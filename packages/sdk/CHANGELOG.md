@@ -1,5 +1,74 @@
 # @tailor-platform/sdk
 
+## 2.22.0
+
+### Minor Changes
+
+- [#2346](https://github.com/tailor-platform/sdk/pull/2346) [`87a6579`](https://github.com/tailor-platform/sdk/commit/87a65793bb8d8c6d5335f69d672db4ce4bc6ab9c) Thanks [@dqn](https://github.com/dqn)! - Add the `TAILOR_JSON_OUTPUT` environment variable to default CLI output to JSON without passing `--json` on every call, for agents, scripts, and CI. Set it to `true` or `1` to enable JSON; `false` or `0` keeps table output. An explicit `--json` still wins, and with the variable unset every command keeps its current output, so existing pipes and CI steps are unaffected. Dispatched CLI plugins inherit the variable from the environment.
+
+- [#2403](https://github.com/tailor-platform/sdk/pull/2403) [`7c3e1cc`](https://github.com/tailor-platform/sdk/commit/7c3e1cc540230173e3f699085019879781bd309e) Thanks [@toiroakr](https://github.com/toiroakr)! - `@tailor-platform/sdk/cli` now exports `appIdLockKey` and `resolveAppId`, so a CLI plugin can read a config's application id the same way `deploy` does — preferring the id recorded in `.github/tailor.lock`, falling back to the id the config module evaluates to. `resolveAppId` never writes the lock, edits the config, or prompts, and resolves to `undefined` without warning when neither source has an id. A config id that disagrees with the lock, or that already belongs to a different, still-existing config, throws `APP_ID_CONFLICT` instead of guessing.
+
+- [#2339](https://github.com/tailor-platform/sdk/pull/2339) [`1d60b6a`](https://github.com/tailor-platform/sdk/commit/1d60b6ab84089d4b645fbcc4b96fbceb59b3ce6f) Thanks [@toiroakr](https://github.com/toiroakr)! - Lock the beta plugin config export name to `plugins`. `definePlugins()` must be assigned to `export const plugins` in `tailor.config.ts`; any other export name (`plugins2`, `generator`, `generators`, etc.) is no longer read for plugins, matching the documented convention. A `plugins` export that is not an array, or that contains an item that is not a valid plugin, now fails config loading with a descriptive error instead of being silently dropped. A duplicate plugin ID within `plugins` now fails config loading in every code path instead of silently keeping only the last one.
+  
+  Provide a v2 minor-release upgrade codemod for existing `generator`/`generators` exports. Preserve unrelated imports and shadowed variables, and leave imports unchanged when their config cannot be safely renamed. Include `.mts` and `.cts` imports and report remaining split exports or multiple plugin arrays for manual migration.
+
+### Patch Changes
+
+- [#2428](https://github.com/tailor-platform/sdk/pull/2428) [`1f18ce8`](https://github.com/tailor-platform/sdk/commit/1f18ce802e65f2e49958696d9bd3ff09b50f8cbf) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `FORBIDDEN_RUNTIME_GLOBAL` wrongly rejecting workflow jobs and executors whose dependencies detect the environment with `typeof` ternaries such as `typeof global !== "undefined" ? global : ...` or `typeof window === "undefined" ? {} : window`, including after the bundle is minified
+  
+  Fix TailorDB hooks and validators dropping a constant from the same file when they read it behind a `typeof` check such as `typeof DEFAULT_VALUE !== "undefined" && DEFAULT_VALUE`
+
+- [#2426](https://github.com/tailor-platform/sdk/pull/2426) [`3ebdc0c`](https://github.com/tailor-platform/sdk/commit/3ebdc0ca1eac2c1c0f2c02d7eb2ce43dffe5a715) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​toiroakr/lines-db to v0.13.0
+
+- [#2429](https://github.com/tailor-platform/sdk/pull/2429) [`214e199`](https://github.com/tailor-platform/sdk/commit/214e199c48d4cfeecfaf1766186a9a2805cdbeb4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency get-east-asian-width to v1.7.0
+
+- [#2430](https://github.com/tailor-platform/sdk/pull/2430) [`b6a0146`](https://github.com/tailor-platform/sdk/commit/b6a014646bc7ff8ca540cb1ae1ce5ce7efdd10ce) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.10.0
+
+- [#2431](https://github.com/tailor-platform/sdk/pull/2431) [`716c337`](https://github.com/tailor-platform/sdk/commit/716c3373cfd30a1535a2396594f6a95d4f97e6c9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#2444](https://github.com/tailor-platform/sdk/pull/2444) [`c4fcd01`](https://github.com/tailor-platform/sdk/commit/c4fcd01d68e7c266d2232fc89f7b6a9d58cc4f5f) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#2426](https://github.com/tailor-platform/sdk/pull/2426) [`f3a0671`](https://github.com/tailor-platform/sdk/commit/f3a067173226f5eced1b24ca544a02da7607762f) Thanks [@renovate](https://github.com/apps/renovate)! - `tailor seed validate` now reports a JSONL line that is not valid JSON with its file and line, and points the GitHub Actions annotation at that line.
+
+- [#2419](https://github.com/tailor-platform/sdk/pull/2419) [`c984ba0`](https://github.com/tailor-platform/sdk/commit/c984ba08adb6effa9717645f7fe836be63476ff7) Thanks [@dqn](https://github.com/dqn)! - Re-running `tailor setup ci` now keeps your own jobs, steps, and top-level keys in generated workflows and composite actions, along with `runs-on` / `timeout-minutes` / `container` / `env` on managed jobs and the documented editable inputs (such as `user-mapping` on `tailor-notify`). `tailor setup check` only reports edits to SDK-managed parts, and `--force` resets those parts without discarding your additions. Files generated by an older version need one `--force` re-run if you had edited them.
+  
+  `setup ci branch`, `setup ci tag`, and `setup ci coordinate` accept `--restrict-dispatch`, which lets a manual `workflow_dispatch` deploy only the target branch (branch targets) or a tag, which must also pass the reachability guard when `--branch` is set (tag targets). Dry runs stay available from any ref.
+
+## 2.21.0
+
+### Minor Changes
+
+- [#2417](https://github.com/tailor-platform/sdk/pull/2417) [`f9f2791`](https://github.com/tailor-platform/sdk/commit/f9f279148ed2b8c03ce9cc1b7833d872add9597d) Thanks [@toiroakr](https://github.com/toiroakr)! - Make function bundles smaller by leaving out code they do not use:
+  
+  - Resolver bundles only include the code that converts `Date` and `Temporal` values for the representations (`as: "date"` or `as: "temporal"`) the resolver's `input` and `output` fields use. A resolver without such fields includes neither.
+  - Bundles that do not define TailorDB tables no longer include the TailorDB schema builders and their deep-clone dependency.
+  
+  Add `parseDateFields` to `@tailor-platform/sdk/runtime`. It parses a value like `field.parse` and always converts fields declared with `as: "date"` or `as: "temporal"`. Inside a resolver `body`, calling `.parse()` on a field whose representation the resolver's `input` and `output` do not use now throws an error pointing to `parseDateFields`; use `parseDateFields` there instead.
+
+- [#2402](https://github.com/tailor-platform/sdk/pull/2402) [`e8651de`](https://github.com/tailor-platform/sdk/commit/e8651deceadfc411c943543b2e89bc31d8e267c7) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix the Secret Manager runtime-access guidance: reading a secret from a resolver, executor, or workflow via the `secrets` object exported by `defineSecretManager()` fails to build with `FORBIDDEN_RUNTIME_GLOBAL (process)` once any vault value comes from `process.env`, because that object also carries the raw config values into the deployed bundle. The docs now recommend `secretmanager.getSecret()` / `getSecrets()` from `@tailor-platform/sdk/runtime` instead, which never touches the config object.
+  
+  `secretmanager.getSecret()` / `getSecrets()`'s vault and secret name arguments are now type-checked and autocompleted, the same way `aigateway.get()` and `authconnection.getConnectionToken()` already are: after `tailor generate`/`tailor deploy`, vault names declared via `defineSecretManager()` are suggested (any other string still works, since vaults can also be managed via the CLI), and secret names inside a declared vault are checked against that vault's configuration.
+  
+  `defineSecretManager()`'s `get()` / `getAll()` methods are now `@deprecated` for the same reason and will be removed in a future major version; a codemod (`v3/secrets-get-to-secretmanager`) is registered to guide the migration.
+
+### Patch Changes
+
+- [#2399](https://github.com/tailor-platform/sdk/pull/2399) [`78e3b5e`](https://github.com/tailor-platform/sdk/commit/78e3b5eccb7e4c088303d7eac6c6b4bdf17a44e4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.13.5
+
+- [#2406](https://github.com/tailor-platform/sdk/pull/2406) [`6fa2839`](https://github.com/tailor-platform/sdk/commit/6fa28393a75580153ec96534fc101a93472ddc0a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.29.6
+
+- [#2407](https://github.com/tailor-platform/sdk/pull/2407) [`759cd65`](https://github.com/tailor-platform/sdk/commit/759cd658279539130c25b437bdb11f82ffe4548b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency p-limit to v7.3.3
+
+- [#2408](https://github.com/tailor-platform/sdk/pull/2408) [`cd150c4`](https://github.com/tailor-platform/sdk/commit/cd150c41aa2b3fb1982cd2d61118cf65400013d0) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.2.9
+
+- [#2413](https://github.com/tailor-platform/sdk/pull/2413) [`6298636`](https://github.com/tailor-platform/sdk/commit/62986365ccb6e2c7113e453fb9c46b827c7c6d5e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsx to v4.23.15
+
+- [#2420](https://github.com/tailor-platform/sdk/pull/2420) [`7de777d`](https://github.com/tailor-platform/sdk/commit/7de777d43b6946c9bfb23ad40d150643502ad370) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​bufbuild/protovalidate to v1.3.0
+
+- [#2421](https://github.com/tailor-platform/sdk/pull/2421) [`a04b239`](https://github.com/tailor-platform/sdk/commit/a04b239c58b73224a8db29c1a79b4163397816b6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.3.0
+
+- [#2427](https://github.com/tailor-platform/sdk/pull/2427) [`d121b73`](https://github.com/tailor-platform/sdk/commit/d121b7318e1dd225e7556f9251fe1bc6158cd19a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency amaro to v1.2.1
+
 ## 2.20.0
 
 ### Minor Changes

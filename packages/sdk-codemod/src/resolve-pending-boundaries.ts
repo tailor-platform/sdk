@@ -1,3 +1,4 @@
+import { Lang, parse as parseSource } from "@ast-grep/napi";
 import { parse } from "semver";
 
 // Tolerant of whitespace and CRLF, not just the exact oxfmt-formatted spacing this file
@@ -89,4 +90,49 @@ export function resolvePendingBoundaries(
   updated = updated.replace(PENDING_USAGE_PATTERN, `prereleaseUntil: ${constantName},`);
 
   return { changed: true, constantName, source: updated };
+}
+
+/**
+ * Rewrite `until: NEXT_RELEASE` usages in a registry.ts source to the stable version the
+ * release PR bumped `@tailor-platform/sdk` to. A no-op when no usage is present.
+ * @param source - Current contents of registry.ts
+ * @param resolvedVersion - The version the release PR bumped `@tailor-platform/sdk` to (e.g. "2.21.0")
+ * @param previousVersion - The `@tailor-platform/sdk` version before the release PR's bump
+ * @returns The (possibly) rewritten source and whether it changed
+ */
+export function resolveNextReleaseUntil(
+  source: string,
+  resolvedVersion: string,
+  previousVersion: string | undefined,
+): { changed: boolean; source: string } {
+  const parsed = parse(resolvedVersion);
+  if (parsed === null) {
+    throw new Error(`resolvedVersion must be a valid semver version: ${resolvedVersion}`);
+  }
+  const root = parseSource(Lang.TypeScript, source).root();
+  const pendingValues = root
+    .findAll({ rule: { kind: "pair" } })
+    .filter((pair) => pair.field("key")?.text() === "until")
+    .map((pair) => pair.field("value"))
+    .filter((value) => value?.kind() === "identifier" && value.text() === "NEXT_RELEASE");
+  if (pendingValues.length === 0) {
+    return { changed: false, source };
+  }
+  if (parsed.prerelease.length > 0) {
+    throw new Error(
+      `resolvedVersion must be a stable version to resolve until: NEXT_RELEASE: ${resolvedVersion}`,
+    );
+  }
+  if (previousVersion === undefined) {
+    throw new Error("previousVersion is required to resolve until: NEXT_RELEASE");
+  }
+  if (resolvedVersion === previousVersion) {
+    throw new Error(
+      `until: NEXT_RELEASE would resolve to ${resolvedVersion}, which was already the SDK version before this release; add an @tailor-platform/sdk changeset to the change that introduced it`,
+    );
+  }
+  return {
+    changed: true,
+    source: root.commitEdits(pendingValues.map((value) => value!.replace(`"${resolvedVersion}"`))),
+  };
 }

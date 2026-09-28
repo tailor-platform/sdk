@@ -251,6 +251,18 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
     const { ok, output } = writeAndLint("branch-npm-dir-env", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
+
+  test("branch / pnpm / with restricted dispatch", () => {
+    const { content } = renderBranchWorkflow({
+      ...COMMON,
+      branch: "main",
+      packageManager: "pnpm",
+      erdPreview: null,
+      restrictDispatch: true,
+    });
+    const { ok, output } = writeAndLint("branch-pnpm-restrict", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
 });
 
 describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflow", () => {
@@ -276,6 +288,21 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflo
         workingDirectory: "apps/backend",
         environment: "production",
       },
+    },
+    {
+      name: "tag / pnpm / with branch guard / restricted dispatch",
+      fileName: "tag-pnpm-guard-restrict",
+      params: {
+        tagPattern: "v*",
+        packageManager: "pnpm" as const,
+        branch: "main",
+        restrictDispatch: true,
+      },
+    },
+    {
+      name: "tag / pnpm / no guard / restricted dispatch",
+      fileName: "tag-pnpm-noguard-restrict",
+      params: { tagPattern: "v*", packageManager: "pnpm" as const, restrictDispatch: true },
     },
     {
       name: "tag / bun / no guard / with explicit environment",
@@ -397,6 +424,18 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinate
       tagPattern: "v*",
     });
     const { ok, output } = lintCoordinate("coord-tag", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+
+  test.each(["branch", "tag"] as const)("coordinate / %s / restricted dispatch", (kind) => {
+    const { content } = renderCoordinateWorkflow({
+      ...COORD_COMMON,
+      kind,
+      branch: "main",
+      tagPattern: "v*",
+      restrictDispatch: true,
+    });
+    const { ok, output } = lintCoordinate(`coord-${kind}-restrict`, content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 });

@@ -234,6 +234,57 @@ describe("precompileTailorDBTypeScripts", () => {
 
     expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toContain("module.exports.main");
   });
+
+  test("bundles a source constant that the script reads behind a typeof ternary guard", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-typeof-guard-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, 'const DEFAULT_VALUE = "configured";\n');
+    const DEFAULT_VALUE = "unused";
+    const createHook = () => (typeof DEFAULT_VALUE !== "undefined" ? DEFAULT_VALUE : "fallback");
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toContain("configured");
+  });
+
+  test("inlines a script that only reads an absent global behind a typeof guard", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-typeof-global-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const createHook = () => (typeof window !== "undefined" ? window.location.href : "server");
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).not.toContain("module.exports");
+  });
 });
 
 describe("collectSourceBindings", () => {

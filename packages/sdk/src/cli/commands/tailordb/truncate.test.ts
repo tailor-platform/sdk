@@ -32,7 +32,8 @@ vi.mock("#/cli/shared/config-loader", () => ({
   }),
 }));
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     success: vi.fn(),
     info: vi.fn(),

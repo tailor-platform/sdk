@@ -1,5 +1,6 @@
 import { Lang, parse } from "@ast-grep/napi";
 import { gte, lte, valid } from "semver";
+import { NEXT_RELEASE } from "./registry";
 import type { SgNode } from "@ast-grep/napi";
 
 /**
@@ -310,7 +311,7 @@ export function checkDeprecationTags(
       // The codemod migrates callers off an API that this release no longer has,
       // so the declaration should have gone with it. Catches a removal that was
       // planned, automated, and then forgotten.
-      if (gte(options.currentVersion, boundary)) {
+      if (boundary !== NEXT_RELEASE && gte(options.currentVersion, boundary)) {
         problems.push({
           line: tag.line,
           message: `\`${id}\` migrates callers off this API as of ${boundary}, which ${options.currentVersion} has reached; delete the deprecated declaration, or point the tag at the codemod for the release that removes it`,

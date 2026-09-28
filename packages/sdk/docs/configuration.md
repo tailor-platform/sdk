@@ -403,7 +403,7 @@ export default defineConfig({
 
 ### Plugins
 
-Configure plugins using `definePlugins()`. Plugins must be exported as a named export.
+Configure plugins using `definePlugins()`, exported as `export const plugins`.
 
 ```typescript
 import { definePlugins } from "@tailor-platform/sdk";

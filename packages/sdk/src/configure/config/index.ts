@@ -20,6 +20,8 @@ export function defineConfig<
  * Define plugins to be used with the Tailor SDK.
  * Plugins can generate additional tables, resolvers, and executors
  * based on existing TailorDB tables.
+ * The result must be assigned to a named export called `plugins` in `tailor.config.ts`;
+ * any other export name is not read.
  * @param configs - Plugin configurations
  * @returns Plugin configurations as given
  */

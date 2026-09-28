@@ -320,13 +320,23 @@ async function bundleScriptTarget(args: {
   const inlineExpr = assertParsableExpression(`(${fnSource})(${buildHookCallArgs(kind)})`, context);
 
   // Check if the function has free variables that need bundling
-  const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
+  const fnCode = `const __fn = ${fnSource};`;
+  const freeVars = findUndefinedReferences(fnCode, { includeGuardedReferences: true });
   if (freeVars.size === 0) {
     // No external dependencies - use inline expression without bundling
     return inlineExpr;
   }
 
-  const { imports, declarations, unresolved } = resolveNeededBindings(freeVars, sourceBindings);
+  const {
+    imports,
+    declarations,
+    unresolved: unresolvedVars,
+  } = resolveNeededBindings(freeVars, sourceBindings);
+  const unguardedFreeVars = findUndefinedReferences(fnCode);
+  const unresolved = unresolvedVars.filter((name) => unguardedFreeVars.has(name));
+  if (imports.length === 0 && declarations.length === 0 && unresolved.length === 0) {
+    return inlineExpr;
+  }
   if (unresolved.length > 0) {
     throw new Error(
       `${context} captures unresolvable variables (${unresolved.join(", ")}). ` +

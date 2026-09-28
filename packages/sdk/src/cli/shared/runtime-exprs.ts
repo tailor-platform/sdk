@@ -14,7 +14,9 @@
  * sync.
  */
 import { makePrincipalExpr, tailorPrincipalMap } from "#/parser/service/tailordb/index";
+import { hasDateRepresentationFields } from "#/runtime/date";
 import type { ApplicationEnv } from "#/cli/shared/client";
+import type { BundledDateRepresentations } from "#/cli/shared/platform-bundle-plugin";
 import type { Trigger } from "#/types/executor.generated";
 import type { Resolver } from "#/types/resolver.generated";
 
@@ -292,4 +294,50 @@ export function buildResolverValidatedInputExpr(params: ResolverPermissionResolu
       return result.value;
     })()
   `;
+}
+
+/**
+ * Import statement and return expression that serialize a resolver's result.
+ */
+export type ResolverResultSerialization = {
+  importStatement: string;
+  resultExpr: string;
+};
+
+/**
+ * Build the code that turns a resolver's `body` result into its response.
+ * Date serialization is only imported when the output uses a Date or Temporal
+ * representation. Requires `_internalResolver` and `result` in the enclosing scope.
+ * @param output - The resolver's output field, or undefined when unknown
+ * @returns Import statement and return expression for the entry module
+ */
+export function buildResolverResultSerialization(
+  output: Resolver["output"] | undefined,
+): ResolverResultSerialization {
+  if (output && !hasDateRepresentationFields(output)) {
+    return { importStatement: "", resultExpr: "result" };
+  }
+  return {
+    importStatement: 'import { serializeDateFields } from "@tailor-platform/sdk/runtime";',
+    resultExpr: "serializeDateFields(_internalResolver.output, result)",
+  };
+}
+
+/**
+ * Input and output fields of a resolver, or undefined when unknown.
+ */
+export type ResolverFields = Pick<Resolver, "input" | "output"> | undefined;
+
+/**
+ * Decide which date representations a resolver bundle has to convert.
+ * @param resolver - The resolver's input and output fields, or undefined when unknown
+ * @returns Date representations used by any input or output field
+ */
+export function resolverDateRepresentations(resolver: ResolverFields): BundledDateRepresentations {
+  if (!resolver) return { date: true, temporal: true };
+  const fields = [resolver.output, ...Object.values(resolver.input ?? {})];
+  return {
+    date: fields.some((field) => hasDateRepresentationFields(field, "date")),
+    temporal: fields.some((field) => hasDateRepresentationFields(field, "temporal")),
+  };
 }

@@ -1,5 +1,23 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.2.6
+
+### Patch Changes
+
+- [#2346](https://github.com/tailor-platform/sdk/pull/2346) [`87a6579`](https://github.com/tailor-platform/sdk/commit/87a65793bb8d8c6d5335f69d672db4ce4bc6ab9c) Thanks [@dqn](https://github.com/dqn)! - Add the `TAILOR_JSON_OUTPUT` environment variable to default CLI output to JSON without passing `--json` on every call, for agents, scripts, and CI. Set it to `true` or `1` to enable JSON; `false` or `0` keeps table output. An explicit `--json` still wins, and with the variable unset every command keeps its current output, so existing pipes and CI steps are unaffected. Dispatched CLI plugins inherit the variable from the environment.
+- Updated dependencies [[`87a6579`](https://github.com/tailor-platform/sdk/commit/87a65793bb8d8c6d5335f69d672db4ce4bc6ab9c), [`1f18ce8`](https://github.com/tailor-platform/sdk/commit/1f18ce802e65f2e49958696d9bd3ff09b50f8cbf), [`7c3e1cc`](https://github.com/tailor-platform/sdk/commit/7c3e1cc540230173e3f699085019879781bd309e), [`1d60b6a`](https://github.com/tailor-platform/sdk/commit/1d60b6ab84089d4b645fbcc4b96fbceb59b3ce6f), [`3ebdc0c`](https://github.com/tailor-platform/sdk/commit/3ebdc0ca1eac2c1c0f2c02d7eb2ce43dffe5a715), [`214e199`](https://github.com/tailor-platform/sdk/commit/214e199c48d4cfeecfaf1766186a9a2805cdbeb4), [`b6a0146`](https://github.com/tailor-platform/sdk/commit/b6a014646bc7ff8ca540cb1ae1ce5ce7efdd10ce), [`716c337`](https://github.com/tailor-platform/sdk/commit/716c3373cfd30a1535a2396594f6a95d4f97e6c9), [`c4fcd01`](https://github.com/tailor-platform/sdk/commit/c4fcd01d68e7c266d2232fc89f7b6a9d58cc4f5f), [`f3a0671`](https://github.com/tailor-platform/sdk/commit/f3a067173226f5eced1b24ca544a02da7607762f), [`c984ba0`](https://github.com/tailor-platform/sdk/commit/c984ba08adb6effa9717645f7fe836be63476ff7)]:
+  - @tailor-platform/sdk@2.22.0
+
+## 0.2.5
+
+### Patch Changes
+
+- [#2399](https://github.com/tailor-platform/sdk/pull/2399) [`78e3b5e`](https://github.com/tailor-platform/sdk/commit/78e3b5eccb7e4c088303d7eac6c6b4bdf17a44e4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.13.5
+
+- [#2421](https://github.com/tailor-platform/sdk/pull/2421) [`a04b239`](https://github.com/tailor-platform/sdk/commit/a04b239c58b73224a8db29c1a79b4163397816b6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.3.0
+- Updated dependencies [[`78e3b5e`](https://github.com/tailor-platform/sdk/commit/78e3b5eccb7e4c088303d7eac6c6b4bdf17a44e4), [`6fa2839`](https://github.com/tailor-platform/sdk/commit/6fa28393a75580153ec96534fc101a93472ddc0a), [`759cd65`](https://github.com/tailor-platform/sdk/commit/759cd658279539130c25b437bdb11f82ffe4548b), [`cd150c4`](https://github.com/tailor-platform/sdk/commit/cd150c41aa2b3fb1982cd2d61118cf65400013d0), [`6298636`](https://github.com/tailor-platform/sdk/commit/62986365ccb6e2c7113e453fb9c46b827c7c6d5e), [`7de777d`](https://github.com/tailor-platform/sdk/commit/7de777d43b6946c9bfb23ad40d150643502ad370), [`a04b239`](https://github.com/tailor-platform/sdk/commit/a04b239c58b73224a8db29c1a79b4163397816b6), [`d121b73`](https://github.com/tailor-platform/sdk/commit/d121b7318e1dd225e7556f9251fe1bc6158cd19a), [`f9f2791`](https://github.com/tailor-platform/sdk/commit/f9f279148ed2b8c03ce9cc1b7833d872add9597d), [`e8651de`](https://github.com/tailor-platform/sdk/commit/e8651deceadfc411c943543b2e89bc31d8e267c7)]:
+  - @tailor-platform/sdk@2.21.0
+
 ## 0.2.4
 
 ### Patch Changes

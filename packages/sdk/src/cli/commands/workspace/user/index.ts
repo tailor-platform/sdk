@@ -1,5 +1,4 @@
 import { defineCommand } from "@politty/zod";
-import { runDefaultSubCommand } from "#/cli/shared/command";
 import { inviteCommand } from "./invite";
 import { listCommand } from "./list";
 import { removeCommand } from "./remove";
@@ -14,7 +13,5 @@ export const userCommand = defineCommand({
     remove: removeCommand,
     update: updateCommand,
   },
-  async run() {
-    await runDefaultSubCommand(listCommand);
-  },
+  defaultSubCommand: "list",
 });

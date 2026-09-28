@@ -17,6 +17,8 @@ export default defineConfig([
     entry: {
       "v2/define-generators-to-plugins/scripts/transform":
         "codemods/v2/define-generators-to-plugins/scripts/transform.ts",
+      "v2/plugin-export-name-normalize/scripts/transform":
+        "codemods/v2/plugin-export-name-normalize/scripts/transform.ts",
       "v2/plugin-cli-import/scripts/transform":
         "codemods/v2/plugin-cli-import/scripts/transform.ts",
       "v2/test-run-arg-input/scripts/transform":

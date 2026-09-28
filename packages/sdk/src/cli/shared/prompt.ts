@@ -1,10 +1,9 @@
 import { ExitPromptError } from "@inquirer/core";
 import { confirm, input, password, select } from "@inquirer/prompts";
-import { isCI } from "std-env";
-import { CIPromptError, logger } from "./logger";
+import { CIPromptError, interactiveTerminal, logger } from "./logger";
 
 export function canPrompt(): boolean {
-  return !isCI && process.stdin.isTTY === true && process.stdout.isTTY === true && !logger.jsonMode;
+  return interactiveTerminal() && !logger.jsonMode;
 }
 
 /**

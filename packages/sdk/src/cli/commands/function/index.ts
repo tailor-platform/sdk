@@ -1,5 +1,4 @@
 import { defineCommand } from "@politty/zod";
-import { runDefaultSubCommand } from "#/cli/shared/command";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
 import { logsCommand } from "./logs";
@@ -16,7 +15,5 @@ export const functionCommand = defineCommand({
     run: runFunctionCommand,
     script: scriptCommand,
   },
-  async run() {
-    await runDefaultSubCommand(listCommand);
-  },
+  defaultSubCommand: "list",
 });

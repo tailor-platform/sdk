@@ -1,3 +1,4 @@
+import { NEXT_RELEASE } from "./registry";
 import type { CodemodPackage } from "./types";
 
 export type AutomationLevel = "Automatic" | "Partially automatic" | "Manual";
@@ -74,6 +75,16 @@ function renderEntry(codemod: CodemodPackage): string {
 /** Render an informational behavioral-change notice (no migration). */
 function renderNotice(codemod: CodemodPackage): string {
   return [`### ${codemod.name}`, "", codemod.description, ""].join("\n");
+}
+
+/**
+ * The major version whose migration doc lists a codemod.
+ * @param codemod - The registered codemod
+ * @returns The major of its `until`, or of its `v<major>/` id while `until` is unresolved
+ */
+export function migrationDocMajor(codemod: CodemodPackage): number {
+  const version = codemod.until === NEXT_RELEASE ? codemod.id.slice(1) : codemod.until;
+  return Number.parseInt(version, 10);
 }
 
 /**

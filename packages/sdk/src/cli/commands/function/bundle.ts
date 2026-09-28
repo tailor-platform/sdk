@@ -17,9 +17,17 @@ import {
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import {
+  createPlatformBundleDefinePlugin,
+  platformBundleDefinePlugin,
+} from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
-import { buildResolverValidatedInputExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import {
+  buildResolverResultSerialization,
+  buildResolverValidatedInputExpr,
+  INVOKER_EXPR,
+  resolverDateRepresentations,
+} from "#/cli/shared/runtime-exprs";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
@@ -102,7 +110,9 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     plugins: [
       createGeneratedEntryResolverPlugin(entryPath, baseDir),
       createTsconfigPathsPlugin(),
-      platformBundleDefinePlugin,
+      detected.type === "resolver"
+        ? createPlatformBundleDefinePlugin(resolverDateRepresentations(detected.fields))
+        : platformBundleDefinePlugin,
     ],
     input: entryPath,
     write: false,
@@ -178,10 +188,13 @@ function generateEntry(options: GenerateEntryOptions): string {
         permission: detected.permission,
         defaultPermission,
       });
+      const { importStatement, resultExpr } = buildResolverResultSerialization(
+        detected.fields?.output,
+      );
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
-        import { serializeDateFields } from "@tailor-platform/sdk/runtime";
+        ${importStatement}
 
         const $tailor_resolver_body = async (rawInput) => {
           const _caller = ${principalExpr};
@@ -189,7 +202,7 @@ function generateEntry(options: GenerateEntryOptions): string {
           const context = { input: rawInput, env: ${JSON.stringify(env)}, caller: _caller, invoker };
           const input = ${validatedInputExpr};
           const result = await _internalResolver.body({ ...context, input });
-          return serializeDateFields(_internalResolver.output, result);
+          return ${resultExpr};
         };
 
         export { $tailor_resolver_body as main };

@@ -17,7 +17,8 @@ vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     success: vi.fn(),
     info: vi.fn(),

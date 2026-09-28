@@ -1,5 +1,4 @@
 import { defineCommand } from "@politty/zod";
-import { runDefaultSubCommand } from "#/cli/shared/command";
 import { authorizeAuthConnectionCommand } from "./authorize";
 import { deleteAuthConnectionCommand } from "./delete";
 import { listAuthConnectionCommand } from "./list";
@@ -16,7 +15,5 @@ export const authconnectionCommand = defineCommand({
     revoke: revokeAuthConnectionCommand,
     delete: deleteAuthConnectionCommand,
   },
-  async run() {
-    await runDefaultSubCommand(listAuthConnectionCommand);
-  },
+  defaultSubCommand: "list",
 });

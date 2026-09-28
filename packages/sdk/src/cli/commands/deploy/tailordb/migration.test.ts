@@ -38,7 +38,8 @@ vi.mock("../label", async (importOriginal) => ({
 }));
 
 // Mock logger to suppress output during tests
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     info: vi.fn(),
     warn: vi.fn(),

@@ -6,6 +6,7 @@ import {
   findMisplacedDeprecationMentions,
   resolvePendingSince,
 } from "./deprecation-tags";
+import { NEXT_RELEASE } from "./registry";
 
 const options = {
   // Both boundaries sit above the current version, so a well-formed tag passes.
@@ -248,6 +249,17 @@ export const oldApi = 1;
       checkDeprecationTags(source, {
         codemodBoundaries: new Map([["v3/old-to-new", "3.0.0"]]),
         currentVersion: "2.1.0",
+      }),
+    ).toEqual([]);
+  });
+
+  test("accepts a declaration whose codemod boundary is still NEXT_RELEASE", () => {
+    const source = "/** @deprecated since 2.20.0 — use newApi. codemod: v2/unreleased */\n";
+
+    expect(
+      checkDeprecationTags(source, {
+        codemodBoundaries: new Map([["v2/unreleased", NEXT_RELEASE]]),
+        currentVersion: "2.20.0",
       }),
     ).toEqual([]);
   });

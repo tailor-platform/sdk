@@ -3,8 +3,8 @@
 # changesets/action has decided the next release version, against the version
 # the release PR just bumped `@tailor-platform/sdk` to:
 #
-#   - `prereleaseUntil: V2_NEXT_PENDING` codemod boundaries
-#     (packages/sdk-codemod/src/registry.ts)
+#   - `prereleaseUntil: V2_NEXT_PENDING` and `until: NEXT_RELEASE` codemod
+#     boundaries (packages/sdk-codemod/src/registry.ts)
 #   - `@deprecated since NEXT_RELEASE` markers (packages/sdk/src/**)
 #
 # Both describe the version a change ships in, which is unknown while the
@@ -22,9 +22,10 @@
 set -euo pipefail
 
 original_ref="$(git rev-parse HEAD)"
+content_file="$(mktemp)"
 # --hard: the resolvers and oxfmt below leave tracked files modified, and a
 # plain `git checkout` refuses to switch away from a dirty tracked file.
-trap 'git reset --hard --quiet "$original_ref"' EXIT
+trap 'rm -f "$content_file"; git reset --hard --quiet "$original_ref"' EXIT
 
 # changesets/action applies `changeset version`'s file
 # edits (package.json bumps, CHANGELOG.md, consumed .changeset/*.md deletions)
@@ -42,7 +43,8 @@ gh pr checkout "$PR_NUMBER"
 # Detach so the trap's reset only moves HEAD, not the local branch gh pr checkout made.
 git checkout --quiet --detach
 
-pnpm codemod:resolve-pending
+PREVIOUS_SDK_VERSION="$(git show "${original_ref}:packages/sdk/package.json" | jq -r .version)" \
+  pnpm codemod:resolve-pending
 pnpm deprecations:resolve-pending
 
 mapfile -t resolved_paths < <(git diff --name-only)
@@ -56,13 +58,13 @@ pnpm exec oxfmt --write "${resolved_paths[@]}"
 # branch, and the blob sha is re-read per file so a preceding push in this loop
 # does not invalidate the next one.
 for path in "${resolved_paths[@]}"; do
-  content_b64="$(base64 <"$path" | tr -d '\n')"
+  base64 <"$path" | tr -d '\n' >"$content_file"
   sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${PR_BRANCH}" -q .sha)"
 
   gh api "repos/${GITHUB_REPOSITORY}/contents/${path}" \
     -X PUT \
     -f message="chore: resolve pending release version in ${path}" \
-    -f content="${content_b64}" \
+    -F content=@"$content_file" \
     -f sha="${sha}" \
     -f branch="${PR_BRANCH}"
 done

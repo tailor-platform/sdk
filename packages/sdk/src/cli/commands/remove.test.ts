@@ -138,7 +138,8 @@ vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(async () => "token"),
   loadWorkspaceId: vi.fn(async () => "workspace-id"),
 }));
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     info: vi.fn(),
     success: vi.fn(),

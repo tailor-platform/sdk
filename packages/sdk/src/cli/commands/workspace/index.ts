@@ -1,5 +1,4 @@
 import { defineCommand } from "@politty/zod";
-import { runDefaultSubCommand } from "#/cli/shared/command";
 import { appCommand } from "./app";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
@@ -24,7 +23,5 @@ export const workspaceCommand = defineCommand({
     ttl: ttlCommand,
     user: userCommand,
   },
-  async run() {
-    await runDefaultSubCommand(listCommand);
-  },
+  defaultSubCommand: "list",
 });

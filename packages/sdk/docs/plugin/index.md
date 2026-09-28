@@ -33,7 +33,7 @@ export default defineConfig({
 });
 ```
 
-**Important**: The `plugins` export must be a named export (not default).
+**Important**: `definePlugins()` must be assigned to a named export called exactly `plugins` (not default, and not any other name).
 
 ### Attaching Plugins to Tables
 

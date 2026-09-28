@@ -59,7 +59,7 @@ describe("skills command", () => {
     const removeCommand = await resolveCommand(expectDefined(skillSubCommands.remove));
 
     expect(Object.keys(skillSubCommands).toSorted()).toEqual(["add", "list", "remove", "sync"]);
-    expect(skillsCommand.run).toBeTypeOf("function");
+    expect(skillsCommand.defaultSubCommand).toBe("add");
     expect(addCommand.aliases).toBeUndefined();
     expect(removeCommand.aliases).toBeUndefined();
     expect(

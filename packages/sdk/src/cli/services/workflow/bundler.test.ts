@@ -261,6 +261,40 @@ export const mainJob = createWorkflowJob({
     }
   });
 
+  test("bundles a job whose dependency detects the environment with a UMD typeof ternary", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-umd-typeof-")));
+    fs.writeFileSync(
+      path.join(tmpDir, "umd-lib.js"),
+      `export const root = typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};\n`,
+    );
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+import { root } from "./umd-lib.js";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => typeof root,
+});
+`,
+    );
+
+    try {
+      const result = await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        ["main-job"],
+        {},
+        { modules: new Map() },
+        tmpDir,
+      );
+      expect(result.bundledCode.get("main-job")).toBeDefined();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   describe("job start binding resolution", () => {
     let tmpDir: string | undefined;
 

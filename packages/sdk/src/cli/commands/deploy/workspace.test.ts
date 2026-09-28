@@ -48,7 +48,8 @@ vi.mock("#/cli/shared/prompt", () => ({
   },
 }));
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     info: mocks.info,
     success: mocks.success,

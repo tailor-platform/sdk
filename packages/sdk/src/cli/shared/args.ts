@@ -5,7 +5,8 @@ import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
-import { logger } from "./logger";
+import { JSON_OUTPUT_ENV_VAR, logger } from "./logger";
+import { parseBoolean } from "./parse-boolean";
 
 type ArgsShape = Record<string, z.ZodType>;
 export type MachineUserInputSource = "option" | "env";
@@ -93,9 +94,18 @@ export function toPageDirection(order: Order | undefined): PageDirection | undef
   return order === "asc" ? PageDirection.ASC : PageDirection.DESC;
 }
 
+/**
+ * Drop the arguments after `--`, which belong to the invoked program.
+ * @param argv - Raw CLI argv, excluding the executable and script path
+ * @returns The tokens the CLI itself parses as options
+ */
+function optionTokens(argv: readonly string[]): readonly string[] {
+  const separator = argv.indexOf("--");
+  return separator === -1 ? argv : argv.slice(0, separator);
+}
+
 function hasMachineUserFlag(argv: readonly string[]): boolean {
-  const optionArgs = argv.slice(0, argv.indexOf("--") === -1 ? argv.length : argv.indexOf("--"));
-  return optionArgs.some(
+  return optionTokens(argv).some(
     (token) =>
       token === "-m" ||
       token.startsWith("-m=") ||
@@ -176,6 +186,10 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 // Argument Definitions
 // ============================================================================
 
+/** Name and short alias of the `--json` flag. */
+const JSON_ARG_NAME = "json";
+const JSON_ARG_ALIAS = "j";
+
 interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
   verboseAlias?: string;
@@ -216,11 +230,15 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
         logger.verbose = value;
       },
     }),
-    json: arg(z.boolean().default(false), {
-      alias: "j",
+    [JSON_ARG_NAME]: arg(z.boolean().default(false), {
+      alias: JSON_ARG_ALIAS,
       description: "Output as JSON",
-      effect: (value) => {
-        logger.jsonMode = value;
+      env: JSON_OUTPUT_ENV_VAR,
+      effect: (value, { args }) => {
+        const source = args.$source?.(JSON_ARG_NAME);
+        const envAlsoEnabled =
+          source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;
+        logger.setJsonMode(value, source === "env" ? "env" : envAlsoEnabled ? "both" : "flag");
       },
     }),
   } satisfies ArgsShape;

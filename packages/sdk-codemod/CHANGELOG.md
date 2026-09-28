@@ -1,5 +1,31 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.14
+
+### Patch Changes
+
+- [#2346](https://github.com/tailor-platform/sdk/pull/2346) [`87a6579`](https://github.com/tailor-platform/sdk/commit/87a65793bb8d8c6d5335f69d672db4ce4bc6ab9c) Thanks [@dqn](https://github.com/dqn)! - Add the `TAILOR_JSON_OUTPUT` environment variable to default CLI output to JSON without passing `--json` on every call, for agents, scripts, and CI. Set it to `true` or `1` to enable JSON; `false` or `0` keeps table output. An explicit `--json` still wins, and with the variable unset every command keeps its current output, so existing pipes and CI steps are unaffected. Dispatched CLI plugins inherit the variable from the environment.
+
+- [#2423](https://github.com/tailor-platform/sdk/pull/2423) [`621922e`](https://github.com/tailor-platform/sdk/commit/621922e4474b8cf0a67a89a0bfcdc78dd5be6334) Thanks [@toiroakr](https://github.com/toiroakr)! - Codemods that ship in a minor release now get their `tailor upgrade` boundary set to the version that actually releases them, so upgrades from any earlier release keep being offered the migration.
+
+- [#2339](https://github.com/tailor-platform/sdk/pull/2339) [`1d60b6a`](https://github.com/tailor-platform/sdk/commit/1d60b6ab84089d4b645fbcc4b96fbceb59b3ce6f) Thanks [@toiroakr](https://github.com/toiroakr)! - Lock the beta plugin config export name to `plugins`. `definePlugins()` must be assigned to `export const plugins` in `tailor.config.ts`; any other export name (`plugins2`, `generator`, `generators`, etc.) is no longer read for plugins, matching the documented convention. A `plugins` export that is not an array, or that contains an item that is not a valid plugin, now fails config loading with a descriptive error instead of being silently dropped. A duplicate plugin ID within `plugins` now fails config loading in every code path instead of silently keeping only the last one.
+  
+  Provide a v2 minor-release upgrade codemod for existing `generator`/`generators` exports. Preserve unrelated imports and shadowed variables, and leave imports unchanged when their config cannot be safely renamed. Include `.mts` and `.cts` imports and report remaining split exports or multiple plugin arrays for manual migration.
+
+## 0.8.13
+
+### Patch Changes
+
+- [#2399](https://github.com/tailor-platform/sdk/pull/2399) [`78e3b5e`](https://github.com/tailor-platform/sdk/commit/78e3b5eccb7e4c088303d7eac6c6b4bdf17a44e4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.13.5
+
+- [#2421](https://github.com/tailor-platform/sdk/pull/2421) [`a04b239`](https://github.com/tailor-platform/sdk/commit/a04b239c58b73224a8db29c1a79b4163397816b6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.3.0
+
+- [#2402](https://github.com/tailor-platform/sdk/pull/2402) [`e8651de`](https://github.com/tailor-platform/sdk/commit/e8651deceadfc411c943543b2e89bc31d8e267c7) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix the Secret Manager runtime-access guidance: reading a secret from a resolver, executor, or workflow via the `secrets` object exported by `defineSecretManager()` fails to build with `FORBIDDEN_RUNTIME_GLOBAL (process)` once any vault value comes from `process.env`, because that object also carries the raw config values into the deployed bundle. The docs now recommend `secretmanager.getSecret()` / `getSecrets()` from `@tailor-platform/sdk/runtime` instead, which never touches the config object.
+  
+  `secretmanager.getSecret()` / `getSecrets()`'s vault and secret name arguments are now type-checked and autocompleted, the same way `aigateway.get()` and `authconnection.getConnectionToken()` already are: after `tailor generate`/`tailor deploy`, vault names declared via `defineSecretManager()` are suggested (any other string still works, since vaults can also be managed via the CLI), and secret names inside a declared vault are checked against that vault's configuration.
+  
+  `defineSecretManager()`'s `get()` / `getAll()` methods are now `@deprecated` for the same reason and will be removed in a future major version; a codemod (`v3/secrets-get-to-secretmanager`) is registered to guide the migration.
+
 ## 0.8.12
 
 ### Patch Changes

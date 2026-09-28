@@ -3,7 +3,7 @@ import { createResolver } from "#/configure/services/resolver/resolver";
 import { t } from "#/configure/types/type";
 import { ResolverSchema } from "#/parser/service/resolver/schema";
 import { serializeDateFields } from "./date";
-import { parseInputFields } from "./field-parse";
+import { parseDateFields, parseInputFields } from "./field-parse";
 import { Temporal } from "./temporal";
 import type { DateFieldOptions } from "#/configure/types/field.types";
 import type { output } from "#/types/helpers";
@@ -354,5 +354,41 @@ describe("Temporal.PlainDate representation", () => {
     });
     expect(ResolverSchema.parse(resolver).input?.date?.metadata.as).toBe("temporal");
     expect(ResolverSchema.parse(resolver).output.fields.date?.metadata.as).toBe("temporal");
+  });
+});
+
+describe("parseDateFields", () => {
+  const schema = t.object({
+    rows: t.object(
+      { day: t.date({ as: "date" }), at: t.datetime({ as: "temporal" }), plain: t.time() },
+      { array: true },
+    ),
+  });
+
+  test("converts Date and Temporal fields the same way as parse", () => {
+    const value = { rows: [{ day: "2024-02-29", at: "2024-02-29T15:45:12.123Z", plain: "09:30" }] };
+    const result = parseDateFields(schema, { value, data: value, invoker: null });
+    expectTypeOf(result).toEqualTypeOf<ReturnType<typeof schema.parse>>();
+    expect(result).toEqual({
+      value: {
+        rows: [
+          {
+            day: new Date("2024-02-29T00:00:00.000Z"),
+            at: Temporal.Instant.from("2024-02-29T15:45:12.123Z"),
+            plain: "09:30",
+          },
+        ],
+      },
+    });
+  });
+
+  test("reports invalid dates as issues", () => {
+    const value = { rows: [{ day: "2023-02-29", at: "2024-02-29T15:45:12.123Z", plain: "09:30" }] };
+    expect(parseDateFields(schema, { value, data: value, invoker: null }).issues).toEqual([
+      {
+        message: "Expected a valid calendar date: received 2023-02-29",
+        path: ["rows", "[0]", "day"],
+      },
+    ]);
   });
 });

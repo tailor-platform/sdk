@@ -72,6 +72,46 @@ describe("findUndefinedReferences", () => {
       [],
     ],
     [
+      "does not flag the UMD ternary global-detection idiom",
+      "() => typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : typeof window !== 'undefined' ? window : {}",
+      [],
+    ],
+    [
+      "does not flag the UMD ternary idiom after a minifier rewrites !== 'undefined' to < 'u'",
+      "() => typeof global<`u`?global:typeof self<`u`?self:typeof window<`u`?window:{}",
+      [],
+    ],
+    [
+      "does not flag a typeof-guarded && chain after a minifier rewrites !== 'undefined' to < 'u'",
+      "() => typeof process<`u`&&process.env",
+      [],
+    ],
+    [
+      "still flags a reference guarded by the minified wrong-direction comparison (> 'u')",
+      "() => typeof global>`u`?global:{}",
+      ["global"],
+    ],
+    [
+      "does not flag the alternate branch of a ternary that tests typeof === 'undefined'",
+      "() => typeof window === 'undefined' ? {} : window",
+      [],
+    ],
+    [
+      "does not flag the alternate branch of a ternary after a minifier rewrites === 'undefined' to > 'u'",
+      "() => typeof window>`u`?{}:window",
+      [],
+    ],
+    [
+      "still flags a global in the alternate branch of a typeof-guarded ternary",
+      "() => typeof global !== 'undefined' ? global : process.env",
+      ["process"],
+    ],
+    [
+      "still flags a ternary consequent guarded by the wrong-direction comparison (=== undefined)",
+      "() => typeof global === 'undefined' ? global : {}",
+      ["global"],
+    ],
+    [
       "still flags a global referenced outside a typeof guard",
       "() => typeof process === 'object' ? 1 : process.exit(1)",
       ["process"],

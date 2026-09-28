@@ -17,7 +17,8 @@ vi.mock("#/cli/shared/context", () => ({
   writePlatformConfig: vi.fn(),
 }));
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     info: vi.fn(),
     success: vi.fn(),

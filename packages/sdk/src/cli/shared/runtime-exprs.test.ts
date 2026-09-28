@@ -3,9 +3,11 @@ import {
   INVOKER_EXPR,
   buildExecutorArgsExpr,
   buildResolverOperationHookExpr,
+  buildResolverResultSerialization,
   buildResolverValidatedInputExpr,
   buildResolverPermissionGuardExpr,
 } from "./runtime-exprs";
+import type { TailorField } from "#/types/field.generated";
 
 const runInvokerExpr = (invoker: unknown): unknown =>
   Function(
@@ -467,5 +469,54 @@ describe("buildResolverValidatedInputExpr", () => {
       defaultPermission: loggedIn,
     });
     expect(expr).not.toContain("access denied");
+  });
+});
+
+describe("buildResolverResultSerialization", () => {
+  const field = (
+    type: TailorField["type"],
+    metadata: TailorField["metadata"] = {},
+    fields: TailorField["fields"] = {},
+  ): TailorField => ({ type, metadata, fields });
+
+  test("returns the result as-is when no output field uses Date or Temporal", () => {
+    const output = field(
+      "nested",
+      {},
+      {
+        n: field("integer"),
+        day: field("date"),
+        at: field("datetime", { as: "string" }),
+      },
+    );
+    expect(buildResolverResultSerialization(output)).toEqual({
+      importStatement: "",
+      resultExpr: "result",
+    });
+  });
+
+  test.each([
+    ["a top-level Date field", field("date", { as: "date" })],
+    ["a top-level Temporal field", field("time", { as: "temporal" })],
+    [
+      "a Temporal field inside an array of objects",
+      field(
+        "nested",
+        {},
+        {
+          rows: field("nested", { array: true }, { at: field("datetime", { as: "temporal" }) }),
+        },
+      ),
+    ],
+  ])("serializes dates when the output has %s", (_, output) => {
+    expect(buildResolverResultSerialization(output).resultExpr).toBe(
+      "serializeDateFields(_internalResolver.output, result)",
+    );
+  });
+
+  test("serializes dates when the output shape is unknown", () => {
+    expect(buildResolverResultSerialization(undefined).importStatement).toContain(
+      "serializeDateFields",
+    );
   });
 });

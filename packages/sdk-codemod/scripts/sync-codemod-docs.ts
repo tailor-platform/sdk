@@ -2,7 +2,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderMigrationDoc } from "../src/migration-doc";
+import { migrationDocMajor, renderMigrationDoc } from "../src/migration-doc";
 import { allCodemods } from "../src/registry";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -19,11 +19,11 @@ function parseMode(args: string[]): "write" | "check" {
 }
 
 const mode = parseMode(process.argv.slice(2));
-const majors = [...new Set(allCodemods.map((codemod) => Number(codemod.until.split(".")[0])))];
+const majors = [...new Set(allCodemods.map(migrationDocMajor))];
 
 let outdated = false;
 for (const major of majors) {
-  const codemods = allCodemods.filter((codemod) => Number(codemod.until.split(".")[0]) === major);
+  const codemods = allCodemods.filter((codemod) => migrationDocMajor(codemod) === major);
   const docPath = resolve(docsDir, `v${major}.md`);
   const expected = renderMigrationDoc(codemods, major);
 
