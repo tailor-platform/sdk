@@ -30,6 +30,14 @@ describe("findUndefinedReferences", () => {
     ).toEqual(new Set());
   });
 
+  test("does not flag references after an early throw guarded by typeof in a class static block", () => {
+    expect(
+      findUndefinedReferences(
+        "class Job { static { if (typeof process > 'u') throw 0; process.exit(1); } }",
+      ),
+    ).toEqual(new Set());
+  });
+
   test("keeps locally bound names excluded when including guarded references", () => {
     expect(
       findUndefinedReferences('(_data) => typeof _data !== "undefined" && _data.name', {
