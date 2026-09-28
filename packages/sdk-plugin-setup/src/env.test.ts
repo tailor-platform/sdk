@@ -195,19 +195,19 @@ describe("renderGhCommands", () => {
   test("sets required entries without embedding any value", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
-    expect(lines).toContain("gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env stg/eu");
+    expect(lines).toContain("gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=stg/eu");
     expect(lines).toContain(
-      "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env stg/eu",
+      "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env=stg/eu",
     );
-    expect(lines).toContain("gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env stg/eu");
+    expect(lines).toContain("gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env=stg/eu");
     expect(lines.some((l) => l.includes("--body"))).toBe(false);
   });
 
   test("leaves optional entries commented out so pasting the output skips them", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
-    expect(lines).toContain("# gh secret set TAILOR_SLACK_BOT_TOKEN --env stg/eu");
-    expect(lines).not.toContain("gh secret set TAILOR_SLACK_BOT_TOKEN --env stg/eu");
+    expect(lines).toContain("# gh secret set TAILOR_SLACK_BOT_TOKEN --env=stg/eu");
+    expect(lines).not.toContain("gh secret set TAILOR_SLACK_BOT_TOKEN --env=stg/eu");
   });
 
   test("tells the user to run the commands one at a time, since gh prompts for each value", () => {

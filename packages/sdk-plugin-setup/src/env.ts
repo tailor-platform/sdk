@@ -138,7 +138,7 @@ export function renderGhCommands(environments: EnvironmentRequirements[]): strin
       `[ "$(gh api -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ] && gh api -X PUT ${endpoint} --silent`,
     ];
     for (const { required, type, name, description } of requirements) {
-      const command = `gh ${type} set ${name} --env ${environment}`;
+      const command = `gh ${type} set ${name} --env=${environment}`;
       lines.push(
         required ? `# ${description}` : `# Optional: ${description}`,
         required ? command : `# ${command}`,
