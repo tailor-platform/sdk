@@ -297,7 +297,7 @@ function collectLocalTargets(
     }
   }
 
-  const tsconfigCache = createTsconfigLookupCache();
+  const tsconfigCache = context.tsconfigCache ?? createTsconfigLookupCache();
   for (const statement of program.body) {
     if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue;
     const importSource = statement.source.value;

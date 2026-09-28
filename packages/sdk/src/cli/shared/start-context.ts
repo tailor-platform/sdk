@@ -6,6 +6,10 @@ import { getModuleExportName, type ASTNode } from "#/cli/services/workflow/ast-u
 import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
 import { logger } from "#/cli/shared/logger";
+import {
+  createTsconfigLookupCache,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 
 export interface StartTarget {
   kind: "job" | "workflow";
@@ -21,6 +25,7 @@ export interface StartModuleBindings {
 export interface StartContext {
   modules: Map<string, StartModuleBindings>;
   authNamespace?: string;
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
@@ -107,7 +112,8 @@ export async function buildStartContext(
   loadedWorkflows: ReadonlyArray<LoadedWorkflowSource> = [],
 ): Promise<StartContext> {
   const modules = new Map<string, StartModuleBindings>();
-  if (!workflowConfig) return { modules, authNamespace };
+  const tsconfigCache = createTsconfigLookupCache();
+  if (!workflowConfig) return { modules, authNamespace, tsconfigCache };
 
   for (const file of loadFilesWithIgnores(workflowConfig, baseDir)) {
     try {
@@ -135,7 +141,7 @@ export async function buildStartContext(
       ?.exports.set("default", { kind: "workflow", name: workflow.name });
   }
 
-  return { modules, authNamespace };
+  return { modules, authNamespace, tsconfigCache };
 }
 
 function sortedTargets(bindings: Map<string, StartTarget>) {
