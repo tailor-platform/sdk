@@ -175,33 +175,78 @@ describe("AppConfigSchema", () => {
     });
   });
 
-  describe("allowedRuntimeGlobals", () => {
-    function parseAllowedRuntimeGlobals(allowedRuntimeGlobals: unknown) {
-      return AppConfigSchema.safeParse({ name: "my-app", allowedRuntimeGlobals });
+  describe("buildOptions", () => {
+    function parseBuildOptions(buildOptions: unknown, topLevel: Record<string, unknown> = {}) {
+      return AppConfigSchema.safeParse({ name: "my-app", ...topLevel, buildOptions });
     }
 
-    test("accepts a list of globals or true per package", () => {
+    function firstIssue(result: ReturnType<typeof parseBuildOptions>) {
+      if (result.success) {
+        throw new Error("Expected AppConfigSchema parsing to fail");
+      }
+      return result.error.issues[0];
+    }
+
+    test("accepts inlineSourcemap, logLevel, and allowedRuntimeGlobals", () => {
       expect(
-        parseAllowedRuntimeGlobals({
-          "@ai-sdk/gateway": ["Buffer"],
-          "@ai-sdk/provider-utils": true,
+        parseBuildOptions({
+          inlineSourcemap: false,
+          logLevel: "warn",
+          allowedRuntimeGlobals: { "@ai-sdk/gateway": ["Buffer"], "@ai-sdk/provider-utils": true },
         }).success,
       ).toBe(true);
     });
 
-    test("rejects false, which would read as an opt-out that does nothing", () => {
-      expect(parseAllowedRuntimeGlobals({ "@ai-sdk/gateway": false }).success).toBe(false);
+    test("rejects unknown fields", () => {
+      expect(parseBuildOptions({ minify: false }).success).toBe(false);
     });
 
-    test("rejects a name that is not a Node-only global, so a typo cannot silently allow nothing", () => {
-      const result = parseAllowedRuntimeGlobals({ "@ai-sdk/gateway": ["buffer"] });
+    test("rejects unsupported log levels", () => {
+      expect(firstIssue(parseBuildOptions({ logLevel: "OFF" }))?.path).toEqual([
+        "buildOptions",
+        "logLevel",
+      ]);
+    });
 
-      expect(result.success).toBe(false);
-      if (result.success) {
-        throw new Error("Expected AppConfigSchema parsing to fail");
-      }
-      expect(result.error.issues[0]?.path).toEqual(["allowedRuntimeGlobals", "@ai-sdk/gateway", 0]);
-      expect(result.error.issues[0]?.message).toContain("buffer");
+    test.each(["inlineSourcemap", "logLevel"] as const)(
+      "rejects %s set both at the top level and in buildOptions instead of picking one",
+      (field) => {
+        const value = field === "inlineSourcemap" ? false : "WARN";
+        const issue = firstIssue(parseBuildOptions({ [field]: value }, { [field]: value }));
+
+        expect(issue?.path).toEqual([field]);
+        expect(issue?.message).toContain(`buildOptions.${field}`);
+      },
+    );
+
+    test("does not accept allowedRuntimeGlobals at the top level", () => {
+      expect(
+        AppConfigSchema.safeParse({
+          name: "my-app",
+          allowedRuntimeGlobals: { "@ai-sdk/gateway": ["Buffer"] },
+        }).success,
+      ).toBe(false);
+    });
+
+    describe("allowedRuntimeGlobals", () => {
+      const parseAllowedRuntimeGlobals = (allowedRuntimeGlobals: unknown) =>
+        parseBuildOptions({ allowedRuntimeGlobals });
+
+      test("rejects false, which would read as an opt-out that does nothing", () => {
+        expect(parseAllowedRuntimeGlobals({ "@ai-sdk/gateway": false }).success).toBe(false);
+      });
+
+      test("rejects a name that is not a Node-only global, so a typo cannot silently allow nothing", () => {
+        const issue = firstIssue(parseAllowedRuntimeGlobals({ "@ai-sdk/gateway": ["buffer"] }));
+
+        expect(issue?.path).toEqual([
+          "buildOptions",
+          "allowedRuntimeGlobals",
+          "@ai-sdk/gateway",
+          0,
+        ]);
+        expect(issue?.message).toContain("buffer");
+      });
     });
   });
 });

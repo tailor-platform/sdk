@@ -76,7 +76,7 @@ describe("checkForbiddenRuntimeGlobals and warnPackageRuntimeGlobals", () => {
     scanBundle(chunk, 'Resolver "chat"');
 
     expect(warnSpy.mock.calls[0]?.[0]).toContain(
-      'add "hint-lib": ["Buffer"] to allowedRuntimeGlobals in defineConfig()',
+      'add "hint-lib": ["Buffer"] to buildOptions.allowedRuntimeGlobals in defineConfig()',
     );
   });
 

@@ -44,7 +44,7 @@ function warnPackageGlobals(packageName: string, names: string[], context: strin
   logger.warn(
     `${packageName} (bundled into ${context}) references ${describeGlobals(names)}. ` +
       `Code in ${packageName} that reaches ${names.length === 1 ? "it" : "them"} throws a ReferenceError at runtime. ` +
-      `If that code never runs, add ${JSON.stringify(packageName)}: ${JSON.stringify(names)} to allowedRuntimeGlobals in defineConfig() to silence this warning.`,
+      `If that code never runs, add ${JSON.stringify(packageName)}: ${JSON.stringify(names)} to buildOptions.allowedRuntimeGlobals in defineConfig() to silence this warning.`,
   );
 }
 
