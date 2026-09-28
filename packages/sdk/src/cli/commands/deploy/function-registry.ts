@@ -93,6 +93,32 @@ export function workflowJobFunctionName(jobName: string): string {
   return `${WORKFLOW_PREFIX}${jobName}`;
 }
 
+type WorkflowJobStates = {
+  unchanged: Set<string>;
+  forcedBySdkVersion: Set<string>;
+};
+
+/**
+ * Collect the workflow jobs a function registry plan leaves unchanged or
+ * updates only because of the SDK version.
+ * @param changeSet - Function registry change set
+ * @returns Workflow job names by state
+ */
+export function collectWorkflowJobStates(
+  changeSet: Pick<ChangeSet<HasName, HasName, HasName>, "unchanged" | "updates">,
+): WorkflowJobStates {
+  const jobNames = (items: ReadonlyArray<HasName>) =>
+    new Set(
+      items
+        .filter((item) => item.name.startsWith(WORKFLOW_PREFIX))
+        .map((item) => item.name.slice(WORKFLOW_PREFIX.length)),
+    );
+  return {
+    unchanged: jobNames(changeSet.unchanged),
+    forcedBySdkVersion: jobNames(changeSet.updates.filter((item) => item.forcedBySdkVersion)),
+  };
+}
+
 /**
  * Split function registry changes into grouped buckets by resource-name prefix.
  * @param changeSet - Function registry change set
@@ -353,11 +379,8 @@ export async function planFunctionRegistry(
         unmanaged,
       });
 
-      if (
-        existing.resource.contentHash === entry.contentHash &&
-        owned &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
-      ) {
+      const configUnchanged = owned && existing.resource.contentHash === entry.contentHash;
+      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({
           name: entry.name,
         });
@@ -366,6 +389,7 @@ export async function planFunctionRegistry(
           name: entry.name,
           entry,
           metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
       delete existingMap[entry.name];

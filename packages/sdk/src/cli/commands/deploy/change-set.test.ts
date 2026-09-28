@@ -20,6 +20,15 @@ describe("ChangeSet.lines", () => {
     expect(lines).toContain("    + echo (httpAdapter)");
   });
 
+  test("marks updates forced by the SDK version", () => {
+    const changeSet = createNamedChangeSet("AIGateways");
+    changeSet.updates.push({ name: "forced", forcedBySdkVersion: true }, { name: "changed" });
+
+    const lines = changeSet.lines();
+    expect(lines.find((line) => line.includes("forced"))).toContain("[forced by SDK version]");
+    expect(lines.find((line) => line.includes("changed"))).not.toContain("forced by SDK version");
+  });
+
   test("returns empty array when change set is empty", () => {
     expect(createNamedChangeSet("Applications").lines()).toEqual([]);
   });
@@ -44,20 +53,44 @@ describe("summarizeChangeSets", () => {
       update: 3,
       delete: 1,
       replace: 2,
+      forcedBySdkVersion: 0,
+    });
+  });
+
+  test("counts updates forced by the SDK version as a subset of updates", () => {
+    const update = createNamedChangeSet("Resolvers");
+    update.updates.push(
+      { name: "resolver-a", forcedBySdkVersion: true },
+      { name: "resolver-b" },
+      { name: "resolver-c", forcedBySdkVersion: true },
+    );
+
+    expect(summarizeChangeSets([update])).toEqual({
+      create: 0,
+      update: 3,
+      delete: 0,
+      replace: 0,
+      forcedBySdkVersion: 2,
     });
   });
 });
 
 describe("formatPlanSummary", () => {
   test("omits replace count when there are no replacements", () => {
-    expect(formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 0 })).toBe(
-      "Plan: 1 to create, 2 to update, 0 to delete",
-    );
+    expect(
+      formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 0, forcedBySdkVersion: 0 }),
+    ).toBe("Plan: 1 to create, 2 to update, 0 to delete");
   });
 
   test("includes replace count when replacements exist", () => {
-    expect(formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 3 })).toBe(
-      "Plan: 1 to create, 2 to update, 0 to delete, 3 to replace",
-    );
+    expect(
+      formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 3, forcedBySdkVersion: 0 }),
+    ).toBe("Plan: 1 to create, 2 to update, 0 to delete, 3 to replace");
+  });
+
+  test("breaks out updates forced by the SDK version", () => {
+    expect(
+      formatPlanSummary({ create: 0, update: 12, delete: 0, replace: 0, forcedBySdkVersion: 11 }),
+    ).toBe("Plan: 0 to create, 12 to update (11 forced by SDK version), 0 to delete");
   });
 });

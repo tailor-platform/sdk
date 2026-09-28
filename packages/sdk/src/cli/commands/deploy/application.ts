@@ -453,12 +453,9 @@ export async function planApplication(
       request,
       metaRequest,
     };
-    if (
-      owned &&
-      hasMatchingSdkVersion(existingLabels, metaRequest.labels) &&
-      areApplicationsEqual(existing, desired) &&
-      metadataDetails.length === 0
-    ) {
+    const configUnchanged =
+      owned && areApplicationsEqual(existing, desired) && metadataDetails.length === 0;
+    if (configUnchanged && hasMatchingSdkVersion(existingLabels, metaRequest.labels)) {
       // Plan display shows this as unchanged, but apply still re-issues it.
       changeSet.unchanged.push(update);
     } else {
@@ -469,7 +466,7 @@ export async function planApplication(
       if (details.length > 0) {
         update.details = details;
       }
-      changeSet.updates.push(update);
+      changeSet.updates.push({ ...update, ...(configUnchanged && { forcedBySdkVersion: true }) });
     }
   } else {
     const details = [...diffHttpAdapterDisplay(undefined, httpAdapters), ...metadataDetails];

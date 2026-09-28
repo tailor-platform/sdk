@@ -410,7 +410,18 @@ describe("planPipeline (resolver service level)", () => {
       const result = await planPipeline(buildCtx({ client, application }));
 
       expect(result.changeSet.service.updates).toHaveLength(1);
+      expect(result.changeSet.service.updates[0]?.forcedBySdkVersion).toBe(true);
       expect(result.changeSet.service.unchanged).toHaveLength(0);
+    });
+
+    test("service update taking over ownership is not forced by the SDK version", async () => {
+      const client = createMockClient([{ name: "resolver-a", label: "other-app" }]);
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+
+      const result = await planPipeline(buildCtx({ client, application }));
+
+      expect(result.changeSet.service.updates).toHaveLength(1);
+      expect(result.changeSet.service.updates[0]).not.toHaveProperty("forcedBySdkVersion");
     });
   });
 
@@ -531,7 +542,36 @@ describe("planPipeline (resolver service level)", () => {
       );
 
       expect(result.changeSet.resolver.updates).toHaveLength(1);
+      expect(result.changeSet.resolver.updates[0]?.forcedBySdkVersion).toBe(true);
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
+    });
+
+    test("resolver update under forceApplyAll is not forced when its definition differs", async () => {
+      const remotePipeline = createPipeline({
+        name: "test-resolver",
+        operation: "query",
+        output: { type: "string", metadata: {} },
+      });
+      const remoteResolver = await getDesiredResolver(remotePipeline);
+      const pipeline = createPipeline({
+        name: "test-resolver",
+        operation: "mutation",
+        output: { type: "string", metadata: {} },
+      });
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [remoteResolver as Record<string, unknown>],
+      });
+      const result = await planPipeline(
+        buildCtx({
+          client,
+          application: createMockApplication([pipeline]),
+          forceApplyAll: true,
+        }),
+      );
+
+      expect(result.changeSet.resolver.updates).toHaveLength(1);
+      expect(result.changeSet.resolver.updates[0]).not.toHaveProperty("forcedBySdkVersion");
     });
 
     test("resolver is updated when invoker differs", async () => {

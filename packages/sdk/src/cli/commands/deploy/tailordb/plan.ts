@@ -271,16 +271,14 @@ async function planServices(
         unmanaged,
       });
 
-      if (
-        owned &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        areTailorDBServicesEqual(existing.resource, tailordb)
-      ) {
+      const configUnchanged = owned && areTailorDBServicesEqual(existing.resource, tailordb);
+      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name: tailordb.namespace });
       } else {
         changeSet.updates.push({
           name: tailordb.namespace,
           metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
       delete existingServices[tailordb.namespace];
@@ -431,13 +429,11 @@ async function planTypes(
       });
       const existingType = existingTypesMap.get(tableName);
       if (existingType) {
-        if (
-          !forceApplyAll &&
-          areNormalizedEqual(
-            normalizeComparableTailorDBType(existingType),
-            normalizeComparableTailorDBType(tailordbType),
-          )
-        ) {
+        const configUnchanged = areNormalizedEqual(
+          normalizeComparableTailorDBType(existingType),
+          normalizeComparableTailorDBType(tailordbType),
+        );
+        if (!forceApplyAll && configUnchanged) {
           // The schema matches, but the records may not, so the labels still go.
           changeSet.unchanged.push({ name: tableName, metaRequest: await typeMeta(tableName) });
         } else {
@@ -449,6 +445,7 @@ async function planTypes(
               tailordbType,
             },
             metaRequest: await typeMeta(tableName),
+            ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }
         existingTypesMap.delete(tableName);
@@ -547,14 +544,13 @@ async function planGqlPermissions(
         (entry) => entry.typeName === tableName,
       );
       if (existingNameSet.has(tableName)) {
-        if (
-          !forceApplyAll &&
-          existingPermission &&
+        const configUnchanged =
+          !!existingPermission &&
           areNormalizedEqual(
             normalizeComparableGqlPermission(existingPermission.permission),
             normalizeComparableGqlPermission(desiredPermission),
-          )
-        ) {
+          );
+        if (!forceApplyAll && configUnchanged) {
           changeSet.unchanged.push({ name: tableName });
         } else {
           changeSet.updates.push({
@@ -565,6 +561,7 @@ async function planGqlPermissions(
               typeName: tableName,
               permission: desiredPermission,
             },
+            ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }
         existingNameSet.delete(tableName);
