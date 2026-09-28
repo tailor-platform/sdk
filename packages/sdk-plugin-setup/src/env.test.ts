@@ -395,11 +395,11 @@ describe("renderTerraform", () => {
   });
 
   test("rejects environments whose Terraform names would collide", () => {
-    const envs = collectEnvironmentRequirements(
+    const colliding = collectEnvironmentRequirements(
       lockOf(target("branch", "app-eu", "stg/eu"), target("tag", "app-eu", "stg.eu")),
     );
 
-    expect(() => renderTerraform(envs)).toThrow(/stg\/eu.*stg\.eu|stg\.eu.*stg\/eu/);
+    expect(() => renderTerraform(colliding)).toThrow(/stg\/eu.*stg\.eu|stg\.eu.*stg\/eu/);
   });
 });
 
