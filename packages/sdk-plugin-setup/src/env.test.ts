@@ -184,7 +184,7 @@ describe("renderGhCommands", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
     const create = lines.indexOf(
-      'gh api -i "repos/{owner}/{repo}/environments/stg%2Feu" 2>/dev/null | head -n 1 | grep -q " 404 " && ' +
+      '[ "$(gh api -i "repos/{owner}/{repo}/environments/stg%2Feu" 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ] && ' +
         'gh api -X PUT "repos/{owner}/{repo}/environments/stg%2Feu" --silent',
     );
     const firstSecret = lines.findIndex((l) => l.startsWith("gh secret set"));
@@ -217,7 +217,8 @@ describe("renderGhCommands", () => {
   test("keeps every non-command line a shell comment", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
-    expect(lines.filter((l) => l !== "" && !l.startsWith("#") && !l.startsWith("gh "))).toEqual([]);
+    const isCommand = (l: string) => l.startsWith("gh ") || l.startsWith('[ "$(gh ');
+    expect(lines.filter((l) => l !== "" && !l.startsWith("#") && !isCommand(l))).toEqual([]);
   });
 });
 
