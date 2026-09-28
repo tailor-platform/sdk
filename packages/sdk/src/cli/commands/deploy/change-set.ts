@@ -10,6 +10,24 @@ export interface HasName {
   details?: readonly string[];
 }
 
+/**
+ * Marks an update whose config the current SDK found unchanged, so it is
+ * planned only because the application's resources were last applied by a
+ * different SDK version.
+ */
+export type UpdateAnnotation = { forcedBySdkVersion?: true };
+
+const FORCED_BY_SDK_VERSION = "forced by SDK version";
+
+/**
+ * Render the plan-line suffix that marks an update forced by the SDK version.
+ * @param item - Plan item that may carry the annotation
+ * @returns Suffix to append to the item's line, or an empty string
+ */
+export function forcedBySdkVersionSuffix(item: UpdateAnnotation): string {
+  return item.forcedBySdkVersion ? ` ${styles.dim(`[${FORCED_BY_SDK_VERSION}]`)}` : "";
+}
+
 export type ChangeSet<
   C extends HasName,
   U extends HasName,
@@ -19,7 +37,7 @@ export type ChangeSet<
 > = {
   readonly title: string;
   readonly creates: C[];
-  readonly updates: U[];
+  readonly updates: Array<U & UpdateAnnotation>;
   readonly deletes: D[];
   readonly replaces: R[];
   readonly unchanged: Un[];
@@ -32,6 +50,8 @@ export interface PlanSummary {
   update: number;
   delete: number;
   replace: number;
+  /** Updates, also counted in `update`, that are forced by the SDK version. */
+  forcedBySdkVersion: number;
 }
 
 /**
@@ -47,7 +67,7 @@ export function createChangeSet<
   Un extends HasName = HasName,
 >(title: string): ChangeSet<C, U, D, R, Un> {
   const creates: C[] = [];
-  const updates: U[] = [];
+  const updates: Array<U & UpdateAnnotation> = [];
   const deletes: D[] = [];
   const replaces: R[] = [];
   const unchanged: Un[] = [];
@@ -65,8 +85,8 @@ export function createChangeSet<
     isEmpty,
     lines: () => {
       if (isEmpty()) return [];
-      const itemLines = (symbol: string) => (item: HasName) => [
-        `  ${symbol} ${item.name}`,
+      const itemLines = (symbol: string) => (item: HasName & UpdateAnnotation) => [
+        `  ${symbol} ${item.name}${forcedBySdkVersionSuffix(item)}`,
         ...(item.details ?? []).map((d) => `    ${d}`),
       ];
       return [
@@ -93,13 +113,22 @@ export function summarizeChangeSets(
     >
   >,
 ): PlanSummary {
-  const summary: PlanSummary = { create: 0, update: 0, delete: 0, replace: 0 };
+  const summary: PlanSummary = {
+    create: 0,
+    update: 0,
+    delete: 0,
+    replace: 0,
+    forcedBySdkVersion: 0,
+  };
 
   for (const changeSet of changeSets) {
     summary.create += changeSet.creates.length;
     summary.update += changeSet.updates.length;
     summary.delete += changeSet.deletes.length;
     summary.replace += changeSet.replaces.length;
+    summary.forcedBySdkVersion += changeSet.updates.filter(
+      (item) => item.forcedBySdkVersion,
+    ).length;
   }
 
   return summary;
@@ -113,7 +142,9 @@ export function summarizeChangeSets(
 export function formatPlanSummary(summary: PlanSummary): string {
   const parts = [
     `${summary.create} to create`,
-    `${summary.update} to update`,
+    summary.forcedBySdkVersion > 0
+      ? `${summary.update} to update (${summary.forcedBySdkVersion} ${FORCED_BY_SDK_VERSION})`
+      : `${summary.update} to update`,
     `${summary.delete} to delete`,
   ];
 

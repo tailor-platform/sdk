@@ -5,6 +5,7 @@ import {
   applyFunctionRegistry,
   authHookFunctionName,
   collectFunctionEntries,
+  collectWorkflowJobStates,
   executorFunctionName,
   planFunctionRegistry,
   resolverFunctionName,
@@ -169,17 +170,22 @@ describe("planFunctionRegistry", () => {
 
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.updates[0]!.name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.updates[0]).not.toHaveProperty("forcedBySdkVersion");
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
 
     test.each([
-      ["ownership metadata is missing", {}, { unmanaged: 1, conflicts: 0 }],
-      ["owned by another app", { label: "other-app" }, { unmanaged: 0, conflicts: 1 }],
+      ["ownership metadata is missing", {}, { unmanaged: 1, conflicts: 0, forced: false }],
+      [
+        "owned by another app",
+        { label: "other-app" },
+        { unmanaged: 0, conflicts: 1, forced: false },
+      ],
       [
         "sdk version differs",
         { label: appName, sdkVersion: "v0-9-0" },
-        { unmanaged: 0, conflicts: 0 },
+        { unmanaged: 0, conflicts: 0, forced: true },
       ],
     ] as const)(
       "matching function content is updated when %s",
@@ -192,6 +198,9 @@ describe("planFunctionRegistry", () => {
         const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
         expect(result.changeSet.updates).toHaveLength(1);
+        expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(
+          expected.forced ? true : undefined,
+        );
         expect(result.changeSet.unchanged).toHaveLength(0);
         expect(result.unmanaged).toHaveLength(expected.unmanaged);
         expect(result.conflicts).toHaveLength(expected.conflicts);
@@ -346,6 +355,20 @@ describe("planFunctionRegistry", () => {
 });
 
 describe("splitFunctionRegistryChanges", () => {
+  test("collects unchanged and SDK-version-forced workflow jobs from the plan", () => {
+    const states = collectWorkflowJobStates({
+      unchanged: [{ name: "workflow--check-inventory" }, { name: "executor--user-created" }],
+      updates: [
+        { name: "workflow--process-order", forcedBySdkVersion: true },
+        { name: "workflow--send-notification" },
+        { name: "resolver--my-resolver--add", forcedBySdkVersion: true },
+      ],
+    });
+
+    expect(states.unchanged).toEqual(new Set(["check-inventory"]));
+    expect(states.forcedBySdkVersion).toEqual(new Set(["process-order"]));
+  });
+
   test("separates workflow and resolver functions from other function registry entries", () => {
     const {
       workflowJobChanges,

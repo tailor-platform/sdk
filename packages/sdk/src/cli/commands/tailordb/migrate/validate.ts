@@ -23,7 +23,7 @@ import {
   type MigrationDiff,
   type WarningChangeInfo,
 } from "./diff-calculator";
-import { formatMigrationScriptCommand } from "./hints";
+import { formatMigrationScriptHint } from "./hints";
 import {
   checkMigrationDiffs,
   logMissingCheckpointGuidance,
@@ -187,7 +187,7 @@ function assertMigrationScriptsReady(
     const clearCommands = conflicting
       .map(
         (migrationNumber) =>
-          `  ${formatMigrationScriptCommand({ migrationNumber, namespace, configPath })}`,
+          `  ${formatMigrationScriptHint({ migrationNumber, namespace, configPath })}`,
       )
       .join("\n");
     throw CLIError({
@@ -530,7 +530,7 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
     for (const report of missingAcknowledgments) {
       for (const migration of report.warningAcknowledgments?.missing ?? []) {
         logger.info(
-          `  ${formatMigrationScriptCommand({
+          `  ${formatMigrationScriptHint({
             migrationNumber: migration.migrationNumber,
             namespace: report.namespace,
             configPath,

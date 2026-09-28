@@ -303,6 +303,7 @@ async function planServices(
             namespaceName: pipeline.namespace,
           },
           metaRequest,
+          ...(owned && { forcedBySdkVersion: true }),
         });
       }
       delete existingServices[pipeline.namespace];
@@ -484,11 +485,9 @@ async function planResolvers(
               })
             ).pipelineResolver;
         existingResolverDetails.set(resolver.name, existingResolverDetail);
-        if (
-          !forceApplyAll &&
-          existingResolverDetail &&
-          areResolversEqual(existingResolverDetail, desiredResolver)
-        ) {
+        const configUnchanged =
+          !!existingResolverDetail && areResolversEqual(existingResolverDetail, desiredResolver);
+        if (!forceApplyAll && configUnchanged) {
           // The definition matches, but the records may not, so the labels still go.
           changeSet.unchanged.push({ name: resolver.name, metaRequest });
         } else {
@@ -500,6 +499,7 @@ async function planResolvers(
               pipelineResolver: desiredResolver,
             },
             metaRequest,
+            ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }
         existingResolversMap.delete(resolver.name);

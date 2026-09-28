@@ -1,9 +1,9 @@
-import { type ChangeSet, type HasName } from "../change-set";
+import { type ChangeSet, type HasName, type UpdateAnnotation } from "../change-set";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
 
 type TailorDBDisplayEntry = GroupedDisplayEntry;
 
-type NamespacedItem = HasName & { request?: { namespaceName?: string } };
+type NamespacedItem = HasName & UpdateAnnotation & { request?: { namespaceName?: string } };
 
 function itemKey(item: NamespacedItem): string {
   return `${item.request?.namespaceName ?? ""}/${item.name}`;
@@ -15,22 +15,29 @@ function collectTailorDBDisplayEntries(
   gqlPermissionItems: ReadonlyArray<NamespacedItem>,
 ): TailorDBDisplayEntry[] {
   const typeKeys = new Set(typeItems.map(itemKey));
-  const gqlPermissionKeys = new Set(gqlPermissionItems.map(itemKey));
-  const typeEntries = typeItems.map((item) => ({
-    action,
-    symbol: ACTION_SYMBOLS[action],
-    name: item.name,
-    labels: gqlPermissionKeys.has(itemKey(item)) ? ["table", "gqlPermission"] : ["table"],
-    namespace: item.request?.namespaceName,
-  }));
+  const gqlPermissionsByKey = new Map(gqlPermissionItems.map((item) => [itemKey(item), item]));
+  const typeEntries = typeItems.map((item): TailorDBDisplayEntry => {
+    const gqlPermission = gqlPermissionsByKey.get(itemKey(item));
+    const forcedBySdkVersion =
+      item.forcedBySdkVersion && (!gqlPermission || gqlPermission.forcedBySdkVersion);
+    return {
+      action,
+      symbol: ACTION_SYMBOLS[action],
+      name: item.name,
+      labels: gqlPermission ? ["table", "gqlPermission"] : ["table"],
+      namespace: item.request?.namespaceName,
+      ...(forcedBySdkVersion && { forcedBySdkVersion: true }),
+    };
+  });
   const gqlPermissionOnlyEntries = gqlPermissionItems
     .filter((item) => !typeKeys.has(itemKey(item)))
-    .map((item) => ({
+    .map((item): TailorDBDisplayEntry => ({
       action,
       symbol: ACTION_SYMBOLS[action],
       name: item.name,
       labels: ["gqlPermission"],
       namespace: item.request?.namespaceName,
+      ...(item.forcedBySdkVersion && { forcedBySdkVersion: true }),
     }));
 
   return [...typeEntries, ...gqlPermissionOnlyEntries];

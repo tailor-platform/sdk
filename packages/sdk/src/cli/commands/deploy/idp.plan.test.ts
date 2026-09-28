@@ -118,6 +118,7 @@ type MockRemoteService = {
   disableGqlOperations?: Record<string, boolean>;
   permission?: Record<string, unknown>;
   label?: string;
+  sdkVersion?: string;
 };
 
 function createMatchingRemoteService(overrides?: Partial<MockRemoteService>): MockRemoteService {
@@ -161,7 +162,9 @@ function createMockClient(opts?: {
       const service = services.find((entry) => entry.name === name);
       return {
         metadata: {
-          labels: service?.label ? { "sdk-name": service.label, "sdk-version": sdkVersion } : {},
+          labels: service?.label
+            ? { "sdk-name": service.label, "sdk-version": service.sdkVersion ?? sdkVersion }
+            : {},
         },
       };
     }),
@@ -230,7 +233,44 @@ describe("planIdP", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.service.unchanged).toHaveLength(1);
     expect(result.changeSet.client.updates).toHaveLength(1);
+    expect(result.changeSet.client.updates[0]?.forcedBySdkVersion).toBe(true);
     expect(result.changeSet.client.unchanged).toHaveLength(0);
+  });
+
+  test("marks an idp service update forced by the SDK version when only its sdk-version differs", async () => {
+    const client = createMockClient({
+      services: [createMatchingRemoteService({ sdkVersion: "v0-9-0" })],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.service.updates).toHaveLength(1);
+    expect(result.changeSet.service.updates[0]?.forcedBySdkVersion).toBe(true);
+  });
+
+  test("does not mark an idp service update whose config also differs as forced by the SDK version", async () => {
+    const client = createMockClient({
+      services: [createMatchingRemoteService({ lang: IdPLang.EN, sdkVersion: "v0-9-0" })],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.service.updates).toHaveLength(1);
+    expect(result.changeSet.service.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+  });
+
+  test("does not mark an idp service update that takes over ownership as forced by the SDK version", async () => {
+    const client = createMockClient({
+      services: [createMatchingRemoteService({ label: "other-app" })],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.service.updates).toHaveLength(1);
+    expect(result.changeSet.service.updates[0]).not.toHaveProperty("forcedBySdkVersion");
   });
 
   test("marks idp service updated when remote state differs", async () => {

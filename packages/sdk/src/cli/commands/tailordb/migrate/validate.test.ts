@@ -536,10 +536,10 @@ describe("tailordb migration validate", () => {
     const [report] = JSON.parse(stdout.output);
     expect(report.migrationFiles.error).toContain("0001, 0002");
     expect(report.migrationFiles.error).toContain(
-      "\n  tailor tailordb migration script 0001 --namespace tailordb\n",
+      "\n  `tailor tailordb migration script 0001 --namespace tailordb`\n",
     );
     expect(report.migrationFiles.error).toContain(
-      "\n  tailor tailordb migration script 0002 --namespace tailordb\n",
+      "\n  `tailor tailordb migration script 0002 --namespace tailordb`\n",
     );
   });
 
@@ -776,7 +776,7 @@ describe("tailordb migration validate", () => {
     expect(stderr.output).toContain("--config=-local.config.ts --no-script");
   });
 
-  test("--strict renders the hint as argv for Windows-expandable config paths", async () => {
+  test("--strict names a PowerShell and a cmd.exe hint for Windows-expandable config paths", async () => {
     using stderr = captureStderr();
     writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
     vi.spyOn(process, "platform", "get").mockReturnValue("win32");
@@ -789,7 +789,7 @@ describe("tailordb migration validate", () => {
 
     expect(result.success).toBe(false);
     expect(stderr.output).toContain(
-      'argv ["tailor","tailordb","migration","script","0001","--namespace","tailordb","--config=%APPDATA%.config.ts","--no-script","--reason","<reason>"]',
+      `  \`tailor tailordb migration script '0001' --namespace tailordb '--config=%APPDATA%.config.ts' --no-script --reason '<reason>'\` in PowerShell or \`tailor tailordb migration script 0001 --namespace tailordb "--config=%%cd:~,%APPDATA%%cd:~,%.config.ts" --no-script --reason "<reason>"\` in cmd.exe`,
     );
   });
 

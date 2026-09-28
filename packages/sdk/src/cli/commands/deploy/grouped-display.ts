@@ -1,16 +1,21 @@
 import { styles, symbols } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import {
+  forcedBySdkVersionSuffix,
+  type ChangeSet,
+  type HasName,
+  type UpdateAnnotation,
+} from "./change-set";
+import {
   AUTH_HOOK_PREFIX,
   EXECUTOR_PREFIX,
   RESOLVER_PREFIX,
   WORKFLOW_PREFIX,
 } from "./function-registry";
-import type { ChangeSet, HasName } from "./change-set";
 
 export type DisplayAction = "create" | "update" | "delete" | "replace";
 
-export type GroupedDisplayEntry = {
+export type GroupedDisplayEntry = UpdateAnnotation & {
   action: DisplayAction;
   symbol: string;
   name: string;
@@ -20,7 +25,7 @@ export type GroupedDisplayEntry = {
 
 export type RelatedFunctionRegistryChanges = {
   creates: ReadonlyArray<HasName>;
-  updates: ReadonlyArray<HasName>;
+  updates: ReadonlyArray<HasName & UpdateAnnotation>;
   deletes: ReadonlyArray<HasName>;
   replaces: ReadonlyArray<HasName>;
 };
@@ -31,6 +36,12 @@ type RelatedFunctionRegistryNameSets = {
   deletes: Set<string>;
   replaces: Set<string>;
 };
+
+function forcedFunctionUpdateNames(changes?: RelatedFunctionRegistryChanges): Set<string> {
+  return new Set(
+    changes?.updates.filter((item) => item.forcedBySdkVersion).map((item) => item.name) ?? [],
+  );
+}
 
 /**
  * Convert grouped function registry changes into mutable name sets.
@@ -70,13 +81,14 @@ export function formatChangeSetEntries(
   labels: string[] = [],
   getNamespace?: (item: HasName) => string | undefined,
 ): GroupedDisplayEntry[] {
-  function toEntry(action: DisplayAction, item: HasName): GroupedDisplayEntry {
+  function toEntry(action: DisplayAction, item: HasName & UpdateAnnotation): GroupedDisplayEntry {
     return {
       action,
       symbol: ACTION_SYMBOLS[action],
       name: item.name,
       labels: [...labels],
       namespace: getNamespace?.(item),
+      ...(item.forcedBySdkVersion && { forcedBySdkVersion: true }),
     };
   }
   return [
@@ -88,9 +100,11 @@ export function formatChangeSetEntries(
 }
 
 function formatGroupedDisplayLine(entry: GroupedDisplayEntry) {
-  return entry.labels.length > 0
-    ? `${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`
-    : `${entry.symbol} ${entry.name}`;
+  const line =
+    entry.labels.length > 0
+      ? `${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`
+      : `${entry.symbol} ${entry.name}`;
+  return `${line}${forcedBySdkVersionSuffix(entry)}`;
 }
 
 function parseFunctionRegistryName(name: string): { displayName: string; namespace?: string } {
@@ -122,11 +136,13 @@ function parseFunctionRegistryName(name: string): { displayName: string; namespa
 /**
  * Build function-registry-only entries that were not grouped with a parent resource.
  * @param names - Related function registry names keyed by action
+ * @param forcedUpdates - Function registry update names forced by the SDK version
  * @param consumed - Function registry names already grouped with parent resources
  * @returns Display entries for ungrouped function registry changes
  */
 function buildRemainingFunctionRegistryEntries(
   names: RelatedFunctionRegistryNameSets,
+  forcedUpdates: ReadonlySet<string>,
   consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets(),
 ): GroupedDisplayEntry[] {
   const actions = [
@@ -147,6 +163,7 @@ function buildRemainingFunctionRegistryEntries(
           name: displayName,
           labels: ["function"],
           namespace,
+          ...(action === "update" && forcedUpdates.has(name) && { forcedBySdkVersion: true }),
         };
       }),
   );
@@ -158,7 +175,9 @@ function buildRemainingFunctionRegistryEntries(
  * For each item in creates/updates/deletes, calls `getFunctionRegistryNames` to
  * derive zero or more function registry names. When a matching function registry
  * change exists for the same action, the item is displayed with both the resource
- * label and "functionRegistry". Ungrouped function registry changes are appended.
+ * label and "function". A grouped update is forced by the SDK version only
+ * when the item and every grouped function registry update are. Ungrouped function
+ * registry changes are appended.
  * @param resourceLabel - Label for the resource kind (e.g. "executor", "resolver")
  * @param changeSet - Resource change set with creates/updates/deletes/replaces
  * @param changeSet.creates - Created resources
@@ -180,7 +199,7 @@ export function formatChangeEntriesWithFunctionRegistry<
   resourceLabel: string,
   changeSet: {
     creates: ReadonlyArray<C>;
-    updates: ReadonlyArray<U>;
+    updates: ReadonlyArray<U & UpdateAnnotation>;
     deletes: ReadonlyArray<D>;
     replaces: ReadonlyArray<HasName>;
   },
@@ -193,30 +212,31 @@ export function formatChangeEntriesWithFunctionRegistry<
 ): GroupedDisplayEntry[] {
   const { getNamespace, getDisplayName } = options ?? {};
   const functionNames = createRelatedFunctionRegistryNameSets(functionRegistryChanges);
+  const forcedFunctionUpdates = forcedFunctionUpdateNames(functionRegistryChanges);
   const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
 
   function processItems(
-    items: ReadonlyArray<C | U | D>,
+    items: ReadonlyArray<(C | U | D) & UpdateAnnotation>,
     action: DisplayAction,
     fnNameSet: Set<string>,
     consumedSet: Set<string>,
   ): GroupedDisplayEntry[] {
     return items.map((item) => {
-      const names = getFunctionRegistryNames(item, action);
-      const hasMatch = names.some((name) => fnNameSet.has(name));
-      if (hasMatch) {
-        for (const name of names) {
-          if (fnNameSet.has(name)) {
-            consumedSet.add(name);
-          }
-        }
+      const matchedNames = getFunctionRegistryNames(item, action).filter((name) =>
+        fnNameSet.has(name),
+      );
+      for (const name of matchedNames) {
+        consumedSet.add(name);
       }
+      const forcedBySdkVersion =
+        item.forcedBySdkVersion && matchedNames.every((name) => forcedFunctionUpdates.has(name));
       return {
         action,
         symbol: ACTION_SYMBOLS[action],
         name: getDisplayName?.(item) ?? item.name,
-        labels: hasMatch ? [resourceLabel, "function"] : [resourceLabel],
+        labels: matchedNames.length > 0 ? [resourceLabel, "function"] : [resourceLabel],
         namespace: getNamespace?.(item),
+        ...(forcedBySdkVersion && { forcedBySdkVersion: true }),
       };
     });
   }
@@ -232,11 +252,11 @@ export function formatChangeEntriesWithFunctionRegistry<
       labels: [resourceLabel],
       namespace: getNamespace?.(item as C | U | D),
     })),
-    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
+    ...buildRemainingFunctionRegistryEntries(functionNames, forcedFunctionUpdates, consumed),
   ];
 }
 
-export type NamespaceAction = {
+export type NamespaceAction = UpdateAnnotation & {
   name: string;
   action: DisplayAction;
 };
@@ -255,7 +275,11 @@ export function extractServiceActions(
   return [
     ...changeSet.creates.map((item) => ({ name: item.name, action: "create" as const })),
     ...changeSet.deletes.map((item) => ({ name: item.name, action: "delete" as const })),
-    ...changeSet.updates.map((item) => ({ name: item.name, action: "update" as const })),
+    ...changeSet.updates.map((item): NamespaceAction => ({
+      name: item.name,
+      action: "update",
+      ...(item.forcedBySdkVersion && { forcedBySdkVersion: true }),
+    })),
     ...changeSet.replaces.map((item) => ({ name: item.name, action: "replace" as const })),
   ];
 }
@@ -274,10 +298,10 @@ export function buildGroupedDisplayLines(
   entries: ReadonlyArray<GroupedDisplayEntry>,
   serviceActions?: ReadonlyArray<NamespaceAction>,
 ): string[] {
-  const serviceMap = new Map<string, DisplayAction>();
+  const serviceMap = new Map<string, NamespaceAction>();
   if (serviceActions) {
     for (const sa of serviceActions) {
-      serviceMap.set(sa.name, sa.action);
+      serviceMap.set(sa.name, sa);
     }
   }
 
@@ -306,8 +330,11 @@ export function buildGroupedDisplayLines(
     const group = assertDefined(byNamespace.get(ns), "namespace group missing");
     if (ns) {
       const svcAction = serviceMap.get(ns);
-      const prefix = svcAction ? `${ACTION_SYMBOLS[svcAction]} ` : "";
-      out.push(`  ${prefix}${styles.bold(`${ns}:`)}`);
+      const prefix = svcAction ? `${ACTION_SYMBOLS[svcAction.action]} ` : "";
+      const header = svcAction?.forcedBySdkVersion
+        ? `${styles.bold(ns)}${forcedBySdkVersionSuffix(svcAction)}${styles.bold(":")}`
+        : styles.bold(`${ns}:`);
+      out.push(`  ${prefix}${header}`);
       printedServices.add(ns);
       for (const entry of group) {
         out.push(`    ${formatGroupedDisplayLine(entry)}`);
@@ -320,9 +347,11 @@ export function buildGroupedDisplayLines(
   }
 
   // Append services without child entries as flat entries
-  for (const [name, action] of serviceMap) {
+  for (const [name, serviceAction] of serviceMap) {
     if (!printedServices.has(name)) {
-      out.push(`  ${ACTION_SYMBOLS[action]} ${name}`);
+      out.push(
+        `  ${ACTION_SYMBOLS[serviceAction.action]} ${name}${forcedBySdkVersionSuffix(serviceAction)}`,
+      );
     }
   }
 

@@ -54,7 +54,7 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.6",
     "eslint-plugin-zod": "4.14.2",
-    "knip": "6.37.0",
+    "knip": "6.38.0",
     "lefthook": "2.1.14",
     "madge": "8.0.0",
     "oxfmt": "0.70.0",

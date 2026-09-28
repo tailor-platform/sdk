@@ -1,5 +1,6 @@
+import { profileUpdateArgs } from "./args";
 import { readPlatformConfig } from "./context";
-import { CLIError } from "./errors";
+import { CLIError, formatCommandHint } from "./errors";
 
 interface AssertWritableOptions {
   /** Explicit profile name from command args. Falls back to TAILOR_PLATFORM_PROFILE. */
@@ -38,6 +39,11 @@ export async function assertWritable(opts?: AssertWritableOptions): Promise<void
     message: `Profile "${profileName}" is read-only.`,
     details:
       "This profile blocks platform-state mutations (apply, create/update/delete, deploy, etc.). Application-data operations remain available because their permissions are governed by the machine user.",
-    suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run 'tailor profile update ${profileName} --permission write'.`,
+    suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run ${formatCommandHint(
+      {
+        command: "tailor",
+        args: profileUpdateArgs(profileName, ["--permission", "write"]),
+      },
+    )}.`,
   });
 }

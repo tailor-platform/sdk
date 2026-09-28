@@ -515,7 +515,7 @@ describe("migration", () => {
       expect(error!.message).toContain("has both a --no-script skip acknowledgment and migrate.ts");
       const { suggestion } = error as CLIError;
       expect(suggestion?.split("\n")).toContain(
-        "Keep the script and clear the stale acknowledgment: tailor tailordb migration script 0001 --namespace tailordb",
+        "Keep the script and clear the stale acknowledgment: `tailor tailordb migration script 0001 --namespace tailordb`",
       );
       expect(suggestion).toContain("delete migrate.ts");
     });

@@ -10,7 +10,7 @@ import {
 import {
   CLIError,
   type CLIErrorNextAction,
-  formatCopyableCommand,
+  formatCommandHint,
   internalError,
 } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -390,11 +390,13 @@ async function createWorkspace(
   );
   logger.success(`Created workspace: ${workspaceLabel(workspace)}`);
   logger.info(
-    `Reuse this workspace with: ${formatCopyableCommand([
-      "tailor",
-      "deploy",
-      ...recoveryContextArgs({ workspaceId: workspace.id, profile: options.profile }),
-    ])}`,
+    `Reuse this workspace by running ${formatCommandHint({
+      command: "tailor",
+      args: [
+        "deploy",
+        ...recoveryContextArgs({ workspaceId: workspace.id, profile: options.profile }),
+      ],
+    })}`,
   );
   logger.info(`Or set TAILOR_PLATFORM_WORKSPACE_ID=${workspace.id}.`);
   return { client, workspaceId: workspace.id };

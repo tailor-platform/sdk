@@ -220,6 +220,8 @@ describe("assertWritable", () => {
       profiles: {
         rw: { user: "u@example.com", workspace_id: validUUID },
         ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
+        ro$1: { user: "u@example.com", workspace_id: validUUID, readonly: true },
+        "-ro": { user: "u@example.com", workspace_id: validUUID, readonly: true },
         ro_false: { user: "u@example.com", workspace_id: validUUID, readonly: false },
       },
       current_user: null,
@@ -260,6 +262,32 @@ describe("assertWritable", () => {
   test("throws CLIError with PROFILE_READONLY code when profile is readonly", async () => {
     await expect(assertWritable({ profile: "ro" })).rejects.toMatchObject({
       code: "PROFILE_READONLY",
+    });
+  });
+
+  test("shell-quotes the profile in the profile update suggestion", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    await expect(assertWritable({ profile: "ro$1" })).rejects.toMatchObject({
+      suggestion:
+        "Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run `tailor profile update 'ro$1' --permission write`.",
+    });
+  });
+
+  test("passes a profile that starts with a dash after `--` in the profile update suggestion", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    await expect(assertWritable({ profile: "-ro" })).rejects.toMatchObject({
+      suggestion:
+        "Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run `tailor profile update --permission write -- -ro`.",
+    });
+  });
+
+  test("names a PowerShell and a cmd.exe profile update command when the Windows shells quote the profile differently", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    await expect(assertWritable({ profile: "ro$1" })).rejects.toMatchObject({
+      suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run \`tailor profile update 'ro$1' --permission write\` in PowerShell or \`tailor profile update "ro$1" --permission write\` in cmd.exe.`,
     });
   });
 });

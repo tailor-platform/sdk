@@ -485,17 +485,16 @@ async function planServices(
         unmanaged,
       });
 
-      if (
-        !forceApplyAll &&
-        existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false) &&
-        owned
-      ) {
+      const configUnchanged =
+        owned && existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false);
+      if (!forceApplyAll && configUnchanged) {
         changeSet.unchanged.push({ name: config.name });
       } else {
         changeSet.updates.push({
           name: config.name,
           request,
           metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
       delete existingServices[config.name];
@@ -601,7 +600,8 @@ async function planIdPConfigs(
           existingMap.delete(idpConfig.name);
           continue;
         }
-        if (!forceApplyAll && areAuthIdPConfigsEqual(existing, desiredComparable)) {
+        const configUnchanged = areAuthIdPConfigsEqual(existing, desiredComparable);
+        if (!forceApplyAll && configUnchanged) {
           changeSet.unchanged.push({ name: idpConfig.name });
         } else {
           changeSet.updates.push({
@@ -612,6 +612,7 @@ async function planIdPConfigs(
               namespaceName: config.name,
               idpConfig: desired,
             },
+            ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }
         existingMap.delete(idpConfig.name);
@@ -872,10 +873,11 @@ async function planUserProfileConfigs(
     const userProfileForUpdate = auth.userProfile;
     if (userProfileForUpdate) {
       const desired = protoUserProfileConfig(userProfileForUpdate);
-      if (
-        !forceApplyAll &&
-        areUserProfileConfigsEqual(existing.userProfileProviderConfig ?? {}, desired)
-      ) {
+      const configUnchanged = areUserProfileConfigsEqual(
+        existing.userProfileProviderConfig ?? {},
+        desired,
+      );
+      if (!forceApplyAll && configUnchanged) {
         changeSet.unchanged.push({ name });
       } else {
         changeSet.updates.push({
@@ -885,6 +887,7 @@ async function planUserProfileConfigs(
             namespaceName: config.name,
             userProfileProviderConfig: desired,
           },
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
     } else {
@@ -994,7 +997,8 @@ async function planTenantConfigs(
 
     if (config.tenantProvider) {
       const desired = protoTenantConfig(config.tenantProvider);
-      if (!forceApplyAll && areTenantProviderConfigsEqual(existing.tenantProviderConfig, desired)) {
+      const configUnchanged = areTenantProviderConfigsEqual(existing.tenantProviderConfig, desired);
+      if (!forceApplyAll && configUnchanged) {
         changeSet.unchanged.push({ name });
       } else {
         changeSet.updates.push({
@@ -1004,6 +1008,7 @@ async function planTenantConfigs(
             namespaceName: config.name,
             tenantProviderConfig: desired,
           },
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
     } else {
@@ -1113,7 +1118,8 @@ async function planMachineUsers(
       };
       const existing = existingMap.get(machineUsername);
       if (existing) {
-        if (!forceApplyAll && areMachineUsersEqual(existing, desiredMachineUser)) {
+        const configUnchanged = areMachineUsersEqual(existing, desiredMachineUser);
+        if (!forceApplyAll && configUnchanged) {
           changeSet.unchanged.push({ name: machineUsername });
         } else {
           changeSet.updates.push({
@@ -1125,6 +1131,7 @@ async function planMachineUsers(
               attributes: machineUser.attributeList,
               attributeMap: desiredMachineUser.attributeMap,
             },
+            ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }
         existingMap.delete(machineUsername);
@@ -1440,7 +1447,8 @@ async function planOAuth2Clients(
             refreshTokenLifetime: oauth2LifetimeToSeconds(existingClient.refreshTokenLifetime),
             requireDpop: existingClient.requireDpop,
           };
-          if (!forceApplyAll && areOAuth2ClientsEqual(existingComparable, desiredComparable)) {
+          const configUnchanged = areOAuth2ClientsEqual(existingComparable, desiredComparable);
+          if (!forceApplyAll && configUnchanged) {
             changeSet.unchanged.push({ name: oauth2ClientName });
           } else {
             changeSet.updates.push({
@@ -1450,6 +1458,7 @@ async function planOAuth2Clients(
                 namespaceName: config.name,
                 oauth2Client: newOAuth2Client,
               },
+              ...(configUnchanged && { forcedBySdkVersion: true }),
             });
           }
         }
@@ -1949,7 +1958,8 @@ async function planAuthHooks(
       };
 
       if (existingHook) {
-        if (!forceApplyAll && areAuthHooksEqual(existingHook, hookRequest.hook)) {
+        const configUnchanged = areAuthHooksEqual(existingHook, hookRequest.hook);
+        if (!forceApplyAll && configUnchanged) {
           changeSet.unchanged.push({
             name: `${config.name}/before-login`,
           });
@@ -1957,6 +1967,7 @@ async function planAuthHooks(
           changeSet.updates.push({
             name: `${config.name}/before-login`,
             request: hookRequest,
+            ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }
       } else {

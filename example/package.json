@@ -44,7 +44,7 @@
     "multiline-ts": "4.0.1",
     "oxfmt": "0.70.0",
     "oxlint": "1.85.0",
-    "oxlint-tsgolint": "7.0.2002",
+    "oxlint-tsgolint": "7.0.2003",
     "tsdown": "0.23.0",
     "tsx": "4.23.15",
     "typescript": "6.0.3",

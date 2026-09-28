@@ -26,12 +26,17 @@ Note: npm 7+ requires `--` before create-sdk options (for example, `--template`)
 
 ## Available Templates
 
-| Template               | Description                      | Features                                  |
-| ---------------------- | -------------------------------- | ----------------------------------------- |
-| `hello-world`          | Minimal starter project          | Simple resolver example                   |
-| `inventory-management` | Full-featured sample application | TailorDB, Resolver, Executor, Permissions |
-| `testing`              | Testing patterns guide           | Unit tests, E2E tests, Vitest setup       |
-| `multi-application`    | Multi-app architecture           | Shared databases, multiple applications   |
+| Template               | Description                      | Features                                                      |
+| ---------------------- | -------------------------------- | ------------------------------------------------------------- |
+| `hello-world`          | Minimal starter project          | Simple resolver example                                       |
+| `inventory-management` | Full-featured sample application | TailorDB, Resolver, Executor, Permissions                     |
+| `multi-application`    | Multi-app architecture           | Shared databases, multiple applications                       |
+| `tailordb`             | TailorDB table definitions       | Field types, relations, validations, hooks                    |
+| `resolver`             | Resolver patterns                | Query and mutation resolvers, Vitest setup                    |
+| `workflow`             | Workflow patterns                | Job chaining, `runWorkflowLocally()` tests                    |
+| `executor`             | Executor trigger types           | Record, resolver, IdP, auth token, schedule, webhook triggers |
+| `static-web-site`      | Static website with auth         | Static website, IdP, OAuth2 login page                        |
+| `generators`           | Built-in generator plugins       | Kysely types, enum constants, file utils, seed                |
 
 ### hello-world
 
@@ -54,17 +59,6 @@ A complete inventory management system demonstrating real-world patterns.
 - Executor for inventory threshold monitoring
 - Machine users for API access
 
-### testing
-
-A comprehensive guide to testing patterns with Vitest.
-
-**Includes:**
-
-- Unit test examples (simple resolver, mock TailorDB, dependency injection)
-- E2E test setup with deployed application
-- CI/CD integration patterns
-- Global setup for test credentials
-
 ### multi-application
 
 Demonstrates multiple applications sharing databases within a workspace.
@@ -74,6 +68,74 @@ Demonstrates multiple applications sharing databases within a workspace.
 - User application (owns shared database)
 - Admin application (references shared database as external)
 - Coordinated deployment scripts
+
+### tailordb
+
+Comprehensive TailorDB table definitions demonstrating the features of `db.table()`.
+
+**Includes:**
+
+- All field types, relations, and nested objects
+- Field-level and table-level validations
+- Hooks, file attachments, and composite indexes
+- Role-based permissions
+- Vitest setup
+
+### resolver
+
+Resolver patterns with testing approaches for each.
+
+**Includes:**
+
+- Simple query, database query, and database mutation resolvers
+- Environment variable, caller, and invoker context access
+- Tests using direct `body()` calls, `mockTailordb`, and dependency injection
+
+### workflow
+
+Workflow patterns with job chaining and dependency injection.
+
+**Includes:**
+
+- Workflow with multiple jobs (`createWorkflow`, `createWorkflowJob`)
+- Job chaining via `.start()`
+- Database operations in workflow jobs
+- Approval wait points (`createWaitPoints`) resolved from a resolver
+- Integration tests with `runWorkflowLocally()` and E2E tests with `startWorkflow()`
+
+### executor
+
+Demonstrates executor triggers with supporting infrastructure.
+
+**Includes:**
+
+- Record created, updated, and deleted, resolver executed, schedule, and incoming webhook triggers
+- IdP user created, updated, and deleted triggers
+- Auth access token issued, refreshed, and revoked triggers
+- `function` and `workflow` operation kinds
+- Vitest setup
+
+### static-web-site
+
+Static website configuration with authentication and identity provider integration.
+
+**Includes:**
+
+- Static website definition (`defineStaticWebSite`)
+- Identity provider and auth setup with machine users and OAuth2 clients
+- Simple HTML login page with OAuth2 callback handler
+
+### generators
+
+Demonstrates the built-in generator plugins.
+
+**Includes:**
+
+- Kysely type definitions (`kyselyTypePlugin`)
+- Enum constants (`enumConstantsPlugin`)
+- File upload and download utilities (`fileUtilsPlugin`)
+- Seed data templates (`seedPlugin`)
+- Vitest setup
 
 ## What it does
 
