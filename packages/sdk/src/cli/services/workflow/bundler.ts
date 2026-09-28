@@ -7,7 +7,10 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/ca
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { assertNoForbiddenRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
+import {
+  checkForbiddenRuntimeGlobals,
+  warnPackageRuntimeGlobals,
+} from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -625,7 +628,7 @@ async function bundleSingleJob(
     prefix: sortedEnvPrefix,
   });
 
-  const code = await withCache({
+  const { code, packageRuntimeGlobals } = await withCache({
     cache,
     kind: "workflow-job",
     name: job.name,
@@ -742,10 +745,17 @@ async function bundleSingleJob(
       bundleLog.assertAllResolved();
 
       const [chunk] = result.output;
-      assertNoForbiddenRuntimeGlobals(chunk, `Workflow job "${job.name}"`, allowedRuntimeGlobals);
-      return chunk.code;
+      return {
+        code: chunk.code,
+        packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Workflow job "${job.name}"`),
+      };
     },
   });
+  warnPackageRuntimeGlobals(
+    packageRuntimeGlobals,
+    `Workflow job "${job.name}"`,
+    allowedRuntimeGlobals,
+  );
 
   return [job.name, code];
 }

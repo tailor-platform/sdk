@@ -610,6 +610,32 @@ describe("bundleResolvers", () => {
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("allowed-buffer-lib"));
   });
 
+  test("warns about a cached bundle's package globals once they are no longer allowed", async () => {
+    using tmp = tempCwd("sdk-bundler-cached-package-global-");
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => {});
+    writeSdkDependency(tmp.dir);
+    writeBufferEncodingPackage(tmp.dir, "cached-buffer-lib");
+    writeEncodingResolver(tmp.dir, "cached-buffer-lib");
+    const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
+    const bundle = (allowedRuntimeGlobals?: Record<string, string[]>) =>
+      bundleResolvers({
+        namespace: "pkgglobal",
+        config: { files: ["./src/backend/pkgglobal/resolver/*.ts"] },
+        baseDir: tmp.dir,
+        cache,
+        allowedRuntimeGlobals,
+      });
+
+    await bundle({ "cached-buffer-lib": ["Buffer"] });
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("cached-buffer-lib"));
+
+    await bundle();
+
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringMatching(/cached.*encoder/));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("cached-buffer-lib"));
+  });
+
   test("bundles a resolver that uses Web Standard globals", async () => {
     using tmp = tempCwd("sdk-bundler-web-standard-");
     writeSdkDependency(tmp.dir);

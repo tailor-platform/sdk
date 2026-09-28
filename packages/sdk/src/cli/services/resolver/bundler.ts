@@ -6,7 +6,10 @@ import { createStartTransformPlugin } from "#/cli/services/workflow/start-transf
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { assertNoForbiddenRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
+import {
+  checkForbiddenRuntimeGlobals,
+  warnPackageRuntimeGlobals,
+} from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -177,7 +180,7 @@ async function bundleSingleResolver(
     bundleLogLevel,
   });
 
-  const code = await withCache({
+  const { code, packageRuntimeGlobals } = await withCache({
     cache,
     kind: "resolver",
     namespace,
@@ -250,10 +253,17 @@ async function bundleSingleResolver(
       bundleLog.assertAllResolved();
 
       const [chunk] = result.output;
-      assertNoForbiddenRuntimeGlobals(chunk, `Resolver "${resolver.name}"`, allowedRuntimeGlobals);
-      return chunk.code;
+      return {
+        code: chunk.code,
+        packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Resolver "${resolver.name}"`),
+      };
     },
   });
+  warnPackageRuntimeGlobals(
+    packageRuntimeGlobals,
+    `Resolver "${resolver.name}"`,
+    allowedRuntimeGlobals,
+  );
 
   return [resolver.name, code];
 }

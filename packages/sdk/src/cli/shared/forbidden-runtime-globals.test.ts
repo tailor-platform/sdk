@@ -1,22 +1,50 @@
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
-import { assertNoForbiddenRuntimeGlobals } from "./forbidden-runtime-globals";
+import {
+  type BundledChunk,
+  checkForbiddenRuntimeGlobals,
+  warnPackageRuntimeGlobals,
+} from "./forbidden-runtime-globals";
 import { logger } from "./logger";
 
 const userFile = (relative: string) => path.join(process.cwd(), relative);
+
+const scanBundle = (
+  chunk: BundledChunk,
+  context: string,
+  allowedRuntimeGlobals?: Parameters<typeof warnPackageRuntimeGlobals>[2],
+) =>
+  warnPackageRuntimeGlobals(
+    checkForbiddenRuntimeGlobals(chunk, context),
+    context,
+    allowedRuntimeGlobals,
+  );
 
 const chunkOf = (modules: Record<string, string>) => ({
   code: Object.values(modules).join("\n"),
   modules: Object.fromEntries(Object.entries(modules).map(([id, code]) => [id, { code }])),
 });
 
-describe("assertNoForbiddenRuntimeGlobals", () => {
+describe("checkForbiddenRuntimeGlobals and warnPackageRuntimeGlobals", () => {
+  test("returns each package's forbidden globals for the caller to warn about", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const chunk = chunkOf({
+      "/app/node_modules/returned-lib/index.js":
+        "function run(b) { return process.env.KEY + Buffer.from(b); }",
+    });
+
+    expect(checkForbiddenRuntimeGlobals(chunk, 'Resolver "chat"')).toEqual({
+      "returned-lib": ["Buffer", "process"],
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   test("rejects a user module that references a forbidden global and names its file", () => {
     const chunk = chunkOf({
       [userFile("src/resolvers/chat.ts")]: "const main = () => process.env.OPENAI_API_KEY;",
     });
 
-    expect(() => assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"')).toThrow(
+    expect(() => scanBundle(chunk, 'Resolver "chat"')).toThrow(
       expect.objectContaining({
         message:
           'Resolver "chat" references a global unavailable in the Tailor Platform runtime: process.',
@@ -33,7 +61,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
       [userFile("src/resolvers/chat.ts")]: "const main = (b) => encode(b);",
     });
 
-    expect(() => assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"')).not.toThrow();
+    expect(() => scanBundle(chunk, 'Resolver "chat"')).not.toThrow();
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toContain("warn-only-lib");
     expect(warnSpy.mock.calls[0]?.[0]).toContain("Buffer");
@@ -45,7 +73,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
       "/app/node_modules/hint-lib/index.js": "function encode(b) { return Buffer.from(b); }",
     });
 
-    assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"');
+    scanBundle(chunk, 'Resolver "chat"');
 
     expect(warnSpy.mock.calls[0]?.[0]).toContain(
       'add "hint-lib": ["Buffer"] to allowedRuntimeGlobals in defineConfig()',
@@ -58,8 +86,8 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
       "/app/node_modules/repeated-lib/index.js": "function encode(b) { return Buffer.from(b); }",
     });
 
-    assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"');
-    assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "summarize"');
+    scanBundle(chunk, 'Resolver "chat"');
+    scanBundle(chunk, 'Resolver "summarize"');
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
@@ -71,7 +99,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
         "function encode(b) { return Buffer.from(b); }",
     });
 
-    assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"');
+    scanBundle(chunk, 'Resolver "chat"');
 
     expect(warnSpy.mock.calls[0]?.[0]).toMatch(/^@scoped\/warn-lib /);
   });
@@ -83,7 +111,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
         "function encode(b) { return Buffer.from(b); }",
     });
 
-    expect(() => assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"')).not.toThrow();
+    expect(() => scanBundle(chunk, 'Resolver "chat"')).not.toThrow();
     expect(warnSpy.mock.calls[0]?.[0]).toMatch(/^windows-lib /);
   });
 
@@ -94,7 +122,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
       [userFile("src/executors/sync.ts")]: "const main = () => process.exit(1);",
     });
 
-    expect(() => assertNoForbiddenRuntimeGlobals(chunk, 'Executor "sync"')).toThrow(
+    expect(() => scanBundle(chunk, 'Executor "sync"')).toThrow(
       expect.objectContaining({ details: expect.stringContaining("src/executors/sync.ts") }),
     );
   });
@@ -105,7 +133,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
       [userFile("src/resolvers/chat.ts")]: "const main = (b) => Buffer.from(b);",
     });
 
-    expect(() => assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"')).not.toThrow();
+    expect(() => scanBundle(chunk, 'Resolver "chat"')).not.toThrow();
   });
 
   describe("allowedRuntimeGlobals", () => {
@@ -118,7 +146,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
     test("does not warn about the globals listed for a package", () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-      assertNoForbiddenRuntimeGlobals(packageChunk("listed-lib"), 'Resolver "chat"', {
+      scanBundle(packageChunk("listed-lib"), 'Resolver "chat"', {
         "listed-lib": ["Buffer", "process"],
       });
 
@@ -128,7 +156,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
     test("does not warn about any global of a package set to true", () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-      assertNoForbiddenRuntimeGlobals(packageChunk("trusted-lib"), 'Resolver "chat"', {
+      scanBundle(packageChunk("trusted-lib"), 'Resolver "chat"', {
         "trusted-lib": true,
       });
 
@@ -138,7 +166,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
     test("still warns about the globals a package is not allowed to reference", () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-      assertNoForbiddenRuntimeGlobals(packageChunk("partial-lib"), 'Resolver "chat"', {
+      scanBundle(packageChunk("partial-lib"), 'Resolver "chat"', {
         "partial-lib": ["process"],
       });
 
@@ -152,7 +180,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
       });
 
       expect(() =>
-        assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"', {
+        scanBundle(chunk, 'Resolver "chat"', {
           "src/resolvers/chat.ts": true,
         }),
       ).toThrow(/references a global unavailable in the Tailor Platform runtime: process/);
@@ -162,7 +190,7 @@ describe("assertNoForbiddenRuntimeGlobals", () => {
   test("rejects a forbidden global that no bundled module accounts for", () => {
     const chunk = { code: "const main = () => process.env.FOO;", modules: {} };
 
-    expect(() => assertNoForbiddenRuntimeGlobals(chunk, 'Resolver "chat"')).toThrow(
+    expect(() => scanBundle(chunk, 'Resolver "chat"')).toThrow(
       /references a global unavailable in the Tailor Platform runtime: process/,
     );
   });

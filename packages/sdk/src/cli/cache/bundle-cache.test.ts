@@ -15,6 +15,8 @@ aroundEach(async (runTest) => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+const builtBundle = (code: string) => ({ code, packageRuntimeGlobals: {} });
+
 function writeFile(name: string, content: string): string {
   const filePath = path.join(tmpDir, name);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -64,7 +66,7 @@ describe("createBundleCache", () => {
 
       const result = cache.tryRestore({ kind: "resolver", name: "myResolver" });
 
-      expect(result).toBe("bundled output");
+      expect(result?.code).toBe("bundled output");
     });
 
     test("returns undefined when cached bundle file is missing", () => {
@@ -178,7 +180,24 @@ describe("createBundleCache", () => {
         contextHash: "env-hash-a",
       });
 
-      expect(result).toBe("bundled output");
+      expect(result?.code).toBe("bundled output");
+    });
+
+    test("restores the package runtime globals saved with the bundle", () => {
+      const cache = createBundleCache(createCacheStore({ cacheDir }));
+      const sourceFile = writeFile("src/resolver.ts", "export default {}");
+      cache.save({
+        kind: "resolver",
+        name: "myResolver",
+        sourceFile,
+        content: "bundled output",
+        packageRuntimeGlobals: { "@ai-sdk/gateway": ["Buffer"] },
+        dependencyPaths: [sourceFile],
+      });
+
+      const result = cache.tryRestore({ kind: "resolver", name: "myResolver" });
+
+      expect(result?.packageRuntimeGlobals).toEqual({ "@ai-sdk/gateway": ["Buffer"] });
     });
   });
 
@@ -301,19 +320,19 @@ describe("createBundleCache", () => {
 
       expect(store.getEntry("resolver:first:getUser")).toBeDefined();
       expect(store.getEntry("resolver:second:getUser")).toBeDefined();
-      expect(cache.tryRestore({ kind: "resolver", namespace: "first", name: "getUser" })).toBe(
-        "first bundle",
-      );
-      expect(cache.tryRestore({ kind: "resolver", namespace: "second", name: "getUser" })).toBe(
-        "second bundle",
-      );
+      expect(
+        cache.tryRestore({ kind: "resolver", namespace: "first", name: "getUser" })?.code,
+      ).toBe("first bundle");
+      expect(
+        cache.tryRestore({ kind: "resolver", namespace: "second", name: "getUser" })?.code,
+      ).toBe("second bundle");
     });
   });
 });
 
 describe("withCache", () => {
   test("calls build directly when cache is undefined", async () => {
-    const build = vi.fn(async () => "built output");
+    const build = vi.fn(async () => builtBundle("built output"));
     const result = await withCache({
       cache: undefined,
       kind: "resolver",
@@ -325,7 +344,7 @@ describe("withCache", () => {
 
     expect(build).toHaveBeenCalledOnce();
     expect(build).toHaveBeenCalledWith([], expect.any(Function));
-    expect(result).toBe("built output");
+    expect(result.code).toBe("built output");
   });
 
   // tsconfigs consulted for path aliases are never loaded as modules, so only
@@ -349,21 +368,21 @@ describe("withCache", () => {
       ...params,
       build: async (_plugins, trackDependency) => {
         trackDependency(ancestorTsconfig);
-        return "built from lib-a";
+        return builtBundle("built from lib-a");
       },
     });
-    expect(first).toBe("built from lib-a");
+    expect(first.code).toBe("built from lib-a");
 
     fs.writeFileSync(
       ancestorTsconfig,
       JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./lib-b/*"] } } }),
     );
 
-    const rebuild = vi.fn(async () => "built from lib-b");
+    const rebuild = vi.fn(async () => builtBundle("built from lib-b"));
     const second = await withCache({ ...params, build: rebuild });
 
     expect(rebuild).toHaveBeenCalledOnce();
-    expect(second).toBe("built from lib-b");
+    expect(second.code).toBe("built from lib-b");
   });
 
   // A tracked file disappearing changes the hash rather than throwing, so it
@@ -384,14 +403,14 @@ describe("withCache", () => {
       ...params,
       build: async (_plugins, trackDependency) => {
         trackDependency(tsconfig);
-        return "built with tsconfig";
+        return builtBundle("built with tsconfig");
       },
     });
 
     fs.rmSync(tsconfig);
 
-    const rebuild = vi.fn(async () => "built without tsconfig");
-    expect(await withCache({ ...params, build: rebuild })).toBe("built without tsconfig");
+    const rebuild = vi.fn(async () => builtBundle("built without tsconfig"));
+    expect((await withCache({ ...params, build: rebuild })).code).toBe("built without tsconfig");
     expect(rebuild).toHaveBeenCalledOnce();
   });
 
@@ -414,13 +433,13 @@ describe("withCache", () => {
       ...params,
       build: async (_plugins, trackDependency) => {
         trackDependency(laterTsconfig);
-        return "built without nearer tsconfig";
+        return builtBundle("built without nearer tsconfig");
       },
     });
-    expect(first).toBe("built without nearer tsconfig");
+    expect(first.code).toBe("built without nearer tsconfig");
 
-    const cachedRebuild = vi.fn(async () => "should not run");
-    expect(await withCache({ ...params, build: cachedRebuild })).toBe(
+    const cachedRebuild = vi.fn(async () => builtBundle("should not run"));
+    expect((await withCache({ ...params, build: cachedRebuild })).code).toBe(
       "built without nearer tsconfig",
     );
     expect(cachedRebuild).not.toHaveBeenCalled();
@@ -430,8 +449,10 @@ describe("withCache", () => {
       JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./near/*"] } } }),
     );
 
-    const rebuild = vi.fn(async () => "built with nearer tsconfig");
-    expect(await withCache({ ...params, build: rebuild })).toBe("built with nearer tsconfig");
+    const rebuild = vi.fn(async () => builtBundle("built with nearer tsconfig"));
+    expect((await withCache({ ...params, build: rebuild })).code).toBe(
+      "built with nearer tsconfig",
+    );
     expect(rebuild).toHaveBeenCalledOnce();
   });
 
@@ -446,7 +467,7 @@ describe("withCache", () => {
       dependencyPaths: [sourceFile],
     });
 
-    const build = vi.fn(async () => "should not be called");
+    const build = vi.fn(async () => builtBundle("should not be called"));
     const result = await withCache({
       cache,
       kind: "resolver",
@@ -457,14 +478,14 @@ describe("withCache", () => {
     });
 
     expect(build).not.toHaveBeenCalled();
-    expect(result).toBe("bundled output");
+    expect(result.code).toBe("bundled output");
   });
 
   test("calls build and saves to cache on cache miss", async () => {
     const store = createCacheStore({ cacheDir });
     const cache = createBundleCache(store);
     const sourceFile = writeFile("src/resolver.ts", "export default {}");
-    const build = vi.fn(async () => "built output");
+    const build = vi.fn(async () => builtBundle("built output"));
 
     const result = await withCache({
       cache,
@@ -480,13 +501,13 @@ describe("withCache", () => {
     const firstCallArgs = build.mock.calls[0] as unknown[];
     expect(firstCallArgs[0]).toHaveLength(1);
     expect(store.getEntry("resolver:myResolver")).toBeDefined();
-    expect(result).toBe("built output");
+    expect(result.code).toBe("built output");
   });
 
   test("passes contextHash through to tryRestore and save", async () => {
     const cache = createBundleCache(createCacheStore({ cacheDir }));
     const sourceFile = writeFile("src/job.ts", "export default {}");
-    const build = vi.fn(async () => "built output");
+    const build = vi.fn(async () => builtBundle("built output"));
 
     await withCache({
       cache,
@@ -508,10 +529,10 @@ describe("withCache", () => {
       build,
     });
     expect(build).not.toHaveBeenCalled();
-    expect(result).toBe("built output");
+    expect(result.code).toBe("built output");
 
     build.mockClear();
-    build.mockImplementation(async () => "rebuilt output");
+    build.mockImplementation(async () => builtBundle("rebuilt output"));
     await withCache({
       cache,
       kind: "workflow-job",
@@ -527,8 +548,8 @@ describe("withCache", () => {
     const cache = createBundleCache(createCacheStore({ cacheDir }));
     const firstSourceFile = writeFile("src/first/resolver.ts", "export default {}");
     const secondSourceFile = writeFile("src/second/resolver.ts", "export default {}");
-    const buildFirst = vi.fn(async () => "first bundle");
-    const buildSecond = vi.fn(async () => "second bundle");
+    const buildFirst = vi.fn(async () => builtBundle("first bundle"));
+    const buildSecond = vi.fn(async () => builtBundle("second bundle"));
 
     await withCache({
       cache,
@@ -561,7 +582,7 @@ describe("withCache", () => {
     });
 
     expect(buildFirst).not.toHaveBeenCalled();
-    expect(result).toBe("first bundle");
+    expect(result.code).toBe("first bundle");
   });
 });
 

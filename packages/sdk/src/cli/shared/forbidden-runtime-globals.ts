@@ -13,6 +13,9 @@ export interface BundledChunk {
   modules: Readonly<Record<string, { readonly code: string | null }>>;
 }
 
+/** Forbidden globals referenced by each installed package, keyed by package name. */
+export type PackageRuntimeGlobals = Record<string, string[]>;
+
 const NODE_MODULES_SEGMENT = "/node_modules/";
 
 function packageNameOf(moduleId: string): string | undefined {
@@ -49,23 +52,22 @@ function warnPackageGlobals(packageName: string, names: string[], context: strin
  * Check bundled output for Node-only globals (`process`, `Buffer`, etc.) that
  * the Tailor Platform runtime never defines. A reference from the project's
  * own code throws a CLIError naming the file; a reference only from an
- * installed package (a module under `node_modules`) is reported as a warning,
- * since the project cannot change that code. Run this against already-bundled
- * output, not source text — bundling resolves every reachable import first,
- * so any free variable left over is either a genuine runtime global or
- * unreachable dead code the bundler failed to resolve (which
- * `bundleLog.assertAllResolved()` already catches).
+ * installed package (a module under `node_modules`) is returned instead, for
+ * `warnPackageRuntimeGlobals` to report, since the project cannot change that
+ * code. Run this against already-bundled output, not source text — bundling
+ * resolves every reachable import first, so any free variable left over is
+ * either a genuine runtime global or unreachable dead code the bundler failed
+ * to resolve (which `bundleLog.assertAllResolved()` already catches).
  * @param chunk - Bundled output chunk to scan.
- * @param context - Human-readable description of what produced `chunk`, used in the messages.
- * @param allowedRuntimeGlobals - Globals each installed package may reference without a warning.
+ * @param context - Human-readable description of what produced `chunk`, used in the error message.
+ * @returns The forbidden globals each installed package references.
  */
-export function assertNoForbiddenRuntimeGlobals(
+export function checkForbiddenRuntimeGlobals(
   chunk: BundledChunk,
   context: string,
-  allowedRuntimeGlobals: AllowedRuntimeGlobals = {},
-): void {
+): PackageRuntimeGlobals {
   const forbidden = new Set([...findUndefinedReferences(chunk.code)].filter(isForbiddenGlobal));
-  if (forbidden.size === 0) return;
+  if (forbidden.size === 0) return {};
 
   const filesByUserGlobal = new Map<string, Set<string>>();
   const globalsByPackage = new Map<string, Set<string>>();
@@ -87,26 +89,45 @@ export function assertNoForbiddenRuntimeGlobals(
     if (!attributed.has(name)) filesByUserGlobal.set(name, new Set());
   }
 
-  for (const [packageName, names] of globalsByPackage) {
+  if (filesByUserGlobal.size > 0) {
+    const userGlobals = [...filesByUserGlobal.keys()].toSorted();
+    throw CLIError({
+      code: "FORBIDDEN_RUNTIME_GLOBAL",
+      message: `${context} references ${describeGlobals(userGlobals)}.`,
+      details: userGlobals
+        .map((name) => {
+          const files = [...(filesByUserGlobal.get(name) ?? [])].toSorted();
+          const message = getForbiddenGlobalMessage(name);
+          return files.length > 0 ? `${message}\nReferenced from: ${files.join(", ")}` : message;
+        })
+        .join("\n"),
+    });
+  }
+
+  return Object.fromEntries(
+    [...globalsByPackage].map(([packageName, names]) => [packageName, [...names].toSorted()]),
+  );
+}
+
+/**
+ * Warn about the forbidden globals installed packages reference, except those
+ * `allowedRuntimeGlobals` allows. Each package's warning is shown once per CLI
+ * run, however many bundles include the package.
+ * @param packageRuntimeGlobals - The forbidden globals each installed package references.
+ * @param context - Human-readable description of the bundle, used in the warning.
+ * @param allowedRuntimeGlobals - Globals each installed package may reference without a warning.
+ */
+export function warnPackageRuntimeGlobals(
+  packageRuntimeGlobals: PackageRuntimeGlobals,
+  context: string,
+  allowedRuntimeGlobals: AllowedRuntimeGlobals = {},
+): void {
+  for (const [packageName, names] of Object.entries(packageRuntimeGlobals)) {
     const allowed = Object.hasOwn(allowedRuntimeGlobals, packageName)
       ? allowedRuntimeGlobals[packageName]
       : undefined;
     if (allowed === true) continue;
-    const warned = [...names].filter((name) => !allowed?.includes(name)).toSorted();
+    const warned = names.filter((name) => !allowed?.includes(name));
     if (warned.length > 0) warnPackageGlobals(packageName, warned, context);
   }
-
-  if (filesByUserGlobal.size === 0) return;
-  const userGlobals = [...filesByUserGlobal.keys()].toSorted();
-  throw CLIError({
-    code: "FORBIDDEN_RUNTIME_GLOBAL",
-    message: `${context} references ${describeGlobals(userGlobals)}.`,
-    details: userGlobals
-      .map((name) => {
-        const files = [...(filesByUserGlobal.get(name) ?? [])].toSorted();
-        const message = getForbiddenGlobalMessage(name);
-        return files.length > 0 ? `${message}\nReferenced from: ${files.join(", ")}` : message;
-      })
-      .join("\n"),
-  });
 }
