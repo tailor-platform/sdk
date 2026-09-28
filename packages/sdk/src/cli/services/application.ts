@@ -655,6 +655,7 @@ export async function loadApplication(
     config.workflow,
     getApplicationAuthNamespace({ authService: authResult.authService, config }),
     baseDir,
+    workflowService?.workflowSources,
   );
 
   // 9. Resolve bundle settings

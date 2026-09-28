@@ -338,9 +338,11 @@ function undetectableStartCallError(
   return new Error(
     `${calleeText}() in ${currentFilePath} cannot be rewritten: ` +
       `"${importSource}" is a workflow file, but its ${exportLabel} is not a ` +
-      `workflow or job the build can detect. Only createWorkflow({ name: "..." }) and ` +
-      `createWorkflowJob({ name: "...", body }) called with literal names in that file are ` +
-      `rewritten; any other .start() would fail at runtime after deploy.`,
+      `workflow or job the build can detect. The build rewrites .start() on the file's ` +
+      `default-exported workflow (including one returned from a helper function) and on ` +
+      `workflows and jobs created in that file with createWorkflow({ name: "..." }) or ` +
+      `createWorkflowJob({ name: "...", body }) using a literal name; any other .start() ` +
+      `would fail at runtime after deploy.`,
   );
 }
 

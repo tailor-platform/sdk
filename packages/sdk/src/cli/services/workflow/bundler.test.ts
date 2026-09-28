@@ -404,10 +404,8 @@ export default createWorkflow({ name: "workflow", mainJob });
       expect(result.bundledCode.get("main-job")).toMatch(/execJobFunction\([`'"]step-a/);
     });
 
-    test("throws when a job starts a workflow-file default export the build cannot detect", async () => {
-      const dir = createTempDir();
+    function writeFactoryWorkflow(dir: string, exportLine: string) {
       const syncFile = path.join(dir, "sync.ts");
-      const callerFile = path.join(dir, "caller.ts");
       fs.writeFileSync(
         syncFile,
         `
@@ -416,14 +414,19 @@ import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 const defineSync = (mainJob: typeof syncStep) =>
   createWorkflow({ name: "sync-gl-balances", mainJob });
 export const syncStep = createWorkflowJob({ name: "sync-step", body: async () => "synced" });
-export default defineSync(syncStep);
+${exportLine}
 `,
       );
+      return syncFile;
+    }
+
+    function writeCaller(dir: string, importLine: string) {
+      const callerFile = path.join(dir, "caller.ts");
       fs.writeFileSync(
         callerFile,
         `
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
-import syncWorkflow from "./sync";
+${importLine}
 
 export const mainJob = createWorkflowJob({
   name: "main-job",
@@ -432,7 +435,44 @@ export const mainJob = createWorkflowJob({
 export default createWorkflow({ name: "workflow", mainJob });
 `,
       );
-      const context = await buildStartContext({ files: [syncFile, callerFile] });
+      return callerFile;
+    }
+
+    test("rewrites .start() on a workflow-file default export created through a helper function", async () => {
+      const dir = createTempDir();
+      const syncFile = writeFactoryWorkflow(dir, "export default defineSync(syncStep);");
+      const callerFile = writeCaller(dir, 'import syncWorkflow from "./sync";');
+      const context = await buildStartContext({ files: [syncFile, callerFile] }, undefined, dir, [
+        { workflow: { name: "sync-gl-balances" }, sourceFile: syncFile },
+      ]);
+
+      const result = await bundleWorkflowJobs(
+        [
+          { name: "sync-step", exportName: "syncStep", sourceFile: syncFile },
+          { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
+        ],
+        ["main-job"],
+        {},
+        context,
+        dir,
+      );
+
+      expect(result.bundledCode.get("main-job")).toMatch(/startWorkflow\([`'"]sync-gl-balances/);
+    });
+
+    test("throws when a job starts a workflow-file named export created through a helper function", async () => {
+      const dir = createTempDir();
+      const syncFile = writeFactoryWorkflow(
+        dir,
+        "export const syncWorkflow = defineSync(syncStep);",
+      );
+      const callerFile = writeCaller(dir, 'import { syncWorkflow } from "./sync";');
+      const context = await buildStartContext(
+        { files: [syncFile, callerFile] },
+        undefined,
+        dir,
+        [],
+      );
 
       await expect(
         bundleWorkflowJobs(

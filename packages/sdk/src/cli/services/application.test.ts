@@ -400,3 +400,54 @@ export default createExecutor({
     expect(second.reusableBuildState).toBe(first.reusableBuildState);
   });
 });
+
+describe("loadApplication workflow start rewriting", () => {
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  test("rewrites .start() on a default-exported workflow created through a helper function", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const syncFile = path.join(tmpDir, "sync.ts");
+    const callerFile = path.join(tmpDir, "caller.ts");
+    fs.writeFileSync(
+      syncFile,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+const defineSync = (mainJob: typeof syncStep) =>
+  createWorkflow({ name: "sync-gl-balances", mainJob });
+export const syncStep = createWorkflowJob({ name: "sync-step", body: async () => "synced" });
+export default defineSync(syncStep);
+`,
+    );
+    fs.writeFileSync(
+      callerFile,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import syncWorkflow from "./sync";
+
+export const callerJob = createWorkflowJob({
+  name: "caller-job",
+  body: async () => await syncWorkflow.start({}),
+});
+export default createWorkflow({ name: "caller-workflow", mainJob: callerJob });
+`,
+    );
+    const config = {
+      ...defineConfig({ name: "testApp", workflow: { files: ["sync.ts", "caller.ts"] } }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+
+    const { workflowBuildResult } = await loadApplication({ config });
+
+    expect(workflowBuildResult?.bundledCode.get("caller-job")).toMatch(
+      /startWorkflow\([`'"]sync-gl-balances/,
+    );
+  });
+});

@@ -87,17 +87,24 @@ function createModuleBindings(
   return { sourceFile, localBindings, exports } satisfies StartModuleBindings;
 }
 
+export interface LoadedWorkflowSource {
+  workflow: { name: string };
+  sourceFile: string;
+}
+
 /**
  * Build start-call context from configured workflow source files.
  * @param workflowConfig - Workflow file loading configuration
  * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
  * @param baseDir - Directory the workflow config's file patterns are resolved against (defaults to process.cwd())
+ * @param loadedWorkflows - Default-exported workflows read by importing the workflow files, which also covers workflows the source text alone cannot identify
  * @returns Module-local workflow and job binding metadata
  */
 export async function buildStartContext(
   workflowConfig: FileLoadConfig | undefined,
   authNamespace?: string,
   baseDir = process.cwd(),
+  loadedWorkflows: ReadonlyArray<LoadedWorkflowSource> = [],
 ): Promise<StartContext> {
   const modules = new Map<string, StartModuleBindings>();
   if (!workflowConfig) return { modules, authNamespace };
@@ -120,6 +127,12 @@ export async function buildStartContext(
         mode: "stream",
       });
     }
+  }
+
+  for (const { workflow, sourceFile } of loadedWorkflows) {
+    modules
+      .get(normalizeFilePath(sourceFile))
+      ?.exports.set("default", { kind: "workflow", name: workflow.name });
   }
 
   return { modules, authNamespace };
