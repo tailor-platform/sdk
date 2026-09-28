@@ -1,4 +1,5 @@
 import { styles } from "./logger";
+import { formatShellCommandLines } from "./shell-quote";
 import type { Jsonifiable } from "type-fest";
 
 /**
@@ -46,42 +47,19 @@ type CLIErrorInternal = Error & {
   format(): string;
 };
 
-function shellQuote(value: string): string {
-  if (process.platform === "win32") {
-    if (/^[A-Za-z0-9_./:=@+\\-]+$/.test(value)) return value;
-    return `"${value.replaceAll('"', '\\"')}"`;
-  }
-  if (/^[A-Za-z0-9_./:=@+-]+$/.test(value)) return value;
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-function needsArgvRendering(argv: readonly string[]): boolean {
-  // cmd.exe/PowerShell expand %, $, and ! even inside double quotes, so no
-  // quoting can keep such values literal on Windows.
-  return process.platform === "win32" && argv.some((value) => /[%$!]/.test(value));
-}
-
 /**
- * Render an argv array as a copyable command line for the current platform's shell
- * @param {readonly string[]} argv - Executable name followed by its arguments
- * @returns {string} A shell-quoted command line, or an `argv [...]` JSON rendering when the platform shell cannot keep a value literal
+ * Render a command as a user-facing hint that can be copied into the current platform's shells:
+ * one backticked command line, or on Windows, when no single quoting suits both shells, a
+ * PowerShell and a cmd.exe line (`` `…` in PowerShell or `…` in cmd.exe ``)
+ * @param {CLIErrorNextAction} action - Executable and arguments to suggest
+ * @returns {string} The command part of the hint, to follow a verb such as "Run"
  */
-export function formatCopyableCommand(argv: readonly string[]): string {
-  if (needsArgvRendering(argv)) {
-    return `argv ${JSON.stringify(argv)}`;
+export function formatCommandHint(action: CLIErrorNextAction): string {
+  const commandLines = formatShellCommandLines([action.command, ...action.args]);
+  if (commandLines.kind === "shared") {
+    return `\`${commandLines.commandLine}\``;
   }
-  return argv.map(shellQuote).join(" ");
-}
-
-/**
- * Format an executable and argv as a shell-safe user-facing command.
- * @param next - Executable and arguments to format
- * @returns Shell command, or an argv representation when shell quoting is unsafe
- */
-export function formatNextAction(next: CLIErrorNextAction): string {
-  const argv = [next.command, ...next.args];
-  const rendered = formatCopyableCommand(argv);
-  return needsArgvRendering(argv) ? `with ${rendered}` : `\`${rendered}\``;
+  return `\`${commandLines.powershell}\` in PowerShell or \`${commandLines.cmd}\` in cmd.exe`;
 }
 
 /**
@@ -109,7 +87,7 @@ function formatError(error: CLIError): string {
   }
 
   if (error.next) {
-    parts.push(`\n  ${styles.info("Next:")} Run ${formatNextAction(error.next)}.`);
+    parts.push(`\n  ${styles.info("Next:")} Run ${formatCommandHint(error.next)}.`);
   }
 
   return parts.join("");

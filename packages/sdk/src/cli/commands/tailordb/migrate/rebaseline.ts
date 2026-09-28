@@ -10,7 +10,7 @@ import { confirmationArgs, deploymentArgs, recoveryContextArgs } from "#/cli/sha
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError, formatNextAction } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -124,10 +124,10 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     getNamespacesWithMigrations(config, configDir),
     options.namespace,
   );
-  const generateCommand = formatNextAction({
+  const generateFirstSuggestion = `First run ${formatCommandHint({
     command: "tailor",
     args: ["tailordb", "migration", "generate", "--config", config.path],
-  });
+  })}.`;
 
   assertValidMigrationFiles(target.migrationsDir, target.namespace);
   const latestSnapshot = reconstructSnapshotFromMigrations(target.migrationsDir);
@@ -135,7 +135,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     throw CLIError({
       code: "MIGRATION_HISTORY_NOT_FOUND",
       message: `No migration history found for namespace "${target.namespace}".`,
-      suggestion: `Run ${generateCommand} first.`,
+      suggestion: generateFirstSuggestion,
     });
   }
   const latestMigration = getLatestMigrationNumber(target.migrationsDir);
@@ -176,7 +176,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
         code: "MIGRATION_HISTORY_MISMATCH",
         message:
           "Refusing to re-baseline: the migration history must reproduce the current local schema.",
-        suggestion: `Run ${generateCommand} first.`,
+        suggestion: generateFirstSuggestion,
       });
     }
   };
@@ -196,7 +196,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     config.path,
     ...recoveryContextArgs({ workspaceId, profile: options.profile }),
   ];
-  const setBaselineCommand = formatNextAction({
+  const setBaselineSuggestion = `Run ${formatCommandHint({
     command: "tailor",
     args: [
       "tailordb",
@@ -207,11 +207,10 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
       target.namespace,
       ...remoteContextArgs,
     ],
-  });
-  const deployCommand = formatNextAction({
-    command: "tailor",
-    args: ["deploy", ...remoteContextArgs],
-  });
+  })}`;
+  const deploySuggestion = `after resolving the connection error, deploy with schema checks enabled by running ${formatCommandHint(
+    { command: "tailor", args: ["deploy", ...remoteContextArgs] },
+  )}.`;
 
   const assertConnectedWorkspaceReady = async (
     expectedHistoryId: string | null,
@@ -336,7 +335,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
       code: "REBASELINE_CHECKPOINT_UPDATE_FAILED",
       message:
         "The local migration history was re-baselined, but the connected workspace checkpoint could not be updated.",
-      suggestion: `Run ${setBaselineCommand}, or run ${deployCommand} with schema checks enabled after resolving the connection error.`,
+      suggestion: `${setBaselineSuggestion}, or ${deploySuggestion}`,
       cause: error,
     });
   }

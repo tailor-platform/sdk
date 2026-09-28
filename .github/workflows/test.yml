@@ -99,6 +99,11 @@ jobs:
         run: pnpm --filter @tailor-platform/sdk exec vitest run --project unit-plugin
         shell: bash
 
+      # Suggested command lines are only run through cmd.exe and PowerShell here.
+      - name: Run shell quoting tests
+        run: pnpm --filter @tailor-platform/sdk exec vitest run --project unit-shell
+        shell: bash
+
   test-summary:
     name: test-summary # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: [changes, test, plugin-windows]

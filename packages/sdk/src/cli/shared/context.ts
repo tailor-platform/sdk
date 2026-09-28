@@ -7,7 +7,7 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import { type MachineUserInputSource, recoveryContextArgs } from "./args";
+import { type MachineUserInputSource, profileUpdateArgs, recoveryContextArgs } from "./args";
 import {
   defaultPlatformBaseUrl,
   fetchUserInfo,
@@ -18,7 +18,7 @@ import {
   rememberPlatformConfigForToken,
   type PlatformClientConfig,
 } from "./client";
-import { CLIError } from "./errors";
+import { CLIError, formatCommandHint } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
@@ -674,7 +674,12 @@ export async function loadMachineUserName(
         code: "PROFILE_MACHINE_USER_OVERRIDE_DENIED",
         message: `Profile "${profile}" denies overriding the machine user.`,
         details,
-        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run 'tailor profile update ${profile} --machine-user-override allow'.`,
+        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run ${formatCommandHint(
+          {
+            command: "tailor",
+            args: profileUpdateArgs(profile, ["--machine-user-override", "allow"]),
+          },
+        )}.`,
       });
     }
     return entry.machine_user;

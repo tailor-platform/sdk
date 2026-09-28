@@ -58,6 +58,11 @@ const integrationTestIncludes = [
 // general unit split below so it does not run twice.
 const pluginTestInclude = "src/cli/shared/plugin.test.ts";
 
+// Runs suggested command lines through the platform's real shells (cmd.exe and
+// PowerShell on Windows), so the Windows CI job runs it too via `--project
+// unit-shell`.
+const shellQuoteTestInclude = "src/cli/shared/shell-quote.test.ts";
+
 // Split unit tests by whether they mutate worker-global state. With
 // `isolate: false` a worker shares one module registry and one global object
 // across files, so per-file partial module mocks (e.g. `vi.mock("node:fs", ...)`)
@@ -74,8 +79,9 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
     file.includes("/node_modules/") ||
     file.includes("/__test_fixtures__/") ||
     integrationTestFiles.has(file) ||
-    // Carved into its own "unit-plugin" project (see below).
+    // Carved into their own "unit-plugin" and "unit-shell" projects (see below).
     file === pluginTestInclude ||
+    file === shellQuoteTestInclude ||
     // Self-contained nested vitest project with its own config.
     file.startsWith("src/vitest/integration/");
 
@@ -137,6 +143,14 @@ export default defineConfig({
           // `--project unit-plugin`; the `unit*` glob still runs it on Linux.
           name: "unit-plugin",
           include: [pluginTestInclude],
+          setupFiles: ["./vitest.setup.ts"],
+          typecheck: { enabled: false },
+        },
+      },
+      {
+        test: {
+          name: "unit-shell",
+          include: [shellQuoteTestInclude],
           setupFiles: ["./vitest.setup.ts"],
           typecheck: { enabled: false },
         },

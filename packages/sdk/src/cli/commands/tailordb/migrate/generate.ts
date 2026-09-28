@@ -39,7 +39,7 @@ import {
   type ExpandContractPlan,
 } from "./expand-contract";
 import { formatFieldShape, hasFieldShapeChange } from "./field-type-change";
-import { formatMigrationScriptCommand } from "./hints";
+import { formatMigrationScriptHint } from "./hints";
 import {
   dropSpecApplies,
   findNestedMemberRenameCandidates,
@@ -1457,11 +1457,9 @@ async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise
 
   const commandOptions = { migrationNumber, namespace, configPath };
   logger.log("To add a custom migrate.ts, run:");
-  logger.log(`  ${styles.bold(formatMigrationScriptCommand(commandOptions))}`);
+  logger.log(`  ${styles.bold(formatMigrationScriptHint(commandOptions))}`);
   logger.log("To record that this migration intentionally has no script, run:");
-  logger.log(
-    `  ${styles.bold(formatMigrationScriptCommand({ ...commandOptions, noScript: true }))}`,
-  );
+  logger.log(`  ${styles.bold(formatMigrationScriptHint({ ...commandOptions, noScript: true }))}`);
 }
 
 /**
