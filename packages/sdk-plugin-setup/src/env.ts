@@ -197,6 +197,7 @@ function terraformUsage(environments: EnvironmentRequirements[]): string {
   const inputs = environments.flatMap(({ environment, requirements }) =>
     requirements.map((requirement) => ({
       ...requirement,
+      environment,
       label: requirementLabel(terraformLabel(environment), requirement.name),
     })),
   );
@@ -215,11 +216,19 @@ function terraformUsage(environments: EnvironmentRequirements[]): string {
     ...inputs
       .filter((input) => input.type === "secret")
       .map((input) => `#   export TF_VAR_${input.label}=<value>${optional(input.required)}`),
-    "# 4. Import each environment that already exists in the repository:",
+    "# 4. Import each environment and variable that already exists in the repository",
+    "#    (creating an existing variable fails; secrets are simply overwritten):",
     ...environments.map(
       ({ environment }) =>
         `#   terraform import github_repository_environment.${terraformLabel(environment)} <repository>:${environment}`,
     ),
+    ...inputs
+      .filter((input) => input.type === "variable")
+      .map((input) => {
+        const address = `github_actions_environment_variable.${input.label}`;
+        const target = input.required ? address : `'${address}[0]'`;
+        return `#   terraform import ${target} <repository>:${input.environment}:${input.name}`;
+      }),
     "# 5. Apply:",
     "#   terraform init && terraform plan && terraform apply",
     "#",

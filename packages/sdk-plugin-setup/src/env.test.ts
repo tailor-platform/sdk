@@ -333,6 +333,22 @@ describe("renderTerraform", () => {
     );
   });
 
+  test("explains how to import each variable that already exists, since creating one fails", () => {
+    const hcl = renderTerraform(envs());
+
+    expect(hcl).toContain(
+      "#   terraform import github_actions_environment_variable.production_tailor_platform_workspace_id <repository>:production:TAILOR_PLATFORM_WORKSPACE_ID",
+    );
+  });
+
+  test("addresses optional variables by their count index when importing", () => {
+    const hcl = renderTerraform(envs());
+
+    expect(hcl).toContain(
+      "#   terraform import 'github_actions_environment_variable.production_tailor_slack_channel_id[0]' <repository>:production:TAILOR_SLACK_CHANNEL_ID",
+    );
+  });
+
   test("rejects environments whose Terraform names would collide", () => {
     const envs = collectEnvironmentRequirements(
       lockOf(target("branch", "app-eu", "stg/eu"), target("tag", "app-eu", "stg.eu")),

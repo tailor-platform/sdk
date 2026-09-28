@@ -357,9 +357,10 @@ The Terraform output takes every value from an input variable (secrets are
 value is written to the output. Its header lists the steps with the variable
 names for your environments: authenticate the provider, put non-secret values in
 `terraform.tfvars`, pass secrets as `TF_VAR_<name>` environment variables, and
-import each environment that already exists (for example
+import each environment and variable that already exists (for example
 `terraform import github_repository_environment.production my-repo:production`)
-before `terraform apply`. The generated environments ignore changes to their
+before `terraform apply`: creating a variable that already exists fails, while
+secrets are overwritten. The generated environments ignore changes to their
 protection settings (reviewers, wait timer, branch policy), so importing an
 environment keeps the approval gate you configured; remove the `lifecycle` block
 to manage those settings in Terraform instead.
