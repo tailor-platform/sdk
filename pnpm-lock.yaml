@@ -313,8 +313,8 @@ importers:
         specifier: 1.8.1
         version: 1.8.1
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
+        specifier: 0.3.1
+        version: 0.3.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
       execa:
         specifier: 10.0.1
         version: 10.0.1
@@ -666,8 +666,8 @@ importers:
         specifier: 0.151.0
         version: 0.151.0
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
+        specifier: 0.3.1
+        version: 0.3.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
       '@secretlint/core':
         specifier: 13.0.5
         version: 13.0.5(supports-color@7.2.0)
@@ -838,8 +838,8 @@ importers:
         specifier: 0.45.3
         version: 0.45.3
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
+        specifier: 0.3.1
+        version: 0.3.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -893,8 +893,8 @@ importers:
   packages/sdk-plugin-seed:
     dependencies:
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
+        specifier: 0.3.1
+        version: 0.3.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
       pathe:
         specifier: 2.0.3
         version: 2.0.3
@@ -939,8 +939,8 @@ importers:
         specifier: 0.2.2
         version: 0.2.2
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
+        specifier: 0.3.1
+        version: 0.3.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
       json5:
         specifier: 2.2.3
         version: 2.2.3
@@ -991,8 +991,8 @@ importers:
   packages/sdk-plugin-tailordb-erd:
     dependencies:
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
+        specifier: 0.3.1
+        version: 0.3.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -2497,8 +2497,8 @@ packages:
       '@inquirer/prompts':
         optional: true
 
-  '@politty/zod@0.3.0':
-    resolution: {integrity: sha512-v01p+p4RtBO1hcc2YC9eJ21tesfnkoTyKUp0VFNy+RalvVW2V9yKC5WkSmFdH/PoEcfHJsxkdk+/6mPzycoV6A==}
+  '@politty/zod@0.3.1':
+    resolution: {integrity: sha512-xDf7ewLfojCbplj3dIyve4B0Bg7RX17XJ0Kstasz8+YljB/LLMtjbZULEiijZPgiRkblFXbS4X422cLceBIGpA==}
     engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
     hasBin: true
     peerDependencies:
@@ -5572,7 +5572,7 @@ snapshots:
       '@clack/prompts': 1.8.1
       '@inquirer/prompts': 8.7.2(@types/node@24.13.6)
 
-  '@politty/zod@0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)':
+  '@politty/zod@0.3.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.6))(zod@4.6.5)':
     dependencies:
       yaml: 2.9.1
       zod: 4.6.5
@@ -5861,7 +5861,7 @@ snapshots:
     dependencies:
       '@vitest/istanbul-lib-coverage': 1.0.1
 
-  '@vitest/mocker@5.0.1(vite@8.3.1(@types/node@24.13.6)(jiti@2.7.0)(tsx@4.23.15))':
+  '@vitest/mocker@5.0.1(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.1
@@ -7440,7 +7440,7 @@ snapshots:
   vitest@5.0.1(@opentelemetry/api@1.9.1)(@types/node@24.13.6)(@vitest/coverage-v8@5.0.1)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.1(vite@8.3.1(@types/node@24.13.6)(jiti@2.7.0)(tsx@4.23.15))
+      '@vitest/mocker': 5.0.1(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
