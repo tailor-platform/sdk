@@ -1,17 +1,20 @@
-import { describe, expect, test } from "vitest";
+import { logger } from "@tailor-platform/sdk/cli";
+import { describe, expect, test, vi } from "vitest";
 import {
   collectEnvironmentRequirements,
   renderGhCommands,
   renderTerraform,
+  setupEnv,
   targetRequirements,
 } from "./env";
-import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind } from "./lock";
+import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind, writeLock } from "./lock";
 import {
   renderBranchWorkflow,
   renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
 } from "./templates";
+import { tempDir } from "./test-helpers/temp-dir";
 
 const target = (kind: TargetKind, workspaceName: string, environment: string): LockTarget => ({
   kind,
@@ -280,5 +283,46 @@ describe("renderTerraform", () => {
     );
 
     expect(() => renderTerraform(envs)).toThrow(/stg\/eu.*stg\.eu|stg\.eu.*stg\/eu/);
+  });
+});
+
+describe("setupEnv", () => {
+  test("fails when no lock exists", () => {
+    using tmp = tempDir("setup-env-");
+
+    expect(() => setupEnv({ outputDir: tmp.dir, format: "gh" })).toThrow(/tailor\.lock/);
+  });
+
+  test("points to `setup ci coordinate` when the lock only has composite actions", () => {
+    using tmp = tempDir("setup-env-");
+    writeLock(tmp.dir, lockOf(target("action", "ims", "ims")));
+
+    expect(() => setupEnv({ outputDir: tmp.dir, format: "gh" })).toThrow(/setup ci coordinate/);
+  });
+
+  test.each([
+    ["gh", renderGhCommands],
+    ["terraform", renderTerraform],
+  ] as const)("prints the %s output to stdout", (format, render) => {
+    using tmp = tempDir("setup-env-");
+    const lock = lockOf(target("branch", "my-app", "stg"));
+    writeLock(tmp.dir, lock);
+    using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    setupEnv({ outputDir: tmp.dir, format });
+
+    expect(out).toHaveBeenCalledWith(render(collectEnvironmentRequirements(lock)));
+  });
+
+  test("prints the grouped requirements as data in JSON mode", () => {
+    using tmp = tempDir("setup-env-");
+    const lock = lockOf(target("branch", "my-app", "stg"));
+    writeLock(tmp.dir, lock);
+    using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+    using _json = vi.spyOn(logger, "jsonMode", "get").mockReturnValue(true);
+
+    setupEnv({ outputDir: tmp.dir, format: "gh" });
+
+    expect(out).toHaveBeenCalledWith(collectEnvironmentRequirements(lock));
   });
 });
