@@ -357,7 +357,9 @@ leaves optional entries commented out. Run the commands one at a time: each
 
 The Terraform output takes every value from an input variable (secrets are
 `sensitive`) and creates an optional entry only when its variable is set, so no
-value is written to the output. Its header lists the steps with the variable
+value is written to the output. Terraform still stores the secret values in its
+state in plain text, so keep the state encrypted and access-restricted, or set
+the secrets with the `gh` output instead. Its header lists the steps with the variable
 names for your environments: authenticate the provider, put non-secret values in
 `terraform.tfvars`, pass secrets as `TF_VAR_<name>` environment variables, and
 import each environment and variable that already exists (for example

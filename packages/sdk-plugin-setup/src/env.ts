@@ -227,6 +227,9 @@ function terraformUsage(
     ...inputs
       .filter((input) => input.type === "secret")
       .map((input) => `#   export TF_VAR_${input.label}=<value>${optional(input.required)}`),
+    "#    Note: the secret values are stored in the Terraform state in plain text. Keep the",
+    "#    state encrypted and access-restricted, or set the secrets with `tailor setup ci env`",
+    "#    (gh) instead and remove their resources from this file.",
     "# 4. Import each environment and variable that already exists in the repository",
     "#    (creating an existing variable fails; secrets are simply overwritten):",
     ...environments.map(

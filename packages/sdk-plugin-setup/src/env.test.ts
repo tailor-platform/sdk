@@ -361,6 +361,12 @@ describe("renderTerraform", () => {
     expect(hcl).toContain("#   export TF_VAR_stg_eu_tailor_platform_machine_user_client_id=");
   });
 
+  test("warns that secret values end up in the Terraform state", () => {
+    expect(renderTerraform(envs())).toMatch(
+      /^# .*secret values are stored in the Terraform state/im,
+    );
+  });
+
   test("explains how to import each environment that already exists", () => {
     const hcl = renderTerraform(envs());
 
