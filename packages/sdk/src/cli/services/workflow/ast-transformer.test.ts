@@ -1225,6 +1225,20 @@ export async function run(syncWorkflow: { start(input: unknown): Promise<string>
         "syncWorkflow.start({ id: 1 })",
       );
     });
+
+    test("does not throw when the namespace import is shadowed by a local binding", () => {
+      const source = `
+import * as sync from "../workflow/sync";
+
+export async function run(sync: { default: { start(input: unknown): Promise<string> } }) {
+  return await sync.default.start({ id: 1 });
+}
+`;
+
+      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+        "sync.default.start({ id: 1 })",
+      );
+    });
   });
 
   describe("mixed workflow and job starts", () => {
