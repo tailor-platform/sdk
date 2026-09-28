@@ -123,12 +123,9 @@ If the unresolved specifier is a Node.js built-in (e.g. `fs`, `crypto`, `path`),
 
 #### Node-only globals
 
-The Tailor Platform runtime does not define Node-only globals such as `process`, `Buffer`, or `require`. When a bundled resolver, executor, or workflow job references one, what happens depends on where the reference is:
+The Tailor Platform runtime does not define Node-only globals such as `process`, `Buffer`, or `require`. When a bundled resolver, executor, or workflow job references one, the build fails with `FORBIDDEN_RUNTIME_GLOBAL`, naming the global and where it is referenced: the file in your own code, or the installed package (code under `node_modules`). A reference behind a `typeof` check, such as `if (typeof process !== "undefined") { ... }`, is not reported.
 
-- **In your own code**, the build fails with `FORBIDDEN_RUNTIME_GLOBAL`, naming the global and the file that references it. A reference behind a `typeof` check, such as `if (typeof process !== "undefined") { ... }`, is not reported.
-- **In an installed package** (code under `node_modules`), the build continues and prints a warning naming the package. Code in that package that reaches the global throws a `ReferenceError` at runtime, so check whether your use of the package can reach it.
-
-When you have confirmed that the package's code referencing the global never runs for your use, silence the warning with `allowedRuntimeGlobals`, keyed by package name. List the globals to allow, or set `true` to allow all of them, including any the package only starts referencing in a later version:
+You cannot change an installed package's code, and it may reference a global only on a code path your use never reaches. When you have confirmed that, allow the reference with `allowedRuntimeGlobals`, keyed by package name. List the globals to allow, or set `true` to allow all of them, including any the package only starts referencing in a later version. Code in that package that does reach the global throws a `ReferenceError` at runtime:
 
 ```typescript
 export default defineConfig({

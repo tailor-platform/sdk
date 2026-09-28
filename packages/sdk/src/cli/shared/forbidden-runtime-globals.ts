@@ -2,7 +2,6 @@ import * as path from "pathe";
 import { findUndefinedReferences } from "#/cli/shared/free-variables";
 import { getForbiddenGlobalMessage, isForbiddenGlobal } from "#/utils/node-builtins";
 import { CLIError } from "./errors";
-import { logger } from "./logger";
 import type { AllowedRuntimeGlobals } from "#/configure/config/types";
 
 /** The parts of a bundled output chunk the forbidden-global check reads. */
@@ -35,26 +34,13 @@ function addTo<K, V>(map: Map<K, Set<V>>, key: K, value: V): void {
 const describeGlobals = (names: string[]) =>
   `${names.length === 1 ? "a global" : "globals"} unavailable in the Tailor Platform runtime: ${names.join(", ")}`;
 
-const warnedPackageGlobals = new Set<string>();
-
-function warnPackageGlobals(packageName: string, names: string[], context: string): void {
-  const key = `${packageName}\0${names.join(",")}`;
-  if (warnedPackageGlobals.has(key)) return;
-  warnedPackageGlobals.add(key);
-  logger.warn(
-    `${packageName} (bundled into ${context}) references ${describeGlobals(names)}. ` +
-      `Code in ${packageName} that reaches ${names.length === 1 ? "it" : "them"} throws a ReferenceError at runtime. ` +
-      `If that code never runs, add ${JSON.stringify(packageName)}: ${JSON.stringify(names)} to allowedRuntimeGlobals in defineConfig() to silence this warning.`,
-  );
-}
-
 /**
  * Check bundled output for Node-only globals (`process`, `Buffer`, etc.) that
  * the Tailor Platform runtime never defines. A reference from the project's
  * own code throws a CLIError naming the file; a reference only from an
  * installed package (a module under `node_modules`) is returned instead, for
- * `warnPackageRuntimeGlobals` to report, since the project cannot change that
- * code. Run this against already-bundled output, not source text — bundling
+ * `assertPackageRuntimeGlobalsAllowed` to check against `allowedRuntimeGlobals`,
+ * since the project cannot change that code. Run this against already-bundled output, not source text — bundling
  * resolves every reachable import first, so any free variable left over is
  * either a genuine runtime global or unreachable dead code the bundler failed
  * to resolve (which `bundleLog.assertAllResolved()` already catches).
@@ -110,24 +96,43 @@ export function checkForbiddenRuntimeGlobals(
 }
 
 /**
- * Warn about the forbidden globals installed packages reference, except those
- * `allowedRuntimeGlobals` allows. Each package's warning is shown once per CLI
- * run, however many bundles include the package.
+ * Throw a CLIError when an installed package references a forbidden global
+ * that `allowedRuntimeGlobals` does not allow for it.
  * @param packageRuntimeGlobals - The forbidden globals each installed package references.
- * @param context - Human-readable description of the bundle, used in the warning.
- * @param allowedRuntimeGlobals - Globals each installed package may reference without a warning.
+ * @param context - Human-readable description of the bundle, used in the error message.
+ * @param allowedRuntimeGlobals - Globals each installed package may reference.
  */
-export function warnPackageRuntimeGlobals(
+export function assertPackageRuntimeGlobalsAllowed(
   packageRuntimeGlobals: PackageRuntimeGlobals,
   context: string,
   allowedRuntimeGlobals: AllowedRuntimeGlobals = {},
 ): void {
+  const rejected: PackageRuntimeGlobals = {};
   for (const [packageName, names] of Object.entries(packageRuntimeGlobals)) {
     const allowed = Object.hasOwn(allowedRuntimeGlobals, packageName)
       ? allowedRuntimeGlobals[packageName]
       : undefined;
     if (allowed === true) continue;
-    const warned = names.filter((name) => !allowed?.includes(name));
-    if (warned.length > 0) warnPackageGlobals(packageName, warned, context);
+    const notAllowed = names.filter((name) => !allowed?.includes(name));
+    if (notAllowed.length > 0) rejected[packageName] = notAllowed;
   }
+
+  const entries = Object.entries(rejected);
+  if (entries.length === 0) return;
+  const globals = [...new Set(entries.flatMap(([, names]) => names))].toSorted();
+  throw CLIError({
+    code: "FORBIDDEN_RUNTIME_GLOBAL",
+    message: `${context} references ${describeGlobals(globals)}.`,
+    details: entries
+      .map(
+        ([packageName, names]) =>
+          `Referenced from the installed package ${packageName}: ${names.join(", ")}. ` +
+          `Code in ${packageName} that reaches ${names.length === 1 ? "it" : "them"} throws a ReferenceError at runtime.`,
+      )
+      .join("\n"),
+    suggestion:
+      "If that code never runs for your use of the package, allow it in defineConfig(): " +
+      `allowedRuntimeGlobals: { ${entries.map(([packageName, names]) => `${JSON.stringify(packageName)}: ${JSON.stringify(names)}`).join(", ")} }`,
+    context: { packages: rejected },
+  });
 }

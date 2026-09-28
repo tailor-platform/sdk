@@ -8,7 +8,7 @@ import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import {
   checkForbiddenRuntimeGlobals,
-  warnPackageRuntimeGlobals,
+  assertPackageRuntimeGlobalsAllowed,
 } from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
@@ -50,7 +50,7 @@ export interface BundleExecutorsOptions {
   baseDir: string;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
-  /** Globals each installed package may reference without a warning */
+  /** Globals each installed package may reference */
   allowedRuntimeGlobals?: AllowedRuntimeGlobals;
 }
 
@@ -231,7 +231,7 @@ async function bundleSingleExecutor(
       };
     },
   });
-  warnPackageRuntimeGlobals(
+  assertPackageRuntimeGlobalsAllowed(
     packageRuntimeGlobals,
     `Executor "${executor.name}"`,
     allowedRuntimeGlobals,
