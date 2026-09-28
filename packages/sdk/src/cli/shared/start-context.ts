@@ -103,6 +103,7 @@ export interface LoadedWorkflowSource {
  * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
  * @param baseDir - Directory the workflow config's file patterns are resolved against (defaults to process.cwd())
  * @param loadedWorkflows - Default-exported workflows read by importing the workflow files, which also covers workflows the source text alone cannot identify
+ * @param tsconfigCache - tsconfig lookup cache shared with the bundlers in this CLI run
  * @returns Module-local workflow and job binding metadata
  */
 export async function buildStartContext(
@@ -110,9 +111,9 @@ export async function buildStartContext(
   authNamespace?: string,
   baseDir = process.cwd(),
   loadedWorkflows: ReadonlyArray<LoadedWorkflowSource> = [],
+  tsconfigCache: TsconfigLookupCache = createTsconfigLookupCache(),
 ): Promise<StartContext> {
   const modules = new Map<string, StartModuleBindings>();
-  const tsconfigCache = createTsconfigLookupCache();
   if (!workflowConfig) return { modules, authNamespace, tsconfigCache };
 
   for (const file of loadFilesWithIgnores(workflowConfig, baseDir)) {
