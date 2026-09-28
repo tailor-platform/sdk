@@ -33,8 +33,9 @@ function referencedNames(content: string): string[] {
   const names = new Set<string>();
   for (const line of content.split("\n")) {
     if (line.trimStart().startsWith("#")) continue;
-    for (const match of line.matchAll(/\b(?:secrets|vars)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
-      if (match[1] !== "GITHUB_TOKEN") names.add(match[1]!);
+    for (const match of line.matchAll(/\b(secrets|vars)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
+      const type = match[1] === "secrets" ? "secret" : "variable";
+      if (match[2] !== "GITHUB_TOKEN") names.add(`${type} ${match[2]!}`);
     }
   }
   return [...names].toSorted();
@@ -42,7 +43,7 @@ function referencedNames(content: string): string[] {
 
 const namesOf = (kind: Exclude<TargetKind, "action">) =>
   targetRequirements(kind)
-    .map((r) => r.name)
+    .map((r) => `${r.type} ${r.name}`)
     .toSorted();
 
 describe("targetRequirements matches the secrets/vars the rendered templates reference", () => {
