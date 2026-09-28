@@ -324,7 +324,10 @@ the environment's protection rules no longer guard your deploys.
 `tailor setup ci env` reads `.github/tailor.lock` and prints, for every GitHub
 Environment the generated workflows use, the commands that create the
 environment (only when it does not exist yet) and set its secrets and
-variables. It is read-only, so re-run it whenever you add a target.
+variables. It is read-only, so re-run it whenever you add a target. When the
+`origin` remote points at github.com, the output names that repository, so the
+commands work from any directory; otherwise `gh` resolves the repository from
+the current directory and the Terraform output leaves it as a placeholder.
 
 ```bash
 tailor setup ci env                      # gh CLI commands (default)

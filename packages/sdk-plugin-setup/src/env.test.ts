@@ -229,6 +229,45 @@ describe("renderGhCommands", () => {
   });
 });
 
+describe("when the repository is known from the origin remote", () => {
+  const repository = { owner: "tailor-platform", name: "sdk" };
+  const envs = () => collectEnvironmentRequirements(lockOf(target("tag", "my-app", "production")));
+
+  test("gh commands target that repository instead of the current directory", () => {
+    const lines = renderGhCommands(envs(), repository).split("\n");
+
+    expect(lines).toContain(
+      '[ "$(gh api -i "repos/tailor-platform/sdk/environments/production" 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ] && ' +
+        'gh api -X PUT "repos/tailor-platform/sdk/environments/production" --silent',
+    );
+    expect(lines).toContain(
+      "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=production --repo=tailor-platform/sdk",
+    );
+  });
+
+  test("Terraform defaults the repository variable to its name", () => {
+    expect(renderTerraform(envs(), repository)).toContain(
+      [
+        'variable "repository" {',
+        '  description = "Repository name (without the owner)"',
+        "  type        = string",
+        '  default     = "sdk"',
+        "}",
+      ].join("\n"),
+    );
+  });
+
+  test("Terraform instructions use the actual owner and repository name", () => {
+    const hcl = renderTerraform(envs(), repository);
+
+    expect(hcl).toContain("#   export GITHUB_TOKEN=<token> GITHUB_OWNER=tailor-platform");
+    expect(hcl).toContain(
+      "#   terraform import github_repository_environment.production sdk:production",
+    );
+    expect(hcl).not.toContain('#   repository = "<repository>"');
+  });
+});
+
 describe("renderTerraform", () => {
   const envs = () =>
     collectEnvironmentRequirements(
@@ -384,6 +423,26 @@ describe("setupEnv", () => {
     setupEnv({ outputDir: tmp.dir, format });
 
     expect(out).toHaveBeenCalledWith(render(collectEnvironmentRequirements(lock)));
+  });
+
+  test("fills in the repository detected from the origin remote", () => {
+    using tmp = tempDir("setup-env-");
+    const lock = lockOf(target("branch", "my-app", "stg"));
+    writeLock(tmp.dir, lock);
+    using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    setupEnv({
+      outputDir: tmp.dir,
+      format: "gh",
+      gitRunner: () => "git@github.com:tailor-platform/sdk.git",
+    });
+
+    expect(out).toHaveBeenCalledWith(
+      renderGhCommands(collectEnvironmentRequirements(lock), {
+        owner: "tailor-platform",
+        name: "sdk",
+      }),
+    );
   });
 
   test("prints the grouped requirements as data in JSON mode", () => {
