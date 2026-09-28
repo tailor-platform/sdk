@@ -298,7 +298,8 @@ the move.
 
 ## Secrets
 
-The generated workflow reads two secrets:
+The generated workflow requires two secrets (the optional Slack token is listed in
+[Setting secrets and variables](#setting-secrets-and-variables)):
 
 | Secret                                       | Description                |
 | -------------------------------------------- | -------------------------- |
@@ -348,7 +349,9 @@ The `gh` output leaves optional entries commented out. Run the commands one at a
 time: each `gh secret set` / `gh variable set` prompts for its value. The
 Terraform output takes every value from an input variable (secrets are
 `sensitive`) and creates an optional entry only when its variable is set, so no
-value is written to the output.
+value is written to the output. If an environment already exists in the
+repository, import it before applying, for example
+`terraform import github_repository_environment.production my-repo:production`.
 
 ## GitHub Environments (approval gate)
 
