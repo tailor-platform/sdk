@@ -1,5 +1,5 @@
 import { logBetaWarning, logger } from "@tailor-platform/sdk/cli";
-import { validateEnvironment } from "./generate";
+import { validateEnvironment, validateWorkspaceName } from "./generate";
 import { type LockFile, readLock, type TargetKind } from "./lock";
 
 export type EnvRequirement = {
@@ -101,6 +101,7 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
     if (target.kind === "action") continue;
     const { environment } = target.inputs;
     validateEnvironment(environment);
+    validateWorkspaceName(target.workspaceName);
     const key = environment.toLowerCase();
     let entry = byEnvironment.get(key);
     if (!entry) {

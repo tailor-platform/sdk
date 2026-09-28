@@ -170,6 +170,12 @@ describe("collectEnvironmentRequirements", () => {
     expect(envs.map((e) => e.environment)).toEqual(["production"]);
   });
 
+  test("rejects a workspace name that is unsafe to embed in the output", () => {
+    expect(() =>
+      collectEnvironmentRequirements(lockOf(target("branch", "my-app\ngh repo delete", "stg"))),
+    ).toThrow(/workspace name/i);
+  });
+
   test("rejects an environment name that is unsafe to embed in commands", () => {
     expect(() =>
       collectEnvironmentRequirements(lockOf(target("branch", "my-app", "stg; rm -rf /"))),
@@ -328,7 +334,7 @@ describe("renderTerraform", () => {
 
   test("rejects environments whose Terraform names would collide", () => {
     const envs = collectEnvironmentRequirements(
-      lockOf(target("branch", "a", "stg/eu"), target("tag", "b", "stg.eu")),
+      lockOf(target("branch", "app-eu", "stg/eu"), target("tag", "app-eu", "stg.eu")),
     );
 
     expect(() => renderTerraform(envs)).toThrow(/stg\/eu.*stg\.eu|stg\.eu.*stg\/eu/);

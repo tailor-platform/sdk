@@ -177,7 +177,11 @@ async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean
 
 // The name is used as the plan label, the generated file name, and the default
 // GitHub Environment name, so it must stay within the workspace-name charset.
-function validateWorkspaceName(name: string): void {
+/**
+ * Reject workspace names that do not match the Platform naming rules.
+ * @param name - Workspace name
+ */
+export function validateWorkspaceName(name: string): void {
   if (!workspaceNameSchema.safeParse(name).success) {
     throw new Error(
       `Invalid workspace name "${name}". Names must be 3-63 characters of lowercase ` +
