@@ -33,9 +33,11 @@ tailor setup ci tag --name my-app-prod \
   --branch main --environment production
 ```
 
-After running the command, follow the **Next steps** printed to the terminal to
-set the required secrets, set the `TAILOR_PLATFORM_WORKSPACE_ID` variable, and
-commit the generated files.
+After running the command, follow the **Next steps** printed to the terminal:
+run `tailor setup ci env` to get the commands that set the secrets and
+variables each GitHub Environment needs (see
+[Setting secrets and variables](#setting-secrets-and-variables)), then commit
+the generated files.
 
 The generated workflow deploys to whichever workspace its
 `TAILOR_PLATFORM_WORKSPACE_ID` Environment variable points at — it never
@@ -304,18 +306,49 @@ The generated workflow reads two secrets:
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Machine user client secret |
 
 Set them on the target GitHub Environment (the `--environment` value, or the
-workspace name when omitted) with the GitHub CLI:
-
-```bash
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env my-app-stg
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env my-app-stg
-```
+workspace name when omitted); `tailor setup ci env` prints the commands (see
+[Setting secrets and variables](#setting-secrets-and-variables)).
 
 Setting them at the environment level isolates each target's credentials and
 keeps them alongside that environment's `TAILOR_PLATFORM_WORKSPACE_ID`
 variable. You can also set them as repository-level secrets if every target
 shares one machine user, but then any workflow on any branch can read them, so
 the environment's protection rules no longer guard your deploys.
+
+### Setting secrets and variables
+
+`tailor setup ci env` reads `.github/tailor.lock` and prints, for every GitHub
+Environment the generated workflows use, the commands that create the
+environment and set its secrets and variables. It is read-only, so re-run it
+whenever you add a target.
+
+```bash
+tailor setup ci env                      # gh CLI commands (default)
+tailor setup ci env --format terraform   # Terraform for the integrations/github provider
+```
+
+The list follows what each generated workflow actually reads:
+
+| Name                                         | Kind     | Targets                 | Required |
+| -------------------------------------------- | -------- | ----------------------- | -------- |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | secret   | all                     | yes      |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all                     | yes      |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag, coordinate | yes      |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview                 | no       |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview                 | no       |
+| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all                     | no       |
+| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag, coordinate | no       |
+| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag, coordinate | no       |
+
+Composite actions (`setup ci action`) read nothing themselves; the coordinator
+that calls them does. Set `TAILOR_SLACK_BOT_TOKEN` and `TAILOR_SLACK_CHANNEL_ID`
+together to enable Slack deploy notifications.
+
+The `gh` output leaves optional entries commented out. Run the commands one at a
+time: each `gh secret set` / `gh variable set` prompts for its value. The
+Terraform output takes every value from an input variable (secrets are
+`sensitive`) and creates an optional entry only when its variable is set, so no
+value is written to the output.
 
 ## GitHub Environments (approval gate)
 
@@ -453,18 +486,13 @@ tailor setup ci tag --name my-app-prod \
   --branch main --environment production
 ```
 
-Then provision each workspace and set its id on the matching environment (the
-staging target's environment defaults to `my-app-stg`; production uses
-`production`):
+Then provision each workspace and set its id and the machine-user credentials
+on the matching environment (the staging target's environment defaults to
+`my-app-stg`; production uses `production`). `tailor setup ci env` prints the
+commands for both environments:
 
 ```bash
-gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env my-app-stg
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env my-app-stg
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env my-app-stg
-
-gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env production
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env production
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env production
+tailor setup ci env
 ```
 
 Commit both workflow files and `.github/tailor.lock`.
