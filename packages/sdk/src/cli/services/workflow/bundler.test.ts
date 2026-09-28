@@ -448,6 +448,47 @@ export default createWorkflow({ name: "workflow", mainJob });
       ).rejects.toThrow(/syncWorkflow\.start\(\) .*cannot be rewritten/);
     });
 
+    test("includes jobs referenced through a namespace import", async () => {
+      const dir = createTempDir();
+      const jobsFile = path.join(dir, "jobs.ts");
+      const callerFile = path.join(dir, "caller.ts");
+      fs.writeFileSync(
+        jobsFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+`,
+      );
+      fs.writeFileSync(
+        callerFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import * as jobs from "./jobs";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await jobs.step.start(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [jobsFile, callerFile] });
+
+      const result = await bundleWorkflowJobs(
+        [
+          { name: "step-a", exportName: "step", sourceFile: jobsFile },
+          { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
+        ],
+        ["main-job"],
+        {},
+        context,
+        dir,
+      );
+
+      expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
+      expect(result.bundledCode.get("main-job")).toMatch(/execJobFunction\([`'"]step-a/);
+    });
+
     test("does not include a job whose binding is shadowed by a parameter", async () => {
       const dir = createTempDir();
       const workflowFile = path.join(dir, "workflow.ts");

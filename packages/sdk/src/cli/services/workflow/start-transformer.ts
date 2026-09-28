@@ -18,6 +18,7 @@ import {
   type StartCallInfo,
   applyReplacements,
   getModuleExportName,
+  getNamespaceStartCallInfo,
   getStartCallInfo,
 } from "./ast-utils";
 import type { Program } from "@oxc-project/types";
@@ -33,10 +34,15 @@ interface UndetectableImport {
   importedName: string;
 }
 
+interface NamespaceImport {
+  importSource: string;
+  module: StartModuleBindings;
+}
+
 interface LocalTargets {
   targets: Map<string, StartTarget>;
   undetectableImports: Map<string, UndetectableImport>;
-  namespaceImports: Map<string, string>;
+  namespaceImports: Map<string, NamespaceImport>;
 }
 
 const START_CALL_RE = /\.start(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*\n)*\(/;
@@ -283,7 +289,7 @@ function collectLocalTargets(
 ): LocalTargets {
   const targets = new Map<string, StartTarget>();
   const undetectableImports = new Map<string, UndetectableImport>();
-  const namespaceImports = new Map<string, string>();
+  const namespaceImports = new Map<string, NamespaceImport>();
   const currentModule = context.modules.get(normalizeFilePath(currentFilePath));
   if (currentModule) {
     for (const [localName, target] of currentModule.localBindings) {
@@ -301,7 +307,7 @@ function collectLocalTargets(
 
     for (const specifier of statement.specifiers) {
       if (specifier.type === "ImportNamespaceSpecifier") {
-        namespaceImports.set(specifier.local.name, importSource);
+        namespaceImports.set(specifier.local.name, { importSource, module: importedModule });
         continue;
       }
       if (specifier.type === "ImportSpecifier" && specifier.importKind === "type") continue;
@@ -323,22 +329,19 @@ function collectLocalTargets(
   return { targets, undetectableImports, namespaceImports };
 }
 
-function getNamespaceStartCall(
-  node: ASTNode,
-  sourceText: string,
-): { namespaceName: string; calleeText: string } | undefined {
-  if (node.type !== "CallExpression") return undefined;
-  const callee = node.callee as ASTNode;
-  if (callee.type !== "MemberExpression" || callee.computed) return undefined;
-  if ((callee.property as ASTNode).name !== "start") return undefined;
-  const receiver = callee.object as ASTNode;
-  if (receiver.type !== "MemberExpression") return undefined;
-  const namespace = receiver.object as ASTNode;
-  if (namespace.type !== "Identifier") return undefined;
-  return {
-    namespaceName: namespace.name as string,
-    calleeText: sourceText.slice(callee.start as number, callee.end as number),
-  };
+function undetectableStartCallError(
+  calleeText: string,
+  currentFilePath: string,
+  { importSource, importedName }: UndetectableImport,
+): Error {
+  const exportLabel = importedName === "default" ? "default export" : `export "${importedName}"`;
+  return new Error(
+    `${calleeText}() in ${currentFilePath} cannot be rewritten: ` +
+      `"${importSource}" is a workflow file, but its ${exportLabel} is not a ` +
+      `workflow or job the build can detect. Only createWorkflow({ name: "..." }) and ` +
+      `createWorkflowJob({ name: "...", body }) called with literal names in that file are ` +
+      `rewritten; any other .start() would fail at runtime after deploy.`,
+  );
 }
 
 function assertNoUndetectableStartCalls(
@@ -349,16 +352,14 @@ function assertNoUndetectableStartCalls(
 ): void {
   const names = new Set([...undetectableImports.keys(), ...namespaceImports.keys()]);
   walkBindingAware(program, names, (node, shadowedNames) => {
-    const namespaceCall = getNamespaceStartCall(node, sourceText);
-    if (namespaceCall && !shadowedNames.has(namespaceCall.namespaceName)) {
-      const importSource = namespaceImports.get(namespaceCall.namespaceName);
-      if (importSource !== undefined) {
-        throw new Error(
-          `${namespaceCall.calleeText}() in ${currentFilePath} cannot be rewritten: ` +
-            `"${importSource}" is a workflow file imported as a namespace. Import the workflow ` +
-            `or job with a default or named import instead; otherwise the call would fail at ` +
-            `runtime after deploy.`,
-        );
+    const namespaceCall = getNamespaceStartCallInfo(node, sourceText);
+    if (namespaceCall && !shadowedNames.has(namespaceCall.identifierName)) {
+      const namespaceImport = namespaceImports.get(namespaceCall.identifierName);
+      if (namespaceImport && !namespaceImport.module.exports.has(namespaceCall.memberName)) {
+        throw undetectableStartCallError(namespaceCall.calleeText, currentFilePath, {
+          importSource: namespaceImport.importSource,
+          importedName: namespaceCall.memberName,
+        });
       }
     }
 
@@ -366,16 +367,10 @@ function assertNoUndetectableStartCalls(
     if (!startCall || shadowedNames.has(startCall.identifierName)) return;
     const undetectable = undetectableImports.get(startCall.identifierName);
     if (!undetectable) return;
-    const exportLabel =
-      undetectable.importedName === "default"
-        ? "default export"
-        : `export "${undetectable.importedName}"`;
-    throw new Error(
-      `${startCall.identifierName}.start() in ${currentFilePath} cannot be rewritten: ` +
-        `"${undetectable.importSource}" is a workflow file, but its ${exportLabel} is not a ` +
-        `workflow or job the build can detect. Only createWorkflow({ name: "..." }) and ` +
-        `createWorkflowJob({ name: "...", body }) called with literal names in that file are ` +
-        `rewritten; any other .start() would fail at runtime after deploy.`,
+    throw undetectableStartCallError(
+      `${startCall.identifierName}.start`,
+      currentFilePath,
+      undetectable,
     );
   });
 }
@@ -383,12 +378,24 @@ function assertNoUndetectableStartCalls(
 function detectStartCallsWithTargets(
   program: Program,
   sourceText: string,
-  targets: Map<string, StartTarget>,
+  { targets, namespaceImports }: LocalTargets,
 ): ResolvedStartCall[] {
   const calls: ResolvedStartCall[] = [];
-  const targetNames = new Set(targets.keys());
+  const targetNames = new Set([...targets.keys(), ...namespaceImports.keys()]);
 
   walkBindingAware(program, targetNames, (node, shadowedNames) => {
+    const namespaceCall = getNamespaceStartCallInfo(node, sourceText);
+    if (namespaceCall && !shadowedNames.has(namespaceCall.identifierName)) {
+      const target = namespaceImports
+        .get(namespaceCall.identifierName)
+        ?.module.exports.get(namespaceCall.memberName);
+      if (target) {
+        const { memberName: _memberName, calleeText: _calleeText, ...startCall } = namespaceCall;
+        calls.push({ ...startCall, kind: target.kind, targetName: target.name });
+      }
+      return;
+    }
+
     const startCall = getStartCallInfo(node, sourceText);
     if (!startCall || shadowedNames.has(startCall.identifierName)) return;
     const target = targets.get(startCall.identifierName);
@@ -409,7 +416,7 @@ export function detectResolvedStartCalls(
   return detectStartCallsWithTargets(
     program,
     sourceText,
-    collectLocalTargets(program, context, currentFilePath).targets,
+    collectLocalTargets(program, context, currentFilePath),
   );
 }
 
@@ -419,9 +426,8 @@ export function transformStartCalls(
   currentFilePath: string,
 ): string {
   const { program } = parseSync("input.ts", source);
-  const localTargetInfo = collectLocalTargets(program, startContext, currentFilePath);
-  const localTargets = localTargetInfo.targets;
-  assertNoUndetectableStartCalls(program, source, localTargetInfo, currentFilePath);
+  const localTargets = collectLocalTargets(program, startContext, currentFilePath);
+  assertNoUndetectableStartCalls(program, source, localTargets, currentFilePath);
   const { authNamespace } = startContext;
   const allStartCalls = detectStartCallsWithTargets(program, source, localTargets);
   const nestedStartCalls: Array<{ call: ResolvedStartCall; parent: ResolvedStartCall }> = [];

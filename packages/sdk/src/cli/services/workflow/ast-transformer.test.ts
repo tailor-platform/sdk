@@ -1196,7 +1196,21 @@ export async function run() {
       );
     });
 
-    test("throws when .start() is called through a namespace import of a workflow file", () => {
+    test("transforms .start() on a detectable export reached through a namespace import", () => {
+      const source = `
+import * as sync from "../workflow/sync";
+
+export async function run() {
+  return await sync.syncStep.start({ id: 1 });
+}
+`;
+
+      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+        'tailor.workflow.execJobFunction("sync-step", { id: 1 })',
+      );
+    });
+
+    test("throws when .start() is called through a namespace import on an export the build cannot detect", () => {
       const source = `
 import * as sync from "../workflow/sync";
 
@@ -1208,7 +1222,7 @@ export async function run() {
       expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
         "sync.default.start() in " +
           callerFile +
-          ' cannot be rewritten: "../workflow/sync" is a workflow file imported as a namespace.',
+          ' cannot be rewritten: "../workflow/sync" is a workflow file, but its default export is not a workflow or job the build can detect.',
       );
     });
 
