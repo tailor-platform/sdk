@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isForbiddenGlobal } from "#/utils/node-builtins";
 import { LOG_LEVELS } from "./log-level";
 
 const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
@@ -61,6 +62,16 @@ const logLevelSchema = z
     message: `'logLevel' must be one of: ${LOG_LEVELS.join(", ")}.`,
   });
 
+const allowedRuntimeGlobalNameSchema = z.string().refine(isForbiddenGlobal, {
+  error: (issue) =>
+    `'allowedRuntimeGlobals' lists '${String(issue.input)}', which is not a Node-only global the Tailor Platform runtime lacks.`,
+});
+
+const allowedRuntimeGlobalsSchema = z.record(
+  z.string().min(1),
+  z.union([z.literal(true), z.array(allowedRuntimeGlobalNameSchema)]),
+);
+
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
  * top-level fields with platform-side constraints (notably `id`); fields
@@ -82,6 +93,7 @@ export const AppConfigSchema = z.strictObject({
   inlineSourcemap: z.boolean().optional(),
   logLevel: logLevelSchema.optional(),
   metadata: metadataSchema.optional(),
+  allowedRuntimeGlobals: allowedRuntimeGlobalsSchema.optional(),
   db: z.unknown().optional(),
   resolver: z.unknown().optional(),
   idp: z.unknown().optional(),

@@ -28,6 +28,11 @@ export type AppConfigParsed = {
         [x: string]: string;
       }
     | undefined;
+  allowedRuntimeGlobals?:
+    | {
+        [x: string]: true | string[];
+      }
+    | undefined;
   db?: unknown;
   resolver?: unknown;
   idp?: unknown;

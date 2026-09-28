@@ -174,4 +174,34 @@ describe("AppConfigSchema", () => {
       expect(result.error.issues[0]?.message).toContain("17");
     });
   });
+
+  describe("allowedRuntimeGlobals", () => {
+    function parseAllowedRuntimeGlobals(allowedRuntimeGlobals: unknown) {
+      return AppConfigSchema.safeParse({ name: "my-app", allowedRuntimeGlobals });
+    }
+
+    test("accepts a list of globals or true per package", () => {
+      expect(
+        parseAllowedRuntimeGlobals({
+          "@ai-sdk/gateway": ["Buffer"],
+          "@ai-sdk/provider-utils": true,
+        }).success,
+      ).toBe(true);
+    });
+
+    test("rejects false, which would read as an opt-out that does nothing", () => {
+      expect(parseAllowedRuntimeGlobals({ "@ai-sdk/gateway": false }).success).toBe(false);
+    });
+
+    test("rejects a name that is not a Node-only global, so a typo cannot silently allow nothing", () => {
+      const result = parseAllowedRuntimeGlobals({ "@ai-sdk/gateway": ["buffer"] });
+
+      expect(result.success).toBe(false);
+      if (result.success) {
+        throw new Error("Expected AppConfigSchema parsing to fail");
+      }
+      expect(result.error.issues[0]?.path).toEqual(["allowedRuntimeGlobals", "@ai-sdk/gateway", 0]);
+      expect(result.error.issues[0]?.message).toContain("buffer");
+    });
+  });
 });

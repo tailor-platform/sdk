@@ -25,7 +25,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
-import type { LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
 import type { Resolver } from "#/types/resolver.generated";
 
 interface ResolverInfo {
@@ -55,6 +55,8 @@ export interface BundleResolversOptions {
   bundleLogLevel?: LogLevel;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
+  /** Globals each installed package may reference without a warning */
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
 }
 
 /**
@@ -80,6 +82,7 @@ export async function bundleResolvers(
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     tsconfigCache,
+    allowedRuntimeGlobals,
   } = options;
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config, baseDir);
@@ -127,6 +130,7 @@ export async function bundleResolvers(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      allowedRuntimeGlobals,
     }),
   );
 
@@ -157,6 +161,7 @@ async function bundleSingleResolver(
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     tsconfigCache,
+    allowedRuntimeGlobals,
   } = options;
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -244,9 +249,9 @@ async function bundleSingleResolver(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      const bundledCode = result.output[0].code;
-      assertNoForbiddenRuntimeGlobals(bundledCode, `Resolver "${resolver.name}"`);
-      return bundledCode;
+      const [chunk] = result.output;
+      assertNoForbiddenRuntimeGlobals(chunk, `Resolver "${resolver.name}"`, allowedRuntimeGlobals);
+      return chunk.code;
     },
   });
 

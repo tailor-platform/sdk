@@ -684,6 +684,7 @@ export async function loadApplication(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      allowedRuntimeGlobals: config.allowedRuntimeGlobals,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -701,6 +702,7 @@ export async function loadApplication(
       bundleLogLevel,
       baseDir,
       tsconfigCache,
+      allowedRuntimeGlobals: config.allowedRuntimeGlobals,
     });
   }
 
@@ -718,6 +720,8 @@ export async function loadApplication(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      undefined,
+      config.allowedRuntimeGlobals,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -858,6 +862,7 @@ async function reloadEnvDependentBundles(params: {
       bundleLogLevel,
       tsconfigCache,
       previous.workflowBuildResult,
+      config.allowedRuntimeGlobals,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }

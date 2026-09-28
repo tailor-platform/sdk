@@ -5,6 +5,7 @@ import { resolveTSConfig } from "pkg-types";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { createBundleCache } from "#/cli/cache/bundle-cache";
 import { createCacheStore } from "#/cli/cache/store";
+import { logger } from "#/cli/shared/logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { bundleResolvers } from "./bundler";
 import type * as pkgTypes from "pkg-types";
@@ -515,6 +516,98 @@ describe("bundleResolvers", () => {
         baseDir: tmp.dir,
       }),
     ).rejects.toThrow(/references a global unavailable in the Tailor Platform runtime: process/);
+  });
+
+  function writeBufferEncodingPackage(projectDir: string, name: string): void {
+    const packageDir = path.join(projectDir, "node_modules", name);
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(packageDir, "package.json"),
+      JSON.stringify({ name, type: "module", exports: { ".": "./index.js" } }),
+    );
+    fs.writeFileSync(
+      path.join(packageDir, "index.js"),
+      'export const encode = (text) => Buffer.from(text).toString("base64");\n',
+    );
+  }
+
+  function writeEncodingResolver(projectDir: string, packageName: string): void {
+    const resolverDir = path.join(projectDir, "src/backend/pkgglobal/resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "encoder.ts"),
+      `import { encode } from "${packageName}";\n` +
+        `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "encoder",\n` +
+        `  permission: "allowAnonymous",\n` +
+        `  body: async () => encode("hi"),\n` +
+        `  output: { type: "string", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+  }
+
+  test("names the resolver file that references a forbidden global", async () => {
+    using tmp = tempCwd("sdk-bundler-forbidden-global-file-");
+    writeSdkDependency(tmp.dir);
+    const resolverDir = path.join(tmp.dir, "src/backend/nodeglobal/resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "leaky.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "leaky",\n` +
+        `  permission: "allowAnonymous",\n` +
+        `  body: async () => process.cwd(),\n` +
+        `  output: { type: "string", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    await expect(
+      bundleResolvers({
+        namespace: "nodeglobal",
+        config: { files: ["./src/backend/nodeglobal/resolver/*.ts"] },
+        baseDir: tmp.dir,
+      }),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        details: expect.stringContaining("src/backend/nodeglobal/resolver/leaky.ts"),
+      }),
+    );
+  });
+
+  test("warns instead of failing when only an installed package references a forbidden global", async () => {
+    using tmp = tempCwd("sdk-bundler-package-global-");
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    writeSdkDependency(tmp.dir);
+    writeBufferEncodingPackage(tmp.dir, "resolver-buffer-lib");
+    writeEncodingResolver(tmp.dir, "resolver-buffer-lib");
+
+    const result = await bundleResolvers({
+      namespace: "pkgglobal",
+      config: { files: ["./src/backend/pkgglobal/resolver/*.ts"] },
+      baseDir: tmp.dir,
+    });
+
+    expect(result.get("encoder")).toBeDefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("resolver-buffer-lib"));
+  });
+
+  test("does not warn about a global the installed package is allowed to reference", async () => {
+    using tmp = tempCwd("sdk-bundler-allowed-package-global-");
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    writeSdkDependency(tmp.dir);
+    writeBufferEncodingPackage(tmp.dir, "allowed-buffer-lib");
+    writeEncodingResolver(tmp.dir, "allowed-buffer-lib");
+
+    await bundleResolvers({
+      namespace: "pkgglobal",
+      config: { files: ["./src/backend/pkgglobal/resolver/*.ts"] },
+      baseDir: tmp.dir,
+      allowedRuntimeGlobals: { "allowed-buffer-lib": ["Buffer"] },
+    });
+
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("allowed-buffer-lib"));
   });
 
   test("bundles a resolver that uses Web Standard globals", async () => {

@@ -20,7 +20,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
-import type { LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
 
 interface ExecutorInfo {
   name: string;
@@ -47,6 +47,8 @@ export interface BundleExecutorsOptions {
   baseDir: string;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
+  /** Globals each installed package may reference without a warning */
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
 }
 
 /**
@@ -71,6 +73,7 @@ export async function bundleExecutors(
     bundleLogLevel = "DEBUG",
     baseDir,
     tsconfigCache,
+    allowedRuntimeGlobals,
   } = options;
   const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
@@ -123,6 +126,7 @@ export async function bundleExecutors(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      allowedRuntimeGlobals,
     ),
   );
 
@@ -143,6 +147,7 @@ async function bundleSingleExecutor(
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -216,9 +221,9 @@ async function bundleSingleExecutor(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      const bundledCode = result.output[0].code;
-      assertNoForbiddenRuntimeGlobals(bundledCode, `Executor "${executor.name}"`);
-      return bundledCode;
+      const [chunk] = result.output;
+      assertNoForbiddenRuntimeGlobals(chunk, `Executor "${executor.name}"`, allowedRuntimeGlobals);
+      return chunk.code;
     },
   });
 

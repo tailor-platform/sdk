@@ -15,6 +15,14 @@ import type { LogLevelEnum } from "#/types/app-config.generated";
 export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});
 
+/**
+ * Node-only globals that installed packages may reference without a warning,
+ * keyed by package name (e.g. `"@ai-sdk/gateway"`). List the globals, or set
+ * `true` to allow every one of them — including any the package only starts
+ * referencing in a later version.
+ */
+export type AllowedRuntimeGlobals = Record<string, true | string[]>;
+
 /** Value an `env` entry resolves to at runtime. */
 export type EnvValue = string | number | boolean;
 
@@ -167,4 +175,17 @@ export interface AppConfig<
    * @default "DEBUG"
    */
   logLevel?: LogLevelInput;
+  /**
+   * Silences the warning `deploy` prints when an installed package bundled into
+   * a resolver, executor, or workflow references a Node-only global such as
+   * `process` or `Buffer`, which the Tailor Platform runtime does not define.
+   * Only code from installed packages is affected: a reference from the
+   * project's own code still fails the build.
+   * @example
+   * allowedRuntimeGlobals: {
+   *   "@ai-sdk/gateway": ["Buffer"],
+   *   "some-trusted-package": true,
+   * }
+   */
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
 }

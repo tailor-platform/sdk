@@ -121,6 +121,26 @@ Error [UNRESOLVED_IMPORT]: Could not resolve "@lib/missing" imported from "/path
 
 If the unresolved specifier is a Node.js built-in (e.g. `fs`, `crypto`, `path`), the suggestion explains that it is not available in the Tailor Platform runtime and, where one exists, names a Web-standard replacement (e.g. the Fetch API instead of `http`/`https`).
 
+#### Node-only globals
+
+The Tailor Platform runtime does not define Node-only globals such as `process`, `Buffer`, or `require`. When a bundled resolver, executor, or workflow job references one, what happens depends on where the reference is:
+
+- **In your own code**, the build fails with `FORBIDDEN_RUNTIME_GLOBAL`, naming the global and the file that references it. A reference behind a `typeof` check, such as `if (typeof process !== "undefined") { ... }`, is not reported.
+- **In an installed package** (code under `node_modules`), the build continues and prints a warning naming the package. Code in that package that reaches the global throws a `ReferenceError` at runtime, so check whether your use of the package can reach it.
+
+When you have confirmed that the package's code referencing the global never runs for your use, silence the warning with `allowedRuntimeGlobals`, keyed by package name. List the globals to allow, or set `true` to allow all of them, including any the package only starts referencing in a later version:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  allowedRuntimeGlobals: {
+    "@ai-sdk/gateway": ["Buffer"],
+  },
+});
+```
+
+`allowedRuntimeGlobals` has no effect on your own code. Packages from your own workspace (for example, a pnpm or npm workspace) are bundled from their source directory rather than from `node_modules`, so they count as your own code.
+
 ### External Resources
 
 You can reference resources managed by Terraform or other SDK projects to include them in your application's subgraph. External resources are not deployed by this project but can be used for shared access across multiple applications.

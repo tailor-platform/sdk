@@ -24,7 +24,7 @@ import { getModuleExportName, type ASTNode } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
-import type { LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);
@@ -291,6 +291,7 @@ export interface BundleWorkflowJobsResult {
  *   workflow source file to redetect reachability, as long as `sourceFileState` still matches
  *   (reachability cannot change unless the sources do, but the sources can change between calls,
  *   e.g. during an interactive confirmation pause before a rebuild)
+ * @param allowedRuntimeGlobals - Globals each installed package may reference without a warning
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -307,6 +308,7 @@ export async function bundleWorkflowJobs(
     BundleWorkflowJobsResult,
     "usedJobNames" | "mainJobDeps" | "sourceFileState"
   >,
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
 ): Promise<BundleWorkflowJobsResult> {
   const jobSourceFiles = allJobs.map((job) => job.sourceFile);
   const sourceFileState = hashReachabilitySourceFiles([
@@ -354,6 +356,7 @@ export async function bundleWorkflowJobs(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      allowedRuntimeGlobals,
     ),
   );
 
@@ -605,6 +608,7 @@ async function bundleSingleJob(
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -737,9 +741,9 @@ async function bundleSingleJob(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      const bundledCode = result.output[0].code;
-      assertNoForbiddenRuntimeGlobals(bundledCode, `Workflow job "${job.name}"`);
-      return bundledCode;
+      const [chunk] = result.output;
+      assertNoForbiddenRuntimeGlobals(chunk, `Workflow job "${job.name}"`, allowedRuntimeGlobals);
+      return chunk.code;
     },
   });
 
