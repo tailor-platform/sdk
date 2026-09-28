@@ -909,6 +909,7 @@ export default createWorkflow({ name: "workflow", mainJob });
       ext: string;
       importPath: string;
       startArgs?: string;
+      tsconfigPaths?: Record<string, string[]>;
     };
 
     aroundEach(async (runTest) => {
@@ -920,10 +921,30 @@ export default createWorkflow({ name: "workflow", mainJob });
     });
 
     const buildBundleFixture = (options: BuildBundleFixtureOptions) => {
-      const { ext, importPath, startArgs = `{ input: 0 }, { invoker: "admin" }` } = options;
+      const {
+        ext,
+        importPath,
+        startArgs = `{ input: 0 }, { invoker: "admin" }`,
+        tsconfigPaths,
+      } = options;
 
       // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
+      if (tsconfigPaths) {
+        fs.writeFileSync(
+          path.join(tmpDir, "tsconfig.json"),
+          JSON.stringify({
+            compilerOptions: {
+              paths: {
+                "@tailor-platform/sdk": [
+                  path.resolve(import.meta.dirname, "../../../configure/index.ts"),
+                ],
+                ...tsconfigPaths,
+              },
+            },
+          }),
+        );
+      }
 
       const simpleFile = path.join(tmpDir, `simple.${ext}`);
       fs.writeFileSync(
@@ -1007,9 +1028,14 @@ export default createWorkflow({
     test.each([
       { label: "cross-file default import", ext: "ts", importPath: "./simple" },
       { label: ".mts dependency files", ext: "mts", importPath: "./simple.mjs" },
+      {
+        label: "a tsconfig paths alias import",
+        ext: "ts",
+        importPath: "@/simple",
+        tsconfigPaths: { "@/*": ["./*"] },
+      },
     ])("transforms workflow.start() from $label", async (options) => {
-      const { ext, importPath } = options;
-      const result = await buildBundleFixture({ ext, importPath });
+      const result = await buildBundleFixture(options);
 
       expect(result.bundledCode.has("caller-job")).toBe(true);
       const callerCode = result.bundledCode.get("caller-job")!;

@@ -8,6 +8,11 @@ import {
   type StartTarget,
 } from "#/cli/shared/start-context";
 import {
+  createTsconfigLookupCache,
+  matchTsconfigPaths,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
+import {
   type ASTNode,
   type Replacement,
   type StartCallInfo,
@@ -238,15 +243,26 @@ function walkBindingAware(
   walk(program as unknown as ASTNode, new Set());
 }
 
-function resolveRelativeImport(
+function findModule(context: StartContext, candidatePath: string): StartModuleBindings | undefined {
+  const modulePath = normalizeFilePath(candidatePath);
+  return context.modules.get(modulePath) ?? context.modules.get(path.join(modulePath, "index"));
+}
+
+function resolveImport(
   context: StartContext,
   currentFilePath: string,
   importSource: string,
+  tsconfigCache: TsconfigLookupCache,
 ): StartModuleBindings | undefined {
-  if (!importSource.startsWith(".")) return undefined;
   const currentDirectory = path.dirname(currentFilePath.replace(/[?#].*$/, ""));
-  const modulePath = normalizeFilePath(path.resolve(currentDirectory, importSource));
-  return context.modules.get(modulePath) ?? context.modules.get(path.join(modulePath, "index"));
+  if (importSource.startsWith(".")) {
+    return findModule(context, path.resolve(currentDirectory, importSource));
+  }
+  for (const candidate of matchTsconfigPaths(importSource, currentDirectory, tsconfigCache)) {
+    const found = findModule(context, candidate);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 function collectLocalTargets(
@@ -262,11 +278,12 @@ function collectLocalTargets(
     }
   }
 
+  const tsconfigCache = createTsconfigLookupCache();
   for (const statement of program.body) {
     if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue;
     const importSource = statement.source.value;
     if (typeof importSource !== "string") continue;
-    const importedModule = resolveRelativeImport(context, currentFilePath, importSource);
+    const importedModule = resolveImport(context, currentFilePath, importSource, tsconfigCache);
     if (!importedModule) continue;
 
     for (const specifier of statement.specifiers) {
