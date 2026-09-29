@@ -207,8 +207,8 @@ describe("renderGhCommands", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
     const create = lines.indexOf(
-      '[ "$(gh api -i "repos/{owner}/{repo}/environments/stg%2Feu" 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ] && ' +
-        'gh api -X PUT "repos/{owner}/{repo}/environments/stg%2Feu" --silent',
+      'if [ "$(gh api -i "repos/{owner}/{repo}/environments/stg%2Feu" 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then ' +
+        'gh api -X PUT "repos/{owner}/{repo}/environments/stg%2Feu" --silent; fi',
     );
     const firstSecret = lines.findIndex((l) => l.startsWith("gh secret set"));
     expect(create).toBeGreaterThanOrEqual(0);
@@ -247,7 +247,7 @@ describe("renderGhCommands", () => {
   test("keeps every non-command line a shell comment", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
-    const isCommand = (l: string) => l.startsWith("gh ") || l.startsWith('[ "$(gh ');
+    const isCommand = (l: string) => l.startsWith("gh ") || l.startsWith('if [ "$(gh ');
     expect(lines.filter((l) => l !== "" && !l.startsWith("#") && !isCommand(l))).toEqual([]);
   });
 });
@@ -260,8 +260,8 @@ describe("when the repository is known from the origin remote", () => {
     const lines = renderGhCommands(envs(), repository).split("\n");
 
     expect(lines).toContain(
-      '[ "$(gh api -i "repos/tailor-platform/sdk/environments/production" 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ] && ' +
-        'gh api -X PUT "repos/tailor-platform/sdk/environments/production" --silent',
+      'if [ "$(gh api -i "repos/tailor-platform/sdk/environments/production" 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then ' +
+        'gh api -X PUT "repos/tailor-platform/sdk/environments/production" --silent; fi',
     );
     expect(lines).toContain(
       "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=production --repo=tailor-platform/sdk",

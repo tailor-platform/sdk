@@ -158,7 +158,7 @@ export function renderGhCommands(
       `# Environment "${environment}" (${targets.join(", ")})`,
       // PUT also rewrites an existing environment and needs admin access, so only create a missing
       // one. The status is compared as text so the expected 404 exit does not fail under pipefail.
-      `[ "$(gh api -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ] && gh api -X PUT ${endpoint} --silent`,
+      `if [ "$(gh api -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then gh api -X PUT ${endpoint} --silent; fi`,
     ];
     for (const { required, type, name, description, howTo } of requirements) {
       const command = `gh ${type} set ${name} --env=${environment}${repoFlag}`;
