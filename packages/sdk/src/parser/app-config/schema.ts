@@ -72,6 +72,14 @@ const allowedRuntimeGlobalsSchema = z.record(
   z.union([z.literal(true), z.array(allowedRuntimeGlobalNameSchema)]),
 );
 
+const buildOptionsSchema = z.strictObject({
+  inlineSourcemap: z.boolean().optional(),
+  logLevel: logLevelSchema.optional(),
+  allowedRuntimeGlobals: allowedRuntimeGlobalsSchema.optional(),
+});
+
+const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;
+
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
  * top-level fields with platform-side constraints (notably `id`); fields
@@ -83,25 +91,37 @@ const allowedRuntimeGlobalsSchema = z.record(
  * label-compatible prefix is added at the metadata boundary, so user-facing
  * configs only need to carry a UUID.
  */
-export const AppConfigSchema = z.strictObject({
-  id: z.uuid({ message: "'id' must be a UUID." }).optional(),
-  name: z.string().min(1, { message: "'name' must be a non-empty string." }),
-  env: z.record(z.string(), envEntrySchema).optional(),
-  cors: z.array(z.string()).optional(),
-  allowedIpAddresses: z.array(z.string()).optional(),
-  disableIntrospection: z.boolean().optional(),
-  inlineSourcemap: z.boolean().optional(),
-  logLevel: logLevelSchema.optional(),
-  metadata: metadataSchema.optional(),
-  allowedRuntimeGlobals: allowedRuntimeGlobalsSchema.optional(),
-  db: z.unknown().optional(),
-  resolver: z.unknown().optional(),
-  idp: z.unknown().optional(),
-  auth: z.unknown().optional(),
-  executor: z.unknown().optional(),
-  workflow: z.unknown().optional(),
-  httpAdapter: z.unknown().optional(),
-  staticWebsites: z.unknown().optional(),
-  aiGateways: z.unknown().optional(),
-  secrets: z.unknown().optional(),
-});
+export const AppConfigSchema = z
+  .strictObject({
+    id: z.uuid({ message: "'id' must be a UUID." }).optional(),
+    name: z.string().min(1, { message: "'name' must be a non-empty string." }),
+    env: z.record(z.string(), envEntrySchema).optional(),
+    cors: z.array(z.string()).optional(),
+    allowedIpAddresses: z.array(z.string()).optional(),
+    disableIntrospection: z.boolean().optional(),
+    inlineSourcemap: z.boolean().optional(),
+    logLevel: logLevelSchema.optional(),
+    buildOptions: buildOptionsSchema.optional(),
+    metadata: metadataSchema.optional(),
+    db: z.unknown().optional(),
+    resolver: z.unknown().optional(),
+    idp: z.unknown().optional(),
+    auth: z.unknown().optional(),
+    executor: z.unknown().optional(),
+    workflow: z.unknown().optional(),
+    httpAdapter: z.unknown().optional(),
+    staticWebsites: z.unknown().optional(),
+    aiGateways: z.unknown().optional(),
+    secrets: z.unknown().optional(),
+  })
+  .superRefine((config, ctx) => {
+    for (const field of MOVED_TO_BUILD_OPTIONS) {
+      if (config[field] !== undefined && config.buildOptions?.[field] !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message: `'${field}' is set both at the top level and in 'buildOptions.${field}'. Keep only 'buildOptions.${field}'.`,
+        });
+      }
+    }
+  });

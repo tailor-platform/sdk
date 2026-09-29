@@ -23,14 +23,20 @@ export type AppConfigParsed = {
   disableIntrospection?: boolean | undefined;
   inlineSourcemap?: boolean | undefined;
   logLevel?: string | undefined;
+  buildOptions?:
+    | {
+        inlineSourcemap?: boolean | undefined;
+        logLevel?: string | undefined;
+        allowedRuntimeGlobals?:
+          | {
+              [x: string]: true | string[];
+            }
+          | undefined;
+      }
+    | undefined;
   metadata?:
     | {
         [x: string]: string;
-      }
-    | undefined;
-  allowedRuntimeGlobals?:
-    | {
-        [x: string]: true | string[];
       }
     | undefined;
   db?: unknown;

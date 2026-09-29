@@ -132,7 +132,7 @@ export function assertPackageRuntimeGlobalsAllowed(
       .join("\n"),
     suggestion:
       "If that code never runs for your use of the package, allow it in defineConfig(): " +
-      `allowedRuntimeGlobals: { ${entries.map(([packageName, names]) => `${JSON.stringify(packageName)}: ${JSON.stringify(names)}`).join(", ")} }`,
+      `buildOptions: { allowedRuntimeGlobals: { ${entries.map(([packageName, names]) => `${JSON.stringify(packageName)}: ${JSON.stringify(names)}`).join(", ")} } }`,
     context: { packages: rejected },
   });
 }

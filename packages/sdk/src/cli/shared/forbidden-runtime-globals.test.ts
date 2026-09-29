@@ -76,7 +76,9 @@ describe("checkForbiddenRuntimeGlobals and assertPackageRuntimeGlobalsAllowed", 
       scanBundle(bufferPackageChunk("/app/node_modules/hint-lib/index.js"), 'Resolver "chat"'),
     ).toThrow(
       expect.objectContaining({
-        suggestion: expect.stringContaining('allowedRuntimeGlobals: { "hint-lib": ["Buffer"] }'),
+        suggestion: expect.stringContaining(
+          'buildOptions: { allowedRuntimeGlobals: { "hint-lib": ["Buffer"] } }',
+        ),
       }),
     );
   });

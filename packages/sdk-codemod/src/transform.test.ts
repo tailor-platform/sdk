@@ -581,4 +581,8 @@ export function read(plugins: unknown) { return generators; }
   test("v3/relation-toward-table transforms correctly", async () => {
     await expect(runFixtureCases("v3/relation-toward-table")).resolves.toBeUndefined();
   });
+
+  test("v3/define-config-build-options transforms correctly", async () => {
+    await expect(runFixtureCases("v3/define-config-build-options")).resolves.toBeUndefined();
+  });
 });
