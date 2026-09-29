@@ -21,7 +21,6 @@ function makeLock(): LockFile {
           packageManager: "pnpm",
         },
         generatedIds: ["tailor-deploy", "tailor-deploy/tailor-apply"],
-        ejectedIds: [],
         contentHash: hashContent("hello"),
       },
     ],

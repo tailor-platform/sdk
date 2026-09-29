@@ -717,7 +717,6 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     templateVersion: TEMPLATE_VERSION,
     inputs: resolved.inputs,
     generatedIds: resolved.render.generatedIds,
-    ejectedIds: existing?.ejectedIds ?? [],
     contentHash,
   };
 
@@ -918,7 +917,6 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       restrictDispatch: options.restrictDispatch ?? false,
     },
     generatedIds: render.generatedIds,
-    ejectedIds: existing?.ejectedIds ?? [],
     contentHash,
   };
 

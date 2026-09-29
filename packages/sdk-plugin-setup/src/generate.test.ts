@@ -694,7 +694,6 @@ describe("decideAction", () => {
     templateVersion: 1,
     inputs: {} as never,
     generatedIds: rendered.generatedIds,
-    ejectedIds: [],
     contentHash: computeManagedHash(rendered.content, "workflow", rendered.generatedIds),
   };
   const legacyTarget = { ...target, contentHash: hashContent("name: managed\n") };

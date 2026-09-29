@@ -65,8 +65,6 @@ export type LockTarget = {
   inputs: LockInputs;
   /** Managed job/step ids: jobs as `<job>`, steps as `<job>/<step>`. */
   generatedIds: string[];
-  /** Reserved for future eject semantics; preserved as-is across regenerations. */
-  ejectedIds: string[];
   /**
    * `managed-v1:sha256:<hex>` of the SDK-managed parts of the rendered file.
    * Entries written by older plugins hold `sha256:<hex>` of the whole file.

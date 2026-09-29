@@ -26,7 +26,6 @@ const baseTarget = (overrides: Partial<LockTarget> = {}): LockTarget => ({
     packageManager: "pnpm",
   },
   generatedIds: [],
-  ejectedIds: [],
   contentHash: "sha256:abc",
   ...overrides,
 });
@@ -298,7 +297,6 @@ describe("checkGitHub (integration)", () => {
       erdPreview: false,
     },
     generatedIds: [],
-    ejectedIds: [],
     contentHash: "sha256:abc",
   });
 
@@ -504,7 +502,6 @@ describe("checkGitHub (integration)", () => {
               packageManager: "pnpm",
             },
             generatedIds: [],
-            ejectedIds: [],
             contentHash: hashContent(wfContent),
           },
         ],
