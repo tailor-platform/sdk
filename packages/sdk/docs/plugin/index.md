@@ -176,6 +176,10 @@ which hooks would run. A deploy-only plugin needs neither `importPath` nor table
 
 A plugin can implement hooks from any combination of phases.
 
+## Deploying Frontends
+
+See [Frontend Plugin](./frontend.md) to build frontends and upload them to static websites as part of `tailor deploy`.
+
 ## Creating Custom Plugins
 
 See [Custom Plugins](./custom.md) for the full hook reference and examples.

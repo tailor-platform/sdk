@@ -1,10 +1,13 @@
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
-import * as path from "node:path";
+import * as path from "pathe";
 import type { Plugin, UploadStaticWebsiteResult } from "#/plugin/types";
 import type { FrontendPluginOptions } from "./types";
 
 export type { FrontendDefinition, FrontendEnvContext, FrontendPluginOptions } from "./types";
+
+/** Unique identifier for the frontend plugin. */
+export const FrontendPluginID = "@tailor-platform/frontend";
 
 interface BuildParams {
   command: string;
@@ -59,7 +62,7 @@ export function frontendPlugin(
     names.add(name);
   }
   return {
-    id: "@tailor-platform/frontend",
+    id: FrontendPluginID,
     description: "Builds and deploys frontend assets to static websites",
     pluginConfig: options,
     async onDeployed(ctx) {
