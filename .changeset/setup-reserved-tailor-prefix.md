@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk-plugin-setup": major
+"@tailor-platform/sdk-plugin-setup": minor
 ---
 
 Reserve the `tailor-` id prefix in generated workflows and composite actions for the SDK. A job or step you add whose `id` starts with `tailor-` is now reported by `setup check` (rule key `reserved-id`), and re-running `setup` stops on it and names the id, instead of silently treating it as yours. Rename such ids (for example `tailor-build-frontend` to `build-frontend`) before upgrading.
