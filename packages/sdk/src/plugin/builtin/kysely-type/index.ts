@@ -10,6 +10,13 @@ export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 type KyselyTypePluginOptions = {
   distPath: string;
   pgliteSchemaPath?: string;
+  /**
+   * When `true`, generated tables map date/datetime/time fields to
+   * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` columns instead of
+   * their `Date`/`string` defaults. Call the generated `getDB` with
+   * `{ temporal: true }` to match this at runtime. Defaults to `false`.
+   */
+  temporal?: boolean;
 };
 
 // Register this plugin's config type under its own id, via the package's
@@ -30,6 +37,9 @@ export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated types
  * @param options.pgliteSchemaPath - Output file path for the PGlite `CREATE TABLE` script module; omit to skip it
+ * @param options.temporal - When `true`, generated tables map date/datetime/time fields
+ * to their `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` counterparts
+ * instead of `Date`/`string`. Defaults to `false`.
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function kyselyTypePlugin(
@@ -43,7 +53,7 @@ export function kyselyTypePlugin(
     async onTailorDBReady(
       ctx: TailorDBReadyContext<KyselyTypePluginOptions>,
     ): Promise<GeneratorResult> {
-      const { distPath, pgliteSchemaPath } = ctx.pluginConfig;
+      const { distPath, pgliteSchemaPath, temporal } = ctx.pluginConfig;
       if (pgliteSchemaPath && resolve(distPath) === resolve(pgliteSchemaPath)) {
         throw new Error("distPath and pgliteSchemaPath must resolve to different files.");
       }
@@ -54,7 +64,7 @@ export function kyselyTypePlugin(
         const typeMetadataList: KyselyTypeMetadata[] = [];
 
         for (const type of Object.values(ns.tables)) {
-          const metadata = await processKyselyType(type);
+          const metadata = await processKyselyType(type, temporal);
           typeMetadataList.push(metadata);
         }
 
@@ -68,7 +78,7 @@ export function kyselyTypePlugin(
 
       const files: GeneratorResult["files"] = [];
       if (allNamespaceData.length > 0) {
-        const content = generateUnifiedKyselyTypes(allNamespaceData);
+        const content = generateUnifiedKyselyTypes(allNamespaceData, temporal);
         files.push({
           path: ctx.pluginConfig.distPath,
           content,

@@ -20,6 +20,8 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import {
   getNamespacesWithMigrations,
@@ -63,6 +65,12 @@ export interface AddMigrationScriptFilesOptions {
   withTest?: boolean;
   /** Whether the project has `@electric-sql/pglite` installed; gates the PGlite test scaffold. */
   pgliteAvailable?: boolean;
+  /**
+   * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
+   * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
+   * was configured with. Defaults to `false`.
+   */
+  temporal?: boolean;
 }
 
 export interface AddMigrationScriptFilesResult {
@@ -171,7 +179,13 @@ export function clearMigrationScriptSkipped(diffPath: string): void {
 export async function addMigrationScriptFiles(
   options: AddMigrationScriptFilesOptions,
 ): Promise<AddMigrationScriptFilesResult> {
-  const { migrationsDir, migrationNumber, withTest = false, pgliteAvailable = false } = options;
+  const {
+    migrationsDir,
+    migrationNumber,
+    withTest = false,
+    pgliteAvailable = false,
+    temporal = false,
+  } = options;
   const label = formatMigrationNumber(migrationNumber);
 
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
@@ -250,6 +264,7 @@ export async function addMigrationScriptFiles(
       diff,
       migrationsDir,
       migrationNumber,
+      temporal,
     });
     result.dbTypesPath = typeFiles.dbTypesPath;
     result.pgliteSchemaPath = typeFiles.pgliteSchemaPath;
@@ -311,8 +326,9 @@ async function script(options: ScriptOptions): Promise<void> {
     });
   }
 
-  const { config } = await loadConfig(options.configPath);
+  const { config, plugins } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
+  const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
 
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   if (namespacesWithMigrations.length === 0) {
@@ -367,6 +383,7 @@ async function script(options: ScriptOptions): Promise<void> {
     migrationNumber,
     withTest: options.withTest,
     pgliteAvailable,
+    temporal,
   });
 
   if (result.clearedScriptSkip) {

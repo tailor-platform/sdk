@@ -50,7 +50,8 @@ describe("KyselyTypePlugin integration tests", () => {
 
   function createCtx(
     namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
-  ): TailorDBReadyContext<{ distPath: string }> {
+    temporal?: boolean,
+  ): TailorDBReadyContext<{ distPath: string; temporal?: boolean }> {
     return {
       tailordb: namespaces.map((ns) => ({
         namespace: ns.namespace,
@@ -61,15 +62,16 @@ describe("KyselyTypePlugin integration tests", () => {
       auth: undefined,
       baseDir: "/test",
       configPath: "tailor.config.ts",
-      pluginConfig: { distPath: testDistPath },
+      pluginConfig: { distPath: testDistPath, temporal },
     };
   }
 
   async function runOnTailorDBReady(
     namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
+    temporal?: boolean,
   ) {
-    const plugin = kyselyTypePlugin({ distPath: testDistPath });
-    return plugin.onTailorDBReady!(createCtx(namespaces));
+    const plugin = kyselyTypePlugin({ distPath: testDistPath, temporal });
+    return plugin.onTailorDBReady!(createCtx(namespaces, temporal));
   }
 
   describe("basic functionality tests", () => {
@@ -174,6 +176,31 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(content).toContain("export type Selectable<T extends TableName>");
       expect(content).toContain("export type Updateable<T extends TableName>");
       expect(result.errors).toBeUndefined();
+    });
+
+    test("bakes temporal: true into the generated getDB when configured", async () => {
+      const result = await runOnTailorDBReady(
+        [
+          {
+            namespace: "test-namespace",
+            tables: { User: parseTailorDBType(toSchemaOutput(mockBasicType)) },
+          },
+        ],
+        true,
+      );
+
+      const content = result.files[0]!.content;
+      expect(content).toContain("type TemporalDate");
+      expect(content).toContain("type TemporalInstant");
+      expect(content).toContain("type GetDBConfig");
+      expect(content).toContain("birthDate: TemporalDate");
+      expect(content).toContain("lastLogin: TemporalInstant");
+      expect(content).toContain("const getDBBase = createGetDB<Namespace>();");
+      expect(content).toContain("export function getDB");
+      expect(content).toContain('config?: Omit<GetDBConfig, "temporal">');
+      expect(content).toContain("return getDBBase(namespace, { ...config, temporal: true });");
+      // The default (non-temporal) path must not be present alongside it.
+      expect(content).not.toContain("export const getDB = createGetDB<Namespace>();");
     });
 
     test("complete integration test with multiple types", async () => {

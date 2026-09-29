@@ -14,16 +14,41 @@ type FieldTypeResult = {
 };
 
 function emptyUsedUtilityTypes(): UsedUtilityTypes {
-  return { Timestamp: false, Serial: false, ObjectColumnType: false, ArrayColumnType: false };
+  return {
+    Timestamp: false,
+    TemporalDate: false,
+    TemporalInstant: false,
+    TemporalTime: false,
+    Serial: false,
+    ObjectColumnType: false,
+    ArrayColumnType: false,
+  };
 }
 
 function mergeUsedUtilityTypes(a: UsedUtilityTypes, b: UsedUtilityTypes): UsedUtilityTypes {
   return {
     Timestamp: a.Timestamp || b.Timestamp,
+    TemporalDate: a.TemporalDate || b.TemporalDate,
+    TemporalInstant: a.TemporalInstant || b.TemporalInstant,
+    TemporalTime: a.TemporalTime || b.TemporalTime,
     Serial: a.Serial || b.Serial,
     ObjectColumnType: a.ObjectColumnType || b.ObjectColumnType,
     ArrayColumnType: a.ArrayColumnType || b.ArrayColumnType,
   };
+}
+
+/**
+ * Whether a utility-type usage record uses any `ColumnType`-shaped alias.
+ * @param usedUtilityTypes - Utility-type usage record to check
+ * @returns Whether any `ColumnType`-shaped alias is used
+ */
+function usesColumnTypeAlias(usedUtilityTypes: UsedUtilityTypes): boolean {
+  return (
+    usedUtilityTypes.Timestamp ||
+    usedUtilityTypes.TemporalDate ||
+    usedUtilityTypes.TemporalInstant ||
+    usedUtilityTypes.TemporalTime
+  );
 }
 
 /**
@@ -48,9 +73,11 @@ function getEnumType(fieldConfig: KyselyFieldConfig): string {
 /**
  * Get the nested object type definition.
  * @param fieldConfig - The field configuration
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults
  * @returns The nested type with used utility types
  */
-function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
+function getNestedType(fieldConfig: KyselyFieldConfig, temporal: boolean): FieldTypeResult {
   const fields = fieldConfig.fields;
   if (!fields || typeof fields !== "object") {
     return {
@@ -60,7 +87,7 @@ function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   }
 
   const fieldResults = Object.entries(fields).map(([fieldName, config]) => {
-    const result = generateFieldType(config);
+    const result = generateFieldType(config, temporal);
     const optional = config.required !== true ? "?" : "";
     return {
       fieldType: `${fieldName}${optional}: ${result.type}`,
@@ -81,7 +108,7 @@ function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
     (config) =>
       config.hooks?.create || config.default !== undefined || config.optionalOnCreate === true,
   );
-  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields || hasGeneratedFields) {
+  if (usesColumnTypeAlias(aggregatedUtilityTypes) || hasOptionalFields || hasGeneratedFields) {
     return {
       type: `ObjectColumnType<${obj}>`,
       usedUtilityTypes: { ...aggregatedUtilityTypes, ObjectColumnType: true },
@@ -93,9 +120,11 @@ function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
 /**
  * Get the base Kysely type for a field (without array/null modifiers).
  * @param fieldConfig - The field configuration
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults
  * @returns The base type with used utility types
  */
-function getBaseType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
+function getBaseType(fieldConfig: KyselyFieldConfig, temporal: boolean): FieldTypeResult {
   const fieldType = fieldConfig.type;
   const usedUtilityTypes = emptyUsedUtilityTypes();
 
@@ -103,11 +132,28 @@ function getBaseType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
     return { type: getEnumType(fieldConfig), usedUtilityTypes };
   }
   if (fieldType === "nested") {
-    return getNestedType(fieldConfig);
+    return getNestedType(fieldConfig, temporal);
   }
 
-  const type = mapFieldTypeToColumnType(fieldType);
-  usedUtilityTypes.Timestamp = type === "Timestamp";
+  const type = mapFieldTypeToColumnType(fieldType, temporal);
+  switch (type) {
+    case "Timestamp":
+      usedUtilityTypes.Timestamp = true;
+      break;
+    case "TemporalDate":
+      usedUtilityTypes.TemporalDate = true;
+      break;
+    case "TemporalInstant":
+      usedUtilityTypes.TemporalInstant = true;
+      break;
+    case "TemporalTime":
+      usedUtilityTypes.TemporalTime = true;
+      break;
+    case "string":
+    case "number":
+    case "boolean":
+      break;
+  }
 
   return { type, usedUtilityTypes };
 }
@@ -115,10 +161,12 @@ function getBaseType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
 /**
  * Generate the complete field type including array and null modifiers.
  * @param fieldConfig - The field configuration
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults
  * @returns The complete field type with used utility types
  */
-function generateFieldType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
-  const baseTypeResult = getBaseType(fieldConfig);
+function generateFieldType(fieldConfig: KyselyFieldConfig, temporal: boolean): FieldTypeResult {
+  const baseTypeResult = getBaseType(fieldConfig, temporal);
   const usedUtilityTypes = { ...baseTypeResult.usedUtilityTypes };
 
   const isArray = fieldConfig.array === true;
@@ -162,11 +210,14 @@ function generateFieldType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
  * Generate the table interface.
  * @param name - Table name
  * @param fields - Field configurations keyed by field name
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults
  * @returns The type definition and used utility types
  */
 function generateTableInterface(
   name: string,
   fields: Record<string, KyselyFieldConfig>,
+  temporal: boolean,
 ): {
   typeDef: string;
   usedUtilityTypes: UsedUtilityTypes;
@@ -175,7 +226,7 @@ function generateTableInterface(
 
   const fieldResults = fieldEntries.map(([fieldName, fieldConfig]) => ({
     fieldName,
-    ...generateFieldType(fieldConfig),
+    ...generateFieldType(fieldConfig, temporal),
   }));
 
   const fieldLines = [
@@ -201,13 +252,16 @@ function generateTableInterface(
  * Generate KyselyTypeMetadata from field configurations.
  * @param name - Table name
  * @param fields - Field configurations keyed by field name
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @returns Generated Kysely type metadata
  */
 export function processKyselyFields(
   name: string,
   fields: Record<string, KyselyFieldConfig>,
+  temporal = false,
 ): KyselyTypeMetadata {
-  const result = generateTableInterface(name, fields);
+  const result = generateTableInterface(name, fields, temporal);
 
   return {
     name,
@@ -219,9 +273,14 @@ export function processKyselyFields(
 /**
  * Convert a TailorDBType into KyselyTypeMetadata.
  * @param type - Parsed TailorDB table
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @returns Generated Kysely type metadata
  */
-export async function processKyselyType(type: TailorDBType): Promise<KyselyTypeMetadata> {
+export async function processKyselyType(
+  type: TailorDBType,
+  temporal = false,
+): Promise<KyselyTypeMetadata> {
   return processKyselyFields(
     type.name,
     Object.fromEntries(
@@ -230,15 +289,23 @@ export async function processKyselyType(type: TailorDBType): Promise<KyselyTypeM
         parsedField.config,
       ]),
     ),
+    temporal,
   );
 }
 
 /**
  * Generate unified types file from multiple namespaces.
  * @param namespaceData - Namespace metadata
+ * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`;
+ * bakes `temporal: true` into the generated `getDB` so its runtime behavior always
+ * matches the Temporal column types the tables above were generated with. Defaults to
+ * `false`.
  * @returns Generated types file contents
  */
-export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadata[]): string {
+export function generateUnifiedKyselyTypes(
+  namespaceData: KyselyNamespaceMetadata[],
+  temporal = false,
+): string {
   if (namespaceData.length === 0) {
     return "";
   }
@@ -255,6 +322,15 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   if (globalUsedUtilityTypes.Timestamp) {
     utilityTypeImports.push("type Timestamp");
   }
+  if (globalUsedUtilityTypes.TemporalDate) {
+    utilityTypeImports.push("type TemporalDate");
+  }
+  if (globalUsedUtilityTypes.TemporalInstant) {
+    utilityTypeImports.push("type TemporalInstant");
+  }
+  if (globalUsedUtilityTypes.TemporalTime) {
+    utilityTypeImports.push("type TemporalTime");
+  }
   if (globalUsedUtilityTypes.ObjectColumnType) {
     utilityTypeImports.push("type ObjectColumnType");
   }
@@ -263,6 +339,9 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   }
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");
+  }
+  if (temporal) {
+    utilityTypeImports.push("type GetDBConfig");
   }
 
   const importsSection = multiline /* ts */ `
@@ -297,11 +376,23 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
 
   const namespaceInterface = `export interface Namespace {\n${namespaceInterfaces}\n}`;
 
-  const getDBFunction = multiline /* ts */ `
-    export const getDB = createGetDB<Namespace>();
+  const getDBFunction = temporal
+    ? multiline /* ts */ `
+        const getDBBase = createGetDB<Namespace>();
+        export function getDB<const N extends keyof Namespace & string>(
+          namespace: N,
+          config?: Omit<GetDBConfig, "temporal">,
+        ) {
+          return getDBBase(namespace, { ...config, temporal: true });
+        }
 
-    export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
-  `;
+        export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
+      `
+    : multiline /* ts */ `
+        export const getDB = createGetDB<Namespace>();
+
+        export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
+      `;
 
   const utilityTypeExports = multiline /* ts */ `
     export type Transaction<K extends keyof Namespace | DB = keyof Namespace> =

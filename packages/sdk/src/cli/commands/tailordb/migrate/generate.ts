@@ -19,6 +19,8 @@ import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
@@ -195,6 +197,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   // Load configuration
   const { config, plugins } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
+  const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
 
   // Get namespaces with migrations config
   const namespacesWithMigrations: NamespaceWithMigrations[] = getNamespacesWithMigrations(
@@ -379,7 +382,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   }
 
   if (dataOnlyTargetNamespace !== undefined) {
-    await generateDataOnlyMigration(generations, dataOnlyTargetNamespace, options);
+    await generateDataOnlyMigration(generations, dataOnlyTargetNamespace, options, temporal);
     return;
   }
 
@@ -542,6 +545,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
         options,
         currentSnapshot,
         expandPlans ?? [],
+        temporal,
       );
     }
   }
@@ -553,12 +557,14 @@ export async function generate(options: GenerateOptions): Promise<void> {
  * @param {readonly NamespaceGeneration[]} generations - Snapshots per namespace
  * @param {string} namespace - Target namespace
  * @param {GenerateOptions} options - Generate options
+ * @param {boolean} temporal - Whether date/datetime/time fields resolve to their Temporal column types
  * @returns {Promise<void>} Promise that resolves when the migration is written
  */
 async function generateDataOnlyMigration(
   generations: readonly NamespaceGeneration[],
   namespace: string,
   options: GenerateOptions,
+  temporal: boolean,
 ): Promise<void> {
   const generation = generations.find((g) => g.namespace === namespace);
   if (!generation) {
@@ -595,6 +601,7 @@ async function generateDataOnlyMigration(
     migrationNumber,
     snapshot: previousSnapshot,
     description: options.name,
+    temporal,
   });
 
   logger.success(
@@ -1162,6 +1169,8 @@ async function resolveRenames(
  * @param {GenerateOptions} options - Generate options
  * @param currentSnapshot - Schema the user now declares
  * @param expandPlans - Field changes confirmed for a migration pair
+ * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
+ * column types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @returns {Promise<void>} Promise that resolves when diff is generated
  */
 async function generateDiffFromSnapshot(
@@ -1171,6 +1180,7 @@ async function generateDiffFromSnapshot(
   options: GenerateOptions,
   currentSnapshot: NormalizedSchemaSnapshot,
   expandPlans: readonly ExpandContractPlan[] = [],
+  temporal = false,
 ): Promise<void> {
   if (!hasChanges(diff)) {
     logger.info("No schema differences detected.");
@@ -1269,6 +1279,7 @@ async function generateDiffFromSnapshot(
       plans: expandPlans,
       migrationsDir,
       description: options.name,
+      temporal,
     });
     return;
   }
@@ -1283,6 +1294,8 @@ async function generateDiffFromSnapshot(
     migrationNumber,
     previousSnapshot,
     options.name,
+    [],
+    temporal,
   );
 
   logger.success(
@@ -1320,6 +1333,12 @@ interface GenerateExpandContractOptions {
   plans: readonly ExpandContractPlan[];
   migrationsDir: string;
   description?: string;
+  /**
+   * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
+   * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
+   * was configured with. Defaults to `false`.
+   */
+  temporal?: boolean;
 }
 
 /**
@@ -1331,8 +1350,15 @@ interface GenerateExpandContractOptions {
 async function generateExpandContractMigrations(
   input: GenerateExpandContractOptions,
 ): Promise<void> {
-  const { previousSnapshot, currentSnapshot, resolvedDiff, plans, migrationsDir, description } =
-    input;
+  const {
+    previousSnapshot,
+    currentSnapshot,
+    resolvedDiff,
+    plans,
+    migrationsDir,
+    description,
+    temporal = false,
+  } = input;
   const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
   // Comparing from the relaxed base records the removal with an optional
   // contract, which is what the deploy restores while the script clears it.
@@ -1384,6 +1410,7 @@ async function generateExpandContractMigrations(
     previousSnapshot,
     description,
     plans,
+    temporal,
   );
   const contract = await generateDiffFiles(
     contractDiff,
@@ -1391,6 +1418,8 @@ async function generateExpandContractMigrations(
     expandNumber + 1,
     intermediateSnapshot,
     description,
+    [],
+    temporal,
   );
 
   const fields = plans.map((plan) => `${plan.tableName}.${plan.fieldName}`).join(", ");

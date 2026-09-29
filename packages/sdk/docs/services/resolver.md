@@ -336,7 +336,7 @@ Define actual resolver logic in the `body` function. Function arguments include:
 
 ### Using Kysely for Database Access
 
-If you're generating Kysely types with `kyselyTypePlugin`, you can use `getDB` to execute typed queries:
+If you're generating Kysely types with `kyselyTypePlugin`, you can use `getDB` to execute typed queries. By default, `date`/`datetime`/`time` columns come back as `Date`/`string`; configure `kyselyTypePlugin({ temporal: true })` to get `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` instead.
 
 ```typescript
 import { getDB } from "../generated/tailordb";

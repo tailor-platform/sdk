@@ -107,6 +107,12 @@ export interface WriteMigrationTypeFilesOptions {
   migrationNumber: number;
   /** Field changes carried through temporary fields */
   expandPlans?: readonly ExpandContractPlan[];
+  /**
+   * Whether date/datetime/time fields in `db.ts` resolve to their Temporal column
+   * types instead of their `Date`/`string` defaults. Should match whatever
+   * `kyselyTypePlugin` was configured with. Defaults to `false`.
+   */
+  temporal?: boolean;
 }
 
 /** Outcome of writing `db.pglite.ts`: the path, or why it was skipped. */
@@ -160,13 +166,21 @@ export async function tryWritePgliteSchemaFile(
 export async function writeMigrationTypeFiles(
   options: WriteMigrationTypeFilesOptions,
 ): Promise<WriteMigrationTypeFilesResult> {
-  const { previousSnapshot, diff, migrationsDir, migrationNumber, expandPlans = [] } = options;
+  const {
+    previousSnapshot,
+    diff,
+    migrationsDir,
+    migrationNumber,
+    expandPlans = [],
+    temporal = false,
+  } = options;
   const dbTypesPath = await writeDbTypesFile(
     previousSnapshot,
     migrationsDir,
     migrationNumber,
     diff,
     expandPlans,
+    temporal,
   );
   return {
     dbTypesPath,

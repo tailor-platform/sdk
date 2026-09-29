@@ -65,7 +65,14 @@ export interface TailordbClientInstance {
 
 /** Constructor shape for `tailordb.Client`. */
 export interface TailordbClientConstructor {
-  new (config: { namespace: string }): TailordbClientInstance;
+  /**
+   * @param config - Client configuration
+   * @param config.namespace - TailorDB namespace to connect to
+   * @param config.temporal - When `true`, `date`/`time`/`datetime` columns come back as
+   * `Temporal.PlainDate`/`Temporal.PlainTime`/`Temporal.Instant` instead of `Date`.
+   * Defaults to `false`.
+   */
+  new (config: { namespace: string; temporal?: boolean }): TailordbClientInstance;
 }
 
 /** Top-level `tailor` runtime object. */

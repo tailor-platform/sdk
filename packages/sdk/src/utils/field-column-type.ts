@@ -1,20 +1,32 @@
 /** The Kysely column type a TailorDB field maps to, before array/null modifiers. */
-export type FieldColumnType = "string" | "number" | "boolean" | "Timestamp";
+export type FieldColumnType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "Timestamp"
+  | "TemporalDate"
+  | "TemporalInstant"
+  | "TemporalTime";
 
 /**
  * Map a scalar TailorDB field type to the column type generated code uses for it.
  *
- * `date` resolves to `Timestamp` because the function runtime hands back a
- * `Date` for a date column, same as for datetime.
+ * With `temporal: false` (the default), `date`/`datetime` resolve to `Timestamp` and
+ * `time` to `string`, because that's what the function runtime hands back for them by
+ * default. With `temporal: true`, `date`/`datetime`/`time` resolve to their
+ * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` counterparts instead,
+ * matching a `getDB` call made with `{ temporal: true }`.
  *
  * `enum` and `nested` carry their own shape, so each generator resolves them
  * before reaching here; passing either is a caller bug rather than a `string`
  * column.
  * @param fieldType - TailorDB scalar field type name
+ * @param temporal - Whether to map date/datetime/time fields to their Temporal column
+ * types instead of their `Date`/`string` defaults
  * @returns The column type for the field, defaulting to `string`
  * @throws If given `enum` or `nested`
  */
-export function mapFieldTypeToColumnType(fieldType: string): FieldColumnType {
+export function mapFieldTypeToColumnType(fieldType: string, temporal = false): FieldColumnType {
   switch (fieldType) {
     case "uuid":
     case "string":
@@ -24,8 +36,11 @@ export function mapFieldTypeToColumnType(fieldType: string): FieldColumnType {
     case "float":
       return "number";
     case "date":
+      return temporal ? "TemporalDate" : "Timestamp";
     case "datetime":
-      return "Timestamp";
+      return temporal ? "TemporalInstant" : "Timestamp";
+    case "time":
+      return temporal ? "TemporalTime" : "string";
     case "bool":
     case "boolean":
       return "boolean";
@@ -62,4 +77,9 @@ export type ColumnTypeAliasExpansion = {
 export const COLUMN_TYPE_ALIASES: ReadonlyMap<string, ColumnTypeAliasExpansion> = new Map<
   FieldColumnType,
   ColumnTypeAliasExpansion
->([["Timestamp", { select: "Date", write: "Date | string" }]]);
+>([
+  ["Timestamp", { select: "Date", write: "Date | string" }],
+  ["TemporalDate", { select: "Temporal.PlainDate", write: "Temporal.PlainDate | string" }],
+  ["TemporalInstant", { select: "Temporal.Instant", write: "Temporal.Instant | string" }],
+  ["TemporalTime", { select: "Temporal.PlainTime", write: "Temporal.PlainTime | string" }],
+]);
