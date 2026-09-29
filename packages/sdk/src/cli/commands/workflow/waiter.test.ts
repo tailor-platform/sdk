@@ -106,6 +106,11 @@ describe("waitForWorkflowExecution", () => {
       attempts: 1,
       timedOut: false,
     } satisfies Partial<WorkflowWaitResult>);
+    expect(getWorkflowWaitFailure(result, "terminal")).toMatchObject({
+      code: "WORKFLOW_EXECUTION_CANCELED",
+      message: "Workflow execution 'execution-1' was canceled.",
+      context: { executionId: "execution-1", status: "CANCELED" },
+    });
   });
 
   test("retries retryable poll failures", async () => {

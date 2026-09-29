@@ -326,6 +326,13 @@ export function getWorkflowWaitFailure(
       context,
     });
   }
+  if (result.status === "CANCELED") {
+    return CLIError({
+      code: "WORKFLOW_EXECUTION_CANCELED",
+      message: `Workflow execution '${result.id}' was canceled.`,
+      context,
+    });
+  }
   if (until === "success" && result.statusClass !== "success") {
     return CLIError({
       code: "WORKFLOW_EXECUTION_NOT_SUCCESSFUL",

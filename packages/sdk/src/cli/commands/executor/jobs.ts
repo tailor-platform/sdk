@@ -652,6 +652,13 @@ export function getExecutorWaitFailure(result: WatchExecutorJobResult): CLIError
       context,
     });
   }
+  if (result.workflowStatus === "CANCELED") {
+    return CLIError({
+      code: "WORKFLOW_EXECUTION_CANCELED",
+      message: `Workflow execution '${result.workflowExecutionId}' was canceled.`,
+      context,
+    });
+  }
   if (result.functionStatus === "FAILED") {
     return CLIError({
       code: "FUNCTION_EXECUTION_FAILED",
