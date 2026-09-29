@@ -633,4 +633,28 @@ describe("start stub in a platform bundle", () => {
       }
     }
   });
+
+  test("rejects with an error naming the workflow", async () => {
+    const previous = process.env.__TAILOR_PLATFORM_BUNDLE;
+    process.env.__TAILOR_PLATFORM_BUNDLE = "1";
+    try {
+      const workflow = createWorkflow({
+        name: "unrewritten-bundle-workflow",
+        mainJob: createWorkflowJob({
+          name: "unrewritten-bundle-workflow-main",
+          body: () => ({ ok: true }),
+        }),
+      });
+
+      await expect(workflow.start()).rejects.toThrow(
+        '.start() on workflow "unrewritten-bundle-workflow" is rewritten at build time and is unavailable in the bundle',
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.__TAILOR_PLATFORM_BUNDLE;
+      } else {
+        process.env.__TAILOR_PLATFORM_BUNDLE = previous;
+      }
+    }
+  });
 });

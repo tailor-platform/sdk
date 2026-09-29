@@ -135,6 +135,49 @@ export function getStartCallInfo(
   };
 }
 
+export interface NamespaceStartCallInfo extends StartCallInfo {
+  memberName: string;
+  calleeText: string;
+}
+
+/**
+ * Get metadata for a `namespace.member.start(...)` call, where `member` is a
+ * static property or a string-literal computed property.
+ * @param node - AST node to inspect
+ * @param sourceText - Source code text
+ * @returns Start call metadata with the namespace as `identifierName`, or null when the node is not such a call
+ */
+export function getNamespaceStartCallInfo(
+  node: ASTNode | null | undefined,
+  sourceText: string,
+): NamespaceStartCallInfo | null {
+  if (!node || typeof node !== "object" || node.type !== "CallExpression") return null;
+  const callExpr = node as unknown as CallExpression;
+  const callee = callExpr.callee as unknown as ASTNode;
+  if (callee.type !== "MemberExpression" || callee.computed) return null;
+  if ((callee.property as ASTNode).name !== "start") return null;
+  const receiver = callee.object as ASTNode;
+  if (receiver.type !== "MemberExpression") return null;
+  const namespace = receiver.object as ASTNode;
+  if (namespace.type !== "Identifier") return null;
+  const member = receiver.property as ASTNode;
+  const memberName = receiver.computed
+    ? typeof member.value === "string"
+      ? member.value
+      : undefined
+    : (member.name as string);
+  if (memberName === undefined) return null;
+
+  return {
+    identifierName: namespace.name as string,
+    memberName,
+    calleeText: sourceText.slice(callee.start as number, callee.end as number),
+    callRange: { start: callExpr.start, end: callExpr.end },
+    argsText: argumentSourceText(callExpr.arguments[0], sourceText) ?? "",
+    optionsText: argumentSourceText(callExpr.arguments[1], sourceText),
+  };
+}
+
 /**
  * Unwrap AwaitExpression to get the inner expression
  * @param node - AST expression node
