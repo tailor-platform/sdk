@@ -1,4 +1,10 @@
-import { arg, confirmationArgs, defineAppCommand, defineCommand } from "@tailor-platform/sdk/cli";
+import {
+  arg,
+  confirmationArgs,
+  defineAppCommand,
+  defineCommand,
+  logBetaWarning,
+} from "@tailor-platform/sdk/cli";
 import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
@@ -11,6 +17,7 @@ const checkCommand = defineAppCommand({
   description: "Audit generated workflows for drift against the current config/repo (read-only).",
   args: z.strictObject({}),
   run: async () => {
+    logBetaWarning("setup");
     await checkGitHub({ outputDir: process.cwd() });
   },
 });
@@ -46,6 +53,7 @@ const coordinateCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     const coordinateKind = args.tag ? "tag" : "branch";
     await setupCoordinate({
       coordinatorName: args.name,
@@ -81,6 +89,7 @@ const actionCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await setupTarget({
       kind: "action",
       workspaceName: args.name,
@@ -123,6 +132,7 @@ const branchCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await setupTarget({
       kind: "branch",
       workspaceName: args.name,
@@ -168,6 +178,7 @@ const tagCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await setupTarget({
       kind: "tag",
       workspaceName: args.name,
@@ -212,6 +223,7 @@ const previewCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await setupTarget({
       kind: "preview",
       workspaceName: args.name,
@@ -237,6 +249,7 @@ const updateCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await setupUpdate({ force: args.force, outputDir: process.cwd() });
   },
 });
@@ -259,6 +272,7 @@ const depsCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await depsProviders[args.provider]({ outputDir: process.cwd() });
   },
 });
@@ -275,6 +289,7 @@ const deleteCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await setupDelete({ files: args.files, yes: args.yes, outputDir: process.cwd() });
   },
 });

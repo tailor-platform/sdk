@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "@tailor-platform/sdk/cli";
+import { defineCommand, logger, runCommand } from "@tailor-platform/sdk/cli";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
 import { setupSubCommands } from "./commands";
@@ -129,5 +129,32 @@ describe("setup update command", () => {
 
     expect(result.success).toBe(true);
     expect(setupUpdate).toHaveBeenCalledWith({ force: true, outputDir: process.cwd() });
+  });
+});
+
+describe("beta warning", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test.each([
+    [["ci", "branch"]],
+    [["ci", "tag"]],
+    [["ci", "preview", "--region", "us-west"]],
+    [["ci", "action"]],
+    [["ci", "coordinate", "--name", "apps", "--action", "api"]],
+    [["deps"]],
+    [["check"]],
+    [["update"]],
+    [["delete", "--yes", ".github/workflows/tailor-app.yml"]],
+  ])("setup %j warns once that setup is a beta feature", async (argv) => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    const result = await runCommand(setupCommand, argv);
+
+    expect(result.success).toBe(true);
+    expect(
+      warnSpy.mock.calls.filter(([message]) => /beta feature/.test(String(message))),
+    ).toHaveLength(1);
   });
 });

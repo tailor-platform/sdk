@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import {
-  logBetaWarning,
   extractOwnedNamespaces,
   findAppIdLock,
   loadConfig,
@@ -54,7 +53,7 @@ type CommonSetupOptions = {
   environment?: string;
   force: boolean;
   outputDir: string;
-  /** Set by `setup update`, which prints the beta warning and a summary once for all targets. */
+  /** Set by `setup update`, which prints one summary for all targets instead of per-target next steps. */
   batch?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
@@ -119,7 +118,7 @@ export type CoordinateSetupOptions = {
   restrictDispatch?: boolean;
   force: boolean;
   outputDir: string;
-  /** Set by `setup update`, which prints the beta warning and a summary once for all targets. */
+  /** Set by `setup update`, which prints one summary for all targets instead of per-target next steps. */
   batch?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
@@ -652,8 +651,6 @@ function printNextSteps(obj: { environment: string; configEdited: boolean }): vo
  * @param options - Setup options
  */
 export async function setupTarget(options: SetupTargetOptions): Promise<void> {
-  if (!options.batch) logBetaWarning("setup");
-
   const resolved = await resolve(options);
 
   const lock = readLock(options.outputDir);
@@ -779,8 +776,6 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
  * @param options - Coordinate setup options
  */
 export async function setupCoordinate(options: CoordinateSetupOptions): Promise<void> {
-  if (!options.batch) logBetaWarning("setup");
-
   const { coordinatorName, coordinateKind, actions, force, outputDir } = options;
   validateWorkspaceName(coordinatorName);
 

@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import {
-  logBetaWarning,
   extractOwnedNamespaces,
   loadConfig,
   logger,
@@ -284,8 +283,6 @@ async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean
  * @param options - Check options
  */
 export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
-  logBetaWarning("setup");
-
   const { outputDir } = options;
   const lock = readLock(outputDir);
   if (!lock || lock.targets.length === 0) {

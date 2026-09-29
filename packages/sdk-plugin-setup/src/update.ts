@@ -1,4 +1,4 @@
-import { logBetaWarning, logger } from "@tailor-platform/sdk/cli";
+import { logger } from "@tailor-platform/sdk/cli";
 import {
   setupCoordinate,
   setupTarget,
@@ -126,8 +126,6 @@ const KIND_ORDER: Record<TargetKind, number> = {
  * @param options - Update options
  */
 export async function setupUpdate(options: UpdateOptions): Promise<void> {
-  logBetaWarning("setup");
-
   const { force, outputDir, ...loaders } = options;
   const lock = readLock(outputDir);
   if (!lock || lock.targets.length === 0) {
