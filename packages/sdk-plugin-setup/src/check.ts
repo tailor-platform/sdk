@@ -101,7 +101,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
       rule: "template-version",
       message:
         `A newer workflow template is available (generated with v${String(target.templateVersion)}, ` +
-        `current v${String(state.templateVersion)}). Re-run setup to update.`,
+        `current v${String(state.templateVersion)}). Run \`tailor setup update\` to regenerate every target.`,
     });
   }
 
@@ -399,6 +399,6 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   }
   throw new Error(
     `Detected ${String(findings.length)} drift finding(s) across ${String(count)} target(s). ` +
-      "Re-run `tailor setup` to regenerate, or address each finding above.",
+      "Run `tailor setup update` to regenerate, or address each finding above.",
   );
 }
