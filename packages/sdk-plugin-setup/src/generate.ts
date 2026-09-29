@@ -915,6 +915,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       dir: ".",
       packageManager,
       actionDirs: actionGroups.flatMap((group) => group.apps.map((a) => a.dir)),
+      actionGroups: actionGroups.map((group) => group.apps.map((a) => a.name)),
       restrictDispatch: options.restrictDispatch ?? false,
     },
     generatedIds: render.generatedIds,

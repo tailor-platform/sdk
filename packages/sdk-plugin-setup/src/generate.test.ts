@@ -10,7 +10,7 @@ import {
   type CoordinateSetupOptions,
 } from "./generate";
 import { detectDefaultBranch } from "./git";
-import { hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
+import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
 import { computeManagedHash, isManagedHash, normalizeActionContent } from "./managed";
 import {
   ACTIONS_SHA,
@@ -1440,6 +1440,20 @@ describe("setupCoordinate", () => {
     const lock = readLock(testDir);
     const target = lock?.targets.find((t) => t.kind === "coordinate" && t.workspaceName === "main");
     expect(target?.inputs.actionDirs).toEqual(["apps/api", "apps/worker"]);
+  });
+
+  test("records the --action grouping in the lock so the coordinator can be regenerated", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    writeAppConfig("web", "apps/web");
+    await setupTarget(actionOpts("api", "apps/api"));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+    await setupTarget(actionOpts("web", "apps/web"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["tailor-api, worker", "web"] }));
+
+    const target = findTarget(readLock(testDir), "coordinate", "main");
+    expect(target?.inputs.actionGroups).toEqual([["api", "worker"], ["web"]]);
   });
 
   test("builds static websites before a multi-config deploy", async () => {
