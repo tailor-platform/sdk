@@ -133,18 +133,19 @@ export function formatFunctionLogEntry(entry: FunctionLogEntryInfo): string {
 }
 
 /**
- * Build the lines of a logs section. Structured entries take precedence;
- * the flat `logs` string is used only when no entries are available.
+ * Build the lines of a logs section.
  * @param logEntries - Structured log entries, if any
- * @param logs - Flat newline-delimited logs, if any
  * @returns Lines to print, empty when there is nothing to show
  */
-export function formatFunctionLogLines(
-  logEntries: FunctionLogEntryInfo[] | undefined,
-  logs: string | undefined,
-): string[] {
-  if (logEntries && logEntries.length > 0) {
-    return logEntries.map(formatFunctionLogEntry);
-  }
-  return logs ? logs.split("\n") : [];
+export function formatFunctionLogLines(logEntries: FunctionLogEntryInfo[] | undefined): string[] {
+  return logEntries ? logEntries.map(formatFunctionLogEntry) : [];
+}
+
+/**
+ * Join the messages of structured log entries into newline-delimited text.
+ * @param logEntries - Log entries from a function execution
+ * @returns Messages joined with newlines, empty when there are no entries
+ */
+export function joinFunctionLogMessages(logEntries: readonly FunctionLogEntry[]): string {
+  return logEntries.map((entry) => entry.message).join("\n");
 }

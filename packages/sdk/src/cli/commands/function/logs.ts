@@ -26,6 +26,7 @@ import {
   type FunctionLogEntryInfo,
   isFunctionExecutionTerminalStatus,
   toFunctionLogEntryInfo,
+  joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
 import {
   downloadFunctionScript,
@@ -98,7 +99,7 @@ function toFunctionExecutionListInfo(execution: FunctionExecution): FunctionExec
 function toFunctionExecutionDetailInfo(execution: FunctionExecution): FunctionExecutionDetailInfo {
   return {
     ...toFunctionExecutionListInfo(execution),
-    logs: execution.logs,
+    logs: joinFunctionLogMessages(execution.logEntries),
     logEntries: execution.logEntries.map(toFunctionLogEntryInfo),
     result: execution.result,
     error: execution.error
@@ -192,7 +193,7 @@ function printFunctionExecutionSummary(info: FunctionExecutionListInfo): void {
  * @param detail - Function execution detail info
  */
 function printFunctionExecutionLogs(detail: FunctionExecutionDetailInfo): void {
-  const lines = formatFunctionLogLines(detail.logEntries, detail.logs);
+  const lines = formatFunctionLogLines(detail.logEntries);
   if (lines.length === 0) return;
   logger.log(styles.bold("\nLogs:"));
   for (const line of lines) {
@@ -447,9 +448,9 @@ export async function downloadScriptForMapping(
 export const logsCommand = defineAppCommand({
   name: "logs",
   description: "List or get function execution logs.",
-  notes: `Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running, whereas the flat \`logs\` string is filled in only after completion. The human-readable view shows the structured entries when present and falls back to \`logs\` otherwise.
+  notes: `Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running. The \`logs\` string joins their messages with newlines.
 
-Use \`--follow\` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless \`--timeout\` is set. On environments where no structured entries are returned, \`--follow\` shows the flat \`logs\` string once the execution completes. With \`--json\`, \`--follow\` waits for completion and then emits the final execution details once.
+Use \`--follow\` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless \`--timeout\` is set. With \`--json\`, \`--follow\` waits for completion and then emits the final execution details once.
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching \`function run\` output).
 

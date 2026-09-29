@@ -175,6 +175,46 @@ describe("watchExecutorJob", () => {
     );
   });
 
+  test("reports a canceled downstream workflow as a failure", async () => {
+    mockOperatorClient({
+      targetType: ExecutorTargetType.WORKFLOW,
+      listExecutorJobAttempts: vi.fn().mockResolvedValue({
+        attempts: [
+          {
+            id: "attempt-1",
+            jobId: "job-1",
+            status: ExecutorJobStatus.SUCCESS,
+            operationReference: "workflow-execution-1",
+          },
+        ],
+        nextPageToken: "",
+      }),
+      getWorkflowExecution: vi.fn().mockResolvedValue({
+        execution: {
+          id: "workflow-execution-1",
+          workflowName: "daily-workflow",
+          status: WorkflowExecution_Status.CANCELED,
+          jobExecutions: [],
+        } as unknown as WorkflowExecution,
+      }),
+    });
+
+    const result = await watchExecutorJob({
+      executor: { name: "my-executor" },
+      jobId: "job-1",
+      interval: 1,
+      timeout: 100,
+      showProgress: false,
+    });
+
+    expect(result).toMatchObject({ workflowStatus: "CANCELED", timedOut: false });
+    expect(getExecutorWaitFailure(result)).toMatchObject({
+      code: "WORKFLOW_EXECUTION_CANCELED",
+      message: "Workflow execution 'workflow-execution-1' was canceled.",
+      context: { jobId: "job-1", workflowExecutionId: "workflow-execution-1" },
+    });
+  });
+
   test("reports a canceled downstream function as a failure", async () => {
     mockOperatorClient({
       targetType: ExecutorTargetType.FUNCTION,

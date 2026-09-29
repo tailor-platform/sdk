@@ -84,7 +84,10 @@ function createMockClient(options: MockClientOptions = {}) {
     getFunctionExecution: vi.fn(() =>
       Promise.resolve({
         execution: {
-          logs: options.logs ?? "",
+          logEntries: (options.logs ?? "")
+            .split("\n")
+            .filter(Boolean)
+            .map((message) => ({ message })),
           error: options.errorMessage ? { message: options.errorMessage } : undefined,
           result: options.executionResult ?? "",
         },
@@ -206,6 +209,19 @@ describe("executeMigrationAsWorkflow", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("constraint violation on users.email");
+  });
+
+  test("reports failure when the execution is canceled", async () => {
+    const { client } = createMockClient({
+      statuses: [WorkflowExecution_Status.CANCELED],
+      logs: "INFO backfilling users",
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(false);
+    expect(result.logs).toBe("INFO backfilling users");
+    expect(result.error).toBe("Migration workflow execution was canceled.");
   });
 
   test("tears the temporary resources down even when the start call fails", async () => {

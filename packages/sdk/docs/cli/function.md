@@ -129,9 +129,9 @@ $ tailor function logs <execution-id> --follow
 
 **Notes**
 
-Execution details include `logEntries`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running, whereas the flat `logs` string is filled in only after completion. The human-readable view shows the structured entries when present and falls back to `logs` otherwise.
+Execution details include `logEntries`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running. The `logs` string joins their messages with newlines.
 
-Use `--follow` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless `--timeout` is set. On environments where no structured entries are returned, `--follow` shows the flat `logs` string once the execution completes. With `--json`, `--follow` waits for completion and then emits the final execution details once.
+Use `--follow` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless `--timeout` is set. With `--json`, `--follow` waits for completion and then emits the final execution details once.
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function run` output).
 

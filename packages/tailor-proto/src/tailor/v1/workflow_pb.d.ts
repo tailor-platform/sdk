@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { ConcurrencyPolicy, RetryPolicy, Workflow, WorkflowExecution, WorkflowJobFunction, WorkflowJobFunctionExecutionPolicy, WorkflowJobFunctionSummary } from "./workflow_resource_pb";
+import type { ConcurrencyPolicy, RetryPolicy, Workflow, WorkflowExecution, WorkflowExecution_Status, WorkflowJobFunction, WorkflowJobFunctionExecutionPolicy, WorkflowJobFunctionSummary } from "./workflow_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
 import type { AuthInvoker } from "./auth_resource_pb";
 
@@ -720,6 +720,8 @@ export declare type TestStartWorkflowRequest = Message<"tailor.v1.TestStartWorkf
   workflowId: string;
 
   /**
+   * Machine user the execution runs as. Omit to run it as the anonymous dataplane identity.
+   *
    * @generated from field: tailor.v1.AuthInvoker auth_invoker = 3;
    */
   authInvoker?: AuthInvoker;
@@ -804,6 +806,8 @@ export declare type StartWorkflowRequest = Message<"tailor.v1.StartWorkflowReque
   workflowId: string;
 
   /**
+   * Machine user the execution runs as. Omit to run it as the anonymous dataplane identity.
+   *
    * @generated from field: tailor.v1.AuthInvoker auth_invoker = 3;
    */
   authInvoker?: AuthInvoker;
@@ -872,6 +876,46 @@ export declare type ResumeWorkflowExecutionResponse = Message<"tailor.v1.ResumeW
  * Use `create(ResumeWorkflowExecutionResponseSchema)` to create a new message.
  */
 export declare const ResumeWorkflowExecutionResponseSchema: GenMessage<ResumeWorkflowExecutionResponse>;
+
+/**
+ * @generated from message tailor.v1.CancelWorkflowExecutionRequest
+ */
+export declare type CancelWorkflowExecutionRequest = Message<"tailor.v1.CancelWorkflowExecutionRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string execution_id = 2;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.CancelWorkflowExecutionRequest.
+ * Use `create(CancelWorkflowExecutionRequestSchema)` to create a new message.
+ */
+export declare const CancelWorkflowExecutionRequestSchema: GenMessage<CancelWorkflowExecutionRequest>;
+
+/**
+ * @generated from message tailor.v1.CancelWorkflowExecutionResponse
+ */
+export declare type CancelWorkflowExecutionResponse = Message<"tailor.v1.CancelWorkflowExecutionResponse"> & {
+  /**
+   * Status after the cancel took effect. Always STATUS_CANCELED; carried so
+   * the caller does not need a follow-up GetWorkflowExecution.
+   *
+   * @generated from field: tailor.v1.WorkflowExecution.Status status = 1;
+   */
+  status: WorkflowExecution_Status;
+};
+
+/**
+ * Describes the message tailor.v1.CancelWorkflowExecutionResponse.
+ * Use `create(CancelWorkflowExecutionResponseSchema)` to create a new message.
+ */
+export declare const CancelWorkflowExecutionResponseSchema: GenMessage<CancelWorkflowExecutionResponse>;
 
 /**
  * @generated from message tailor.v1.CreateWorkflowJobFunctionExecutionPolicyRequest

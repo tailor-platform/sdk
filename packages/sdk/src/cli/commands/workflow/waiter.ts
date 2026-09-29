@@ -71,6 +71,7 @@ function colorizeStatus(status: WorkflowExecution_Status): string {
     case WorkflowExecution_Status.SUCCESS:
       return styles.success(statusText);
     case WorkflowExecution_Status.FAILED:
+    case WorkflowExecution_Status.CANCELED:
       return styles.error(statusText);
     default:
       return statusText;
@@ -322,6 +323,13 @@ export function getWorkflowWaitFailure(
     return CLIError({
       code: "WORKFLOW_EXECUTION_FAILED",
       message: `Workflow execution '${result.id}' failed.`,
+      context,
+    });
+  }
+  if (result.status === "CANCELED") {
+    return CLIError({
+      code: "WORKFLOW_EXECUTION_CANCELED",
+      message: `Workflow execution '${result.id}' was canceled.`,
       context,
     });
   }

@@ -112,7 +112,7 @@ describe("getWorkflowExecution", () => {
     expect(detail.jobDetails).toEqual([
       expect.objectContaining({
         stackedJobName: "main",
-        logs: undefined,
+        logs: "step 1",
         result: undefined,
         logEntries: [
           {
@@ -134,7 +134,6 @@ describe("getWorkflowExecution", () => {
         execution: create(FunctionExecutionSchema, {
           id: "fn-exec-1",
           status: FunctionExecution_Status.SUCCESS,
-          logs: "done",
           result: "1",
         }),
       }),
@@ -145,7 +144,7 @@ describe("getWorkflowExecution", () => {
       logs: true,
     });
 
-    expect(detail.jobDetails?.[0]).toMatchObject({ logs: "done", result: "1" });
+    expect(detail.jobDetails?.[0]).toMatchObject({ logs: undefined, result: "1" });
     expect(detail.jobDetails?.[0]?.logEntries).toBeUndefined();
   });
 
@@ -210,7 +209,7 @@ describe("printExecutionWithLogs", () => {
     finishedAt: null,
   };
 
-  test("prints structured entries instead of the flat logs when both are present", () => {
+  test("prints each structured entry once", () => {
     using stderr = captureStderr();
 
     printExecutionWithLogs({
@@ -229,13 +228,5 @@ describe("printExecutionWithLogs", () => {
     const plain = stripAnsi(stderr.output);
     expect(plain).toContain("2026-09-05T00:00:00.000Z [INFO] step 1");
     expect(plain.match(/step 1/g)).toHaveLength(1);
-  });
-
-  test("falls back to the flat logs when no entries are present", () => {
-    using stderr = captureStderr();
-
-    printExecutionWithLogs({ ...base, jobDetails: [{ ...job, logs: "legacy line" }] });
-
-    expect(stripAnsi(stderr.output)).toContain("    legacy line");
   });
 });
