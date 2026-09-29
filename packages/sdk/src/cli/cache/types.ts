@@ -12,6 +12,7 @@ const cacheEntrySchema = z.object({
   inputHash: z.string(),
   dependencyPaths: z.array(z.string()),
   outputFiles: z.array(cacheOutputFileSchema),
+  packageRuntimeGlobals: z.record(z.string(), z.array(z.string())).optional(),
   createdAt: z.string(),
 });
 

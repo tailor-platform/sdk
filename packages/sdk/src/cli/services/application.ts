@@ -20,6 +20,7 @@ import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
+import { buildOptionsOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
@@ -664,8 +665,9 @@ export async function loadApplication(
   );
 
   // 9. Resolve bundle settings
-  const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
-  const bundleLogLevel = resolveBundleLogLevel(config.logLevel);
+  const buildOptions = buildOptionsOf(config);
+  const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
+  const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -687,6 +689,7 @@ export async function loadApplication(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -704,6 +707,7 @@ export async function loadApplication(
       bundleLogLevel,
       baseDir,
       tsconfigCache,
+      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
     });
   }
 
@@ -721,6 +725,8 @@ export async function loadApplication(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      undefined,
+      buildOptions.allowedRuntimeGlobals,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -861,6 +867,7 @@ async function reloadEnvDependentBundles(params: {
       bundleLogLevel,
       tsconfigCache,
       previous.workflowBuildResult,
+      buildOptionsOf(config).allowedRuntimeGlobals,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }

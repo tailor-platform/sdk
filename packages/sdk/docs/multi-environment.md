@@ -64,7 +64,9 @@ tailor deploy -w <production-workspace-id> --env-file .env.production
 ```typescript
 export default defineConfig({
   name: "my-app",
-  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
+  buildOptions: {
+    logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
+  },
 });
 ```
 

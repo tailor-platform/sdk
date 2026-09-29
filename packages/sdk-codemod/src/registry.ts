@@ -1832,6 +1832,48 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/define-config-build-options",
+    name: "defineConfig inlineSourcemap / logLevel → buildOptions",
+    description:
+      "Move the top-level `inlineSourcemap` and `logLevel` of `defineConfig()` into `buildOptions`, which groups the settings that control how functions are bundled. The top-level fields keep working until they are removed in v3; setting the same option in both places is rejected.",
+    since: "1.19.0",
+    until: "3.0.0",
+    scriptPath: "v3/define-config-build-options/scripts/transform.js",
+    filePatterns: ["**/*.{ts,mts,cts,js,mjs,cjs}"],
+    examples: [
+      {
+        before: [
+          "export default defineConfig({",
+          '  name: "my-app",',
+          "  inlineSourcemap: false,",
+          '  logLevel: "WARN",',
+          "});",
+        ].join("\n"),
+        after: [
+          "export default defineConfig({",
+          '  name: "my-app",',
+          "  buildOptions: {",
+          "    inlineSourcemap: false,",
+          '    logLevel: "WARN",',
+          "  },",
+          "});",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, the top-level `inlineSourcemap` and `logLevel` options of",
+      "`defineConfig()` from `@tailor-platform/sdk` are removed in favor of",
+      "`buildOptions.inlineSourcemap` and `buildOptions.logLevel`. For each flagged",
+      "config, move those two properties into a `buildOptions` object (create it if",
+      "it does not exist) without changing their values. When the config is built",
+      "from a variable or a spread, move them in the object that actually defines",
+      "them. If an option is set both at the top level and in `buildOptions`, keep",
+      "the value that the deployed app should use and delete the other; the build",
+      "rejects a config that sets both. Leave `logLevel` options of other tools",
+      "(for example a Vite or Vitest config) unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v3/file-upload-encoding",
     name: "String file uploads → explicit encoding",
     description:

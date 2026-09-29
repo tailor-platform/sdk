@@ -6,7 +6,10 @@ import { createStartTransformPlugin } from "#/cli/services/workflow/start-transf
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { assertNoForbiddenRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
+import {
+  checkForbiddenRuntimeGlobals,
+  assertPackageRuntimeGlobalsAllowed,
+} from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -25,7 +28,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
-import type { LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
 import type { Resolver } from "#/types/resolver.generated";
 
 interface ResolverInfo {
@@ -55,6 +58,8 @@ export interface BundleResolversOptions {
   bundleLogLevel?: LogLevel;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
+  /** Globals each installed package may reference */
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
 }
 
 /**
@@ -80,6 +85,7 @@ export async function bundleResolvers(
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     tsconfigCache,
+    allowedRuntimeGlobals,
   } = options;
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config, baseDir);
@@ -127,6 +133,7 @@ export async function bundleResolvers(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      allowedRuntimeGlobals,
     }),
   );
 
@@ -157,6 +164,7 @@ async function bundleSingleResolver(
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     tsconfigCache,
+    allowedRuntimeGlobals,
   } = options;
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -172,7 +180,7 @@ async function bundleSingleResolver(
     bundleLogLevel,
   });
 
-  const code = await withCache({
+  const { code, packageRuntimeGlobals } = await withCache({
     cache,
     kind: "resolver",
     namespace,
@@ -244,11 +252,18 @@ async function bundleSingleResolver(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      const bundledCode = result.output[0].code;
-      assertNoForbiddenRuntimeGlobals(bundledCode, `Resolver "${resolver.name}"`);
-      return bundledCode;
+      const [chunk] = result.output;
+      return {
+        code: chunk.code,
+        packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Resolver "${resolver.name}"`),
+      };
     },
   });
+  assertPackageRuntimeGlobalsAllowed(
+    packageRuntimeGlobals,
+    `Resolver "${resolver.name}"`,
+    allowedRuntimeGlobals,
+  );
 
   return [resolver.name, code];
 }

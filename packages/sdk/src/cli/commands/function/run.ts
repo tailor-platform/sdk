@@ -18,6 +18,7 @@ import {
   type MachineUserInputSource,
   workspaceArgs,
 } from "#/cli/shared/args";
+import { buildOptionsOf } from "#/cli/shared/build-options";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -190,6 +191,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
       }
 
       logger.info("Bundling...");
+      const buildOptions = buildOptionsOf(config);
       const baseDir = path.dirname(config.path);
       ({ bundledCode, scriptName } = await bundleForRun({
         detected,
@@ -204,8 +206,8 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
               })
             : undefined,
         env: config.env ?? {},
-        inlineSourcemap: config.inlineSourcemap,
-        logLevel: config.logLevel,
+        inlineSourcemap: buildOptions.inlineSourcemap,
+        logLevel: buildOptions.logLevel,
         machineUser,
         workspaceId,
       }));

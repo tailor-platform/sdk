@@ -15,6 +15,45 @@ import type { LogLevelEnum } from "#/types/app-config.generated";
 export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});
 
+/**
+ * Node-only globals that installed packages may reference without failing
+ * `deploy`, keyed by package name (e.g. `"@ai-sdk/gateway"`). List the globals, or set
+ * `true` to allow every one of them — including any the package only starts
+ * referencing in a later version.
+ */
+export type AllowedRuntimeGlobals = Record<string, true | string[]>;
+
+/** Options for how `defineConfig()` bundles functions. */
+export interface BuildOptions {
+  /**
+   * Enable inline sourcemaps in bundled functions for better error stack traces.
+   * @default true
+   */
+  inlineSourcemap?: boolean;
+  /**
+   * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
+   * calls remain in bundled functions. `logger.setAttributes` has no severity and
+   * is never dropped.
+   * @default "DEBUG"
+   */
+  logLevel?: LogLevelInput;
+  /**
+   * Lets `deploy` continue when an installed package bundled into a resolver,
+   * executor, or workflow references a Node-only global such as `process` or
+   * `Buffer`, which the Tailor Platform runtime does not define. Allow a global
+   * only after confirming that the package's code referencing it never runs for
+   * your use, since that code throws a `ReferenceError` at runtime. Only code
+   * from installed packages is affected: a reference from the project's own
+   * code always fails the build.
+   * @example
+   * allowedRuntimeGlobals: {
+   *   "@ai-sdk/gateway": ["Buffer"],
+   *   "some-trusted-package": true,
+   * }
+   */
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+}
+
 /** Value an `env` entry resolves to at runtime. */
 export type EnvValue = string | number | boolean;
 
@@ -158,13 +197,16 @@ export interface AppConfig<
   /**
    * Enable inline sourcemaps in bundled functions for better error stack traces.
    * @default true
+   * @deprecated since NEXT_RELEASE — use `buildOptions.inlineSourcemap` instead. codemod: v3/define-config-build-options
    */
   inlineSourcemap?: boolean;
   /**
    * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
-   * calls remain in bundled functions. `logger.setAttributes` has no severity and
-   * is never dropped.
+   * calls remain in bundled functions.
    * @default "DEBUG"
+   * @deprecated since NEXT_RELEASE — use `buildOptions.logLevel` instead. codemod: v3/define-config-build-options
    */
   logLevel?: LogLevelInput;
+  /** Options for how resolvers, executors, workflow jobs, and other functions are bundled. */
+  buildOptions?: BuildOptions;
 }
