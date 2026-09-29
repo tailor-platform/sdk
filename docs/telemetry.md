@@ -87,7 +87,8 @@ deploy
 ├── apply.deleteDependentServices
 ├── apply.deleteApplication
 ├── apply.deleteSubgraphServices
-└── apply.cleanup
+├── apply.cleanup
+└── deploy.onDeployed
 ```
 
 With `--build-only`, `config.preflight` is omitted and the config preparation

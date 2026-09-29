@@ -1,4 +1,7 @@
-import { describe, test, expectTypeOf } from "vitest";
+import { describe, test, expectTypeOf, expect } from "vitest";
+import { definePlugins } from "#/configure/config/index";
+import { PluginConfigSchema } from "#/parser/plugin-config/schema";
+import { hasGenerationHooks, getPluginGenerationDependencies } from "./guards";
 import type {
   PluginGeneratedTable,
   PluginExecutorContextBase,
@@ -22,4 +25,19 @@ describe("PluginConfig generated type alignment", () => {
     expectTypeOf<"onTableLoaded">().toExtend<keyof Plugin>();
     expectTypeOf<`on${"Type"}Loaded`>().not.toExtend<keyof Plugin>();
   });
+});
+
+test("rejects a non-function onDeployed hook", () => {
+  expect(
+    PluginConfigSchema.safeParse({ id: "deploy", description: "deploy", onDeployed: 42 }).success,
+  ).toBe(false);
+});
+test("accepts a deploy-only plugin without importPath", () => {
+  const plugin: Plugin = { id: "deploy", description: "deploy", onDeployed: () => {} };
+  expect(PluginConfigSchema.parse(definePlugins(plugin)[0]).onDeployed).toBe(plugin.onDeployed);
+});
+test("deploy-only plugins do not introduce generation dependencies", () => {
+  const plugin: Plugin = { id: "deploy", description: "deploy", onDeployed: () => {} };
+  expect(hasGenerationHooks(plugin)).toBe(false);
+  expect(getPluginGenerationDependencies(plugin)).toEqual(new Set());
 });

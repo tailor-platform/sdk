@@ -6,7 +6,7 @@ Create your own plugins by implementing the `Plugin` interface.
 
 ## Requirements
 
-**Plugins must use default export**:
+**Plugins with definition-time hooks must use default export**:
 
 ```typescript
 // plugin.ts
@@ -48,6 +48,9 @@ interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
   onExecutorReady?(
     context: ExecutorReadyContext<PluginConfig>,
   ): GeneratorResult | Promise<GeneratorResult>;
+  onDeployed?(
+    context: DeployedContext<PluginConfig>,
+  ): void | DeployedHookResult | Promise<void | DeployedHookResult>;
 }
 ```
 
@@ -253,6 +256,55 @@ onExecutorReady(ctx) {
   };
 },
 ```
+
+### onDeployed
+
+Runs once after every application in the deploy has been applied, including when
+there are no resource changes. Hooks run sequentially in config order, then in
+`definePlugins()` registration order. No `importPath` or table attachment is required.
+
+Use `ctx.application` for the registering application's URL, domain, websites,
+AI Gateway URLs, and public OAuth client IDs. `ctx.applications` contains all
+applications in a multi-config deploy, and `ctx.staticWebsites` looks up their
+websites by name. OAuth client secrets are never included.
+
+`ctx.configPath` is the absolute path of the registering config. `ctx.workspaceId`
+and `ctx.pluginConfig` identify the deployment workspace and the plugin's options.
+Use `ctx.logger.info`, `warn`, and `success` for diagnostics; they write to stderr
+and preserve deploy's JSON stdout.
+
+```typescript
+import { definePlugins, type Plugin } from "@tailor-platform/sdk";
+
+const deployedInfo: Plugin = {
+  id: "@example/deployed-info",
+  description: "Reports the deployed application URL",
+  onDeployed(ctx) {
+    ctx.logger.success(`Application ready: ${ctx.application.url}`);
+    return { outputs: { url: ctx.application.url } };
+  },
+};
+
+export const plugins = definePlugins(deployedInfo);
+```
+
+To publish assets, await `ctx.uploadStaticWebsite({ name, dir })` with an absolute
+directory path. The site must belong to an application included in this deploy.
+The result contains `url` and `skippedFiles`; report skipped files so users can
+correct files that could not be uploaded.
+
+Return JSON-serializable `outputs` to include a result in `deployedHooks` under
+`tailor deploy --json`. Each entry identifies the application and plugin. This
+key is omitted when no hook supplies outputs.
+
+A failed hook stops later hooks with `DEPLOYED_HOOK_FAILED`. Platform resources
+have already been applied and are not rolled back. The error lists any hooks
+that did not run. Fix the hook and run `tailor deploy` again; hooks run again even
+if there are no resource changes.
+
+Hooks do not run during dry-run, build-only, or migration test deployments.
+Dry-run lists the pending hooks. Calling `deploy()` from the programmatic CLI
+API runs hooks under the same conditions as `tailor deploy`.
 
 ## Hook Scheduling Rules
 

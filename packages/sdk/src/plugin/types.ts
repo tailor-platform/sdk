@@ -345,7 +345,70 @@ export interface Plugin<
     context: ResolverReadyContext<PluginConfig>,
   ): GeneratorResult | Promise<GeneratorResult>;
 
+  /** Runs after a successful deploy, including deploys with no resource changes. */
+  onDeployed?(
+    context: DeployedContext<PluginConfig>,
+  ): void | DeployedHookResult | Promise<void | DeployedHookResult>;
+
   onExecutorReady?(
     context: ExecutorReadyContext<PluginConfig>,
   ): GeneratorResult | Promise<GeneratorResult>;
+}
+
+export interface DeployedStaticWebsite {
+  name: string;
+  url: string;
+}
+
+export interface DeployedOAuth2Client {
+  name: string;
+  clientId: string;
+}
+
+export interface DeployedApplication {
+  name: string;
+  configPath: string;
+  /** Application endpoint URL. */
+  url: string;
+  domain: string;
+  staticWebsites: DeployedStaticWebsite[];
+  aiGateways: { name: string; url: string }[];
+  auth?: { namespace: string; oauth2Clients: DeployedOAuth2Client[] };
+}
+
+export interface PluginLogger {
+  info(message: string): void;
+  warn(message: string): void;
+  success(message: string): void;
+}
+
+export interface UploadStaticWebsiteParams {
+  /** Name of a site included in this deploy run. */
+  name: string;
+  /** Absolute path to the directory to upload. */
+  dir: string;
+}
+
+export interface UploadStaticWebsiteResult {
+  url: string;
+  skippedFiles: string[];
+}
+
+/** Values available after all applications in this deploy run have been applied. */
+export interface DeployedContext<PluginConfig = unknown> {
+  workspaceId: string;
+  /** Application whose config registers this plugin. */
+  application: DeployedApplication;
+  applications: readonly DeployedApplication[];
+  staticWebsites: Readonly<Record<string, DeployedStaticWebsite>>;
+  /** Absolute path of the config registering this plugin. */
+  configPath: string;
+  pluginConfig: PluginConfig;
+  logger: PluginLogger;
+  uploadStaticWebsite(params: UploadStaticWebsiteParams): Promise<UploadStaticWebsiteResult>;
+}
+
+export interface DeployedHookResult {
+  /** JSON-serializable values included in deploy's JSON result. */
+  outputs?: Record<string, unknown>;
 }

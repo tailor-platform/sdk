@@ -12,6 +12,7 @@ export type PluginConfigInput = {
   onTailorDBReady?: Function | undefined;
   onResolverReady?: Function | undefined;
   onExecutorReady?: Function | undefined;
+  onDeployed?: Function | undefined;
 };
 
 export type PluginConfig = {
@@ -53,6 +54,14 @@ export type PluginConfig = {
       ) =>
         | import("#/plugin/types").GeneratorResult
         | Promise<import("#/plugin/types").GeneratorResult>)
+    | undefined;
+  onDeployed?:
+    | ((
+        context: import("#/plugin/types").DeployedContext<unknown>,
+      ) =>
+        | void
+        | import("#/plugin/types").DeployedHookResult
+        | Promise<void | import("#/plugin/types").DeployedHookResult>)
     | undefined;
   onExecutorReady?:
     | ((

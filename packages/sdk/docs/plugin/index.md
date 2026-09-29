@@ -115,7 +115,7 @@ e.g. `@example/soft-delete` → `example-soft-delete`), such as:
 
 ## Plugin Lifecycle
 
-Plugins have 5 hooks across two lifecycle phases. Each hook fires at a specific point in the `tailor generate` pipeline:
+Plugins have definition-time, generation-time, and deploy-time hooks. The generation lifecycle is:
 
 ```
 tailor generate
@@ -156,7 +156,25 @@ These hooks produce TailorDB tables, resolvers, and executors that become part o
 
 These hooks receive all finalized data and produce output files (TypeScript code, etc.). No `importPath` required.
 
-A plugin can implement hooks from either or both phases.
+### Deploy-time hooks
+
+```
+tailor deploy
+│
+├─ Build and review resource changes
+├─ Apply all applications and services
+└─ onDeployed                ← each registered plugin, in config order
+```
+
+| Hook         | Available data                                                   | Can do                                  |
+| ------------ | ---------------------------------------------------------------- | --------------------------------------- |
+| `onDeployed` | Deployed application URLs, website URLs, public OAuth client IDs | Build assets and upload static websites |
+
+Deploy hooks run even when there are no resource changes. They do not run during
+`tailor generate`, dry-run, build-only, or migration test deployments. Dry-run lists
+which hooks would run. A deploy-only plugin needs neither `importPath` nor table attachments.
+
+A plugin can implement hooks from any combination of phases.
 
 ## Creating Custom Plugins
 
