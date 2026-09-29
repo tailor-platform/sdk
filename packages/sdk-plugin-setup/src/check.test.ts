@@ -386,6 +386,23 @@ describe("checkGitHub (integration)", () => {
       );
     });
 
+    test("does not report tailor- steps of a legacy entry whose recorded ids miss them", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const content = fs.readFileSync(wfPath(), "utf-8");
+      const lockFile = path.join(testDir, ".github/tailor.lock");
+      const lock = JSON.parse(fs.readFileSync(lockFile, "utf-8")) as {
+        targets: Array<{ generatedIds: string[]; contentHash: string }>;
+      };
+      for (const target of lock.targets) {
+        target.contentHash = hashContent(content);
+        target.generatedIds = target.generatedIds.filter(
+          (id) => id !== "tailor-deploy/tailor-notify",
+        );
+      }
+      fs.writeFileSync(lockFile, JSON.stringify(lock));
+      await expect(check()).resolves.toBeUndefined();
+    });
+
     test("reports a workflow file that is not valid YAML", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       fs.appendFileSync(wfPath(), "jobs: [\n");

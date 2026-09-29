@@ -19,6 +19,7 @@ import {
   isManagedHash,
   layoutOf,
   ManagedMergeError,
+  recordedManagedIds,
 } from "./managed";
 import { TEMPLATE_VERSION } from "./templates";
 
@@ -219,7 +220,8 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
 
 function reservedIdsIn(target: LockTarget, content: string): string[] {
   try {
-    return findReservedIds(content, layoutOf(target.kind), target.generatedIds);
+    const recorded = recordedManagedIds(target, content);
+    return findReservedIds(content, layoutOf(target.kind), recorded);
   } catch (error) {
     if (error instanceof ManagedMergeError) return [];
     throw error;

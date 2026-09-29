@@ -34,6 +34,7 @@ import {
   layoutOf,
   ManagedMergeError,
   mergeUserContent,
+  recordedManagedIds,
 } from "./managed";
 import {
   detectPackageManager,
@@ -570,7 +571,7 @@ function reconcileContent(obj: {
       current: currentContent,
       rendered: render.content,
       layout,
-      previousIds: existing.generatedIds,
+      previousIds: recordedManagedIds(existing, currentContent),
       renderedIds: render.generatedIds,
       force: decision.force,
     });

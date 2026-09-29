@@ -1101,6 +1101,29 @@ export default defineConfig({
       expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
     });
 
+    test("regenerates a legacy entry whose recorded ids miss a tailor- step it wrote", async () => {
+      const opts = baseOptions({ workspaceName: "my-app" });
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wfPath(), "utf-8");
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, {
+        ...lock,
+        targets: [
+          {
+            ...target,
+            contentHash: hashContent(generated),
+            generatedIds: target.generatedIds.filter((id) => id !== "tailor-deploy/tailor-notify"),
+          },
+        ],
+      });
+
+      await setupTarget(opts);
+
+      expect(fs.readFileSync(wfPath(), "utf-8")).toBe(generated);
+    });
+
     test("replaces an invalid YAML file of a legacy entry on --force", async () => {
       const opts = baseOptions({ workspaceName: "my-app" });
       await setupTarget(opts);

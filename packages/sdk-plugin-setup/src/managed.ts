@@ -354,6 +354,22 @@ export function findReservedIds(
   return ids.filter((id) => localId(id).startsWith(RESERVED_PREFIX) && !managed.has(id));
 }
 
+/**
+ * Managed ids to treat as the SDK's when reading a file tracked by a lock target.
+ * @param target - Lock target
+ * @param content - File content on disk
+ * @returns The recorded ids, plus every tailor- id in the file for an entry written before managed hashing
+ */
+export function recordedManagedIds(
+  target: Pick<LockTarget, "kind" | "contentHash" | "generatedIds">,
+  content: string,
+): string[] {
+  if (isManagedHash(target.contentHash)) return target.generatedIds;
+  // Entries written before managed hashing may not list every tailor- id their template wrote.
+  const layout = layoutOf(target.kind);
+  return [...target.generatedIds, ...findReservedIds(content, layout, target.generatedIds)];
+}
+
 function keyOf(pair: Pair): string | undefined {
   return isScalar(pair.key) ? String(pair.key.value) : undefined;
 }
