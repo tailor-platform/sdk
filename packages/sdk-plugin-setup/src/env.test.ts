@@ -150,6 +150,23 @@ describe("collectEnvironmentRequirements", () => {
     expect(names).toContain("TAILOR_PLATFORM_FOLDER_ID");
   });
 
+  test("requires the preview organization, since a machine user cannot create a workspace without one", () => {
+    const [env] = collectEnvironmentRequirements(lockOf(target("preview", "my-app", "pr")));
+    const organization = env?.requirements.find(
+      (r) => r.name === "TAILOR_PLATFORM_ORGANIZATION_ID",
+    );
+
+    expect(organization?.required).toBe(true);
+  });
+
+  test("explains when the preview folder can be omitted", () => {
+    const [env] = collectEnvironmentRequirements(lockOf(target("preview", "my-app", "pr")));
+    const folder = env?.requirements.find((r) => r.name === "TAILOR_PLATFORM_FOLDER_ID");
+
+    expect(folder?.required).toBe(false);
+    expect(folder?.description).toMatch(/directly under the organization/);
+  });
+
   test("merges targets sharing an environment into one entry without duplicates", () => {
     const envs = collectEnvironmentRequirements(
       lockOf(target("branch", "my-app", "stg"), target("preview", "my-app", "stg")),
@@ -238,6 +255,12 @@ describe("renderGhCommands", () => {
     const setter = lines.indexOf("gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env=stg/eu");
 
     expect(lines[setter - 1]).toMatch(/^# {3}How to get: .*tailor workspace create/);
+  });
+
+  test("links to the Tailor Platform docs that explain organizations, folders, and machine users", () => {
+    expect(renderGhCommands(envs())).toContain(
+      "https://docs.tailor.tech/administration/account-management",
+    );
   });
 
   test("tells the user to run the commands one at a time, since gh prompts for each value", () => {
@@ -388,6 +411,12 @@ describe("renderTerraform", () => {
       "#   export TF_VAR_production_tailor_platform_machine_user_client_secret=",
     );
     expect(hcl).toContain("#   export TF_VAR_stg_eu_tailor_platform_machine_user_client_id=");
+  });
+
+  test("links to the Tailor Platform docs that explain organizations, folders, and machine users", () => {
+    expect(renderTerraform(envs())).toContain(
+      "https://docs.tailor.tech/administration/account-management",
+    );
   });
 
   test("warns that secret values end up in the Terraform state", () => {
