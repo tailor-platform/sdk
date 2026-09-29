@@ -103,6 +103,21 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
   });
 });
 
+describe("how to get each value", () => {
+  test.each(["branch", "tag", "coordinate", "preview"] as const)(
+    "is described for every entry a %s target needs",
+    (kind) => {
+      expect(targetRequirements(kind).filter((r) => r.howTo.trim() === "")).toEqual([]);
+    },
+  );
+
+  test("points to the Terraform resource that issues the machine user credentials", () => {
+    const [clientId] = targetRequirements("branch");
+
+    expect(clientId?.howTo).toContain("tailor_platform_machine_user");
+  });
+});
+
 describe("collectEnvironmentRequirements", () => {
   test("lists the credentials and workspace id a branch target needs", () => {
     const [env] = collectEnvironmentRequirements(lockOf(target("branch", "my-app", "stg")));
@@ -217,6 +232,13 @@ describe("renderGhCommands", () => {
     expect(lines).not.toContain("gh secret set TAILOR_SLACK_BOT_TOKEN --env=stg/eu");
   });
 
+  test("explains how to get the value right under each description", () => {
+    const lines = renderGhCommands(envs()).split("\n");
+    const setter = lines.indexOf("gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env=stg/eu");
+
+    expect(lines[setter - 1]).toMatch(/^# {3}How to get: .*tailor workspace create/);
+  });
+
   test("tells the user to run the commands one at a time, since gh prompts for each value", () => {
     expect(renderGhCommands(envs()).split("\n")[0]).toMatch(/^# .*one at a time/);
   });
@@ -282,13 +304,19 @@ describe("renderTerraform", () => {
     expect(hcl).toContain('resource "github_repository_environment" "production" {');
   });
 
+  test("explains how to get each value above its input variable", () => {
+    expect(renderTerraform(envs())).toMatch(
+      /# How to get: .*tailor workspace create.*\nvariable "production_tailor_platform_workspace_id" \{/,
+    );
+  });
+
   test("takes secret values from sensitive variables instead of embedding them", () => {
     const hcl = renderTerraform(envs());
 
     expect(hcl).toContain(
       [
         'variable "stg_eu_tailor_platform_machine_user_client_secret" {',
-        '  description = "Machine user client secret"',
+        '  description = "Client secret of the same platform machine user"',
         "  type        = string",
         "  sensitive   = true",
         "}",

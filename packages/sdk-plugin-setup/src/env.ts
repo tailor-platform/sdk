@@ -7,7 +7,10 @@ export type EnvRequirement = {
   name: string;
   type: "secret" | "variable";
   required: boolean;
+  /** What the value is. */
   description: string;
+  /** Where the value comes from. */
+  howTo: string;
 };
 
 export type EnvironmentRequirements = {
@@ -17,53 +20,65 @@ export type EnvironmentRequirements = {
   requirements: EnvRequirement[];
 };
 
+const MACHINE_USER_HOW_TO =
+  "an organization or folder admin creates a platform machine user with the " +
+  "tailor_platform_machine_user Terraform resource (tailor-platform/tailor provider)";
+
 const CLIENT_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID",
   type: "secret",
   required: true,
-  description: "Machine user client ID",
+  description: "Client ID of the platform machine user that runs plan and deploy",
+  howTo: `${MACHINE_USER_HOW_TO}; use its client_id`,
 };
 const CLIENT_SECRET: EnvRequirement = {
   name: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
   type: "secret",
   required: true,
-  description: "Machine user client secret",
+  description: "Client secret of the same platform machine user",
+  howTo: `${MACHINE_USER_HOW_TO}; use its client_secret`,
 };
 const WORKSPACE_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_WORKSPACE_ID",
   type: "variable",
   required: true,
-  description: "ID of the workspace to deploy to (tailor workspace create)",
+  description: "ID of the workspace this environment deploys to",
+  howTo: "the id printed by `tailor workspace create`, or listed by `tailor workspace list`",
 };
 const ORGANIZATION_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_ORGANIZATION_ID",
   type: "variable",
   required: false,
-  description: "Organization ID to create per-PR preview workspaces in",
+  description: "Organization to create the per-PR preview workspaces in",
+  howTo: "the organizationId listed by `tailor organization list`",
 };
 const FOLDER_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_FOLDER_ID",
   type: "variable",
   required: false,
-  description: "Folder ID to create per-PR preview workspaces in",
+  description: "Folder to create the per-PR preview workspaces in",
+  howTo: "the id listed by `tailor organization folder list -o <organization id>`",
 };
 const FAIL_ON_DRIFT: EnvRequirement = {
   name: "TAILOR_PLATFORM_FAIL_ON_DRIFT",
   type: "variable",
   required: false,
-  description: 'Set to "true" to fail the drift check when drift is found',
+  description: "Whether the drift check fails the job when it finds drift",
+  howTo: 'set to "true" to fail; anything else only reports the drift',
 };
 const SLACK_BOT_TOKEN: EnvRequirement = {
   name: "TAILOR_SLACK_BOT_TOKEN",
   type: "secret",
   required: false,
-  description: "Slack bot token for deploy notifications (set with TAILOR_SLACK_CHANNEL_ID)",
+  description: "Slack bot token that posts deploy notifications (set with TAILOR_SLACK_CHANNEL_ID)",
+  howTo: "the Bot User OAuth Token (xoxb-...) of a Slack app with the chat:write scope",
 };
 const SLACK_CHANNEL_ID: EnvRequirement = {
   name: "TAILOR_SLACK_CHANNEL_ID",
   type: "variable",
   required: false,
-  description: "Slack channel ID for deploy notifications (set with TAILOR_SLACK_BOT_TOKEN)",
+  description: "Slack channel to post deploy notifications to (set with TAILOR_SLACK_BOT_TOKEN)",
+  howTo: "the channel ID (C...) shown in the channel details in Slack; invite the bot to it",
 };
 
 const DEPLOY_REQUIREMENTS = [
@@ -145,10 +160,11 @@ export function renderGhCommands(
       // one. The status is compared as text so the expected 404 exit does not fail under pipefail.
       `[ "$(gh api -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ] && gh api -X PUT ${endpoint} --silent`,
     ];
-    for (const { required, type, name, description } of requirements) {
+    for (const { required, type, name, description, howTo } of requirements) {
       const command = `gh ${type} set ${name} --env=${environment}${repoFlag}`;
       lines.push(
         required ? `# ${description}` : `# Optional: ${description}`,
+        `#   How to get: ${howTo}`,
         required ? command : `# ${command}`,
       );
     }
@@ -252,18 +268,20 @@ function terraformUsage(
 }
 
 function terraformRequirement(envLabel: string, requirement: EnvRequirement): string[] {
-  const { name, type, required, description } = requirement;
+  const { name, type, required, description, howTo } = requirement;
   const label = requirementLabel(envLabel, name);
   const input = `var.${label}`;
   const sensitive = type === "secret";
   // A sensitive value cannot drive `count` directly; only its presence is revealed.
   const supplied = sensitive ? `nonsensitive(${input} != null)` : `${input} != null`;
-  const variable = hclBlock(`variable "${label}"`, [
-    ["description", JSON.stringify(description)],
-    ["type", "string"],
-    !required && ["default", "null"],
-    sensitive && ["sensitive", "true"],
-  ]);
+  const variable =
+    `# How to get: ${howTo}\n` +
+    hclBlock(`variable "${label}"`, [
+      ["description", JSON.stringify(description)],
+      ["type", "string"],
+      !required && ["default", "null"],
+      sensitive && ["sensitive", "true"],
+    ]);
   const resource = hclBlock(`resource "github_actions_environment_${type}" "${label}"`, [
     !required && ["count", `${supplied} ? 1 : 0`],
     ["repository", "var.repository"],
