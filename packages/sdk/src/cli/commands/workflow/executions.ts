@@ -104,12 +104,14 @@ function parseStatus(status: string): WorkflowExecution_Status {
       return WorkflowExecution_Status.PENDING_RETRY;
     case "WAITING":
       return WorkflowExecution_Status.WAITING;
+    case "CANCELED":
+      return WorkflowExecution_Status.CANCELED;
     case "UNSPECIFIED":
       return WorkflowExecution_Status.UNSPECIFIED;
     default:
       throw CLIError({
         code: "WORKFLOW_STATUS_INVALID",
-        message: `Invalid status: ${status}. Valid values: UNSPECIFIED, PENDING, PENDING_RESUME, RUNNING, SUCCESS, FAILED, PENDING_RETRY, WAITING`,
+        message: `Invalid status: ${status}. Valid values: UNSPECIFIED, PENDING, PENDING_RESUME, RUNNING, SUCCESS, FAILED, PENDING_RETRY, WAITING, CANCELED`,
         command: "workflow executions",
       });
   }

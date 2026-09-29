@@ -91,6 +91,23 @@ describe("waitForWorkflowExecution", () => {
     expect(getWorkflowWaitFailure(result, "suspended")).toBeUndefined();
   });
 
+  test("stops at a canceled execution as a terminal failure", async () => {
+    const getWorkflowExecution = vi.fn().mockResolvedValue({
+      execution: workflowExecution(WorkflowExecution_Status.CANCELED, [
+        WorkflowJobExecution_Status.CANCELED,
+      ]),
+    });
+
+    const result = await wait(getWorkflowExecution);
+
+    expect(result).toMatchObject({
+      status: "CANCELED",
+      statusClass: "failure",
+      attempts: 1,
+      timedOut: false,
+    } satisfies Partial<WorkflowWaitResult>);
+  });
+
   test("retries retryable poll failures", async () => {
     const getWorkflowExecution = vi
       .fn()

@@ -316,6 +316,10 @@ async function waitForMigrationWorkflow(
         error: extractFailureMessage(outcomes),
       };
     }
+    if (execution.status === WorkflowExecution_Status.CANCELED) {
+      const { logs } = await collectJobOutcomes(client, workspaceId, execution);
+      return { success: false, logs, error: "Migration workflow execution was canceled." };
+    }
 
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
   }

@@ -64,6 +64,8 @@ function workflowExecutionStatusToString(status: WorkflowExecution_Status): stri
       return "PENDING_RETRY";
     case WorkflowExecution_Status.WAITING:
       return "WAITING";
+    case WorkflowExecution_Status.CANCELED:
+      return "CANCELED";
     default:
       return "UNSPECIFIED";
   }
@@ -86,6 +88,8 @@ function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status)
       return "FAILED";
     case WorkflowJobExecution_Status.WAITING:
       return "WAITING";
+    case WorkflowJobExecution_Status.CANCELED:
+      return "CANCELED";
     default:
       return "UNSPECIFIED";
   }

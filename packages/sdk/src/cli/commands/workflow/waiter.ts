@@ -71,6 +71,7 @@ function colorizeStatus(status: WorkflowExecution_Status): string {
     case WorkflowExecution_Status.SUCCESS:
       return styles.success(statusText);
     case WorkflowExecution_Status.FAILED:
+    case WorkflowExecution_Status.CANCELED:
       return styles.error(statusText);
     default:
       return statusText;
