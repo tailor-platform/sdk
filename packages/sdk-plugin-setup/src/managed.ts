@@ -189,6 +189,11 @@ export function computeManagedHash(
   layout: Layout,
   managedIds: readonly string[],
 ): string {
+  const projection = projectManaged(content, layout, managedIds);
+  return `${MANAGED_HASH_PREFIX}${hashContent(canonicalJson(projection))}`;
+}
+
+function projectManaged(content: string, layout: Layout, managedIds: readonly string[]): Plain {
   const doc = readMapping(content);
   const managed = new Set(managedIds);
   const slots = SLOTS[layout];
@@ -221,7 +226,7 @@ export function computeManagedHash(
         }),
     );
   }
-  return `${MANAGED_HASH_PREFIX}${hashContent(canonicalJson(projection))}`;
+  return projection;
 }
 
 function stepIds(steps: unknown, prefix: string): string[] {
