@@ -4,6 +4,7 @@ import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupCoordinate, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
+import { setupUpdate } from "./update";
 
 const checkCommand = defineAppCommand({
   name: "check",
@@ -225,6 +226,21 @@ const previewCommand = defineAppCommand({
   },
 });
 
+const updateCommand = defineAppCommand({
+  name: "update",
+  description:
+    "Regenerate every workflow/action in .github/tailor.lock with the flags it was generated with.",
+  args: z.strictObject({
+    force: arg(z.boolean().default(false), {
+      description:
+        "Reset hand edits to SDK-managed parts of every target (your own jobs and steps are kept)",
+    }),
+  }),
+  run: async (args) => {
+    await setupUpdate({ force: args.force, outputDir: process.cwd() });
+  },
+});
+
 const DEPS_PROVIDERS = ["renovate"] as const;
 
 const depsProviders: Record<
@@ -283,5 +299,6 @@ export const setupSubCommands = {
   deps: depsCommand,
   // Cross-cutting operations over lock-tracked files.
   check: checkCommand,
+  update: updateCommand,
   delete: deleteCommand,
 };

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
 import { setupSubCommands } from "./commands";
 import { setupCoordinate, setupTarget } from "./generate";
+import { setupUpdate } from "./update";
 
 vi.mock("./generate", () => ({
   setupTarget: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock("./generate", () => ({
 vi.mock("./check", () => ({ checkGitHub: vi.fn() }));
 vi.mock("./delete", () => ({ setupDelete: vi.fn() }));
 vi.mock("./renovate", () => ({ setupRenovate: vi.fn() }));
+vi.mock("./update", () => ({ setupUpdate: vi.fn() }));
 
 const setupCommand = defineCommand({
   name: "tailor-setup",
@@ -107,5 +109,25 @@ describe("setup check command", () => {
     expect(result.success).toBe(false);
     expect(result.success ? "" : String(result.error)).toContain("Unknown flags: ci");
     expect(checkGitHub).not.toHaveBeenCalled();
+  });
+});
+
+describe("setup update command", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("regenerates every target from the lock without --force by default", async () => {
+    const result = await runCommand(setupCommand, ["update"]);
+
+    expect(result.success).toBe(true);
+    expect(setupUpdate).toHaveBeenCalledWith({ force: false, outputDir: process.cwd() });
+  });
+
+  test("passes --force through to every target", async () => {
+    const result = await runCommand(setupCommand, ["update", "--force"]);
+
+    expect(result.success).toBe(true);
+    expect(setupUpdate).toHaveBeenCalledWith({ force: true, outputDir: process.cwd() });
   });
 });
