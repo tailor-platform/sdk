@@ -357,9 +357,7 @@ describe("logs command detail output", () => {
     using stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
-    mockClient([
-      functionExecution({ logs: "starting\ncareful", logEntries: entries, result: '{"ok":true}' }),
-    ]);
+    mockClient([functionExecution({ logEntries: entries, result: '{"ok":true}' })]);
 
     await runCommand(logsCommand, ["exec-1"]);
 
@@ -374,10 +372,10 @@ describe("logs command detail output", () => {
     });
   });
 
-  test("prints structured entries instead of the flat logs string when both are present", async () => {
+  test("prints each structured entry once", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
-    mockClient([functionExecution({ logs: "starting\ncareful", logEntries: entries })]);
+    mockClient([functionExecution({ logEntries: entries })]);
 
     await runCommand(logsCommand, ["exec-1"]);
 
@@ -387,14 +385,14 @@ describe("logs command detail output", () => {
     expect(plain.match(/starting/g)).toHaveLength(1);
   });
 
-  test("falls back to the flat logs string when no entries are available", async () => {
+  test("omits the logs section when no entries are available", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
-    mockClient([functionExecution({ logs: "legacy line" })]);
+    mockClient([functionExecution({})]);
 
     await runCommand(logsCommand, ["exec-1"]);
 
-    expect(stripAnsi(stderr.output)).toContain("  legacy line");
+    expect(stripAnsi(stderr.output)).not.toContain("Logs:");
   });
 
   test("--follow prints each entry once as it arrives and stops at a terminal status", async () => {
@@ -409,7 +407,6 @@ describe("logs command detail output", () => {
       functionExecution({
         status: FunctionExecution_Status.FAILED,
         logEntries: [first, second, third],
-        logs: "one\ntwo\nthree",
         error: { name: "Error", message: "boom", stackTrace: "" },
       }),
     ]);
@@ -437,7 +434,7 @@ describe("logs command detail output", () => {
     try {
       mockClient([
         functionExecution({ status: FunctionExecution_Status.RUNNING }),
-        functionExecution({ status: FunctionExecution_Status.SUCCESS, logs: "done" }),
+        functionExecution({ status: FunctionExecution_Status.SUCCESS }),
       ]);
 
       await runCommand(logsCommand, ["exec-1", "--follow", "--interval", "1ms"]);
@@ -449,21 +446,6 @@ describe("logs command detail output", () => {
     expect(tables).toHaveLength(2);
     expect(tables[0]).toContain("RUNNING");
     expect(tables[1]).toContain("SUCCESS");
-  });
-
-  test("--follow falls back to the flat logs when no entries ever arrive", async () => {
-    using _stdout = captureStdout();
-    using stderr = captureStderr();
-    mockClient([
-      functionExecution({ status: FunctionExecution_Status.RUNNING }),
-      functionExecution({ status: FunctionExecution_Status.SUCCESS, logs: "only at the end" }),
-    ]);
-
-    await runCommand(logsCommand, ["exec-1", "--follow", "--interval", "1ms"]);
-
-    const plain = stripAnsi(stderr.output);
-    expect(plain).toContain("  only at the end");
-    expect(plain.match(/Logs:/g)).toHaveLength(1);
   });
 
   test("--follow --timeout stops with an error when the execution does not finish", async () => {

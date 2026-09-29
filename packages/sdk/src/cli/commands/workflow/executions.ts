@@ -23,6 +23,7 @@ import {
   formatFunctionLogLines,
   type FunctionLogEntryInfo,
   toFunctionLogEntryInfo,
+  joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
 import { styles, logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -233,7 +234,7 @@ export async function getWorkflowExecution(
             if (functionExecution) {
               return {
                 ...jobInfo,
-                logs: functionExecution.logs || undefined,
+                logs: joinFunctionLogMessages(functionExecution.logEntries) || undefined,
                 logEntries:
                   functionExecution.logEntries.length > 0
                     ? functionExecution.logEntries.map(toFunctionLogEntryInfo)
@@ -307,7 +308,7 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
       logger.log(`  Started: ${formatDate(job.startedAt)}`);
       logger.log(`  Finished: ${formatDate(job.finishedAt)}`);
 
-      const logLines = formatFunctionLogLines(job.logEntries, job.logs);
+      const logLines = formatFunctionLogLines(job.logEntries);
       if (logLines.length > 0) {
         logger.log(styles.warning("\n  Logs:"));
         for (const line of logLines) {

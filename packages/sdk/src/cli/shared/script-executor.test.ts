@@ -1,4 +1,9 @@
-import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import { create } from "@bufbuild/protobuf";
+import {
+  FunctionExecution_Status,
+  FunctionExecutionSchema,
+  FunctionLogEntrySchema,
+} from "@tailor-platform/tailor-proto/function_resource_pb";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   waitForExecution,
@@ -24,12 +29,13 @@ const mockAuthInvoker: AuthInvoker = {
   machineUserName: "test-machine-user",
 } as AuthInvoker;
 
-function execution(
-  status: FunctionExecution_Status,
-  logs: string,
-  result: string,
-): { execution: { status: FunctionExecution_Status; logs: string; result: string } } {
-  return { execution: { status, logs, result } };
+type ExecutionResponse = ReturnType<typeof execution>;
+
+function execution(status: FunctionExecution_Status, logs: string, result: string) {
+  const logEntries = logs
+    ? logs.split("\n").map((message) => create(FunctionLogEntrySchema, { message }))
+    : [];
+  return { execution: create(FunctionExecutionSchema, { status, logEntries, result }) };
 }
 
 describe("waitForExecution", () => {
@@ -176,7 +182,7 @@ describe("executeScript", () => {
   });
 
   function createExecScriptMockClient(
-    execResult: { execution: { status: FunctionExecution_Status; logs: string; result: string } },
+    execResult: ExecutionResponse,
     execScriptResponse: { executionId: string; result?: string } = { executionId: "exec-123" },
   ) {
     return createMockClient({
@@ -234,9 +240,9 @@ describe("executeScript", () => {
   test("accepts options typed as the bare ScriptExecutionOptions", async () => {
     const client = createMockClient({
       execScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: { status: FunctionExecution_Status.SUCCESS, logs: "", result: "" },
-      }),
+      getFunctionExecution: vi
+        .fn()
+        .mockResolvedValue(execution(FunctionExecution_Status.SUCCESS, "", "")),
     });
 
     // Regression: a typed-out options object must stay assignable to

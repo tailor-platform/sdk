@@ -84,7 +84,10 @@ function createMockClient(options: MockClientOptions = {}) {
     getFunctionExecution: vi.fn(() =>
       Promise.resolve({
         execution: {
-          logs: options.logs ?? "",
+          logEntries: (options.logs ?? "")
+            .split("\n")
+            .filter(Boolean)
+            .map((message) => ({ message })),
           error: options.errorMessage ? { message: options.errorMessage } : undefined,
           result: options.executionResult ?? "",
         },
