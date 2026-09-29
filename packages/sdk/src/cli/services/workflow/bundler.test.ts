@@ -277,21 +277,18 @@ export const mainJob = createWorkflowJob({
     }
   }
 
-  test("warns instead of failing when only an installed package references a forbidden global", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-
-    const result = await bundleEncodingJob("job-buffer-lib");
-
-    expect(result.bundledCode.get("main-job")).toBeDefined();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("job-buffer-lib"));
+  test("rejects a job whose installed package references a forbidden global and names the package", async () => {
+    await expect(bundleEncodingJob("job-buffer-lib")).rejects.toThrow(
+      expect.objectContaining({ details: expect.stringContaining("job-buffer-lib") }),
+    );
   });
 
-  test("does not warn about a global the installed package is allowed to reference", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+  test("bundles a job whose installed package references an allowed global", async () => {
+    const result = await bundleEncodingJob("job-allowed-buffer-lib", {
+      "job-allowed-buffer-lib": ["Buffer"],
+    });
 
-    await bundleEncodingJob("job-allowed-buffer-lib", { "job-allowed-buffer-lib": ["Buffer"] });
-
-    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("job-allowed-buffer-lib"));
+    expect(result.bundledCode.get("main-job")).toBeDefined();
   });
 
   test("bundles a job that uses Web Standard globals", async () => {

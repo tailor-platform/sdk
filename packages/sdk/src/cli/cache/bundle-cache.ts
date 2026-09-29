@@ -28,7 +28,7 @@ type BundleCacheSaveParams = {
   name: string;
   sourceFile: string;
   content: string;
-  /** Forbidden globals the bundle's installed packages reference, replayed as warnings on restore. */
+  /** Forbidden globals the bundle's installed packages reference, checked again on restore. */
   packageRuntimeGlobals?: PackageRuntimeGlobals;
   dependencyPaths: string[];
   /** Optional hash of non-file context (e.g., env variables) to include in cache key computation. */

@@ -9,7 +9,7 @@ import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import {
   checkForbiddenRuntimeGlobals,
-  warnPackageRuntimeGlobals,
+  assertPackageRuntimeGlobalsAllowed,
 } from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
@@ -294,7 +294,7 @@ export interface BundleWorkflowJobsResult {
  *   workflow source file to redetect reachability, as long as `sourceFileState` still matches
  *   (reachability cannot change unless the sources do, but the sources can change between calls,
  *   e.g. during an interactive confirmation pause before a rebuild)
- * @param allowedRuntimeGlobals - Globals each installed package may reference without a warning
+ * @param allowedRuntimeGlobals - Globals each installed package may reference
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -751,7 +751,7 @@ async function bundleSingleJob(
       };
     },
   });
-  warnPackageRuntimeGlobals(
+  assertPackageRuntimeGlobalsAllowed(
     packageRuntimeGlobals,
     `Workflow job "${job.name}"`,
     allowedRuntimeGlobals,

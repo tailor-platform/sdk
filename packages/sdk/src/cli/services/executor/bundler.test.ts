@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test, vi } from "vitest";
-import { logger } from "#/cli/shared/logger";
+import { describe, expect, test } from "vitest";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { bundleExecutors } from "./bundler";
 
@@ -75,36 +74,33 @@ describe("bundleExecutors", () => {
     ).rejects.toThrow(/references a global unavailable in the Tailor Platform runtime: process/);
   });
 
-  test("warns instead of failing when only an installed package references a forbidden global", async () => {
+  test("rejects an executor whose installed package references a forbidden global and names the package", async () => {
     using tmp = tempCwd("sdk-bundler-executor-package-global-");
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     writeBufferEncodingPackage(tmp.dir, "executor-buffer-lib");
     writeEncodingExecutor(tmp.dir, "executor-buffer-lib");
 
-    const result = await bundleExecutors({
-      config: { files: ["./src/backend/pkgglobal/executor/*.ts"] },
-      baseDir: tmp.dir,
-    });
-
-    expect(result.get("encoder")).toBeDefined();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("executor-buffer-lib"));
+    await expect(
+      bundleExecutors({
+        config: { files: ["./src/backend/pkgglobal/executor/*.ts"] },
+        baseDir: tmp.dir,
+      }),
+    ).rejects.toThrow(
+      expect.objectContaining({ details: expect.stringContaining("executor-buffer-lib") }),
+    );
   });
 
-  test("does not warn about a global the installed package is allowed to reference", async () => {
+  test("bundles an executor whose installed package references an allowed global", async () => {
     using tmp = tempCwd("sdk-bundler-executor-allowed-package-global-");
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     writeBufferEncodingPackage(tmp.dir, "executor-allowed-buffer-lib");
     writeEncodingExecutor(tmp.dir, "executor-allowed-buffer-lib");
 
-    await bundleExecutors({
+    const result = await bundleExecutors({
       config: { files: ["./src/backend/pkgglobal/executor/*.ts"] },
       baseDir: tmp.dir,
       allowedRuntimeGlobals: { "executor-allowed-buffer-lib": ["Buffer"] },
     });
 
-    expect(warnSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining("executor-allowed-buffer-lib"),
-    );
+    expect(result.get("encoder")).toBeDefined();
   });
 
   test("bundles an executor that uses Web Standard globals", async () => {
