@@ -67,27 +67,35 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): UpdatePlan
     case "action":
       return { kind: "target", options: { kind, ...base } };
     case "coordinate": {
+      const coordinateKind = inputs.tagPattern !== null ? "tag" : "branch";
+      const branch =
+        coordinateKind === "tag"
+          ? (inputs.branch ?? undefined)
+          : recordedBranchUnlessDetected(inputs);
       if (!inputs.actionGroups) {
+        const flags = [
+          `--name ${workspaceName}`,
+          coordinateKind === "tag" ? "--tag" : null,
+          branch !== undefined ? `--branch ${branch}` : null,
+          inputs.environment !== workspaceName ? `--environment ${inputs.environment}` : null,
+          inputs.restrictDispatch ? "--restrict-dispatch" : null,
+        ].filter((flag) => flag !== null);
         return {
           kind: "skip",
           reason:
             "This coordinator was generated before its --action grouping was recorded, so it " +
-            "cannot be regenerated from the lock. Re-run it once by hand with the same groups " +
-            `(\`tailor setup ci coordinate --name ${workspaceName} --action <a,b> --action <c> ...\`); ` +
+            "cannot be regenerated from the lock. Re-run it once by hand with its original " +
+            `groups (\`tailor setup ci coordinate ${flags.join(" ")} --action <a,b> --action <c> ...\`); ` +
             "later updates pick the grouping up from the lock.",
         };
       }
-      const coordinateKind = inputs.tagPattern !== null ? "tag" : "branch";
       return {
         kind: "coordinate",
         options: {
           coordinatorName: workspaceName,
           coordinateKind,
           actions: inputs.actionGroups.map((group) => group.join(",")),
-          branch:
-            coordinateKind === "tag"
-              ? (inputs.branch ?? undefined)
-              : recordedBranchUnlessDetected(inputs),
+          branch,
           tagPattern: inputs.tagPattern ?? undefined,
           environment: inputs.environment,
           restrictDispatch: inputs.restrictDispatch ?? false,

@@ -235,6 +235,40 @@ describe("planUpdate", () => {
     });
   });
 
+  test("coordinate: the recovery command for an entry without a grouping repeats its recorded flags", () => {
+    const plan = planUpdate(
+      lockTarget("coordinate", "apps", {
+        tagPattern: "v*",
+        branch: "main",
+        branchAutoDetected: false,
+        environment: "production",
+        restrictDispatch: true,
+      }),
+      common,
+    );
+
+    expect(plan).toEqual({
+      kind: "skip",
+      reason: expect.stringContaining(
+        "`tailor setup ci coordinate --name apps --tag --branch main --environment production --restrict-dispatch --action <a,b> --action <c> ...`",
+      ),
+    });
+  });
+
+  test("coordinate: the recovery command leaves out a branch that was auto-detected", () => {
+    const plan = planUpdate(
+      lockTarget("coordinate", "apps", { branch: "main", branchAutoDetected: true }),
+      common,
+    );
+
+    expect(plan).toEqual({
+      kind: "skip",
+      reason: expect.stringContaining(
+        "`tailor setup ci coordinate --name apps --action <a,b> --action <c> ...`",
+      ),
+    });
+  });
+
   test("coordinate: skips an entry without a recorded grouping and tells how to record it", () => {
     const plan = planUpdate(
       lockTarget("coordinate", "apps", { actionDirs: ["apps/front", "apps/api"] }),
