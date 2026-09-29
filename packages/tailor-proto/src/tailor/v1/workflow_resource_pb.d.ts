@@ -287,6 +287,10 @@ export declare type WorkflowJobExecution = Message<"tailor.v1.WorkflowJobExecuti
   status: WorkflowJobExecution_Status;
 
   /**
+   * The function service execution behind this job. Meaningful only when kind
+   * is job_function; a wait checkpoint runs no function and carries the nil
+   * UUID here.
+   *
    * execution_id in Function Execution
    *
    * @generated from field: string execution_id = 4;
@@ -302,6 +306,35 @@ export declare type WorkflowJobExecution = Message<"tailor.v1.WorkflowJobExecuti
    * @generated from field: google.protobuf.Timestamp finished_at = 6;
    */
   finishedAt?: Timestamp;
+
+  /**
+   * Where this job sits in the run's execution tree.
+   *
+   * @generated from field: tailor.v1.WorkflowJobExecution.Position position = 7;
+   */
+  position?: WorkflowJobExecution_Position;
+
+  /**
+   * What kind of job this row is. wait() occupies a call_index in its parent's
+   * script and returns a value, exactly like a triggered job function, so it is
+   * one of these jobs rather than a separate concept. A reader that does not
+   * recognize the variant must still place the job using position.
+   *
+   * @generated from oneof tailor.v1.WorkflowJobExecution.kind
+   */
+  kind: {
+    /**
+     * @generated from field: tailor.v1.WorkflowJobExecution.JobFunctionCall job_function = 8;
+     */
+    value: WorkflowJobExecution_JobFunctionCall;
+    case: "jobFunction";
+  } | {
+    /**
+     * @generated from field: tailor.v1.WorkflowJobExecution.WaitCheckpoint wait = 9;
+     */
+    value: WorkflowJobExecution_WaitCheckpoint;
+    case: "wait";
+  } | { case: undefined; value?: undefined };
 };
 
 /**
@@ -309,6 +342,95 @@ export declare type WorkflowJobExecution = Message<"tailor.v1.WorkflowJobExecuti
  * Use `create(WorkflowJobExecutionSchema)` to create a new message.
  */
 export declare const WorkflowJobExecutionSchema: GenMessage<WorkflowJobExecution>;
+
+/**
+ * Position of a job within its run's execution tree. Siblings are ordered
+ * by (call_index, branch_index); started_at is not an ordering, because the
+ * branches of one parallel group start together.
+ *
+ * @generated from message tailor.v1.WorkflowJobExecution.Position
+ */
+export declare type WorkflowJobExecution_Position = Message<"tailor.v1.WorkflowJobExecution.Position"> & {
+  /**
+   * The parent job execution's id (field 1 of this message), not its
+   * execution_id. Empty on the main job function, which has no caller, and
+   * on jobs recorded before this field existed. Otherwise set, but not
+   * always resolvable: job executions are deleted by age and nothing
+   * clears the references to them, so a parent can be gone while its
+   * children still name it.
+   *
+   * @generated from field: string parent_workflow_job_execution_id = 1;
+   */
+  parentWorkflowJobExecutionId: string;
+
+  /**
+   * Zero-based order of the call within the parent's script. Unset on the
+   * main job function, and on jobs recorded before this field existed.
+   *
+   * @generated from field: optional int32 call_index = 2;
+   */
+  callIndex?: number;
+
+  /**
+   * Zero-based branch within a parallelJobFunctions.all() group sharing one
+   * call_index. Unset when the call did not fan out.
+   *
+   * @generated from field: optional int32 branch_index = 3;
+   */
+  branchIndex?: number;
+
+  /**
+   * Distance from the main job function, which is 0. Redundant with walking
+   * the parent links, and carried so a reader can still indent a job whose
+   * parent is outside the set it holds.
+   *
+   * @generated from field: int32 depth = 4;
+   */
+  depth: number;
+};
+
+/**
+ * Describes the message tailor.v1.WorkflowJobExecution.Position.
+ * Use `create(WorkflowJobExecution_PositionSchema)` to create a new message.
+ */
+export declare const WorkflowJobExecution_PositionSchema: GenMessage<WorkflowJobExecution_Position>;
+
+/**
+ * @generated from message tailor.v1.WorkflowJobExecution.JobFunctionCall
+ */
+export declare type WorkflowJobExecution_JobFunctionCall = Message<"tailor.v1.WorkflowJobExecution.JobFunctionCall"> & {
+  /**
+   * Matches WorkflowJobFunction.name.
+   *
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.WorkflowJobExecution.JobFunctionCall.
+ * Use `create(WorkflowJobExecution_JobFunctionCallSchema)` to create a new message.
+ */
+export declare const WorkflowJobExecution_JobFunctionCallSchema: GenMessage<WorkflowJobExecution_JobFunctionCall>;
+
+/**
+ * @generated from message tailor.v1.WorkflowJobExecution.WaitCheckpoint
+ */
+export declare type WorkflowJobExecution_WaitCheckpoint = Message<"tailor.v1.WorkflowJobExecution.WaitCheckpoint"> & {
+  /**
+   * The key passed to tailor.workflow.wait(), as accepted by
+   * ResolveWaitingExecution. The payload stays on the wait / resolve APIs.
+   *
+   * @generated from field: string key = 1;
+   */
+  key: string;
+};
+
+/**
+ * Describes the message tailor.v1.WorkflowJobExecution.WaitCheckpoint.
+ * Use `create(WorkflowJobExecution_WaitCheckpointSchema)` to create a new message.
+ */
+export declare const WorkflowJobExecution_WaitCheckpointSchema: GenMessage<WorkflowJobExecution_WaitCheckpoint>;
 
 /**
  * @generated from enum tailor.v1.WorkflowJobExecution.Status
@@ -343,6 +465,16 @@ export enum WorkflowJobExecution_Status {
    * @generated from enum value: STATUS_WAITING = 5;
    */
   WAITING = 5,
+
+  /**
+   * Terminal state. The execution was canceled, either directly via
+   * CancelJobFunctionExecution or as a descendant of an ancestor that was
+   * canceled. Never retried automatically. Must stay integer-aligned with
+   * the controlplane enum (the operator transform casts directly).
+   *
+   * @generated from enum value: STATUS_CANCELED = 6;
+   */
+  CANCELED = 6,
 }
 
 /**
@@ -444,6 +576,16 @@ export enum WorkflowExecution_Status {
    * @generated from enum value: STATUS_WAITING = 7;
    */
   WAITING = 7,
+
+  /**
+   * Terminal state. The execution was canceled via
+   * CancelWorkflowExecution. Never retried automatically and not resumable.
+   * Must stay integer-aligned with the controlplane enum (the operator
+   * transform casts directly).
+   *
+   * @generated from enum value: STATUS_CANCELED = 8;
+   */
+  CANCELED = 8,
 }
 
 /**

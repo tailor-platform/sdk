@@ -90,7 +90,11 @@ export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> &
   status: FunctionExecution_Status;
 
   /**
-   * @generated from field: string logs = 5;
+   * Deprecated: use log_entries instead. Only populated in GetFunctionExecution,
+   * not in ListFunctionExecutions.
+   *
+   * @generated from field: string logs = 5 [deprecated = true];
+   * @deprecated
    */
   logs: string;
 
@@ -130,6 +134,8 @@ export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> &
   contentHash: string;
 
   /**
+   * Only populated in GetFunctionExecution, not in ListFunctionExecutions.
+   *
    * @generated from field: repeated tailor.v1.FunctionLogEntry log_entries = 13;
    */
   logEntries: FunctionLogEntry[];

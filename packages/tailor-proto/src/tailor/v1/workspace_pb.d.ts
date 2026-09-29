@@ -584,6 +584,14 @@ export declare type GetWorkspacePlatformUserRequest = Message<"tailor.v1.GetWork
    * @generated from field: string workspace_id = 1;
    */
   workspaceId: string;
+
+  /**
+   * email identifies the member to read. Use GetWorkspaceRole to read the
+   * caller's own role.
+   *
+   * @generated from field: string email = 2;
+   */
+  email: string;
 };
 
 /**
