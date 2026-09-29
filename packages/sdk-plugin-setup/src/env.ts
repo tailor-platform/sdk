@@ -21,22 +21,22 @@ export type EnvironmentRequirements = {
 };
 
 const MACHINE_USER_HOW_TO =
-  "an organization or folder admin creates a platform machine user with the " +
-  "tailor_platform_machine_user Terraform resource (tailor-platform/tailor provider)";
+  "contact Tailor support (https://docs.tailor.tech/administration/support) to get a " +
+  "platform machine user for your organization or folder";
 
 const CLIENT_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID",
   type: "secret",
   required: true,
   description: "Client ID of the platform machine user that runs plan and deploy",
-  howTo: `${MACHINE_USER_HOW_TO}; use its client_id`,
+  howTo: `${MACHINE_USER_HOW_TO}; use its client ID`,
 };
 const CLIENT_SECRET: EnvRequirement = {
   name: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
   type: "secret",
   required: true,
   description: "Client secret of the same platform machine user",
-  howTo: `${MACHINE_USER_HOW_TO}; use its client_secret`,
+  howTo: `${MACHINE_USER_HOW_TO}; use its client secret`,
 };
 const WORKSPACE_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_WORKSPACE_ID",

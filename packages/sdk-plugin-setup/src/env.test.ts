@@ -111,10 +111,11 @@ describe("how to get each value", () => {
     },
   );
 
-  test("points to the Terraform resource that issues the machine user credentials", () => {
-    const [clientId] = targetRequirements("branch");
+  test("asks the user to contact Tailor support for the machine user credentials", () => {
+    const [clientId, clientSecret] = targetRequirements("branch");
 
-    expect(clientId?.howTo).toContain("tailor_platform_machine_user");
+    expect(clientId?.howTo).toContain("https://docs.tailor.tech/administration/support");
+    expect(clientSecret?.howTo).toContain("https://docs.tailor.tech/administration/support");
   });
 });
 

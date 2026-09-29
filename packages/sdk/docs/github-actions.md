@@ -336,16 +336,16 @@ tailor setup ci env --format terraform   # Terraform for the integrations/github
 
 The list follows what each generated workflow actually reads:
 
-| Name                                         | Kind     | Targets                 | Required | Where the value comes from                                                                                                                    |
-| -------------------------------------------- | -------- | ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | secret   | all                     | yes      | `client_id` of a platform machine user, created by an organization or folder admin with the `tailor_platform_machine_user` Terraform resource |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all                     | yes      | `client_secret` of the same platform machine user                                                                                             |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag, coordinate | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                               |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview                 | no       | `organizationId` listed by `tailor organization list`                                                                                         |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview                 | no       | `id` listed by `tailor organization folder list -o <organization id>`                                                                         |
-| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all                     | no       | `true` to fail the drift check when it finds drift                                                                                            |
-| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag, coordinate | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                  |
-| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag, coordinate | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                          |
+| Name                                         | Kind     | Targets                 | Required | Where the value comes from                                                                                                 |
+| -------------------------------------------- | -------- | ----------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | secret   | all                     | yes      | Client ID of a platform machine user; contact [Tailor support](https://docs.tailor.tech/administration/support) to get one |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all                     | yes      | Client secret of the same platform machine user                                                                            |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag, coordinate | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                            |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview                 | no       | `organizationId` listed by `tailor organization list`                                                                      |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview                 | no       | `id` listed by `tailor organization folder list -o <organization id>`                                                      |
+| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all                     | no       | `true` to fail the drift check when it finds drift                                                                         |
+| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag, coordinate | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                               |
+| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag, coordinate | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                       |
 
 Composite actions (`setup ci action`) read nothing themselves; the coordinator
 that calls them does. Set `TAILOR_SLACK_BOT_TOKEN` and `TAILOR_SLACK_CHANNEL_ID`
