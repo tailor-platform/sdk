@@ -306,7 +306,7 @@ The generated workflow requires two secrets (the optional Slack token is listed 
 
 | Secret                                       | Description                |
 | -------------------------------------------- | -------------------------- |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | secret                     | all | yes | Client ID of the platform machine user CI signs in as; it needs an editor or admin role on the organization or folder that holds the workspace. Contact [Tailor support](https://docs.tailor.tech/administration/support) to get one |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Machine user client ID     |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Machine user client secret |
 
 Set them on the target GitHub Environment (the `--environment` value, or the
