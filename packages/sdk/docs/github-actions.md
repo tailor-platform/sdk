@@ -219,7 +219,7 @@ them. Everything else is yours, and re-running `setup` keeps it:
   `install-command` on `tailor-install`, `node-version-file` on
   `tailor-setup`, `label` on `tailor-plan`, and `user-mapping` on
   `tailor-notify` and on a coordinator's steps that call an app action.
-- **The `run:` command of the `build-site` step** in a composite action.
+- **The `run:` command of the `tailor-build-site` step** in a composite action.
 
 Comments above your own jobs and steps and at the end of the file are kept too.
 Comments inside managed jobs and steps, and edits to the header comment, are

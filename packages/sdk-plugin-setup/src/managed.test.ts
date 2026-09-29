@@ -132,8 +132,6 @@ function idsIn(content: string, layout: Layout): string[] {
   );
 }
 
-const SLOTS = new Set(["build-site"]);
-
 describe.each(variants)("%s template", (_name, layout, render) => {
   test("round-trips through the merge unchanged when there is nothing to keep", () => {
     const result = mergeUserContent({
@@ -151,9 +149,7 @@ describe.each(variants)("%s template", (_name, layout, render) => {
     const emitted = idsIn(render.content, layout);
     expect(new Set(emitted).size).toBe(emitted.length);
     expect(new Set(render.generatedIds).size).toBe(render.generatedIds.length);
-    expect(emitted.filter((id) => !SLOTS.has(id)).toSorted()).toEqual(
-      render.generatedIds.toSorted(),
-    );
+    expect(emitted.toSorted()).toEqual(render.generatedIds.toSorted());
   });
 });
 
@@ -161,6 +157,14 @@ const render = renderBranchWorkflow(branchBase);
 const lockHash = computeManagedHash(render.content, "workflow", render.generatedIds);
 const hashOf = (content: string): string =>
   computeManagedHash(content, "workflow", render.generatedIds);
+
+const legacyBuildSiteAction = (): { content: string; ids: string[] } => {
+  const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
+  return {
+    content: action.content.replace("- id: tailor-build-site\n", "- id: build-site\n"),
+    ids: action.generatedIds.filter((id) => id !== "tailor-build-site"),
+  };
+};
 
 const addStepAfterInstall = (content: string, job: string, step: string): string =>
   content.replace(
@@ -296,7 +300,7 @@ describe("computeManagedHash", () => {
     expect(content).toBe(edited);
   });
 
-  test("ignores the build-site slot body but not its removal", () => {
+  test("ignores the tailor-build-site run command but not its removal", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
     const hash = (c: string) => computeManagedHash(c, "action", action.generatedIds);
     const edited = action.content.replace(
@@ -305,8 +309,22 @@ describe("computeManagedHash", () => {
     );
     expect(edited).not.toBe(action.content);
     expect(hash(edited)).toBe(hash(action.content));
-    const removed = action.content.replace(/ {4}- id: build-site\n(?:      .*\n)+/, "");
+    const removed = action.content.replace(/ {4}- id: tailor-build-site\n(?:      .*\n)+/, "");
     expect(hash(removed)).not.toBe(hash(action.content));
+  });
+
+  test("hashes a build-site step an older template wrote like the slot it became", () => {
+    const { content, ids } = legacyBuildSiteAction();
+    const hash = (c: string) => computeManagedHash(c, "action", ids);
+    const editedRun = content.replace(
+      /(run: \|\n)(?:        #.*\n)+ {8}true\n/,
+      "$1        pnpm build\n",
+    );
+    expect(editedRun).not.toBe(content);
+    expect(hash(editedRun)).toBe(hash(content));
+    const editedIf = content.replace("if: inputs.build-site == 'true'", "if: always()");
+    expect(editedIf).not.toBe(content);
+    expect(hash(editedIf)).not.toBe(hash(content));
   });
 });
 
@@ -524,7 +542,7 @@ describe("mergeUserContent", () => {
     ).toThrow(/after-erd.*tailor-erd-preview/);
   });
 
-  test("keeps a user-edited build-site slot body and user steps in a composite action", () => {
+  test("keeps a user-edited tailor-build-site run command and user steps in a composite action", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
     const edited = action.content
       .replace(/(run: \|\n)(?:        #.*\n)+ {8}true\n/, "$1        pnpm build\n")
@@ -544,8 +562,34 @@ describe("mergeUserContent", () => {
       runs: { steps: Array<Record<string, unknown>> };
     };
     expect(doc.runs.steps.map((s) => s["id"] ?? s["name"])).toEqual([
-      "build-site",
+      "tailor-build-site",
       "Upload",
+      "tailor-apply",
+      "tailor-notify",
+    ]);
+    expect(doc.runs.steps[0]?.["run"]).toBe("pnpm build\n");
+  });
+
+  test("moves the run command of a build-site step an older template wrote into tailor-build-site", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
+    const legacy = legacyBuildSiteAction();
+    const edited = legacy.content.replace(
+      /(run: \|\n)(?:        #.*\n)+ {8}true\n/,
+      "$1        pnpm build\n",
+    );
+    const { content } = mergeUserContent({
+      current: edited,
+      rendered: action.content,
+      layout: "action",
+      previousIds: legacy.ids,
+      renderedIds: action.generatedIds,
+      force: false,
+    });
+    const doc = parseDocument(content).toJS() as {
+      runs: { steps: Array<Record<string, unknown>> };
+    };
+    expect(doc.runs.steps.map((s) => s["id"])).toEqual([
+      "tailor-build-site",
       "tailor-apply",
       "tailor-notify",
     ]);

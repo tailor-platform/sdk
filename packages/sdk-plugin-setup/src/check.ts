@@ -207,7 +207,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
       rule: "static-websites",
       message:
         "Static websites were added to the config. " +
-        "Re-run setup so the build-site slot is included in the composite action.",
+        "Re-run setup so the tailor-build-site step is included in the composite action.",
     });
   }
 

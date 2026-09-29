@@ -8,7 +8,7 @@ import tagTemplate from "./tag.workflow.yml";
 
 // Bump on material template-structure changes (managed step ids, placeholders)
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 13;
+export const TEMPLATE_VERSION = 14;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -85,7 +85,7 @@ export type RenderPreviewParams = {
 export type RenderActionParams = {
   workspaceName: string;
   workingDirectory?: string;
-  /** Include the build-site slot (user-owned step for building static website assets). */
+  /** Include the tailor-build-site step, whose run command builds the static website assets. */
   hasStaticWebsites?: boolean;
 };
 
@@ -94,7 +94,7 @@ export type CoordinateApp = {
   name: string;
   /** App directory relative to repo root (e.g. "apps/ims"). */
   dir: string;
-  /** Whether the app action contains the user-owned build-site slot. */
+  /** Whether the app action contains the tailor-build-site step. */
   hasStaticWebsites?: boolean;
 };
 
@@ -453,12 +453,15 @@ export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   let out = actionTemplate;
   out = line(out, "HEADER", HEADER);
 
-  // build-site is a user-owned slot; include when staticWebsites are configured.
   out = block(out, "STATIC_WEBSITE_BUILD", params.hasStaticWebsites ?? false);
 
   out = out.replaceAll("__WORKSPACE_NAME__", () => params.workspaceName);
 
-  const generatedIds = ["tailor-apply", "tailor-notify"];
+  const generatedIds = [
+    ...(params.hasStaticWebsites ? ["tailor-build-site"] : []),
+    "tailor-apply",
+    "tailor-notify",
+  ];
 
   return { content: out, generatedIds };
 }

@@ -45,14 +45,14 @@ const APP_ACTION_EDITABLE_WITH_KEYS = ["user-mapping"];
 // Slots are SDK-placed steps whose listed fields belong to the user.
 const SLOTS: Record<Layout, Record<string, readonly string[]>> = {
   workflow: {},
-  action: { "build-site": ["run"] },
+  action: { "tailor-build-site": ["run"] },
 };
 
 // Non-`tailor-` step ids that earlier template versions wrote, mapped to the
 // ids that replaced them.
 const RETIRED_IDS: Record<Layout, Record<string, string>> = {
   workflow: { "tailor-deploy/slack-prereq": "tailor-deploy/tailor-slack-prereq" },
-  action: {},
+  action: { "build-site": "tailor-build-site" },
 };
 
 const STRINGIFY_OPTIONS = { lineWidth: 0, flowCollectionPadding: false } as const;
@@ -146,17 +146,27 @@ function canonicalJson(value: unknown, seen = new WeakSet<object>()): string {
   }
 }
 
+function resolveRetired(
+  qualifiedId: string,
+  retired: Record<string, string>,
+  recorded: ReadonlySet<string>,
+): string {
+  const replacement = lookup(retired, qualifiedId);
+  return replacement !== undefined && !recorded.has(replacement) ? replacement : qualifiedId;
+}
+
 function projectSteps(
   steps: unknown,
   prefix: string,
   managed: ReadonlySet<string>,
   slots: Record<string, readonly string[]>,
+  retired: Record<string, string>,
 ): unknown[] {
   if (!Array.isArray(steps)) return [];
   return steps.filter(isPlainObject).flatMap((step) => {
     const id = step["id"];
     if (typeof id !== "string") return [];
-    const slotFields = lookup(slots, `${prefix}${id}`);
+    const slotFields = lookup(slots, resolveRetired(`${prefix}${id}`, retired, managed));
     if (slotFields) return [omit(step, slotFields)];
     if (!managed.has(`${prefix}${id}`)) return [];
     const editable = editableWithKeys(step["uses"]) ?? [];
@@ -182,6 +192,7 @@ export function computeManagedHash(
   const doc = readMapping(content);
   const managed = new Set(managedIds);
   const slots = SLOTS[layout];
+  const retired = RETIRED_IDS[layout];
   const projection: Plain = {};
   for (const key of MANAGED_TOP_LEVEL_KEYS[layout]) {
     projection[key] = doc[key] ?? null;
@@ -190,7 +201,7 @@ export function computeManagedHash(
     const runs = isPlainObject(doc["runs"]) ? doc["runs"] : {};
     projection["runs"] = {
       ...omit(runs, ["steps"]),
-      steps: projectSteps(runs["steps"], "", managed, slots),
+      steps: projectSteps(runs["steps"], "", managed, slots, retired),
     };
   } else {
     const jobs = isPlainObject(doc["jobs"]) ? doc["jobs"] : {};
@@ -204,7 +215,7 @@ export function computeManagedHash(
             jobId,
             {
               ...omit(job, [...EDITABLE_JOB_KEYS, "steps"]),
-              steps: projectSteps(job["steps"], `${jobId}/`, managed, slots),
+              steps: projectSteps(job["steps"], `${jobId}/`, managed, slots, retired),
             },
           ];
         }),
@@ -355,8 +366,7 @@ function reservedIdError(qualifiedId: string): ManagedMergeError {
 
 function isSdkOwned(qualifiedId: string, ctx: MergeContext): boolean {
   if (Object.hasOwn(ctx.slots, qualifiedId)) return true;
-  const replacement = lookup(ctx.retired, qualifiedId);
-  if (replacement !== undefined && !ctx.previous.has(replacement)) return true;
+  if (resolveRetired(qualifiedId, ctx.retired, ctx.previous) !== qualifiedId) return true;
   if (!localId(qualifiedId).startsWith(RESERVED_PREFIX)) return false;
   if (ctx.previous.has(qualifiedId)) return true;
   throw reservedIdError(qualifiedId);
@@ -401,9 +411,10 @@ function mergeSteps(
   for (const node of currentSteps.items) {
     const id = stepIdOf(node);
     if (id === undefined || !isMap(node)) continue;
-    const match = renderedSteps.items.find((candidate) => stepIdOf(candidate) === id);
+    const renderedId = localId(resolveRetired(`${prefix}${id}`, ctx.retired, ctx.previous));
+    const match = renderedSteps.items.find((candidate) => stepIdOf(candidate) === renderedId);
     if (!isMap(match)) continue;
-    const slotFields = lookup(ctx.slots, `${prefix}${id}`);
+    const slotFields = lookup(ctx.slots, `${prefix}${renderedId}`);
     if (slotFields) {
       carryFields(node, match, slotFields);
       continue;

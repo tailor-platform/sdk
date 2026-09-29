@@ -1309,7 +1309,7 @@ export default defineConfig({
     expect(lock?.targets[0]).toMatchObject({ inputs: { seedValidate: true } });
   });
 
-  test("action: preserves user-edited build-site run body on rerun without --force", async () => {
+  test("action: preserves user-edited tailor-build-site run body on rerun without --force", async () => {
     const actionOpts = (): Parameters<typeof setupTarget>[0] => ({
       kind: "action",
       workspaceName: "my-app",
@@ -1327,12 +1327,13 @@ export default defineConfig({
     // Simulate user customizing the build command
     const generated = fs.readFileSync(actionFile, "utf-8");
     const edited = generated.replace(
-      /(\s*- id: build-site[\s\S]*?run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/,
+      /(\s*- id: tailor-build-site[\s\S]*?run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/,
       (_, header, _body, tail) => `${header}\n        pnpm run build:static${tail}`,
     );
     fs.writeFileSync(actionFile, edited, "utf-8");
     // Second run: should preserve the custom build command
     await setupTarget(actionOpts());
+    expect(fs.readFileSync(actionFile, "utf-8")).not.toBe(generated);
     const afterRerun = fs.readFileSync(actionFile, "utf-8");
     expect(afterRerun).toContain("pnpm run build:static");
   });
