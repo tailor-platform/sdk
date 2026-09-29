@@ -295,8 +295,6 @@ describe("checkGitHub (integration)", () => {
     contentHash: "sha256:abc",
   });
 
-  // isCI (from std-env) skips the WORKSPACE_ID env check, so most drift-detection
-  // tests run here to focus on drift rather than local-mode preconditions.
   describe("in CI (isCI: true)", () => {
     let checkGitHub: typeof CheckGitHub;
     let logger: typeof Logger;
@@ -415,17 +413,6 @@ describe("checkGitHub (integration)", () => {
       await expect(check()).rejects.toThrow(/drift/);
     });
 
-    test("skips WORKSPACE_ID check in CI mode", async () => {
-      await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      try {
-        await expect(check()).resolves.toBeUndefined();
-      } finally {
-        if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
-      }
-    });
-
     test("detects ERD preview namespace drift", async () => {
       await setupTarget(
         setupOptions({
@@ -535,57 +522,8 @@ describe("checkGitHub (integration)", () => {
       ).toBe(false);
     });
 
-    test("throws when WORKSPACE_ID is unset and a deploying target exists (local mode)", async () => {
+    test("does not require TAILOR_PLATFORM_WORKSPACE_ID in the local shell", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      try {
-        await expect(
-          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
-        ).rejects.toThrow(/TAILOR_PLATFORM_WORKSPACE_ID/);
-      } finally {
-        if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
-      }
-    });
-
-    test("explains how to pass WORKSPACE_ID to a local run when it is unset (local mode)", async () => {
-      await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      try {
-        await expect(
-          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
-        ).rejects.toThrow(/export TAILOR_PLATFORM_WORKSPACE_ID=<id>/);
-      } finally {
-        if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
-      }
-    });
-
-    test("points to `tailor setup ci env` when WORKSPACE_ID is unset (local mode)", async () => {
-      await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      try {
-        await expect(
-          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
-        ).rejects.toThrow(/tailor setup ci env/);
-      } finally {
-        if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
-      }
-    });
-
-    test("skips WORKSPACE_ID check when only preview targets exist (local mode)", async () => {
-      await setupTarget({
-        kind: "preview",
-        workspaceName: "my-app",
-        region: "us-west",
-        dir: ".",
-        force: false,
-        outputDir: testDir,
-        gitRunner: () => "origin/main",
-        loadConfigName: async () => "my-app",
-        loadConfigId: async () => undefined,
-      });
       const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
       delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
       try {
@@ -594,6 +532,20 @@ describe("checkGitHub (integration)", () => {
         ).resolves.toBeUndefined();
       } finally {
         if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
+      }
+    });
+
+    test("does not check the Slack settings in the local shell", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const saved = process.env["TAILOR_SLACK_BOT_TOKEN"];
+      process.env["TAILOR_SLACK_BOT_TOKEN"] = "xoxb-local";
+      try {
+        await expect(
+          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+        ).resolves.toBeUndefined();
+      } finally {
+        if (saved === undefined) delete process.env["TAILOR_SLACK_BOT_TOKEN"];
+        else process.env["TAILOR_SLACK_BOT_TOKEN"] = saved;
       }
     });
   });

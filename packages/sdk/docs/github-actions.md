@@ -577,12 +577,10 @@ Drift findings are advisory by default. Set the repository variable
 `TAILOR_PLATFORM_FAIL_ON_DRIFT` to `true` to make unsuppressed findings fail
 the job. Execution and configuration errors fail regardless of this variable.
 
-Running `check` on your own machine also verifies that
-`TAILOR_PLATFORM_WORKSPACE_ID` is set locally for any branch, tag, or
-coordinate target, since those workflows read it directly. `check` detects on
-its own when it is running in CI (no flag needed) and skips that local-only
-verification there, since the deploy job resolves the Environment variable
-itself at runtime.
+`check` compares only the generated files, `.github/tailor.lock`, and the
+config; it does not read the GitHub Environment secrets and variables, so it
+runs the same on your own machine and in CI. Run `tailor setup ci env` to list
+what each environment needs.
 
 ## Updating the generated workflow
 
