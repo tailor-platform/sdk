@@ -386,21 +386,27 @@ describe("checkGitHub (integration)", () => {
       );
     });
 
-    test("does not report tailor- steps of a legacy entry whose recorded ids miss them", async () => {
+    test("reports a user tailor- step in a legacy entry", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      const content = fs.readFileSync(wfPath(), "utf-8");
+      const generated = fs.readFileSync(wfPath(), "utf-8");
+      fs.writeFileSync(
+        wfPath(),
+        generated.replace(
+          "      - id: tailor-apply\n",
+          "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
+        ),
+      );
       const lockFile = path.join(testDir, ".github/tailor.lock");
       const lock = JSON.parse(fs.readFileSync(lockFile, "utf-8")) as {
-        targets: Array<{ generatedIds: string[]; contentHash: string }>;
+        targets: Array<{ contentHash: string }>;
       };
-      for (const target of lock.targets) {
-        target.contentHash = hashContent(content);
-        target.generatedIds = target.generatedIds.filter(
-          (id) => id !== "tailor-deploy/tailor-notify",
-        );
-      }
+      for (const target of lock.targets) target.contentHash = hashContent(generated);
       fs.writeFileSync(lockFile, JSON.stringify(lock));
-      await expect(check()).resolves.toBeUndefined();
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/drift/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix/),
+      );
     });
 
     test("reports a workflow file that is not valid YAML", async () => {
