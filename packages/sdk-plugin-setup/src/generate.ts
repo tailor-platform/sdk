@@ -54,6 +54,8 @@ type CommonSetupOptions = {
   environment?: string;
   force: boolean;
   outputDir: string;
+  /** Set by `setup update`, which prints the beta warning and a summary once for all targets. */
+  batch?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
   /** Injectable config-name loader, for testing. Defaults to loading the config. */
@@ -117,6 +119,8 @@ export type CoordinateSetupOptions = {
   restrictDispatch?: boolean;
   force: boolean;
   outputDir: string;
+  /** Set by `setup update`, which prints the beta warning and a summary once for all targets. */
+  batch?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
 };
@@ -648,7 +652,7 @@ function printNextSteps(obj: { environment: string; configEdited: boolean }): vo
  * @param options - Setup options
  */
 export async function setupTarget(options: SetupTargetOptions): Promise<void> {
-  logBetaWarning("setup");
+  if (!options.batch) logBetaWarning("setup");
 
   const resolved = await resolve(options);
 
@@ -748,6 +752,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     logger.success(`Generated ${styles.path(resolved.file)}`);
   }
 
+  if (options.batch) return;
   if (resolved.kind === "action") {
     logger.newline();
     logger.info("Next steps:");
@@ -774,7 +779,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
  * @param options - Coordinate setup options
  */
 export async function setupCoordinate(options: CoordinateSetupOptions): Promise<void> {
-  logBetaWarning("setup");
+  if (!options.batch) logBetaWarning("setup");
 
   const { coordinatorName, coordinateKind, actions, force, outputDir } = options;
   validateWorkspaceName(coordinatorName);
@@ -942,6 +947,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
     logger.success(`Generated ${styles.path(file)}`);
   }
 
+  if (options.batch) return;
   logger.newline();
   logger.info("Next steps:");
   logger.newline();

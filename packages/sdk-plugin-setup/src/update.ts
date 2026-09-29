@@ -1,5 +1,11 @@
-import type { CoordinateSetupOptions, SetupTargetOptions } from "./generate";
-import type { LockInputs, LockTarget } from "./lock";
+import { logBetaWarning, logger } from "@tailor-platform/sdk/cli";
+import {
+  setupCoordinate,
+  setupTarget,
+  type CoordinateSetupOptions,
+  type SetupTargetOptions,
+} from "./generate";
+import { readLock, type LockInputs, type LockTarget, type TargetKind } from "./lock";
 
 type UpdateCommon = { force: boolean; outputDir: string };
 
@@ -89,4 +95,75 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): UpdatePlan
       };
     }
   }
+}
+
+export type UpdateOptions = UpdateCommon &
+  Pick<
+    SetupTargetOptions,
+    | "gitRunner"
+    | "loadConfigId"
+    | "loadErdNamespaces"
+    | "loadHasMigrations"
+    | "loadHasSeeds"
+    | "loadHasStaticWebsites"
+  >;
+
+// Grouped coordinators refuse action entries from an older template, so the
+// actions they read must be regenerated first.
+const KIND_ORDER: Record<TargetKind, number> = {
+  action: 0,
+  branch: 1,
+  tag: 1,
+  preview: 1,
+  coordinate: 2,
+};
+
+/**
+ * Regenerate every target recorded in `.github/tailor.lock` with the inputs it
+ * was generated with. A target that cannot be regenerated does not stop the
+ * others; all of them are reported together at the end.
+ * @param options - Update options
+ */
+export async function setupUpdate(options: UpdateOptions): Promise<void> {
+  logBetaWarning("setup");
+
+  const { force, outputDir, ...loaders } = options;
+  const lock = readLock(outputDir);
+  if (!lock || lock.targets.length === 0) {
+    throw new Error(
+      "No managed workflows found (.github/tailor.lock is missing or empty). " +
+        "Run `tailor setup ci branch` (or another setup subcommand) first.",
+    );
+  }
+
+  const targets = lock.targets.toSorted((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
+  const failures: string[] = [];
+  for (const target of targets) {
+    const label = `[${target.kind} ${target.workspaceName}]`;
+    const plan = planUpdate(target, { force, outputDir });
+    try {
+      if (plan.kind === "skip") {
+        failures.push(`${label} ${plan.reason}`);
+      } else if (plan.kind === "coordinate") {
+        await setupCoordinate({ ...plan.options, gitRunner: loaders.gitRunner, batch: true });
+      } else {
+        await setupTarget({ ...plan.options, ...loaders, batch: true });
+      }
+    } catch (error) {
+      failures.push(`${label} ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const updated = targets.length - failures.length;
+  if (failures.length === 0) {
+    logger.newline();
+    logger.success(`Updated ${String(updated)} target(s). Review and commit the changes.`);
+    return;
+  }
+  throw new Error(
+    `${String(failures.length)} target(s) could not be updated ` +
+      `(${String(updated)} of ${String(targets.length)} updated):\n` +
+      failures.map((failure) => `  ${failure}`).join("\n") +
+      "\nAddress each one above, then re-run `tailor setup update`.",
+  );
 }
