@@ -61,6 +61,11 @@ describe("defineConfig top-level options -> buildOptions migration review", () =
       'export default defineConfig({\n  logLevel: "WARN",\n  buildOptions: { inlineSourcemap: false },\n});\n',
       "single line",
     ],
+    [
+      "a call to a local binding that shadows the imported defineConfig",
+      'export const build = (defineConfig) =>\n  defineConfig({\n    logLevel: "WARN",\n  });\n',
+      "declared again in this file",
+    ],
   ])("leaves %s unchanged and flags it for review", (_name, body, reason) => {
     const { transformed, findings } = review(body);
 

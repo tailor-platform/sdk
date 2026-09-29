@@ -2,6 +2,7 @@ import { parse, Lang } from "@ast-grep/napi";
 import {
   findImportStatements,
   importBindings,
+  localDeclarationNames,
   stringValue,
 } from "../../../../src/ast-grep-helpers";
 import type { LlmReviewFinding } from "../../../../src/types";
@@ -30,21 +31,47 @@ function parseRoot(source: string, filePath: string): SgNode | null {
   }
 }
 
-function defineConfigNames(root: SgNode): Set<string> {
-  const names = new Set<string>();
-  for (const statement of findImportStatements(root)) {
-    for (const binding of importBindings(statement)) {
-      if (binding.source === SDK_MODULE && binding.importedName === DEFINE_CONFIG) {
-        names.add(binding.localName);
-      }
-    }
-  }
-  return names;
+/** Local names through which a file reaches the SDK's `defineConfig`. */
+type DefineConfigBindings = {
+  /** Names bound by `import { defineConfig } from "@tailor-platform/sdk"`, aliases included. */
+  functions: Set<string>;
+  /** Names bound by `import * as sdk from "@tailor-platform/sdk"`. */
+  namespaces: Set<string>;
+};
+
+function namespaceImportName(statement: SgNode): string | null {
+  const namespaceImport = statement.find({ rule: { kind: "namespace_import" } });
+  const name = namespaceImport?.children().find((child) => child.kind() === "identifier");
+  return name?.text() ?? null;
 }
 
-function isDefineConfigCall(call: SgNode, names: ReadonlySet<string>): boolean {
+function defineConfigBindings(root: SgNode): DefineConfigBindings {
+  const bindings: DefineConfigBindings = { functions: new Set(), namespaces: new Set() };
+  for (const statement of findImportStatements(root)) {
+    const namespaceName = namespaceImportName(statement);
+    for (const binding of importBindings(statement)) {
+      if (binding.source !== SDK_MODULE || binding.typeOnly) continue;
+      if (binding.importedName === DEFINE_CONFIG) bindings.functions.add(binding.localName);
+      if (binding.localName === namespaceName) bindings.namespaces.add(binding.localName);
+    }
+  }
+  return bindings;
+}
+
+/**
+ * The imported name through which `call` reaches the SDK's `defineConfig`,
+ * or null when `call` does not call it.
+ */
+function defineConfigCalleeName(call: SgNode, bindings: DefineConfigBindings): string | null {
   const callee = call.children()[0];
-  return callee?.kind() === "identifier" && names.has(callee.text());
+  if (callee?.kind() === "identifier") {
+    return bindings.functions.has(callee.text()) ? callee.text() : null;
+  }
+  if (callee?.kind() !== "member_expression") return null;
+  const object = callee.children()[0];
+  const property = callee.children().at(-1);
+  if (object?.kind() !== "identifier" || property?.text() !== DEFINE_CONFIG) return null;
+  return bindings.namespaces.has(object.text()) ? object.text() : null;
 }
 
 function callArgument(call: SgNode): SgNode | null {
@@ -198,12 +225,21 @@ function analyzeFile(
   if (!source.includes(DEFINE_CONFIG)) return null;
   const root = parseRoot(source, filePath);
   if (!root) return null;
-  const names = defineConfigNames(root);
-  if (names.size === 0) return null;
+  const bindings = defineConfigBindings(root);
+  if (bindings.functions.size === 0 && bindings.namespaces.size === 0) return null;
+  const declaredNames = localDeclarationNames(root);
 
   const results: Exclude<Analysis, null>[] = [];
   for (const call of root.findAll({ rule: { kind: "call_expression" } })) {
-    if (!isDefineConfigCall(call, names)) continue;
+    const calleeName = defineConfigCalleeName(call, bindings);
+    if (!calleeName) continue;
+    if (declaredNames.has(calleeName)) {
+      results.push({
+        reason: `\`${calleeName}\` is declared again in this file, so this call may not be the SDK's defineConfig()`,
+        node: call,
+      });
+      continue;
+    }
     const config = callArgument(call);
     if (!config) continue;
     if (config.kind() !== "object") {
