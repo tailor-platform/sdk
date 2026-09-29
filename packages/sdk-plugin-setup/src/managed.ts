@@ -19,6 +19,8 @@ export type Layout = "workflow" | "action";
 
 const MANAGED_HASH_PREFIX = "managed-v1:";
 
+const RESERVED_PREFIX = "tailor-";
+
 const MANAGED_TOP_LEVEL_KEYS: Record<Layout, readonly string[]> = {
   workflow: ["name", "on", "permissions"],
   action: ["name", "description", "inputs", "outputs", "runs"],
@@ -211,6 +213,42 @@ export function computeManagedHash(
   return `${MANAGED_HASH_PREFIX}${hashContent(canonicalJson(projection))}`;
 }
 
+function stepIds(steps: unknown, prefix: string): string[] {
+  if (!Array.isArray(steps)) return [];
+  return steps.flatMap((step) =>
+    isPlainObject(step) && typeof step["id"] === "string" ? [`${prefix}${step["id"]}`] : [],
+  );
+}
+
+/**
+ * List the jobs and steps that use the reserved `tailor-` prefix without
+ * being managed by the SDK.
+ * @param content - Workflow or composite action YAML
+ * @param layout - File layout
+ * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
+ * @returns Offending ids in file order
+ */
+export function findReservedIds(
+  content: string,
+  layout: Layout,
+  managedIds: readonly string[],
+): string[] {
+  const doc = readMapping(content);
+  const managed = new Set(managedIds);
+  let ids: string[];
+  if (layout === "action") {
+    const runs = isPlainObject(doc["runs"]) ? doc["runs"] : {};
+    ids = stepIds(runs["steps"], "");
+  } else {
+    const jobs = isPlainObject(doc["jobs"]) ? doc["jobs"] : {};
+    ids = Object.entries(jobs).flatMap(([jobId, job]) => [
+      jobId,
+      ...(isPlainObject(job) ? stepIds(job["steps"], `${jobId}/`) : []),
+    ]);
+  }
+  return ids.filter((id) => localId(id).startsWith(RESERVED_PREFIX) && !managed.has(id));
+}
+
 function keyOf(pair: Pair): string | undefined {
   return isScalar(pair.key) ? String(pair.key.value) : undefined;
 }
@@ -288,25 +326,50 @@ function carryLeadingComment(
 
 type MergeContext = {
   previous: ReadonlySet<string>;
-  rendered: ReadonlySet<string>;
   slots: Record<string, readonly string[]>;
   retired: Record<string, string>;
   force: boolean;
   dropped: string[];
 };
 
+function localId(qualifiedId: string): string {
+  return qualifiedId.slice(qualifiedId.lastIndexOf("/") + 1);
+}
+
+/**
+ * Explain how to fix a user job or step id that uses the reserved prefix.
+ * @param qualifiedId - `<job>` / `<job>/<step>` in a workflow, `<step>` in a composite action
+ * @returns Message naming the id and a rename suggestion
+ */
+export function describeReservedId(qualifiedId: string): string {
+  const suggestion = localId(qualifiedId).slice(RESERVED_PREFIX.length);
+  return (
+    `"${qualifiedId}" uses the ${RESERVED_PREFIX} prefix reserved for SDK-managed jobs and steps. ` +
+    `Rename it (e.g. "${suggestion}"); --force does not rename it.`
+  );
+}
+
+function reservedIdError(qualifiedId: string): ManagedMergeError {
+  return new ManagedMergeError(describeReservedId(qualifiedId));
+}
+
 function isSdkOwned(qualifiedId: string, ctx: MergeContext): boolean {
-  if (Object.hasOwn(ctx.slots, qualifiedId) || ctx.previous.has(qualifiedId)) return true;
+  if (Object.hasOwn(ctx.slots, qualifiedId)) return true;
   const replacement = lookup(ctx.retired, qualifiedId);
   if (replacement !== undefined && !ctx.previous.has(replacement)) return true;
-  if (ctx.rendered.has(qualifiedId)) {
-    if (ctx.force) return true;
-    throw new ManagedMergeError(
-      `"${qualifiedId}" is now managed by the SDK but already exists as your own job or step. ` +
-        "Rename yours, or re-run with --force to replace it.",
-    );
+  if (!localId(qualifiedId).startsWith(RESERVED_PREFIX)) return false;
+  if (ctx.previous.has(qualifiedId)) return true;
+  throw reservedIdError(qualifiedId);
+}
+
+function assertNoReservedSteps(job: unknown, prefix: string): void {
+  if (!isMap(job)) return;
+  const steps = findPair(job, "steps")?.value;
+  if (!isSeq(steps)) return;
+  for (const node of steps.items) {
+    const id = stepIdOf(node);
+    if (id?.startsWith(RESERVED_PREFIX)) throw reservedIdError(`${prefix}${id}`);
   }
-  return false;
 }
 
 function mergeSteps(
@@ -389,7 +452,7 @@ function assertNeedsResolve(root: YAMLMap): void {
  * @param params.layout - File layout
  * @param params.previousIds - Managed ids recorded when `current` was generated
  * @param params.renderedIds - Managed ids of `rendered`
- * @param params.force - Replace user nodes that collide with managed ids and drop user steps whose managed job no longer exists, instead of failing
+ * @param params.force - Drop user steps whose managed job no longer exists instead of failing
  * @returns Merged content and the labels of any dropped user steps
  */
 export function mergeUserContent(params: {
@@ -410,7 +473,6 @@ export function mergeUserContent(params: {
   }
   const ctx: MergeContext = {
     previous: new Set(params.previousIds),
-    rendered: new Set(params.renderedIds),
     slots: SLOTS[layout],
     retired: RETIRED_IDS[layout],
     force: params.force,
@@ -435,6 +497,7 @@ export function mergeUserContent(params: {
     const renderedJobs = mapAt(renderedRoot, "jobs");
     if (currentJobs && renderedJobs) {
       const userJobs = currentJobs.items.filter((pair) => !isSdkOwned(keyOf(pair) ?? "", ctx));
+      for (const pair of userJobs) assertNoReservedSteps(pair.value, `${keyOf(pair) ?? ""}/`);
       for (const pair of currentJobs.items) {
         if (userJobs.includes(pair) || !isMap(pair.value)) continue;
         const jobId = keyOf(pair) ?? "";

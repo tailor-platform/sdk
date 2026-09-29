@@ -3,6 +3,7 @@ import { parseDocument } from "yaml";
 import {
   ManagedMergeError,
   computeManagedHash,
+  findReservedIds,
   isManagedHash,
   mergeUserContent,
   type Layout,
@@ -309,6 +310,34 @@ describe("computeManagedHash", () => {
   });
 });
 
+describe("findReservedIds", () => {
+  test("lists the user's jobs and steps whose ids use the tailor- prefix", () => {
+    const edited = `${addStepAfterInstall(
+      render.content,
+      "tailor-deploy",
+      "      - id: tailor-build-frontend\n        run: echo build\n",
+    )}  tailor-lint:\n    runs-on: ubuntu-latest\n    steps:\n      - id: tailor-checkout\n        run: echo lint\n`;
+    expect(findReservedIds(edited, "workflow", render.generatedIds)).toEqual([
+      "tailor-deploy/tailor-build-frontend",
+      "tailor-lint",
+      "tailor-lint/tailor-checkout",
+    ]);
+  });
+
+  test("lists a composite action step whose id uses the tailor- prefix", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app" });
+    const edited = action.content.replace(
+      /( {4}- id: tailor-apply\n)/,
+      "    - id: tailor-upload\n      shell: bash\n      run: echo up\n$1",
+    );
+    expect(findReservedIds(edited, "action", action.generatedIds)).toEqual(["tailor-upload"]);
+  });
+
+  test("lists nothing for a freshly generated file", () => {
+    expect(findReservedIds(render.content, "workflow", render.generatedIds)).toEqual([]);
+  });
+});
+
 describe("mergeUserContent", () => {
   const merge = (current: string, next: RenderResult, force = false) =>
     mergeUserContent({
@@ -391,7 +420,7 @@ describe("mergeUserContent", () => {
     expect(content).toBe(render.content);
   });
 
-  test("rejects a user node whose id the new template now manages unless forced", () => {
+  test("rejects a user node whose id the new template now manages, even when forced", () => {
     const edited = render.content.replace(
       /( {2}tailor-plan:[\s\S]*? {6}- id: tailor-install\n(?:        .*\n)+)/,
       "$1      - id: tailor-seed-validate\n        run: echo mine\n",
@@ -405,9 +434,59 @@ describe("mergeUserContent", () => {
       renderedIds: next.generatedIds,
     };
     expect(() => mergeUserContent({ ...args, force: false })).toThrow(
-      /tailor-plan\/tailor-seed-validate/,
+      /"tailor-plan\/tailor-seed-validate" uses the tailor- prefix/,
     );
-    expect(mergeUserContent({ ...args, force: true }).content).toBe(next.content);
+    expect(() => mergeUserContent({ ...args, force: true })).toThrow(
+      /"tailor-plan\/tailor-seed-validate" uses the tailor- prefix/,
+    );
+  });
+
+  test.each([
+    [
+      "a user step in a managed job",
+      (c: string) =>
+        addStepAfterInstall(
+          c,
+          "tailor-deploy",
+          "      - id: tailor-build-frontend\n        run: echo build\n",
+        ),
+      "tailor-deploy/tailor-build-frontend",
+    ],
+    [
+      "a user job",
+      (c: string) =>
+        `${c}  tailor-lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo lint\n`,
+      "tailor-lint",
+    ],
+    [
+      "a step in a user job",
+      (c: string) =>
+        `${c}  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - id: tailor-checkout\n        run: echo lint\n`,
+      "lint/tailor-checkout",
+    ],
+  ])("rejects %s with a tailor- id, even when forced", (_name, edit, id) => {
+    const edited = edit(render.content);
+    expect(edited).not.toBe(render.content);
+    const message = `"${id}" uses the tailor- prefix reserved for SDK-managed jobs and steps`;
+    expect(() => merge(edited, render)).toThrow(message);
+    expect(() => merge(edited, render, true)).toThrow(message);
+  });
+
+  test("keeps a user step whose id the lock wrongly records as managed", () => {
+    const edited = addStepAfterInstall(
+      render.content,
+      "tailor-deploy",
+      "      - id: build-frontend\n        run: echo build\n",
+    );
+    const { content } = mergeUserContent({
+      current: edited,
+      rendered: render.content,
+      layout: "workflow",
+      previousIds: [...render.generatedIds, "tailor-deploy/build-frontend"],
+      renderedIds: render.generatedIds,
+      force: true,
+    });
+    expect(content).toBe(edited);
   });
 
   test("rejects, or with force drops, user steps whose managed job was removed", () => {

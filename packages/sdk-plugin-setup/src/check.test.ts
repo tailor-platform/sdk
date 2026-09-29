@@ -38,6 +38,7 @@ const cleanState = (overrides: Partial<TargetState> = {}): TargetState => ({
   defaultBranch: "main",
   templateVersion: TEMPLATE_VERSION,
   erdNamespaces: ["tailordb"],
+  reservedIds: [],
   ...overrides,
 });
 
@@ -56,6 +57,12 @@ describe("findTargetDrift", () => {
       {},
       { fileExists: false, currentHash: null },
       ["missing-file"],
+    ],
+    [
+      "reports a job or step of the user's that uses the reserved tailor- prefix",
+      {},
+      { reservedIds: ["tailor-deploy/tailor-build-frontend"] },
+      ["reserved-id"],
     ],
     [
       "reports an outdated template version",
@@ -354,6 +361,25 @@ describe("checkGitHub (integration)", () => {
           ),
       );
       await expect(check()).resolves.toBeUndefined();
+    });
+
+    test("names a user step that uses the reserved tailor- prefix", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const content = fs.readFileSync(wfPath(), "utf-8");
+      fs.writeFileSync(
+        wfPath(),
+        content.replace(
+          "      - id: tailor-apply\n",
+          "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
+        ),
+      );
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/1 drift finding/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix.*Rename it \(e\.g\. "build-frontend"\).*reserved-id/,
+        ),
+      );
     });
 
     test("reports a workflow file that is not valid YAML", async () => {
