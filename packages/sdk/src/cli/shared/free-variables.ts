@@ -143,52 +143,78 @@ function typeofComparison(expr: Node): { name: string; isTrueWhenUndeclared: boo
   return { name: (typeofSide.argument as { name: string }).name, isTrueWhenUndeclared };
 }
 
+interface TypeofGuards {
+  falseWhenUndeclared: string[];
+  trueWhenUndeclared: string[];
+}
+
+const NO_TYPEOF_GUARDS: TypeofGuards = { falseWhenUndeclared: [], trueWhenUndeclared: [] };
+const NO_GUARDED_NAMES: ReadonlySet<string> = new Set();
+
 /**
- * If `expr` is a `typeof x` comparison that is only true while `x` is
- * declared, return `x`'s name. `typeof` never throws on an undeclared
- * identifier, so `typeof x !== "undefined" && x` (and
- * `typeof x === "<anything but undefined>" && x`) cannot actually reference
- * `x` when it is undeclared — this is the cross-environment global-detection
- * idiom used by es-toolkit, lodash, core-js, etc. The opposite direction —
- * `typeof x === "undefined" && x` or `typeof x !== "<anything but
- * undefined>" && x` — is true precisely when `x` is NOT safely usable (or
- * says nothing about it), so it must not be treated as a guard. Minifiers
- * rewrite these comparisons to loose equality (`==`/`!=`) and to
- * `typeof x < "u"` (`"undefined"` is the only `typeof` result not ordered
- * before `"u"`), which are evaluated the same way.
- * @param expr - Candidate comparison AST node.
- * @returns The guarded identifier's name, or undefined if `expr` doesn't guard one.
+ * Collect the identifiers whose being undeclared fixes the result of `test`.
+ * `typeof` never throws on an undeclared identifier, so code that only runs
+ * while `typeof x !== "undefined"` (or `typeof x === "<anything but
+ * undefined>"`) holds cannot actually reference `x` when it is undeclared —
+ * this is the cross-environment global-detection idiom used by es-toolkit,
+ * lodash, core-js, etc. The opposite direction — `typeof x === "undefined"` or
+ * `typeof x !== "<anything but undefined>"` — is true precisely when `x` is NOT
+ * safely usable (or says nothing about it), so only code that runs while it is
+ * false is guarded. Minifiers rewrite these comparisons to loose equality
+ * (`==`/`!=`) and to `typeof x < "u"` (`"undefined"` is the only `typeof`
+ * result not ordered before `"u"`), which are evaluated the same way. An `&&`
+ * is false whenever any operand is, and an `||` is true whenever any operand
+ * is.
+ * @param test - Condition AST node.
+ * @returns Identifiers whose being undeclared makes `test` false, and those whose being undeclared makes it true.
  */
-function typeofGuardTarget(expr: Node): string | undefined {
-  const comparison = typeofComparison(expr);
-  return comparison && !comparison.isTrueWhenUndeclared ? comparison.name : undefined;
+function typeofGuards(test: Node): TypeofGuards {
+  if (test.type === "ParenthesizedExpression") return typeofGuards(test.expression);
+  if (test.type === "LogicalExpression") {
+    const left = typeofGuards(test.left);
+    const right = typeofGuards(test.right);
+    switch (test.operator) {
+      case "&&":
+        return {
+          falseWhenUndeclared: [...left.falseWhenUndeclared, ...right.falseWhenUndeclared],
+          trueWhenUndeclared: [],
+        };
+      case "||":
+        return {
+          falseWhenUndeclared: [],
+          trueWhenUndeclared: [...left.trueWhenUndeclared, ...right.trueWhenUndeclared],
+        };
+      default:
+        return NO_TYPEOF_GUARDS;
+    }
+  }
+  const comparison = typeofComparison(test);
+  if (!comparison) return NO_TYPEOF_GUARDS;
+  return comparison.isTrueWhenUndeclared
+    ? { falseWhenUndeclared: [], trueWhenUndeclared: [comparison.name] }
+    : { falseWhenUndeclared: [comparison.name], trueWhenUndeclared: [] };
 }
 
 /**
- * Check whether `node` is `guardedName` itself, or a member-expression chain
- * rooted at it (`x.y`, `x.y[z]`), as in `typeof x !== "undefined" && x.y`.
- * Computed property expressions along the chain are still walked for their
- * own free variables (e.g. the `z` in `x.y[z]`) — only the guarded root
- * identifier is treated as safe.
- * @param node - Candidate right-hand side of a `typeof`-guarded `&&`, or branch of a `typeof`-guarded ternary.
- * @param guardedName - The identifier name the `typeof` check guards.
- * @param walk - The AST walker, used to visit computed property expressions.
- * @returns Whether `node` is entirely covered by the guard.
+ * Check whether control never reaches the statement after `statement`, as in
+ * the consequent of `if (typeof x === "undefined") return;`.
+ * @param statement - Statement AST node.
+ * @returns Whether `statement` always returns, throws, breaks, or continues.
  */
-function walkGuardedChain(
-  node: Node,
-  guardedName: string,
-  walk: (n: Node | null | undefined) => void,
-): boolean {
-  if (node.type === "Identifier") {
-    return node.name === guardedName;
+function alwaysExits(statement: Node): boolean {
+  switch (statement.type) {
+    case "ReturnStatement":
+    case "ThrowStatement":
+    case "BreakStatement":
+    case "ContinueStatement":
+      return true;
+    case "BlockStatement": {
+      const last = statement.body.at(-1);
+      return last !== undefined && alwaysExits(last);
+    }
+    default:
+      return false;
   }
-  if (node.type === "MemberExpression") {
-    if (!walkGuardedChain(node.object, guardedName, walk)) return false;
-    if (node.computed) walk(node.property);
-    return true;
-  }
-  return false;
 }
 
 interface FindUndefinedReferencesOptions {
@@ -215,6 +241,34 @@ export function findUndefinedReferences(
   const references: { name: string; scope: Scope }[] = [];
   const rootScope: Scope = { bindings: new Set(), parent: null };
   let currentScope: Scope = rootScope;
+  let guardedNames = NO_GUARDED_NAMES;
+
+  const guardsOf = (test: Node): TypeofGuards =>
+    options?.includeGuardedReferences ? NO_TYPEOF_GUARDS : typeofGuards(test);
+
+  const walkWithGuardedNames = (node: Node | null | undefined, names: ReadonlySet<string>) => {
+    const outerGuardedNames = guardedNames;
+    guardedNames = names;
+    walk(node);
+    guardedNames = outerGuardedNames;
+  };
+
+  const guardedNamesWith = (names: string[]): ReadonlySet<string> =>
+    names.length > 0 ? new Set([...guardedNames, ...names]) : guardedNames;
+
+  const walkGuarded = (node: Node | null | undefined, names: string[]) =>
+    walkWithGuardedNames(node, guardedNamesWith(names));
+
+  const walkStatements = (statements: Node[]) => {
+    const outerGuardedNames = guardedNames;
+    for (const statement of statements) {
+      walk(statement);
+      if (statement.type === "IfStatement" && alwaysExits(statement.consequent)) {
+        guardedNames = guardedNamesWith(guardsOf(statement.test).trueWhenUndeclared);
+      }
+    }
+    guardedNames = outerGuardedNames;
+  };
 
   const walk = (node: Node | null | undefined): void => {
     if (!node) return;
@@ -248,9 +302,9 @@ export function findUndefinedReferences(
         const outerScope = currentScope;
         currentScope = functionScope;
         for (const param of node.params) {
-          if (isBindingPattern(param)) walk(param);
+          if (isBindingPattern(param)) walkWithGuardedNames(param, NO_GUARDED_NAMES);
         }
-        walk(node.body);
+        walkWithGuardedNames(node.body, NO_GUARDED_NAMES);
         currentScope = outerScope;
         return;
       }
@@ -265,9 +319,9 @@ export function findUndefinedReferences(
         const outerScope = currentScope;
         currentScope = functionScope;
         for (const param of node.params) {
-          if (isBindingPattern(param)) walk(param);
+          if (isBindingPattern(param)) walkWithGuardedNames(param, NO_GUARDED_NAMES);
         }
-        walk(node.body);
+        walkWithGuardedNames(node.body, NO_GUARDED_NAMES);
         currentScope = outerScope;
         return;
       }
@@ -276,7 +330,7 @@ export function findUndefinedReferences(
       case "ClassExpression":
         if (node.id) currentScope.bindings.add(node.id.name);
         walk(node.superClass);
-        walk(node.body);
+        walkWithGuardedNames(node.body, NO_GUARDED_NAMES);
         return;
 
       case "CatchClause":
@@ -301,34 +355,38 @@ export function findUndefinedReferences(
         return;
 
       case "LogicalExpression": {
-        const guardedName = node.operator === "&&" ? typeofGuardTarget(node.left) : undefined;
+        const guards = guardsOf(node.left);
         walk(node.left);
-        if (
-          !options?.includeGuardedReferences &&
-          guardedName &&
-          walkGuardedChain(node.right, guardedName, walk)
-        ) {
-          return;
-        }
-        walk(node.right);
+        walkGuarded(
+          node.right,
+          node.operator === "&&"
+            ? guards.falseWhenUndeclared
+            : node.operator === "||"
+              ? guards.trueWhenUndeclared
+              : [],
+        );
         return;
       }
 
-      case "ConditionalExpression": {
-        const comparison = options?.includeGuardedReferences
-          ? undefined
-          : typeofComparison(node.test);
+      case "ConditionalExpression":
+      case "IfStatement": {
+        const guards = guardsOf(node.test);
         walk(node.test);
-        const isConsequentGuarded =
-          comparison?.isTrueWhenUndeclared === false &&
-          walkGuardedChain(node.consequent, comparison.name, walk);
-        if (!isConsequentGuarded) walk(node.consequent);
-        const isAlternateGuarded =
-          comparison?.isTrueWhenUndeclared === true &&
-          walkGuardedChain(node.alternate, comparison.name, walk);
-        if (!isAlternateGuarded) walk(node.alternate);
+        walkGuarded(node.consequent, guards.falseWhenUndeclared);
+        walkGuarded(node.alternate, guards.trueWhenUndeclared);
         return;
       }
+
+      case "Program":
+      case "BlockStatement":
+      case "StaticBlock":
+        walkStatements(node.body);
+        return;
+
+      case "SwitchCase":
+        walk(node.test);
+        walkStatements(node.consequent);
+        return;
 
       case "Property":
         if (node.computed) walk(node.key);
@@ -351,6 +409,7 @@ export function findUndefinedReferences(
         return;
 
       case "Identifier":
+        if (guardedNames.has(node.name)) return;
         references.push({ name: node.name, scope: currentScope });
         return;
 
