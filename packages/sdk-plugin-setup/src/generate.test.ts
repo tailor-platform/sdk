@@ -1239,8 +1239,16 @@ export default defineConfig({
 
     expect(output).toContain("tailor setup ci env");
     expect(output).toContain('"stg"');
-    expect(output).toContain("tailor workspace create");
     expect(output).not.toContain("gh secret set");
+  });
+
+  test("next steps leave where each value comes from to `tailor setup ci env`", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" }));
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("where each value comes from");
+    expect(output).not.toContain("tailor workspace create");
   });
 
   test("preview next steps do not ask for a workspace id", async () => {
