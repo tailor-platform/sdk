@@ -14,9 +14,10 @@ type UpdatePlan =
   | { kind: "coordinate"; options: CoordinateSetupOptions }
   | { kind: "skip"; reason: string };
 
-// Mirrors `setup check`'s default-branch rule: only an explicit `false` pins the branch.
+// Not `setup check`'s `!== false`: an entry without the flag may hold an explicit
+// branch, and re-detecting it would silently move the deploy trigger.
 function recordedBranchUnlessDetected(inputs: LockInputs): string | undefined {
-  return inputs.branchAutoDetected === false ? (inputs.branch ?? undefined) : undefined;
+  return inputs.branchAutoDetected === true ? undefined : (inputs.branch ?? undefined);
 }
 
 /**

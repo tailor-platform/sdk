@@ -62,20 +62,20 @@ describe("planUpdate", () => {
     });
   });
 
-  test.each([true, undefined])(
-    "branch: re-detects the default branch when branchAutoDetected is %s",
-    (branchAutoDetected) => {
-      const plan = planUpdate(
-        lockTarget("branch", "my-app", { branch: "main", branchAutoDetected }),
-        common,
-      );
+  test("branch: re-detects the default branch when it was auto-detected", () => {
+    const plan = planUpdate(
+      lockTarget("branch", "my-app", { branch: "main", branchAutoDetected: true }),
+      common,
+    );
 
-      expect(plan).toMatchObject({
-        kind: "target",
-        options: { kind: "branch", branch: undefined },
-      });
-    },
-  );
+    expect(plan).toMatchObject({ kind: "target", options: { kind: "branch", branch: undefined } });
+  });
+
+  test("branch: keeps the recorded branch when the lock does not say it was auto-detected", () => {
+    const plan = planUpdate(lockTarget("branch", "my-app", { branch: "staging" }), common);
+
+    expect(plan).toMatchObject({ kind: "target", options: { kind: "branch", branch: "staging" } });
+  });
 
   test("tag: regenerates with the recorded tag pattern, guard branch and restrict-dispatch", () => {
     const plan = planUpdate(
