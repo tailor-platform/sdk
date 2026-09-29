@@ -48,6 +48,7 @@ interface MigrationExecutionOptions {
   configDir: string;
   appName: string;
   appId: string | undefined;
+  temporal: boolean;
 }
 
 /**
@@ -65,6 +66,12 @@ export interface MigrationContext {
   appName: string;
   /** Application id, used to label a migration's temporary resources. */
   appId: string | undefined;
+  /**
+   * Whether `kyselyTypePlugin` was configured with `{ temporal: true }`, so the
+   * `tailordb.Client` a migration script runs against matches the Temporal
+   * column types its `db.ts` was generated with.
+   */
+  temporal: boolean;
 }
 
 interface ExecutionResult {
@@ -216,7 +223,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
+  const { client, workspaceId, invoker, env, configDir, appName, appId, temporal } = options;
 
   // Bundle the migration script
   const bundleResult = await bundleMigrationScript(
@@ -225,6 +232,7 @@ async function executeSingleMigration(
     migration.number,
     env,
     configDir,
+    temporal,
   );
 
   const result = await executeMigrationAsWorkflow({
@@ -325,6 +333,7 @@ export async function executeMigrations(
       configDir: context.configDir,
       appName: context.appName,
       appId: context.appId,
+      temporal: context.temporal,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);

@@ -55,6 +55,7 @@ function emptyInput(): ValidatePlanInput {
         executorUsedTables: new Set(),
         config: {} as ValidatePlanInput["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
+        temporal: false,
         namespacesWithMigrations: [],
         migrationFileState: {},
         checkpointRepairs: [],

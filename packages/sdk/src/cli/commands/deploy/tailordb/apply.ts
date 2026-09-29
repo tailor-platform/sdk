@@ -147,6 +147,7 @@ async function buildMigrationContextForScripts(
     configDir: path.dirname(migrationContext.config.path),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,
+    temporal: migrationContext.temporal,
   };
 }
 

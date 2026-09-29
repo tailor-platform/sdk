@@ -10,6 +10,8 @@ import { loadConfigPath } from "#/cli/shared/context";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import {
@@ -62,6 +64,13 @@ export type BuiltDeploymentTarget = {
   httpAdapterBuildResult: Awaited<ReturnType<typeof loadApplication>>["httpAdapterBuildResult"];
   bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
   reusableBuildState: Awaited<ReturnType<typeof loadApplication>>["reusableBuildState"];
+  /**
+   * Whether `kyselyTypePlugin` was configured with `{ temporal: true }`. Carried
+   * through to migration script execution so the `tailordb.Client` it runs
+   * against matches the Temporal column types the migration's `db.ts` was
+   * generated with.
+   */
+  temporal: boolean;
 };
 
 type BuildDeploymentTargetsParams = Omit<
@@ -135,6 +144,7 @@ async function buildDeploymentTarget(
   if (plugins.length > 0) {
     pluginManager = new PluginManager(plugins);
   }
+  const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
 
   // Generated types are derived from config/TailorDB shape, not `env`, so a
   // reload reusing `previous` would regenerate identical output.
@@ -177,6 +187,7 @@ async function buildDeploymentTarget(
     httpAdapterBuildResult,
     bundledScripts,
     reusableBuildState,
+    temporal,
   };
 }
 

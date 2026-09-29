@@ -421,8 +421,14 @@ async function planDeploymentTarget(
     skip,
     previous,
   } = params;
-  const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
-    target;
+  const {
+    config,
+    application,
+    workflowBuildResult,
+    httpAdapterBuildResult,
+    bundledScripts,
+    temporal,
+  } = target;
   const owned = ownedSubscriptions(runInputs.eventSubscriptions, target);
 
   const migrationTestServices = application.tailorDBServices.map((service) => {
@@ -466,6 +472,7 @@ async function planDeploymentTarget(
       application,
       forRemoval: false,
       config,
+      temporal,
       noSchemaCheck,
       migrationTestBaselines,
       migrationTestSnapshots,
