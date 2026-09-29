@@ -193,6 +193,95 @@ export function computeManagedHash(
   return `${MANAGED_HASH_PREFIX}${hashContent(canonicalJson(projection))}`;
 }
 
+/**
+ * Hash each SDK-managed part of a generated file separately: every top-level
+ * key the template writes, every managed job (with the order of its managed
+ * steps), and every managed step.
+ * @param content - Workflow or composite action YAML
+ * @param layout - File layout
+ * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
+ * @returns Hashes keyed by top-level key, `<job>`, or `<job>/<step>` (`<step>` in an action)
+ */
+export function computeManagedParts(
+  content: string,
+  layout: Layout,
+  managedIds: readonly string[],
+): Record<string, string> {
+  const projection = projectManaged(content, layout, managedIds);
+  const parts: Record<string, unknown> = {};
+  const addWithSteps = (key: string, container: Plain, prefix: string): void => {
+    const steps = (container["steps"] as Plain[]).map(
+      (step) => [`${prefix}${String(step["id"])}`, step] as const,
+    );
+    parts[key] = { ...omit(container, ["steps"]), steps: steps.map(([id]) => id) };
+    for (const [id, step] of steps) parts[id] = step;
+  };
+  for (const key of MANAGED_TOP_LEVEL_KEYS[layout]) parts[key] = projection[key];
+  if (layout === "action") {
+    addWithSteps("runs", projection["runs"] as Plain, "");
+  } else {
+    for (const [jobId, job] of Object.entries(projection["jobs"] as Record<string, Plain | null>)) {
+      if (job !== null) addWithSteps(jobId, job, `${jobId}/`);
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(parts).map(([key, part]) => [key, hashContent(canonicalJson(part))]),
+  );
+}
+
+/**
+ * Compare per-part hashes from {@link computeManagedParts}.
+ * @param recorded - Hashes recorded when the file was generated
+ * @param current - Hashes of the file on disk
+ * @returns Changed or missing parts in recorded order; the steps of a missing job are not listed
+ */
+export function findEditedParts(
+  recorded: Record<string, string>,
+  current: Record<string, string>,
+): string[] {
+  const changed = Object.keys(recorded).filter((key) => lookup(current, key) !== recorded[key]);
+  return changed.filter((key) => {
+    const slash = key.indexOf("/");
+    if (slash === -1) return true;
+    const job = key.slice(0, slash);
+    return !(changed.includes(job) && lookup(current, job) === undefined);
+  });
+}
+
+/**
+ * Name the managed parts of `content` that differ from those recorded for a
+ * lock target.
+ * @param target - Lock target
+ * @param content - File content on disk
+ * @returns Edited parts, or undefined when the lock records no per-part hashes or the file cannot be read
+ */
+export function editedPartsOf(
+  target: Pick<LockTarget, "kind" | "generatedIds" | "managedHashes">,
+  content: string,
+): string[] | undefined {
+  if (target.managedHashes === undefined) return undefined;
+  try {
+    const current = computeManagedParts(content, layoutOf(target.kind), target.generatedIds);
+    return findEditedParts(target.managedHashes, current);
+  } catch (error) {
+    if (error instanceof ManagedMergeError) return undefined;
+    throw error;
+  }
+}
+
+/**
+ * Open a hand-edit message, naming the edited parts when they are known.
+ * @param subject - What was edited, such as a file path
+ * @param parts - Edited parts from {@link editedPartsOf}
+ * @returns The first sentence of the message
+ */
+export function describeHandEdit(subject: string, parts: readonly string[] | undefined): string {
+  if (parts === undefined || parts.length === 0) {
+    return `SDK-managed parts of ${subject} (tailor-* jobs/steps or top-level keys) were edited by hand.`;
+  }
+  return `SDK-managed parts of ${subject} were edited by hand: ${parts.map((part) => `"${part}"`).join(", ")}.`;
+}
+
 function projectManaged(content: string, layout: Layout, managedIds: readonly string[]): Plain {
   const doc = readMapping(content);
   const managed = new Set(managedIds);

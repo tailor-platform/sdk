@@ -1012,7 +1012,7 @@ export default defineConfig({
       wf,
       generated.replace("timeout-minutes: 30", "timeout-minutes: 30\n    services: {}"),
     );
-    await expect(setupTarget(opts)).rejects.toThrow(/edited by hand.*--force/);
+    await expect(setupTarget(opts)).rejects.toThrow(/edited by hand: "tailor-plan"\..*--force/);
     await setupTarget({ ...opts, force: true });
     expect(fs.readFileSync(wf, "utf-8")).toBe(generated);
   });

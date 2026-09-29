@@ -7,3 +7,5 @@ Reserve the `tailor-` id prefix in generated workflows and composite actions for
 `--force` no longer replaces a job or step of yours whose id a new template starts to manage; `setup` stops and asks you to rename it instead. A step without the `tailor-` prefix is now always kept on regeneration, even when `.github/tailor.lock` lists its id.
 
 The composite action's static website build step is renamed from `build-site` to `tailor-build-site`, so every SDK-managed step carries the prefix. Re-running `setup ci action` renames it and keeps the `run:` command you wrote; the `build-site` input of the action is unchanged.
+
+A hand edit to an SDK-managed part now names the edited job, step, or top-level key (for example `"tailor-preview-deploy/tailor-preview-comment"`) in `setup check` and when re-running `setup`. Files whose lock entry was written by an older plugin keep the generic message until they are regenerated once.

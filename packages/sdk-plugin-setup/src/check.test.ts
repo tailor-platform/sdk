@@ -58,6 +58,12 @@ describe("findTargetDrift", () => {
       ["missing-file"],
     ],
     [
+      "reports a hand edit named by the managed parts it changed",
+      {},
+      { currentHash: "sha256:zzz", editedParts: ["on"] },
+      ["hand-edit"],
+    ],
+    [
       "reports a job or step of the user's that uses the reserved tailor- prefix",
       {},
       { reservedIds: ["tailor-deploy/tailor-build-frontend"] },
@@ -392,6 +398,16 @@ describe("checkGitHub (integration)", () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       editManagedPart();
       await expect(check()).rejects.toThrow(/drift/);
+    });
+
+    test("names the managed parts a hand edit changed", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      editManagedPart();
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/drift/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/edited by hand: "on"\. Revert them.*hand-edit/),
+      );
     });
 
     test("emits the drift count marker after every finding", async () => {

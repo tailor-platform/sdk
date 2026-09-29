@@ -3,6 +3,8 @@ import { parseDocument } from "yaml";
 import {
   ManagedMergeError,
   computeManagedHash,
+  computeManagedParts,
+  findEditedParts,
   findReservedIds,
   isManagedHash,
   mergeUserContent,
@@ -325,6 +327,64 @@ describe("computeManagedHash", () => {
     const editedIf = content.replace("if: inputs.build-site == 'true'", "if: always()");
     expect(editedIf).not.toBe(content);
     expect(hash(editedIf)).not.toBe(hash(content));
+  });
+});
+
+describe("findEditedParts", () => {
+  const recorded = computeManagedParts(render.content, "workflow", render.generatedIds);
+  const edited = (content: string) =>
+    findEditedParts(recorded, computeManagedParts(content, "workflow", render.generatedIds));
+
+  test.each([
+    ["nothing for an untouched file", (c: string) => c, []],
+    [
+      "nothing for the user's own steps and editable fields",
+      (c: string) =>
+        addStepAfterInstall(c, "tailor-deploy", USER_STEP).replace(
+          /( {2}tailor-deploy:[\s\S]*?)timeout-minutes: 30/,
+          "$1timeout-minutes: 90",
+        ),
+      [],
+    ],
+    [
+      "a managed step whose content changed",
+      (c: string) =>
+        c.replace(/( {6}- id: tailor-apply\n)/, "$1        env:\n          FOO: bar\n"),
+      ["tailor-deploy/tailor-apply"],
+    ],
+    [
+      "a managed top-level key",
+      (c: string) => c.replace('branches: ["main"]', 'branches: ["develop"]'),
+      ["on"],
+    ],
+    [
+      "a removed managed step",
+      (c: string) => c.replace(/ {6}- id: tailor-drift-check\n(?:        .*\n)+/, ""),
+      ["tailor-plan", "tailor-plan/tailor-drift-check"],
+    ],
+    [
+      "a renamed managed job once, without its steps",
+      (c: string) => c.replace("  tailor-deploy:", "  my-deploy:"),
+      ["tailor-deploy"],
+    ],
+  ])("names %s", (_name, edit, expected) => {
+    expect(edited(edit(render.content))).toEqual(expected);
+  });
+
+  test("names the job whose managed steps were reordered", () => {
+    const reordered = render.content.replace(
+      /( {6}- id: tailor-setup\n(?:        .*\n)+)( {6}- id: tailor-install\n(?:        .*\n)+)/,
+      "$2$1",
+    );
+    expect(reordered).not.toBe(render.content);
+    expect(edited(reordered)).toEqual(["tailor-plan"]);
+  });
+
+  test("names a changed condition on the composite action's tailor-build-site step", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
+    const parts = (c: string) => computeManagedParts(c, "action", action.generatedIds);
+    const changed = action.content.replace("if: inputs.build-site == 'true'", "if: always()");
+    expect(findEditedParts(parts(action.content), parts(changed))).toEqual(["tailor-build-site"]);
   });
 });
 
