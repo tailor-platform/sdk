@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
@@ -420,6 +421,17 @@ describe("setupUpdate", () => {
     expect(
       readLock(testDir)?.targets.filter((t) => t.templateVersion === TEMPLATE_VERSION),
     ).toHaveLength(5);
+  });
+
+  test("prints one summary instead of per-target next steps", async () => {
+    await generateMonorepo();
+    using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    using successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(infoSpy).not.toHaveBeenCalledWith("Next steps:");
+    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 6 target\(s\)/));
   });
 
   test("errors when there is nothing to update", async () => {

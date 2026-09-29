@@ -144,9 +144,9 @@ export async function setupUpdate(options: UpdateOptions): Promise<void> {
       if (plan.kind === "skip") {
         failures.push(`${label} ${plan.reason}`);
       } else if (plan.kind === "coordinate") {
-        await setupCoordinate({ ...plan.options, gitRunner: loaders.gitRunner, batch: true });
+        await setupCoordinate({ ...plan.options, gitRunner: loaders.gitRunner });
       } else {
-        await setupTarget({ ...plan.options, ...loaders, batch: true });
+        await setupTarget({ ...plan.options, ...loaders });
       }
     } catch (error) {
       failures.push(`${label} ${error instanceof Error ? error.message : String(error)}`);

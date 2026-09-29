@@ -1001,7 +1001,9 @@ export default defineConfig({
   test("silent regenerate when hash matches", async () => {
     const opts = baseOptions({ workspaceName: "my-app" });
     await setupTarget(opts);
-    await expect(setupTarget(opts)).resolves.toBeUndefined();
+    await expect(setupTarget(opts)).resolves.toMatchObject({
+      file: ".github/workflows/tailor-my-app.yml",
+    });
   });
 
   test("errors on a hand edit to a managed part without --force", async () => {
@@ -1222,7 +1224,7 @@ export default defineConfig({
         loadConfigName: async () => "cfg-app",
         loadConfigId: async () => undefined,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({ file: ".github/workflows/tailor-my-app-tag.yml" });
     const lock = readLock(testDir);
     expect(lock?.targets).toHaveLength(2);
     expect(lock?.targets.map((t) => t.file).toSorted()).toEqual([

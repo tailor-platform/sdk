@@ -53,8 +53,6 @@ type CommonSetupOptions = {
   environment?: string;
   force: boolean;
   outputDir: string;
-  /** Set by `setup update`, which prints one summary for all targets instead of per-target next steps. */
-  batch?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
   /** Injectable config-name loader, for testing. Defaults to loading the config. */
@@ -118,8 +116,6 @@ export type CoordinateSetupOptions = {
   restrictDispatch?: boolean;
   force: boolean;
   outputDir: string;
-  /** Set by `setup update`, which prints one summary for all targets instead of per-target next steps. */
-  batch?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
 };
@@ -613,14 +609,37 @@ function assertNoKindCollision(obj: {
   }
 }
 
+export type SetupTargetResult = {
+  kind: TargetKind;
+  /** Repository-relative path of the generated workflow or action. */
+  file: string;
+  /** Resolved GitHub Environment name. */
+  environment: string;
+  /** Whether the app id was moved out of tailor.config.ts. */
+  configEdited: boolean;
+};
+
 /**
- * Print next-step guidance after generating workflow files.
- * @param obj - Output context
- * @param obj.environment - Resolved GitHub Environment name for this target
- * @param obj.configEdited - Whether the app id was moved out of the config
+ * Print next-step guidance after generating a deploy target.
+ * @param result - What {@link setupTarget} generated
  */
-function printNextSteps(obj: { environment: string; configEdited: boolean }): void {
-  const { environment, configEdited } = obj;
+export function printTargetNextSteps(result: SetupTargetResult): void {
+  const { kind, file, environment, configEdited } = result;
+
+  if (kind === "action") {
+    logger.newline();
+    logger.info("Next steps:");
+    logger.newline();
+    logger.log(`The composite action has been generated at ${styles.path(file)}.`);
+    logger.log(
+      "Use `tailor setup ci coordinate` to generate a coordinator workflow that orchestrates this action.",
+    );
+    logger.log(`Commit ${TAILOR_LOCK_FILENAME} alongside it: it records this app's id.`);
+    if (configEdited) {
+      logger.log("The app id was moved out of tailor.config.ts; commit that change too.");
+    }
+    return;
+  }
 
   logger.newline();
   logger.info("Next steps:");
@@ -649,8 +668,9 @@ function printNextSteps(obj: { environment: string; configEdited: boolean }): vo
 /**
  * Generate a deploy target workflow and reconcile it with the lock file.
  * @param options - Setup options
+ * @returns What was generated, for {@link printTargetNextSteps}
  */
-export async function setupTarget(options: SetupTargetOptions): Promise<void> {
+export async function setupTarget(options: SetupTargetOptions): Promise<SetupTargetResult> {
   const resolved = await resolve(options);
 
   const lock = readLock(options.outputDir);
@@ -749,22 +769,12 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     logger.success(`Generated ${styles.path(resolved.file)}`);
   }
 
-  if (options.batch) return;
-  if (resolved.kind === "action") {
-    logger.newline();
-    logger.info("Next steps:");
-    logger.newline();
-    logger.log(`The composite action has been generated at ${styles.path(resolved.file)}.`);
-    logger.log(
-      "Use `tailor setup ci coordinate` to generate a coordinator workflow that orchestrates this action.",
-    );
-    logger.log(`Commit ${TAILOR_LOCK_FILENAME} alongside it: it records this app's id.`);
-    if (configEdited) {
-      logger.log("The app id was moved out of tailor.config.ts; commit that change too.");
-    }
-  } else {
-    printNextSteps({ environment: resolved.environment, configEdited });
-  }
+  return {
+    kind: resolved.kind,
+    file: resolved.file,
+    environment: resolved.environment,
+    configEdited,
+  };
 }
 
 /**
@@ -774,8 +784,11 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
  * name is required via `--name`. App working directories are resolved from
  * the lock file entries created by `setup ci action`.
  * @param options - Coordinate setup options
+ * @returns What was generated, for {@link printCoordinateNextSteps}
  */
-export async function setupCoordinate(options: CoordinateSetupOptions): Promise<void> {
+export async function setupCoordinate(
+  options: CoordinateSetupOptions,
+): Promise<SetupCoordinateResult> {
   const { coordinatorName, coordinateKind, actions, force, outputDir } = options;
   validateWorkspaceName(coordinatorName);
 
@@ -942,7 +955,25 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
     logger.success(`Generated ${styles.path(file)}`);
   }
 
-  if (options.batch) return;
+  return { file, environment, tailorSetupFile };
+}
+
+export type SetupCoordinateResult = {
+  /** Repository-relative path of the generated coordinator workflow. */
+  file: string;
+  /** Resolved GitHub Environment name. */
+  environment: string;
+  /** Repository-relative path of the user-owned tailor-setup action. */
+  tailorSetupFile: string;
+};
+
+/**
+ * Print next-step guidance after generating a coordinator workflow.
+ * @param result - What {@link setupCoordinate} generated
+ */
+export function printCoordinateNextSteps(result: SetupCoordinateResult): void {
+  const { file, environment, tailorSetupFile } = result;
+
   logger.newline();
   logger.info("Next steps:");
   logger.newline();

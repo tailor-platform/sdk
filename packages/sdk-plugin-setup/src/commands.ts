@@ -8,7 +8,12 @@ import {
 import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
-import { setupCoordinate, setupTarget } from "./generate";
+import {
+  printCoordinateNextSteps,
+  printTargetNextSteps,
+  setupCoordinate,
+  setupTarget,
+} from "./generate";
 import { setupRenovate } from "./renovate";
 import { setupUpdate } from "./update";
 
@@ -55,7 +60,7 @@ const coordinateCommand = defineAppCommand({
   run: async (args) => {
     logBetaWarning("setup");
     const coordinateKind = args.tag ? "tag" : "branch";
-    await setupCoordinate({
+    const result = await setupCoordinate({
       coordinatorName: args.name,
       coordinateKind,
       actions: args.action,
@@ -65,6 +70,7 @@ const coordinateCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printCoordinateNextSteps(result);
   },
 });
 
@@ -90,7 +96,7 @@ const actionCommand = defineAppCommand({
   }),
   run: async (args) => {
     logBetaWarning("setup");
-    await setupTarget({
+    const result = await setupTarget({
       kind: "action",
       workspaceName: args.name,
       dir: args.dir,
@@ -98,6 +104,7 @@ const actionCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printTargetNextSteps(result);
   },
 });
 
@@ -133,7 +140,7 @@ const branchCommand = defineAppCommand({
   }),
   run: async (args) => {
     logBetaWarning("setup");
-    await setupTarget({
+    const result = await setupTarget({
       kind: "branch",
       workspaceName: args.name,
       branch: args.target,
@@ -144,6 +151,7 @@ const branchCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printTargetNextSteps(result);
   },
 });
 
@@ -179,7 +187,7 @@ const tagCommand = defineAppCommand({
   }),
   run: async (args) => {
     logBetaWarning("setup");
-    await setupTarget({
+    const result = await setupTarget({
       kind: "tag",
       workspaceName: args.name,
       tagPattern: args["tag-pattern"],
@@ -190,6 +198,7 @@ const tagCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printTargetNextSteps(result);
   },
 });
 
@@ -224,7 +233,7 @@ const previewCommand = defineAppCommand({
   }),
   run: async (args) => {
     logBetaWarning("setup");
-    await setupTarget({
+    const result = await setupTarget({
       kind: "preview",
       workspaceName: args.name,
       branch: args.branch,
@@ -235,6 +244,7 @@ const previewCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printTargetNextSteps(result);
   },
 });
 

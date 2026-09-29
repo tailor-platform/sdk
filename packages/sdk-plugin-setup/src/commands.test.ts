@@ -2,12 +2,19 @@ import { defineCommand, logger, runCommand } from "@tailor-platform/sdk/cli";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
 import { setupSubCommands } from "./commands";
-import { setupCoordinate, setupTarget } from "./generate";
+import {
+  printCoordinateNextSteps,
+  printTargetNextSteps,
+  setupCoordinate,
+  setupTarget,
+} from "./generate";
 import { setupUpdate } from "./update";
 
 vi.mock("./generate", () => ({
   setupTarget: vi.fn(),
   setupCoordinate: vi.fn(),
+  printTargetNextSteps: vi.fn(),
+  printCoordinateNextSteps: vi.fn(),
 }));
 
 vi.mock("./check", () => ({ checkGitHub: vi.fn() }));
@@ -89,6 +96,44 @@ describe("setup ci subcommand nesting", () => {
       );
     },
   );
+});
+
+describe("next steps", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test.each([
+    [["ci", "branch"]],
+    [["ci", "tag"]],
+    [["ci", "preview", "--region", "us-west"]],
+    [["ci", "action"]],
+  ])("setup %j prints next steps for the generated target", async (argv) => {
+    const result = {
+      kind: "branch",
+      file: ".github/workflows/tailor-app.yml",
+      environment: "app",
+      configEdited: false,
+    } as const;
+    vi.mocked(setupTarget).mockResolvedValue(result);
+
+    await runCommand(setupCommand, argv);
+
+    expect(printTargetNextSteps).toHaveBeenCalledWith(result);
+  });
+
+  test("ci coordinate prints next steps for the generated coordinator", async () => {
+    const result = {
+      file: ".github/workflows/tailor-coordinate-apps.yml",
+      environment: "apps",
+      tailorSetupFile: ".github/actions/tailor-setup/action.yml",
+    };
+    vi.mocked(setupCoordinate).mockResolvedValue(result);
+
+    await runCommand(setupCommand, ["ci", "coordinate", "--name", "apps", "--action", "api"]);
+
+    expect(printCoordinateNextSteps).toHaveBeenCalledWith(result);
+  });
 });
 
 describe("setup check command", () => {
