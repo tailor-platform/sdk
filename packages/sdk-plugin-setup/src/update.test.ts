@@ -335,8 +335,11 @@ describe("setupUpdate", () => {
       Array(6).fill(TEMPLATE_VERSION),
     );
     vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", "ws");
-    await expect(checkGitHub({ outputDir: testDir, ...loaders })).resolves.toBeUndefined();
-    vi.unstubAllEnvs();
+    try {
+      await expect(checkGitHub({ outputDir: testDir, ...loaders })).resolves.toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("regenerates grouped actions before the coordinator that reads them", async () => {
