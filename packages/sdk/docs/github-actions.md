@@ -346,6 +346,7 @@ The list follows what each generated workflow actually reads:
 | `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all                     | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                   |
 | `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag, coordinate | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                         |
 | `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag, coordinate | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                 |
+| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag             | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                 |
 
 See [Account management](https://docs.tailor.tech/administration/account-management)
 for how organizations, folders, workspaces, and machine users relate.

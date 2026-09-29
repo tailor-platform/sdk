@@ -90,6 +90,17 @@ const SLACK_CHANNEL_ID: EnvRequirement = {
   howTo: "the channel ID (C...) shown in the channel details in Slack; invite the bot to it",
 };
 
+const SLACK_USER_MAPPING: EnvRequirement = {
+  name: "TAILOR_SLACK_USER_MAPPING",
+  type: "variable",
+  required: false,
+  description:
+    "Map from GitHub usernames to Slack user IDs so deploy notifications mention the actor; " +
+    "read only after you uncomment the user-mapping input of the tailor-notify step",
+  howTo:
+    'a JSON object such as {"alice":"U0123456"}, with the member ID (U...) from each Slack profile',
+};
+
 const DEPLOY_REQUIREMENTS = [
   CLIENT_ID,
   CLIENT_SECRET,
@@ -100,8 +111,8 @@ const DEPLOY_REQUIREMENTS = [
 ];
 
 const REQUIREMENTS: Record<Exclude<TargetKind, "action">, EnvRequirement[]> = {
-  branch: DEPLOY_REQUIREMENTS,
-  tag: DEPLOY_REQUIREMENTS,
+  branch: [...DEPLOY_REQUIREMENTS, SLACK_USER_MAPPING],
+  tag: [...DEPLOY_REQUIREMENTS, SLACK_USER_MAPPING],
   coordinate: DEPLOY_REQUIREMENTS,
   preview: [CLIENT_ID, CLIENT_SECRET, ORGANIZATION_ID, FOLDER_ID, FAIL_ON_DRIFT],
 };

@@ -32,7 +32,8 @@ const lockOf = (...targets: LockTarget[]): LockFile => ({ version: LOCK_VERSION,
 function referencedNames(content: string): string[] {
   const names = new Set<string>();
   for (const line of content.split("\n")) {
-    if (line.trimStart().startsWith("#")) continue;
+    const comment = line.trimStart().startsWith("#");
+    if (comment && !line.trimStart().startsWith("# editable:")) continue;
     for (const match of line.matchAll(/\b(secrets|vars)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
       const type = match[1] === "secrets" ? "secret" : "variable";
       if (match[2] !== "GITHUB_TOKEN") names.add(`${type} ${match[2]!}`);
@@ -138,6 +139,7 @@ describe("collectEnvironmentRequirements", () => {
       "TAILOR_PLATFORM_FAIL_ON_DRIFT",
       "TAILOR_SLACK_BOT_TOKEN",
       "TAILOR_SLACK_CHANNEL_ID",
+      "TAILOR_SLACK_USER_MAPPING",
     ]);
   });
 
