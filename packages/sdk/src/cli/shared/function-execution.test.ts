@@ -12,6 +12,7 @@ import {
   functionExecutionStatusToString,
   functionLogSeverityToString,
   isFunctionExecutionTerminalStatus,
+  joinFunctionLogMessages,
   toFunctionLogEntryInfo,
 } from "./function-execution";
 import { stripAnsi } from "./test-helpers/strip-ansi";
@@ -86,20 +87,30 @@ describe("toFunctionLogEntryInfo", () => {
 describe("formatFunctionLogLines", () => {
   const entry = { message: "structured", severity: "INFO", timestamp: null };
 
-  test("prefers structured entries over the flat logs string", () => {
-    const lines = formatFunctionLogLines([entry], "flat");
+  test("renders one line per structured entry", () => {
+    const lines = formatFunctionLogLines([entry]);
 
     expect(lines.map(stripAnsi)).toEqual(["N/A [INFO] structured"]);
   });
 
-  test("splits the flat logs string when no entries are present", () => {
-    expect(formatFunctionLogLines([], "line 1\nline 2")).toEqual(["line 1", "line 2"]);
-    expect(formatFunctionLogLines(undefined, "line 1")).toEqual(["line 1"]);
+  test("returns no lines when there are no entries", () => {
+    expect(formatFunctionLogLines([])).toEqual([]);
+    expect(formatFunctionLogLines(undefined)).toEqual([]);
+  });
+});
+
+describe("joinFunctionLogMessages", () => {
+  test("joins entry messages with newlines", () => {
+    const entries = [
+      create(FunctionLogEntrySchema, { message: "line 1", severity: FunctionLogSeverity.INFO }),
+      create(FunctionLogEntrySchema, { message: "line 2", severity: FunctionLogSeverity.ERROR }),
+    ];
+
+    expect(joinFunctionLogMessages(entries)).toBe("line 1\nline 2");
   });
 
-  test("returns no lines when neither is present", () => {
-    expect(formatFunctionLogLines([], "")).toEqual([]);
-    expect(formatFunctionLogLines(undefined, undefined)).toEqual([]);
+  test("returns an empty string when there are no entries", () => {
+    expect(joinFunctionLogMessages([])).toBe("");
   });
 });
 

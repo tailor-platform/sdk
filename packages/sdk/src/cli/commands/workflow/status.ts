@@ -51,7 +51,7 @@ export function isWorkflowExecutionSuspendedStatus(status: WorkflowExecution_Sta
  * @returns True if status represents failure
  */
 export function isWorkflowExecutionFailureStatus(status: WorkflowExecution_Status): boolean {
-  return status === WorkflowExecution_Status.FAILED;
+  return status === WorkflowExecution_Status.FAILED || status === WorkflowExecution_Status.CANCELED;
 }
 
 /**

@@ -651,20 +651,23 @@ export async function loadApplication(
     await httpAdapterService.loadAdapters();
   }
 
+  // Shared across the start context and every bundle below so a project with many
+  // resolvers/executors/etc. reads and parses each ancestor tsconfig once instead of once per item.
+  const tsconfigCache = createTsconfigLookupCache();
+
   // 8. Build start context for workflow/job start transformation
   const startContext = await buildStartContext(
     config.workflow,
     getApplicationAuthNamespace({ authService: authResult.authService, config }),
     baseDir,
+    workflowService?.workflowSources,
+    tsconfigCache,
   );
 
   // 9. Resolve bundle settings
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
-  // Shared across every bundle below so a project with many resolvers/executors/etc.
-  // reads and parses each ancestor tsconfig once instead of once per item.
-  const tsconfigCache = createTsconfigLookupCache();
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {

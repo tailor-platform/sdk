@@ -1,5 +1,23 @@
 # @tailor-platform/sdk
 
+## 2.23.0
+
+### Minor Changes
+
+- [#2440](https://github.com/tailor-platform/sdk/pull/2440) [`e2df6cf`](https://github.com/tailor-platform/sdk/commit/e2df6cfa8acd4acf1cbd46418855aa93127b70d3) Thanks [@dqn](https://github.com/dqn)! - `tailor deploy` now marks updates that show no configuration difference and are applied again only because the application's resources were last deployed with a different SDK version. The plan lists them with `[forced by SDK version]` and the summary counts them (`12 to update (11 forced by SDK version)`), so after an SDK upgrade you can tell them apart from real configuration changes. With `--json`, such changes carry `forcedBySdkVersion: true` and `summary.forcedBySdkVersion` counts them.
+
+### Patch Changes
+
+- [#2442](https://github.com/tailor-platform/sdk/pull/2442) [`4a974b1`](https://github.com/tailor-platform/sdk/commit/4a974b1a16a5e2b9ff9e1e130962053b055a96af) Thanks [@dqn](https://github.com/dqn)! - Fix the `tailor deploy` plan leaving out workflow execution policies: their changes are now listed in the Workflow section, and unmanaged or conflicting execution policies and applications now appear in the plan's warnings and owner conflicts, including `--json` output.
+
+- [#2462](https://github.com/tailor-platform/sdk/pull/2462) [`551179a`](https://github.com/tailor-platform/sdk/commit/551179ac9b0b44c3bfc46eca44b2507cad7c1511) Thanks [@k1LoW](https://github.com/k1LoW)! - Function execution logs are now read from the platform's structured log entries instead of the deprecated flat `logs` field. The `logs` string that `function run`, `function logs --json`, `workflow executions --logs`, `executor jobs --logs`, TailorDB migrations, and `executeScript()` return joins the messages of those entries with newlines, and `function logs` no longer falls back to the flat string when an execution has no structured entries.
+
+- [#2448](https://github.com/tailor-platform/sdk/pull/2448) [`317ba1e`](https://github.com/tailor-platform/sdk/commit/317ba1eb287ad650ae59b16e000911da484edf47) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.2.11
+
+- [#2438](https://github.com/tailor-platform/sdk/pull/2438) [`feb8b23`](https://github.com/tailor-platform/sdk/commit/feb8b2365c202a732be2d552dcb4a5d841101e2d) Thanks [@dqn](https://github.com/dqn)! - On Windows, a suggested follow-up command whose arguments cmd.exe and PowerShell read differently (for example a profile named `dev$1`, a config path containing `%`, or the webhook trigger's JSON body) is now shown as one command to copy into PowerShell and one to copy into cmd.exe, instead of an `argv [...]` array or a double-quoted line that PowerShell misreads. The `tailor profile update` suggestions shown for a read-only profile or a denied machine-user override now quote the profile name instead of pasting it into the command unquoted. On every platform, these suggested follow-up commands are now set off in backticks.
+
+- [#2462](https://github.com/tailor-platform/sdk/pull/2462) [`0dcbed6`](https://github.com/tailor-platform/sdk/commit/0dcbed6f3c4f1847e8864febb1c43d0d00fdffae) Thanks [@k1LoW](https://github.com/k1LoW)! - Workflow commands now recognize canceled workflow executions. `workflow start --wait`, `workflow wait`, `workflow executions <id> --wait`, and `executor jobs --wait` over a workflow stop at a canceled execution and fail with `WORKFLOW_EXECUTION_CANCELED` instead of polling until they time out, a TailorDB migration whose workflow is canceled fails instead of waiting indefinitely, the status is shown as `CANCELED` rather than `UNSPECIFIED`, and `workflow executions --status CANCELED` is accepted.
+
 ## 2.22.0
 
 ### Minor Changes

@@ -18,6 +18,7 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
 import { isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
+import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
 import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -315,6 +316,10 @@ async function waitForMigrationWorkflow(
         error: extractFailureMessage(outcomes),
       };
     }
+    if (execution.status === WorkflowExecution_Status.CANCELED) {
+      const { logs } = await collectJobOutcomes(client, workspaceId, execution);
+      return { success: false, logs, error: "Migration workflow execution was canceled." };
+    }
 
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
   }
@@ -348,7 +353,7 @@ async function collectJobOutcomes(
         // the execution result; logs only carry what the script printed.
         const failure =
           functionExecution.error?.message.trim() || functionExecution.result.trim() || "";
-        return { logs: functionExecution.logs, failure };
+        return { logs: joinFunctionLogMessages(functionExecution.logEntries), failure };
       } catch {
         return undefined;
       }

@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.23.0
+
+### Patch Changes
+
+- [#2422](https://github.com/tailor-platform/sdk/pull/2422) [`e5509ba`](https://github.com/tailor-platform/sdk/commit/e5509baacf431faa46ada16cbf0b4bb9a4821a3c) Thanks [@toiroakr](https://github.com/toiroakr)! - List every template `--template` accepts in the create-sdk README. The list named a `testing` template that no longer exists and left out `tailordb`, `resolver`, `workflow`, `executor`, `static-web-site`, and `generators`. The `executor` template's description now matches what it ships: IdP user and auth access token triggers are included, and the `graphql` and `webhook` operation kinds it never contained are no longer listed.
+
 ## 2.22.0
 
 No changes in this release.

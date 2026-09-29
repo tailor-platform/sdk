@@ -31,6 +31,7 @@ import {
   colorizeFunctionExecutionStatus,
   functionExecutionStatusToString,
   isFunctionExecutionTerminalStatus,
+  joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -551,7 +552,9 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                         targetType: targetTypeStr,
                         functionExecutionId: operationReference,
                         functionStatus,
-                        functionLogs: options.logs ? execution.logs || undefined : undefined,
+                        functionLogs: options.logs
+                          ? joinFunctionLogMessages(execution.logEntries) || undefined
+                          : undefined,
                       },
                       false,
                     );
@@ -646,6 +649,13 @@ export function getExecutorWaitFailure(result: WatchExecutorJobResult): CLIError
     return CLIError({
       code: "WORKFLOW_EXECUTION_FAILED",
       message: `Workflow execution '${result.workflowExecutionId}' failed.`,
+      context,
+    });
+  }
+  if (result.workflowStatus === "CANCELED") {
+    return CLIError({
+      code: "WORKFLOW_EXECUTION_CANCELED",
+      message: `Workflow execution '${result.workflowExecutionId}' was canceled.`,
       context,
     });
   }

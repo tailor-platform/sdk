@@ -5,7 +5,7 @@
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { AuthInvoker } from "./auth_resource_pb";
-import type { FunctionExecution } from "./function_resource_pb";
+import type { FunctionExecution, FunctionExecution_Status } from "./function_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
 
 /**
@@ -38,6 +38,8 @@ export declare type TestExecScriptRequest = Message<"tailor.v1.TestExecScriptReq
   arg?: string;
 
   /**
+   * Machine user the script runs as. Omit to run it as the anonymous dataplane identity.
+   *
    * @generated from field: tailor.v1.AuthInvoker invoker = 5;
    */
   invoker?: AuthInvoker;
@@ -95,6 +97,8 @@ export declare type ExecScriptRequest = Message<"tailor.v1.ExecScriptRequest"> &
   arg?: string;
 
   /**
+   * Machine user the script runs as. Omit to run it as the anonymous dataplane identity.
+   *
    * @generated from field: tailor.v1.AuthInvoker invoker = 5;
    */
   invoker?: AuthInvoker;
@@ -163,6 +167,96 @@ export declare type GetFunctionExecutionResponse = Message<"tailor.v1.GetFunctio
  * Use `create(GetFunctionExecutionResponseSchema)` to create a new message.
  */
 export declare const GetFunctionExecutionResponseSchema: GenMessage<GetFunctionExecutionResponse>;
+
+/**
+ * @generated from message tailor.v1.StartJobFunctionRequest
+ */
+export declare type StartJobFunctionRequest = Message<"tailor.v1.StartJobFunctionRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * Name of a function in the function registry.
+   *
+   * @generated from field: string script_ref = 2;
+   */
+  scriptRef: string;
+
+  /**
+   * @generated from field: optional string arg = 3;
+   */
+  arg?: string;
+
+  /**
+   * Machine user the job function runs as. Omit to run it as the anonymous dataplane identity.
+   *
+   * @generated from field: tailor.v1.AuthInvoker invoker = 4;
+   */
+  invoker?: AuthInvoker;
+};
+
+/**
+ * Describes the message tailor.v1.StartJobFunctionRequest.
+ * Use `create(StartJobFunctionRequestSchema)` to create a new message.
+ */
+export declare const StartJobFunctionRequestSchema: GenMessage<StartJobFunctionRequest>;
+
+/**
+ * @generated from message tailor.v1.StartJobFunctionResponse
+ */
+export declare type StartJobFunctionResponse = Message<"tailor.v1.StartJobFunctionResponse"> & {
+  /**
+   * @generated from field: string execution_id = 1;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.StartJobFunctionResponse.
+ * Use `create(StartJobFunctionResponseSchema)` to create a new message.
+ */
+export declare const StartJobFunctionResponseSchema: GenMessage<StartJobFunctionResponse>;
+
+/**
+ * @generated from message tailor.v1.CancelJobFunctionExecutionRequest
+ */
+export declare type CancelJobFunctionExecutionRequest = Message<"tailor.v1.CancelJobFunctionExecutionRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string execution_id = 2;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.CancelJobFunctionExecutionRequest.
+ * Use `create(CancelJobFunctionExecutionRequestSchema)` to create a new message.
+ */
+export declare const CancelJobFunctionExecutionRequestSchema: GenMessage<CancelJobFunctionExecutionRequest>;
+
+/**
+ * @generated from message tailor.v1.CancelJobFunctionExecutionResponse
+ */
+export declare type CancelJobFunctionExecutionResponse = Message<"tailor.v1.CancelJobFunctionExecutionResponse"> & {
+  /**
+   * Status after the cancel request took effect (CANCELING or CANCELED).
+   *
+   * @generated from field: tailor.v1.FunctionExecution.Status status = 1;
+   */
+  status: FunctionExecution_Status;
+};
+
+/**
+ * Describes the message tailor.v1.CancelJobFunctionExecutionResponse.
+ * Use `create(CancelJobFunctionExecutionResponseSchema)` to create a new message.
+ */
+export declare const CancelJobFunctionExecutionResponseSchema: GenMessage<CancelJobFunctionExecutionResponse>;
 
 /**
  * @generated from message tailor.v1.ListFunctionExecutionsRequest
