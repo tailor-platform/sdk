@@ -345,14 +345,14 @@ export interface Plugin<
     context: ResolverReadyContext<PluginConfig>,
   ): GeneratorResult | Promise<GeneratorResult>;
 
+  onExecutorReady?(
+    context: ExecutorReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
+
   /** Runs after a successful deploy, including deploys with no resource changes. */
   onDeployed?(
     context: DeployedContext<PluginConfig>,
   ): void | DeployedHookResult | Promise<void | DeployedHookResult>;
-
-  onExecutorReady?(
-    context: ExecutorReadyContext<PluginConfig>,
-  ): GeneratorResult | Promise<GeneratorResult>;
 }
 
 export interface DeployedStaticWebsite {

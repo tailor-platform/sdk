@@ -55,6 +55,13 @@ export type PluginConfig = {
         | import("#/plugin/types").GeneratorResult
         | Promise<import("#/plugin/types").GeneratorResult>)
     | undefined;
+  onExecutorReady?:
+    | ((
+        context: import("#/plugin/types").ExecutorReadyContext<unknown>,
+      ) =>
+        | import("#/plugin/types").GeneratorResult
+        | Promise<import("#/plugin/types").GeneratorResult>)
+    | undefined;
   onDeployed?:
     | ((
         context: import("#/plugin/types").DeployedContext<unknown>,
@@ -62,12 +69,5 @@ export type PluginConfig = {
         | void
         | import("#/plugin/types").DeployedHookResult
         | Promise<void | import("#/plugin/types").DeployedHookResult>)
-    | undefined;
-  onExecutorReady?:
-    | ((
-        context: import("#/plugin/types").ExecutorReadyContext<unknown>,
-      ) =>
-        | import("#/plugin/types").GeneratorResult
-        | Promise<import("#/plugin/types").GeneratorResult>)
     | undefined;
 };
