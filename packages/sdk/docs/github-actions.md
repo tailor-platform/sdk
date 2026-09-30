@@ -239,6 +239,11 @@ The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
 request is closed, for draft and fork pull requests, and for unlabeled ones with
 `--require-preview-label`.
 
+Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
+deployed workspace as the outputs `workspace-id` and `app-url`, so a job with
+`needs: tailor-deploy` can run checks against it without entering the target's
+GitHub Environment.
+
 Comments above your own jobs and steps and at the end of the file are kept too.
 Comments inside managed jobs and steps, and edits to the header comment, are
 not kept.

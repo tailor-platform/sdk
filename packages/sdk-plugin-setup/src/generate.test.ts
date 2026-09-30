@@ -517,6 +517,25 @@ describe("renderTagWorkflow", () => {
   });
 });
 
+describe("deploy job outputs", () => {
+  test.each([
+    ["branch", () => renderBranchWorkflow(branchBase).content],
+    ["tag", () => renderTagWorkflow(tagBase).content],
+  ] as const)(
+    "%s workflow's deploy job exposes the deployed workspace id and app URL to user jobs",
+    (_kind, render) => {
+      const workflow = parseYAML(render()) as {
+        jobs: Record<string, { outputs?: Record<string, string> }>;
+      };
+
+      expect(workflow.jobs["tailor-deploy"]?.outputs).toEqual({
+        "workspace-id": "${{ steps.tailor-apply.outputs.workspace-id }}",
+        "app-url": "${{ steps.tailor-apply.outputs.app-url }}",
+      });
+    },
+  );
+});
+
 describe("renderPreviewWorkflow", () => {
   test("deploy job exposes the preview workspace id, name, and app URL to user jobs", () => {
     const { content } = renderPreviewWorkflow({
