@@ -7,13 +7,13 @@ on:
     # __PR_TYPES__
     # To deploy only for PRs that carry the `tailor:preview` label instead of all PRs,
     # re-run: tailor setup ci preview --require-preview-label
-    # __PATHS__
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
+  # __CHANGES_JOB__
   tailor-preview-deploy:
     # __DEPLOY_IF__
     runs-on: ubuntu-latest

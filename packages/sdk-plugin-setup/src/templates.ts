@@ -197,19 +197,60 @@ export function appSlug(dir: string): string {
   return dir === "." ? "root" : dir.replaceAll(/[^A-Za-z0-9-]+/g, "-");
 }
 
-function pathsFilter(params: {
+const ALL_ZERO_SHA = "0000000000000000000000000000000000000000";
+
+function changePatterns(params: {
   workingDirectory?: string;
   apps?: RenderApp[];
   extraPaths?: string[];
-}): string | undefined {
+}): string[] | undefined {
   const dirs = params.apps
     ? params.apps.map((app) => app.dir)
     : params.workingDirectory
       ? [params.workingDirectory]
       : [];
   if (dirs.length === 0 || dirs.includes(".")) return undefined;
-  const patterns = [...dirs.map((dir) => `${dir}/**`), ...(params.extraPaths ?? [])];
-  return `paths: [${patterns.map((pattern) => `"${pattern}"`).join(", ")}]`;
+  return [...dirs.map((dir) => `${dir}/**`), ...(params.extraPaths ?? [])];
+}
+
+function changesJob(patterns: readonly string[]): string {
+  return [
+    "tailor-changes:",
+    "  runs-on: ubuntu-latest",
+    "  timeout-minutes: 5",
+    "  permissions:",
+    "    contents: read",
+    "  outputs:",
+    "    relevant: ${{ steps.tailor-changes.outputs.relevant }}",
+    "  steps:",
+    "    - id: tailor-changes",
+    `      uses: tailor-platform/actions/relevance@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
+    "      with:",
+    `        sha-base: \${{ github.event.pull_request.base.sha || github.event.before || '${ALL_ZERO_SHA}' }}`,
+    "        sha-head: ${{ github.event.pull_request.head.sha || github.sha }}",
+    "        path-patterns: |",
+    ...patterns.map((pattern) => `          ${pattern}`),
+    "        github-token: ${{ github.token }}",
+  ].join("\n");
+}
+
+// Gate a job's `if:` on the change detection job; skipped jobs report success,
+// unlike a workflow that `on.paths` never started, so the checks stay requirable.
+function gateOnChanges(ifLine: string, patterns: readonly string[] | undefined): string {
+  if (!patterns) return ifLine;
+  const condition = ifLine.replace(/^if: (\|-\n)?/, "");
+  const lines = condition.split("\n").map((l) => l.replace(/^ {2}/, ""));
+  return [
+    "needs: tailor-changes",
+    "if: |-",
+    "  needs.tailor-changes.outputs.relevant == 'true' && (",
+    ...lines.map((l) => `    ${l}`),
+    "  )",
+  ].join("\n");
+}
+
+function changesIds(patterns: readonly string[] | undefined): string[] {
+  return patterns ? ["tailor-changes", "tailor-changes/tailor-changes"] : [];
 }
 
 function perAppGenerateCheckSteps(apps: readonly RenderApp[]): string {
@@ -375,12 +416,31 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   out = block(out, "MIGRATION_DRIFT_CHECK", migrationDriftCheck);
   // SEED_DATA is dropped from the default rendering; users add their own step.
   out = block(out, "SEED_DATA", false);
-  out = line(out, "DEPLOY_IF", branchDeployIf(params.restrictDispatch ?? false));
-  out = line(out, "PATHS", pathsFilter(params));
+  const patterns = changePatterns(params);
+  out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
+  out = line(
+    out,
+    "PLAN_IF",
+    gateOnChanges(
+      "if: |-\n  github.event_name == 'pull_request' ||\n  (github.event_name == 'workflow_dispatch' && inputs['dry-run'])",
+      patterns,
+    ),
+  );
+  out = line(
+    out,
+    "ERD_MATRIX_IF",
+    gateOnChanges("if: github.event_name == 'pull_request'", patterns),
+  );
+  out = line(
+    out,
+    "DEPLOY_IF",
+    gateOnChanges(branchDeployIf(params.restrictDispatch ?? false), patterns),
+  );
 
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
 
   const generatedIds: string[] = [
+    ...changesIds(patterns),
     "tailor-plan",
     "tailor-plan/tailor-checkout",
     "tailor-plan/tailor-setup",
@@ -511,7 +571,6 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   const requirePreviewLabel = params.requirePreviewLabel ?? false;
 
   let out = previewTemplate;
-  out = line(out, "PATHS", pathsFilter(params));
 
   // PR trigger event types — single line() marker avoids duplicate YAML map keys in the template.
   out = line(
@@ -526,7 +585,9 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   const deployIf = requirePreviewLabel
     ? `if: |-\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`
     : `if: |-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`;
-  out = line(out, "DEPLOY_IF", deployIf);
+  const patterns = changePatterns(params);
+  out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
+  out = line(out, "DEPLOY_IF", gateOnChanges(deployIf, patterns));
 
   // Cleanup always runs on closed regardless of current labels: the label may have been
   // removed after a preview deploy, and the cleanup action is a no-op when no workspace exists.
@@ -542,6 +603,7 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     .replaceAll("__REGION__", () => params.region);
 
   const generatedIds: string[] = [
+    ...changesIds(patterns),
     "tailor-preview-deploy",
     "tailor-preview-deploy/tailor-checkout",
     "tailor-preview-deploy/tailor-setup",

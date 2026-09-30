@@ -440,9 +440,13 @@ For a monorepo where your SDK app lives in a subdirectory, pass `--dir`:
 tailor setup ci branch --name my-app --dir apps/backend
 ```
 
-The generated workflow adds a `paths` filter on `apps/backend/**` so the
-workflow only runs when that subdirectory changes. The `working-directory` for
-SDK commands is set accordingly.
+The `working-directory` for SDK commands is set accordingly, and the workflow
+only plans and deploys when that subdirectory changes. The workflow itself
+starts on every pull request and push: a `tailor-changes` job checks whether
+the change touches `apps/backend/**`, and the plan, deploy, and ERD preview jobs
+are skipped when it does not. A skipped job reports success, so you can make
+these checks required in branch protection; a workflow that a `paths` trigger
+filter never started would leave them pending instead.
 
 ### Deploying several apps together
 
@@ -460,7 +464,7 @@ an app can reference resources of another app with `external: true`. Add
 `@tailor-platform/sdk` to the root `package.json` so the `tailor` CLI resolves
 there; setup stops until it is declared. The generate check runs for each app
 directory, as do seed validation and the migration drift check on branch and tag
-workflows, and the `paths` filter covers every app directory.
+workflows, and a change under any app directory runs the workflow's jobs.
 
 With `--erd-preview`, each TailorDB namespace is previewed from the app that
 owns it. A namespace may be owned by only one app; the others reference it with
@@ -480,9 +484,9 @@ tailor setup ci preview --name erp --region asia-northeast \
   --paths "apps/*/frontend/**" --paths "modules/**" --paths pnpm-lock.yaml
 ```
 
-The patterns are added to the `paths` filter after the app directories. A
-pattern starting with `!` excludes matching paths, following GitHub's `paths`
-filter rules, so it can also exclude files inside an app directory, for example
+The patterns are checked after the app directories, with the same syntax as
+GitHub's `paths` filters. A pattern starting with `!` excludes matching paths,
+so it can also exclude files inside an app directory, for example
 `--paths '!apps/erp/backend/**/*.md'`. An app at the repository root already
 runs on every change, so `--paths` is not accepted with `--dir .`.
 

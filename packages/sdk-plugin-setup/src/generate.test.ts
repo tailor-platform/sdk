@@ -452,14 +452,14 @@ describe("renderBranchWorkflow", () => {
     expect(content).not.toContain("tailor generate");
   });
 
-  test("includes paths + working-directory only when dir != '.'", () => {
+  test("includes change detection + working-directory only when dir != '.'", () => {
     const plain = renderBranchWorkflow(branchBase).content;
-    expect(plain).not.toContain("paths:");
+    expect(plain).not.toContain("path-patterns:");
     expect(plain).not.toContain("working-directory:");
 
     const scoped = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/foo" }).content;
     expect(scoped).not.toMatch(NO_MARKER);
-    expect(scoped).toContain('paths: ["apps/foo/**"]');
+    expect(scoped).toContain("path-patterns: |\n            apps/foo/**\n");
     // Install, drift-check, and notify run at the repo root — no working-directory.
     // plan job: generate-check + plan; deploy job: deploy action.
     expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(3);
@@ -690,48 +690,86 @@ describe("ERD preview matrix", () => {
   });
 });
 
-describe("paths filters", () => {
-  type Triggers = { on: Record<string, { paths?: string[] }> };
+describe("change detection", () => {
+  type Job = { needs?: string | string[]; if?: string; steps?: Array<Record<string, unknown>> };
+  type Workflow = { on: Record<string, { paths?: string[] } | null>; jobs: Record<string, Job> };
+  const previewBase = {
+    workspaceName: "my-app",
+    branch: "main",
+    environment: "my-app",
+    packageManager: "pnpm",
+    region: "us-west",
+  } as const;
+  const patternsOf = (workflow: Workflow) =>
+    String(
+      (workflow.jobs["tailor-changes"]?.steps?.[0]?.with as Record<string, string> | undefined)?.[
+        "path-patterns"
+      ],
+    )
+      .trim()
+      .split("\n");
+  const gated = (job: Job | undefined) =>
+    [job?.needs].flat().includes("tailor-changes") &&
+    String(job?.if).includes("needs.tailor-changes.outputs.relevant == 'true'");
 
-  test("a multi-directory branch workflow runs when any of its app directories changes", () => {
-    const { content } = renderBranchWorkflow({
-      ...branchBase,
-      apps: [{ dir: "apps/erp/backend" }, { dir: "apps/users/backend" }],
-    });
-    const { on } = parseYAML(content) as Triggers;
+  test("starts the workflow on every change so its checks can be required", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({ ...branchBase, apps: [{ dir: "apps/a" }, { dir: "apps/b" }] }).content,
+    ) as Workflow;
 
-    expect(on.pull_request?.paths).toEqual(["apps/erp/backend/**", "apps/users/backend/**"]);
-    expect(on.push?.paths).toEqual(["apps/erp/backend/**", "apps/users/backend/**"]);
+    expect(workflow.on.pull_request?.paths).toBeUndefined();
+    expect(workflow.on.push?.paths).toBeUndefined();
   });
 
-  test("additional paths extend the filter of a single-directory branch workflow", () => {
-    const { content } = renderBranchWorkflow({
-      ...branchBase,
-      workingDirectory: "apps/erp/backend",
-      extraPaths: ["apps/erp/frontend/**", "modules/**"],
-    });
-    const { on } = parseYAML(content) as Triggers;
+  test("detects changes under every app directory and the additional paths, in order", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({
+        ...branchBase,
+        apps: [{ dir: "apps/a" }, { dir: "apps/b" }],
+        extraPaths: ["modules/**", "!apps/a/**/*.md"],
+      }).content,
+    ) as Workflow;
 
-    expect(on.push?.paths).toEqual(["apps/erp/backend/**", "apps/erp/frontend/**", "modules/**"]);
-  });
-
-  test("additional paths extend the filter of a preview workflow", () => {
-    const { content } = renderPreviewWorkflow({
-      workspaceName: "my-app",
-      branch: "main",
-      environment: "my-app",
-      packageManager: "pnpm",
-      region: "us-west",
-      apps: [{ dir: "apps/erp/backend" }, { dir: "apps/users/backend" }],
-      extraPaths: ["pnpm-lock.yaml"],
-    });
-    const { on } = parseYAML(content) as Triggers;
-
-    expect(on.pull_request?.paths).toEqual([
-      "apps/erp/backend/**",
-      "apps/users/backend/**",
-      "pnpm-lock.yaml",
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      "apps/b/**",
+      "modules/**",
+      "!apps/a/**/*.md",
     ]);
+  });
+
+  test("skips the plan, deploy, and ERD preview jobs of a branch workflow when nothing relevant changed", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      workingDirectory: "apps/a",
+      erdPreview: { namespaces: ["main"] },
+    });
+    const { jobs } = parseYAML(content) as Workflow;
+
+    expect(gated(jobs["tailor-plan"])).toBe(true);
+    expect(gated(jobs["tailor-deploy"])).toBe(true);
+    expect(gated(jobs["tailor-erd-preview-matrix"])).toBe(true);
+    expect(generatedIds).toEqual(
+      expect.arrayContaining(["tailor-changes", "tailor-changes/tailor-changes"]),
+    );
+  });
+
+  test("skips the preview deploy when nothing relevant changed, but always cleans up", () => {
+    const { jobs } = parseYAML(
+      renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+
+    expect(gated(jobs["tailor-preview-deploy"])).toBe(true);
+    expect(jobs["tailor-preview-cleanup"]?.needs).toBeUndefined();
+  });
+
+  test("generates no change detection for an app at the repository root", () => {
+    const { content, generatedIds } = renderBranchWorkflow(branchBase);
+    const { jobs } = parseYAML(content) as Workflow;
+
+    expect(jobs["tailor-changes"]).toBeUndefined();
+    expect(jobs["tailor-plan"]?.needs).toBeUndefined();
+    expect(generatedIds).not.toContain("tailor-changes");
   });
 });
 
@@ -1506,7 +1544,7 @@ export default defineConfig({
     });
     await setupTarget(opts);
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
-    expect(wf).toContain('paths: ["apps/backend/**"]');
+    expect(wf).toContain("path-patterns: |\n            apps/backend/**\n");
     expect(wf).not.toContain("apps/backend//");
     expect(wf).not.toContain('["./apps');
   });
@@ -1668,7 +1706,7 @@ export default defineConfig({
       );
     };
 
-    test("extends the workflow's paths filter and is recorded in the lock", async () => {
+    test("extends the workflow's change detection and is recorded in the lock", async () => {
       writeApp("apps/erp/backend");
 
       await setupTarget(
@@ -1683,7 +1721,7 @@ export default defineConfig({
 
       const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-erp.yml"), "utf-8");
       expect(wf).toContain(
-        'paths: ["apps/erp/backend/**", "apps/erp/frontend/**", "pnpm-lock.yaml"]',
+        "path-patterns: |\n            apps/erp/backend/**\n            apps/erp/frontend/**\n            pnpm-lock.yaml\n",
       );
       expect(readLock(testDir)?.targets[0]?.inputs.paths).toEqual([
         "apps/erp/frontend/**",

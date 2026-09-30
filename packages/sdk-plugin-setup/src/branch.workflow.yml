@@ -5,11 +5,9 @@ on:
   # __PULL_REQUEST_START__
   pull_request:
     branches: ["__BRANCH__"]
-    # __PATHS__
   # __PULL_REQUEST_END__
   push:
     branches: ["__BRANCH__"]
-    # __PATHS__
   workflow_dispatch:
     # __DISPATCH_INPUTS_START__
     inputs:
@@ -23,11 +21,10 @@ permissions:
   contents: read
 
 jobs:
+  # __CHANGES_JOB__
   # __PLAN_JOB_START__
   tailor-plan:
-    if: |-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && inputs['dry-run'])
+    # __PLAN_IF__
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: __ENVIRONMENT__
@@ -91,7 +88,7 @@ jobs:
   # __PLAN_JOB_END__
   # __ERD_PREVIEW_JOB_START__
   tailor-erd-preview-matrix:
-    if: github.event_name == 'pull_request'
+    # __ERD_MATRIX_IF__
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
