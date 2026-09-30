@@ -5,13 +5,15 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
+  printCoordinateNextSteps,
+  printTargetNextSteps,
   setupCoordinate,
   setupTarget,
   type BranchSetupOptions,
   type CoordinateSetupOptions,
 } from "./generate";
 import { detectDefaultBranch } from "./git";
-import { hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
+import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
 import { computeManagedHash, isManagedHash, normalizeActionContent } from "./managed";
 import {
   ACTIONS_SHA,
@@ -1002,7 +1004,9 @@ export default defineConfig({
   test("silent regenerate when hash matches", async () => {
     const opts = baseOptions({ workspaceName: "my-app" });
     await setupTarget(opts);
-    await expect(setupTarget(opts)).resolves.toBeUndefined();
+    await expect(setupTarget(opts)).resolves.toMatchObject({
+      file: ".github/workflows/tailor-my-app.yml",
+    });
   });
 
   test("errors on a hand edit to a managed part without --force", async () => {
@@ -1223,7 +1227,7 @@ export default defineConfig({
         loadConfigName: async () => "cfg-app",
         loadConfigId: async () => undefined,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({ file: ".github/workflows/tailor-my-app-tag.yml" });
     const lock = readLock(testDir);
     expect(lock?.targets).toHaveLength(2);
     expect(lock?.targets.map((t) => t.file).toSorted()).toEqual([
@@ -1234,7 +1238,9 @@ export default defineConfig({
 
   test("next steps point to `tailor setup ci env` for the environment's secrets and variables", async () => {
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});
-    await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" }));
+    printTargetNextSteps(
+      await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" })),
+    );
     const output = log.mock.calls.map(([line]) => line).join("\n");
 
     expect(output).toContain("tailor setup ci env --environment stg");
@@ -1243,7 +1249,9 @@ export default defineConfig({
 
   test("next steps leave where each value comes from to `tailor setup ci env`", async () => {
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});
-    await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" }));
+    printTargetNextSteps(
+      await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" })),
+    );
     const output = log.mock.calls.map(([line]) => line).join("\n");
 
     expect(output).toContain("where each value comes from");
@@ -1252,17 +1260,19 @@ export default defineConfig({
 
   test("preview next steps do not ask for a workspace id", async () => {
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});
-    await setupTarget({
-      kind: "preview",
-      workspaceName: "my-app",
-      region: "us-west",
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
-    });
+    printTargetNextSteps(
+      await setupTarget({
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
+      }),
+    );
     const output = log.mock.calls.map(([line]) => line).join("\n");
 
     expect(output).toContain("tailor setup ci env");
@@ -1455,7 +1465,7 @@ describe("setupCoordinate", () => {
   test("next steps point to `tailor setup ci env` for the environment's secrets and variables", async () => {
     await setupTarget(actionOpts("api"));
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});
-    await setupCoordinate(coordinateOpts({ environment: "production" }));
+    printCoordinateNextSteps(await setupCoordinate(coordinateOpts({ environment: "production" })));
     const output = log.mock.calls.map(([line]) => line).join("\n");
 
     expect(output).toContain("tailor setup ci env --environment production");
@@ -1489,6 +1499,20 @@ describe("setupCoordinate", () => {
     const lock = readLock(testDir);
     const target = lock?.targets.find((t) => t.kind === "coordinate" && t.workspaceName === "main");
     expect(target?.inputs.actionDirs).toEqual(["apps/api", "apps/worker"]);
+  });
+
+  test("records the --action grouping in the lock so the coordinator can be regenerated", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    writeAppConfig("web", "apps/web");
+    await setupTarget(actionOpts("api", "apps/api"));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+    await setupTarget(actionOpts("web", "apps/web"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["api, worker", "web"] }));
+
+    const target = findTarget(readLock(testDir), "coordinate", "main");
+    expect(target?.inputs.actionGroups).toEqual([["api", "worker"], ["web"]]);
   });
 
   test("builds static websites before a multi-config deploy", async () => {
@@ -1560,6 +1584,24 @@ describe("setupCoordinate", () => {
     await setupTarget(actionOpts("api"));
     await expect(setupCoordinate(coordinateOpts({ actions: ["missing-app"] }))).rejects.toThrow(
       /not found in .github\/tailor\.lock/,
+    );
+  });
+
+  test("takes an --action value as the exact action name, even one starting with tailor-", async () => {
+    writeAppConfig("tailor-crm", "apps/crm");
+    await setupTarget(actionOpts("tailor-crm", "apps/crm"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["tailor-crm"] }));
+
+    const target = findTarget(readLock(testDir), "coordinate", "main");
+    expect(target?.inputs.actionGroups).toEqual([["tailor-crm"]]);
+  });
+
+  test("suggests the name without tailor- when no action has the given name", async () => {
+    await setupTarget(actionOpts("api"));
+
+    await expect(setupCoordinate(coordinateOpts({ actions: ["tailor-api"] }))).rejects.toThrow(
+      /Action target "tailor-api" not found[\s\S]*--action api/,
     );
   });
 

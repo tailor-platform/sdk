@@ -9,7 +9,7 @@ import {
   type JsonValueNode,
   reservedIdentifiers,
 } from "@croct/json5-parser";
-import { logBetaWarning, logger, styles } from "@tailor-platform/sdk/cli";
+import { logger, styles } from "@tailor-platform/sdk/cli";
 import JSON5 from "json5";
 import * as path from "pathe";
 
@@ -490,8 +490,6 @@ function renderRenovateConfig(): string {
  * @param options - Renovate setup options
  */
 export async function setupRenovate(options: SetupRenovateOptions): Promise<void> {
-  logBetaWarning("setup");
-
   const existingConfig = findExistingConfig(options.outputDir);
   if (existingConfig !== null) {
     if (existingConfig.kind === "extends-preset") {
