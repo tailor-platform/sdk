@@ -29,7 +29,9 @@ import {
   computeManagedParts,
   currentContentHash,
   describeHandEdit,
+  describeReservedId,
   editedPartsOf,
+  findReservedIds,
   isManagedHash,
   layoutOf,
   ManagedMergeError,
@@ -525,7 +527,6 @@ export function decideAction(obj: {
 
   if (!fileExists || currentContent === null) return { action: "restore" };
   const currentHash = currentContentHash(existing, currentContent);
-  if (currentHash === existing.contentHash) return { action: "regenerate", force };
   if (currentHash === null) {
     if (force) return { action: "adopt" };
     return {
@@ -534,6 +535,15 @@ export function decideAction(obj: {
         "This file is not valid YAML. Fix it, or re-run with --force to replace it with a fresh copy.",
     };
   }
+  const [reservedId] = findReservedIds(
+    currentContent,
+    layoutOf(existing.kind),
+    existing.generatedIds,
+  );
+  if (reservedId !== undefined) {
+    return { action: "conflict", reason: describeReservedId(reservedId) };
+  }
+  if (currentHash === existing.contentHash) return { action: "regenerate", force };
   if (force) return { action: "regenerate", force: true };
   return {
     action: "conflict",

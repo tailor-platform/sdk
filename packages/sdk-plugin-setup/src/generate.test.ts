@@ -779,6 +779,7 @@ describe("decideAction", () => {
     const existing = {
       ...target,
       kind: "action" as const,
+      generatedIds: ["tailor-apply"],
       contentHash: hashContent(normalizeActionContent(original)),
     };
     expect(
@@ -1102,29 +1103,32 @@ export default defineConfig({
       expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
     });
 
-    test("stops on a user tailor- step in a legacy entry, even with --force", async () => {
-      const opts = baseOptions({ workspaceName: "my-app" });
-      await setupTarget(opts);
-      const generated = fs.readFileSync(wfPath(), "utf-8");
-      const edited = generated.replace(
-        "      - id: tailor-apply\n",
-        "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
-      );
-      fs.writeFileSync(wfPath(), edited);
-      const lock = readLock(testDir);
-      const [target] = lock?.targets ?? [];
-      if (!lock || !target) throw new Error("expected a lock target");
-      writeLock(testDir, {
-        ...lock,
-        targets: [{ ...target, contentHash: hashContent(generated) }],
-      });
+    test.each([false, true])(
+      "stops on a user tailor- step in a legacy entry, naming it (force: %s)",
+      async (force) => {
+        const opts = baseOptions({ workspaceName: "my-app" });
+        await setupTarget(opts);
+        const generated = fs.readFileSync(wfPath(), "utf-8");
+        const edited = generated.replace(
+          "      - id: tailor-apply\n",
+          "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
+        );
+        fs.writeFileSync(wfPath(), edited);
+        const lock = readLock(testDir);
+        const [target] = lock?.targets ?? [];
+        if (!lock || !target) throw new Error("expected a lock target");
+        writeLock(testDir, {
+          ...lock,
+          targets: [{ ...target, contentHash: hashContent(generated) }],
+        });
 
-      await expect(setupTarget({ ...opts, force: true })).rejects.toThrow(
-        /"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix/,
-      );
+        await expect(setupTarget({ ...opts, force })).rejects.toThrow(
+          /"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix/,
+        );
 
-      expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
-    });
+        expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
+      },
+    );
 
     test("replaces an invalid YAML file of a legacy entry on --force", async () => {
       const opts = baseOptions({ workspaceName: "my-app" });
