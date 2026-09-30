@@ -656,6 +656,32 @@ describe("mergeUserContent", () => {
     expect(doc.runs.steps[0]?.["run"]).toBe("pnpm build\n");
   });
 
+  test("keeps a user step right after the build-site step an older template wrote", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
+    const legacy = legacyBuildSiteAction();
+    const edited = legacy.content.replace(
+      /( {4}- id: tailor-apply\n)/,
+      "    - name: Upload\n      shell: bash\n      run: echo up\n$1",
+    );
+    const { content } = mergeUserContent({
+      current: edited,
+      rendered: action.content,
+      layout: "action",
+      previousIds: legacy.ids,
+      renderedIds: action.generatedIds,
+      force: false,
+    });
+    const doc = parseDocument(content).toJS() as {
+      runs: { steps: Array<Record<string, unknown>> };
+    };
+    expect(doc.runs.steps.map((s) => s["id"] ?? s["name"])).toEqual([
+      "tailor-build-site",
+      "Upload",
+      "tailor-apply",
+      "tailor-notify",
+    ]);
+  });
+
   test("keeps user nodes whose ids are Object.prototype keys", () => {
     const edited = `${render.content}  constructor:\n    runs-on: ubuntu-latest\n    steps:\n      - id: toString\n        run: echo hi\n`;
     expect(merge(edited, render).content).toBe(edited);

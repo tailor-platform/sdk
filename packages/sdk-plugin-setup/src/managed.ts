@@ -502,10 +502,15 @@ function mergeSteps(
     ctx.dropped.push(...labels);
     return;
   }
-  for (const node of currentSteps.items) {
+  const renderedIdOf = (node: unknown): string | undefined => {
     const id = stepIdOf(node);
-    if (id === undefined || !isMap(node)) continue;
-    const renderedId = localId(resolveRetired(`${prefix}${id}`, ctx.retired, ctx.previous));
+    return id === undefined
+      ? undefined
+      : localId(resolveRetired(`${prefix}${id}`, ctx.retired, ctx.previous));
+  };
+  for (const node of currentSteps.items) {
+    const renderedId = renderedIdOf(node);
+    if (renderedId === undefined || !isMap(node)) continue;
     const match = renderedSteps.items.find((candidate) => stepIdOf(candidate) === renderedId);
     if (!isMap(match)) continue;
     const slotFields = lookup(ctx.slots, `${prefix}${renderedId}`);
@@ -523,7 +528,7 @@ function mergeSteps(
     currentSteps.items,
     renderedSteps.items,
     (node) => userSteps.includes(node),
-    (node) => stepIdOf(node),
+    renderedIdOf,
   );
 }
 
