@@ -194,7 +194,7 @@ describe("planUpdate", () => {
       options: {
         coordinatorName: "apps",
         coordinateKind: "branch",
-        actions: ["front,admin", "api"],
+        actions: ["tailor-front,tailor-admin", "tailor-api"],
         branch: "release",
         tagPattern: undefined,
         environment: "production",
@@ -392,6 +392,27 @@ describe("setupUpdate", () => {
     await expect(
       setupUpdate({ force: false, outputDir: testDir, ...loaders }),
     ).resolves.toBeUndefined();
+  });
+
+  test("regenerates a coordinator whose action name itself starts with tailor-", async () => {
+    writeAppConfig("apps/crm");
+    await generate({ kind: "action", workspaceName: "tailor-crm", dir: "apps/crm" });
+    await setupCoordinate({
+      coordinatorName: "apps",
+      coordinateKind: "branch",
+      actions: ["tailor-tailor-crm"],
+      force: false,
+      outputDir: testDir,
+      gitRunner: loaders.gitRunner,
+    });
+    ageLock();
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(readLock(testDir)?.targets.map((t) => t.templateVersion)).toEqual([
+      TEMPLATE_VERSION,
+      TEMPLATE_VERSION,
+    ]);
   });
 
   test("keeps going past a hand-edited target and lists it as not updated", async () => {

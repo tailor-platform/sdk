@@ -94,7 +94,11 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): UpdatePlan
         options: {
           coordinatorName: workspaceName,
           coordinateKind,
-          actions: inputs.actionGroups.map((group) => group.join(",")),
+          // Not the bare names: setupCoordinate strips one tailor- prefix, so an action
+          // named tailor-crm would be looked up as crm.
+          actions: inputs.actionGroups.map((group) =>
+            group.map((name) => `tailor-${name}`).join(","),
+          ),
           branch,
           tagPattern: inputs.tagPattern ?? undefined,
           environment: inputs.environment,
