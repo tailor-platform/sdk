@@ -571,6 +571,7 @@ function reconcileContent(obj: {
       rendered: render.content,
       layout,
       previousIds: existing.generatedIds,
+      previousInputs: existing.inputs,
       renderedIds: render.generatedIds,
       force: decision.force,
     });

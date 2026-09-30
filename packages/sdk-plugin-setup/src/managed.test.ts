@@ -19,6 +19,7 @@ import {
   type RenderBranchParams,
   type RenderResult,
 } from "./templates";
+import type { LockInputs } from "./lock";
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -160,11 +161,19 @@ const lockHash = computeManagedHash(render.content, "workflow", render.generated
 const hashOf = (content: string): string =>
   computeManagedHash(content, "workflow", render.generatedIds);
 
-const legacyBuildSiteAction = (): { content: string; ids: string[] } => {
+const legacyBuildSiteAction = (): { content: string; ids: string[]; inputs: LockInputs } => {
   const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
   return {
     content: action.content.replace("- id: tailor-build-site\n", "- id: build-site\n"),
     ids: action.generatedIds.filter((id) => id !== "tailor-build-site"),
+    inputs: {
+      branch: null,
+      tagPattern: null,
+      environment: "my-app",
+      dir: ".",
+      packageManager: "pnpm",
+      hasStaticWebsites: true,
+    },
   };
 };
 
@@ -316,8 +325,8 @@ describe("computeManagedHash", () => {
   });
 
   test("hashes a build-site step an older template wrote like the slot it became", () => {
-    const { content, ids } = legacyBuildSiteAction();
-    const hash = (c: string) => computeManagedHash(c, "action", ids);
+    const { content, ids, inputs } = legacyBuildSiteAction();
+    const hash = (c: string) => computeManagedHash(c, "action", ids, inputs);
     const editedRun = content.replace(
       /(run: \|\n)(?:        #.*\n)+ {8}true\n/,
       "$1        pnpm build\n",
@@ -642,6 +651,7 @@ describe("mergeUserContent", () => {
       rendered: action.content,
       layout: "action",
       previousIds: legacy.ids,
+      previousInputs: legacy.inputs,
       renderedIds: action.generatedIds,
       force: false,
     });
@@ -668,6 +678,7 @@ describe("mergeUserContent", () => {
       rendered: action.content,
       layout: "action",
       previousIds: legacy.ids,
+      previousInputs: legacy.inputs,
       renderedIds: action.generatedIds,
       force: false,
     });

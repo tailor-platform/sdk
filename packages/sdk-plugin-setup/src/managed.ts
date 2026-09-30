@@ -9,7 +9,7 @@ import {
   type Pair,
   type YAMLMap,
 } from "yaml";
-import { hashContent, type LockTarget, type TargetKind } from "./lock";
+import { hashContent, type LockInputs, type LockTarget, type TargetKind } from "./lock";
 
 /**
  * Workflow files keep jobs under `jobs:`; composite actions keep one step list
@@ -49,11 +49,28 @@ const SLOTS: Record<Layout, Record<string, readonly string[]>> = {
 };
 
 // Non-`tailor-` step ids that earlier template versions wrote, mapped to the
-// ids that replaced them.
-const RETIRED_IDS: Record<Layout, Record<string, string>> = {
-  workflow: { "tailor-deploy/slack-prereq": "tailor-deploy/tailor-slack-prereq" },
-  action: { "build-site": "tailor-build-site" },
+// ids that replaced them. `wrote` limits a retirement to lock entries whose
+// template could have emitted the old id, so a user step reusing it elsewhere stays the user's.
+type Retirement = { replacement: string; wrote?: (inputs: LockInputs) => boolean };
+const RETIRED_IDS: Record<Layout, Record<string, Retirement>> = {
+  workflow: { "tailor-deploy/slack-prereq": { replacement: "tailor-deploy/tailor-slack-prereq" } },
+  action: {
+    "build-site": {
+      replacement: "tailor-build-site",
+      wrote: (inputs) => inputs.hasStaticWebsites === true,
+    },
+  },
 };
+
+function retiredIdsOf(layout: Layout, inputs: LockInputs | undefined): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(RETIRED_IDS[layout])
+      .filter(
+        ([, retirement]) => !retirement.wrote || (inputs !== undefined && retirement.wrote(inputs)),
+      )
+      .map(([id, retirement]) => [id, retirement.replacement]),
+  );
+}
 
 const STRINGIFY_OPTIONS = { lineWidth: 0, flowCollectionPadding: false } as const;
 
@@ -182,14 +199,16 @@ function projectSteps(
  * @param content - Workflow or composite action YAML
  * @param layout - File layout
  * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
+ * @param inputs - Lock inputs the file was generated with, which decide the retired ids it may hold
  * @returns Versioned hash string
  */
 export function computeManagedHash(
   content: string,
   layout: Layout,
   managedIds: readonly string[],
+  inputs?: LockInputs,
 ): string {
-  const projection = projectManaged(content, layout, managedIds);
+  const projection = projectManaged(content, layout, managedIds, inputs);
   return `${MANAGED_HASH_PREFIX}${hashContent(canonicalJson(projection))}`;
 }
 
@@ -200,14 +219,16 @@ export function computeManagedHash(
  * @param content - Workflow or composite action YAML
  * @param layout - File layout
  * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
+ * @param inputs - Lock inputs the file was generated with, which decide the retired ids it may hold
  * @returns Hashes keyed by top-level key, `<job>`, or `<job>/<step>` (`<step>` in an action)
  */
 export function computeManagedParts(
   content: string,
   layout: Layout,
   managedIds: readonly string[],
+  inputs?: LockInputs,
 ): Record<string, string> {
-  const projection = projectManaged(content, layout, managedIds);
+  const projection = projectManaged(content, layout, managedIds, inputs);
   const parts: Record<string, unknown> = {};
   const addWithSteps = (key: string, container: Plain, prefix: string): void => {
     const steps = (container["steps"] as Plain[]).map(
@@ -256,12 +277,13 @@ export function findEditedParts(
  * @returns Edited parts, or undefined when the lock records no per-part hashes or the file cannot be read
  */
 export function editedPartsOf(
-  target: Pick<LockTarget, "kind" | "generatedIds" | "managedHashes">,
+  target: Pick<LockTarget, "kind" | "generatedIds" | "managedHashes" | "inputs">,
   content: string,
 ): string[] | undefined {
   if (target.managedHashes === undefined) return undefined;
   try {
-    const current = computeManagedParts(content, layoutOf(target.kind), target.generatedIds);
+    const layout = layoutOf(target.kind);
+    const current = computeManagedParts(content, layout, target.generatedIds, target.inputs);
     return findEditedParts(target.managedHashes, current);
   } catch (error) {
     if (error instanceof ManagedMergeError) return undefined;
@@ -282,11 +304,16 @@ export function describeHandEdit(subject: string, parts: readonly string[] | und
   return `SDK-managed parts of ${subject} were edited by hand: ${parts.map((part) => `"${part}"`).join(", ")}.`;
 }
 
-function projectManaged(content: string, layout: Layout, managedIds: readonly string[]): Plain {
+function projectManaged(
+  content: string,
+  layout: Layout,
+  managedIds: readonly string[],
+  inputs: LockInputs | undefined,
+): Plain {
   const doc = readMapping(content);
   const managed = new Set(managedIds);
   const slots = SLOTS[layout];
-  const retired = RETIRED_IDS[layout];
+  const retired = retiredIdsOf(layout, inputs);
   const projection: Plain = {};
   for (const key of MANAGED_TOP_LEVEL_KEYS[layout]) {
     projection[key] = doc[key] ?? null;
@@ -561,6 +588,7 @@ function assertNeedsResolve(root: YAMLMap): void {
  * @param params.rendered - Fresh template render
  * @param params.layout - File layout
  * @param params.previousIds - Managed ids recorded when `current` was generated
+ * @param params.previousInputs - Lock inputs recorded when `current` was generated
  * @param params.renderedIds - Managed ids of `rendered`
  * @param params.force - Drop user steps whose managed job no longer exists instead of failing
  * @returns Merged content and the labels of any dropped user steps
@@ -570,6 +598,7 @@ export function mergeUserContent(params: {
   rendered: string;
   layout: Layout;
   previousIds: readonly string[];
+  previousInputs?: LockInputs;
   renderedIds: readonly string[];
   force: boolean;
 }): { content: string; dropped: string[] } {
@@ -584,7 +613,7 @@ export function mergeUserContent(params: {
   const ctx: MergeContext = {
     previous: new Set(params.previousIds),
     slots: SLOTS[layout],
-    retired: RETIRED_IDS[layout],
+    retired: retiredIdsOf(layout, params.previousInputs),
     force: params.force,
     dropped: [],
   };
@@ -672,12 +701,12 @@ export function normalizeActionContent(content: string): string {
  * @returns The comparable hash, or null when the file is not valid YAML
  */
 export function currentContentHash(
-  target: Pick<LockTarget, "kind" | "contentHash" | "generatedIds">,
+  target: Pick<LockTarget, "kind" | "contentHash" | "generatedIds" | "inputs">,
   content: string,
 ): string | null {
   try {
     if (isManagedHash(target.contentHash)) {
-      return computeManagedHash(content, layoutOf(target.kind), target.generatedIds);
+      return computeManagedHash(content, layoutOf(target.kind), target.generatedIds, target.inputs);
     }
     readMapping(content);
     return hashContent(target.kind === "action" ? normalizeActionContent(content) : content);
