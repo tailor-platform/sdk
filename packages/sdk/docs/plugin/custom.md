@@ -297,8 +297,9 @@ files so users can correct files that could not be uploaded.
 
 Return JSON-serializable `outputs` to include a result in `deployedHooks` under
 `tailor deploy --json`. Each entry identifies the application and plugin. This
-key is omitted when no hook supplies outputs. Outputs that cannot be serialized
-fail the hook.
+key is omitted when no hook supplies outputs. Outputs may contain only strings,
+finite numbers, booleans, `null`, arrays, and plain objects; any other value, such
+as `undefined`, a function, or a `Date`, fails the hook.
 
 A failed hook stops later hooks with `DEPLOYED_HOOK_FAILED`. The same error is
 reported when the deployed information passed to hooks cannot be loaded. Platform

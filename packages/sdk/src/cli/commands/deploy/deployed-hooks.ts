@@ -55,9 +55,11 @@ async function loadDeployedTarget(
         const response = await getOrNull(() =>
           client.getAIGateway({ workspaceId, aigatewayName: gateway.name }),
         );
-        return response?.aigateway
-          ? { name: gateway.name, url: response.aigateway.url }
-          : undefined;
+        const deployed = assertDefined(
+          response?.aigateway,
+          `AI Gateway "${gateway.name}" not found after deploy`,
+        );
+        return { name: gateway.name, url: deployed.url };
       }),
     ),
     namespace
@@ -83,7 +85,7 @@ async function loadDeployedTarget(
       configPath: target.config.path,
       url: application.url,
       domain: application.domain,
-      aiGateways: gateways.filter((gateway) => gateway !== undefined),
+      aiGateways: gateways,
       ...(namespace
         ? {
             auth: {
@@ -131,16 +133,42 @@ function deployedHookFailure(what: string, error: unknown, notRun: readonly stri
   });
 }
 
-function assertJsonSerializable(outputs: Record<string, JsonValue>): void {
+function isPlainObject(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === null || prototype === Object.prototype;
+}
+
+function findNonJsonValue(
+  value: unknown,
+  path: string,
+  ancestors: Set<object>,
+): string | undefined {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return undefined;
+  if (typeof value === "number") return Number.isFinite(value) ? undefined : path;
+  if (typeof value !== "object" || ancestors.has(value)) return path;
+  if (!Array.isArray(value) && !isPlainObject(value)) return path;
+  const entries = Array.isArray(value)
+    ? value.map((item, index) => [`${path}[${index}]`, item] as const)
+    : Object.entries(value).map(([key, item]) => [`${path}.${key}`, item] as const);
+  ancestors.add(value);
   try {
-    JSON.stringify(outputs);
-  } catch (error) {
+    for (const [itemPath, item] of entries) {
+      const found = findNonJsonValue(item, itemPath, ancestors);
+      if (found) return found;
+    }
+    return undefined;
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function assertJsonOutputs(outputs: Record<string, JsonValue>): void {
+  const path = findNonJsonValue(outputs, "outputs", new Set());
+  if (path)
     throw CLIError({
       code: "DEPLOYED_HOOK_OUTPUTS_INVALID",
-      message: `outputs are not JSON-serializable: ${error instanceof Error ? error.message : String(error)}`,
-      cause: error,
+      message: `outputs are not JSON-serializable: ${path} is not a JSON value`,
     });
-  }
 }
 
 /**
@@ -197,7 +225,7 @@ export async function runDeployedHooks(
           logger: { info: logger.info, warn: logger.warn, success: logger.success },
         });
       });
-      if (result?.outputs !== undefined) assertJsonSerializable(result.outputs);
+      if (result?.outputs !== undefined) assertJsonOutputs(result.outputs);
       if (result?.outputs !== undefined)
         outputs.push({
           application: target.application.name,

@@ -187,6 +187,64 @@ describe("deployed hooks", () => {
       message: expect.stringMatching(/hook.*outputs.*JSON/s),
     });
   });
+  test.each([
+    ["undefined", { nested: { value: undefined } }, "outputs.nested.value"],
+    ["a function", { list: [() => {}] }, "outputs.list[0]"],
+    ["a non-finite number", { ratio: Number.NaN }, "outputs.ratio"],
+    ["a Date", { at: new Date(0) }, "outputs.at"],
+  ])("rejects hook outputs containing %s and names its path", async (_, outputs, where) => {
+    const { client } = clientMock();
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [
+          target([plugin(() => ({ outputs: outputs as unknown as Record<string, never> }))]),
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message: expect.stringContaining(where),
+    });
+  });
+  test("rejects cyclic hook outputs instead of recursing forever", async () => {
+    const { client } = clientMock();
+    const outputs: Record<string, unknown> = {};
+    outputs.self = outputs;
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [target([plugin(() => ({ outputs: outputs as Record<string, never> }))])],
+      }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message: expect.stringContaining("outputs.self"),
+    });
+  });
+  test("accepts nested JSON values in hook outputs", async () => {
+    const { client } = clientMock();
+    const outputs = { list: [1, "a", true, null, { deep: [] }], empty: {} };
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [target([plugin(() => ({ outputs }))])],
+      }),
+    ).resolves.toEqual([{ application: "app", pluginId: "hook", outputs }]);
+  });
+  test("fails when a configured AI Gateway is missing after deploy", async () => {
+    const { client, methods } = clientMock();
+    methods.getAIGateway.mockResolvedValue({ aigateway: undefined });
+    const hook = vi.fn();
+    await expect(
+      runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message: expect.stringContaining('AI Gateway "ai" not found after deploy'),
+    });
+    expect(hook).not.toHaveBeenCalled();
+  });
   test("exposes only the static websites of this deploy", async () => {
     const { client } = clientMock();
     const hook = vi.fn();
