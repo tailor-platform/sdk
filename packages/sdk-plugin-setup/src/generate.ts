@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import {
-  logBetaWarning,
   extractOwnedNamespaces,
   findAppIdLock,
   loadConfig,
@@ -114,7 +113,7 @@ export type SetupTargetOptions =
 export type CoordinateSetupOptions = {
   coordinatorName: string;
   coordinateKind: CoordinateKind;
-  /** Action names or comma-separated action groups (without tailor- prefix), in deploy order. */
+  /** Action names or comma-separated action groups, in deploy order. */
   actions: string[];
   branch?: string;
   tagPattern?: string;
@@ -126,12 +125,8 @@ export type CoordinateSetupOptions = {
   gitRunner?: GitRunner;
 };
 
-function actionName(input: string): string {
-  return input.startsWith("tailor-") ? input.slice("tailor-".length) : input;
-}
-
 function splitActionGroup(input: string): string[] {
-  const names = input.split(",").map((entry) => actionName(entry.trim()));
+  const names = input.split(",").map((entry) => entry.trim());
   if (names.some((name) => name.length === 0)) {
     throw new Error("--action must contain one or more non-empty action names.");
   }
@@ -647,14 +642,37 @@ function printEnvironmentStep(environment: string): void {
   );
 }
 
+export type SetupTargetResult = {
+  kind: TargetKind;
+  /** Repository-relative path of the generated workflow or action. */
+  file: string;
+  /** Resolved GitHub Environment name. */
+  environment: string;
+  /** Whether the app id was moved out of tailor.config.ts. */
+  configEdited: boolean;
+};
+
 /**
- * Print next-step guidance after generating workflow files.
- * @param obj - Output context
- * @param obj.environment - Resolved GitHub Environment name for this target
- * @param obj.configEdited - Whether the app id was moved out of the config
+ * Print next-step guidance after generating a deploy target.
+ * @param result - What {@link setupTarget} generated
  */
-function printNextSteps(obj: { environment: string; configEdited: boolean }): void {
-  const { environment, configEdited } = obj;
+export function printTargetNextSteps(result: SetupTargetResult): void {
+  const { kind, file, environment, configEdited } = result;
+
+  if (kind === "action") {
+    logger.newline();
+    logger.info("Next steps:");
+    logger.newline();
+    logger.log(`The composite action has been generated at ${styles.path(file)}.`);
+    logger.log(
+      "Use `tailor setup ci coordinate` to generate a coordinator workflow that orchestrates this action.",
+    );
+    logger.log(`Commit ${TAILOR_LOCK_FILENAME} alongside it: it records this app's id.`);
+    if (configEdited) {
+      logger.log("The app id was moved out of tailor.config.ts; commit that change too.");
+    }
+    return;
+  }
 
   logger.newline();
   logger.info("Next steps:");
@@ -673,10 +691,9 @@ function printNextSteps(obj: { environment: string; configEdited: boolean }): vo
 /**
  * Generate a deploy target workflow and reconcile it with the lock file.
  * @param options - Setup options
+ * @returns What was generated, for {@link printTargetNextSteps}
  */
-export async function setupTarget(options: SetupTargetOptions): Promise<void> {
-  logBetaWarning("setup");
-
+export async function setupTarget(options: SetupTargetOptions): Promise<SetupTargetResult> {
   const resolved = await resolve(options);
 
   const lock = readLock(options.outputDir);
@@ -775,21 +792,12 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     logger.success(`Generated ${styles.path(resolved.file)}`);
   }
 
-  if (resolved.kind === "action") {
-    logger.newline();
-    logger.info("Next steps:");
-    logger.newline();
-    logger.log(`The composite action has been generated at ${styles.path(resolved.file)}.`);
-    logger.log(
-      "Use `tailor setup ci coordinate` to generate a coordinator workflow that orchestrates this action.",
-    );
-    logger.log(`Commit ${TAILOR_LOCK_FILENAME} alongside it: it records this app's id.`);
-    if (configEdited) {
-      logger.log("The app id was moved out of tailor.config.ts; commit that change too.");
-    }
-  } else {
-    printNextSteps({ environment: resolved.environment, configEdited });
-  }
+  return {
+    kind: resolved.kind,
+    file: resolved.file,
+    environment: resolved.environment,
+    configEdited,
+  };
 }
 
 /**
@@ -799,10 +807,11 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
  * name is required via `--name`. App working directories are resolved from
  * the lock file entries created by `setup ci action`.
  * @param options - Coordinate setup options
+ * @returns What was generated, for {@link printCoordinateNextSteps}
  */
-export async function setupCoordinate(options: CoordinateSetupOptions): Promise<void> {
-  logBetaWarning("setup");
-
+export async function setupCoordinate(
+  options: CoordinateSetupOptions,
+): Promise<SetupCoordinateResult> {
   const { coordinatorName, coordinateKind, actions, force, outputDir } = options;
   validateWorkspaceName(coordinatorName);
 
@@ -860,9 +869,12 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       seenNames.add(name);
       const entry = actionTargets.get(name);
       if (!entry) {
+        const unprefixed = name.startsWith("tailor-") ? name.slice("tailor-".length) : null;
         throw new Error(
           `Action target "${name}" not found in .github/tailor.lock. ` +
-            `Run \`tailor setup ci action --name ${name}\` first.`,
+            (unprefixed !== null && actionTargets.has(unprefixed)
+              ? `--action takes the action's name; use \`--action ${unprefixed}\`.`
+              : `Run \`tailor setup ci action --name ${name}\` first.`),
         );
       }
       if (names.length > 1 && entry.templateVersion < TEMPLATE_VERSION) {
@@ -942,6 +954,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       dir: ".",
       packageManager,
       actionDirs: actionGroups.flatMap((group) => group.apps.map((a) => a.dir)),
+      actionGroups: actionGroups.map((group) => group.apps.map((a) => a.name)),
       restrictDispatch: options.restrictDispatch ?? false,
     },
     generatedIds: render.generatedIds,
@@ -967,6 +980,25 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   } else {
     logger.success(`Generated ${styles.path(file)}`);
   }
+
+  return { file, environment, tailorSetupFile };
+}
+
+export type SetupCoordinateResult = {
+  /** Repository-relative path of the generated coordinator workflow. */
+  file: string;
+  /** Resolved GitHub Environment name. */
+  environment: string;
+  /** Repository-relative path of the user-owned tailor-setup action. */
+  tailorSetupFile: string;
+};
+
+/**
+ * Print next-step guidance after generating a coordinator workflow.
+ * @param result - What {@link setupCoordinate} generated
+ */
+export function printCoordinateNextSteps(result: SetupCoordinateResult): void {
+  const { file, environment, tailorSetupFile } = result;
 
   logger.newline();
   logger.info("Next steps:");

@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import {
-  logBetaWarning,
   extractOwnedNamespaces,
   loadConfig,
   logger,
@@ -122,7 +121,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
       rule: "template-version",
       message:
         `A newer workflow template is available (generated with v${String(target.templateVersion)}, ` +
-        `current v${String(state.templateVersion)}). Re-run setup to update.`,
+        `current v${String(state.templateVersion)}). Run \`tailor setup update\` to regenerate every target.`,
     });
   }
 
@@ -314,8 +313,6 @@ async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean
  * @param options - Check options
  */
 export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
-  logBetaWarning("setup");
-
   const { outputDir } = options;
   const lock = readLock(outputDir);
   if (!lock || lock.targets.length === 0) {
@@ -404,6 +401,6 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   }
   throw new Error(
     `Detected ${String(findings.length)} drift finding(s) across ${String(count)} target(s). ` +
-      "Re-run `tailor setup` to regenerate, or address each finding above.",
+      "Run `tailor setup update` to regenerate, or address each finding above.",
   );
 }

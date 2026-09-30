@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { logBetaWarning, logger, styles, prompt } from "@tailor-platform/sdk/cli";
+import { logger, styles, prompt } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { resolveWithinRoot } from "./check";
 import { LOCK_VERSION, readLock, writeLock, type LockTarget } from "./lock";
@@ -76,8 +76,6 @@ function warnCoordinatorReferences(
  * @param options - Delete options
  */
 export async function setupDelete(options: DeleteOptions): Promise<void> {
-  logBetaWarning("setup");
-
   const { outputDir, yes } = options;
   const lock = readLock(outputDir);
   if (!lock || lock.targets.length === 0) {

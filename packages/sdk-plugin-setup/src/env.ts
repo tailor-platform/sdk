@@ -1,4 +1,4 @@
-import { logBetaWarning, logger } from "@tailor-platform/sdk/cli";
+import { logger } from "@tailor-platform/sdk/cli";
 import { validateEnvironment, validateWorkspaceName } from "./generate";
 import { detectRepository, type GitRunner, type Repository } from "./git";
 import { type LockFile, readLock, type TargetKind } from "./lock";
@@ -405,8 +405,6 @@ export function setupEnv(options: {
   environments?: string[];
   gitRunner?: GitRunner;
 }): void {
-  logBetaWarning("setup");
-
   const lock = readLock(options.outputDir);
   if (!lock || lock.targets.length === 0) {
     throw new Error(
