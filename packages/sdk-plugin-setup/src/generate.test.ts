@@ -1735,14 +1735,34 @@ export default defineConfig({
       ).rejects.toThrow(/--paths has no effect when --dir is the repository root/);
     });
 
-    test("rejects a pattern that could break the generated YAML", async () => {
+    test("accepts literal path characters such as the @ of a scoped package", async () => {
+      writeApp("apps/erp/backend");
+
+      await setupTarget(
+        baseOptions({
+          workspaceName: "erp",
+          dir: "apps/erp/backend",
+          extraPaths: ["packages/@scope/**"],
+          loadHasMigrations: async () => false,
+          loadHasSeeds: async () => false,
+        }),
+      );
+
+      expect(readLock(testDir)?.targets[0]?.inputs.paths).toEqual(["packages/@scope/**"]);
+    });
+
+    test.each([
+      ["a workflow expression", "${{ github.token }}"],
+      ["a line break", "modules/**\nsha-head: x"],
+      ["surrounding whitespace", " modules/** "],
+    ])("rejects a pattern containing %s", async (_label, pattern) => {
       writeApp("apps/erp/backend");
 
       await expect(
         setupTarget(
-          baseOptions({ workspaceName: "erp", dir: "apps/erp/backend", extraPaths: ['a"b'] }),
+          baseOptions({ workspaceName: "erp", dir: "apps/erp/backend", extraPaths: [pattern] }),
         ),
-      ).rejects.toThrow(/Invalid --paths "a"b"/);
+      ).rejects.toThrow(/Invalid --paths/);
     });
   });
 

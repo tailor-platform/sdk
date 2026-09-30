@@ -259,17 +259,28 @@ function validateDir(dir: string): void {
   }
 }
 
-// `--paths` patterns are embedded into a double-quoted YAML flow sequence.
-const PATHS_RE = /^!?[A-Za-z0-9._/*?[\]{},-]+$/;
+// `--paths` patterns are embedded one per line into a YAML block scalar that
+// GitHub evaluates, so only line breaks and expressions could escape it.
+// oxlint-disable-next-line no-control-regex
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
+
+function isSafePathPattern(pattern: string): boolean {
+  return (
+    pattern.length > 0 &&
+    pattern === pattern.trim() &&
+    !pattern.includes("${{") &&
+    !CONTROL_CHAR_RE.test(pattern)
+  );
+}
 
 function resolveExtraPaths(options: SetupTargetOptions, dirs: readonly string[]): string[] {
   const extraPaths =
     options.kind === "branch" || options.kind === "preview" ? [...(options.extraPaths ?? [])] : [];
   for (const pattern of extraPaths) {
-    if (!PATHS_RE.test(pattern)) {
+    if (!isSafePathPattern(pattern)) {
       throw new Error(
-        `Invalid --paths "${pattern}". Only letters, numbers, ".", "_", "/", "-", ",", and the ` +
-          'glob characters "*?![]{}" are supported.',
+        `Invalid --paths ${JSON.stringify(pattern)}. A pattern cannot contain line breaks or ` +
+          "control characters, a ${{ }} expression, or leading or trailing whitespace.",
       );
     }
   }
