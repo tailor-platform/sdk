@@ -523,6 +523,18 @@ describe("setupEnv", () => {
     expect(out).toHaveBeenCalledWith(renderGhCommands([production!]));
   });
 
+  test("prints an environment once even when --environment names it twice", () => {
+    using tmp = tempDir("setup-env-");
+    const lock = lockOf(target("branch", "my-app", "stg"), target("tag", "my-app", "production"));
+    writeLock(tmp.dir, lock);
+    using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["stg", "STG"] });
+
+    const [stg] = collectEnvironmentRequirements(lock);
+    expect(out).toHaveBeenCalledWith(renderGhCommands([stg!]));
+  });
+
   test("rejects an --environment that no workflow uses, listing the ones that exist", () => {
     using tmp = tempDir("setup-env-");
     writeLock(

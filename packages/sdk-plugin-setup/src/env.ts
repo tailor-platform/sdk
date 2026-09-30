@@ -378,7 +378,7 @@ function selectEnvironments(
 ): EnvironmentRequirements[] {
   if (names.length === 0) return environments;
   const byName = new Map(environments.map((entry) => [entry.environment.toLowerCase(), entry]));
-  return names.map((name) => {
+  const selected = names.map((name) => {
     const entry = byName.get(name.toLowerCase());
     if (!entry) {
       throw new Error(
@@ -388,6 +388,7 @@ function selectEnvironments(
     }
     return entry;
   });
+  return [...new Set(selected)];
 }
 
 /**
