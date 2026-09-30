@@ -148,6 +148,12 @@ describe.each(variants)("%s template", (_name, layout, render) => {
     expect(result).toEqual({ content: render.content, dropped: [] });
   });
 
+  test("gives every job and step it emits an id with the reserved tailor- prefix", () => {
+    for (const id of idsIn(render.content, layout)) {
+      expect(id.slice(id.lastIndexOf("/") + 1)).toMatch(/^tailor-/);
+    }
+  });
+
   test("declares exactly the job and step ids it emits", () => {
     const emitted = idsIn(render.content, layout);
     expect(new Set(emitted).size).toBe(emitted.length);
