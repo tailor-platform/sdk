@@ -289,6 +289,25 @@ describe("deployed hooks", () => {
     });
     expect(methods.listAuthOAuth2Clients).toHaveBeenCalledOnce();
   });
+  test("reads each nested outputs value once so validation and storage agree", async () => {
+    const { client } = clientMock();
+    let reads = 0;
+    const outputs = {
+      nested: {
+        get value() {
+          reads += 1;
+          return reads === 1 ? "ok" : undefined;
+        },
+      },
+    } as unknown as Record<string, never>;
+    const [stored] = await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([plugin(() => ({ outputs }))])],
+    });
+    expect(stored?.outputs).toEqual({ nested: { value: "ok" } });
+    expect(reads).toBe(1);
+  });
   test("keeps the validated outputs even if the hook mutates them afterwards", async () => {
     const { client } = clientMock();
     const outputs: Record<string, never | string> = { value: "validated" };

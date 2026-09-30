@@ -199,13 +199,23 @@ function findNonJsonValue(
   }
 }
 
-function assertJsonOutputs(outputs: Record<string, JsonValue>): void {
-  const path = findNonJsonValue(outputs, "outputs", new Set());
-  if (path)
-    throw CLIError({
-      code: "DEPLOYED_HOOK_OUTPUTS_INVALID",
-      message: `outputs are not JSON-serializable: ${path} is not a JSON value`,
-    });
+function invalidOutputs(path: string) {
+  return CLIError({
+    code: "DEPLOYED_HOOK_OUTPUTS_INVALID",
+    message: `outputs are not JSON-serializable: ${path} is not a JSON value`,
+  });
+}
+
+function copyJsonOutputs(outputs: Record<string, JsonValue>): Record<string, JsonValue> {
+  let copy: Record<string, JsonValue>;
+  try {
+    copy = structuredClone(outputs);
+  } catch {
+    throw invalidOutputs(findNonJsonValue(outputs, "outputs", new Set()) ?? "outputs");
+  }
+  const path = findNonJsonValue(copy, "outputs", new Set());
+  if (path) throw invalidOutputs(path);
+  return copy;
 }
 
 /**
@@ -265,11 +275,10 @@ export async function runDeployedHooks(
       });
       const hookOutputs = result?.outputs;
       if (hookOutputs !== undefined) {
-        assertJsonOutputs(hookOutputs);
         outputs.push({
           application: target.application.name,
           pluginId: plugin.id,
-          outputs: structuredClone(hookOutputs),
+          outputs: copyJsonOutputs(hookOutputs),
         });
       }
     } catch (error) {
