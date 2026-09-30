@@ -84,6 +84,11 @@ describe("frontendPlugin", () => {
   test("rejects an empty dist directory", () => {
     expect(() => frontendPlugin({ frontends: [{ site: "web", distDir: "" }] })).toThrow(/distDir/);
   });
+  test.each(["", "   "])("rejects a blank build command %j", (build) => {
+    expect(() => frontendPlugin({ frontends: [{ site: "web", distDir: "dist", build }] })).toThrow(
+      /build/,
+    );
+  });
   test("rejects duplicate site names across string and object definitions", () => {
     expect(() =>
       frontendPlugin({

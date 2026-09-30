@@ -213,6 +213,15 @@ describe("deployed hooks", () => {
     ["a non-finite number", { ratio: Number.NaN }, "outputs.ratio"],
     ["a Date", { at: new Date(0) }, "outputs.at"],
     ["an array hole", { list: sparseArray() }, "outputs.list[0]"],
+    [
+      "a class instance",
+      {
+        item: new (class Point {
+          x = 1;
+        })(),
+      },
+      "outputs.item",
+    ],
   ])("rejects hook outputs containing %s and names its path", async (_, outputs, where) => {
     const { client } = clientMock();
     await expect(
@@ -256,6 +265,17 @@ describe("deployed hooks", () => {
       code: "DEPLOYED_HOOK_FAILED",
       message: expect.stringContaining("outputs.self"),
     });
+  });
+  test("keeps a __proto__ key in hook outputs as data", async () => {
+    const { client } = clientMock();
+    const outputs = JSON.parse('{"__proto__":{"polluted":true}}') as Record<string, never>;
+    const [stored] = await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([plugin(() => ({ outputs }))])],
+    });
+    expect(Object.getPrototypeOf(stored?.outputs)).toBe(Object.prototype);
+    expect(Object.hasOwn(stored?.outputs ?? {}, "__proto__")).toBe(true);
   });
   test("accepts nested JSON values in hook outputs", async () => {
     const { client } = clientMock();

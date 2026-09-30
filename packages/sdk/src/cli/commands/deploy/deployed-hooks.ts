@@ -175,30 +175,6 @@ function isPlainObject(value: object): boolean {
   return prototype === null || prototype === Object.prototype;
 }
 
-function findNonJsonValue(
-  value: unknown,
-  path: string,
-  ancestors: Set<object>,
-): string | undefined {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return undefined;
-  if (typeof value === "number") return Number.isFinite(value) ? undefined : path;
-  if (typeof value !== "object" || ancestors.has(value)) return path;
-  if (!Array.isArray(value) && !isPlainObject(value)) return path;
-  const entries = Array.isArray(value)
-    ? Array.from(value, (item: unknown, index) => [`${path}[${index}]`, item] as const)
-    : Object.entries(value).map(([key, item]) => [`${path}.${key}`, item] as const);
-  ancestors.add(value);
-  try {
-    for (const [itemPath, item] of entries) {
-      const found = findNonJsonValue(item, itemPath, ancestors);
-      if (found) return found;
-    }
-    return undefined;
-  } finally {
-    ancestors.delete(value);
-  }
-}
-
 function invalidOutputs(path: string) {
   return CLIError({
     code: "DEPLOYED_HOOK_OUTPUTS_INVALID",
@@ -206,16 +182,30 @@ function invalidOutputs(path: string) {
   });
 }
 
-function copyJsonOutputs(outputs: Record<string, JsonValue>): Record<string, JsonValue> {
-  let copy: Record<string, JsonValue>;
+function toJsonValue(value: unknown, path: string, ancestors: Set<object>): JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "object" || ancestors.has(value)) throw invalidOutputs(path);
+  if (!Array.isArray(value) && !isPlainObject(value)) throw invalidOutputs(path);
+  ancestors.add(value);
   try {
-    copy = structuredClone(outputs);
-  } catch {
-    throw invalidOutputs(findNonJsonValue(outputs, "outputs", new Set()) ?? "outputs");
+    if (Array.isArray(value))
+      return Array.from(value, (item: unknown, index) =>
+        toJsonValue(item, `${path}[${index}]`, ancestors),
+      );
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        toJsonValue(item, `${path}.${key}`, ancestors),
+      ]),
+    );
+  } finally {
+    ancestors.delete(value);
   }
-  const path = findNonJsonValue(copy, "outputs", new Set());
-  if (path) throw invalidOutputs(path);
-  return copy;
+}
+
+function copyJsonOutputs(outputs: Record<string, JsonValue>): Record<string, JsonValue> {
+  return toJsonValue(outputs, "outputs", new Set()) as Record<string, JsonValue>;
 }
 
 /**

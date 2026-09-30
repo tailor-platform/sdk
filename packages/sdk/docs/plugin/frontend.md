@@ -91,7 +91,7 @@ export const plugins = definePlugins(
 
 For multiple frontends, add entries to the same `frontends` array. Each site may
 appear only once. Frontends are built and uploaded sequentially. The array and
-each `distDir` must be non-empty.
+each `distDir` must be non-empty. A `build` that is empty or only whitespace is rejected; omit `build` instead to publish without building.
 
 ## Deploy behavior and failures
 

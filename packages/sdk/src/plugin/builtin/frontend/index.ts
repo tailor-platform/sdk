@@ -69,6 +69,10 @@ export function frontendPlugin(
     const name = typeof frontend.site === "string" ? frontend.site : frontend.site.name;
     if (frontend.distDir.length === 0)
       throw new Error(`distDir must not be empty for site "${name}"`);
+    if (frontend.build !== undefined && frontend.build.trim().length === 0)
+      throw new Error(
+        `build must not be blank for site "${name}"; omit it to publish without building`,
+      );
     if (names.has(name)) throw new Error(`Duplicate frontend site "${name}"`);
     names.add(name);
   }
