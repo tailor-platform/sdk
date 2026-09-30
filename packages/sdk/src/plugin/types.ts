@@ -16,6 +16,7 @@ export type { PluginAttachment };
 import type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 import type { IdProvider as IdProviderConfig, OAuth2Client } from "#/types/auth.generated";
 import type { Executor } from "#/types/executor.generated";
+import type { JsonValue } from "#/types/helpers";
 import type { Resolver } from "#/types/resolver.generated";
 
 /**
@@ -405,6 +406,6 @@ export interface DeployedContext<PluginConfig = unknown> {
 }
 
 export interface DeployedHookResult {
-  /** JSON-serializable values included in deploy's JSON result. */
-  outputs?: Record<string, unknown>;
+  /** Values included in deploy's JSON result. */
+  outputs?: Record<string, JsonValue>;
 }

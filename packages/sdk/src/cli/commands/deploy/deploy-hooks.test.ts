@@ -270,6 +270,23 @@ test("lists the pending hook during dry-run without executing it", async () => {
   expect(mocks.getApplication).not.toHaveBeenCalled();
   expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/hook.*app/));
 });
+test("includes pending hooks in the JSON dry-run result", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  register(vi.fn());
+  await deploy({ dryRun: true, noValidate: true });
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({ pendingDeployedHooks: [{ application: "app", pluginId: "hook" }] }),
+  );
+});
+test("omits pendingDeployedHooks from the JSON dry-run result without deploy hooks", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  await deploy({ dryRun: true, noValidate: true });
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.not.objectContaining({ pendingDeployedHooks: expect.anything() }),
+  );
+});
 test("does not execute hooks in build-only mode", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   const hook = vi.fn();

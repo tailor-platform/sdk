@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
-import type { Plugin, PublishStaticWebsiteResult } from "#/plugin/types";
+import type { Plugin } from "#/plugin/types";
 import type { FrontendPluginOptions } from "./types";
 
 export type { FrontendDefinition, FrontendEnvContext, FrontendPluginOptions } from "./types";
 
 /** Unique identifier for the frontend plugin. */
 export const FrontendPluginID = "@tailor-platform/frontend";
+
+type FrontendOutput = { site: string; url: string; skippedFiles: string[] };
 
 interface BuildParams {
   command: string;
@@ -69,7 +71,7 @@ export function frontendPlugin(
     description: "Builds and deploys frontend assets to static websites",
     pluginConfig: options,
     async onDeployed(ctx) {
-      const frontends: Array<PublishStaticWebsiteResult & { site: string }> = [];
+      const frontends: FrontendOutput[] = [];
       for (const def of ctx.pluginConfig.frontends) {
         const name = typeof def.site === "string" ? def.site : def.site.name;
         const site = Object.hasOwn(ctx.staticWebsites, name) ? ctx.staticWebsites[name] : undefined;
@@ -106,7 +108,7 @@ export function frontendPlugin(
           for (const file of result.skippedFiles) ctx.logger.warn(`  - ${file}`);
         }
         ctx.logger.success(`Frontend deployed to "${name}": ${result.url}`);
-        frontends.push({ site: name, ...result });
+        frontends.push({ site: name, url: result.url, skippedFiles: result.skippedFiles });
       }
       return { outputs: { frontends } };
     },

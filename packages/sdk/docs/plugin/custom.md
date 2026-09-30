@@ -297,15 +297,18 @@ files so users can correct files that could not be uploaded.
 
 Return JSON-serializable `outputs` to include a result in `deployedHooks` under
 `tailor deploy --json`. Each entry identifies the application and plugin. This
-key is omitted when no hook supplies outputs.
+key is omitted when no hook supplies outputs. Outputs that cannot be serialized
+fail the hook.
 
-A failed hook stops later hooks with `DEPLOYED_HOOK_FAILED`. Platform resources
-have already been applied and are not rolled back. The error lists any hooks
+A failed hook stops later hooks with `DEPLOYED_HOOK_FAILED`. The same error is
+reported when the deployed information passed to hooks cannot be loaded. Platform
+resources have already been applied and are not rolled back. The error lists any hooks
 that did not run. Fix the hook and run `tailor deploy` again; hooks run again even
 if there are no resource changes.
 
 Hooks do not run during dry-run, build-only, or migration test deployments.
-Dry-run lists the pending hooks. Calling `deploy()` from the programmatic CLI
+Dry-run lists the pending hooks; with `--json`, they appear under
+`pendingDeployedHooks` as `{ application, pluginId }` entries. Calling `deploy()` from the programmatic CLI
 API runs hooks under the same conditions as `tailor deploy`.
 
 ## Hook Scheduling Rules

@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
+import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { fetchPaged, getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -8,6 +9,7 @@ import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { deployStaticWebsite } from "../staticwebsite/deploy";
 import type { DeployedApplication, DeployedStaticWebsite } from "#/plugin/types";
+import type { JsonValue } from "#/types/helpers";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
 interface RunDeployedHooksParams {
@@ -18,7 +20,7 @@ interface RunDeployedHooksParams {
 interface DeployedHookOutput {
   application: string;
   pluginId: string;
-  outputs: Record<string, unknown>;
+  outputs: Record<string, JsonValue>;
 }
 
 interface LoadedTarget {
@@ -32,7 +34,10 @@ async function loadDeployedTarget(
   target: BuiltDeploymentTarget,
 ): Promise<LoadedTarget> {
   const name = target.application.name;
-  const namespace = target.application.authService?.config.name;
+  const namespace = getApplicationAuthNamespace({
+    authService: target.application.authService,
+    config: target.config,
+  });
   const [response, siteUrls, gateways, oauth2Clients] = await Promise.all([
     client.getApplication({ workspaceId, applicationName: name }),
     Promise.all(
@@ -115,6 +120,29 @@ async function publishStaticWebsite(
   );
 }
 
+function deployedHookFailure(what: string, error: unknown, notRun: readonly string[]) {
+  const reason = error instanceof Error ? error.message : String(error);
+  return CLIError({
+    code: "DEPLOYED_HOOK_FAILED",
+    message: `Platform resources were applied successfully, but ${what}: ${reason}${notRun.length ? `. Hooks not run: ${notRun.join(", ")}` : ""}`,
+    suggestion:
+      "Fix the error and run `tailor deploy` again. Unchanged resources are not re-applied.",
+    cause: error,
+  });
+}
+
+function assertJsonSerializable(outputs: Record<string, JsonValue>): void {
+  try {
+    JSON.stringify(outputs);
+  } catch (error) {
+    throw CLIError({
+      code: "DEPLOYED_HOOK_OUTPUTS_INVALID",
+      message: `outputs are not JSON-serializable: ${error instanceof Error ? error.message : String(error)}`,
+      cause: error,
+    });
+  }
+}
+
 /**
  * Run deploy hooks in config and plugin registration order after resources are applied.
  * @param params - Deployed targets and workspace client
@@ -133,7 +161,13 @@ export async function runDeployedHooks(
 
   const loaded = await Promise.all(
     targets.map((target) => loadDeployedTarget(client, workspaceId, target)),
-  );
+  ).catch((error: unknown) => {
+    throw deployedHookFailure(
+      "loading the deployed information for onDeployed hooks failed",
+      error,
+      hooks.map(({ plugin }) => plugin.id),
+    );
+  });
   const applications = loaded.map(({ application }) => application);
   const staticWebsites: Record<string, DeployedStaticWebsite> = Object.create(null);
   for (const { siteUrls } of loaded) {
@@ -163,6 +197,7 @@ export async function runDeployedHooks(
           logger: { info: logger.info, warn: logger.warn, success: logger.success },
         });
       });
+      if (result?.outputs !== undefined) assertJsonSerializable(result.outputs);
       if (result?.outputs !== undefined)
         outputs.push({
           application: target.application.name,
@@ -170,14 +205,11 @@ export async function runDeployedHooks(
           outputs: result.outputs,
         });
     } catch (error) {
-      const remaining = hooks.slice(position + 1).map(({ plugin }) => plugin.id);
-      throw CLIError({
-        code: "DEPLOYED_HOOK_FAILED",
-        message: `Platform resources were applied successfully, but the onDeployed hook of plugin "${plugin.id}" failed for app "${target.application.name}": ${error instanceof Error ? error.message : String(error)}${remaining.length ? `. Hooks not run: ${remaining.join(", ")}` : ""}`,
-        suggestion:
-          "Fix the error and run `tailor deploy` again. Unchanged resources are not re-applied.",
-        cause: error,
-      });
+      throw deployedHookFailure(
+        `the onDeployed hook of plugin "${plugin.id}" failed for app "${target.application.name}"`,
+        error,
+        hooks.slice(position + 1).map(({ plugin }) => plugin.id),
+      );
     }
   }
   return outputs;

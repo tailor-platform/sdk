@@ -41,3 +41,13 @@ test("deploy-only plugins do not introduce generation dependencies", () => {
   expect(hasGenerationHooks(plugin)).toBe(false);
   expect(getPluginGenerationDependencies(plugin)).toEqual(new Set());
 });
+
+test("accepts only JSON values as deploy hook outputs", () => {
+  const plugin: Plugin = {
+    id: "@example/outputs",
+    description: "Returns outputs",
+    // @ts-expect-error bigint is not a JSON value
+    onDeployed: () => ({ outputs: { size: 1n } }),
+  };
+  expect(plugin.onDeployed).toBeTypeOf("function");
+});

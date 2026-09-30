@@ -996,21 +996,21 @@ async function deployInternal(
     // one, so printing this first-pass plan would only show output that's
     // about to be superseded. Dry run never rebuilds (it returns right
     // below), so it always shows this first pass instead.
+    const pendingDeployedHooks = internalContext?.skipDeployedHooks
+      ? []
+      : targets.flatMap((target) =>
+          target.plugins
+            .filter((plugin) => plugin.onDeployed)
+            .map((plugin) => ({ application: target.application.name, pluginId: plugin.id })),
+        );
     let planSummary: PlanSummary | undefined =
       dryRun || !needsUrlResolution
-        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun })
+        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun, pendingDeployedHooks })
         : undefined;
 
     if (dryRun) {
-      if (!internalContext?.skipDeployedHooks) {
-        for (const target of targets) {
-          for (const plugin of target.plugins) {
-            if (plugin.onDeployed)
-              logger.info(
-                `Hook to run after apply: "${plugin.id}" (app "${target.application.name}")`,
-              );
-          }
-        }
+      for (const { application, pluginId } of pendingDeployedHooks) {
+        logger.info(`Hook to run after apply: "${pluginId}" (app "${application}")`);
       }
       logger.info("Dry run enabled. No changes applied.");
       return undefined;

@@ -146,6 +146,47 @@ describe("deployed hooks", () => {
     });
     expect(later).not.toHaveBeenCalled();
   });
+  test("resolves public OAuth clients for an external Auth namespace", async () => {
+    const { client, methods } = clientMock();
+    const hook = vi.fn();
+    const external = target([plugin(hook)]);
+    Object.assign(external.application, { authService: undefined });
+    Object.assign(external.config, { auth: { name: "shared-auth", external: true } });
+    await runDeployedHooks({ client, workspaceId: "ws", targets: [external] });
+    expect(methods.listAuthOAuth2Clients).toHaveBeenCalledWith(
+      expect.objectContaining({ namespaceName: "shared-auth" }),
+    );
+    expect(hook.mock.calls[0]?.[0].application.auth).toEqual({
+      namespace: "shared-auth",
+      oauth2Clients: [{ name: "web", clientId: "public" }],
+    });
+  });
+  test("reports applied resources when loading the hook context fails", async () => {
+    const { client, methods } = clientMock();
+    methods.getApplication.mockRejectedValue(new Error("network down"));
+    const hook = vi.fn();
+    await expect(
+      runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message: expect.stringMatching(/applied successfully.*network down.*Hooks not run: hook/s),
+    });
+    expect(hook).not.toHaveBeenCalled();
+  });
+  test("rejects hook outputs that cannot be serialized to JSON", async () => {
+    const { client } = clientMock();
+    const outputs = { size: 1n } as unknown as Record<string, never>;
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [target([plugin(() => ({ outputs }))])],
+      }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message: expect.stringMatching(/hook.*outputs.*JSON/s),
+    });
+  });
   test("exposes only the static websites of this deploy", async () => {
     const { client } = clientMock();
     const hook = vi.fn();
