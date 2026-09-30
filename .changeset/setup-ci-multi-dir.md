@@ -7,4 +7,6 @@
 
 `tailor setup ci branch` and `tailor setup ci preview` also accept `--paths` (repeatable) to trigger the workflow on changes outside the app directories, such as a frontend or shared packages.
 
+Branch workflows generated with `--erd-preview` now install the project dependencies before building the ERD preview, which the setup step does not do.
+
 The workflow template version is bumped, so `tailor setup check` reports every generated target as outdated. Re-run the setup subcommand to pick it up: only branch workflows generated with `--erd-preview` change, and other single-`--dir` workflows regenerate identically. If you group apps with a comma in `tailor setup ci coordinate --action`, re-run `tailor setup ci action --force` for each grouped app before re-running `setup ci coordinate`.

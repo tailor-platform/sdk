@@ -237,6 +237,10 @@ jobs:
         uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
+      - id: tailor-install
+        uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        with:
+          package-manager: __PACKAGE_MANAGER__
       - id: tailor-checkout-base
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

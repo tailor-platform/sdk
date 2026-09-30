@@ -185,6 +185,21 @@ describe("renderBranchWorkflow", () => {
     expect(generatedIds).not.toContain("tailor-erd-preview");
   });
 
+  test("installs head dependencies in the ERD preview job, since the setup action does not", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const steps = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-erd-preview"]?.steps ?? [];
+    const ids = steps.map((step) => step.id);
+
+    expect(ids.indexOf("tailor-install")).toBe(ids.indexOf("tailor-setup") + 1);
+    expect(String(steps[ids.indexOf("tailor-install")]?.uses)).toMatch(
+      /^tailor-platform\/actions\/install@/,
+    );
+    expect(generatedIds).toContain("tailor-erd-preview/tailor-install");
+  });
+
   test("adds ERD preview and comment jobs when enabled", () => {
     const { content, generatedIds } = renderBranchWorkflow({
       ...branchBase,

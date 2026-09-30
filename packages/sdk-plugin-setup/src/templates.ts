@@ -400,6 +400,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-erd-preview",
       "tailor-erd-preview/tailor-checkout",
       "tailor-erd-preview/tailor-setup",
+      "tailor-erd-preview/tailor-install",
       "tailor-erd-preview/tailor-checkout-base",
       "tailor-erd-preview/tailor-detect-base-package-manager",
       "tailor-erd-preview/tailor-setup-base-pnpm",
