@@ -235,6 +235,7 @@ describe("beta warning", () => {
     [["ci", "preview", "--region", "us-west"]],
     [["ci", "action"]],
     [["ci", "coordinate", "--name", "apps", "--action", "api"]],
+    [["ci", "env"]],
     [["deps"]],
     [["check"]],
     [["update"]],

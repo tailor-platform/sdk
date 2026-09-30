@@ -41,6 +41,7 @@ const envCommand = defineAppCommand({
     }),
   }),
   run: (args) => {
+    logBetaWarning("setup");
     setupEnv({ outputDir: process.cwd(), format: args.format, environments: args.environment });
   },
 });
