@@ -7,11 +7,7 @@ import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { deployStaticWebsite } from "../staticwebsite/deploy";
-import type {
-  DeployedApplication,
-  DeployedStaticWebsite,
-  UploadStaticWebsiteParams,
-} from "#/plugin/types";
+import type { DeployedApplication, DeployedStaticWebsite } from "#/plugin/types";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
 interface RunDeployedHooksParams {
@@ -25,14 +21,19 @@ interface DeployedHookOutput {
   outputs: Record<string, unknown>;
 }
 
-async function loadDeployedApplication(
+interface LoadedTarget {
+  application: DeployedApplication;
+  siteUrls: { name: string; url: string }[];
+}
+
+async function loadDeployedTarget(
   client: OperatorClient,
   workspaceId: string,
   target: BuiltDeploymentTarget,
-): Promise<DeployedApplication> {
+): Promise<LoadedTarget> {
   const name = target.application.name;
   const namespace = target.application.authService?.config.name;
-  const [response, staticWebsites, gateways, oauth2Clients] = await Promise.all([
+  const [response, siteUrls, gateways, oauth2Clients] = await Promise.all([
     client.getApplication({ workspaceId, applicationName: name }),
     Promise.all(
       target.application.staticWebsiteServices.map(async (site) => {
@@ -71,24 +72,47 @@ async function loadDeployedApplication(
     `Application "${name}" not found after deploy`,
   );
   return {
-    name,
-    configPath: target.config.path,
-    url: application.url,
-    domain: application.domain,
-    staticWebsites,
-    aiGateways: gateways.filter((gateway) => gateway !== undefined),
-    ...(namespace
-      ? {
-          auth: {
-            namespace,
-            oauth2Clients: oauth2Clients.map((client) => ({
-              name: client.name,
-              clientId: client.clientId,
-            })),
-          },
-        }
-      : {}),
+    application: {
+      ...(target.application.id ? { id: target.application.id } : {}),
+      name,
+      configPath: target.config.path,
+      url: application.url,
+      domain: application.domain,
+      aiGateways: gateways.filter((gateway) => gateway !== undefined),
+      ...(namespace
+        ? {
+            auth: {
+              namespace,
+              oauth2Clients: oauth2Clients.map((client) => ({
+                name: client.name,
+                clientId: client.clientId,
+              })),
+            },
+          }
+        : {}),
+    },
+    siteUrls,
   };
+}
+
+async function publishStaticWebsite(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+  dir: string,
+) {
+  const resolved = path.resolve(dir);
+  const info = await stat(resolved).catch(() => undefined);
+  if (!info?.isDirectory())
+    throw CLIError({
+      code: "DIRECTORY_NOT_FOUND",
+      message: `Static website publish directory does not exist or is not a directory: ${resolved}`,
+    });
+  return withTimeout(
+    deployStaticWebsite(client, workspaceId, name, resolved, !logger.jsonMode),
+    10 * 60_000,
+    "Deployment timed out after 10 minutes.",
+  );
 }
 
 /**
@@ -107,37 +131,21 @@ export async function runDeployedHooks(
   );
   if (hooks.length === 0) return [];
 
-  const applications = await Promise.all(
-    targets.map((target) => loadDeployedApplication(client, workspaceId, target)),
+  const loaded = await Promise.all(
+    targets.map((target) => loadDeployedTarget(client, workspaceId, target)),
   );
+  const applications = loaded.map(({ application }) => application);
   const staticWebsites: Record<string, DeployedStaticWebsite> = Object.create(null);
-  for (const application of applications) {
-    for (const site of application.staticWebsites) {
+  for (const { siteUrls } of loaded) {
+    for (const site of siteUrls) {
       if (Object.hasOwn(staticWebsites, site.name))
         throw internalError(`Duplicate deployed static website "${site.name}"`);
-      staticWebsites[site.name] = site;
+      staticWebsites[site.name] = {
+        ...site,
+        publish: (dir) => publishStaticWebsite(client, workspaceId, site.name, dir),
+      };
     }
   }
-  const uploadStaticWebsite = async (params: UploadStaticWebsiteParams) => {
-    if (!Object.hasOwn(staticWebsites, params.name)) {
-      throw CLIError({
-        code: "STATIC_WEBSITE_NOT_IN_DEPLOY",
-        message: `Static website "${params.name}" is not included in this deploy. Available sites: ${Object.keys(staticWebsites).join(", ")}`,
-      });
-    }
-    const dir = path.resolve(params.dir);
-    const info = await stat(dir).catch(() => undefined);
-    if (!info?.isDirectory())
-      throw CLIError({
-        code: "DIRECTORY_NOT_FOUND",
-        message: `Static website upload directory does not exist or is not a directory: ${dir}`,
-      });
-    return withTimeout(
-      deployStaticWebsite(client, workspaceId, params.name, dir, !logger.jsonMode),
-      10 * 60_000,
-      "Deployment timed out after 10 minutes.",
-    );
-  };
   const outputs: DeployedHookOutput[] = [];
   for (const [position, entry] of hooks.entries()) {
     const { target, index, plugin, hook } = entry;
@@ -153,7 +161,6 @@ export async function runDeployedHooks(
           configPath: target.config.path,
           pluginConfig: plugin.pluginConfig,
           logger: { info: logger.info, warn: logger.warn, success: logger.success },
-          uploadStaticWebsite,
         });
       });
       if (result?.outputs !== undefined)

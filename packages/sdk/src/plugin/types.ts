@@ -355,9 +355,16 @@ export interface Plugin<
   ): void | DeployedHookResult | Promise<void | DeployedHookResult>;
 }
 
+export interface PublishStaticWebsiteResult {
+  url: string;
+  skippedFiles: string[];
+}
+
 export interface DeployedStaticWebsite {
   name: string;
   url: string;
+  /** Uploads the directory at the absolute path `dir` and publishes it to this website. */
+  publish(dir: string): Promise<PublishStaticWebsiteResult>;
 }
 
 export interface DeployedOAuth2Client {
@@ -366,12 +373,13 @@ export interface DeployedOAuth2Client {
 }
 
 export interface DeployedApplication {
+  /** SDK-managed application ID from defineConfig(); undefined when the config has none. */
+  id?: string;
   name: string;
   configPath: string;
   /** Application endpoint URL. */
   url: string;
   domain: string;
-  staticWebsites: DeployedStaticWebsite[];
   aiGateways: { name: string; url: string }[];
   auth?: { namespace: string; oauth2Clients: DeployedOAuth2Client[] };
 }
@@ -382,30 +390,18 @@ export interface PluginLogger {
   success(message: string): void;
 }
 
-export interface UploadStaticWebsiteParams {
-  /** Name of a site included in this deploy run. */
-  name: string;
-  /** Absolute path to the directory to upload. */
-  dir: string;
-}
-
-export interface UploadStaticWebsiteResult {
-  url: string;
-  skippedFiles: string[];
-}
-
 /** Values available after all applications in this deploy run have been applied. */
 export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
   /** Application whose config registers this plugin. */
   application: DeployedApplication;
   applications: readonly DeployedApplication[];
+  /** Static websites of every application in this deploy run, keyed by name. */
   staticWebsites: Readonly<Record<string, DeployedStaticWebsite>>;
   /** Absolute path of the config registering this plugin. */
   configPath: string;
   pluginConfig: PluginConfig;
   logger: PluginLogger;
-  uploadStaticWebsite(params: UploadStaticWebsiteParams): Promise<UploadStaticWebsiteResult>;
 }
 
 export interface DeployedHookResult {

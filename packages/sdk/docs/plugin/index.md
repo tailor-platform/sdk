@@ -166,9 +166,9 @@ tailor deploy
 └─ onDeployed                ← each registered plugin, in config order
 ```
 
-| Hook         | Available data                                                   | Can do                                  |
-| ------------ | ---------------------------------------------------------------- | --------------------------------------- |
-| `onDeployed` | Deployed application URLs, website URLs, public OAuth client IDs | Build assets and upload static websites |
+| Hook         | Available data                                                   | Can do                                   |
+| ------------ | ---------------------------------------------------------------- | ---------------------------------------- |
+| `onDeployed` | Deployed application URLs, website URLs, public OAuth client IDs | Build assets and publish static websites |
 
 Deploy hooks run even when there are no resource changes. They do not run during
 `tailor generate`, dry-run, build-only, or migration test deployments. Dry-run lists

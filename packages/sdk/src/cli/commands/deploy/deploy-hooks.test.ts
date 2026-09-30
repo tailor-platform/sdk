@@ -257,7 +257,7 @@ test("runs a hook once after remaining resources are applied even when the plan 
   expect(hook).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       application: expect.objectContaining({ url: "https://app" }),
-      staticWebsites: { web: { name: "web", url: "https://web" } },
+      staticWebsites: { web: expect.objectContaining({ name: "web", url: "https://web" }) },
     }),
   );
 });

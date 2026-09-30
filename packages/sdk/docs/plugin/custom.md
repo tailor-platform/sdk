@@ -263,10 +263,12 @@ Runs once after every application in the deploy has been applied, including when
 there are no resource changes. Hooks run sequentially in config order, then in
 `definePlugins()` registration order. No `importPath` or table attachment is required.
 
-Use `ctx.application` for the registering application's URL, domain, websites,
-AI Gateway URLs, and public OAuth client IDs. `ctx.applications` contains all
-applications in a multi-config deploy, and `ctx.staticWebsites` looks up their
-websites by name. OAuth client secrets are never included.
+Use `ctx.application` for the registering application's ID, URL, domain, AI
+Gateway URLs, and public OAuth client IDs. `ctx.application.id` is the `id` from
+`defineConfig()` and is `undefined` when the config has none. `ctx.applications`
+contains all applications in a multi-config deploy, and `ctx.staticWebsites`
+looks up the static websites of all of them by name. OAuth client secrets are
+never included.
 
 `ctx.configPath` is the absolute path of the registering config. `ctx.workspaceId`
 and `ctx.pluginConfig` identify the deployment workspace and the plugin's options.
@@ -288,10 +290,10 @@ const deployedInfo: Plugin = {
 export const plugins = definePlugins(deployedInfo);
 ```
 
-To publish assets, await `ctx.uploadStaticWebsite({ name, dir })` with an absolute
-directory path. The site must belong to an application included in this deploy.
-The result contains `url` and `skippedFiles`; report skipped files so users can
-correct files that could not be uploaded.
+To publish assets, await `ctx.staticWebsites[name].publish(dir)` with an absolute
+directory path. Only websites of applications included in this deploy appear in
+`ctx.staticWebsites`. The result contains `url` and `skippedFiles`; report skipped
+files so users can correct files that could not be uploaded.
 
 Return JSON-serializable `outputs` to include a result in `deployedHooks` under
 `tailor deploy --json`. Each entry identifies the application and plugin. This

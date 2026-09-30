@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
-import type { Plugin, UploadStaticWebsiteResult } from "#/plugin/types";
+import type { Plugin, PublishStaticWebsiteResult } from "#/plugin/types";
 import type { FrontendPluginOptions } from "./types";
 
 export type { FrontendDefinition, FrontendEnvContext, FrontendPluginOptions } from "./types";
@@ -66,7 +66,7 @@ export function frontendPlugin(
     description: "Builds and deploys frontend assets to static websites",
     pluginConfig: options,
     async onDeployed(ctx) {
-      const frontends: Array<UploadStaticWebsiteResult & { site: string }> = [];
+      const frontends: Array<PublishStaticWebsiteResult & { site: string }> = [];
       for (const def of ctx.pluginConfig.frontends) {
         const name = typeof def.site === "string" ? def.site : def.site.name;
         const site = Object.hasOwn(ctx.staticWebsites, name) ? ctx.staticWebsites[name] : undefined;
@@ -93,7 +93,7 @@ export function frontendPlugin(
           throw new Error(
             `Frontend output directory does not exist or is not a directory: ${outDir}`,
           );
-        const result = await ctx.uploadStaticWebsite({ name, dir: outDir });
+        const result = await site.publish(outDir);
         if (result.skippedFiles.length > 0) {
           ctx.logger.warn(
             "Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",

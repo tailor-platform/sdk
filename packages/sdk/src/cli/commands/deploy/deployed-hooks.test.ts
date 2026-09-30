@@ -17,6 +17,7 @@ function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
   return {
     config: { path: `/repo/${name}/tailor.config.ts`, aiGateways: [{ name: "ai" }] },
     application: {
+      id: `${name}-id`,
       name,
       staticWebsiteServices: [{ name: `${name}-web` }],
       authService: { config: { name: "auth" } },
@@ -65,15 +66,17 @@ describe("deployed hooks", () => {
         configPath: "/repo/app/tailor.config.ts",
         pluginConfig: { setting: true },
         application: {
+          id: "app-id",
           name: "app",
           configPath: "/repo/app/tailor.config.ts",
           url: "https://app",
           domain: "app.example",
-          staticWebsites: [{ name: "app-web", url: "https://app-web" }],
           aiGateways: [{ name: "ai", url: "https://ai" }],
           auth: { namespace: "auth", oauth2Clients: [{ name: "web", clientId: "public" }] },
         },
-        staticWebsites: { "app-web": { name: "app-web", url: "https://app-web" } },
+        staticWebsites: {
+          "app-web": { name: "app-web", url: "https://app-web", publish: expect.any(Function) },
+        },
       }),
     );
   });
@@ -143,17 +146,14 @@ describe("deployed hooks", () => {
     });
     expect(later).not.toHaveBeenCalled();
   });
-  test("rejects uploads to sites outside this deploy", async () => {
+  test("exposes only the static websites of this deploy", async () => {
     const { client } = clientMock();
-    const hook = plugin(async (ctx) => {
-      await expect(ctx.uploadStaticWebsite({ name: "toString", dir: "/tmp" })).rejects.toThrow(
-        "toString",
-      );
-    });
-    await runDeployedHooks({ client, workspaceId: "ws", targets: [target([hook])] });
-    expect(deployStaticWebsite).not.toHaveBeenCalled();
+    const hook = vi.fn();
+    await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
+    const { staticWebsites } = hook.mock.calls[0]?.[0] as DeployedContext;
+    expect(staticWebsites["toString"]).toBeUndefined();
   });
-  test("rejects missing upload directories with an absolute path", async () => {
+  test("rejects missing publish directories with an absolute path", async () => {
     const { client } = clientMock();
     await runDeployedHooks({
       client,
@@ -162,7 +162,7 @@ describe("deployed hooks", () => {
         target([
           plugin(async (ctx) => {
             await expect(
-              ctx.uploadStaticWebsite({ name: "app-web", dir: "/missing/deployed-hook-build" }),
+              ctx.staticWebsites["app-web"]?.publish("/missing/deployed-hook-build"),
             ).rejects.toThrow("/missing/deployed-hook-build");
           }),
         ]),
@@ -170,7 +170,7 @@ describe("deployed hooks", () => {
     });
     expect(deployStaticWebsite).not.toHaveBeenCalled();
   });
-  test("uploads an existing directory through the injected capability", async () => {
+  test("publishes an existing directory to the static website", async () => {
     using _logger = silenceLogger();
     const dir = await mkdtemp(join(tmpdir(), "deployed-hook-"));
     try {
@@ -181,7 +181,7 @@ describe("deployed hooks", () => {
         targets: [
           target([
             plugin(async (ctx: DeployedContext) => {
-              expect(await ctx.uploadStaticWebsite({ name: "app-web", dir })).toEqual({
+              expect(await ctx.staticWebsites["app-web"]?.publish(dir)).toEqual({
                 url: "https://published",
                 skippedFiles: [],
               });
@@ -200,7 +200,7 @@ describe("deployed hooks", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
-  test("rejects an upload path that is a file", async () => {
+  test("rejects a publish path that is a file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "deployed-hook-"));
     try {
       const file = join(dir, "file");
@@ -212,9 +212,7 @@ describe("deployed hooks", () => {
         targets: [
           target([
             plugin(async (ctx) => {
-              await expect(ctx.uploadStaticWebsite({ name: "app-web", dir: file })).rejects.toThrow(
-                file,
-              );
+              await expect(ctx.staticWebsites["app-web"]?.publish(file)).rejects.toThrow(file);
             }),
           ]),
         ],
