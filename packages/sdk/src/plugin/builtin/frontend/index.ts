@@ -11,24 +11,27 @@ export const FrontendPluginID = "@tailor-platform/frontend";
 
 interface BuildParams {
   command: string;
-  cwd: string;
+  workingDir: string;
   env: Record<string, string>;
 }
 
 async function buildFrontend(params: BuildParams): Promise<void> {
-  const { command, cwd, env } = params;
+  const { command, workingDir, env } = params;
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, {
       shell: true,
-      cwd,
+      cwd: workingDir,
       env: { ...process.env, ...env },
       stdio: ["ignore", process.stderr, process.stderr],
     });
     child.once("error", (error) => {
       reject(
-        new Error(`Failed to start frontend build: ${command} (cwd: ${cwd}): ${error.message}`, {
-          cause: error,
-        }),
+        new Error(
+          `Failed to start frontend build: ${command} (working directory: ${workingDir}): ${error.message}`,
+          {
+            cause: error,
+          },
+        ),
       );
     });
     child.once("close", (code, signal) => {
@@ -36,7 +39,7 @@ async function buildFrontend(params: BuildParams): Promise<void> {
       else
         reject(
           new Error(
-            `Frontend build failed: ${command} (cwd: ${cwd}, exit code: ${code}${signal ? `, signal: ${signal}` : ""})`,
+            `Frontend build failed: ${command} (working directory: ${workingDir}, exit code: ${code}${signal ? `, signal: ${signal}` : ""})`,
           ),
         );
     });
@@ -56,8 +59,8 @@ export function frontendPlugin(
   const names = new Set<string>();
   for (const frontend of options.frontends) {
     const name = typeof frontend.site === "string" ? frontend.site : frontend.site.name;
-    if (frontend.outDir.length === 0)
-      throw new Error(`outDir must not be empty for site "${name}"`);
+    if (frontend.distDir.length === 0)
+      throw new Error(`distDir must not be empty for site "${name}"`);
     if (names.has(name)) throw new Error(`Duplicate frontend site "${name}"`);
     names.add(name);
   }
@@ -74,8 +77,8 @@ export function frontendPlugin(
           throw new Error(
             `Static website "${name}" is not included in this deploy. Available sites: ${Object.keys(ctx.staticWebsites).join(", ")}`,
           );
-        const cwd = path.resolve(path.dirname(ctx.configPath), def.cwd ?? ".");
-        const outDir = path.resolve(cwd, def.outDir);
+        const workingDir = path.resolve(path.dirname(ctx.configPath), def.workingDir ?? ".");
+        const distDir = path.resolve(workingDir, def.distDir);
         const env =
           (await def.env?.({
             site,
@@ -85,15 +88,17 @@ export function frontendPlugin(
             workspaceId: ctx.workspaceId,
           })) ?? {};
         if (def.build) {
-          ctx.logger.info(`Building frontend for site "${name}": ${def.build} (cwd: ${cwd})`);
-          await buildFrontend({ command: def.build, cwd, env });
+          ctx.logger.info(
+            `Building frontend for site "${name}": ${def.build} (working directory: ${workingDir})`,
+          );
+          await buildFrontend({ command: def.build, workingDir, env });
         }
-        const info = await stat(outDir).catch(() => undefined);
+        const info = await stat(distDir).catch(() => undefined);
         if (!info?.isDirectory())
           throw new Error(
-            `Frontend output directory does not exist or is not a directory: ${outDir}`,
+            `Frontend dist directory does not exist or is not a directory: ${distDir}`,
           );
-        const result = await site.publish(outDir);
+        const result = await site.publish(distDir);
         if (result.skippedFiles.length > 0) {
           ctx.logger.warn(
             "Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",

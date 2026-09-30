@@ -58,27 +58,27 @@ describe("frontendPlugin", () => {
   test("rejects an empty frontend list", () => {
     expect(() => frontendPlugin({ frontends: [] })).toThrow(/frontends/i);
   });
-  test("rejects an empty output directory", () => {
-    expect(() => frontendPlugin({ frontends: [{ site: "web", outDir: "" }] })).toThrow(/outDir/);
+  test("rejects an empty dist directory", () => {
+    expect(() => frontendPlugin({ frontends: [{ site: "web", distDir: "" }] })).toThrow(/distDir/);
   });
   test("rejects duplicate site names across string and object definitions", () => {
     expect(() =>
       frontendPlugin({
         frontends: [
-          { site: "web", outDir: "dist" },
-          { site: { name: "web" }, outDir: "other" },
+          { site: "web", distDir: "dist" },
+          { site: { name: "web" }, distDir: "other" },
         ],
       }),
     ).toThrow(/web/);
   });
-  test("builds with awaited environment values in a cwd relative to the config", async () => {
+  test("builds with awaited environment values in a working directory relative to the config", async () => {
     const cwd = join(root, "apps/web");
     await mkdir(cwd, { recursive: true });
     const { publish, run } = setup([
       {
         site: { name: "web" },
-        cwd: "../web",
-        outDir: "dist",
+        workingDir: "../web",
+        distDir: "dist",
         env: async ({ site, application, workspaceId, applications, staticWebsites }) => {
           await Promise.resolve();
           return {
@@ -100,37 +100,37 @@ describe("frontendPlugin", () => {
     );
     expect(publish).toHaveBeenCalledExactlyOnceWith("web", join(cwd, "dist"));
   });
-  test("reports the command, cwd, and exit code when a build fails", async () => {
+  test("reports the command, working directory, and exit code when a build fails", async () => {
     const cwd = join(root, "apps/web");
     await mkdir(cwd, { recursive: true });
     const build = 'node -e "process.exit(7)"';
-    const { publish, run } = setup([{ site: "web", cwd: "../web", outDir: "dist", build }]);
+    const { publish, run } = setup([{ site: "web", workingDir: "../web", distDir: "dist", build }]);
     await expect(run()).rejects.toThrow(
-      `Frontend build failed: ${build} (cwd: ${cwd}, exit code: 7)`,
+      `Frontend build failed: ${build} (working directory: ${cwd}, exit code: 7)`,
     );
     expect(publish).not.toHaveBeenCalled();
   });
-  test("reports the resolved path when the output directory is absent", async () => {
-    const { publish, run } = setup([{ site: "web", outDir: "dist" }]);
+  test("reports the resolved path when the dist directory is absent", async () => {
+    const { publish, run } = setup([{ site: "web", distDir: "dist" }]);
     await expect(run()).rejects.toThrow(join(root, "apps/backend/dist"));
     expect(publish).not.toHaveBeenCalled();
   });
-  test("rejects an output path that is a file", async () => {
+  test("rejects a dist path that is a file", async () => {
     const file = join(root, "file");
     await writeFile(file, "data");
-    const { publish, run } = setup([{ site: "web", outDir: file }]);
+    const { publish, run } = setup([{ site: "web", distDir: file }]);
     await expect(run()).rejects.toThrow(file);
     expect(publish).not.toHaveBeenCalled();
   });
   test("lists available sites when the requested site is outside this deploy", async () => {
-    const { publish, run } = setup([{ site: "toString", outDir: "dist" }]);
+    const { publish, run } = setup([{ site: "toString", distDir: "dist" }]);
     await expect(run()).rejects.toThrow(/toString.*web, admin/);
     expect(publish).not.toHaveBeenCalled();
   });
   test("uploads existing assets without requiring a build command", async () => {
     const dir = join(root, "apps/backend/dist");
     await mkdir(dir, { recursive: true });
-    const { ctx, publish, run } = setup([{ site: "web", outDir: "dist" }]);
+    const { ctx, publish, run } = setup([{ site: "web", distDir: "dist" }]);
     expect(await run()).toEqual({
       outputs: { frontends: [{ site: "web", url: "https://published", skippedFiles: [] }] },
     });
@@ -141,7 +141,7 @@ describe("frontendPlugin", () => {
     );
   });
   test("warns about files that were skipped during upload", async () => {
-    const { ctx, publish, run } = setup([{ site: "web", outDir: root }]);
+    const { ctx, publish, run } = setup([{ site: "web", distDir: root }]);
     publish.mockResolvedValue({
       url: "https://published",
       skippedFiles: ["bad.bin"],
@@ -155,10 +155,10 @@ describe("frontendPlugin", () => {
   test("waits for each frontend upload before evaluating the next frontend", async () => {
     const sequence: string[] = [];
     const { publish, run } = setup([
-      { site: "web", outDir: root },
+      { site: "web", distDir: root },
       {
         site: "admin",
-        outDir: root,
+        distDir: root,
         env: async () => {
           sequence.push("admin env");
           return {};
@@ -176,8 +176,8 @@ describe("frontendPlugin", () => {
   test("stops before later frontends when an upload fails", async () => {
     const nextEnv = vi.fn();
     const { publish, run } = setup([
-      { site: "web", outDir: root },
-      { site: "admin", outDir: root, env: nextEnv },
+      { site: "web", distDir: root },
+      { site: "admin", distDir: root, env: nextEnv },
     ]);
     publish.mockRejectedValue(new Error("upload failed"));
     await expect(run()).rejects.toThrow("upload failed");
@@ -190,8 +190,8 @@ test("keeps frontend build output off the JSON stdout stream", () => {
     frontends: [
       {
         site: "web",
-        cwd: root,
-        outDir: root,
+        workingDir: root,
+        distDir: root,
         build: `node -e "process.stdout.write('build stdout');process.stderr.write('build stderr')"`,
       },
     ],

@@ -35,9 +35,9 @@ export const plugins = definePlugins(
     frontends: [
       {
         site: website,
-        cwd: "../web",
+        workingDir: "../web",
         build: "pnpm run build",
-        outDir: "dist",
+        distDir: "dist",
         env: ({ site, application }) => ({
           VITE_TAILOR_APP_URL: application.url,
           VITE_SITE_URL: site.url,
@@ -51,9 +51,11 @@ export const plugins = definePlugins(
 ```
 
 Run `tailor deploy --config apps/backend/tailor.config.ts` from the repository
-root. `cwd` is relative to the config's directory, so this example builds in
-`apps/web`. `outDir` is relative to that working directory, so it uploads
-`apps/web/dist`. Omitting `cwd` uses the config's directory. Absolute paths are
+root. `workingDir` is where `build` runs, relative to the config's directory, so
+this example builds in `apps/web`. `distDir` is the directory your build writes
+its assets to, relative to `workingDir`, so this example publishes `apps/web/dist`.
+Set it to match your build tool's output setting; the plugin does not change where
+the build writes. Omitting `workingDir` uses the config's directory. Absolute paths are
 also accepted.
 
 `site` accepts either a `defineStaticWebSite()` result or a site name. The site
@@ -82,14 +84,14 @@ Omit `build` to upload an existing directory:
 ```typescript
 export const plugins = definePlugins(
   frontendPlugin({
-    frontends: [{ site: "my-frontend", cwd: "../web", outDir: "dist" }],
+    frontends: [{ site: "my-frontend", workingDir: "../web", distDir: "dist" }],
   }),
 );
 ```
 
 For multiple frontends, add entries to the same `frontends` array. Each site may
 appear only once. Frontends are built and uploaded sequentially. The array and
-each `outDir` must be non-empty.
+each `distDir` must be non-empty.
 
 ## Deploy behavior and failures
 

@@ -3,12 +3,12 @@ import type { DeployedApplication, DeployedStaticWebsite } from "#/plugin/types"
 export interface FrontendDefinition {
   /** Static website included in this deploy. Accepts a name or a defineStaticWebSite result. */
   site: string | { readonly name: string };
-  /** Working directory relative to the registering config's directory. Defaults to that directory. */
-  cwd?: string;
+  /** Directory to run `build` in, relative to the registering config's directory. Defaults to that directory. */
+  workingDir?: string;
   /** Shell command to build assets. Omit to upload existing assets. */
   build?: string;
-  /** Output directory relative to cwd, or an absolute path. */
-  outDir: string;
+  /** Directory the build writes its assets to, relative to workingDir or absolute. Its contents are published. */
+  distDir: string;
   /** Environment variables added to the build process. Values may be resolved asynchronously. */
   env?: (context: FrontendEnvContext) => Record<string, string> | Promise<Record<string, string>>;
 }
