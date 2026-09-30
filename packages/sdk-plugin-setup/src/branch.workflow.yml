@@ -48,16 +48,20 @@ jobs:
         uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __GENERATE_CHECK_START__
       - id: tailor-generate-check
         uses: tailor-platform/actions/generate-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
+      # __GENERATE_CHECK_END__
+      # __PER_APP_GENERATE_CHECK__
       # __SEED_VALIDATE_START__
       - id: tailor-seed-validate
         run: __TAILOR_CLI__ seed validate
         # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
+      # __PER_APP_SEED_VALIDATE__
       - id: tailor-drift-check
         uses: tailor-platform/actions/drift-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
@@ -70,10 +74,12 @@ jobs:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __MIGRATION_DRIFT_CHECK_END__
+      # __PER_APP_MIGRATION_DRIFT_CHECK__
       - id: tailor-plan
         # Fork PRs cannot read secrets; the checks above still run for them.
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
         uses: tailor-platform/actions/plan@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -92,7 +98,8 @@ jobs:
       contents: read
     outputs:
       namespaces: ${{ steps.tailor-erd-preview-matrix.outputs.namespaces }}
-      base-app-dir: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dir'] }}
+      app-dirs: ${{ steps.tailor-erd-preview-matrix.outputs['app-dirs'] }}
+      base-app-dirs: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dirs'] }}
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -135,17 +142,11 @@ jobs:
             }
           }
 
-          function namespacesFromTarget(target, label) {
-            const namespaces =
-              target?.inputs?.erdPreview === true && Array.isArray(target.inputs?.erdNamespaces)
-                ? target.inputs.erdNamespaces
-                : [];
-            for (const namespace of namespaces) {
-              if (typeof namespace !== "string" || !namespacePattern.test(namespace)) {
-                throw new Error(`Invalid ERD namespace in ${label}: ${String(namespace)}`);
-              }
+          function validNamespace(namespace, label) {
+            if (typeof namespace !== "string" || !namespacePattern.test(namespace)) {
+              throw new Error(`Invalid ERD namespace in ${label}: ${String(namespace)}`);
             }
-            return namespaces;
+            return namespace;
           }
 
           function normalizeDir(value, label) {
@@ -163,15 +164,39 @@ jobs:
             return normalized;
           }
 
+          // Each namespace is owned by one app; a namespace missing on one side is
+          // exported from that side's first app, where it renders as added or removed.
+          function appDirsFromTarget(target, label) {
+            const dirs = new Map();
+            if (target?.inputs?.erdPreview !== true) return dirs;
+            const apps = Array.isArray(target.inputs.apps)
+              ? target.inputs.apps
+              : [{ dir: target.inputs.dir, erdNamespaces: target.inputs.erdNamespaces }];
+            for (const app of apps) {
+              const dir = normalizeDir(app?.dir, label);
+              for (const namespace of Array.isArray(app?.erdNamespaces) ? app.erdNamespaces : []) {
+                dirs.set(validNamespace(namespace, label), dir);
+              }
+            }
+            return dirs;
+          }
+
+          function defaultAppDir(target, label) {
+            const apps = target?.inputs?.apps;
+            return normalizeDir(Array.isArray(apps) ? apps[0]?.dir : target?.inputs?.dir, label);
+          }
+
           const headTarget = lockTarget(".github/tailor.lock");
           const baseTarget = lockTarget(".tailor-erd-base/.github/tailor.lock");
-          const baseAppDir = normalizeDir(baseTarget?.inputs?.dir, "base setup lock");
-          const namespaces = [
-            ...new Set([
-              ...namespacesFromTarget(headTarget, "head setup lock"),
-              ...namespacesFromTarget(baseTarget, "base setup lock"),
-            ]),
-          ].sort((a, b) => a.localeCompare(b));
+          const headDirs = appDirsFromTarget(headTarget, "head setup lock");
+          const baseDirs = appDirsFromTarget(baseTarget, "base setup lock");
+          const namespaces = [...new Set([...headDirs.keys(), ...baseDirs.keys()])].sort((a, b) =>
+            a.localeCompare(b),
+          );
+          const dirsFor = (dirs, fallback) =>
+            Object.fromEntries(namespaces.map((namespace) => [namespace, dirs.get(namespace) ?? fallback]));
+          const appDirs = dirsFor(headDirs, defaultAppDir(headTarget, "head setup lock"));
+          const baseAppDirs = dirsFor(baseDirs, defaultAppDir(baseTarget, "base setup lock"));
 
           if (namespaces.length === 0) {
             console.error("No ERD preview namespaces found in the head or base setup lock.");
@@ -179,7 +204,8 @@ jobs:
           }
 
           fs.appendFileSync(output, `namespaces=${JSON.stringify(namespaces)}\n`);
-          fs.appendFileSync(output, `base-app-dir=${baseAppDir}\n`);
+          fs.appendFileSync(output, `app-dirs=${JSON.stringify(appDirs)}\n`);
+          fs.appendFileSync(output, `base-app-dirs=${JSON.stringify(baseAppDirs)}\n`);
           NODE
 
   tailor-erd-preview:
@@ -315,8 +341,8 @@ jobs:
       - id: tailor-build-erd-preview
         shell: bash
         env:
-          APP_DIR: "__APP_DIR__"
-          BASE_APP_DIR: ${{ needs.tailor-erd-preview-matrix.outputs['base-app-dir'] }}
+          APP_DIR: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs['app-dirs'])[matrix.namespace] }}
+          BASE_APP_DIR: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs['base-app-dirs'])[matrix.namespace] }}
           BASE_PACKAGE_MANAGER: ${{ steps.tailor-detect-base-package-manager.outputs['package-manager'] }}
           NAMESPACE: ${{ matrix.namespace }}
         run: |
@@ -602,6 +628,7 @@ jobs:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
         uses: tailor-platform/actions/deploy@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__

@@ -52,16 +52,20 @@ jobs:
         uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __GENERATE_CHECK_START__
       - id: tailor-generate-check
         uses: tailor-platform/actions/generate-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
+      # __GENERATE_CHECK_END__
+      # __PER_APP_GENERATE_CHECK__
       # __SEED_VALIDATE_START__
       - id: tailor-seed-validate
         run: __TAILOR_CLI__ seed validate
         # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
+      # __PER_APP_SEED_VALIDATE__
       - id: tailor-drift-check
         uses: tailor-platform/actions/drift-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
@@ -74,8 +78,10 @@ jobs:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __MIGRATION_DRIFT_CHECK_END__
+      # __PER_APP_MIGRATION_DRIFT_CHECK__
       - id: tailor-plan
         uses: tailor-platform/actions/plan@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -108,6 +114,7 @@ jobs:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
         uses: tailor-platform/actions/deploy@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__

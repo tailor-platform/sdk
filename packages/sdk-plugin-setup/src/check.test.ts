@@ -196,6 +196,80 @@ describe("findTargetDrift", () => {
     expect(findings.map((f) => f.rule)).toEqual(["seed-validate"]);
     expect(findings[0]?.message).toMatch(/plan job/);
   });
+
+  describe("multi-directory targets", () => {
+    const multiTarget = baseTarget({
+      inputs: {
+        ...baseTarget().inputs,
+        apps: [
+          { dir: "apps/erp/backend", migrationDriftCheck: false, seedValidate: false },
+          { dir: "apps/users/backend", migrationDriftCheck: false, seedValidate: false },
+        ],
+      },
+    });
+    const inSync = [
+      { dir: "apps/erp/backend", configExists: true, hasMigrations: false, hasSeeds: false },
+      { dir: "apps/users/backend", configExists: true, hasMigrations: false, hasSeeds: false },
+    ];
+
+    test("reports no findings when every app is in sync", () => {
+      expect(findTargetDrift(multiTarget, cleanState({ apps: inSync }))).toEqual([]);
+    });
+
+    test("names the app directory whose config is gone", () => {
+      const findings = findTargetDrift(
+        multiTarget,
+        cleanState({ apps: [inSync[0]!, { ...inSync[1]!, configExists: false }] }),
+      );
+
+      expect(findings.map((f) => f.rule)).toEqual(["config-dir"]);
+      expect(findings[0]?.message).toMatch(/"apps\/users\/backend"/);
+    });
+
+    test("reports migration and seed changes per app directory", () => {
+      const findings = findTargetDrift(
+        multiTarget,
+        cleanState({
+          apps: [
+            { ...inSync[0]!, hasMigrations: true },
+            { ...inSync[1]!, hasSeeds: true },
+          ],
+        }),
+      );
+
+      expect(findings.map((f) => [f.rule, /apps\/(\w+)/.exec(f.message)?.[1]])).toEqual([
+        ["migration-drift", "erp"],
+        ["seed-validate", "users"],
+      ]);
+    });
+
+    test("reports the app whose owned TailorDB namespaces changed for ERD preview", () => {
+      const erdTarget = baseTarget({
+        inputs: {
+          ...baseTarget().inputs,
+          erdPreview: true,
+          erdNamespaces: ["erp", "users"],
+          apps: [
+            { dir: "apps/erp/backend", erdNamespaces: ["erp"] },
+            { dir: "apps/users/backend", erdNamespaces: ["users"] },
+          ],
+        },
+      });
+
+      const findings = findTargetDrift(
+        erdTarget,
+        cleanState({
+          apps: [
+            { dir: "apps/erp/backend", configExists: true, erdNamespaces: ["erp"] },
+            { dir: "apps/users/backend", configExists: true, erdNamespaces: ["users", "audit"] },
+          ],
+        }),
+      );
+
+      expect(findings.map((f) => f.rule)).toEqual(["erd-namespaces"]);
+      expect(findings[0]?.message).toMatch(/"apps\/users\/backend"/);
+    });
+  });
 });
 
 describe("resolveWithinRoot", () => {
@@ -315,6 +389,28 @@ describe("checkGitHub (integration)", () => {
     test("passes for a freshly generated target", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       await expect(check()).resolves.toBeUndefined();
+    });
+
+    test("passes for a freshly generated multi-directory target with no config at the repository root", async () => {
+      const dirs = ["apps/erp/backend", "apps/users/backend"];
+      for (const dir of dirs) {
+        fs.mkdirSync(path.join(testDir, dir), { recursive: true });
+        fs.copyFileSync(
+          path.join(testDir, "tailor.config.ts"),
+          path.join(testDir, dir, "tailor.config.ts"),
+        );
+      }
+      fs.rmSync(path.join(testDir, "tailor.config.ts"));
+      fs.writeFileSync(
+        path.join(testDir, "package.json"),
+        JSON.stringify({ private: true, devDependencies: { "@tailor-platform/sdk": "1.0.0" } }),
+      );
+      const noPlugins = { loadHasMigrations: async () => false, loadHasSeeds: async () => false };
+      await setupTarget(setupOptions({ workspaceName: "my-app", dir: dirs, ...noPlugins }));
+
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", ...noPlugins }),
+      ).resolves.toBeUndefined();
     });
 
     test("passes after --force regeneration following a hand edit", async () => {

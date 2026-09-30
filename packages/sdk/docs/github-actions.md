@@ -444,6 +444,46 @@ The generated workflow adds a `paths` filter on `apps/backend/**` so the
 workflow only runs when that subdirectory changes. The `working-directory` for
 SDK commands is set accordingly.
 
+### Deploying several apps together
+
+To deploy several apps to the same workspace from one workflow, repeat `--dir`
+and pass `--name` for the workflow:
+
+```bash
+tailor setup ci branch --name erp --dir apps/erp/backend --dir apps/users/backend
+```
+
+`setup ci branch`, `setup ci tag`, and `setup ci preview` accept repeated
+`--dir`. The workflow plans and deploys every app's `tailor.config.ts` in one
+[multi-config deploy](./cli/application.md#deploy) from the repository root, so
+an app can reference resources of another app with `external: true`. Add
+`@tailor-platform/sdk` to the root `package.json` so the `tailor` CLI resolves
+there; setup stops until it is declared. The generate check, seed validation,
+and migration drift check run for each app directory, and the `paths` filter
+covers every app directory.
+
+With `--erd-preview`, each TailorDB namespace is previewed from the app that
+owns it. A namespace may be owned by only one app; the others reference it with
+`external: true`.
+
+With more than one app, the preview comment does not link an application URL.
+
+### Running on changes outside the app directories
+
+When the apps depend on code outside their directories, such as a frontend or
+shared packages, add those paths with `--paths` on `setup ci branch` or
+`setup ci preview`. Repeat it for each pattern:
+
+```bash
+tailor setup ci preview --name erp --region asia-northeast \
+  --dir apps/erp/backend --dir apps/users/backend \
+  --paths "apps/*/frontend/**" --paths "modules/**" --paths pnpm-lock.yaml
+```
+
+The patterns are added to the `paths` filter next to the app directories. An
+app at the repository root already runs on every change, so `--paths` is not
+accepted with `--dir .`.
+
 ## Rollback
 
 `tailor deploy` is declarative: redeploying a past configuration returns

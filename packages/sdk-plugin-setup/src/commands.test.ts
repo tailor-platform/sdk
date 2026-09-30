@@ -100,6 +100,51 @@ describe("setup ci subcommand nesting", () => {
     });
   });
 
+  test.each([
+    ["branch", []],
+    ["tag", []],
+    ["preview", ["--region", "us-west"]],
+  ] as const)("ci %s passes every repeated --dir to setupTarget", async (subcommand, args) => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      subcommand,
+      ...args,
+      "--name",
+      "erp",
+      "--dir",
+      "apps/erp/backend",
+      "--dir",
+      "apps/users/backend",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ dir: ["apps/erp/backend", "apps/users/backend"] }),
+    );
+  });
+
+  test.each([
+    ["branch", []],
+    ["preview", ["--region", "us-west"]],
+  ] as const)("ci %s passes repeated --paths to setupTarget", async (subcommand, args) => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      subcommand,
+      ...args,
+      "--dir",
+      "apps/erp/backend",
+      "--paths",
+      "apps/erp/frontend/**",
+      "--paths",
+      "modules/**",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ extraPaths: ["apps/erp/frontend/**", "modules/**"] }),
+    );
+  });
+
   test("ci env narrows the output with repeated --environment flags", async () => {
     const result = await runCommand(setupCommand, [
       "ci",

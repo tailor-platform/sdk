@@ -33,6 +33,7 @@ import {
   mergeUserContent,
 } from "./managed";
 import {
+  appSlug,
   detectPackageManager,
   renderActionWorkflow,
   renderBranchWorkflow,
@@ -45,12 +46,14 @@ import {
   type CoordinateAppGroup,
   type CoordinateKind,
   type PackageManager,
+  type RenderApp,
   type RenderResult,
 } from "./templates";
 
 type CommonSetupOptions = {
   workspaceName?: string;
-  dir: string;
+  /** App directory, or several deployed together in one multi-config run. */
+  dir: string | readonly string[];
   environment?: string;
   force: boolean;
   outputDir: string;
@@ -73,6 +76,8 @@ type CommonSetupOptions = {
 export type BranchSetupOptions = CommonSetupOptions & {
   kind: "branch";
   branch?: string;
+  /** Extra `paths` filter patterns beyond the app directories. */
+  extraPaths?: readonly string[];
   erdPreview: boolean;
   restrictDispatch?: boolean;
 };
@@ -87,6 +92,8 @@ type TagSetupOptions = CommonSetupOptions & {
 type PreviewSetupOptions = CommonSetupOptions & {
   kind: "preview";
   branch?: string;
+  /** Extra `paths` filter patterns beyond the app directories. */
+  extraPaths?: readonly string[];
   /** Workspace region for preview workspace creation (e.g. `us-west`). */
   region: string;
   /**
@@ -252,6 +259,29 @@ function validateDir(dir: string): void {
   }
 }
 
+// `--paths` patterns are embedded into a double-quoted YAML flow sequence.
+const PATHS_RE = /^!?[A-Za-z0-9._/*?[\]{},-]+$/;
+
+function resolveExtraPaths(options: SetupTargetOptions, dirs: readonly string[]): string[] {
+  const extraPaths =
+    options.kind === "branch" || options.kind === "preview" ? [...(options.extraPaths ?? [])] : [];
+  for (const pattern of extraPaths) {
+    if (!PATHS_RE.test(pattern)) {
+      throw new Error(
+        `Invalid --paths "${pattern}". Only letters, numbers, ".", "_", "/", "-", ",", and the ` +
+          'glob characters "*?![]{}" are supported.',
+      );
+    }
+  }
+  if (extraPaths.length > 0 && dirs.includes(".")) {
+    throw new Error(
+      "--paths has no effect when --dir is the repository root: the workflow already runs on " +
+        "every change.",
+    );
+  }
+  return extraPaths;
+}
+
 // ERD namespaces are embedded into a GitHub Actions matrix and artifact file
 // names. Keep them to path-safe scalar values.
 const ERD_NAMESPACE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -322,29 +352,85 @@ type Resolved = {
   render: RenderResult;
   inputs: LockInputs;
   file: string;
-  configPath: string;
+  configPaths: string[];
 };
+
+// Normalize before any filesystem use and before embedding into workflow
+// YAML (paths filters / working-directory): POSIX separators, collapse
+// duplicate slashes, drop a leading "./" and trailing "/" so values like
+// "./apps/backend/" produce a clean "apps/backend".
+function normalizeDir(dir: string): string {
+  const normalized =
+    dir
+      .replaceAll("\\", "/")
+      .replace(/\/{2,}/g, "/")
+      .replace(/^\.\//, "")
+      .replace(/\/$/, "") || ".";
+  validateDir(normalized);
+  return normalized;
+}
 
 /**
  * Resolve all derived values and render the workflow content.
  * @param options - Setup options
  * @returns Resolved target metadata and rendered content
  */
+function rootDeclaresSdk(outputDir: string): boolean {
+  const manifestPath = path.join(outputDir, "package.json");
+  if (!fs.existsSync(manifestPath)) return false;
+  let manifest: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as typeof manifest;
+  } catch (cause) {
+    throw new Error("package.json at the repository root is not valid JSON. Fix it and re-run.", {
+      cause,
+    });
+  }
+  return [manifest.dependencies, manifest.devDependencies].some(
+    (deps) => deps !== undefined && Object.hasOwn(deps, "@tailor-platform/sdk"),
+  );
+}
+
+function assertMultiDirTarget(options: SetupTargetOptions, dirs: readonly string[]): void {
+  if (options.workspaceName === undefined) {
+    throw new Error(
+      "--name is required when --dir is given more than once: it names the workflow, its " +
+        "file, and the default GitHub Environment, which no single config's name can do.",
+    );
+  }
+  if (!rootDeclaresSdk(options.outputDir)) {
+    throw new Error(
+      "Add @tailor-platform/sdk to the dependencies of package.json at the repository root. " +
+        "With more than one --dir, the workflow plans and deploys every app from the " +
+        "repository root, so the tailor CLI must resolve there.",
+    );
+  }
+  const bySlug = new Map<string, string>();
+  for (const dir of dirs) {
+    const other = bySlug.get(appSlug(dir));
+    if (other !== undefined) {
+      throw new Error(
+        `--dir "${other}" and "${dir}" map to the same step id suffix "${appSlug(dir)}". ` +
+          "Pass each app directory once, under distinct names.",
+      );
+    }
+    bySlug.set(appSlug(dir), dir);
+  }
+}
+
 async function resolve(options: SetupTargetOptions): Promise<Resolved> {
-  // Normalize before any filesystem use and before embedding into workflow
-  // YAML (paths filters / working-directory): POSIX separators, collapse
-  // duplicate slashes, drop a leading "./" and trailing "/" so values like
-  // "./apps/backend/" produce a clean "apps/backend".
-  const dir =
-    options.dir
-      .replaceAll("\\", "/")
-      .replace(/\/{2,}/g, "/")
-      .replace(/^\.\//, "")
-      .replace(/\/$/, "") || ".";
-  validateDir(dir);
+  const dirs = (typeof options.dir === "string" ? [options.dir] : options.dir).map(normalizeDir);
+  const multi = dirs.length > 1;
+  if (multi) assertMultiDirTarget(options, dirs);
+  const dir = multi ? "." : (dirs[0] ?? ".");
+  const extraPaths = resolveExtraPaths(options, dirs);
   const workingDirectory = dir !== "." ? dir : undefined;
 
-  const configPath = resolveConfigPath(options.outputDir, dir);
+  const configPaths = dirs.map((d) => resolveConfigPath(options.outputDir, d));
+  const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
 
   const loadName = options.loadConfigName ?? defaultLoadConfigName;
   const workspaceName = options.workspaceName ?? (await loadName(configPath));
@@ -378,11 +464,48 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
   const loadHasSeeds = options.loadHasSeeds ?? defaultLoadHasSeeds;
   const loadHasStaticWebsites = options.loadHasStaticWebsites ?? defaultLoadHasStaticWebsites;
+  const loadApps = async (checks: boolean): Promise<RenderApp[] | undefined> => {
+    if (!multi) return undefined;
+    return Promise.all(
+      dirs.map(async (appDir, index) => {
+        const appConfigPath = configPaths[index] ?? appDir;
+        return checks
+          ? {
+              dir: appDir,
+              migrationDriftCheck: await loadHasMigrations(appConfigPath),
+              seedValidate: await loadHasSeeds(appConfigPath),
+            }
+          : { dir: appDir };
+      }),
+    );
+  };
+  let apps: RenderApp[] | undefined;
 
+  const appErdNamespaces = new Map<string, string[]>();
   if (kind === "branch") {
     if (options.erdPreview) {
       const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
-      erdNamespaces = await loadErdNamespaces(configPath);
+      if (multi) {
+        const owners = new Map<string, string>();
+        for (const [index, appDir] of dirs.entries()) {
+          const owned = await loadErdNamespaces(configPaths[index] ?? appDir);
+          for (const namespace of owned) {
+            const owner = owners.get(namespace);
+            if (owner !== undefined) {
+              throw new Error(
+                `TailorDB namespace "${namespace}" is owned by both "${owner}" and "${appDir}". ` +
+                  "A namespace is unique within a workspace: keep it in one app and reference it " +
+                  "from the other with external: true.",
+              );
+            }
+            owners.set(namespace, appDir);
+          }
+          appErdNamespaces.set(appDir, owned);
+        }
+        erdNamespaces = [...owners.keys()];
+      } else {
+        erdNamespaces = await loadErdNamespaces(configPath);
+      }
       if (erdNamespaces.length === 0) {
         throw new Error(
           "No TailorDB namespaces found for --erd-preview. Define owned db namespaces in tailor.config.ts.",
@@ -394,12 +517,17 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     branch =
       options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner, "--target");
     validateBranch(branch);
-    hasMigrations = await loadHasMigrations(configPath);
-    hasSeeds = await loadHasSeeds(configPath);
+    apps = await loadApps(true);
+    if (!apps) {
+      hasMigrations = await loadHasMigrations(configPath);
+      hasSeeds = await loadHasSeeds(configPath);
+    }
     render = renderBranchWorkflow({
       workspaceName,
       branch,
       workingDirectory,
+      apps,
+      extraPaths,
       environment,
       packageManager,
       erdPreview: options.erdPreview ? { namespaces: erdNamespaces } : null,
@@ -412,13 +540,17 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     if (branch !== null) {
       validateBranch(branch);
     }
-    hasMigrations = await loadHasMigrations(configPath);
-    hasSeeds = await loadHasSeeds(configPath);
+    apps = await loadApps(true);
+    if (!apps) {
+      hasMigrations = await loadHasMigrations(configPath);
+      hasSeeds = await loadHasSeeds(configPath);
+    }
     render = renderTagWorkflow({
       workspaceName,
       tagPattern: options.tagPattern,
       branch: options.branch,
       workingDirectory,
+      apps,
       environment,
       packageManager,
       migrationDriftCheck: hasMigrations,
@@ -430,10 +562,13 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
     validateBranch(branch);
     validateRegion(options.region);
+    apps = await loadApps(false);
     render = renderPreviewWorkflow({
       workspaceName,
       branch,
       workingDirectory,
+      apps,
+      extraPaths,
       environment,
       packageManager,
       region: options.region,
@@ -464,8 +599,13 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
     erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
-    migrationDriftCheck: kind === "branch" || kind === "tag" ? hasMigrations : undefined,
-    seedValidate: kind === "branch" || kind === "tag" ? hasSeeds : undefined,
+    apps:
+      apps && appErdNamespaces.size > 0
+        ? apps.map((app) => ({ ...app, erdNamespaces: appErdNamespaces.get(app.dir) ?? [] }))
+        : apps,
+    paths: extraPaths.length > 0 ? extraPaths : undefined,
+    migrationDriftCheck: (kind === "branch" || kind === "tag") && !apps ? hasMigrations : undefined,
+    seedValidate: (kind === "branch" || kind === "tag") && !apps ? hasSeeds : undefined,
     hasStaticWebsites: kind === "action" ? hasStaticWebsites : undefined,
     restrictDispatch:
       kind === "branch" || kind === "tag" ? (options.restrictDispatch ?? false) : undefined,
@@ -481,7 +621,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     render,
     inputs,
     file,
-    configPath,
+    configPaths,
   };
 }
 
@@ -687,16 +827,18 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   // deploy resolves the app id against the nearest lock above the config, so
   // a lock between the config and this directory would take precedence over
   // the one written here.
-  const nearestLock = findAppIdLock(resolved.configPath);
-  if (
-    nearestLock !== null &&
-    path.normalize(nearestLock.root) !== path.normalize(options.outputDir)
-  ) {
-    throw new Error(
-      `${path.relative(options.outputDir, path.join(nearestLock.root, TAILOR_LOCK_FILENAME))} ` +
-        "already governs the app id of this config. Run setup from that directory, or remove " +
-        "that lock file if it is a leftover.",
-    );
+  for (const configPath of resolved.configPaths) {
+    const nearestLock = findAppIdLock(configPath);
+    if (
+      nearestLock !== null &&
+      path.normalize(nearestLock.root) !== path.normalize(options.outputDir)
+    ) {
+      throw new Error(
+        `${path.relative(options.outputDir, path.join(nearestLock.root, TAILOR_LOCK_FILENAME))} ` +
+          "already governs the app id of this config. Run setup from that directory, or remove " +
+          "that lock file if it is a leftover.",
+      );
+    }
   }
 
   // Planned before any file is written, so an app id conflict leaves the
@@ -704,9 +846,12 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   const loadConfigId = options.loadConfigId ?? defaultLoadConfigId;
   const appIdPlan = await planAppIds({
     lock: { root: options.outputDir, appIds: lock?.appIds ?? {} },
-    entries: [
-      { configPath: resolved.configPath, configId: await loadConfigId(resolved.configPath) },
-    ],
+    entries: await Promise.all(
+      resolved.configPaths.map(async (configPath) => ({
+        configPath,
+        configId: await loadConfigId(configPath),
+      })),
+    ),
     mode: "write",
   });
 

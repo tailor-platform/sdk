@@ -36,11 +36,14 @@ jobs:
         uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __GENERATE_CHECK_START__
       - id: tailor-generate-check
         uses: tailor-platform/actions/generate-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
+      # __GENERATE_CHECK_END__
+      # __PER_APP_GENERATE_CHECK__
       - id: tailor-drift-check
         uses: tailor-platform/actions/drift-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
@@ -48,6 +51,7 @@ jobs:
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       - id: tailor-preview-deploy
         uses: tailor-platform/actions/preview-deploy@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        # __CONFIG_ENV__
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           region: "__REGION__"
