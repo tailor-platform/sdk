@@ -227,6 +227,20 @@ describe("deployed hooks", () => {
       message: expect.stringContaining(where),
     });
   });
+  test("validates and stores the outputs value it read once", async () => {
+    const { client } = clientMock();
+    let reads = 0;
+    const result = {
+      get outputs() {
+        reads += 1;
+        return reads === 1 ? { value: 1 } : { value: () => {} };
+      },
+    } as unknown as { outputs: Record<string, never> };
+    await expect(
+      runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(() => result)])] }),
+    ).resolves.toEqual([{ application: "app", pluginId: "hook", outputs: { value: 1 } }]);
+    expect(reads).toBe(1);
+  });
   test("rejects cyclic hook outputs instead of recursing forever", async () => {
     const { client } = clientMock();
     const outputs: Record<string, unknown> = {};

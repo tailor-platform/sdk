@@ -290,9 +290,10 @@ const deployedInfo: Plugin = {
 export const plugins = definePlugins(deployedInfo);
 ```
 
-To publish assets, await `ctx.staticWebsites[name].publish(dir)` with an absolute
-directory path. Only websites of applications included in this deploy appear in
-`ctx.staticWebsites`. The result contains `url` and `skippedFiles`; report skipped
+To publish assets, look up the site with `ctx.staticWebsites[name]` and await its
+`publish(dir)` with an absolute directory path. Only websites of applications
+included in this deploy appear in `ctx.staticWebsites`; any other name is
+`undefined`, so check the site before publishing. The result contains `url` and `skippedFiles`; report skipped
 files so users can correct files that could not be uploaded.
 
 Return JSON-serializable `outputs` to include a result in `deployedHooks` under

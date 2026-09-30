@@ -1,8 +1,9 @@
+import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
 import type { DeployedApplication, DeployedStaticWebsite } from "#/plugin/types";
 
 export interface FrontendDefinition {
   /** Static website included in this deploy. Accepts a name or a defineStaticWebSite result. */
-  site: string | { readonly name: string };
+  site: string | StaticWebsiteConfig;
   /** Directory to run `build` in, relative to the registering config's directory. Defaults to that directory. */
   workingDir?: string;
   /** Shell command to build assets. Omit to upload existing assets. */
@@ -18,7 +19,7 @@ export interface FrontendEnvContext {
   site: DeployedStaticWebsite;
   application: DeployedApplication;
   applications: readonly DeployedApplication[];
-  staticWebsites: Readonly<Record<string, DeployedStaticWebsite>>;
+  staticWebsites: Readonly<Partial<Record<string, DeployedStaticWebsite>>>;
   workspaceId: string;
 }
 

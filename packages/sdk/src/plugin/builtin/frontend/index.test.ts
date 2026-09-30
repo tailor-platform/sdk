@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { frontendPlugin } from "./index";
+import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
 import type { DeployedContext, PublishStaticWebsiteResult } from "#/plugin/types";
 import type { FrontendDefinition, FrontendPluginOptions } from "./types";
 
@@ -69,6 +70,14 @@ function setup(frontends: FrontendDefinition[]) {
   return { ctx, publish, run };
 }
 describe("frontendPlugin", () => {
+  test("accepts only static website definitions or names as site", () => {
+    const frontend: FrontendDefinition = {
+      // @ts-expect-error a plain object with a name is not a static website definition
+      site: { name: "web" },
+      distDir: "dist",
+    };
+    expect(frontend.distDir).toBe("dist");
+  });
   test("rejects an empty frontend list", () => {
     expect(() => frontendPlugin({ frontends: [] })).toThrow(/frontends/i);
   });
@@ -80,7 +89,7 @@ describe("frontendPlugin", () => {
       frontendPlugin({
         frontends: [
           { site: "web", distDir: "dist" },
-          { site: { name: "web" }, distDir: "other" },
+          { site: { name: "web" } as StaticWebsiteConfig, distDir: "other" },
         ],
       }),
     ).toThrow(/web/);
@@ -90,7 +99,7 @@ describe("frontendPlugin", () => {
     await mkdir(cwd, { recursive: true });
     const { publish, run } = setup([
       {
-        site: { name: "web" },
+        site: { name: "web" } as StaticWebsiteConfig,
         workingDir: "../web",
         distDir: "dist",
         env: async ({ site, application, workspaceId, applications, staticWebsites }) => {

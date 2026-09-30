@@ -231,13 +231,15 @@ export async function runDeployedHooks(
           logger: { info: logger.info, warn: logger.warn, success: logger.success },
         });
       });
-      if (result?.outputs !== undefined) assertJsonOutputs(result.outputs);
-      if (result?.outputs !== undefined)
+      const hookOutputs = result?.outputs;
+      if (hookOutputs !== undefined) {
+        assertJsonOutputs(hookOutputs);
         outputs.push({
           application: target.application.name,
           pluginId: plugin.id,
-          outputs: result.outputs,
+          outputs: hookOutputs,
         });
+      }
     } catch (error) {
       throw deployedHookFailure(
         `the onDeployed hook of plugin "${plugin.id}" failed for app "${target.application.name}"`,

@@ -9,7 +9,7 @@ import type {
   TablePluginOutput,
   TailorDBTableForPlugin,
 } from "#/configure/index";
-import type { Plugin } from "#/plugin/types";
+import type { DeployedContext, DeployedStaticWebsite, Plugin } from "#/plugin/types";
 import type { PluginConfig } from "#/types/plugin-config.generated";
 
 describe("PluginConfig generated type alignment", () => {
@@ -50,4 +50,10 @@ test("accepts only JSON values as deploy hook outputs", () => {
     onDeployed: () => ({ outputs: { size: 1n } }),
   };
   expect(plugin.onDeployed).toBeTypeOf("function");
+});
+
+test("models static websites outside the deploy as possibly missing", () => {
+  expectTypeOf<DeployedContext["staticWebsites"]["web"]>().toEqualTypeOf<
+    DeployedStaticWebsite | undefined
+  >();
 });

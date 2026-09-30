@@ -398,7 +398,7 @@ export interface DeployedContext<PluginConfig = unknown> {
   application: DeployedApplication;
   applications: readonly DeployedApplication[];
   /** Static websites of every application in this deploy run, keyed by name. */
-  staticWebsites: Readonly<Record<string, DeployedStaticWebsite>>;
+  staticWebsites: Readonly<Partial<Record<string, DeployedStaticWebsite>>>;
   /** Absolute path of the config registering this plugin. */
   configPath: string;
   pluginConfig: PluginConfig;
