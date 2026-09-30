@@ -28,6 +28,25 @@ interface LoadedTarget {
   siteUrls: { name: string; url: string }[];
 }
 
+async function loadSiteUrl(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<string> {
+  const response = await client.getStaticWebsite({ workspaceId, name });
+  const deployed = assertDefined(
+    response.staticwebsite,
+    `Static website "${name}" not found after deploy`,
+  );
+  if (!deployed.url)
+    throw CLIError({
+      code: "STATIC_WEBSITE_URL_NOT_ASSIGNED",
+      message: `Static website "${name}" has no URL assigned yet`,
+      suggestion: "Re-run the deploy once the static website's URL is available.",
+    });
+  return deployed.url;
+}
+
 async function loadDeployedTarget(
   client: OperatorClient,
   workspaceId: string,
@@ -41,14 +60,10 @@ async function loadDeployedTarget(
   const [response, siteUrls, gateways, oauth2Clients] = await Promise.all([
     client.getApplication({ workspaceId, applicationName: name }),
     Promise.all(
-      target.application.staticWebsiteServices.map(async (site) => {
-        const response = await client.getStaticWebsite({ workspaceId, name: site.name });
-        const deployed = assertDefined(
-          response.staticwebsite,
-          `Static website "${site.name}" not found after deploy`,
-        );
-        return { name: site.name, url: deployed.url };
-      }),
+      target.application.staticWebsiteServices.map(async (site) => ({
+        name: site.name,
+        url: await loadSiteUrl(client, workspaceId, site.name),
+      })),
     ),
     Promise.all(
       (target.config.aiGateways ?? []).map(async (gateway) => {
@@ -70,6 +85,8 @@ async function loadDeployedTarget(
             pageToken,
             pageSize,
           });
+          for (const oauth2Client of response.oauth2Clients)
+            logger.registerSecret(oauth2Client.clientSecret);
           return [response.oauth2Clients, response.nextPageToken];
         })
       : [],

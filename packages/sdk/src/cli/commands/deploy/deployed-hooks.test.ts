@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { runDeployedHooks } from "./deployed-hooks";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -266,6 +267,24 @@ describe("deployed hooks", () => {
         targets: [target([plugin(() => ({ outputs }))])],
       }),
     ).resolves.toEqual([{ application: "app", pluginId: "hook", outputs }]);
+  });
+  test("fails before running hooks when a static website has no URL assigned yet", async () => {
+    const { client, methods } = clientMock();
+    methods.getStaticWebsite.mockResolvedValue({ staticwebsite: { name: "app-web", url: "" } });
+    const hook = vi.fn();
+    await expect(
+      runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message: expect.stringContaining('Static website "app-web" has no URL assigned yet'),
+    });
+    expect(hook).not.toHaveBeenCalled();
+  });
+  test("registers fetched OAuth client secrets for redaction", async () => {
+    using registerSecret = vi.spyOn(logger, "registerSecret");
+    const { client } = clientMock();
+    await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(vi.fn())])] });
+    expect(registerSecret).toHaveBeenCalledWith("secret");
   });
   test("fails when a configured AI Gateway is missing after deploy", async () => {
     const { client, methods } = clientMock();
