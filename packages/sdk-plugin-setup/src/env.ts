@@ -372,16 +372,36 @@ export function renderTerraform(
 
 export type EnvFormat = "gh" | "terraform";
 
+function selectEnvironments(
+  environments: EnvironmentRequirements[],
+  names: string[],
+): EnvironmentRequirements[] {
+  if (names.length === 0) return environments;
+  const byName = new Map(environments.map((entry) => [entry.environment.toLowerCase(), entry]));
+  return names.map((name) => {
+    const entry = byName.get(name.toLowerCase());
+    if (!entry) {
+      throw new Error(
+        `No generated workflow uses the environment "${name}". ` +
+          `Environments in .github/tailor.lock: ${environments.map((e) => e.environment).join(", ")}.`,
+      );
+    }
+    return entry;
+  });
+}
+
 /**
  * Print what each GitHub Environment used by the generated workflows needs. Read-only.
  * @param options - Env options
  * @param options.outputDir - Repository root where `.github` lives
  * @param options.format - Output format
+ * @param options.environments - Only print these environments; all when empty
  * @param options.gitRunner - Injectable git runner, for testing
  */
 export function setupEnv(options: {
   outputDir: string;
   format: EnvFormat;
+  environments?: string[];
   gitRunner?: GitRunner;
 }): void {
   logBetaWarning("setup");
@@ -393,13 +413,14 @@ export function setupEnv(options: {
         "Run `tailor setup ci branch` (or another setup subcommand) first.",
     );
   }
-  const environments = collectEnvironmentRequirements(lock);
-  if (environments.length === 0) {
+  const allEnvironments = collectEnvironmentRequirements(lock);
+  if (allEnvironments.length === 0) {
     throw new Error(
       "Composite actions read no secrets or variables themselves. " +
         "Run `tailor setup ci coordinate` to generate the workflow that uses them, then re-run this command.",
     );
   }
+  const environments = selectEnvironments(allEnvironments, options.environments ?? []);
   if (logger.jsonMode) {
     logger.out(environments);
     return;

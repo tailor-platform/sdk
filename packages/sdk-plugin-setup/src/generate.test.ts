@@ -1237,8 +1237,7 @@ export default defineConfig({
     await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" }));
     const output = log.mock.calls.map(([line]) => line).join("\n");
 
-    expect(output).toContain("tailor setup ci env");
-    expect(output).toContain('"stg"');
+    expect(output).toContain("tailor setup ci env --environment stg");
     expect(output).not.toContain("gh secret set");
   });
 
@@ -1459,8 +1458,7 @@ describe("setupCoordinate", () => {
     await setupCoordinate(coordinateOpts({ environment: "production" }));
     const output = log.mock.calls.map(([line]) => line).join("\n");
 
-    expect(output).toContain("tailor setup ci env");
-    expect(output).toContain('"production"');
+    expect(output).toContain("tailor setup ci env --environment production");
     expect(output).not.toContain("gh secret set");
   });
 

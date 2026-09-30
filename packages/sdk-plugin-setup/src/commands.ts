@@ -23,9 +23,12 @@ const envCommand = defineAppCommand({
     format: arg(z.enum(["gh", "terraform"]).default("gh"), {
       description: "Output format: gh CLI commands, or Terraform (integrations/github provider)",
     }),
+    environment: arg(z.array(z.string().min(1)).default([]), {
+      description: "Only print this GitHub Environment. Repeat to print several",
+    }),
   }),
   run: (args) => {
-    setupEnv({ outputDir: process.cwd(), format: args.format });
+    setupEnv({ outputDir: process.cwd(), format: args.format, environments: args.environment });
   },
 });
 

@@ -621,11 +621,15 @@ function assertNoKindCollision(obj: {
 function printEnvironmentStep(environment: string): void {
   logger.log(
     `1. Set the secrets and variables the "${environment}" environment needs. ` +
-      "This lists them, and where each value comes from, for every environment in " +
-      ".github/tailor.lock:",
+      "This lists them and where each value comes from (drop --environment to list every " +
+      "environment in .github/tailor.lock):",
   );
-  logger.log("   tailor setup ci env                       # gh commands");
-  logger.log("   tailor setup ci env --format terraform    # or Terraform");
+  logger.log(
+    `   tailor setup ci env --environment ${environment}                       # gh commands`,
+  );
+  logger.log(
+    `   tailor setup ci env --environment ${environment} --format terraform    # or Terraform`,
+  );
 }
 
 /**

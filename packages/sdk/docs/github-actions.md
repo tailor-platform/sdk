@@ -330,8 +330,9 @@ commands work from any directory; otherwise `gh` resolves the repository from
 the current directory and the Terraform output leaves it as a placeholder.
 
 ```bash
-tailor setup ci env                      # gh CLI commands (default)
-tailor setup ci env --format terraform   # Terraform for the integrations/github provider
+tailor setup ci env                          # gh CLI commands (default)
+tailor setup ci env --format terraform       # Terraform for the integrations/github provider
+tailor setup ci env --environment my-app-stg # only one environment (repeat for several)
 ```
 
 The list follows what each generated workflow actually reads:

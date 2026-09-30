@@ -511,6 +511,30 @@ describe("setupEnv", () => {
     );
   });
 
+  test("prints only the environments passed with --environment, ignoring case", () => {
+    using tmp = tempDir("setup-env-");
+    const lock = lockOf(target("branch", "my-app", "stg"), target("tag", "my-app", "production"));
+    writeLock(tmp.dir, lock);
+    using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["Production"] });
+
+    const [, production] = collectEnvironmentRequirements(lock);
+    expect(out).toHaveBeenCalledWith(renderGhCommands([production!]));
+  });
+
+  test("rejects an --environment that no workflow uses, listing the ones that exist", () => {
+    using tmp = tempDir("setup-env-");
+    writeLock(
+      tmp.dir,
+      lockOf(target("branch", "my-app", "stg"), target("tag", "my-app", "production")),
+    );
+
+    expect(() => setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["prod"] })).toThrow(
+      /"prod".*stg, production/,
+    );
+  });
+
   test("prints the grouped requirements as data in JSON mode", () => {
     using tmp = tempDir("setup-env-");
     const lock = lockOf(target("branch", "my-app", "stg"));
