@@ -366,11 +366,6 @@ function normalizeDir(dir: string): string {
   return normalized;
 }
 
-/**
- * Resolve all derived values and render the workflow content.
- * @param options - Setup options
- * @returns Resolved target metadata and rendered content
- */
 function assertDistinctConfigs(dirs: readonly string[], configPaths: readonly string[]): void {
   const byRealPath = new Map<string, string>();
   for (const [index, configPath] of configPaths.entries()) {
@@ -433,6 +428,11 @@ function assertMultiDirTarget(options: SetupTargetOptions, dirs: readonly string
   }
 }
 
+/**
+ * Resolve all derived values and render the workflow content.
+ * @param options - Setup options
+ * @returns Resolved target metadata and rendered content
+ */
 async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const dirs = (typeof options.dir === "string" ? [options.dir] : options.dir).map(normalizeDir);
   const multi = dirs.length > 1;

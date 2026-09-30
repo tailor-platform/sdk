@@ -640,6 +640,24 @@ describe("ERD preview matrix", () => {
     });
   });
 
+  test("exports the base side from the head owner when the base branch has no setup target yet", () => {
+    writeLockAt(".", {
+      dir: ".",
+      erdNamespaces: ["erp", "users"],
+      apps: [
+        { dir: "apps/erp/backend", erdNamespaces: ["erp"] },
+        { dir: "apps/users/backend", erdNamespaces: ["users"] },
+      ],
+    });
+
+    const outputs = runMatrix();
+
+    expect(JSON.parse(outputs["base-app-dirs"] ?? "")).toEqual({
+      erp: "apps/erp/backend",
+      users: "apps/users/backend",
+    });
+  });
+
   test("maps every namespace of a single-directory target to that directory", () => {
     writeLockAt(".", { dir: "apps/backend", erdNamespaces: ["main", "audit"] });
     writeLockAt(".tailor-erd-base", { dir: "backend", erdNamespaces: ["main"] });

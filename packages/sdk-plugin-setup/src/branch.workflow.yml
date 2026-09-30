@@ -164,8 +164,9 @@ jobs:
             return normalized;
           }
 
-          // Each namespace is owned by one app; a namespace missing on one side is
-          // exported from that side's first app, where it renders as added or removed.
+          // Each namespace is owned by one app. A side without an ERD target yet reuses the
+          // other side's owner; a namespace missing from a side's target is exported from
+          // that side's first app, where it renders as added or removed.
           function appDirsFromTarget(target, label) {
             const dirs = new Map();
             if (target?.inputs?.erdPreview !== true) return dirs;
@@ -193,10 +194,18 @@ jobs:
           const namespaces = [...new Set([...headDirs.keys(), ...baseDirs.keys()])].sort((a, b) =>
             a.localeCompare(b),
           );
-          const dirsFor = (dirs, fallback) =>
-            Object.fromEntries(namespaces.map((namespace) => [namespace, dirs.get(namespace) ?? fallback]));
-          const appDirs = dirsFor(headDirs, defaultAppDir(headTarget, "head setup lock"));
-          const baseAppDirs = dirsFor(baseDirs, defaultAppDir(baseTarget, "base setup lock"));
+          function dirsFor(dirs, target, otherDirs, label) {
+            const hasTarget = target?.inputs?.erdPreview === true;
+            const fallback = defaultAppDir(target, label);
+            return Object.fromEntries(
+              namespaces.map((namespace) => [
+                namespace,
+                dirs.get(namespace) ?? (hasTarget ? undefined : otherDirs.get(namespace)) ?? fallback,
+              ]),
+            );
+          }
+          const appDirs = dirsFor(headDirs, headTarget, baseDirs, "head setup lock");
+          const baseAppDirs = dirsFor(baseDirs, baseTarget, headDirs, "base setup lock");
 
           if (namespaces.length === 0) {
             console.error("No ERD preview namespaces found in the head or base setup lock.");
