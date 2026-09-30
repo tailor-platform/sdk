@@ -57,7 +57,7 @@ const coordinateCommand = defineAppCommand({
     }),
     action: arg(z.array(z.string().min(1)).min(1), {
       description:
-        "Composite action to include. Repeat for separate deploy steps, or use commas to deploy actions as one multi-config group. tailor- prefix optional.",
+        "Composite action to include. Repeat for separate deploy steps, or use commas to deploy actions as one multi-config group. Takes the name given to setup ci action.",
     }),
     branch: arg(z.string().min(1).optional(), {
       description: "Branch target: deploy trigger branch (defaults to the detected default branch)",

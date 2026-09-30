@@ -1509,7 +1509,7 @@ describe("setupCoordinate", () => {
     await setupTarget(actionOpts("worker", "apps/worker"));
     await setupTarget(actionOpts("web", "apps/web"));
 
-    await setupCoordinate(coordinateOpts({ actions: ["tailor-api, worker", "web"] }));
+    await setupCoordinate(coordinateOpts({ actions: ["api, worker", "web"] }));
 
     const target = findTarget(readLock(testDir), "coordinate", "main");
     expect(target?.inputs.actionGroups).toEqual([["api", "worker"], ["web"]]);
@@ -1584,6 +1584,24 @@ describe("setupCoordinate", () => {
     await setupTarget(actionOpts("api"));
     await expect(setupCoordinate(coordinateOpts({ actions: ["missing-app"] }))).rejects.toThrow(
       /not found in .github\/tailor\.lock/,
+    );
+  });
+
+  test("takes an --action value as the exact action name, even one starting with tailor-", async () => {
+    writeAppConfig("tailor-crm", "apps/crm");
+    await setupTarget(actionOpts("tailor-crm", "apps/crm"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["tailor-crm"] }));
+
+    const target = findTarget(readLock(testDir), "coordinate", "main");
+    expect(target?.inputs.actionGroups).toEqual([["tailor-crm"]]);
+  });
+
+  test("suggests the name without tailor- when no action has the given name", async () => {
+    await setupTarget(actionOpts("api"));
+
+    await expect(setupCoordinate(coordinateOpts({ actions: ["tailor-api"] }))).rejects.toThrow(
+      /Action target "tailor-api" not found[\s\S]*--action api/,
     );
   });
 

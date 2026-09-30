@@ -194,7 +194,7 @@ describe("planUpdate", () => {
       options: {
         coordinatorName: "apps",
         coordinateKind: "branch",
-        actions: ["tailor-front,tailor-admin", "tailor-api"],
+        actions: ["front,admin", "api"],
         branch: "release",
         tagPattern: undefined,
         environment: "production",
@@ -400,7 +400,7 @@ describe("setupUpdate", () => {
     await setupCoordinate({
       coordinatorName: "apps",
       coordinateKind: "branch",
-      actions: ["tailor-tailor-crm"],
+      actions: ["tailor-crm"],
       force: false,
       outputDir: testDir,
       gitRunner: loaders.gitRunner,

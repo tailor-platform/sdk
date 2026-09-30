@@ -108,7 +108,7 @@ export type SetupTargetOptions =
 export type CoordinateSetupOptions = {
   coordinatorName: string;
   coordinateKind: CoordinateKind;
-  /** Action names or comma-separated action groups (without tailor- prefix), in deploy order. */
+  /** Action names or comma-separated action groups, in deploy order. */
   actions: string[];
   branch?: string;
   tagPattern?: string;
@@ -120,12 +120,8 @@ export type CoordinateSetupOptions = {
   gitRunner?: GitRunner;
 };
 
-function actionName(input: string): string {
-  return input.startsWith("tailor-") ? input.slice("tailor-".length) : input;
-}
-
 function splitActionGroup(input: string): string[] {
-  const names = input.split(",").map((entry) => actionName(entry.trim()));
+  const names = input.split(",").map((entry) => entry.trim());
   if (names.some((name) => name.length === 0)) {
     throw new Error("--action must contain one or more non-empty action names.");
   }
@@ -858,9 +854,12 @@ export async function setupCoordinate(
       seenNames.add(name);
       const entry = actionTargets.get(name);
       if (!entry) {
+        const unprefixed = name.startsWith("tailor-") ? name.slice("tailor-".length) : null;
         throw new Error(
           `Action target "${name}" not found in .github/tailor.lock. ` +
-            `Run \`tailor setup ci action --name ${name}\` first.`,
+            (unprefixed !== null && actionTargets.has(unprefixed)
+              ? `--action takes the action's name; use \`--action ${unprefixed}\`.`
+              : `Run \`tailor setup ci action --name ${name}\` first.`),
         );
       }
       if (names.length > 1 && entry.templateVersion < TEMPLATE_VERSION) {

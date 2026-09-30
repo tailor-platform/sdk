@@ -44,7 +44,7 @@ export type LockInputs = {
   requirePreviewLabel?: boolean;
   /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
   actionDirs?: string[];
-  /** For `coordinate` kind: action names (without tailor- prefix) per deploy step, in deploy order. */
+  /** For `coordinate` kind: action names per deploy step, in deploy order. */
   actionGroups?: string[][];
   erdPreview?: boolean;
   erdNamespaces?: string[];
