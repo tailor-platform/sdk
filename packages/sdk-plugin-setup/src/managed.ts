@@ -314,7 +314,10 @@ function projectManaged(
   inputs: LockInputs | undefined,
 ): Plain {
   const doc = readMapping(content);
-  const managed = new Set(managedIds);
+  const sdkIds = managedIds.filter(
+    (id) => localId(id).startsWith(RESERVED_PREFIX) || Object.hasOwn(RETIRED_IDS[layout], id),
+  );
+  const managed = new Set(sdkIds);
   const slots = SLOTS[layout];
   const retired = retiredIdsOf(layout, inputs);
   const projection: Plain = {};
@@ -330,7 +333,7 @@ function projectManaged(
   } else {
     const jobs = isPlainObject(doc["jobs"]) ? doc["jobs"] : {};
     projection["jobs"] = Object.fromEntries(
-      managedIds
+      sdkIds
         .filter((id) => !id.includes("/"))
         .map((jobId) => {
           const job = jobs[jobId];

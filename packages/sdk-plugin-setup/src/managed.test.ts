@@ -339,6 +339,21 @@ describe("computeManagedHash", () => {
   });
 });
 
+describe("computeManagedHash for a non-prefixed id the lock records", () => {
+  test("ignores edits to that step, since only tailor- ids are the SDK's", () => {
+    const withStep = (run: string) =>
+      addStepAfterInstall(
+        render.content,
+        "tailor-deploy",
+        `      - id: registry-auth\n        run: ${run}\n`,
+      );
+    const ids = [...render.generatedIds, "tailor-deploy/registry-auth"];
+    expect(computeManagedHash(withStep("echo edited"), "workflow", ids)).toBe(
+      computeManagedHash(withStep("echo auth"), "workflow", ids),
+    );
+  });
+});
+
 describe("computeManagedHash for a tailor-build-site step the lock does not record", () => {
   test("ignores the step, so only the reserved prefix reports it", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app" });
