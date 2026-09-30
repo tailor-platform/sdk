@@ -61,6 +61,8 @@ export type LockInputs = {
   paths?: string[];
   /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
   actionDirs?: string[];
+  /** For `coordinate` kind: action names per deploy step, in deploy order. */
+  actionGroups?: string[][];
   erdPreview?: boolean;
   erdNamespaces?: string[];
   /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */

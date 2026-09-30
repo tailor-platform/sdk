@@ -169,6 +169,14 @@ describe("findTargetDrift", () => {
     expect(findings[0]?.message).toMatch(message);
   });
 
+  test("points an outdated template at `tailor setup update`", () => {
+    const findings = findTargetDrift(
+      baseTarget({ templateVersion: TEMPLATE_VERSION - 1 }),
+      cleanState(),
+    );
+    expect(findings[0]?.message).toMatch(/Run `tailor setup update`/);
+  });
+
   test("accumulates multiple findings", () => {
     const findings = findTargetDrift(
       baseTarget({ templateVersion: TEMPLATE_VERSION - 1 }),
@@ -493,6 +501,13 @@ describe("checkGitHub (integration)", () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       editManagedPart();
       await expect(check()).rejects.toThrow(/drift/);
+    });
+
+    test("points the drift summary at `tailor setup update`", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      editManagedPart();
+      using _warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/Run `tailor setup update` to regenerate/);
     });
 
     test("emits the drift count marker after every finding", async () => {
