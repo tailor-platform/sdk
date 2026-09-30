@@ -28,7 +28,8 @@ function recordedBranchUnlessDetected(inputs: LockInputs): string | undefined {
  */
 export function planUpdate(target: LockTarget, common: UpdateCommon): UpdatePlan {
   const { kind, workspaceName, inputs } = target;
-  const base = { workspaceName, dir: inputs.dir, environment: inputs.environment, ...common };
+  const dir = inputs.apps ? inputs.apps.map((app) => app.dir) : inputs.dir;
+  const base = { workspaceName, dir, environment: inputs.environment, ...common };
 
   switch (kind) {
     case "branch":
@@ -38,6 +39,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): UpdatePlan
           kind,
           ...base,
           branch: recordedBranchUnlessDetected(inputs),
+          extraPaths: inputs.paths,
           erdPreview: inputs.erdPreview ?? false,
           restrictDispatch: inputs.restrictDispatch ?? false,
         },
@@ -60,6 +62,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): UpdatePlan
           kind,
           ...base,
           branch: recordedBranchUnlessDetected(inputs),
+          extraPaths: inputs.paths,
           region: inputs.region ?? "",
           requirePreviewLabel: inputs.requirePreviewLabel ?? false,
         },
