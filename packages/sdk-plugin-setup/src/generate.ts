@@ -371,6 +371,22 @@ function normalizeDir(dir: string): string {
  * @param options - Setup options
  * @returns Resolved target metadata and rendered content
  */
+function assertDistinctConfigs(dirs: readonly string[], configPaths: readonly string[]): void {
+  const byRealPath = new Map<string, string>();
+  for (const [index, configPath] of configPaths.entries()) {
+    const dir = dirs[index] ?? configPath;
+    const realPath = fs.realpathSync(configPath);
+    const other = byRealPath.get(realPath);
+    if (other !== undefined) {
+      throw new Error(
+        `--dir "${other}" and "${dir}" are the same app: both reach the same tailor.config.ts ` +
+          "through a symbolic link. Pass each app directory once.",
+      );
+    }
+    byRealPath.set(realPath, dir);
+  }
+}
+
 function rootDeclaresSdk(outputDir: string): boolean {
   const manifestPath = path.join(outputDir, "package.json");
   if (!fs.existsSync(manifestPath)) return false;
@@ -426,6 +442,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const workingDirectory = dir !== "." ? dir : undefined;
 
   const configPaths = dirs.map((d) => resolveConfigPath(options.outputDir, d));
+  if (multi) assertDistinctConfigs(dirs, configPaths);
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
 
   const loadName = options.loadConfigName ?? defaultLoadConfigName;

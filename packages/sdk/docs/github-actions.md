@@ -480,9 +480,11 @@ tailor setup ci preview --name erp --region asia-northeast \
   --paths "apps/*/frontend/**" --paths "modules/**" --paths pnpm-lock.yaml
 ```
 
-The patterns are added to the `paths` filter next to the app directories. An
-app at the repository root already runs on every change, so `--paths` is not
-accepted with `--dir .`.
+The patterns are added to the `paths` filter after the app directories. A
+pattern starting with `!` excludes matching paths, following GitHub's `paths`
+filter rules, so it can also exclude files inside an app directory, for example
+`--paths '!apps/erp/backend/**/*.md'`. An app at the repository root already
+runs on every change, so `--paths` is not accepted with `--dir .`.
 
 ## Rollback
 

@@ -1787,6 +1787,17 @@ export default defineConfig({
       ).rejects.toThrow(/"apps\/erp\/backend" and "apps\/erp\/backend" map to the same step id/);
     });
 
+    test("rejects two --dir values that reach the same config through a symbolic link", async () => {
+      writeApp("apps/erp/backend");
+      fs.symlinkSync(path.join(testDir, "apps/erp"), path.join(testDir, "apps/alias"));
+
+      await expect(
+        setupTarget(
+          baseOptions({ workspaceName: "erp", dir: ["apps/erp/backend", "apps/alias/backend"] }),
+        ),
+      ).rejects.toThrow(/"apps\/erp\/backend" and "apps\/alias\/backend" are the same app/);
+    });
+
     test("rejects directories whose generated step ids would collide", async () => {
       ["apps/a-b", "apps/a/b"].forEach(writeApp);
 
