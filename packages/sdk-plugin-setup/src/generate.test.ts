@@ -1774,6 +1774,19 @@ export default defineConfig({
       );
     });
 
+    test("resolves . and .. segments, so an app named twice through them is rejected", async () => {
+      dirs.forEach(writeApp);
+
+      await expect(
+        setupTarget(
+          baseOptions({
+            workspaceName: "erp",
+            dir: ["apps/erp/backend", "apps/users/../erp/./backend"],
+          }),
+        ),
+      ).rejects.toThrow(/"apps\/erp\/backend" and "apps\/erp\/backend" map to the same step id/);
+    });
+
     test("rejects directories whose generated step ids would collide", async () => {
       ["apps/a-b", "apps/a/b"].forEach(writeApp);
 

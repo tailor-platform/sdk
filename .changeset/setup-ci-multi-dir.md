@@ -3,7 +3,7 @@
 "@tailor-platform/sdk": patch
 ---
 
-`tailor setup ci branch`, `tailor setup ci tag`, and `tailor setup ci preview` accept `--dir` more than once. The generated workflow deploys every app to the same workspace in one multi-config run from the repository root, runs the generate check, seed validation, and migration drift check for each app directory, and triggers on changes under any of them. `--name` is required when `--dir` is repeated, and the root `package.json` must declare `@tailor-platform/sdk`. With `--erd-preview`, each TailorDB namespace is previewed from the app that owns it.
+`tailor setup ci branch`, `tailor setup ci tag`, and `tailor setup ci preview` accept `--dir` more than once. The generated workflow deploys every app to the same workspace in one multi-config run from the repository root, runs the generate check for each app directory (plus seed validation and the migration drift check on branch and tag workflows), and triggers on changes under any of them. `--name` is required when `--dir` is repeated, and the root `package.json` must declare `@tailor-platform/sdk`. With `--erd-preview`, each TailorDB namespace is previewed from the app that owns it.
 
 `tailor setup ci branch` and `tailor setup ci preview` also accept `--paths` (repeatable) to trigger the workflow on changes outside the app directories, such as a frontend or shared packages.
 

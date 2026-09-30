@@ -458,9 +458,9 @@ tailor setup ci branch --name erp --dir apps/erp/backend --dir apps/users/backen
 [multi-config deploy](./cli/application.md#deploy) from the repository root, so
 an app can reference resources of another app with `external: true`. Add
 `@tailor-platform/sdk` to the root `package.json` so the `tailor` CLI resolves
-there; setup stops until it is declared. The generate check, seed validation,
-and migration drift check run for each app directory, and the `paths` filter
-covers every app directory.
+there; setup stops until it is declared. The generate check runs for each app
+directory, as do seed validation and the migration drift check on branch and tag
+workflows, and the `paths` filter covers every app directory.
 
 With `--erd-preview`, each TailorDB namespace is previewed from the app that
 owns it. A namespace may be owned by only one app; the others reference it with

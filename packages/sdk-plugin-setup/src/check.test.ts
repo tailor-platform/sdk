@@ -413,6 +413,37 @@ describe("checkGitHub (integration)", () => {
       ).resolves.toBeUndefined();
     });
 
+    test("does not load an unrelated config at the repository root for a multi-directory target", async () => {
+      const dirs = ["apps/erp/backend", "apps/users/backend"];
+      for (const dir of dirs) {
+        fs.mkdirSync(path.join(testDir, dir), { recursive: true });
+        fs.copyFileSync(
+          path.join(testDir, "tailor.config.ts"),
+          path.join(testDir, dir, "tailor.config.ts"),
+        );
+      }
+      fs.writeFileSync(
+        path.join(testDir, "package.json"),
+        JSON.stringify({ private: true, devDependencies: { "@tailor-platform/sdk": "1.0.0" } }),
+      );
+      const appsOnly = async (configPath: string) => {
+        if (!configPath.includes("/apps/")) throw new Error(`loaded ${configPath}`);
+        return false;
+      };
+      const loadErdNamespaces = async (configPath: string) => {
+        if (!configPath.includes("/apps/")) throw new Error(`loaded ${configPath}`);
+        return configPath.includes("/erp/") ? ["erp"] : ["users"];
+      };
+      const loaders = { loadHasMigrations: appsOnly, loadHasSeeds: appsOnly, loadErdNamespaces };
+      await setupTarget(
+        setupOptions({ workspaceName: "my-app", dir: dirs, erdPreview: true, ...loaders }),
+      );
+
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", ...loaders }),
+      ).resolves.toBeUndefined();
+    });
+
     test("passes after --force regeneration following a hand edit", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       editManagedPart();

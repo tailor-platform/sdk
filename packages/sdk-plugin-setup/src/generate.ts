@@ -361,11 +361,7 @@ type Resolved = {
 // "./apps/backend/" produce a clean "apps/backend".
 function normalizeDir(dir: string): string {
   const normalized =
-    dir
-      .replaceAll("\\", "/")
-      .replace(/\/{2,}/g, "/")
-      .replace(/^\.\//, "")
-      .replace(/\/$/, "") || ".";
+    path.normalize(dir.replaceAll("\\", "/")).replace(/^\.\//, "").replace(/\/$/, "") || ".";
   validateDir(normalized);
   return normalized;
 }

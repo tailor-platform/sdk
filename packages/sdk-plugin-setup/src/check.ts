@@ -378,12 +378,12 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
     const absFile = resolveWithinRoot(outputDir, target.file);
     const content = absFile === null ? null : readContent(absFile);
     const currentHash = content === null ? null : currentContentHash(target, content);
-    // Coordinator targets are config-less; skip the probe so config-dir drift is never emitted.
-    const configAbs =
-      target.kind === "coordinate"
-        ? null
-        : resolveWithinRoot(outputDir, path.join(target.inputs.dir, "tailor.config.ts"));
-    const configExists = target.kind === "coordinate" || (configAbs !== null && exists(configAbs));
+    // Coordinator targets have no config, and multi-directory targets are audited per app below.
+    const noRootConfig = target.kind === "coordinate" || target.inputs.apps !== undefined;
+    const configAbs = noRootConfig
+      ? null
+      : resolveWithinRoot(outputDir, path.join(target.inputs.dir, "tailor.config.ts"));
+    const configExists = noRootConfig || (configAbs !== null && exists(configAbs));
     const erdNamespaces =
       target.kind === "branch" && target.inputs.erdPreview && configAbs !== null && configExists
         ? await loadErdNamespaces(configAbs)
