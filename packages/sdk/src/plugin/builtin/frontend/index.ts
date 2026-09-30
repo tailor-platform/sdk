@@ -17,6 +17,12 @@ interface BuildParams {
   env: Record<string, string>;
 }
 
+function ignoreMissingPath(error: unknown): undefined {
+  const code = error instanceof Error && "code" in error ? error.code : undefined;
+  if (code === "ENOENT" || code === "ENOTDIR") return undefined;
+  throw error;
+}
+
 async function buildFrontend(params: BuildParams): Promise<void> {
   const { command, workingDir, env } = params;
   await new Promise<void>((resolve, reject) => {
@@ -95,7 +101,7 @@ export function frontendPlugin(
           );
           await buildFrontend({ command: def.build, workingDir, env });
         }
-        const info = await stat(distDir).catch(() => undefined);
+        const info = await stat(distDir).catch(ignoreMissingPath);
         if (!info?.isDirectory())
           throw new Error(
             `Frontend dist directory does not exist or is not a directory: ${distDir}`,
@@ -103,9 +109,11 @@ export function frontendPlugin(
         const result = await site.publish(distDir);
         if (result.skippedFiles.length > 0) {
           ctx.logger.warn(
-            "Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",
+            [
+              "Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",
+              ...result.skippedFiles.map((file) => `  - ${file}`),
+            ].join("\n"),
           );
-          for (const file of result.skippedFiles) ctx.logger.warn(`  - ${file}`);
         }
         ctx.logger.success(`Frontend deployed to "${name}": ${result.url}`);
         frontends.push({ site: name, url: result.url, skippedFiles: result.skippedFiles });

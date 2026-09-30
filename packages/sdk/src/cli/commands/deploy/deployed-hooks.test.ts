@@ -8,6 +8,20 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { DeployedContext, Plugin } from "#/plugin/types";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
+const statFailure = vi.hoisted(() => ({ next: undefined as Error | undefined }));
+vi.mock(import("node:fs/promises"), async (original) => {
+  const actual = await original();
+  const stat = (async (...args: Parameters<typeof actual.stat>) => {
+    const failure = statFailure.next;
+    statFailure.next = undefined;
+    if (failure) throw failure;
+    return actual.stat(...args);
+  }) as typeof actual.stat;
+  return { ...actual, stat, default: { ...actual, stat } };
+});
+function permissionDenied(path: string): Error {
+  return Object.assign(new Error(`EACCES: permission denied, stat '${path}'`), { code: "EACCES" });
+}
 vi.mock("../staticwebsite/deploy", () => ({
   deployStaticWebsite: vi.fn().mockResolvedValue({ url: "https://published", skippedFiles: [] }),
 }));
@@ -24,6 +38,11 @@ function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
     },
     plugins,
   } as unknown as BuiltDeploymentTarget;
+}
+function sparseArray(): unknown[] {
+  const list: unknown[] = [];
+  list[1] = 1;
+  return list;
 }
 function clientMock() {
   const methods = {
@@ -192,6 +211,7 @@ describe("deployed hooks", () => {
     ["a function", { list: [() => {}] }, "outputs.list[0]"],
     ["a non-finite number", { ratio: Number.NaN }, "outputs.ratio"],
     ["a Date", { at: new Date(0) }, "outputs.at"],
+    ["an array hole", { list: sparseArray() }, "outputs.list[0]"],
   ])("rejects hook outputs containing %s and names its path", async (_, outputs, where) => {
     const { client } = clientMock();
     await expect(
@@ -263,6 +283,23 @@ describe("deployed hooks", () => {
             await expect(
               ctx.staticWebsites["app-web"]?.publish("/missing/deployed-hook-build"),
             ).rejects.toThrow("/missing/deployed-hook-build");
+          }),
+        ]),
+      ],
+    });
+    expect(deployStaticWebsite).not.toHaveBeenCalled();
+  });
+  test("reports stat failures other than a missing directory as they are", async () => {
+    const { client } = clientMock();
+    const dir = "/restricted/deployed-hook-build";
+    statFailure.next = permissionDenied(dir);
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [
+        target([
+          plugin(async (ctx) => {
+            await expect(ctx.staticWebsites["app-web"]?.publish(dir)).rejects.toThrow("EACCES");
           }),
         ]),
       ],

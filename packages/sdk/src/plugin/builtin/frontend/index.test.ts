@@ -8,6 +8,20 @@ import { frontendPlugin } from "./index";
 import type { DeployedContext, PublishStaticWebsiteResult } from "#/plugin/types";
 import type { FrontendDefinition, FrontendPluginOptions } from "./types";
 
+const statFailure = vi.hoisted(() => ({ next: undefined as Error | undefined }));
+vi.mock(import("node:fs/promises"), async (original) => {
+  const actual = await original();
+  const stat = (async (...args: Parameters<typeof actual.stat>) => {
+    const failure = statFailure.next;
+    statFailure.next = undefined;
+    if (failure) throw failure;
+    return actual.stat(...args);
+  }) as typeof actual.stat;
+  return { ...actual, stat, default: { ...actual, stat } };
+});
+function permissionDenied(path: string): Error {
+  return Object.assign(new Error(`EACCES: permission denied, stat '${path}'`), { code: "EACCES" });
+}
 let root: string;
 aroundEach(async (runTest) => {
   root = await mkdtemp(join(tmpdir(), "frontend-plugin-"));
@@ -147,10 +161,15 @@ describe("frontendPlugin", () => {
       skippedFiles: ["bad.bin"],
     });
     await run();
-    expect(ctx.logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("some files failed to upload"),
+    expect(ctx.logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/some files failed to upload.*\n {2}- bad\.bin$/s),
     );
-    expect(ctx.logger.warn).toHaveBeenCalledWith("  - bad.bin");
+  });
+  test("reports stat failures other than a missing dist directory as they are", async () => {
+    const { publish, run } = setup([{ site: "web", distDir: root }]);
+    statFailure.next = permissionDenied(root);
+    await expect(run()).rejects.toThrow("EACCES");
+    expect(publish).not.toHaveBeenCalled();
   });
   test("waits for each frontend upload before evaluating the next frontend", async () => {
     const sequence: string[] = [];

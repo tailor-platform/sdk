@@ -102,6 +102,12 @@ async function loadDeployedTarget(
   };
 }
 
+function ignoreMissingPath(error: unknown): undefined {
+  const code = error instanceof Error && "code" in error ? error.code : undefined;
+  if (code === "ENOENT" || code === "ENOTDIR") return undefined;
+  throw error;
+}
+
 async function publishStaticWebsite(
   client: OperatorClient,
   workspaceId: string,
@@ -109,7 +115,7 @@ async function publishStaticWebsite(
   dir: string,
 ) {
   const resolved = path.resolve(dir);
-  const info = await stat(resolved).catch(() => undefined);
+  const info = await stat(resolved).catch(ignoreMissingPath);
   if (!info?.isDirectory())
     throw CLIError({
       code: "DIRECTORY_NOT_FOUND",
@@ -148,7 +154,7 @@ function findNonJsonValue(
   if (typeof value !== "object" || ancestors.has(value)) return path;
   if (!Array.isArray(value) && !isPlainObject(value)) return path;
   const entries = Array.isArray(value)
-    ? value.map((item, index) => [`${path}[${index}]`, item] as const)
+    ? Array.from(value, (item: unknown, index) => [`${path}[${index}]`, item] as const)
     : Object.entries(value).map(([key, item]) => [`${path}.${key}`, item] as const);
   ancestors.add(value);
   try {
