@@ -339,6 +339,21 @@ describe("computeManagedHash", () => {
   });
 });
 
+describe("computeManagedHash for a tailor-build-site step the lock does not record", () => {
+  test("ignores the step, so only the reserved prefix reports it", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app" });
+    const edited = action.content.replace(
+      /( {4}- id: tailor-apply\n)/,
+      "    - id: tailor-build-site\n      shell: bash\n      run: pnpm run build:docs\n$1",
+    );
+    expect(edited).not.toBe(action.content);
+    expect(computeManagedHash(edited, "action", action.generatedIds)).toBe(
+      computeManagedHash(action.content, "action", action.generatedIds),
+    );
+    expect(findReservedIds(edited, "action", action.generatedIds)).toEqual(["tailor-build-site"]);
+  });
+});
+
 describe("findEditedParts", () => {
   const recorded = computeManagedParts(render.content, "workflow", render.generatedIds);
   const edited = (content: string) =>

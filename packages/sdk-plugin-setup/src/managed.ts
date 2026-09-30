@@ -183,9 +183,12 @@ function projectSteps(
   return steps.filter(isPlainObject).flatMap((step) => {
     const id = step["id"];
     if (typeof id !== "string") return [];
-    const slotFields = lookup(slots, resolveRetired(`${prefix}${id}`, retired, managed));
+    const qualifiedId = `${prefix}${id}`;
+    const resolvedId = resolveRetired(qualifiedId, retired, managed);
+    const recorded = resolvedId !== qualifiedId || managed.has(qualifiedId);
+    const slotFields = recorded ? lookup(slots, resolvedId) : undefined;
     if (slotFields) return [omit(step, slotFields)];
-    if (!managed.has(`${prefix}${id}`)) return [];
+    if (!managed.has(qualifiedId)) return [];
     const editable = editableWithKeys(step["uses"]) ?? [];
     const withMap = step["with"];
     return [isPlainObject(withMap) ? { ...step, with: omit(withMap, editable) } : step];
@@ -486,7 +489,6 @@ function reservedIdError(qualifiedId: string): ManagedMergeError {
 }
 
 function isSdkOwned(qualifiedId: string, ctx: MergeContext): boolean {
-  if (Object.hasOwn(ctx.slots, qualifiedId)) return true;
   if (resolveRetired(qualifiedId, ctx.retired, ctx.previous) !== qualifiedId) return true;
   if (!localId(qualifiedId).startsWith(RESERVED_PREFIX)) return false;
   if (ctx.previous.has(qualifiedId)) return true;

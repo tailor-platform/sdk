@@ -1400,6 +1400,35 @@ export default defineConfig({
     expect(afterRerun).toContain("pnpm run build:static");
   });
 
+  test("action: stops on a user step named tailor-build-site when the action has no static website, even with --force", async () => {
+    const opts: Parameters<typeof setupTarget>[0] = {
+      kind: "action",
+      workspaceName: "my-app",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+      loadHasStaticWebsites: async () => false,
+    };
+    await setupTarget(opts);
+    const actionFile = path.join(testDir, ".github/actions/tailor-my-app/action.yml");
+    const edited = fs
+      .readFileSync(actionFile, "utf-8")
+      .replace(
+        /( {4}- id: tailor-apply\n)/,
+        "    - id: tailor-build-site\n      shell: bash\n      run: pnpm run build:docs\n$1",
+      );
+    fs.writeFileSync(actionFile, edited, "utf-8");
+
+    await expect(setupTarget({ ...opts, force: true })).rejects.toThrow(
+      /"tailor-build-site" uses the tailor- prefix/,
+    );
+
+    expect(fs.readFileSync(actionFile, "utf-8")).toBe(edited);
+  });
+
   test("action: keeps a user step named build-site when the action has no static website", async () => {
     const opts: Parameters<typeof setupTarget>[0] = {
       kind: "action",
