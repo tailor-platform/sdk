@@ -447,6 +447,20 @@ describe("setupUpdate", () => {
     );
   });
 
+  test("keeps the suggestion of a CLI error in the list of targets not updated", async () => {
+    writeAppConfig("apps/front");
+    await generate({ kind: "action", workspaceName: "front", dir: "apps/front" });
+
+    await expect(
+      setupUpdate({
+        force: false,
+        outputDir: testDir,
+        ...loaders,
+        loadConfigId: async () => "c98794dd-9bf1-480f-a5c9-bf92b3679d42",
+      }),
+    ).rejects.toThrow(/\[action front\][\s\S]*Neither can be chosen automatically/);
+  });
+
   test("--force resets hand edits to SDK-managed parts of every target", async () => {
     await generateMonorepo();
     handEdit(".github/workflows/tailor-front.yml");

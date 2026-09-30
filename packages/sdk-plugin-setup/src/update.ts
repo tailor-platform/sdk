@@ -121,6 +121,16 @@ export type UpdateOptions = UpdateCommon &
     | "loadHasStaticWebsites"
   >;
 
+// Not the SDK's errorSummary: it is not exported from @tailor-platform/sdk/cli,
+// and importing it would make this plugin require a newer SDK.
+function failureSummary(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const { details, suggestion } = error as { details?: unknown; suggestion?: unknown };
+  return [error.message, details, suggestion]
+    .filter((part): part is string => typeof part === "string" && part.length > 0)
+    .join("\n");
+}
+
 // Grouped coordinators refuse action entries from an older template, so the
 // actions they read must be regenerated first.
 const KIND_ORDER: Record<TargetKind, number> = {
@@ -161,7 +171,7 @@ export async function setupUpdate(options: UpdateOptions): Promise<void> {
         await setupTarget({ ...plan.options, ...loaders });
       }
     } catch (error) {
-      failures.push(`${label} ${error instanceof Error ? error.message : String(error)}`);
+      failures.push(`${label} ${failureSummary(error)}`);
     }
   }
 
@@ -174,7 +184,7 @@ export async function setupUpdate(options: UpdateOptions): Promise<void> {
   throw new Error(
     `${String(failures.length)} target(s) could not be updated ` +
       `(${String(updated)} of ${String(targets.length)} updated):\n` +
-      failures.map((failure) => `  ${failure}`).join("\n") +
+      failures.map((failure) => `  ${failure.replaceAll("\n", "\n    ")}`).join("\n") +
       "\nAddress each one above, then re-run `tailor setup update`.",
   );
 }
