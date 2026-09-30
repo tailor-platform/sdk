@@ -220,6 +220,25 @@ them. Everything else is yours, and re-running `setup` keeps it:
   `tailor-notify` and on a coordinator's steps that call an app action.
 - **The `run:` command of the `build-site` step** in a composite action.
 
+In a preview workflow, the `tailor-preview-deploy` job exposes the per-PR
+workspace as the outputs `workspace-id`, `workspace-name`, and `app-url`, so a
+job of your own can run tests or deploy extra assets against it:
+
+```yaml
+e2e:
+  needs: tailor-preview-deploy
+  runs-on: ubuntu-latest
+  env:
+    TAILOR_PLATFORM_WORKSPACE_ID: ${{ needs.tailor-preview-deploy.outputs.workspace-id }}
+    APP_URL: ${{ needs.tailor-preview-deploy.outputs.app-url }}
+  steps:
+    # checkout, dependency installation, and your test command
+```
+
+The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
+request is closed, for draft and fork pull requests, and for unlabeled ones with
+`--require-preview-label`.
+
 Comments above your own jobs and steps and at the end of the file are kept too.
 Comments inside managed jobs and steps, and edits to the header comment, are
 not kept.
