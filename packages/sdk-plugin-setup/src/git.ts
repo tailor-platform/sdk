@@ -43,3 +43,26 @@ export function detectDefaultBranch(
   }
   return branch;
 }
+
+export type Repository = { owner: string; name: string };
+
+const GITHUB_REMOTE_RE =
+  /^(?:git@github\.com:|https:\/\/github\.com\/|ssh:\/\/git@github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?$/;
+const REPOSITORY_PART_RE = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Detect the GitHub repository from the `origin` remote URL.
+ * @param cwd - Repository directory to inspect
+ * @param run - Git runner, injectable for testing
+ * @returns Owner and name, or null when origin is missing, not on github.com, or unsafe to embed
+ */
+export function detectRepository(
+  cwd: string,
+  run: GitRunner = defaultGitRunner,
+): Repository | null {
+  const match = run(["remote", "get-url", "origin"], cwd)?.match(GITHUB_REMOTE_RE);
+  if (!match) return null;
+  const [, owner = "", name = ""] = match;
+  if (!REPOSITORY_PART_RE.test(owner) || !REPOSITORY_PART_RE.test(name)) return null;
+  return { owner, name };
+}

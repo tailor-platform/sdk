@@ -6,7 +6,10 @@ import { createStartTransformPlugin } from "#/cli/services/workflow/start-transf
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { assertNoForbiddenRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
+import {
+  checkForbiddenRuntimeGlobals,
+  assertPackageRuntimeGlobalsAllowed,
+} from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -20,7 +23,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
-import type { LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
 
 interface ExecutorInfo {
   name: string;
@@ -47,6 +50,8 @@ export interface BundleExecutorsOptions {
   baseDir: string;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
+  /** Globals each installed package may reference */
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
 }
 
 /**
@@ -71,6 +76,7 @@ export async function bundleExecutors(
     bundleLogLevel = "DEBUG",
     baseDir,
     tsconfigCache,
+    allowedRuntimeGlobals,
   } = options;
   const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
@@ -123,6 +129,7 @@ export async function bundleExecutors(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      allowedRuntimeGlobals,
     ),
   );
 
@@ -143,6 +150,7 @@ async function bundleSingleExecutor(
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -154,7 +162,7 @@ async function bundleSingleExecutor(
     bundleLogLevel,
   });
 
-  const code = await withCache({
+  const { code, packageRuntimeGlobals } = await withCache({
     cache,
     kind: "executor",
     name: executor.name,
@@ -216,11 +224,18 @@ async function bundleSingleExecutor(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      const bundledCode = result.output[0].code;
-      assertNoForbiddenRuntimeGlobals(bundledCode, `Executor "${executor.name}"`);
-      return bundledCode;
+      const [chunk] = result.output;
+      return {
+        code: chunk.code,
+        packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Executor "${executor.name}"`),
+      };
     },
   });
+  assertPackageRuntimeGlobalsAllowed(
+    packageRuntimeGlobals,
+    `Executor "${executor.name}"`,
+    allowedRuntimeGlobals,
+  );
 
   return [executor.name, code];
 }

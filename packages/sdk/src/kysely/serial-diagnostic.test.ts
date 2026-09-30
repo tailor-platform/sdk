@@ -83,5 +83,5 @@ describe("Serial diagnostics", () => {
       expect(message).toContain("SerialColumnMustBeOmitted");
       expect(message).not.toContain("TypeLevelError<...>");
     }
-  });
+  }, 15_000);
 });

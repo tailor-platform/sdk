@@ -40,6 +40,7 @@ tailor setup update
 | `setup ci preview`    | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                    |
 | `setup ci action`     | Generate a per-app composite action for use with `setup ci coordinate` (monorepo multi-app deploys). |
 | `setup ci coordinate` | Generate a coordinator workflow that orchestrates multiple `--action`-generated composite actions.   |
+| `setup ci env`        | Print the secrets and variables each GitHub Environment needs, as `gh` commands or Terraform.        |
 | `setup deps`          | Generate a dependency update config for Tailor dependency and workflow updates.                      |
 | `setup check`         | Audit generated workflows for drift against the current config/repo (read-only).                     |
 | `setup update`        | Regenerate every workflow/action in `.github/tailor.lock` with the flags it was generated with.      |

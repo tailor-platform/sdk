@@ -1,0 +1,5 @@
+name: "@tailor-platform/define-config-build-options"
+version: "1.0.0"
+description: "Move defineConfig's top-level inlineSourcemap and logLevel into buildOptions"
+engine: jssg
+language: typescript
