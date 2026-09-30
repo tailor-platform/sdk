@@ -307,6 +307,23 @@ describe("deployed hooks", () => {
       message: expect.stringContaining("outputs must be a plain object"),
     });
   });
+  test("rejects a Date nested in an interface-typed output at deploy time", async () => {
+    interface Event {
+      when: Date;
+    }
+    const event: Event = { when: new Date(0) };
+    const { client } = clientMock();
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [target([plugin(() => ({ outputs: { event } }))])],
+      }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message: expect.stringContaining("outputs.event.when"),
+    });
+  });
   test("names the application of each hook not run after a hook fails", async () => {
     const { client } = clientMock();
     await expect(

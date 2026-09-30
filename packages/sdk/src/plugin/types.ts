@@ -16,7 +16,6 @@ export type { PluginAttachment };
 import type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 import type { IdProvider as IdProviderConfig, OAuth2Client } from "#/types/auth.generated";
 import type { Executor } from "#/types/executor.generated";
-import type { JsonValue } from "#/types/helpers";
 import type { Resolver } from "#/types/resolver.generated";
 
 /**
@@ -405,7 +404,29 @@ export interface DeployedContext<PluginConfig = unknown> {
   logger: PluginLogger;
 }
 
+// Symbol keys only: string keys such as `toJSON?: never` would also reject interfaces with a data field of that name.
+type OutputObject = object & {
+  [Symbol.iterator]?: never;
+  [Symbol.toStringTag]?: never;
+  [Symbol.hasInstance]?: never;
+  [Symbol.toPrimitive]?: never;
+  [Symbol.match]?: never;
+};
+
+/**
+ * A value a plugin hook can return in `outputs`. Interface-typed objects are accepted;
+ * a `Date` or class instance nested inside one is rejected when the deploy runs.
+ */
+export type PluginOutputValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly PluginOutputValue[]
+  | { [key: string]: PluginOutputValue }
+  | OutputObject;
+
 export interface DeployedHookResult {
-  /** Values included in deploy's JSON result. Declare their shape with `type`, not `interface`: interface-typed values are not assignable to `JsonValue`. */
-  outputs?: Record<string, JsonValue>;
+  /** Values included in deploy's JSON result. Interface-typed values are accepted, but a `Date` or class instance nested inside one fails the deploy instead of the type check. */
+  outputs?: Record<string, PluginOutputValue>;
 }

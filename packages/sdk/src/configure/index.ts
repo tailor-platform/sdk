@@ -52,6 +52,7 @@ export type {
   PublishStaticWebsiteResult,
   DeployedContext,
   DeployedHookResult,
+  PluginOutputValue,
   Plugin,
   PluginConfigs,
   PluginFieldExtensions,

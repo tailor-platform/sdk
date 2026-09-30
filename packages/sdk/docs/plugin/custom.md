@@ -301,9 +301,10 @@ Return JSON-serializable `outputs` to include a result in `deployedHooks` under
 key is omitted when no hook supplies outputs. `outputs` must be a plain object whose
 values are only strings, finite numbers, booleans, `null`, arrays, and plain objects;
 any other value, such as `undefined`, a function, or a `Date`, fails the hook.
-Declare the shape of an output value with a `type` alias rather than an `interface`:
-an interface-typed value is rejected by the type checker even when all of its fields
-are JSON values.
+Output values may be typed with an `interface`. The type checker rejects a
+`Date`, function, `Map`, or other non-JSON value placed directly in `outputs` or in
+an object or array literal, but a `Date` or class instance nested inside an
+interface-typed value is caught only when `tailor deploy` runs the hook.
 
 A failed hook stops later hooks with `DEPLOYED_HOOK_FAILED`. The same error is
 reported when the deployed information passed to hooks cannot be loaded. Platform
