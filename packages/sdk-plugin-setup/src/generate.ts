@@ -180,7 +180,11 @@ async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean
 
 // The name is used as the plan label, the generated file name, and the default
 // GitHub Environment name, so it must stay within the workspace-name charset.
-function validateWorkspaceName(name: string): void {
+/**
+ * Reject workspace names that do not match the Platform naming rules.
+ * @param name - Workspace name
+ */
+export function validateWorkspaceName(name: string): void {
   if (!workspaceNameSchema.safeParse(name).success) {
     throw new Error(
       `Invalid workspace name "${name}". Names must be 3-63 characters of lowercase ` +
@@ -215,7 +219,11 @@ function validateTagPattern(pattern: string): void {
 // The environment name is embedded into workflow YAML as a plain scalar.
 const ENVIRONMENT_RE = /^[A-Za-z0-9._/-]+$/;
 
-function validateEnvironment(environment: string): void {
+/**
+ * Reject GitHub Environment names that cannot be embedded as-is in generated files.
+ * @param environment - GitHub Environment name
+ */
+export function validateEnvironment(environment: string): void {
   if (!ENVIRONMENT_RE.test(environment)) {
     throw new Error(
       `Invalid environment name "${environment}". Only letters, numbers, ".", "_", "/", and "-" are supported.`,
@@ -615,6 +623,20 @@ function assertNoKindCollision(obj: {
   }
 }
 
+function printEnvironmentStep(environment: string): void {
+  logger.log(
+    `1. Set the secrets and variables the "${environment}" environment needs. ` +
+      "This lists them and where each value comes from (drop --environment to list every " +
+      "environment in .github/tailor.lock):",
+  );
+  logger.log(
+    `   tailor setup ci env --environment ${environment}                       # gh commands`,
+  );
+  logger.log(
+    `   tailor setup ci env --environment ${environment} --format terraform    # or Terraform`,
+  );
+}
+
 /**
  * Print next-step guidance after generating workflow files.
  * @param obj - Output context
@@ -627,20 +649,10 @@ function printNextSteps(obj: { environment: string; configEdited: boolean }): vo
   logger.newline();
   logger.info("Next steps:");
   logger.newline();
-  logger.log(`1. Set the machine-user credentials as secrets on the "${environment}" environment:`);
-  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env ${environment}`);
-  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env ${environment}`);
+  printEnvironmentStep(environment);
 
   logger.newline();
-  logger.log(
-    `2. Provision the workspace and set its id as the TAILOR_PLATFORM_WORKSPACE_ID variable ` +
-      `on the "${environment}" environment:`,
-  );
-  logger.log("   tailor workspace create   # if it does not exist yet; copy the id");
-  logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
-
-  logger.newline();
-  logger.log("3. Commit the generated files:");
+  logger.log("2. Commit the generated files:");
   logger.log("   - .github/workflows/tailor-*.yml");
   logger.log("   - .github/tailor.lock");
   if (configEdited) {
@@ -949,17 +961,9 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   logger.newline();
   logger.info("Next steps:");
   logger.newline();
-  logger.log(`1. Set the machine-user credentials as secrets on the "${environment}" environment:`);
-  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env ${environment}`);
-  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env ${environment}`);
+  printEnvironmentStep(environment);
   logger.newline();
-  logger.log(
-    `2. Provision the target workspace and set TAILOR_PLATFORM_WORKSPACE_ID on the "${environment}" environment:`,
-  );
-  logger.log("   tailor workspace create   # if it does not exist yet; copy the id");
-  logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
-  logger.newline();
-  logger.log("3. Commit the generated files:");
+  logger.log("2. Commit the generated files:");
   logger.log(`   - ${file}`);
   logger.log(`   - ${tailorSetupFile}  (if newly created)`);
   logger.log("   - .github/tailor.lock");

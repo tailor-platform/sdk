@@ -122,6 +122,27 @@ export function createTsconfigPathsPlugin(
   };
 }
 
+/**
+ * Expand `specifier` into the file paths the nearest tsconfig's `paths` table
+ * maps it to, looking the tsconfig up the same way {@link createTsconfigPathsPlugin} does.
+ * @param specifier - Import specifier to expand
+ * @param importerDirectory - Directory of the importing file
+ * @param cache - Lookup cache to reuse across calls
+ * @returns Candidate paths in `paths` order; empty when no alias matches
+ */
+export function matchTsconfigPaths(
+  specifier: string,
+  importerDirectory: string,
+  cache: TsconfigLookupCache,
+): string[] {
+  const resolution = getResolutionContext(
+    importerDirectory,
+    cache.tsconfigCache,
+    cache.contextCache,
+  );
+  return resolution?.matcher(specifier) ?? [];
+}
+
 function getResolutionContext(
   startDir: string,
   tsconfigCache: Cache,

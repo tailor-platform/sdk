@@ -325,38 +325,6 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
     );
   }
 
-  // In local (non-CI) mode, check that TAILOR_PLATFORM_WORKSPACE_ID is set for
-  // targets that directly read vars.TAILOR_PLATFORM_WORKSPACE_ID: branch, tag,
-  // and coordinate (coordinators pass it into each per-app deploy step).
-  // Action targets (composite actions) receive workspace-id as a caller input and
-  // never read vars.* themselves. Preview targets create per-PR workspaces and
-  // don't reference TAILOR_PLATFORM_WORKSPACE_ID either.
-  // In CI the plan/deploy actions handle this at runtime.
-  if (!isCI) {
-    const needsWorkspaceId = lock.targets.some(
-      (t) => t.kind === "branch" || t.kind === "tag" || t.kind === "coordinate",
-    );
-    if (needsWorkspaceId && !process.env["TAILOR_PLATFORM_WORKSPACE_ID"]) {
-      throw new Error(
-        "TAILOR_PLATFORM_WORKSPACE_ID is not set. " +
-          "Provision the workspace and set the variable:\n" +
-          "  tailor workspace create   # if it does not exist yet; copy the id\n" +
-          "  gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env <environment>",
-      );
-    }
-  }
-
-  const slackToken = Boolean(process.env["TAILOR_SLACK_BOT_TOKEN"]);
-  const slackChannelId = Boolean(process.env["TAILOR_SLACK_CHANNEL_ID"]);
-  if (slackToken !== slackChannelId) {
-    throw new Error(
-      `Slack is partially configured: ` +
-        `${slackToken ? "TAILOR_SLACK_BOT_TOKEN is set" : "TAILOR_SLACK_CHANNEL_ID is set"} but not both. ` +
-        "TAILOR_SLACK_BOT_TOKEN (secret) and TAILOR_SLACK_CHANNEL_ID (variable) must be set together, " +
-        "or neither should be set.",
-    );
-  }
-
   const exists = options.configExistsAt ?? ((p: string) => fs.existsSync(p));
   const defaultBranch = detectDefaultBranchSafe(outputDir, options.gitRunner);
   const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;

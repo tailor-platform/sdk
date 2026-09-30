@@ -6,6 +6,10 @@ import { getModuleExportName, type ASTNode } from "#/cli/services/workflow/ast-u
 import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
 import { logger } from "#/cli/shared/logger";
+import {
+  createTsconfigLookupCache,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 
 export interface StartTarget {
   kind: "job" | "workflow";
@@ -21,6 +25,7 @@ export interface StartModuleBindings {
 export interface StartContext {
   modules: Map<string, StartModuleBindings>;
   authNamespace?: string;
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
@@ -87,20 +92,29 @@ function createModuleBindings(
   return { sourceFile, localBindings, exports } satisfies StartModuleBindings;
 }
 
+export interface LoadedWorkflowSource {
+  workflow: { name: string };
+  sourceFile: string;
+}
+
 /**
  * Build start-call context from configured workflow source files.
  * @param workflowConfig - Workflow file loading configuration
  * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
  * @param baseDir - Directory the workflow config's file patterns are resolved against (defaults to process.cwd())
+ * @param loadedWorkflows - Default-exported workflows read by importing the workflow files, which also covers workflows the source text alone cannot identify
+ * @param tsconfigCache - tsconfig lookup cache shared with the bundlers in this CLI run
  * @returns Module-local workflow and job binding metadata
  */
 export async function buildStartContext(
   workflowConfig: FileLoadConfig | undefined,
   authNamespace?: string,
   baseDir = process.cwd(),
+  loadedWorkflows: ReadonlyArray<LoadedWorkflowSource> = [],
+  tsconfigCache: TsconfigLookupCache = createTsconfigLookupCache(),
 ): Promise<StartContext> {
   const modules = new Map<string, StartModuleBindings>();
-  if (!workflowConfig) return { modules, authNamespace };
+  if (!workflowConfig) return { modules, authNamespace, tsconfigCache };
 
   for (const file of loadFilesWithIgnores(workflowConfig, baseDir)) {
     try {
@@ -122,7 +136,13 @@ export async function buildStartContext(
     }
   }
 
-  return { modules, authNamespace };
+  for (const { workflow, sourceFile } of loadedWorkflows) {
+    modules
+      .get(normalizeFilePath(sourceFile))
+      ?.exports.set("default", { kind: "workflow", name: workflow.name });
+  }
+
+  return { modules, authNamespace, tsconfigCache };
 }
 
 function sortedTargets(bindings: Map<string, StartTarget>) {

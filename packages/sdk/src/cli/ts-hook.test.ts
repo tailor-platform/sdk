@@ -156,7 +156,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-project/tailordb/user.ts" };
     const nextResolve = vi
@@ -177,7 +177,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-project-no-baseurl/tailordb/user.ts" };
     const nextResolve = vi
@@ -198,7 +198,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-project-bad-baseurl/tailordb/user.ts" };
     const nextResolve = vi
@@ -219,7 +219,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const nextResolve = vi.fn().mockRejectedValue(notFound("@/tailordb/user"));
     await expect(
@@ -237,7 +237,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///malformed-paths-entry-project/tailordb/user.ts" };
     const nextResolve = vi
@@ -258,7 +258,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const nextResolve = vi
       .fn()
@@ -279,9 +279,9 @@ describe("resolve", () => {
     const rootConfig = JSON.stringify({ extends: "./tsconfig.base.json" });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const resolved = { url: "file:///extends-project/tailordb/user.ts" };
     const nextResolve = vi
@@ -306,9 +306,9 @@ describe("resolve", () => {
     });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockRejectedValue(notFound("@app/tailordb/user"));
     await expect(
@@ -334,9 +334,9 @@ describe("resolve", () => {
     });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockRejectedValue(notFound("@shared/tailordb/user"));
     await expect(
@@ -362,9 +362,9 @@ describe("resolve", () => {
     });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockRejectedValue(notFound("@parent/foo"));
     await expect(
@@ -387,9 +387,9 @@ describe("resolve", () => {
     });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const resolved = { url: "file:///malformed-child-paths-project/parent-src/foo.ts" };
     const nextResolve = vi
@@ -413,7 +413,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///specificity-project/foo-pkg/bar.ts" };
     const nextResolve = vi
@@ -441,7 +441,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///empty-target-fallback-project/foo/bar.ts" };
     const nextResolve = vi
@@ -462,7 +462,7 @@ describe("resolve", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///ext-project/utils/index.ts" };
     const nextResolve = vi
@@ -554,7 +554,7 @@ describe("resolveSync", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-sync-project/tailordb/user.ts" };
     const nextResolve = vi
@@ -577,7 +577,7 @@ describe("resolveSync", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const nextResolve = vi
       .fn()
@@ -601,7 +601,7 @@ describe("resolveSync", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-sync-project-no-baseurl/tailordb/user.ts" };
     const nextResolve = vi
@@ -624,7 +624,7 @@ describe("resolveSync", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-sync-project-bad-baseurl/tailordb/user.ts" };
     const nextResolve = vi
@@ -647,7 +647,7 @@ describe("resolveSync", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const nextResolve = vi.fn().mockImplementation(() => {
       throw notFound("@/tailordb/user");
@@ -667,7 +667,7 @@ describe("resolveSync", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///malformed-paths-entry-sync-project/tailordb/user.ts" };
     const nextResolve = vi
@@ -694,9 +694,9 @@ describe("resolveSync", () => {
     });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockImplementation(() => {
       throw notFound("@app/tailordb/user");
@@ -724,9 +724,9 @@ describe("resolveSync", () => {
     });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockImplementation(() => {
       throw notFound("@shared/tailordb/user");
@@ -754,9 +754,9 @@ describe("resolveSync", () => {
     });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockImplementation(() => {
       throw notFound("@parent/foo");
@@ -781,9 +781,9 @@ describe("resolveSync", () => {
     });
     using _tsconfigReads = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), { encoding: "utf-8" })
       .thenReturn(baseConfig)
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(rootConfig);
     const resolved = { url: "file:///malformed-child-paths-sync-project/parent-src/foo.ts" };
     const nextResolve = vi
@@ -809,7 +809,7 @@ describe("resolveSync", () => {
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
-      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const resolved = { url: "file:///empty-target-fallback-sync-project/foo/bar.ts" };
     const nextResolve = vi

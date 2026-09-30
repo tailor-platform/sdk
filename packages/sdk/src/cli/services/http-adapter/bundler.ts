@@ -107,7 +107,7 @@ async function bundleAdapterScript(
     prefix: `${kind}:document-query-normalize-v1`,
   });
 
-  const code = await withCache({
+  const { code } = await withCache({
     cache,
     kind: kind === "input" ? "http-adapter-input" : "http-adapter-output",
     name: adapter.name,
@@ -202,7 +202,7 @@ async function bundleAdapterScript(
       // still introduce async/await, so verify the whole bundle is synchronous.
       rejectAsyncInBundle(bundled, adapter.name, kind);
 
-      return bundled;
+      return { code: bundled, packageRuntimeGlobals: {} };
     },
   });
 

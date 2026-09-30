@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { logger } from "@tailor-platform/sdk/cli";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -1254,6 +1255,44 @@ export default defineConfig({
     ]);
   });
 
+  test("next steps point to `tailor setup ci env` for the environment's secrets and variables", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" }));
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("tailor setup ci env --environment stg");
+    expect(output).not.toContain("gh secret set");
+  });
+
+  test("next steps leave where each value comes from to `tailor setup ci env`", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" }));
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("where each value comes from");
+    expect(output).not.toContain("tailor workspace create");
+  });
+
+  test("preview next steps do not ask for a workspace id", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    await setupTarget({
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+    });
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("tailor setup ci env");
+    expect(output).not.toContain("TAILOR_PLATFORM_WORKSPACE_ID");
+    expect(output).not.toContain("tailor workspace create");
+  });
+
   test("preview: generates a -preview.yml workflow and records kind in lock", async () => {
     await setupTarget({
       kind: "preview",
@@ -1462,6 +1501,16 @@ describe("setupCoordinate", () => {
     expect(lock?.targets.some((t) => t.kind === "coordinate" && t.workspaceName === "main")).toBe(
       true,
     );
+  });
+
+  test("next steps point to `tailor setup ci env` for the environment's secrets and variables", async () => {
+    await setupTarget(actionOpts("api"));
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    await setupCoordinate(coordinateOpts({ environment: "production" }));
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("tailor setup ci env --environment production");
+    expect(output).not.toContain("gh secret set");
   });
 
   test("groups comma-separated --action values into one multi-config plan and deploy step", async () => {

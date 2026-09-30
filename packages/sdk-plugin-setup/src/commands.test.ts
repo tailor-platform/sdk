@@ -2,6 +2,7 @@ import { defineCommand, runCommand } from "@tailor-platform/sdk/cli";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
 import { setupSubCommands } from "./commands";
+import { setupEnv } from "./env";
 import { setupCoordinate, setupTarget } from "./generate";
 
 vi.mock("./generate", () => ({
@@ -10,6 +11,7 @@ vi.mock("./generate", () => ({
 }));
 
 vi.mock("./check", () => ({ checkGitHub: vi.fn() }));
+vi.mock("./env", () => ({ setupEnv: vi.fn() }));
 vi.mock("./delete", () => ({ setupDelete: vi.fn() }));
 vi.mock("./renovate", () => ({ setupRenovate: vi.fn() }));
 
@@ -74,6 +76,51 @@ describe("setup ci subcommand nesting", () => {
     expect(setupCoordinate).toHaveBeenCalledWith(
       expect.objectContaining({ coordinatorName: "apps", actions: ["api"] }),
     );
+  });
+
+  test("ci env prints gh commands by default", async () => {
+    const result = await runCommand(setupCommand, ["ci", "env"]);
+
+    expect(result.success).toBe(true);
+    expect(setupEnv).toHaveBeenCalledWith({
+      outputDir: process.cwd(),
+      format: "gh",
+      environments: [],
+    });
+  });
+
+  test("ci env accepts --format terraform", async () => {
+    const result = await runCommand(setupCommand, ["ci", "env", "--format", "terraform"]);
+
+    expect(result.success).toBe(true);
+    expect(setupEnv).toHaveBeenCalledWith({
+      outputDir: process.cwd(),
+      format: "terraform",
+      environments: [],
+    });
+  });
+
+  test("ci env narrows the output with repeated --environment flags", async () => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      "env",
+      "--environment",
+      "stg",
+      "--environment",
+      "production",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(setupEnv).toHaveBeenCalledWith(
+      expect.objectContaining({ environments: ["stg", "production"] }),
+    );
+  });
+
+  test("ci env rejects an unknown format", async () => {
+    const result = await runCommand(setupCommand, ["ci", "env", "--format", "yaml"]);
+
+    expect(result.success).toBe(false);
+    expect(setupEnv).not.toHaveBeenCalled();
   });
 
   test.each(["branch", "tag", "preview", "action", "coordinate"])(

@@ -10,6 +10,34 @@ describe("findUndefinedReferences", () => {
     ).toEqual(new Set(["_data", "key"]));
   });
 
+  test("includes references guarded by an if statement or an early exit when requested", () => {
+    expect(
+      findUndefinedReferences(
+        "if (typeof process !== 'undefined') process.cwd();\n" +
+          "if (typeof Buffer === 'undefined') throw new Error('x');\n" +
+          "Buffer.from('');\n" +
+          "typeof Deno < 'u' && Deno.exit(1);",
+        { includeGuardedReferences: true },
+      ),
+    ).toEqual(new Set(["process", "Buffer", "Deno"]));
+  });
+
+  test("does not flag module-level references after an early throw guarded by typeof", () => {
+    expect(
+      findUndefinedReferences(
+        "if (typeof Buffer === 'undefined') throw new Error('x');\nBuffer.from('');",
+      ),
+    ).toEqual(new Set());
+  });
+
+  test("does not flag references after an early throw guarded by typeof in a class static block", () => {
+    expect(
+      findUndefinedReferences(
+        "class Job { static { if (typeof process > 'u') throw 0; process.exit(1); } }",
+      ),
+    ).toEqual(new Set());
+  });
+
   test("keeps locally bound names excluded when including guarded references", () => {
     expect(
       findUndefinedReferences('(_data) => typeof _data !== "undefined" && _data.name', {
@@ -145,6 +173,111 @@ describe("findUndefinedReferences", () => {
       "does not flag the positive form compared against a non-undefined type",
       "() => typeof process === 'object' && process.env",
       [],
+    ],
+    [
+      "does not flag a call on a typeof-guarded identifier on the right of &&",
+      "(m) => typeof process < 'u' && process.emitWarning(m)",
+      [],
+    ],
+    [
+      "does not flag a typeof-guarded identifier passed as an argument on the right of &&",
+      "() => typeof Buffer !== 'undefined' && wrap(Buffer)",
+      ["wrap"],
+    ],
+    [
+      "does not flag the right of || whose left is true while the identifier is undeclared",
+      "() => typeof process > 'u' || process.emitWarning('x')",
+      [],
+    ],
+    [
+      "still flags the right of || whose left is false while the identifier is undeclared",
+      "() => typeof process !== 'undefined' || process.env",
+      ["process"],
+    ],
+    [
+      "does not flag a call in a ternary branch guarded by typeof",
+      "() => typeof process !== 'undefined' ? process.cwd() : '/'",
+      [],
+    ],
+    [
+      "does not flag references guarded by any operand of an && test",
+      "() => typeof window !== 'undefined' && typeof process !== 'undefined' && process.env",
+      [],
+    ],
+    [
+      "does not flag references guarded by any operand of a parenthesized || test",
+      "() => (typeof process > 'u' || typeof window > 'u') || process.env",
+      [],
+    ],
+    [
+      "does not flag references in an if consequent guarded by typeof",
+      "() => { if (typeof process !== 'undefined') { return process.env.FOO; } }",
+      [],
+    ],
+    [
+      "does not flag references in an if alternate when the test is true while undeclared",
+      "() => { if (typeof process === 'undefined') { return 1; } else { return process.env.FOO; } }",
+      [],
+    ],
+    [
+      "still flags references in an if consequent when the test is true while undeclared",
+      "() => { if (typeof process === 'undefined') { return process.env.FOO; } }",
+      ["process"],
+    ],
+    [
+      "still flags references in an if alternate when the test is false while undeclared",
+      "() => { if (typeof process !== 'undefined') { return 1; } else { return process.env.FOO; } }",
+      ["process"],
+    ],
+    [
+      "does not flag references after an early return guarded by typeof",
+      "() => { if (typeof process === 'undefined') return; return process.env.FOO; }",
+      [],
+    ],
+    [
+      "does not flag references after an early throw in a block guarded by typeof",
+      "() => { if (typeof process > 'u') { log('missing'); throw new Error('no process'); } return process.env.FOO; }",
+      ["log"],
+    ],
+    [
+      "does not flag references after an early break in a switch case guarded by typeof",
+      "(k) => { switch (k) { case 1: if (typeof process > 'u') break; process.exit(1); } }",
+      [],
+    ],
+    [
+      "does not flag references after an early continue in a loop guarded by typeof",
+      "(ks) => { for (const k of ks) { if (typeof process > 'u') continue; process.emit(k); } }",
+      [],
+    ],
+    [
+      "still flags references after an early-exit if when its test is false while undeclared",
+      "() => { if (typeof process !== 'undefined') return; return process.env.FOO; }",
+      ["process"],
+    ],
+    [
+      "still flags references after an if guarded by typeof whose consequent does not always exit",
+      "(c) => { if (typeof process === 'undefined') { if (c) return; } return process.env.FOO; }",
+      ["process"],
+    ],
+    [
+      "still flags references before an early return guarded by typeof",
+      "() => { process.exit(1); if (typeof process === 'undefined') return; }",
+      ["process"],
+    ],
+    [
+      "still flags references outside the block that holds an early return guarded by typeof",
+      "(c) => { if (c) { if (typeof process === 'undefined') return; } return process.env.FOO; }",
+      ["process"],
+    ],
+    [
+      "still flags references in a function defined inside a typeof-guarded region",
+      "() => typeof process !== 'undefined' && (() => process.env)",
+      ["process"],
+    ],
+    [
+      "still flags references guarded by a negated typeof test",
+      "() => { if (!(typeof process === 'undefined')) return process.env; }",
+      ["process"],
     ],
   ])("%s", (_name, code, expected) => {
     const vars = findUndefinedReferences(`const __fn = ${code};`);

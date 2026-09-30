@@ -20,7 +20,7 @@
     "@tailor-platform/eslint-plugin-sdk": "workspace:^",
     "@tailor-platform/sdk": "workspace:^",
     "@tailor-platform/sdk-plugin-seed": "workspace:^",
-    "@types/node": "24.13.6",
+    "@types/node": "24.19.0",
     "oxfmt": "0.70.0",
     "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2003",

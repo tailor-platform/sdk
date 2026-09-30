@@ -7,7 +7,10 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/ca
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { assertNoForbiddenRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
+import {
+  checkForbiddenRuntimeGlobals,
+  assertPackageRuntimeGlobalsAllowed,
+} from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -24,7 +27,7 @@ import { getModuleExportName, type ASTNode } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
-import type { LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);
@@ -291,6 +294,7 @@ export interface BundleWorkflowJobsResult {
  *   workflow source file to redetect reachability, as long as `sourceFileState` still matches
  *   (reachability cannot change unless the sources do, but the sources can change between calls,
  *   e.g. during an interactive confirmation pause before a rebuild)
+ * @param allowedRuntimeGlobals - Globals each installed package may reference
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -307,6 +311,7 @@ export async function bundleWorkflowJobs(
     BundleWorkflowJobsResult,
     "usedJobNames" | "mainJobDeps" | "sourceFileState"
   >,
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
 ): Promise<BundleWorkflowJobsResult> {
   const jobSourceFiles = allJobs.map((job) => job.sourceFile);
   const sourceFileState = hashReachabilitySourceFiles([
@@ -354,6 +359,7 @@ export async function bundleWorkflowJobs(
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      allowedRuntimeGlobals,
     ),
   );
 
@@ -605,6 +611,7 @@ async function bundleSingleJob(
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -621,7 +628,7 @@ async function bundleSingleJob(
     prefix: sortedEnvPrefix,
   });
 
-  const code = await withCache({
+  const { code, packageRuntimeGlobals } = await withCache({
     cache,
     kind: "workflow-job",
     name: job.name,
@@ -737,11 +744,18 @@ async function bundleSingleJob(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      const bundledCode = result.output[0].code;
-      assertNoForbiddenRuntimeGlobals(bundledCode, `Workflow job "${job.name}"`);
-      return bundledCode;
+      const [chunk] = result.output;
+      return {
+        code: chunk.code,
+        packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Workflow job "${job.name}"`),
+      };
     },
   });
+  assertPackageRuntimeGlobalsAllowed(
+    packageRuntimeGlobals,
+    `Workflow job "${job.name}"`,
+    allowedRuntimeGlobals,
+  );
 
   return [job.name, code];
 }

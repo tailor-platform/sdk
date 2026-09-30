@@ -2,6 +2,7 @@ import * as path from "pathe";
 import { logger, styles } from "#/cli/shared/logger";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import { hashContent, hashFile, hashFiles } from "./hasher";
+import type { PackageRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
 import type { CacheStore } from "./store";
 import type { Plugin } from "rolldown";
 
@@ -27,9 +28,17 @@ type BundleCacheSaveParams = {
   name: string;
   sourceFile: string;
   content: string;
+  /** Forbidden globals the bundle's installed packages reference, checked again on restore. */
+  packageRuntimeGlobals?: PackageRuntimeGlobals;
   dependencyPaths: string[];
   /** Optional hash of non-file context (e.g., env variables) to include in cache key computation. */
   contextHash?: string;
+};
+
+/** A bundle's code and the forbidden globals its installed packages reference. */
+type BuiltBundle = {
+  code: string;
+  packageRuntimeGlobals: PackageRuntimeGlobals;
 };
 
 /**
@@ -37,8 +46,8 @@ type BundleCacheSaveParams = {
  * restored from cache or needs rebuilding.
  */
 type BundleCache = {
-  /** Attempt to restore cached bundle content. Returns the code string if cache is valid, undefined otherwise. */
-  tryRestore(params: BundleCacheRestoreParams): string | undefined;
+  /** Attempt to restore a cached bundle. Returns it if the cache is valid, undefined otherwise. */
+  tryRestore(params: BundleCacheRestoreParams): BuiltBundle | undefined;
   /** Save bundle content and its metadata to the cache. */
   save(params: BundleCacheSaveParams): void;
 };
@@ -90,7 +99,7 @@ type WithCacheParams = {
   name: string;
   sourceFile: string;
   contextHash: string | undefined;
-  build: (plugins: Plugin[], trackDependency: (filePath: string) => void) => Promise<string>;
+  build: (plugins: Plugin[], trackDependency: (filePath: string) => void) => Promise<BuiltBundle>;
 };
 
 /**
@@ -98,38 +107,39 @@ type WithCacheParams = {
  * When caching is active, attempts to restore from cache first,
  * and saves the build result (with collected dependencies) on a cache miss.
  * @param params - Cache and build parameters
- * @returns The bundled code string
+ * @returns The built or restored bundle
  */
-async function withCache(params: WithCacheParams): Promise<string> {
+async function withCache(params: WithCacheParams): Promise<BuiltBundle> {
   const { cache, kind, namespace, name, sourceFile, contextHash, build } = params;
 
   if (!cache) {
     return await build([], () => {});
   }
 
-  const content = cache.tryRestore({ kind, namespace, name, contextHash });
-  if (content !== undefined) {
+  const restored = cache.tryRestore({ kind, namespace, name, contextHash });
+  if (restored !== undefined) {
     logger.debug(`  ${styles.dim("cached")}: ${name}`);
-    return content;
+    return restored;
   }
 
   // Files a build reads without rolldown loading them as modules — tsconfigs
   // consulted for path aliases — still have to invalidate the entry.
   const extraDependencies = new Set<string>();
   const { plugin, getResult } = createDepCollectorPlugin();
-  const code = await build([plugin], (filePath) => extraDependencies.add(filePath));
+  const built = await build([plugin], (filePath) => extraDependencies.add(filePath));
 
   cache.save({
     kind,
     namespace,
     name,
     sourceFile,
-    content: code,
+    content: built.code,
+    packageRuntimeGlobals: built.packageRuntimeGlobals,
     dependencyPaths: [...getResult(), ...extraDependencies],
     contextHash,
   });
 
-  return code;
+  return built;
 }
 
 /**
@@ -138,7 +148,7 @@ async function withCache(params: WithCacheParams): Promise<string> {
  * @returns A BundleCache instance
  */
 function createBundleCache(store: CacheStore): BundleCache {
-  function tryRestore(params: BundleCacheRestoreParams): string | undefined {
+  function tryRestore(params: BundleCacheRestoreParams): BuiltBundle | undefined {
     const cacheKey = buildCacheKey(params.kind, params.name, params.namespace);
     const entry = store.getEntry(cacheKey);
 
@@ -165,11 +175,20 @@ function createBundleCache(store: CacheStore): BundleCache {
     if (content === undefined || !output || hashContent(content) !== output.contentHash) {
       return undefined;
     }
-    return content;
+    return { code: content, packageRuntimeGlobals: entry.packageRuntimeGlobals ?? {} };
   }
 
   function save(params: BundleCacheSaveParams): void {
-    const { kind, namespace, name, sourceFile, content, dependencyPaths, contextHash } = params;
+    const {
+      kind,
+      namespace,
+      name,
+      sourceFile,
+      content,
+      packageRuntimeGlobals,
+      dependencyPaths,
+      contextHash,
+    } = params;
     const cacheKey = buildCacheKey(kind, name, namespace);
     // Always include sourceFile in dependency paths so that changes to the
     // source file itself are detected even when dep-collector only finds
@@ -196,6 +215,9 @@ function createBundleCache(store: CacheStore): BundleCache {
       inputHash,
       dependencyPaths: allDeps,
       outputFiles: [{ outputPath: cacheKey, contentHash }],
+      ...(packageRuntimeGlobals && Object.keys(packageRuntimeGlobals).length > 0
+        ? { packageRuntimeGlobals }
+        : {}),
       createdAt: new Date().toISOString(),
     });
   }

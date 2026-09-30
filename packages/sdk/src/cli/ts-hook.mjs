@@ -43,7 +43,7 @@ function resolveEffectiveConfig(configFilePath, content, visited) {
     const base = resolvePath(baseDir, extendsField);
     const extendsPath = base.endsWith(".json") ? base : base + ".json";
     try {
-      const sub = JSON.parse(readFileSync(extendsPath, "utf-8"));
+      const sub = JSON.parse(readFileSync(extendsPath, { encoding: "utf-8" }));
       inherited = resolveEffectiveConfig(extendsPath, sub, visited);
     } catch (e) {
       if (e?.code !== "ENOENT" && !(e instanceof SyntaxError)) throw e;
@@ -92,7 +92,7 @@ function loadTsconfigPaths(startDir, cacheGeneration) {
   while (dir !== prev) {
     try {
       const configFilePath = join(dir, "tsconfig.json");
-      const content = JSON.parse(readFileSync(configFilePath, "utf-8"));
+      const content = JSON.parse(readFileSync(configFilePath, { encoding: "utf-8" }));
       collectPathsInto(paths, configFilePath, content, new Set());
       break;
     } catch (e) {
@@ -371,7 +371,7 @@ export function loadSync(url, context, nextLoad) {
       parsedUrl.search = "";
       parsedUrl.hash = "";
       const filePath = fileURLToPath(parsedUrl);
-      const source = readFileSync(filePath, "utf-8");
+      const source = readFileSync(filePath, { encoding: "utf-8" });
       const { code } = transformSync(source, { mode: "transform", filename: filePath });
       return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
     }
