@@ -447,7 +447,7 @@ describe("setupUpdate", () => {
     );
   });
 
-  test("keeps the suggestion of a CLI error in the list of targets not updated", async () => {
+  test("lists a CLI error's suggestion under its target, labelled as in `setup ci`", async () => {
     writeAppConfig("apps/front");
     await generate({ kind: "action", workspaceName: "front", dir: "apps/front" });
 
@@ -458,7 +458,9 @@ describe("setupUpdate", () => {
         ...loaders,
         loadConfigId: async () => "c98794dd-9bf1-480f-a5c9-bf92b3679d42",
       }),
-    ).rejects.toThrow(/\[action front\][\s\S]*Neither can be chosen automatically/);
+    ).rejects.toThrow(
+      /\[action front\] [^\n]+\n {4}Suggestion: Neither can be chosen automatically/,
+    );
   });
 
   test("--force resets hand edits to SDK-managed parts of every target", async () => {

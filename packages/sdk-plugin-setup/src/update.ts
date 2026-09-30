@@ -122,9 +122,13 @@ export type UpdateOptions = UpdateCommon &
 function failureSummary(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
   const { details, suggestion } = error as { details?: unknown; suggestion?: unknown };
-  return [error.message, details, suggestion]
-    .filter((part): part is string => typeof part === "string" && part.length > 0)
-    .join("\n");
+  const labelled = (label: string, value: unknown) =>
+    typeof value === "string" && value.length > 0 ? [`${label}: ${value}`] : [];
+  return [
+    error.message,
+    ...labelled("Details", details),
+    ...labelled("Suggestion", suggestion),
+  ].join("\n");
 }
 
 // Grouped coordinators refuse action entries from an older template, so the
