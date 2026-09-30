@@ -8,7 +8,11 @@ import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { deployStaticWebsite } from "../staticwebsite/deploy";
-import type { DeployedApplication, DeployedStaticWebsite } from "#/plugin/types";
+import type {
+  DeployedApplication,
+  DeployedOAuth2Client,
+  DeployedStaticWebsite,
+} from "#/plugin/types";
 import type { JsonValue } from "#/types/helpers";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
@@ -47,10 +51,35 @@ async function loadSiteUrl(
   return deployed.url;
 }
 
+type LoadOAuth2Clients = (namespace: string) => Promise<DeployedOAuth2Client[]>;
+
+function oauth2ClientLoader(client: OperatorClient, workspaceId: string): LoadOAuth2Clients {
+  const byNamespace = new Map<string, Promise<DeployedOAuth2Client[]>>();
+  return (namespace) => {
+    let loaded = byNamespace.get(namespace);
+    if (!loaded) {
+      loaded = fetchPaged(async (pageToken, pageSize) => {
+        const response = await client.listAuthOAuth2Clients({
+          workspaceId,
+          namespaceName: namespace,
+          pageToken,
+          pageSize,
+        });
+        for (const oauth2Client of response.oauth2Clients)
+          logger.registerSecret(oauth2Client.clientSecret);
+        return [response.oauth2Clients, response.nextPageToken];
+      }).then((oauth2Clients) => oauth2Clients.map(({ name, clientId }) => ({ name, clientId })));
+      byNamespace.set(namespace, loaded);
+    }
+    return loaded;
+  };
+}
+
 async function loadDeployedTarget(
   client: OperatorClient,
   workspaceId: string,
   target: BuiltDeploymentTarget,
+  loadOAuth2Clients: LoadOAuth2Clients,
 ): Promise<LoadedTarget> {
   const name = target.application.name;
   const namespace = getApplicationAuthNamespace({
@@ -77,19 +106,7 @@ async function loadDeployedTarget(
         return { name: gateway.name, url: deployed.url };
       }),
     ),
-    namespace
-      ? fetchPaged(async (pageToken, pageSize) => {
-          const response = await client.listAuthOAuth2Clients({
-            workspaceId,
-            namespaceName: namespace,
-            pageToken,
-            pageSize,
-          });
-          for (const oauth2Client of response.oauth2Clients)
-            logger.registerSecret(oauth2Client.clientSecret);
-          return [response.oauth2Clients, response.nextPageToken];
-        })
-      : [],
+    namespace ? loadOAuth2Clients(namespace) : [],
   ]);
   const application = assertDefined(
     response.application,
@@ -107,10 +124,7 @@ async function loadDeployedTarget(
         ? {
             auth: {
               namespace,
-              oauth2Clients: oauth2Clients.map((client) => ({
-                name: client.name,
-                clientId: client.clientId,
-              })),
+              oauth2Clients,
             },
           }
         : {}),
@@ -210,8 +224,9 @@ export async function runDeployedHooks(
   );
   if (hooks.length === 0) return [];
 
+  const loadOAuth2Clients = oauth2ClientLoader(client, workspaceId);
   const loaded = await Promise.all(
-    targets.map((target) => loadDeployedTarget(client, workspaceId, target)),
+    targets.map((target) => loadDeployedTarget(client, workspaceId, target, loadOAuth2Clients)),
   ).catch((error: unknown) => {
     throw deployedHookFailure(
       "loading the deployed information for onDeployed hooks failed",
@@ -254,7 +269,7 @@ export async function runDeployedHooks(
         outputs.push({
           application: target.application.name,
           pluginId: plugin.id,
-          outputs: hookOutputs,
+          outputs: structuredClone(hookOutputs),
         });
       }
     } catch (error) {

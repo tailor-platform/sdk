@@ -280,6 +280,26 @@ describe("deployed hooks", () => {
     });
     expect(hook).not.toHaveBeenCalled();
   });
+  test("lists the OAuth clients of an Auth namespace shared by several apps once", async () => {
+    const { client, methods } = clientMock();
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([plugin(vi.fn())], "a"), target([], "b")],
+    });
+    expect(methods.listAuthOAuth2Clients).toHaveBeenCalledOnce();
+  });
+  test("keeps the validated outputs even if the hook mutates them afterwards", async () => {
+    const { client } = clientMock();
+    const outputs: Record<string, never | string> = { value: "validated" };
+    const [stored] = await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([plugin(() => ({ outputs }))])],
+    });
+    outputs.value = "changed";
+    expect(stored?.outputs).toEqual({ value: "validated" });
+  });
   test("registers fetched OAuth client secrets for redaction", async () => {
     using registerSecret = vi.spyOn(logger, "registerSecret");
     const { client } = clientMock();
