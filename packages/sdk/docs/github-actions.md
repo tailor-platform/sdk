@@ -33,9 +33,11 @@ tailor setup ci tag --name my-app-prod \
   --branch main --environment production
 ```
 
-After running the command, follow the **Next steps** printed to the terminal to
-set the required secrets, set the `TAILOR_PLATFORM_WORKSPACE_ID` variable, and
-commit the generated files.
+After running the command, follow the **Next steps** printed to the terminal:
+run `tailor setup ci env` to get the commands that set the secrets and
+variables each GitHub Environment needs (see
+[Setting secrets and variables](#setting-secrets-and-variables)), then commit
+the generated files.
 
 The generated workflow deploys to whichever workspace its
 `TAILOR_PLATFORM_WORKSPACE_ID` Environment variable points at — it never
@@ -170,10 +172,13 @@ Because the variable is scoped to a GitHub Environment, both the `plan` and
    ```
 
 2. Set the id as the Environment variable (the environment name is your
-   `--environment` value, or the workspace name when omitted):
+   `--environment` value, or the workspace name when omitted).
+   `tailor setup ci env` prints this command together with the other secrets
+   and variables each environment needs (see
+   [Setting secrets and variables](#setting-secrets-and-variables)):
 
    ```bash
-   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env my-app-stg
+   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env=my-app-stg
    ```
 
 If `TAILOR_PLATFORM_WORKSPACE_ID` is unset, `deploy` fails because the target
@@ -296,7 +301,8 @@ the move.
 
 ## Secrets
 
-The generated workflow reads two secrets:
+The generated workflow requires two secrets (the optional Slack token is listed in
+[Setting secrets and variables](#setting-secrets-and-variables)):
 
 | Secret                                       | Description                |
 | -------------------------------------------- | -------------------------- |
@@ -304,18 +310,70 @@ The generated workflow reads two secrets:
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Machine user client secret |
 
 Set them on the target GitHub Environment (the `--environment` value, or the
-workspace name when omitted) with the GitHub CLI:
-
-```bash
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env my-app-stg
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env my-app-stg
-```
+workspace name when omitted); `tailor setup ci env` prints the commands (see
+[Setting secrets and variables](#setting-secrets-and-variables)).
 
 Setting them at the environment level isolates each target's credentials and
 keeps them alongside that environment's `TAILOR_PLATFORM_WORKSPACE_ID`
 variable. You can also set them as repository-level secrets if every target
 shares one machine user, but then any workflow on any branch can read them, so
 the environment's protection rules no longer guard your deploys.
+
+### Setting secrets and variables
+
+`tailor setup ci env` reads `.github/tailor.lock` and prints, for every GitHub
+Environment the generated workflows use, the commands that create the
+environment (only when it does not exist yet) and set its secrets and
+variables. It is read-only, so re-run it whenever you add a target. When the
+`origin` remote points at github.com, the output names that repository, so the
+commands work from any directory; otherwise `gh` resolves the repository from
+the current directory and the Terraform output leaves it as a placeholder.
+
+```bash
+tailor setup ci env                          # gh CLI commands (default)
+tailor setup ci env --format terraform       # Terraform for the integrations/github provider
+tailor setup ci env --environment my-app-stg # only one environment (repeat for several)
+```
+
+The list follows what each generated workflow actually reads:
+
+| Name                                         | Kind     | Targets                 | Required | Where the value comes from                                                                                                                                                                                                           |
+| -------------------------------------------- | -------- | ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | secret   | all                     | yes      | Client ID of the platform machine user CI signs in as; it needs an editor or admin role on the organization or folder that holds the workspace. Contact [Tailor support](https://docs.tailor.tech/administration/support) to get one |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all                     | yes      | Client secret of the same platform machine user                                                                                                                                                                                      |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag, coordinate | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                      |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview                 | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                        |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview                 | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself |
+| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all                     | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                   |
+| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag, coordinate | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                         |
+| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag, coordinate | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                 |
+| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag             | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                 |
+
+See [Account management](https://docs.tailor.tech/administration/account-management)
+for how organizations, folders, workspaces, and machine users relate.
+
+Composite actions (`setup ci action`) read nothing themselves; the coordinator
+that calls them does. Set `TAILOR_SLACK_BOT_TOKEN` and `TAILOR_SLACK_CHANNEL_ID`
+together to enable Slack deploy notifications.
+
+The `gh` output creates an environment only when GitHub reports it missing and
+leaves optional entries commented out. Run the commands one at a time: each
+`gh secret set` / `gh variable set` prompts for its value.
+
+The Terraform output takes every value from an input variable (secrets are
+`sensitive`) and creates an optional entry only when its variable is set, so no
+value is written to the output. Terraform still stores the secret values in its
+state in plain text, so keep the state encrypted and access-restricted, or set
+the secrets with the `gh` output instead. Its header lists the steps with the variable
+names for your environments: authenticate the provider, put non-secret values in
+`terraform.tfvars`, pass secrets as `TF_VAR_<name>` environment variables, and
+import each environment and variable that already exists (for example
+`terraform import github_repository_environment.production my-repo:production`)
+before `terraform apply`: creating a variable that already exists fails, while
+secrets are overwritten. The generated environments ignore changes to their
+protection settings (reviewers, wait timer, branch policy), so importing an
+environment keeps the approval gate you configured; remove the `lifecycle` block
+to manage those settings in Terraform instead.
 
 ## GitHub Environments (approval gate)
 
@@ -453,18 +511,13 @@ tailor setup ci tag --name my-app-prod \
   --branch main --environment production
 ```
 
-Then provision each workspace and set its id on the matching environment (the
-staging target's environment defaults to `my-app-stg`; production uses
-`production`):
+Then provision each workspace and set its id and the machine-user credentials
+on the matching environment (the staging target's environment defaults to
+`my-app-stg`; production uses `production`). `tailor setup ci env` prints the
+commands for both environments:
 
 ```bash
-gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env my-app-stg
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env my-app-stg
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env my-app-stg
-
-gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env production
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env production
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env production
+tailor setup ci env
 ```
 
 Commit both workflow files and `.github/tailor.lock`.
@@ -529,12 +582,10 @@ Drift findings are advisory by default. Set the repository variable
 `TAILOR_PLATFORM_FAIL_ON_DRIFT` to `true` to make unsuppressed findings fail
 the job. Execution and configuration errors fail regardless of this variable.
 
-Running `check` on your own machine also verifies that
-`TAILOR_PLATFORM_WORKSPACE_ID` is set locally for any branch, tag, or
-coordinate target, since those workflows read it directly. `check` detects on
-its own when it is running in CI (no flag needed) and skips that local-only
-verification there, since the deploy job resolves the Environment variable
-itself at runtime.
+`check` compares only the generated files, `.github/tailor.lock`, and the
+config; it does not read the GitHub Environment secrets and variables, so it
+runs the same on your own machine and in CI. Run `tailor setup ci env` to list
+what each environment needs.
 
 ## Updating the generated workflow
 

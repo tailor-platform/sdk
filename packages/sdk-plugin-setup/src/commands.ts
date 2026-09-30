@@ -2,6 +2,7 @@ import { arg, confirmationArgs, defineAppCommand, defineCommand } from "@tailor-
 import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
+import { setupEnv } from "./env";
 import { setupCoordinate, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
 
@@ -11,6 +12,23 @@ const checkCommand = defineAppCommand({
   args: z.strictObject({}),
   run: async () => {
     await checkGitHub({ outputDir: process.cwd() });
+  },
+});
+
+const envCommand = defineAppCommand({
+  name: "env",
+  description:
+    "Print the secrets and variables each GitHub Environment used by the generated workflows needs (read-only).",
+  args: z.strictObject({
+    format: arg(z.enum(["gh", "terraform"]).default("gh"), {
+      description: "Output format: gh CLI commands, or Terraform (integrations/github provider)",
+    }),
+    environment: arg(z.array(z.string().min(1)).default([]), {
+      description: "Only print this GitHub Environment. Repeat to print several",
+    }),
+  }),
+  run: (args) => {
+    setupEnv({ outputDir: process.cwd(), format: args.format, environments: args.environment });
   },
 });
 
@@ -266,13 +284,14 @@ const deleteCommand = defineAppCommand({
 const ciCommand = defineCommand({
   name: "ci",
   description:
-    "Generate a GitHub Actions deploy workflow or composite action, tracked in .github/tailor.lock and drift-checked by `setup check`.",
+    "Generate a GitHub Actions deploy workflow or composite action, tracked in .github/tailor.lock and drift-checked by `setup check`, and list the GitHub Environment settings they need.",
   subCommands: {
     branch: branchCommand,
     tag: tagCommand,
     preview: previewCommand,
     action: actionCommand,
     coordinate: coordinateCommand,
+    env: envCommand,
   },
 });
 
