@@ -233,10 +233,13 @@ not kept.
 `setup check` reports an edit to a managed part, and re-running `setup` stops
 on it; both name the edited job, step, or top-level key. Revert the edit, or
 pass `--force` to reset the managed parts to the current template; `--force`
-still keeps your own jobs, steps, and settings. A managed job or step you
-renamed to an id without the `tailor-` prefix counts as your own, so `--force`
-adds the managed one back next to it; rename it back instead of forcing. To start over
-from a clean template, delete the file and re-run `setup`.
+still keeps your own jobs, steps, and settings. A managed step you renamed to
+an id without the `tailor-` prefix counts as your own, so `--force` adds the
+managed one back next to it; rename it back instead of forcing. A managed job
+you renamed still holds the SDK's `tailor-` steps, so `setup check` reports
+them as reserved ids and `setup` stops on them, even with `--force`; rename the
+job back. To start over from a clean template, delete the file and re-run
+`setup`.
 
 When a template update removes a managed job that contains steps of yours, or
 a job of yours `needs` a removed job, `setup` stops and names them. Move those
