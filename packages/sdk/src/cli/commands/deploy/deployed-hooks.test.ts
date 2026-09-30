@@ -288,6 +288,60 @@ describe("deployed hooks", () => {
       }),
     ).resolves.toEqual([{ application: "app", pluginId: "hook", outputs }]);
   });
+  test.each([
+    ["an array", [1]],
+    ["a string", "url"],
+    ["null", null],
+  ])("rejects hook outputs whose root is %s", async (_, outputs) => {
+    const { client } = clientMock();
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [
+          target([plugin(() => ({ outputs: outputs as unknown as Record<string, never> }))]),
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message: expect.stringContaining("outputs must be a plain object"),
+    });
+  });
+  test("names the application of each hook not run after a hook fails", async () => {
+    const { client } = clientMock();
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [
+          target(
+            [
+              plugin(() => {
+                throw new Error("build failed");
+              }),
+            ],
+            "web",
+          ),
+          target([plugin(vi.fn())], "admin"),
+        ],
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/Hooks not run: hook \(app: admin\)$/),
+    });
+  });
+  test("names the application of each hook not run when loading the hook context fails", async () => {
+    const { client, methods } = clientMock();
+    methods.getApplication.mockRejectedValue(new Error("network down"));
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [target([plugin(vi.fn())], "web"), target([plugin(vi.fn())], "admin")],
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/Hooks not run: hook \(app: web\), hook \(app: admin\)$/),
+    });
+  });
   test("fails before running hooks when a static website has no URL assigned yet", async () => {
     const { client, methods } = clientMock();
     methods.getStaticWebsite.mockResolvedValue({ staticwebsite: { name: "app-web", url: "" } });

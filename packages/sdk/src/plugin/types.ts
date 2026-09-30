@@ -406,6 +406,6 @@ export interface DeployedContext<PluginConfig = unknown> {
 }
 
 export interface DeployedHookResult {
-  /** Values included in deploy's JSON result. */
+  /** Values included in deploy's JSON result. Declare their shape with `type`, not `interface`: interface-typed values are not assignable to `JsonValue`. */
   outputs?: Record<string, JsonValue>;
 }

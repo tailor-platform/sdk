@@ -298,14 +298,17 @@ files so users can correct files that could not be uploaded.
 
 Return JSON-serializable `outputs` to include a result in `deployedHooks` under
 `tailor deploy --json`. Each entry identifies the application and plugin. This
-key is omitted when no hook supplies outputs. Outputs may contain only strings,
-finite numbers, booleans, `null`, arrays, and plain objects; any other value, such
-as `undefined`, a function, or a `Date`, fails the hook.
+key is omitted when no hook supplies outputs. `outputs` must be a plain object whose
+values are only strings, finite numbers, booleans, `null`, arrays, and plain objects;
+any other value, such as `undefined`, a function, or a `Date`, fails the hook.
+Declare the shape of an output value with a `type` alias rather than an `interface`:
+an interface-typed value is rejected by the type checker even when all of its fields
+are JSON values.
 
 A failed hook stops later hooks with `DEPLOYED_HOOK_FAILED`. The same error is
 reported when the deployed information passed to hooks cannot be loaded. Platform
 resources have already been applied and are not rolled back. The error lists any hooks
-that did not run. Fix the hook and run `tailor deploy` again; hooks run again even
+that did not run, with the application each belongs to. Fix the hook and run `tailor deploy` again; hooks run again even
 if there are no resource changes.
 
 Hooks do not run during dry-run, build-only, or migration test deployments.

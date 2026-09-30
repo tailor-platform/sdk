@@ -12,6 +12,7 @@ import type {
   DeployedApplication,
   DeployedOAuth2Client,
   DeployedStaticWebsite,
+  Plugin,
 } from "#/plugin/types";
 import type { JsonValue } from "#/types/helpers";
 import type { BuiltDeploymentTarget } from "./deployment-target";
@@ -204,7 +205,21 @@ function toJsonValue(value: unknown, path: string, ancestors: Set<object>): Json
   }
 }
 
-function copyJsonOutputs(outputs: Record<string, JsonValue>): Record<string, JsonValue> {
+interface HookOwner {
+  target: BuiltDeploymentTarget;
+  plugin: Plugin;
+}
+
+function hookLabel(hook: HookOwner): string {
+  return `${hook.plugin.id} (app: ${hook.target.application.name})`;
+}
+
+function copyJsonOutputs(outputs: unknown): Record<string, JsonValue> {
+  if (typeof outputs !== "object" || outputs === null || !isPlainObject(outputs))
+    throw CLIError({
+      code: "DEPLOYED_HOOK_OUTPUTS_INVALID",
+      message: "outputs must be a plain object",
+    });
   return toJsonValue(outputs, "outputs", new Set()) as Record<string, JsonValue>;
 }
 
@@ -231,7 +246,7 @@ export async function runDeployedHooks(
     throw deployedHookFailure(
       "loading the deployed information for onDeployed hooks failed",
       error,
-      hooks.map(({ plugin }) => plugin.id),
+      hooks.map(hookLabel),
     );
   });
   const applications = loaded.map(({ application }) => application);
@@ -275,7 +290,7 @@ export async function runDeployedHooks(
       throw deployedHookFailure(
         `the onDeployed hook of plugin "${plugin.id}" failed for app "${target.application.name}"`,
         error,
-        hooks.slice(position + 1).map(({ plugin }) => plugin.id),
+        hooks.slice(position + 1).map(hookLabel),
       );
     }
   }
