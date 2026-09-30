@@ -4,6 +4,7 @@ import {
   ManagedMergeError,
   computeManagedHash,
   computeManagedParts,
+  describeReservedId,
   findEditedParts,
   findReservedIds,
   isManagedHash,
@@ -430,6 +431,21 @@ describe("findEditedParts", () => {
     const parts = (c: string) => computeManagedParts(c, "action", action.generatedIds);
     const changed = action.content.replace("if: inputs.build-site == 'true'", "if: always()");
     expect(findEditedParts(parts(action.content), parts(changed))).toEqual(["tailor-build-site"]);
+  });
+});
+
+describe("describeReservedId", () => {
+  test("suggests the id without the prefix", () => {
+    expect(describeReservedId("tailor-deploy/tailor-build-frontend")).toContain(
+      'Rename it (e.g. "build-frontend")',
+    );
+  });
+
+  test("leaves out the suggestion when nothing follows the prefix", () => {
+    expect(describeReservedId("tailor-deploy/tailor-")).toBe(
+      '"tailor-deploy/tailor-" uses the tailor- prefix reserved for SDK-managed jobs and steps. ' +
+        "Rename it; --force does not rename it.",
+    );
   });
 });
 

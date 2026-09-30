@@ -481,9 +481,10 @@ function localId(qualifiedId: string): string {
  */
 export function describeReservedId(qualifiedId: string): string {
   const suggestion = localId(qualifiedId).slice(RESERVED_PREFIX.length);
+  const example = suggestion === "" ? "" : ` (e.g. "${suggestion}")`;
   return (
     `"${qualifiedId}" uses the ${RESERVED_PREFIX} prefix reserved for SDK-managed jobs and steps. ` +
-    `Rename it (e.g. "${suggestion}"); --force does not rename it.`
+    `Rename it${example}; --force does not rename it.`
   );
 }
 
