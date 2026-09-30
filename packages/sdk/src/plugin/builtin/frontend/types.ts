@@ -22,8 +22,3 @@ export interface FrontendEnvContext {
   staticWebsites: Readonly<Partial<Record<string, DeployedStaticWebsite>>>;
   workspaceId: string;
 }
-
-export interface FrontendPluginOptions {
-  /** Frontends to build and upload sequentially. Each site may appear only once. */
-  frontends: FrontendDefinition[];
-}

@@ -32,20 +32,16 @@ export default defineConfig({
 
 export const plugins = definePlugins(
   frontendPlugin({
-    frontends: [
-      {
-        site: website,
-        workingDir: "../web",
-        build: "pnpm run build",
-        distDir: "dist",
-        env: ({ site, application }) => ({
-          VITE_TAILOR_APP_URL: application.url,
-          VITE_SITE_URL: site.url,
-          VITE_OAUTH2_CLIENT_ID:
-            application.auth?.oauth2Clients.find((client) => client.name === "web")?.clientId ?? "",
-        }),
-      },
-    ],
+    site: website,
+    workingDir: "../web",
+    build: "pnpm run build",
+    distDir: "dist",
+    env: ({ site, application }) => ({
+      VITE_TAILOR_APP_URL: application.url,
+      VITE_SITE_URL: site.url,
+      VITE_OAUTH2_CLIENT_ID:
+        application.auth?.oauth2Clients.find((client) => client.name === "web")?.clientId ?? "",
+    }),
   }),
 );
 ```
@@ -83,15 +79,14 @@ Omit `build` to upload an existing directory:
 
 ```typescript
 export const plugins = definePlugins(
-  frontendPlugin({
-    frontends: [{ site: "my-frontend", workingDir: "../web", distDir: "dist" }],
-  }),
+  frontendPlugin({ site: "my-frontend", workingDir: "../web", distDir: "dist" }),
 );
 ```
 
-For multiple frontends, add entries to the same `frontends` array. Each site may
-appear only once. Frontends are built and uploaded sequentially. The array and
-each `distDir` must be non-empty. A `build` that is empty or only whitespace is rejected; omit `build` instead to publish without building.
+For multiple frontends, pass each one as another argument, as in
+`frontendPlugin(web, admin)`; register the plugin only once. Each site may appear
+only once. Frontends are built and uploaded sequentially, in argument order. At
+least one frontend is required, and each `distDir` must be non-empty. A `build` that is empty or only whitespace is rejected; omit `build` instead to publish without building.
 
 ## Deploy behavior and failures
 

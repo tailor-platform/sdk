@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
 import type { Plugin } from "#/plugin/types";
-import type { FrontendPluginOptions } from "./types";
+import type { FrontendDefinition } from "./types";
 
-export type { FrontendDefinition, FrontendEnvContext, FrontendPluginOptions } from "./types";
+export type { FrontendDefinition, FrontendEnvContext } from "./types";
 
 /** Unique identifier for the frontend plugin. */
 export const FrontendPluginID = "@tailor-platform/frontend";
@@ -56,16 +56,15 @@ async function buildFrontend(params: BuildParams): Promise<void> {
 
 /**
  * Build and upload frontend assets after a successful deployment.
- * @param options - Frontends and their build settings
+ * @param frontends - Frontends to build and upload in order. Each site may appear only once.
  * @returns Plugin that deploys frontends in the supplied order
  */
 export function frontendPlugin(
-  options: FrontendPluginOptions,
-): Plugin<unknown, FrontendPluginOptions> {
-  if (options.frontends.length === 0)
-    throw new Error("frontends must contain at least one frontend");
+  ...frontends: [FrontendDefinition, ...FrontendDefinition[]]
+): Plugin<unknown, FrontendDefinition[]> {
+  if (frontends.length === 0) throw new Error("frontendPlugin requires at least one frontend");
   const names = new Set<string>();
-  for (const frontend of options.frontends) {
+  for (const frontend of frontends) {
     const name = typeof frontend.site === "string" ? frontend.site : frontend.site.name;
     if (frontend.distDir.length === 0)
       throw new Error(`distDir must not be empty for site "${name}"`);
@@ -79,10 +78,10 @@ export function frontendPlugin(
   return {
     id: FrontendPluginID,
     description: "Builds and deploys frontend assets to static websites",
-    pluginConfig: options,
+    pluginConfig: frontends,
     async onDeployed(ctx) {
       const frontends: FrontendOutput[] = [];
-      for (const def of ctx.pluginConfig.frontends) {
+      for (const def of ctx.pluginConfig) {
         const name = typeof def.site === "string" ? def.site : def.site.name;
         const site = Object.hasOwn(ctx.staticWebsites, name) ? ctx.staticWebsites[name] : undefined;
         if (!site)

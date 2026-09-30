@@ -7,7 +7,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { frontendPlugin } from "./index";
 import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
 import type { DeployedContext, PublishStaticWebsiteResult } from "#/plugin/types";
-import type { FrontendDefinition, FrontendPluginOptions } from "./types";
+import type { FrontendDefinition } from "./types";
 
 const statFailure = vi.hoisted(() => ({ next: undefined as Error | undefined }));
 vi.mock(import("node:fs/promises"), async (original) => {
@@ -32,7 +32,7 @@ aroundEach(async (runTest) => {
     await rm(root, { recursive: true, force: true });
   }
 });
-function context(options: FrontendPluginOptions) {
+function context(frontends: FrontendDefinition[]) {
   const publish = vi.fn<(site: string, dir: string) => Promise<PublishStaticWebsiteResult>>(
     async () => ({ url: "https://published", skippedFiles: [] }),
   );
@@ -48,21 +48,20 @@ function context(options: FrontendPluginOptions) {
     domain: "app",
     aiGateways: [],
   };
-  const ctx: DeployedContext<FrontendPluginOptions> = {
+  const ctx: DeployedContext<FrontendDefinition[]> = {
     workspaceId: "ws",
     application,
     applications: [application],
     staticWebsites: { web: site("web"), admin: site("admin") },
     configPath: application.configPath,
-    pluginConfig: options,
+    pluginConfig: frontends,
     logger: { info: vi.fn(), warn: vi.fn(), success: vi.fn() },
   };
   return { ctx, publish };
 }
-function setup(frontends: FrontendDefinition[]) {
-  const options = { frontends };
-  const plugin = frontendPlugin(options);
-  const { ctx, publish } = context(options);
+function setup(frontends: [FrontendDefinition, ...FrontendDefinition[]]) {
+  const plugin = frontendPlugin(...frontends);
+  const { ctx, publish } = context(frontends);
   const run = async () => {
     if (!plugin.onDeployed) throw new Error("onDeployed hook missing");
     return plugin.onDeployed(ctx);
@@ -78,25 +77,24 @@ describe("frontendPlugin", () => {
     };
     expect(frontend.distDir).toBe("dist");
   });
-  test("rejects an empty frontend list", () => {
-    expect(() => frontendPlugin({ frontends: [] })).toThrow(/frontends/i);
+  test("requires at least one frontend", () => {
+    expect(() => {
+      // @ts-expect-error at least one frontend is required
+      frontendPlugin();
+    }).toThrow(/at least one frontend/);
   });
   test("rejects an empty dist directory", () => {
-    expect(() => frontendPlugin({ frontends: [{ site: "web", distDir: "" }] })).toThrow(/distDir/);
+    expect(() => frontendPlugin({ site: "web", distDir: "" })).toThrow(/distDir/);
   });
   test.each(["", "   "])("rejects a blank build command %j", (build) => {
-    expect(() => frontendPlugin({ frontends: [{ site: "web", distDir: "dist", build }] })).toThrow(
-      /build/,
-    );
+    expect(() => frontendPlugin({ site: "web", distDir: "dist", build })).toThrow(/build/);
   });
   test("rejects duplicate site names across string and object definitions", () => {
     expect(() =>
-      frontendPlugin({
-        frontends: [
-          { site: "web", distDir: "dist" },
-          { site: { name: "web" } as StaticWebsiteConfig, distDir: "other" },
-        ],
-      }),
+      frontendPlugin(
+        { site: "web", distDir: "dist" },
+        { site: { name: "web" } as StaticWebsiteConfig, distDir: "other" },
+      ),
     ).toThrow(/web/);
   });
   test("builds with awaited environment values in a working directory relative to the config", async () => {
@@ -219,24 +217,22 @@ describe("frontendPlugin", () => {
 });
 
 test("keeps frontend build output off the JSON stdout stream", () => {
-  const options = {
-    frontends: [
-      {
-        site: "web",
-        workingDir: root,
-        distDir: root,
-        build: `node -e "process.stdout.write('build stdout');process.stderr.write('build stderr')"`,
-      },
-    ],
-  };
+  const frontends: FrontendDefinition[] = [
+    {
+      site: "web",
+      workingDir: root,
+      distDir: root,
+      build: `node -e "process.stdout.write('build stdout');process.stderr.write('build stderr')"`,
+    },
+  ];
   const moduleUrl = pathToFileURL(join(import.meta.dirname, "index.ts")).href;
   const script = `
     import { frontendPlugin } from ${JSON.stringify(moduleUrl)};
-    const ctx = ${JSON.stringify(context(options).ctx)};
+    const ctx = ${JSON.stringify(context(frontends).ctx)};
     ctx.logger = { info() {}, warn() {}, success() {} };
     for (const site of Object.values(ctx.staticWebsites))
       site.publish = async () => ({ url: "https://published", skippedFiles: [] });
-    const result = await frontendPlugin(ctx.pluginConfig).onDeployed(ctx);
+    const result = await frontendPlugin(...ctx.pluginConfig).onDeployed(ctx);
     process.stdout.write(JSON.stringify(result));
   `;
   const result = spawnSync(
