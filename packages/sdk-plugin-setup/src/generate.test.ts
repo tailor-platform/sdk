@@ -520,6 +520,46 @@ describe("renderTagWorkflow", () => {
   });
 });
 
+describe("deploy job outputs", () => {
+  test.each([
+    ["branch", () => renderBranchWorkflow(branchBase).content],
+    ["tag", () => renderTagWorkflow(tagBase).content],
+  ] as const)(
+    "%s workflow's deploy job exposes the deployed workspace id and app URL to user jobs",
+    (_kind, render) => {
+      const workflow = parseYAML(render()) as {
+        jobs: Record<string, { outputs?: Record<string, string> }>;
+      };
+
+      expect(workflow.jobs["tailor-deploy"]?.outputs).toEqual({
+        "workspace-id": "${{ steps.tailor-apply.outputs.workspace-id }}",
+        "app-url": "${{ steps.tailor-apply.outputs.app-url }}",
+      });
+    },
+  );
+});
+
+describe("renderPreviewWorkflow", () => {
+  test("deploy job exposes the preview workspace id, name, and app URL to user jobs", () => {
+    const { content } = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const workflow = parseYAML(content) as {
+      jobs: Record<string, { outputs?: Record<string, string> }>;
+    };
+
+    expect(workflow.jobs["tailor-preview-deploy"]?.outputs).toEqual({
+      "workspace-id": "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
+      "workspace-name": "${{ steps.tailor-preview-deploy.outputs.workspace-name }}",
+      "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
+    });
+  });
+});
+
 describe("Tailor Platform action pins", () => {
   test("pins every generated Tailor Platform action to the release pin", () => {
     expect(ACTIONS_SHA).toMatch(/^[0-9a-f]{40}$/);
@@ -1328,6 +1368,54 @@ export default defineConfig({
     const lock = readLock(testDir);
     expect(lock?.targets[0]).toMatchObject({ kind: "preview", workspaceName: "my-app" });
     expect(lock?.targets[0]?.generatedIds).toContain("tailor-preview-deploy/tailor-drift-check");
+  });
+
+  test("preview: re-running on a workflow from before the deploy job had outputs adds them and keeps user jobs that read them", async () => {
+    const opts = {
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+    } as const;
+    await setupTarget(opts);
+    const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+    const outputsBlock =
+      "    outputs:\n" +
+      "      workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}\n" +
+      "      workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}\n" +
+      "      app-url: ${{ steps.tailor-preview-deploy.outputs.app-url }}\n";
+    const userJob =
+      "  e2e:\n" +
+      "    needs: tailor-preview-deploy\n" +
+      "    runs-on: ubuntu-latest\n" +
+      "    steps:\n" +
+      "      - run: echo ${{ needs.tailor-preview-deploy.outputs.app-url }}\n";
+    const generated = fs.readFileSync(wf, "utf-8");
+    expect(generated).toContain(outputsBlock);
+    const legacy = generated.replace(outputsBlock, "").concat(userJob);
+    fs.writeFileSync(wf, legacy);
+    const lock = readLock(testDir);
+    const [target] = lock?.targets ?? [];
+    if (!lock || !target) throw new Error("expected a lock target");
+    writeLock(testDir, {
+      ...lock,
+      targets: [
+        {
+          ...target,
+          templateVersion: TEMPLATE_VERSION - 1,
+          contentHash: computeManagedHash(legacy, "workflow", target.generatedIds),
+        },
+      ],
+    });
+
+    await setupTarget(opts);
+
+    expect(fs.readFileSync(wf, "utf-8")).toBe(generated.concat(userJob));
   });
 
   test("preview: require-preview-label variant adds label filter to trigger", async () => {
