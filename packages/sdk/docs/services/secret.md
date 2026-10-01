@@ -204,7 +204,7 @@ printf '%s' "$STRIPE_SECRET_KEY" | tailor secret update \
   --value-stdin
 ```
 
-A value passed with `--value` can show up in your shell history and in process listings. `--value-stdin` reads it from standard input instead and removes one trailing newline.
+A value passed with `--value` can show up in your shell history and in process listings. `--value-stdin` reads it from standard input instead, accepting up to 128 KiB and removing one trailing newline.
 
 ### List Secrets
 

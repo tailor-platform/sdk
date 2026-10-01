@@ -1,5 +1,7 @@
-import { buffer } from "node:stream/consumers";
 import { CLIError } from "#/cli/shared/errors";
+
+/** Largest secret value `--value-stdin` accepts, in KiB. */
+export const MAX_PIPED_SECRET_KIB = 128;
 
 /** Parsed `--value` / `--value-stdin` options. */
 export interface SecretValueArgs {
@@ -12,7 +14,7 @@ export type SecretValueInput = AsyncIterable<string | Uint8Array> & { isTTY?: bo
 
 /**
  * Resolve the secret value from `--value`, or from standard input with `--value-stdin`.
- * One trailing newline is removed from a piped value.
+ * A piped value is limited to {@link MAX_PIPED_SECRET_KIB} KiB, and one trailing newline is removed from it.
  * @param args - Parsed `--value` / `--value-stdin` options
  * @param stdin - Stream read when `--value-stdin` is set
  * @param command - Command path shown in the error's help hint
@@ -49,10 +51,23 @@ export async function resolveSecretValue(
     });
   }
 
-  const bytes = await buffer(stdin);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of stdin) {
+    const bytes = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+    size += bytes.length;
+    if (size > MAX_PIPED_SECRET_KIB * 1024) {
+      throw CLIError({
+        code: "SECRET_VALUE_TOO_LARGE",
+        message: `The secret value read from standard input exceeds ${MAX_PIPED_SECRET_KIB} KiB.`,
+        command,
+      });
+    }
+    chunks.push(bytes);
+  }
   let text: string;
   try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(chunks));
   } catch (error) {
     throw CLIError({
       code: "SECRET_VALUE_INVALID_UTF8",

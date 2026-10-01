@@ -5,7 +5,7 @@ import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { createSecretCommand } from "./create";
 import { updateSecretCommand } from "./update";
-import { resolveSecretValue } from "./value";
+import { MAX_PIPED_SECRET_KIB, resolveSecretValue } from "./value";
 import type * as LoggerModule from "#/cli/shared/logger";
 
 vi.mock("#/cli/shared/operator-context", () => ({
@@ -88,6 +88,37 @@ describe("resolveSecretValue", () => {
     await expect(
       resolveSecretValue({ "value-stdin": true }, input(chunks), "secret create"),
     ).rejects.toMatchObject({ code: "SECRET_VALUE_EMPTY" });
+  });
+
+  test("keeps a leading byte order mark", async () => {
+    await expect(
+      resolveSecretValue(
+        { "value-stdin": true },
+        input([Buffer.from([0xef, 0xbb, 0xbf, 0x73, 0x6b, 0x0a])]),
+        "secret create",
+      ),
+    ).resolves.toBe("\uFEFFsk");
+  });
+
+  test("accepts standard input at the size limit", async () => {
+    const value = "a".repeat(MAX_PIPED_SECRET_KIB * 1024);
+
+    await expect(
+      resolveSecretValue({ "value-stdin": true }, input([value]), "secret create"),
+    ).resolves.toBe(value);
+  });
+
+  test("rejects standard input over the size limit", async () => {
+    await expect(
+      resolveSecretValue(
+        { "value-stdin": true },
+        input([
+          "a".repeat((MAX_PIPED_SECRET_KIB / 2) * 1024),
+          "a".repeat((MAX_PIPED_SECRET_KIB / 2) * 1024 + 1),
+        ]),
+        "secret create",
+      ),
+    ).rejects.toMatchObject({ code: "SECRET_VALUE_TOO_LARGE" });
   });
 
   test("rejects standard input that is not valid UTF-8", async () => {

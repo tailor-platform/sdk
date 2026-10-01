@@ -1,5 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
+import { MAX_PIPED_SECRET_KIB } from "./value";
 
 /**
  * Arguments for specify secret key
@@ -42,5 +43,5 @@ export const secretValueArgs = {
  * @returns Notes text for the command help
  */
 export function secretValueNotes(subcommand: "create" | "update"): string {
-  return `Pass the value with \`--value\`, or pipe it with \`--value-stdin\` to keep it out of shell history and process listings, for example \`printf '%s' "$STRIPE_KEY" | tailor secret ${subcommand} --vault-name api-keys --name stripe-secret-key --value-stdin\`. One trailing newline is removed from a piped value. In a vault managed by \`defineSecretManager()\`, the command asks for confirmation before releasing the vault from the config, which needs an interactive terminal, so pass \`--yes\` when piping the value.`;
+  return `Pass the value with \`--value\`, or pipe it with \`--value-stdin\` to keep it out of shell history and process listings, for example \`printf '%s' "$STRIPE_KEY" | tailor secret ${subcommand} --vault-name api-keys --name stripe-secret-key --value-stdin\`. A piped value can be up to ${MAX_PIPED_SECRET_KIB} KiB, and one trailing newline is removed from it. In a vault managed by \`defineSecretManager()\`, the command asks for confirmation before releasing the vault from the config, which needs an interactive terminal, so pass \`--yes\` when piping the value.`;
 }

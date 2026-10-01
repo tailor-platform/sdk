@@ -50,7 +50,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Pass the value with `--value`, or pipe it with `--value-stdin` to keep it out of shell history and process listings, for example `printf '%s' "$STRIPE_KEY" | tailor secret create --vault-name api-keys --name stripe-secret-key --value-stdin`. One trailing newline is removed from a piped value. In a vault managed by `defineSecretManager()`, the command asks for confirmation before releasing the vault from the config, which needs an interactive terminal, so pass `--yes` when piping the value.
+Pass the value with `--value`, or pipe it with `--value-stdin` to keep it out of shell history and process listings, for example `printf '%s' "$STRIPE_KEY" | tailor secret create --vault-name api-keys --name stripe-secret-key --value-stdin`. A piped value can be up to 128 KiB, and one trailing newline is removed from it. In a vault managed by `defineSecretManager()`, the command asks for confirmation before releasing the vault from the config, which needs an interactive terminal, so pass `--yes` when piping the value.
 
 ### secret delete
 
@@ -122,7 +122,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Pass the value with `--value`, or pipe it with `--value-stdin` to keep it out of shell history and process listings, for example `printf '%s' "$STRIPE_KEY" | tailor secret update --vault-name api-keys --name stripe-secret-key --value-stdin`. One trailing newline is removed from a piped value. In a vault managed by `defineSecretManager()`, the command asks for confirmation before releasing the vault from the config, which needs an interactive terminal, so pass `--yes` when piping the value.
+Pass the value with `--value`, or pipe it with `--value-stdin` to keep it out of shell history and process listings, for example `printf '%s' "$STRIPE_KEY" | tailor secret update --vault-name api-keys --name stripe-secret-key --value-stdin`. A piped value can be up to 128 KiB, and one trailing newline is removed from it. In a vault managed by `defineSecretManager()`, the command asks for confirmation before releasing the vault from the config, which needs an interactive terminal, so pass `--yes` when piping the value.
 
 ### secret vault
 
