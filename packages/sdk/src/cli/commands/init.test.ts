@@ -61,8 +61,12 @@ describe("init command", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({
       code: "INIT_FAILED",
-      message: "pnpm create @tailor-platform/sdk@1.2.3 my-app exited with code 3.",
-      context: { exitCode: 3 },
+      message: "pnpm create exited with code 3.",
+      context: {
+        command: "pnpm",
+        args: ["create", "@tailor-platform/sdk@1.2.3", "my-app"],
+        exitCode: 3,
+      },
     });
   });
 
@@ -75,7 +79,7 @@ describe("init command", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({
       code: "INIT_FAILED",
-      message: "pnpm create @tailor-platform/sdk@1.2.3 my-app was terminated by SIGTERM.",
+      message: "pnpm create was terminated by SIGTERM.",
       context: { signal: "SIGTERM" },
     });
   });
@@ -92,6 +96,7 @@ describe("init command", () => {
     expect(result.error).toMatchObject({
       code: "INIT_SPAWN_FAILED",
       message: "Failed to run pnpm: spawnSync pnpm ENOENT",
+      context: { command: "pnpm" },
     });
   });
 });

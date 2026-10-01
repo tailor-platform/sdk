@@ -45,16 +45,17 @@ export const initCommand = defineAppCommand({
       ...(packageManager === "npm" ? ["--"] : []),
       ...(args.template ? ["--template", args.template] : []),
     ];
-    const commandLine = `${packageManager} ${initArgs.join(" ")}`;
-    logger.log(`Running: ${commandLine}`);
+    logger.log(`Running: ${packageManager} ${initArgs.join(" ")}`);
 
     const result = spawnSync(packageManager, initArgs, { stdio: "inherit" });
+    const context = { command: packageManager, args: initArgs };
     if (result.error) {
       throw CLIError({
         code: "INIT_SPAWN_FAILED",
         message: `Failed to run ${packageManager}: ${result.error.message}`,
         suggestion: `Ensure ${packageManager} is on your PATH, or run the command above directly.`,
         command: "init",
+        context,
         cause: result.error,
       });
     }
@@ -63,10 +64,14 @@ export const initCommand = defineAppCommand({
         code: "INIT_FAILED",
         message:
           result.signal === null
-            ? `${commandLine} exited with code ${result.status}.`
-            : `${commandLine} was terminated by ${result.signal}.`,
+            ? `${packageManager} create exited with code ${result.status}.`
+            : `${packageManager} create was terminated by ${result.signal}.`,
         command: "init",
-        context: { exitCode: result.status ?? undefined, signal: result.signal ?? undefined },
+        context: {
+          ...context,
+          exitCode: result.status ?? undefined,
+          signal: result.signal ?? undefined,
+        },
       });
     }
   },
