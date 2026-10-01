@@ -345,6 +345,16 @@ describe("show", () => {
       expect(listAuthOAuth2ClientsMock).not.toHaveBeenCalled();
     });
 
+    test("returns no OAuth2 clients when the auth namespace is not found", async () => {
+      mockConfig({ auth: { name: "local-auth", oauth2Clients } });
+      listAuthOAuth2ClientsMock.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+      const info = await show();
+
+      expect(info.oauth2Clients).toEqual([]);
+      expect(listAuthOAuth2ClientsMock).toHaveBeenCalledTimes(1);
+    });
+
     test("returns no OAuth2 clients for an external auth", async () => {
       mockConfig({ auth: { name: "my-auth", external: true } });
 
