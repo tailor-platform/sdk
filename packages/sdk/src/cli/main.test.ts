@@ -124,6 +124,18 @@ describe("argument errors under JSON output", () => {
     expect(result.status).toBe(1);
     expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
   }, 20_000);
+
+  test("keeps the argument error annotation title without JSON output", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-argument-error-json-");
+
+    const result = runCli(["workspace", "list", "--bogus"], tmp.dir, { GITHUB_ACTIONS: "true" });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe(
+      "✖ Unknown flags: bogus\n::error title=Error::Unknown flags: bogus\n",
+    );
+  }, 20_000);
 });
 
 describe("parent command shortcuts", () => {

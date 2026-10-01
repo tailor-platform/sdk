@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
-import { arg } from "@politty/zod";
+import { arg, parseArgv } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
@@ -191,7 +191,31 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 const JSON_ARG_NAME = "json";
 const JSON_ARG_ALIAS = "j";
 
-let globalArgsApplied = false;
+const JSON_ARG_PARSER_OPTIONS = {
+  aliasMap: new Map([[JSON_ARG_ALIAS, JSON_ARG_NAME]]),
+  booleanFlags: new Set([JSON_ARG_NAME]),
+};
+
+let globalArgsWereApplied = false;
+
+/**
+ * Report whether the global arguments have been applied, which happens only
+ * after every argument of the command parsed and validated.
+ * @returns True once the `--json` effect has run
+ */
+export function globalArgsApplied(): boolean {
+  return globalArgsWereApplied;
+}
+
+/**
+ * Read the value `--json` tokens set, coerced the way the CLI coerces the flag
+ * and its environment variable.
+ * @param tokens - `--json` / `-j` tokens, each optionally carrying `=value`
+ * @returns `true`, `false`, a rejected value unchanged, or undefined when no token sets it
+ */
+function parseJsonArg(tokens: string[]): unknown {
+  return parseArgv(tokens, JSON_ARG_PARSER_OPTIONS).options[JSON_ARG_NAME];
+}
 
 /**
  * Report what requested JSON output, reading the command line and the environment.
@@ -205,15 +229,14 @@ let globalArgsApplied = false;
 export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource | undefined {
   const separator = argv.indexOf("--");
   const options = separator === -1 ? argv : argv.slice(0, separator);
-  let flag: boolean | undefined;
-  for (const value of options) {
-    const assignment = value.indexOf("=");
-    const name = assignment === -1 ? value : value.slice(0, assignment);
-    if (name !== `--${JSON_ARG_NAME}` && name !== `-${JSON_ARG_ALIAS}`) continue;
-    const enabled = assignment === -1 || parseBoolean(value.slice(assignment + 1)) !== false;
-    flag = flag === true || enabled;
-  }
-  const envEnabled = parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;
+  const flag = parseJsonArg(
+    options.filter((value) => {
+      const [name] = value.split("=", 1);
+      return name === `--${JSON_ARG_NAME}` || name === `-${JSON_ARG_ALIAS}`;
+    }),
+  );
+  const env = process.env[JSON_OUTPUT_ENV_VAR];
+  const envEnabled = env !== undefined && parseJsonArg([`--${JSON_ARG_NAME}=${env}`]) === true;
   if (flag === true) return envEnabled ? "both" : "flag";
   if (flag === undefined && envEnabled) return "env";
   return undefined;
@@ -221,15 +244,16 @@ export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource
 
 /**
  * Prepare a failure that ended the command before the global arguments were
- * applied: turn on JSON output when the command line or the environment asked
- * for it, and name a plain argument-parsing error `INVALID_ARGUMENTS`.
+ * applied (see {@link globalArgsApplied}): when the command line or the
+ * environment asked for JSON output, turn it on and name a plain
+ * argument-parsing error `INVALID_ARGUMENTS`.
  * @param error - Failure about to be rendered
  * @param argv - Command-line arguments after the executable and script path
  */
 export function resolveEarlyFailure(error: unknown, argv: readonly string[]): void {
-  if (globalArgsApplied) return;
   const source = requestedJsonModeSource(argv);
-  if (source) logger.setJsonMode(true, source);
+  if (!source) return;
+  logger.setJsonMode(true, source);
   if (
     error instanceof Error &&
     Object.getPrototypeOf(error) === Error.prototype &&
@@ -284,7 +308,7 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       description: "Output as JSON",
       env: JSON_OUTPUT_ENV_VAR,
       effect: (value, { args }) => {
-        globalArgsApplied = true;
+        globalArgsWereApplied = true;
         const source = args.$source?.(JSON_ARG_NAME);
         const envAlsoEnabled =
           source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;

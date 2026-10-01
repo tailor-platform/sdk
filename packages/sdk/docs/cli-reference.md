@@ -47,7 +47,8 @@ Errors, warnings, progress, and diagnostic messages are written to stderr. A com
 parsing arguments: an unknown option or subcommand, or an option value that fails validation, is
 reported as `INVALID_ARGUMENTS`. Failures you can act on — an invalid or missing option, a resource
 that does not exist, an invalid configuration, or an unmet precondition — carry a stable `error.code`
-such as `PROFILE_NOT_FOUND`, `TAILORDB_NAMESPACE_NOT_FOUND`, or `MIGRATION_SCRIPT_REQUIRED`. Where a remediation exists, the envelope also includes
+such as `PROFILE_NOT_FOUND`, `TAILORDB_NAMESPACE_NOT_FOUND`, or `MIGRATION_SCRIPT_REQUIRED`. Where a
+remediation exists, the envelope also includes
 `error.suggestion`, `error.help` (the `--help` invocation for the failing command), `error.next` (a
 runnable command), or `error.context`. `UNEXPECTED_ERROR` marks failures without a dedicated code,
 including SDK-internal errors. Diagnostic lines may precede the error envelope, and stdout is not
@@ -76,9 +77,10 @@ Use `--verbose` to include debug diagnostics and error stack traces. `DEBUG=true
 sets `RUNNER_DEBUG=1` when debug logging is enabled, so the same command automatically includes
 these details in a debug run. These settings do not enable JSON output; pass `--json` separately.
 
-Capture the original failure's stderr and exit code before retrying. Argument parsing and failures
-before the CLI starts may produce plain text even with `--json`. A failed deployment may have
-already applied changes, so inspect its output before deciding to run it again.
+Capture the original failure's stderr and exit code before retrying. Failures before the CLI starts,
+a rejected `--json` or `TAILOR_JSON_OUTPUT` value, and argument errors in the bundled CLI plugins
+may still produce plain text when JSON output is requested. A failed deployment may have already
+applied changes, so inspect its output before deciding to run it again.
 
 ### GitHub Actions Annotations
 
