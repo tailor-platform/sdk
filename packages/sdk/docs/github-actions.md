@@ -202,7 +202,8 @@ you can distinguish multiple workspaces in the Actions UI.
 Every checkout in the workflow sets `persist-credentials: false`, so the GitHub
 token is not left in `.git/config` while the job installs and runs your
 project's code. The plan and tag guard steps pass the job token only to the
-`git fetch` they need.
+`git fetch` they need. If installing your dependencies fetches git repositories
+that require authentication, configure the credentials in your own step.
 
 See [Customizing the generated workflow](#customizing-the-generated-workflow)
 for what you can edit.

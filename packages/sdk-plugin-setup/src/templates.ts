@@ -644,8 +644,8 @@ export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   return { content: out, generatedIds };
 }
 
-export const ACTIONS_SHA = "19c81ce6530e0c79e7ab7753dea32233997006e7";
-export const ACTIONS_VERSION = "v2.3.5";
+export const ACTIONS_SHA = "673f134587307b7d61bd9080edbb3130d352003c";
+export const ACTIONS_VERSION = "fix/plan-tag-guard-scoped-fetch-auth";
 
 /**
  * Render the coordinator workflow that orchestrates per-app composite actions.
