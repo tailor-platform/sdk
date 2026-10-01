@@ -23,7 +23,6 @@ const target = (kind: TargetKind, workspaceName: string, environment: string): L
   templateVersion: 1,
   inputs: { branch: "main", tagPattern: null, environment, dir: ".", packageManager: "pnpm" },
   generatedIds: [],
-  ejectedIds: [],
   contentHash: "sha256:abc",
 });
 
