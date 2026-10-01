@@ -1087,6 +1087,11 @@ describe("tailordb migration generate declined confirmations", () => {
 
     const result = await runCommand(generateCommand, ["--init"]);
 
+    expect(prompt.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Are you sure you want to delete these directories and start fresh?",
+      }),
+    );
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_CANCELLED" });
     expect(fs.existsSync(path.join(ns.migrationsDir, "0000", "schema.json"))).toBe(true);
@@ -1108,5 +1113,30 @@ describe("tailordb migration generate declined confirmations", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_CANCELLED" });
     expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("still writes the other namespaces when one breaking change is declined", async () => {
+    const withRequiredEmail = parsedType("User");
+    withRequiredEmail.fields.email = {
+      name: "email",
+      config: { type: "string", required: true },
+    };
+    const declined = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail);
+    const withNickname = parsedType("Event");
+    withNickname.fields.nickname = {
+      name: "nickname",
+      config: { type: "string", required: false },
+    };
+    const accepted = addNamespace(tmpDir, "analyticsdb", "Event", withNickname);
+
+    const result = await runCommand(generateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_GENERATE_CANCELLED",
+      context: { namespaces: ["tailordb"] },
+    });
+    expect(fs.existsSync(path.join(declined.migrationsDir, "0001"))).toBe(false);
+    expect(fs.existsSync(path.join(accepted.migrationsDir, "0001", "diff.json"))).toBe(true);
   });
 });
