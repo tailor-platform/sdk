@@ -50,18 +50,19 @@ export async function resolveSecretValue(
     });
   }
 
+  const maxBytes = MAX_PIPED_SECRET_KIB * 1024;
+  const tooLarge = () =>
+    CLIError({
+      code: "SECRET_VALUE_TOO_LARGE",
+      message: `The secret value read from standard input exceeds ${MAX_PIPED_SECRET_KIB} KiB.`,
+      command,
+    });
   const chunks: Uint8Array[] = [];
   let size = 0;
   for await (const chunk of stdin) {
     const bytes = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
     size += bytes.length;
-    if (size > MAX_PIPED_SECRET_KIB * 1024) {
-      throw CLIError({
-        code: "SECRET_VALUE_TOO_LARGE",
-        message: `The secret value read from standard input exceeds ${MAX_PIPED_SECRET_KIB} KiB.`,
-        command,
-      });
-    }
+    if (size > maxBytes + "\r\n".length) throw tooLarge();
     chunks.push(bytes);
   }
   let text: string;
@@ -76,6 +77,7 @@ export async function resolveSecretValue(
     });
   }
   const value = text.replace(/\r?\n$/, "");
+  if (Buffer.byteLength(value) > maxBytes) throw tooLarge();
   if (value === "") {
     throw CLIError({
       code: "SECRET_VALUE_EMPTY",

@@ -108,6 +108,27 @@ describe("resolveSecretValue", () => {
     ).resolves.toBe(value);
   });
 
+  test.each([
+    { name: "LF", newline: "\n" },
+    { name: "CRLF", newline: "\r\n" },
+  ])("accepts a value at the size limit followed by a $name", async ({ newline }) => {
+    const value = "a".repeat(MAX_PIPED_SECRET_KIB * 1024);
+
+    await expect(
+      resolveSecretValue({ "value-stdin": true }, input([value, newline]), "secret create"),
+    ).resolves.toBe(value);
+  });
+
+  test("rejects a value over the size limit even with a trailing newline", async () => {
+    await expect(
+      resolveSecretValue(
+        { "value-stdin": true },
+        input(["a".repeat(MAX_PIPED_SECRET_KIB * 1024 + 1), "\n"]),
+        "secret create",
+      ),
+    ).rejects.toMatchObject({ code: "SECRET_VALUE_TOO_LARGE" });
+  });
+
   test("rejects standard input over the size limit", async () => {
     await expect(
       resolveSecretValue(
