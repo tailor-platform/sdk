@@ -33,12 +33,21 @@ type Equal<Derived, Generated> = [Flatten<Derived>] extends [Flatten<Generated>]
     : ["generated is not assignable to derived", Flatten<Derived>, Flatten<Generated>]
   : ["derived is not assignable to generated", Flatten<Derived>, Flatten<Generated>];
 
+// This project's kyselyTypePlugin is configured with `{ temporal: true }`.
+type IsTemporal = true;
+
 type Same<Table extends TailorAnyDBType, Name extends keyof Emitted> =
-  Equal<TailorDBInsertable<Table>, Insertable<Emitted[Name]>> extends true
-    ? Equal<TailorDBSelectable<Table>, Selectable<Emitted[Name]>> extends true
-      ? Equal<TailorDBUpdateable<Table>, Updateable<Emitted[Name]>>
-      : ["selectable differs", Equal<TailorDBSelectable<Table>, Selectable<Emitted[Name]>>]
-    : ["insertable differs", Equal<TailorDBInsertable<Table>, Insertable<Emitted[Name]>>];
+  Equal<TailorDBInsertable<Table, IsTemporal>, Insertable<Emitted[Name]>> extends true
+    ? Equal<TailorDBSelectable<Table, IsTemporal>, Selectable<Emitted[Name]>> extends true
+      ? Equal<TailorDBUpdateable<Table, IsTemporal>, Updateable<Emitted[Name]>>
+      : [
+          "selectable differs",
+          Equal<TailorDBSelectable<Table, IsTemporal>, Selectable<Emitted[Name]>>,
+        ]
+    : [
+        "insertable differs",
+        Equal<TailorDBInsertable<Table, IsTemporal>, Insertable<Emitted[Name]>>,
+      ];
 
 type Assert<T extends true> = T;
 

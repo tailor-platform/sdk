@@ -1,4 +1,5 @@
 import { createResolver, t } from "@tailor-platform/sdk";
+import { Temporal } from "@tailor-platform/sdk/runtime";
 import { getDB } from "../generated/tailordb";
 
 export default createResolver({
@@ -27,7 +28,7 @@ export default createResolver({
           email: input.email,
         },
         metadata: {
-          created: new Date(),
+          created: Temporal.Now.instant(),
           version: 1,
         },
       })
@@ -45,7 +46,7 @@ export default createResolver({
 
     return {
       id: selected.id,
-      metadataCreated: selected.metadata.created,
+      metadataCreated: selected.metadata.created.toString(),
     };
   },
 });

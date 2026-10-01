@@ -13,8 +13,8 @@ export const fetchCustomer = createWorkflowJob({
     if (!customer) return undefined;
     return {
       ...customer,
-      createdAt: customer.createdAt.toISOString(),
-      updatedAt: customer.updatedAt.toISOString(),
+      createdAt: customer.createdAt.toString(),
+      updatedAt: customer.updatedAt.toString(),
     };
   },
 });
