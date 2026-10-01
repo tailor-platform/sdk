@@ -225,24 +225,32 @@ workspace as the outputs `workspace-id`, `workspace-name`, and `app-url`, so a
 job of your own can run tests or deploy extra assets against it:
 
 ```yaml
-e2e:
+deploy-assets:
   needs: tailor-preview-deploy
   runs-on: ubuntu-latest
+  environment: my-app
   env:
     TAILOR_PLATFORM_WORKSPACE_ID: ${{ needs.tailor-preview-deploy.outputs.workspace-id }}
-    APP_URL: ${{ needs.tailor-preview-deploy.outputs.app-url }}
+    TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+    TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
   steps:
-    # checkout, dependency installation, and your test command
+    # checkout, dependency installation, and your tailor commands
 ```
+
+A job that runs `tailor` against the workspace needs the machine-user
+[secrets](#secrets), so it declares the preview target's GitHub Environment
+(the `--environment` value, or the workspace name when omitted) as above. A job
+that only uses `app-url`, such as end-to-end tests, does not.
 
 The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
 request is closed, for draft and fork pull requests, and for unlabeled ones with
 `--require-preview-label`.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
-deployed workspace as the outputs `workspace-id` and `app-url`, so a job with
-`needs: tailor-deploy` can run checks against it without entering the target's
-GitHub Environment.
+deployed workspace as the outputs `workspace-id` and `app-url` to a job with
+`needs: tailor-deploy`. Reading them does not require the target's GitHub
+Environment; a job that runs `tailor` against the workspace declares it for the
+machine-user secrets, as in the preview example above.
 
 Comments above your own jobs and steps and at the end of the file are kept too.
 Comments inside managed jobs and steps, and edits to the header comment, are
