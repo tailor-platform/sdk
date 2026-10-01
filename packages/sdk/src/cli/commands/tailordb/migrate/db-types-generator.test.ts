@@ -267,7 +267,10 @@ describe("db-types-generator", () => {
       );
       const content = fs.readFileSync(filePath, "utf-8");
 
-      expect(content).toContain('import type { Temporal } from "temporal-spec";');
+      expect(content).toContain(
+        'type Generated, type Temporal } from "@tailor-platform/sdk/kysely";',
+      );
+      expect(content).not.toContain("temporal-spec");
       expect(content).toContain(
         "eventDate: ColumnType<Temporal.PlainDate | null, Temporal.PlainDate | string | null, Temporal.PlainDate | string | null>;",
       );
@@ -297,7 +300,10 @@ describe("db-types-generator", () => {
 
       const { content } = await generateContent(snapshot, 1, diff, true);
 
-      expect(content).toContain('import type { Temporal } from "temporal-spec";');
+      expect(content).toContain(
+        'type Generated, type Temporal } from "@tailor-platform/sdk/kysely";',
+      );
+      expect(content).not.toContain("temporal-spec");
       expect(content).toContain(
         "eventDate: ColumnType<Temporal.PlainDate | null, Temporal.PlainDate | string, Temporal.PlainDate | string>;",
       );

@@ -43,6 +43,9 @@ export {
 
 export { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
+/** The host `Temporal` namespace, re-exported so generated code never imports `temporal-spec` directly (avoids phantom dependency issues with pnpm). */
+export type { Temporal } from "temporal-spec";
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 /** Column type for a `date` field read back as `Temporal.PlainDate` (`getDB`'s `temporal` option). */
 export type TemporalDate = ColumnType<

@@ -229,6 +229,9 @@ function generateDbTypesFromSnapshot(
   if (usedUtilityTypes.has("TemporalTime")) {
     imports.push("type TemporalTime");
   }
+  if (usesTemporalNamespace) {
+    imports.push("type Temporal");
+  }
 
   // Build output
   const lines: string[] = [
@@ -241,7 +244,6 @@ function generateDbTypesFromSnapshot(
     "",
     `import { ${imports.join(", ")} } from "@tailor-platform/sdk/kysely";`,
     'import type { Env } from "@tailor-platform/sdk";',
-    ...(usesTemporalNamespace ? ['import type { Temporal } from "temporal-spec";'] : []),
     "",
     "export interface Database {",
     ...typeDefinitions,
