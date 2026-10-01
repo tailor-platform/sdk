@@ -6,9 +6,8 @@ import coordinateTemplate from "./coordinate.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
-// Only the release PR changes RELEASED_TEMPLATE_VERSION. A PR that changes the generated
-// templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead of bumping a number, so
-// concurrent template PRs make the same edit and merge without conflicts.
+// Only the release PR changes RELEASED_TEMPLATE_VERSION; a PR that changes the generated
+// templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
 const RELEASED_TEMPLATE_VERSION = 13;
 const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */
