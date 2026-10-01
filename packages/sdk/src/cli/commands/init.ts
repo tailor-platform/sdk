@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
 
@@ -44,8 +45,29 @@ export const initCommand = defineAppCommand({
       ...(packageManager === "npm" ? ["--"] : []),
       ...(args.template ? ["--template", args.template] : []),
     ];
-    logger.log(`Running: ${packageManager} ${initArgs.join(" ")}`);
+    const commandLine = `${packageManager} ${initArgs.join(" ")}`;
+    logger.log(`Running: ${commandLine}`);
 
-    spawnSync(packageManager, initArgs, { stdio: "inherit" });
+    const result = spawnSync(packageManager, initArgs, { stdio: "inherit" });
+    if (result.error) {
+      throw CLIError({
+        code: "INIT_SPAWN_FAILED",
+        message: `Failed to run ${packageManager}: ${result.error.message}`,
+        suggestion: `Ensure ${packageManager} is on your PATH, or run the command above directly.`,
+        command: "init",
+        cause: result.error,
+      });
+    }
+    if (result.status !== 0) {
+      throw CLIError({
+        code: "INIT_FAILED",
+        message:
+          result.signal === null
+            ? `${commandLine} exited with code ${result.status}.`
+            : `${commandLine} was terminated by ${result.signal}.`,
+        command: "init",
+        context: { exitCode: result.status ?? undefined, signal: result.signal ?? undefined },
+      });
+    }
   },
 });
