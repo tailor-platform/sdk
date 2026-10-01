@@ -102,8 +102,7 @@ describe("renderBranchWorkflow", () => {
   test("pins every `uses:` to a full commit SHA (no moving tags/branches)", () => {
     // Generated workflows are committed to user repos and must be reproducible
     // and pass zizmor/ghalint pinning checks: every action reference must be a
-    // 40-char commit SHA, never a tag like @v1. (actionlint does not enforce
-    // this, so it is asserted here.)
+    // 40-char commit SHA, never a tag like @v1.
     const assertShaPinned = (content: string): void => {
       const refs = [...content.matchAll(/uses:\s*(\S+?)@(\S+)/g)];
       expect(refs.length).toBeGreaterThan(0);

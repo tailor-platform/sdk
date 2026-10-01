@@ -38,7 +38,7 @@ jobs:
       group: tailor-plan-__WORKSPACE_NAME__-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
     steps:
-      - id: tailor-checkout
+      - id: tailor-checkout # zizmor: ignore[artipacked] the plan action runs git fetch on pull requests, which needs the persisted token on private repositories
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
         uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
@@ -595,6 +595,8 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
         uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:

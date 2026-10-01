@@ -33,7 +33,7 @@ jobs:
     outputs:
       on-branch: ${{ steps.tailor-tag-guard.outputs.on-branch }}
     steps:
-      - id: tailor-checkout
+      - id: tailor-checkout # zizmor: ignore[artipacked] tag-guard runs git fetch, which needs the persisted token on private repositories
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -56,10 +56,10 @@ jobs:
       group: tailor-plan-__WORKSPACE_NAME__-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
     steps:
-      - id: tailor-checkout
+      - id: tailor-checkout # zizmor: ignore[artipacked] the plan action runs git fetch on pull requests, which needs the persisted token on private repositories
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: ./.github/actions/tailor-setup
+        uses: $/.github/actions/tailor-setup
       # __PER_APP_PLAN_STEPS__
 
   tailor-deploy:
@@ -76,6 +76,8 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
-        uses: ./.github/actions/tailor-setup
+        uses: $/.github/actions/tailor-setup
       # __PER_APP_DEPLOY_STEPS__

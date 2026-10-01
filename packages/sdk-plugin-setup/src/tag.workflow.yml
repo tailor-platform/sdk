@@ -24,7 +24,7 @@ jobs:
     outputs:
       on-branch: ${{ steps.tailor-tag-guard.outputs.on-branch }}
     steps:
-      - id: tailor-checkout
+      - id: tailor-checkout # zizmor: ignore[artipacked] tag-guard runs git fetch, which needs the persisted token on private repositories
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -44,6 +44,8 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
         uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
@@ -101,6 +103,8 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
         uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:

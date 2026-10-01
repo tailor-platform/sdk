@@ -39,7 +39,7 @@ const EDITABLE_WITH_KEYS: Record<string, readonly string[]> = {
 };
 
 // Coordinator steps call an app's generated composite action.
-const APP_ACTION_USES = /^\.\/\.github\/actions\/tailor-[^/]+$/;
+const APP_ACTION_USES = /^[.$]\/\.github\/actions\/tailor-[^/]+$/;
 const APP_ACTION_EDITABLE_WITH_KEYS = ["user-mapping"];
 
 // Slots are SDK-placed steps whose listed fields belong to the user.
