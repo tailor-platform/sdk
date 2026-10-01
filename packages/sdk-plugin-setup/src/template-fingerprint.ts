@@ -5,14 +5,13 @@ import {
   renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
-  renderTailorSetupAction,
   type PackageManager,
 } from "./templates";
 
 type RenderedTemplate = { name: string; content: string; generatedIds: readonly string[] };
 
 const PACKAGE_MANAGERS: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
-const COMMON = { workspaceName: "my-app", environment: "my-app" } as const;
+const COMMON = { workspaceName: "my-app", environment: "production" } as const;
 
 /**
  * Fingerprint a set of rendered templates.
@@ -39,26 +38,25 @@ function renderAll(): RenderedTemplate[] {
       `preview/${packageManager}`,
       renderPreviewWorkflow({ ...base, branch: "main", region: "us-west" }),
     );
-    add(`tailor-setup/${packageManager}`, {
-      content: renderTailorSetupAction({ packageManager }),
-      generatedIds: [],
-    });
-    for (const kind of ["branch", "tag"] as const) {
+    for (const [name, target] of [
+      ["branch", { kind: "branch", branch: "main", restrictDispatch: true }],
+      ["branch-unrestricted", { kind: "branch", branch: "main" }],
+      ["tag", { kind: "tag", tagPattern: "v*", branch: "main", restrictDispatch: true }],
+      ["tag-unguarded", { kind: "tag", tagPattern: "v*" }],
+    ] as const) {
       add(
-        `coordinate-${kind}/${packageManager}`,
+        `coordinate-${name}/${packageManager}`,
         renderCoordinateWorkflow({
           coordinatorName: "platform",
-          kind,
-          ...(kind === "branch" ? { branch: "main" } : { tagPattern: "v*", branch: "main" }),
-          environment: "platform",
+          ...target,
+          environment: "production",
           packageManager,
-          restrictDispatch: true,
           actionGroups: [
             { id: "core", apps: [{ name: "ims", dir: "apps/ims", hasStaticWebsites: true }] },
             {
               id: "apps",
               apps: [
-                { name: "crm", dir: "apps/crm" },
+                { name: "crm", dir: "apps/crm", hasStaticWebsites: true },
                 { name: "pos", dir: "apps/pos" },
               ],
             },
