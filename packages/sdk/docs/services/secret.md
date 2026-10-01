@@ -197,12 +197,14 @@ tailor secret create \
   --name stripe-secret-key \
   --value sk_live_xxxxx
 
-# Update a secret
-tailor secret update \
+# Update a secret, reading the value from standard input
+printf '%s' "$STRIPE_SECRET_KEY" | tailor secret update \
   --vault-name api-keys \
   --name stripe-secret-key \
-  --value sk_live_yyyyy
+  --value-stdin
 ```
+
+A value passed with `--value` can show up in your shell history and in process listings. `--value-stdin` reads it from standard input instead and removes one trailing newline.
 
 ### List Secrets
 

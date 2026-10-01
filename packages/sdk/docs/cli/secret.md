@@ -36,16 +36,21 @@ tailor secret create [options]
 
 **Options**
 
-| Option                          | Alias | Description               | Required | Default | Env                            |
-| ------------------------------- | ----- | ------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                | Yes      | -       | -                              |
-| `--name <NAME>`                 | `-n`  | Secret name               | Yes      | -       | -                              |
-| `--value <VALUE>`               | `-v`  | Secret value              | Yes      | -       | -                              |
-| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` | -                              |
+| Option                          | Alias | Description                               | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                              | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                         | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                                | Yes      | -       | -                              |
+| `--name <NAME>`                 | `-n`  | Secret name                               | Yes      | -       | -                              |
+| `--value <VALUE>`               | `-v`  | Secret value (or use --value-stdin)       | No       | -       | -                              |
+| `--value-stdin`                 | -     | Read the secret value from standard input | No       | `false` | -                              |
+| `--yes`                         | `-y`  | Skip confirmation prompts                 | No       | `false` | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Pass the value with `--value`, or pipe it with `--value-stdin` to keep it out of shell history and process listings, for example `printf '%s' "$STRIPE_KEY" | tailor secret create --vault-name api-keys --name stripe-secret-key --value-stdin`. One trailing newline is removed from a piped value. In a vault managed by `defineSecretManager()`, the command asks for confirmation before releasing the vault from the config, which needs an interactive terminal, so pass `--yes` when piping the value.
 
 ### secret delete
 
@@ -103,16 +108,21 @@ tailor secret update [options]
 
 **Options**
 
-| Option                          | Alias | Description               | Required | Default | Env                            |
-| ------------------------------- | ----- | ------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                | Yes      | -       | -                              |
-| `--name <NAME>`                 | `-n`  | Secret name               | Yes      | -       | -                              |
-| `--value <VALUE>`               | `-v`  | Secret value              | Yes      | -       | -                              |
-| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` | -                              |
+| Option                          | Alias | Description                               | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                              | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                         | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                                | Yes      | -       | -                              |
+| `--name <NAME>`                 | `-n`  | Secret name                               | Yes      | -       | -                              |
+| `--value <VALUE>`               | `-v`  | Secret value (or use --value-stdin)       | No       | -       | -                              |
+| `--value-stdin`                 | -     | Read the secret value from standard input | No       | `false` | -                              |
+| `--yes`                         | `-y`  | Skip confirmation prompts                 | No       | `false` | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Pass the value with `--value`, or pipe it with `--value-stdin` to keep it out of shell history and process listings, for example `printf '%s' "$STRIPE_KEY" | tailor secret update --vault-name api-keys --name stripe-secret-key --value-stdin`. One trailing newline is removed from a piped value. In a vault managed by `defineSecretManager()`, the command asks for confirmation before releasing the vault from the config, which needs an interactive terminal, so pass `--yes` when piping the value.
 
 ### secret vault
 
