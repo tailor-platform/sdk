@@ -103,6 +103,27 @@ describe("truncate command", () => {
     });
   });
 
+  describe("confirmation through the command", () => {
+    test.each<[string, string[], "truncateTailorDBTypes" | "truncateTailorDBType"]>([
+      ["--all", ["--all"], "truncateTailorDBTypes"],
+      ["--namespace", ["--namespace", "tailordb"], "truncateTailorDBTypes"],
+      ["table names", ["User"], "truncateTailorDBType"],
+    ])("truncates after the prompt is accepted for %s", async (_, argv, rpc) => {
+      const { prompt } = await import("#/cli/shared/prompt");
+      vi.mocked(prompt.confirm).mockResolvedValue(true);
+      const client = await getMockClient();
+      vi.mocked(client[rpc]).mockClear();
+
+      const result = await runCommand(truncateCommand, argv);
+
+      expect(result.success).toBe(true);
+      expect(prompt.confirm).toHaveBeenCalledWith(expect.objectContaining({ default: false }));
+      expect(client[rpc]).toHaveBeenCalledWith(
+        expect.objectContaining({ namespaceName: "tailordb" }),
+      );
+    });
+  });
+
   describe("declined confirmation", () => {
     test.each<[string, string[]]>([
       ["--all", ["--all"]],

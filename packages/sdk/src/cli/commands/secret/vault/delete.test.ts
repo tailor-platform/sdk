@@ -41,4 +41,21 @@ describe("secret vault delete command", () => {
     expect(result.error).toMatchObject({ code: "VAULT_DELETION_CANCELLED" });
     expect(client.deleteSecretManagerVault).not.toHaveBeenCalled();
   });
+
+  test("deletes when the entered name matches", async () => {
+    const client = { deleteSecretManagerVault: vi.fn().mockResolvedValue({}) };
+    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
+      client,
+      workspaceId: "workspace-1",
+    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    vi.mocked(prompt.text).mockResolvedValue("api-keys");
+
+    const result = await runCommand(deleteCommand, ["--name", "api-keys"]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      secretmanagerVaultName: "api-keys",
+    });
+  });
 });

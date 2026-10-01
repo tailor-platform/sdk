@@ -36,4 +36,21 @@ describe("authconnection revoke command", () => {
     expect(result.error).toMatchObject({ code: "AUTH_CONNECTION_REVOCATION_CANCELLED" });
     expect(client.revokeAuthConnection).not.toHaveBeenCalled();
   });
+
+  test("revokes when the entered name matches", async () => {
+    const client = { revokeAuthConnection: vi.fn().mockResolvedValue({}) };
+    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
+      client,
+      workspaceId: "workspace-1",
+    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    vi.mocked(prompt.text).mockResolvedValue("google");
+
+    const result = await runCommand(revokeAuthConnectionCommand, ["--name", "google"]);
+
+    expect(result.success).toBe(true);
+    expect(client.revokeAuthConnection).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      connectionName: "google",
+    });
+  });
 });

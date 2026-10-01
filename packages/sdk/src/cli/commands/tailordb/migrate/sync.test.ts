@@ -424,6 +424,16 @@ describe("tailordb migration sync", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("applies the snapshot when the confirmation prompt is accepted", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(syncCommand, ["1"]);
+
+    expect(result.success).toBe(true);
+    expect(prompt.confirm).toHaveBeenCalledWith(expect.objectContaining({ default: false }));
+    expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
+  });
+
   test("fails without changes when the confirmation prompt is declined", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 

@@ -87,6 +87,19 @@ describe("organization folder delete", () => {
     expect(client.deleteOrganizationFolder).not.toHaveBeenCalled();
   });
 
+  test("deletes when the confirmation is accepted", async () => {
+    const client = mockClient({});
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(deleteCommand, argv.slice(0, -1));
+
+    expect(result.success).toBe(true);
+    expect(client.deleteOrganizationFolder).toHaveBeenCalledWith({
+      organizationId: ORGANIZATION_ID,
+      folderId: FOLDER_ID,
+    });
+  });
+
   test("fails without deleting when the confirmation is declined", async () => {
     const client = mockClient({});
     vi.mocked(prompt.confirm).mockResolvedValue(false);

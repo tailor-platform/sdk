@@ -51,4 +51,31 @@ describe("secret create command", () => {
     expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
     expect(releaseVaultOwnership).not.toHaveBeenCalled();
   });
+
+  test("creates and releases the vault when the confirmation is accepted", async () => {
+    const client = { createSecretManagerSecret: vi.fn().mockResolvedValue({}) };
+    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
+      client,
+      workspaceId: "workspace-1",
+    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(createSecretCommand, [
+      "--vault-name",
+      "api-keys",
+      "--name",
+      "stripe",
+      "--value",
+      "sk_live",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.createSecretManagerSecret).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      secretmanagerVaultName: "api-keys",
+      secretmanagerSecretName: "stripe",
+      secretmanagerSecretValue: "sk_live",
+    });
+    expect(releaseVaultOwnership).toHaveBeenCalledTimes(1);
+  });
 });

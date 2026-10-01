@@ -36,4 +36,21 @@ describe("authconnection delete command", () => {
     expect(result.error).toMatchObject({ code: "AUTH_CONNECTION_DELETION_CANCELLED" });
     expect(client.deleteAuthConnection).not.toHaveBeenCalled();
   });
+
+  test("deletes when the entered name matches", async () => {
+    const client = { deleteAuthConnection: vi.fn().mockResolvedValue({}) };
+    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
+      client,
+      workspaceId: "workspace-1",
+    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    vi.mocked(prompt.text).mockResolvedValue("google");
+
+    const result = await runCommand(deleteAuthConnectionCommand, ["--name", "google"]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteAuthConnection).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      connectionName: "google",
+    });
+  });
 });

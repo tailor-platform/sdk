@@ -33,4 +33,21 @@ describe("workspace user remove command", () => {
     expect(result.error).toMatchObject({ code: "WORKSPACE_USER_REMOVAL_CANCELLED" });
     expect(client.removeWorkspacePlatformUser).not.toHaveBeenCalled();
   });
+
+  test("removes the user when the confirmation is yes", async () => {
+    const client = { removeWorkspacePlatformUser: vi.fn().mockResolvedValue({}) };
+    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
+      client,
+      workspaceId: "workspace-1",
+    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    vi.mocked(prompt.text).mockResolvedValue("yes");
+
+    const result = await runCommand(removeCommand, ["--email", "user@example.com"]);
+
+    expect(result.success).toBe(true);
+    expect(client.removeWorkspacePlatformUser).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      email: "user@example.com",
+    });
+  });
 });

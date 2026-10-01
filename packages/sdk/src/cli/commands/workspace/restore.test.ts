@@ -38,4 +38,17 @@ describe("workspace restore command", () => {
     expect(result.error).toMatchObject({ code: "WORKSPACE_RESTORATION_CANCELLED" });
     expect(client.restoreWorkspace).not.toHaveBeenCalled();
   });
+
+  test("restores when the confirmation is yes", async () => {
+    const client = { restoreWorkspace: vi.fn().mockResolvedValue({}) };
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
+    );
+    vi.mocked(prompt.text).mockResolvedValue("yes");
+
+    const result = await runCommand(restoreCommand, ["--workspace-id", workspaceId]);
+
+    expect(result.success).toBe(true);
+    expect(client.restoreWorkspace).toHaveBeenCalledWith({ workspaceId });
+  });
 });
