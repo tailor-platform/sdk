@@ -223,6 +223,84 @@ async function findMigrationWorkflowId(
   }
 }
 
+interface CreateMigrationWorkflowParams {
+  client: OperatorClient;
+  workspaceId: string;
+  /** Shared resource name; the workflow and its main job function use it. */
+  name: string;
+  /** Job functions to create on the uploaded function, the main one included. */
+  jobFunctionNames: readonly string[];
+  appName: string;
+  appId: string | undefined;
+  /** Extra labels for the workflow. */
+  workflowLabels?: Record<string, string>;
+}
+
+/** Ids of the resources {@link createMigrationWorkflow} created, as soon as each exists. */
+interface CreatedMigrationWorkflow {
+  workflowId?: string;
+}
+
+/**
+ * Create the job functions and the workflow for an uploaded migration
+ * function, labeling each as it is created.
+ * @param params - Resources to create
+ * @param created - Receives the workflow id before labeling, so teardown can remove it
+ * @returns Workflow id
+ */
+async function createMigrationWorkflow(
+  params: CreateMigrationWorkflowParams,
+  created: CreatedMigrationWorkflow,
+): Promise<string> {
+  const { client, workspaceId, name, appName, appId } = params;
+  const versions: Record<string, bigint> = {};
+  for (const jobFunctionName of params.jobFunctionNames) {
+    const { jobFunction } = await client.createWorkflowJobFunction({
+      workspaceId,
+      jobFunctionName,
+      scriptRef: name,
+      publishExecutionEvents: false,
+    });
+    await writeMetadataLabelsDirect(
+      client,
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
+        appName,
+        appId,
+      }),
+    );
+    const version = jobFunction?.version;
+    if (version === undefined) {
+      throw internalError(
+        `Temporary migration job function '${jobFunctionName}' was created without a version.`,
+      );
+    }
+    versions[jobFunctionName] = version;
+  }
+
+  const { workflow } = await client.createWorkflow({
+    workspaceId,
+    workflowName: name,
+    mainJobFunctionName: name,
+    jobFunctions: versions,
+  });
+  const workflowId = workflow?.id;
+  if (!workflowId) {
+    throw internalError(`Temporary migration workflow '${name}' was created without an id.`);
+  }
+  created.workflowId = workflowId;
+  await writeMetadataLabelsDirect(
+    client,
+    await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "workflow", name),
+      appName,
+      appId,
+      ...(params.workflowLabels ? { metadata: params.workflowLabels } : {}),
+    }),
+  );
+  return workflowId;
+}
+
 /**
  * Execute a migration script as a temporary workflow and wait for completion.
  *
@@ -239,50 +317,13 @@ export async function executeMigrationAsWorkflow(
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
-  let workflowId: string | undefined;
+  const created: CreatedMigrationWorkflow = {};
   try {
     await reclaimLeftovers(client, workspaceId, name);
     await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
-
-    const { jobFunction } = await client.createWorkflowJobFunction({
-      workspaceId,
-      jobFunctionName: name,
-      scriptRef: name,
-      publishExecutionEvents: false,
-    });
-    await writeMetadataLabelsDirect(
-      client,
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow_job_function", name),
-        appName,
-        appId,
-      }),
-    );
-
-    const version = jobFunction?.version;
-    if (version === undefined) {
-      throw internalError(
-        `Temporary migration job function '${name}' was created without a version.`,
-      );
-    }
-
-    const { workflow } = await client.createWorkflow({
-      workspaceId,
-      workflowName: name,
-      mainJobFunctionName: name,
-      jobFunctions: { [name]: version },
-    });
-    workflowId = workflow?.id;
-    if (!workflowId) {
-      throw internalError(`Temporary migration workflow '${name}' was created without an id.`);
-    }
-    await writeMetadataLabelsDirect(
-      client,
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow", name),
-        appName,
-        appId,
-      }),
+    const workflowId = await createMigrationWorkflow(
+      { client, workspaceId, name, jobFunctionNames: [name], appName, appId },
+      created,
     );
 
     const { executionId } = await client.startWorkflow({
@@ -293,7 +334,7 @@ export async function executeMigrationAsWorkflow(
 
     return await waitForMigrationWorkflow(client, workspaceId, executionId, pollInterval);
   } finally {
-    await teardown(client, workspaceId, name, workflowId);
+    await teardown(client, workspaceId, name, created.workflowId);
   }
 }
 
@@ -669,7 +710,7 @@ export async function executeMigrationStepsAsWorkflow(
     options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
   const runnerName = migrationStepRunnerName(name);
-  const jobFunctionNames = [name, runnerName];
+  const jobFunctionNames = [runnerName, name];
   const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
   const plan = migrationPlanFingerprint(order);
 
@@ -711,68 +752,36 @@ export async function executeMigrationStepsAsWorkflow(
   await assertNoActiveExecution(client, workspaceId, name, migrationLabel);
   await reclaimLeftovers(client, workspaceId, name, jobFunctionNames);
 
-  let workflowId: string | undefined;
-  let executionId: string | undefined;
+  const created: CreatedMigrationWorkflow = {};
+  let executionId: string;
   try {
     await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
-    const versions: Record<string, bigint> = {};
-    for (const jobFunctionName of [runnerName, name]) {
-      const { jobFunction } = await client.createWorkflowJobFunction({
-        workspaceId,
-        jobFunctionName,
-        scriptRef: name,
-        publishExecutionEvents: false,
-      });
-      await writeMetadataLabelsDirect(
+    const workflowId = await createMigrationWorkflow(
+      {
         client,
-        await buildMetaRequest({
-          trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
-          appName,
-          appId,
-        }),
-      );
-      if (jobFunction?.version === undefined) {
-        throw internalError(
-          `Temporary migration job function '${jobFunctionName}' was created without a version.`,
-        );
-      }
-      versions[jobFunctionName] = jobFunction.version;
-    }
-
-    const { workflow } = await client.createWorkflow({
-      workspaceId,
-      workflowName: name,
-      mainJobFunctionName: name,
-      jobFunctions: versions,
-    });
-    workflowId = workflow?.id;
-    if (!workflowId) {
-      throw internalError(`Temporary migration workflow '${name}' was created without an id.`);
-    }
-    await writeMetadataLabelsDirect(
-      client,
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow", name),
+        workspaceId,
+        name,
+        jobFunctionNames,
         appName,
         appId,
-        metadata: { [MIGRATION_PLAN_LABEL_KEY]: plan },
-      }),
+        workflowLabels: { [MIGRATION_PLAN_LABEL_KEY]: plan },
+      },
+      created,
     );
-
     ({ executionId } = await client.startWorkflow({
       workspaceId,
       workflowId,
       authInvoker: invoker,
     }));
   } catch (error) {
-    await teardown(client, workspaceId, name, workflowId, jobFunctionNames);
+    await teardown(client, workspaceId, name, created.workflowId, jobFunctionNames);
     throw error;
   }
 
   await options.onExecutionStarted(executionId);
   const result = await waitForSteps(options, executionId);
   if (!result.success && !result.stepsMayHaveCommitted && !options.inProgress) {
-    await teardown(client, workspaceId, name, workflowId, jobFunctionNames);
+    await teardown(client, workspaceId, name, created.workflowId, jobFunctionNames);
   }
   return result;
 }
