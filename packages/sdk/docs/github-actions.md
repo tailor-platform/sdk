@@ -446,7 +446,9 @@ starts on every pull request and push: a `tailor-changes` job checks whether
 the change touches `apps/backend/**`, and the plan, deploy, and ERD preview jobs
 are skipped when it does not. A skipped job reports success, so you can make
 these checks required in branch protection; a workflow that a `paths` trigger
-filter never started would leave them pending instead.
+filter never started would leave them pending instead. If the `tailor-changes` job
+itself fails, the jobs run as if the change were relevant, so a required check
+cannot pass without them.
 
 ### Deploying several apps together
 

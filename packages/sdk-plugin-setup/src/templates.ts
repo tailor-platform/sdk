@@ -236,6 +236,8 @@ function changesJob(patterns: readonly string[]): string {
 
 // Gate a job's `if:` on the change detection job; skipped jobs report success,
 // unlike a workflow that `on.paths` never started, so the checks stay requirable.
+// A failed detection runs the job instead of skipping it: a job skipped after a
+// failed `needs` also reports success and would let a required check pass.
 function gateOnChanges(ifLine: string, patterns: readonly string[] | undefined): string {
   if (!patterns) return ifLine;
   const condition = ifLine.replace(/^if: (\|-\n)?/, "");
@@ -243,7 +245,10 @@ function gateOnChanges(ifLine: string, patterns: readonly string[] | undefined):
   return [
     "needs: tailor-changes",
     "if: |-",
-    "  needs.tailor-changes.outputs.relevant == 'true' && (",
+    "  !cancelled() && (",
+    "    needs.tailor-changes.result != 'success' ||",
+    "    needs.tailor-changes.outputs.relevant == 'true'",
+    "  ) && (",
     ...lines.map((l) => `    ${l}`),
     "  )",
   ].join("\n");

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as vm from "node:vm";
 import { logger } from "@tailor-platform/sdk/cli";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
@@ -713,6 +714,59 @@ describe("change detection", () => {
   const gated = (job: Job | undefined) =>
     [job?.needs].flat().includes("tailor-changes") &&
     String(job?.if).includes("needs.tailor-changes.outputs.relevant == 'true'");
+
+  // Evaluates the generated `if:` for a pull request run, mapping the GitHub
+  // expression syntax used by the templates onto JavaScript.
+  const runsOnPullRequest = (
+    job: Job | undefined,
+    changes: { result: "success" | "failure" | "cancelled"; relevant: string },
+  ): boolean => {
+    const expression = String(job?.if)
+      .replaceAll("needs.tailor-changes.", "changes.")
+      .replaceAll("inputs['dry-run']", "false");
+    return Boolean(
+      vm.runInNewContext(expression, {
+        cancelled: () => changes.result === "cancelled",
+        changes: { result: changes.result, outputs: { relevant: changes.relevant } },
+        github: {
+          event_name: "pull_request",
+          event: {
+            action: "opened",
+            pull_request: { draft: false, head: { repo: { fork: false } }, labels: [] },
+          },
+        },
+      }),
+    );
+  };
+
+  test("runs the plan and preview deploy when change detection fails, so a required check cannot be bypassed", () => {
+    const branch = parseYAML(
+      renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+    const preview = parseYAML(
+      renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+    const failed = { result: "failure", relevant: "" } as const;
+
+    expect(runsOnPullRequest(branch.jobs["tailor-plan"], failed)).toBe(true);
+    expect(runsOnPullRequest(preview.jobs["tailor-preview-deploy"], failed)).toBe(true);
+  });
+
+  test("skips the plan only when change detection succeeded and found nothing relevant", () => {
+    const { jobs } = parseYAML(
+      renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+
+    expect(runsOnPullRequest(jobs["tailor-plan"], { result: "success", relevant: "false" })).toBe(
+      false,
+    );
+    expect(runsOnPullRequest(jobs["tailor-plan"], { result: "success", relevant: "true" })).toBe(
+      true,
+    );
+    expect(runsOnPullRequest(jobs["tailor-plan"], { result: "cancelled", relevant: "" })).toBe(
+      false,
+    );
+  });
 
   test("starts the workflow on every change so its checks can be required", () => {
     const workflow = parseYAML(
