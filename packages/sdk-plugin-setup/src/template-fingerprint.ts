@@ -62,10 +62,30 @@ function renderAll(): RenderedTemplate[] {
                 { name: "pos", dir: "apps/pos" },
               ],
             },
+            { id: "web", apps: [{ name: "web", dir: "." }] },
           ],
         }),
       );
     }
+    add(
+      `coordinate-root-group/${packageManager}`,
+      renderCoordinateWorkflow({
+        coordinatorName: "platform",
+        kind: "branch",
+        branch: "main",
+        environment: "production",
+        packageManager,
+        actionGroups: [
+          {
+            id: "all",
+            apps: [
+              { name: "web", dir: ".", hasStaticWebsites: true },
+              { name: "crm", dir: "apps/crm" },
+            ],
+          },
+        ],
+      }),
+    );
   }
 
   const full = { ...COMMON, packageManager: "pnpm", workingDirectory: "apps/backend" } as const;
