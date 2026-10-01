@@ -596,7 +596,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
 
   const singleAppDeployStep = (group: CoordinateAppGroup, app: CoordinateApp) => [
     `- id: tailor-deploy-${group.id}`,
-    `  uses: $/.github/actions/tailor-${app.name}`,
+    `  uses: ./.github/actions/tailor-${app.name} # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${app.name}`,
@@ -609,7 +609,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
   ];
   const buildSiteStep = (app: CoordinateApp) => [
     `- id: tailor-build-site-${app.name}`,
-    `  uses: $/.github/actions/tailor-${app.name}`,
+    `  uses: ./.github/actions/tailor-${app.name} # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${app.name}`,
@@ -625,7 +625,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     ...group.apps.filter((app) => app.hasStaticWebsites).flatMap(buildSiteStep),
     `- id: tailor-deploy-${group.id}`,
     // Grouped deploys reuse one app action; keep action.yml parameterized by config/deploy/build-site inputs.
-    `  uses: $/.github/actions/tailor-${firstApp(group).name}`,
+    `  uses: ./.github/actions/tailor-${firstApp(group).name} # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${coordinatorName}/${group.id}`,

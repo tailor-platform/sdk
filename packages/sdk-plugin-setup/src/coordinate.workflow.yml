@@ -59,7 +59,7 @@ jobs:
       - id: tailor-checkout # zizmor: ignore[artipacked] the plan action runs git fetch on pull requests, which needs the persisted token on private repositories
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: $/.github/actions/tailor-setup
+        uses: ./.github/actions/tailor-setup # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server
       # __PER_APP_PLAN_STEPS__
 
   tailor-deploy:
@@ -79,5 +79,5 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: $/.github/actions/tailor-setup
+        uses: ./.github/actions/tailor-setup # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server
       # __PER_APP_DEPLOY_STEPS__
