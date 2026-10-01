@@ -47,6 +47,7 @@ interface JobSpec {
   status: WorkflowJobExecution_Status;
   logs?: string[];
   error?: string;
+  result?: string;
 }
 
 interface ExecutionSpec {
@@ -115,6 +116,7 @@ function createStepsClient(options: StepsClientOptions = {}) {
     }),
     listWorkflowExecutions: vi.fn(async () => {
       calls.push("listWorkflowExecutions");
+      if (!options.existingWorkflow) throw new ConnectError("not found", Code.NotFound);
       return {
         executions: (options.listed ?? []).map((spec) => toExecution(spec, spec.status)),
         nextPageToken: "",
@@ -157,7 +159,7 @@ function createStepsClient(options: StepsClientOptions = {}) {
         execution: {
           logEntries: (job?.logs ?? []).map((message) => ({ message })),
           error: job?.error ? { message: job.error } : undefined,
-          result: "",
+          result: job?.result ?? "",
         },
       };
     }),
@@ -280,6 +282,29 @@ describe("executeMigrationStepsAsWorkflow", () => {
     expect(calls.slice(calls.indexOf("startWorkflow"))).not.toContain("deleteWorkflow");
   });
 
+  test("reports the failed step's error rather than another step's result", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.FAILED],
+        jobs: [
+          { status: WorkflowJobExecution_Status.FAILED },
+          {
+            ...runnerJob(1, WorkflowJobExecution_Status.FAILED),
+            error: "column total does not exist",
+          },
+          {
+            ...runnerJob(0, WorkflowJobExecution_Status.SUCCESS),
+            result: '{"step":"backfillUser"}',
+          },
+        ],
+      },
+    });
+
+    const result = await run(client);
+
+    expect(result).toMatchObject({ success: false, error: "column total does not exist" });
+  });
+
   test("tears the run down when it fails before any step started", async () => {
     const { client, calls } = createStepsClient({
       run: {
@@ -340,6 +365,19 @@ describe("executeMigrationStepsAsWorkflow", () => {
     });
     expect(result.error).toContain("network down");
     expect(calls.slice(calls.indexOf("startWorkflow"))).not.toContain("deleteWorkflow");
+  });
+
+  test("keeps waiting while the run reports no status yet", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.UNSPECIFIED, WorkflowExecution_Status.SUCCESS],
+        jobs: ALL_STEPS_SUCCEEDED,
+      },
+    });
+
+    const result = await run(client);
+
+    expect(result).toMatchObject({ success: true, completedSteps: ORDER });
   });
 
   test("refuses to reclaim leftovers while one of their executions is still active", async () => {
@@ -440,6 +478,22 @@ describe("executeMigrationStepsAsWorkflow", () => {
       expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
     });
 
+    test("runs every step again when the steps changed after the earlier run succeeded", async () => {
+      const { client, raw } = createStepsClient({
+        existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+        listed: [
+          { id: "exec-old", status: WorkflowExecution_Status.SUCCESS, jobs: ALL_STEPS_SUCCEEDED },
+        ],
+        run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+      });
+
+      const result = await run(client, { inProgress: { executionId: "exec-old" } });
+
+      expect(result).toMatchObject({ success: true, executionId: "exec-new" });
+      expect(raw.startWorkflow).toHaveBeenCalledOnce();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
+    });
+
     test("waits for an earlier run that is still active instead of starting another", async () => {
       const { client, raw } = createStepsClient({
         existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
@@ -465,6 +519,36 @@ describe("executeMigrationStepsAsWorkflow", () => {
       expect(raw.startWorkflow).not.toHaveBeenCalled();
       expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
     });
+
+    test.each([
+      ["succeeds", WorkflowExecution_Status.SUCCESS],
+      ["fails", WorkflowExecution_Status.FAILED],
+    ])(
+      "runs every step again when the steps changed and an earlier active run %s",
+      async (_label, finalStatus) => {
+        const { client, raw } = createStepsClient({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [{ id: "exec-old", status: finalStatus }],
+          run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+        });
+        raw.getWorkflowExecution.mockImplementationOnce(async () => ({
+          execution: {
+            id: "exec-old",
+            status: WorkflowExecution_Status.RUNNING,
+            jobExecutions: [],
+          },
+        }));
+        raw.getWorkflowExecution.mockImplementationOnce(async () => ({
+          execution: { id: "exec-old", status: finalStatus, jobExecutions: [] },
+        }));
+
+        const result = await run(client, { inProgress: { executionId: "exec-old" } });
+
+        expect(result).toMatchObject({ success: true, executionId: "exec-new" });
+        expect(raw.startWorkflow).toHaveBeenCalledOnce();
+        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
+      },
+    );
   });
 });
 
@@ -481,5 +565,17 @@ describe("removeMigrationWorkflowResources", () => {
       `deleteWorkflowJobFunction ${RUNNER}`,
       "deleteFunctionRegistry",
     ]);
+  });
+
+  test("names the job function it could not remove", async () => {
+    const { client, raw } = createStepsClient({ existingWorkflow: { id: "wf-old" } });
+    raw.deleteWorkflowJobFunction.mockImplementation(async ({ jobFunctionName }) => {
+      if (jobFunctionName === RUNNER) throw new ConnectError("denied", Code.PermissionDenied);
+      return 0;
+    });
+
+    await removeMigrationWorkflowResources(client, "ws-1", "tailordb", 3);
+
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(`'${RUNNER}'`));
   });
 });

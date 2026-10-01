@@ -42,7 +42,7 @@ import {
   convertIndexToProto,
   processNestedFieldsFromSnapshot,
 } from "./snapshot-manifest";
-import { copySnapshotRecord } from "./snapshot-normalization";
+import { copySnapshotRecord, createSnapshotRecord } from "./snapshot-normalization";
 import type {
   DiffChange,
   FieldDiffChange,
@@ -491,12 +491,22 @@ export function buildPreMigrationSnapshot(
   const fieldChanges = buildPreMigrationChangesMapFromDiffs([diff]);
   const indexChanges = buildPreMigrationIndexChangesMapFromDiffs([diff]);
 
-  const tables: Record<string, TailorDBSnapshotType> = {};
+  const tables = createSnapshotRecord<TailorDBSnapshotType>();
   for (const table of Object.values(target.tables)) {
-    const fields = copySnapshotRecord(table.fields);
     const typeChanges = fieldChanges.get(table.name);
+    const preTable = typeChanges
+      ? createPreMigrationSnapshotType(
+          table,
+          typeChanges,
+          diff.changes.find(
+            (change): change is TableScriptsModifiedChange =>
+              change.kind === "table_scripts_modified" && change.tableName === table.name,
+          ),
+        )
+      : table;
+    const fields = copySnapshotRecord(preTable.fields);
     if (typeChanges) applyPreMigrationFieldAdjustmentsToSnapshot(fields, typeChanges);
-    const adjusted: TailorDBSnapshotType = { ...table, fields };
+    const adjusted: TailorDBSnapshotType = { ...preTable, fields };
     const typeIndexChanges = indexChanges.get(table.name);
     if (table.indexes && typeIndexChanges) {
       const indexes = copySnapshotRecord(table.indexes);

@@ -369,7 +369,11 @@ function partiallyAppliedError(
       cause instanceof Error ? cause.message : String(cause)
     }`,
     suggestion:
-      "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again. " +
+      `${
+        isCLIError(cause) && cause.suggestion
+          ? cause.suggestion
+          : "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again."
+      } ` +
       `Until the migration completes, the tables of namespace '${migration.namespace}' stay in maintenance mode, as during the migration.`,
     context: {
       namespace: migration.namespace,

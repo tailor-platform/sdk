@@ -9,6 +9,8 @@ import { parseSync } from "oxc-parser";
 import { CLIError } from "#/cli/shared/errors";
 import { orderMigrationSteps, type MigrationStepNode } from "#/utils/migration-steps";
 import type {
+  BindingPattern,
+  BindingRestElement,
   Expression,
   ModuleExportName,
   ObjectExpression,
@@ -48,15 +50,43 @@ function propertyName(key: PropertyKey | ModuleExportName): string | undefined {
   return undefined;
 }
 
+function boundNames(pattern: BindingPattern | BindingRestElement): string[] {
+  switch (pattern.type) {
+    case "Identifier":
+      return [pattern.name];
+    case "AssignmentPattern":
+      return boundNames(pattern.left);
+    case "RestElement":
+      return boundNames(pattern.argument);
+    case "ObjectPattern":
+      return pattern.properties.flatMap((property) =>
+        boundNames(property.type === "RestElement" ? property : property.value),
+      );
+    case "ArrayPattern":
+      return pattern.elements.flatMap((element) => (element ? boundNames(element) : []));
+  }
+}
+
 interface ExportedNames {
   hasMain: boolean;
   stepsInit: Expression | null | undefined;
-  stepsViaSpecifier: boolean;
+  stepsExportedIndirectly: boolean;
+  hasUnreadableExports: boolean;
 }
 
 function collectExports(program: Program): ExportedNames {
-  const result: ExportedNames = { hasMain: false, stepsInit: undefined, stepsViaSpecifier: false };
+  const result: ExportedNames = {
+    hasMain: false,
+    stepsInit: undefined,
+    stepsExportedIndirectly: false,
+    hasUnreadableExports: false,
+  };
   for (const statement of program.body) {
+    if (statement.type === "ExportAllDeclaration") {
+      if (!statement.exported) result.hasUnreadableExports = true;
+      else if (propertyName(statement.exported) === "main") result.hasMain = true;
+      continue;
+    }
     if (statement.type !== "ExportNamedDeclaration") continue;
     const declaration = statement.declaration;
     if (declaration?.type === "FunctionDeclaration" && declaration.id?.name === "main") {
@@ -64,7 +94,12 @@ function collectExports(program: Program): ExportedNames {
     }
     if (declaration?.type === "VariableDeclaration") {
       for (const declarator of declaration.declarations) {
-        if (declarator.id.type !== "Identifier") continue;
+        if (declarator.id.type !== "Identifier") {
+          const names = boundNames(declarator.id);
+          if (names.includes("main")) result.hasMain = true;
+          if (names.includes("steps")) result.stepsExportedIndirectly = true;
+          continue;
+        }
         if (declarator.id.name === "main") result.hasMain = true;
         if (declarator.id.name === "steps") {
           result.stepsInit = declaration.kind === "const" ? declarator.init : null;
@@ -74,7 +109,7 @@ function collectExports(program: Program): ExportedNames {
     for (const specifier of statement.specifiers) {
       const exported = propertyName(specifier.exported);
       if (exported === "main") result.hasMain = true;
-      if (exported === "steps") result.stepsViaSpecifier = true;
+      if (exported === "steps") result.stepsExportedIndirectly = true;
     }
   }
   return result;
@@ -100,13 +135,12 @@ function readSteps(filePath: string, object: ObjectExpression): MigrationStepNod
     for (const field of value.properties) {
       const key =
         field.type === "SpreadElement" || field.computed ? undefined : propertyName(field.key);
-      if (key === undefined || !STEP_KEYS.has(key)) {
+      if (field.type === "SpreadElement" || key === undefined || !STEP_KEYS.has(key)) {
         throw invalidScript(
           filePath,
           `Step "${name}" has unknown key ${key === undefined ? "(spread or computed)" : `"${key}"`}.`,
         );
       }
-      if (field.type === "SpreadElement") continue;
       if (key === "run") {
         hasRun = true;
         continue;
@@ -149,15 +183,15 @@ export function analyzeMigrationScriptSource(
   }
 
   const exports = collectExports(program);
-  const exportsSteps = exports.stepsInit !== undefined || exports.stepsViaSpecifier;
+  const exportsSteps = exports.stepsInit !== undefined || exports.stepsExportedIndirectly;
   if (exports.hasMain && exportsSteps) {
     throw invalidScript(filePath, "it exports both `main` and `steps`; keep one.");
   }
-  if (exports.hasMain) return { kind: "main" };
+  if (exports.hasMain || (!exportsSteps && exports.hasUnreadableExports)) return { kind: "main" };
   if (!exportsSteps) {
     throw invalidScript(filePath, "it must export either `main` or `steps`.");
   }
-  if (exports.stepsViaSpecifier) {
+  if (exports.stepsExportedIndirectly) {
     throw invalidScript(filePath, "declare `steps` directly as `export const steps = { ... }`.");
   }
   const init = exports.stepsInit ? unwrapExpression(exports.stepsInit) : undefined;

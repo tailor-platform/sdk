@@ -3,6 +3,7 @@
  * does: in dependency order, each step in its own transaction.
  */
 
+import { assertDefined } from "#/utils/assert";
 import { orderMigrationSteps } from "#/utils/migration-steps";
 
 /** A step as declared in a migration script's `steps`. */
@@ -61,8 +62,7 @@ export async function runMigrationSteps<Trx, Context extends { env: unknown }>(
   const context = { env: options.env ?? {} } as Context;
   const completed: string[] = [];
   for (const name of order) {
-    const step = steps[name];
-    if (!step) continue;
+    const step = assertDefined(steps[name], `Migration step "${name}" is not defined.`);
     try {
       await options.transaction((trx) => step.run(trx, context));
     } catch (error) {

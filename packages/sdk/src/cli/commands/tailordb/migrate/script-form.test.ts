@@ -9,8 +9,13 @@ describe("analyzeMigrationScriptSource", () => {
     ["an async function declaration", "export async function main(trx) {}"],
     ["a const arrow function", "export const main = async (trx) => {};"],
     ["an export specifier", "async function run(trx) {}\nexport { run as main };"],
+    ["a destructured declaration", "export const { main } = createMigration();"],
   ])("detects the single-transaction form exported as %s", (_label, source) => {
     expect(analyze(source)).toEqual({ kind: "main" });
+  });
+
+  test("treats a re-export of another module as the single-transaction form", () => {
+    expect(analyze('export * from "./impl";')).toEqual({ kind: "main" });
   });
 
   test("reads steps and their dependencies in declaration order", () => {
@@ -83,6 +88,9 @@ describe("analyzeMigrationScriptSource", () => {
         export { steps };
       `),
     ).toThrow("declare `steps` directly as `export const steps = { ... }`");
+    expect(() => analyze("export const { steps } = defineSteps();")).toThrow(
+      "declare `steps` directly as `export const steps = { ... }`",
+    );
   });
 
   test("rejects spread and computed step names", () => {

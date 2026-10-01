@@ -106,6 +106,37 @@ describe("buildPreMigrationSnapshot", () => {
     expect(Object.keys(result.tables)).toEqual(["User", "Legacy"]);
     expect(result.tables.Legacy).toEqual(legacy);
   });
+
+  test("keeps a table named __proto__", () => {
+    const legacy = table("__proto__", { note: snapshotField("string") });
+    const result = buildPreMigrationSnapshot(snapshot(user, legacy), diff([]));
+
+    expect(Object.keys(result.tables)).toEqual(["User", "__proto__"]);
+  });
+
+  test("keeps the previous table scripts while a field's type change is pending", () => {
+    const result = buildPreMigrationSnapshot(
+      snapshot({ ...user, typeHookExpr: { create: "before" } }),
+      diff([
+        {
+          kind: "field_type_modified",
+          tableName: "User",
+          fieldName: "score",
+          before: snapshotField("integer", { required: true }),
+          after: snapshotField("float", { required: true }),
+        },
+        {
+          kind: "table_scripts_modified",
+          tableName: "User",
+          before: { typeHookExpr: { create: "before" } },
+          after: { typeHookExpr: { create: "after" } },
+        },
+      ]),
+    );
+
+    expect(result.tables.User!.typeHookExpr).toEqual({ create: "before" });
+    expect(result.tables.User!.fields.score).toMatchObject({ type: "integer" });
+  });
 });
 
 describe("buildPreMigrationTables", () => {

@@ -692,9 +692,10 @@ export async function applyTailorDB(
               migrationContext.executorUsedTables,
             );
             for (const [tableName, settings] of previousRestorationSettings ?? []) {
-              if (!previousRestorationSnapshot?.tables[tableName]) {
-                committedSettings.set(tableName, settings);
-              }
+              if (previousRestorationSnapshot?.tables[tableName]) continue;
+              const restrictedByEarlierDeploy =
+                inProgress && postMigrationSnapshot.tables[tableName] !== undefined;
+              if (!restrictedByEarlierDeploy) committedSettings.set(tableName, settings);
             }
             restorationSettings.set(migration.namespace, committedSettings);
           }
@@ -763,6 +764,13 @@ export async function applyTailorDB(
         }
       }
 
+      for (const migration of pendingMigrations) {
+        const resumed = inProgressMigrations[migration.namespace]?.number === migration.number;
+        const committed = restorationCheckpoints.get(migration.namespace)?.number ?? -1;
+        if (resumed && committed < migration.number) {
+          partialMigrations.set(migration.namespace, migration);
+        }
+      }
       for (const [namespaceName, migration] of partialMigrations) {
         keepMigrationTablesRestricted(
           namespaceName,

@@ -1261,5 +1261,49 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         1,
       );
     });
+
+    test("lifts maintenance mode on the tables the resumed migration created", async () => {
+      const client = createMockClient();
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      const restrictedOperations = { create: true, update: true, delete: true, read: true };
+      const restricted = {
+        bulkUpsert: false,
+        publishRecordEvents: false,
+        disableGqlOperations: restrictedOperations,
+      };
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [
+          { name: "GoodsReceipt", schema: { settings: restricted } },
+          { name: "StockReservation", schema: { settings: restricted } },
+        ],
+      } as never);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+
+      await applyTailorDB(client, withInputs(createMockPlanResult()), "create-update");
+
+      const writes = vi.mocked(client.updateTailorDBType).mock.calls.filter(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call) => (call[0] as any)?.tailordbType?.name === "StockReservation",
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const settings = (writes.at(-1)?.[0] as any)?.tailordbType?.schema?.settings;
+      expect(settings).toBeDefined();
+      expect(settings.disableGqlOperations).not.toEqual(restrictedOperations);
+    });
+
+    test("leaves an in-progress migration's schema alone when the deploy fails before reaching it", async () => {
+      const client = createMockClient();
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      vi.mocked(client.updateTailorDBType).mockRejectedValueOnce(
+        new Error("restriction write failed"),
+      );
+
+      await expect(
+        applyTailorDB(client, withInputs(createMockPlanResult()), "create-update"),
+      ).rejects.toThrow("restriction write failed");
+
+      expect(migrationModule.executeMigrations).not.toHaveBeenCalled();
+      expect(client.updateTailorDBType).toHaveBeenCalledTimes(1);
+    });
   });
 });
