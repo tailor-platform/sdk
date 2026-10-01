@@ -139,6 +139,14 @@ export interface Namespace {
       updatedAt: Generated<Timestamp>;
     }
 
+    TemporalCheck: {
+      id: Generated<string>;
+      eventDate: Timestamp;
+      eventDatetime: Timestamp;
+      eventTime: string;
+      checkedAt: Timestamp;
+    }
+
     User: {
       id: Generated<string>;
       name: string;
