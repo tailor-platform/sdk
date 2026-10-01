@@ -351,6 +351,8 @@ Get OAuth2 client credentials using the CLI:
 tailor oauth2client get <name>
 ```
 
+`tailor show` also lists the client ID, without the secret, of each OAuth2 client defined in `oauth2Clients` once it has been deployed.
+
 ## Identity Provider
 
 Connect to an external identity provider:

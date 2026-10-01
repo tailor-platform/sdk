@@ -130,6 +130,8 @@ export default defineConfig({
 
 Resolver, executor, workflow job, and auth before-login hook code, and TailorDB migration scripts, that read [`env`](../configuration.md#environment-variables) receive the deployed URL, even when the same deploy both creates the website and reads its URL — one `deploy` call resolves it, with no second, manually-triggered `deploy` needed. If the referenced website does not exist at all, the CLI warns and leaves the unresolved reference in place. If the reference still can't be resolved after this deploy's rebuild, the deploy fails instead of shipping the unresolved reference. This platform lookup only happens during `deploy`; `function run` passes the literal `<name>:url` string unchanged, since it never talks to the platform to resolve it.
 
+The deployed URL is also shown by `tailor show`, which lists the URL of each static website defined in `staticWebsites` once it has been deployed.
+
 ## Complete Example
 
 ```typescript
