@@ -7,6 +7,7 @@
  * state.
  */
 
+import * as fs from "node:fs";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
@@ -16,6 +17,7 @@ import {
   formatDiffSummary,
   type MigrationDiff,
 } from "./diff-calculator";
+import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import { fetchRemoteMigrationState } from "./remote-state";
 import {
   reconstructSnapshotFromMigrations,
@@ -26,6 +28,9 @@ import {
   createSnapshotType,
   createSnapshotFromRemoteTypes,
   getLatestMigrationNumber,
+  getMigrationFilePath,
+  loadDiff,
+  MIGRATION_RESTRICTION_SETTINGS,
   MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
   type RemoteGqlPermission,
   type SchemaSnapshot,
@@ -231,6 +236,16 @@ function deployComparableSnapshot(
   return { ...snapshot, tables };
 }
 
+function reconstructPreMigrationSnapshot(
+  migrationsDir: string,
+  migrationNumber: number,
+): SchemaSnapshot | null {
+  const previous = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
+  const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  if (!previous || !fs.existsSync(diffPath)) return null;
+  return buildPreMigrationSnapshot(previous, loadDiff(diffPath));
+}
+
 /**
  * Verify remote schema matches the expected snapshot state
  * @param {OperatorClient} client - Operator client instance
@@ -325,12 +340,17 @@ export async function verifyRemoteSchema(
       continue;
     }
     const expectedMigrationNumber = checkpointRepair?.to ?? remoteMigrationNumber;
+    const inProgressNumber =
+      !checkpointRepair && remoteState.inProgress?.number === remoteMigrationNumber + 1
+        ? remoteState.inProgress.number
+        : undefined;
 
-    // Reconstruct the snapshot that the remote schema must match.
-    const expectedSnapshot = reconstructSnapshotFromMigrations(
-      migrationsDir,
-      expectedMigrationNumber,
-    );
+    // Reconstruct the snapshot that the remote schema must match. A migration
+    // left in progress keeps its Pre-phase schema until a deploy completes it.
+    const expectedSnapshot =
+      inProgressNumber === undefined
+        ? reconstructSnapshotFromMigrations(migrationsDir, expectedMigrationNumber)
+        : reconstructPreMigrationSnapshot(migrationsDir, inProgressNumber);
     if (!expectedSnapshot) {
       // No snapshots exist - skip verification
       results.push({
@@ -359,6 +379,7 @@ export async function verifyRemoteSchema(
       remoteTypes,
       expectedDeploySnapshot,
       remoteGqlPermissions,
+      inProgressNumber === undefined ? [] : MIGRATION_RESTRICTION_SETTINGS,
     );
 
     results.push({
@@ -367,6 +388,9 @@ export async function verifyRemoteSchema(
       drifts,
       hasDrift: drifts.length > 0,
       ...(checkpointRepair && drifts.length === 0 ? { checkpointRepair } : {}),
+      ...(remoteState.inProgress || remoteState.inProgressInvalid
+        ? { migrationInProgress: true }
+        : {}),
     });
   }
 

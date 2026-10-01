@@ -39,6 +39,9 @@ interface MigrationStatusInfo {
   currentMigration: number;
   currentMigrationLabel: string;
   pendingMigrations: PendingMigrationStatusInfo[];
+  /** Migration an earlier deploy left partially applied; the next deploy resumes it. */
+  inProgressMigration?: number;
+  inProgressMigrationLabel?: string;
 }
 
 interface MigrationStatusFailure {
@@ -168,6 +171,14 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       });
       continue;
     }
+    if (remoteState.inProgressInvalid) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: "Remote in-progress migration record is invalid.",
+      });
+      continue;
+    }
 
     const hasRemoteMigrationState = remoteState.number !== null || remoteState.historyId !== null;
     if (hasRemoteMigrationState && remoteState.historyId !== localHistoryId) {
@@ -199,6 +210,12 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       currentMigration,
       currentMigrationLabel: formatMigrationNumber(currentMigration),
       pendingMigrations,
+      ...(remoteState.inProgress
+        ? {
+            inProgressMigration: remoteState.inProgress.number,
+            inProgressMigrationLabel: formatMigrationNumber(remoteState.inProgress.number),
+          }
+        : {}),
     });
   }
 
@@ -214,6 +231,11 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
       continue;
     }
     logger.log(`  Current migration: ${styles.bold(row.currentMigrationLabel)}`);
+    if (row.inProgressMigrationLabel) {
+      logger.log(
+        `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (partially applied; the next deploy resumes it)`,
+      );
+    }
 
     if (row.pendingMigrations.length > 0) {
       logger.log("  Pending migrations:");

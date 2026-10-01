@@ -112,6 +112,54 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
+  test("reports a migration left in progress by an earlier deploy", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      { status: "ok", inProgressMigration: 2, inProgressMigrationLabel: "0002" },
+    ]);
+  });
+
+  test("tells the user how an in-progress migration continues", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
+      },
+    });
+    using stderr = captureStderr();
+
+    await runCommand(statusCommand, []);
+
+    expect(stderr.output).toContain("In progress: 0002");
+  });
+
+  test("reports unreadable in-progress labels as an error", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "broken" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      { status: "error", error: expect.stringContaining("in-progress") },
+    ]);
+  });
+
   test("treats metadata NotFound as no applied migrations", async () => {
     state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
     using stdout = captureStdout();

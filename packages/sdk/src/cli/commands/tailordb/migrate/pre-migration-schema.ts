@@ -36,12 +36,13 @@
 
 import { assertDefined } from "#/utils/assert";
 import { collectNestedMemberChanges } from "./nested-members";
-import { isBreakingIndexChange } from "./snapshot";
+import { applyDiffToSnapshot, isBreakingIndexChange } from "./snapshot";
 import {
   convertFieldConfigToProto,
   convertIndexToProto,
   processNestedFieldsFromSnapshot,
 } from "./snapshot-manifest";
+import { copySnapshotRecord } from "./snapshot-normalization";
 import type {
   DiffChange,
   FieldDiffChange,
@@ -52,6 +53,7 @@ import type {
   TableScriptsModifiedChange,
 } from "./diff-calculator";
 import type {
+  SchemaSnapshot,
   SnapshotFieldConfig,
   SnapshotIndexConfig,
   TailorDBSnapshotType,
@@ -164,7 +166,7 @@ export function buildPreMigrationChangesMap(
  * @param diffs - Migration diffs to scan
  * @returns Map of changes keyed by tableName/fieldName
  */
-export function buildPreMigrationChangesMapFromDiffs(
+function buildPreMigrationChangesMapFromDiffs(
   diffs: readonly MigrationDiff[],
 ): PreMigrationChangesMap {
   const map: PreMigrationChangesMap = new Map();
@@ -216,7 +218,7 @@ export function applyPreMigrationFieldAdjustments(
  * @param fields - Snapshot field map to adjust (mutated in place)
  * @param typeChanges - Changes for this table, keyed by fieldName
  */
-export function applyPreMigrationFieldAdjustmentsToSnapshot(
+function applyPreMigrationFieldAdjustmentsToSnapshot(
   fields: Record<string, SnapshotFieldConfig>,
   typeChanges: Map<string, FieldDiffChange>,
 ): void {
@@ -407,7 +409,7 @@ export function buildPreMigrationIndexChangesMap(
  * @param diffs - Migration diffs to scan
  * @returns Map of changes keyed by tableName/indexName
  */
-export function buildPreMigrationIndexChangesMapFromDiffs(
+function buildPreMigrationIndexChangesMapFromDiffs(
   diffs: readonly MigrationDiff[],
 ): PreMigrationIndexChangesMap {
   const map: PreMigrationIndexChangesMap = new Map();
@@ -450,7 +452,7 @@ export function applyPreMigrationIndexAdjustments(
  * @param indexes - Snapshot index map to adjust (mutated in place)
  * @param typeIndexChanges - Changes for this table, keyed by indexName
  */
-export function applyPreMigrationIndexAdjustmentsToSnapshot(
+function applyPreMigrationIndexAdjustmentsToSnapshot(
   indexes: Record<string, SnapshotIndexConfig>,
   typeIndexChanges: Map<string, IndexDiffChange>,
 ): void {
@@ -471,4 +473,43 @@ function relaxIndexesForPreMigration<I>(
       defineRecordEntry(indexes, indexName, toIndex(change.before));
     }
   }
+}
+
+/**
+ * The schema `migrate.ts` runs against: the migration's target schema with the
+ * Pre-phase relaxations applied, plus the tables the Pre-phase retains for the
+ * script to read (removed tables, and renamed tables under their old name).
+ * @param previousSnapshot - Schema before the migration
+ * @param diff - The migration's diff
+ * @returns Snapshot of the Pre-phase schema, retained tables last
+ */
+export function buildPreMigrationSnapshot(
+  previousSnapshot: SchemaSnapshot,
+  diff: MigrationDiff,
+): SchemaSnapshot {
+  const target = applyDiffToSnapshot(previousSnapshot, diff);
+  const fieldChanges = buildPreMigrationChangesMapFromDiffs([diff]);
+  const indexChanges = buildPreMigrationIndexChangesMapFromDiffs([diff]);
+
+  const tables: Record<string, TailorDBSnapshotType> = {};
+  for (const table of Object.values(target.tables)) {
+    const fields = copySnapshotRecord(table.fields);
+    const typeChanges = fieldChanges.get(table.name);
+    if (typeChanges) applyPreMigrationFieldAdjustmentsToSnapshot(fields, typeChanges);
+    const adjusted: TailorDBSnapshotType = { ...table, fields };
+    const typeIndexChanges = indexChanges.get(table.name);
+    if (table.indexes && typeIndexChanges) {
+      const indexes = copySnapshotRecord(table.indexes);
+      applyPreMigrationIndexAdjustmentsToSnapshot(indexes, typeIndexChanges);
+      adjusted.indexes = indexes;
+    }
+    tables[table.name] = adjusted;
+  }
+
+  for (const change of diff.changes) {
+    if (change.kind === "table_removed" || change.kind === "table_renamed") {
+      tables[change.before.name] = change.before;
+    }
+  }
+  return { ...target, tables };
 }

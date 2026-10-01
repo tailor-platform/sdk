@@ -805,27 +805,61 @@ function compareFields(
 const SYSTEM_FIELDS = new Set(["id"]);
 
 /**
+ * Table settings a running migration overrides on every table it restricts,
+ * so they cannot be compared while a migration is in progress.
+ */
+export const MIGRATION_RESTRICTION_SETTINGS = [
+  "bulkUpsert",
+  "gqlOperations",
+  "publishEvents",
+] as const satisfies readonly (keyof SnapshotSettings)[];
+
+function withoutSettings(
+  snapshot: SchemaSnapshot,
+  ignored: readonly (keyof SnapshotSettings)[],
+): SchemaSnapshot {
+  if (ignored.length === 0) return snapshot;
+  const tables = createSnapshotRecord<TailorDBSnapshotType>();
+  for (const [tableName, type] of Object.entries(snapshot.tables)) {
+    if (!type.settings) {
+      tables[tableName] = type;
+      continue;
+    }
+    const settings: SnapshotSettings = { ...type.settings };
+    for (const key of ignored) delete settings[key];
+    const { settings: _, ...rest } = type;
+    tables[tableName] = Object.keys(settings).length > 0 ? { ...rest, settings } : rest;
+  }
+  return { ...snapshot, tables };
+}
+
+/**
  * Compare remote TailorDB tables with a local snapshot
  * @param {ProtoTailorDBType[]} remoteTypes - Remote tables from listParsedTailorDBTypes API
  * @param {SchemaSnapshot} snapshot - Local schema snapshot
  * @param {readonly RemoteGqlPermission[]} remoteGqlPermissions - Remote GQL permissions for the namespace
+ * @param ignoredSettings - Table settings left out of the comparison on both sides
  * @returns {SchemaDrift[]} List of drifts detected
  */
 export function compareRemoteWithSnapshot(
   remoteTypes: ProtoTailorDBType[],
   snapshot: SchemaSnapshot,
   remoteGqlPermissions: readonly RemoteGqlPermission[] = [],
+  ignoredSettings: readonly (keyof SnapshotSettings)[] = [],
 ): SchemaDrift[] {
   const structuralDrifts = compareNormalizedRemoteWithSnapshot(
     createRemoteComparableSnapshot(
-      createSnapshotFromRemoteTypes(
-        remoteTypes,
-        snapshot.namespace,
-        remoteGqlPermissions,
-        snapshot,
+      withoutSettings(
+        createSnapshotFromRemoteTypes(
+          remoteTypes,
+          snapshot.namespace,
+          remoteGqlPermissions,
+          snapshot,
+        ),
+        ignoredSettings,
       ),
     ),
-    createRemoteComparableSnapshot(snapshot),
+    createRemoteComparableSnapshot(withoutSettings(snapshot, ignoredSettings)),
   );
 
   const scriptDrifts = compareScriptHashes(remoteTypes, snapshot);

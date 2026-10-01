@@ -31,7 +31,7 @@ import { loadApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { assertDefined } from "#/utils/assert";
 import { bundleMigrationScript } from "./bundler";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
-import { fetchRemoteMigrationNumber } from "./remote-state";
+import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertValidMigrationFiles,
   compareSnapshots,
@@ -432,10 +432,12 @@ export async function assertSourceBaselineFresh(
   for (const namespace of namespaces) {
     const baseline = prepared.baselines.get(namespace.namespace);
     if (!baseline) continue;
-    const migrationNumber = await fetchRemoteMigrationNumber(
+    const remoteState = await fetchRemoteMigrationState(
       state.client,
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
+    assertNoMigrationInProgress(remoteState, namespace.namespace);
+    const migrationNumber = remoteState.number;
     if (migrationNumber !== baseline.migrationNumber) {
       throw CLIError({
         code: "MIGRATION_TEST_SOURCE_CHANGED",
@@ -612,10 +614,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   const targetSnapshots = new Map<string, NormalizedSchemaSnapshot>();
   const pendingNamespaces: string[] = [];
   for (const namespace of namespaces) {
-    const migrationNumber = await fetchRemoteMigrationNumber(
+    const remoteState = await fetchRemoteMigrationState(
       client,
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
+    assertNoMigrationInProgress(remoteState, namespace.namespace);
+    const migrationNumber = remoteState.number;
     if (migrationNumber === null) {
       throw CLIError({
         code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",

@@ -14,7 +14,11 @@
  */
 
 import * as crypto from "node:crypto";
-import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
 import { isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
@@ -24,8 +28,14 @@ import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../lab
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import type { CreateFunctionRegistryRequestSchema } from "@tailor-platform/tailor-proto/function_registry_pb";
-import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type {
+  CreateFunctionRegistryRequestSchema,
+  UpdateFunctionRegistryRequestSchema,
+} from "@tailor-platform/tailor-proto/function_registry_pb";
+import type {
+  WorkflowExecution,
+  WorkflowJobExecution,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 const CHUNK_SIZE = 64 * 1024;
 
@@ -71,6 +81,7 @@ export function migrationWorkflowResourceName(namespace: string, migrationNumber
  * @param code - Bundled script content
  * @param appName - Owning application name for the resource's labels
  * @param appId - Owning application id, when known
+ * @param mode - Whether the function is new or replaces an existing one's content
  */
 async function uploadMigrationFunction(
   client: OperatorClient,
@@ -79,6 +90,7 @@ async function uploadMigrationFunction(
   code: string,
   appName: string,
   appId: string | undefined,
+  mode: "create" | "update" = "create",
 ): Promise<void> {
   const buffer = Buffer.from(code, "utf-8");
   const info = {
@@ -91,7 +103,8 @@ async function uploadMigrationFunction(
 
   /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Info header followed by content chunks */
   async function* stream(): AsyncIterable<
-    MessageInitShape<typeof CreateFunctionRegistryRequestSchema>
+    MessageInitShape<typeof CreateFunctionRegistryRequestSchema> &
+      MessageInitShape<typeof UpdateFunctionRegistryRequestSchema>
   > {
     yield { payload: { case: "info" as const, value: info } };
     for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
@@ -104,7 +117,11 @@ async function uploadMigrationFunction(
     }
   }
 
-  await client.createFunctionRegistry(stream());
+  if (mode === "create") {
+    await client.createFunctionRegistry(stream());
+  } else {
+    await client.updateFunctionRegistry(stream());
+  }
   await writeMetadataLabelsDirect(
     client,
     await buildMetaRequest({
@@ -125,12 +142,14 @@ async function uploadMigrationFunction(
  * @param workspaceId - Workspace ID
  * @param name - Shared resource name
  * @param workflowId - Created workflow id, when it was created
+ * @param jobFunctionNames - Job functions created under the shared name
  */
 async function teardown(
   client: OperatorClient,
   workspaceId: string,
   name: string,
   workflowId: string | undefined,
+  jobFunctionNames: readonly string[] = [name],
 ): Promise<void> {
   const steps: [string, () => Promise<unknown>][] = [
     ...(workflowId
@@ -139,10 +158,10 @@ async function teardown(
           () => Promise<unknown>,
         ][])
       : []),
-    [
+    ...jobFunctionNames.map((jobFunctionName): [string, () => Promise<unknown>] => [
       "job function",
-      () => client.deleteWorkflowJobFunction({ workspaceId, jobFunctionName: name }),
-    ],
+      () => client.deleteWorkflowJobFunction({ workspaceId, jobFunctionName }),
+    ]),
     ["function", () => client.deleteFunctionRegistry({ workspaceId, name })],
   ];
 
@@ -171,14 +190,16 @@ async function teardown(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param name - Shared resource name
+ * @param jobFunctionNames - Job functions created under the shared name
  */
 async function reclaimLeftovers(
   client: OperatorClient,
   workspaceId: string,
   name: string,
+  jobFunctionNames: readonly string[] = [name],
 ): Promise<void> {
   const workflowId = await findMigrationWorkflowId(client, workspaceId, name);
-  await teardown(client, workspaceId, name, workflowId);
+  await teardown(client, workspaceId, name, workflowId, jobFunctionNames);
 }
 
 /**
@@ -333,15 +354,18 @@ async function waitForMigrationWorkflow(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param execution - Workflow execution to read jobs from
+ * @param labelJob - Prefix for a job's log lines, e.g. the step it ran
  * @returns Concatenated job logs and the reasons the jobs failed
  */
 async function collectJobOutcomes(
   client: OperatorClient,
   workspaceId: string,
   execution: WorkflowExecution,
+  labelJob: (job: WorkflowJobExecution) => string | undefined = () => undefined,
 ): Promise<{ logs: string; failures: string[] }> {
   const outcomes = await Promise.all(
     execution.jobExecutions.map(async (job) => {
+      const label = labelJob(job);
       if (!job.executionId) return undefined;
       try {
         const { execution: functionExecution } = await client.getFunctionExecution({
@@ -353,7 +377,11 @@ async function collectJobOutcomes(
         // the execution result; logs only carry what the script printed.
         const failure =
           functionExecution.error?.message.trim() || functionExecution.result.trim() || "";
-        return { logs: joinFunctionLogMessages(functionExecution.logEntries), failure };
+        const logs = joinFunctionLogMessages(functionExecution.logEntries);
+        return {
+          logs: label && logs ? prefixLines(logs, `[${label}] `) : logs,
+          failure,
+        };
       } catch {
         return undefined;
       }
@@ -386,4 +414,383 @@ function extractFailureMessage(outcomes: { logs: string; failures: string[] }): 
     .filter((line) => /error/i.test(line))
     .at(-1);
   return lastErrorLine?.trim() || "Migration workflow execution failed.";
+}
+
+function prefixLines(text: string, prefix: string): string {
+  return text
+    .split("\n")
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
+}
+
+/** Label recording which step plan a temporary migration workflow was created for. */
+const MIGRATION_PLAN_LABEL_KEY = "sdk-migration-plan";
+
+const ACTIVE_EXECUTION_STATUSES: ReadonlySet<WorkflowExecution_Status> = new Set([
+  WorkflowExecution_Status.PENDING,
+  WorkflowExecution_Status.PENDING_RESUME,
+  WorkflowExecution_Status.PENDING_RETRY,
+  WorkflowExecution_Status.RUNNING,
+  WorkflowExecution_Status.WAITING,
+]);
+
+/**
+ * Name of the job function that runs one step of a multi-step migration.
+ * @param name - Shared resource name of the migration
+ * @returns Runner job function name
+ */
+export function migrationStepRunnerName(name: string): string {
+  return `${name}--step`;
+}
+
+/**
+ * Identify a step plan, so a failed run is only resumed by a deploy that
+ * would start the steps in the same order.
+ * @param order - Step names in execution order
+ * @returns Label-safe fingerprint
+ */
+export function migrationPlanFingerprint(order: readonly string[]): string {
+  const hash = crypto.createHash("sha256").update(JSON.stringify(order), "utf-8").digest("hex");
+  return `p${hash.slice(0, 40)}`;
+}
+
+export interface MigrationStepsWorkflowOptions extends LongRunningMigrationOptions {
+  /** Step names in execution order. */
+  order: readonly string[];
+  /**
+   * Set when an earlier deploy left this migration partially applied; holds
+   * the execution it recorded, when it got that far.
+   */
+  inProgress?: { executionId?: string };
+  /** Called as soon as a new execution exists, before waiting on it. */
+  onExecutionStarted: (executionId: string) => Promise<void>;
+  /** Called while waiting, with the number of steps that have completed. */
+  onProgress?: (completedSteps: number, totalSteps: number) => void;
+}
+
+export interface MigrationStepsWorkflowResult {
+  success: boolean;
+  logs: string;
+  error?: string;
+  executionId?: string;
+  completedSteps: string[];
+  failedSteps: string[];
+  /** Whether any step may have committed: one completed, or the outcome could not be observed. */
+  stepsMayHaveCommitted: boolean;
+}
+
+interface StepOutcome {
+  completed: string[];
+  failed: string[];
+}
+
+function classifySteps(
+  execution: WorkflowExecution,
+  runnerName: string,
+  order: readonly string[],
+): StepOutcome {
+  const statuses = new Map<number, Set<WorkflowJobExecution_Status>>();
+  for (const job of execution.jobExecutions) {
+    if (job.kind.case !== "jobFunction" || job.kind.value.name !== runnerName) continue;
+    const index = job.position?.callIndex;
+    if (index === undefined) continue;
+    const seen = statuses.get(index) ?? new Set();
+    seen.add(job.status);
+    statuses.set(index, seen);
+  }
+  const completed = order.filter((_, index) =>
+    statuses.get(index)?.has(WorkflowJobExecution_Status.SUCCESS),
+  );
+  const failed = order.filter((step, index) => {
+    const seen = statuses.get(index);
+    return (
+      !completed.includes(step) &&
+      (seen?.has(WorkflowJobExecution_Status.FAILED) ||
+        seen?.has(WorkflowJobExecution_Status.CANCELED))
+    );
+  });
+  return { completed, failed };
+}
+
+async function listMigrationExecutions(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<WorkflowExecution[]> {
+  const { executions } = await client.listWorkflowExecutions({
+    workspaceId,
+    workflowName: name,
+    pageSize: 20,
+    pageDirection: PageDirection.DESC,
+  });
+  return executions;
+}
+
+async function assertNoActiveExecution(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+  migrationLabel: string,
+): Promise<void> {
+  const active = (await listMigrationExecutions(client, workspaceId, name)).find((execution) =>
+    ACTIVE_EXECUTION_STATUSES.has(execution.status),
+  );
+  if (active) {
+    throw CLIError({
+      code: "MIGRATION_EXECUTION_ACTIVE",
+      message: `Migration ${migrationLabel} has an execution that is still running (${active.id}).`,
+      suggestion:
+        "Wait for it to finish, or check that no other deploy is running against this workspace, then deploy again.",
+      context: { executionId: active.id },
+    });
+  }
+}
+
+async function findRecordedExecution(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+  executionId: string | undefined,
+): Promise<WorkflowExecution | undefined> {
+  if (executionId === undefined) {
+    return (await listMigrationExecutions(client, workspaceId, name))[0];
+  }
+  try {
+    const { execution } = await client.getWorkflowExecution({ workspaceId, executionId });
+    return execution;
+  } catch (error) {
+    if (isNotFoundError(error)) return undefined;
+    throw error;
+  }
+}
+
+async function readWorkflowPlan(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<string | undefined> {
+  try {
+    const { metadata } = await client.getMetadata({
+      trn: resourceTrn(workspaceId, "workflow", name),
+    });
+    return metadata?.labels[MIGRATION_PLAN_LABEL_KEY];
+  } catch (error) {
+    if (isNotFoundError(error)) return undefined;
+    throw error;
+  }
+}
+
+async function summarizeSteps(
+  client: OperatorClient,
+  workspaceId: string,
+  execution: WorkflowExecution,
+  runnerName: string,
+  order: readonly string[],
+): Promise<MigrationStepsWorkflowResult> {
+  const steps = classifySteps(execution, runnerName, order);
+  const outcomes = await collectJobOutcomes(client, workspaceId, execution, (job) => {
+    if (job.kind.case !== "jobFunction" || job.kind.value.name !== runnerName) return undefined;
+    const index = job.position?.callIndex;
+    return index === undefined ? undefined : order[index];
+  });
+  const base = {
+    logs: outcomes.logs,
+    executionId: execution.id,
+    completedSteps: steps.completed,
+    failedSteps: steps.failed,
+    stepsMayHaveCommitted: steps.completed.length > 0,
+  };
+  if (execution.status === WorkflowExecution_Status.SUCCESS) return { success: true, ...base };
+  const error =
+    execution.status === WorkflowExecution_Status.CANCELED
+      ? "Migration workflow execution was canceled."
+      : extractFailureMessage(outcomes);
+  return { success: false, error, ...base };
+}
+
+async function waitForSteps(
+  options: MigrationStepsWorkflowOptions,
+  executionId: string,
+): Promise<MigrationStepsWorkflowResult> {
+  const { client, workspaceId, order } = options;
+  const runnerName = migrationStepRunnerName(
+    migrationWorkflowResourceName(options.namespace, options.migrationNumber),
+  );
+  const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
+  try {
+    // loop exits when the workflow execution reaches a terminal status
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    while (true) {
+      const { execution } = await client.getWorkflowExecution({ workspaceId, executionId });
+      if (!execution) {
+        throw CLIError({
+          code: "WORKFLOW_EXECUTION_NOT_FOUND",
+          message: `Migration workflow execution '${executionId}' not found.`,
+        });
+      }
+      if (!ACTIVE_EXECUTION_STATUSES.has(execution.status)) {
+        return await summarizeSteps(client, workspaceId, execution, runnerName, order);
+      }
+      options.onProgress?.(
+        classifySteps(execution, runnerName, order).completed.length,
+        order.length,
+      );
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+  } catch (error) {
+    return {
+      success: false,
+      logs: "",
+      error: `Lost track of migration workflow execution '${executionId}': ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      executionId,
+      completedSteps: [],
+      failedSteps: [],
+      stepsMayHaveCommitted: true,
+    };
+  }
+}
+
+/**
+ * Execute a multi-step migration as a temporary workflow and wait for it.
+ *
+ * Each step commits separately, so the temporary resources outlive a failed
+ * run: the next deploy resumes that run from its failed step. They are only
+ * removed here when nothing ran; otherwise the caller removes them once the
+ * migration's checkpoint is committed.
+ * @param options - Execution options
+ * @returns Execution result with per-step outcomes
+ */
+export async function executeMigrationStepsAsWorkflow(
+  options: MigrationStepsWorkflowOptions,
+): Promise<MigrationStepsWorkflowResult> {
+  const { client, workspaceId, code, namespace, migrationNumber, invoker, appName, appId, order } =
+    options;
+  const name = migrationWorkflowResourceName(namespace, migrationNumber);
+  const runnerName = migrationStepRunnerName(name);
+  const jobFunctionNames = [name, runnerName];
+  const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
+  const plan = migrationPlanFingerprint(order);
+
+  if (options.inProgress) {
+    const execution = await findRecordedExecution(
+      client,
+      workspaceId,
+      name,
+      options.inProgress.executionId,
+    );
+    if (execution && ACTIVE_EXECUTION_STATUSES.has(execution.status)) {
+      logger.info(`Migration ${migrationLabel} is still running from an earlier deploy; waiting.`);
+      return await waitForSteps(options, execution.id);
+    }
+    if (execution?.status === WorkflowExecution_Status.SUCCESS) {
+      return await summarizeSteps(client, workspaceId, execution, runnerName, order);
+    }
+    const workflowId = await findMigrationWorkflowId(client, workspaceId, name);
+    const resumable =
+      execution?.status === WorkflowExecution_Status.FAILED &&
+      workflowId !== undefined &&
+      (await readWorkflowPlan(client, workspaceId, name)) === plan;
+    if (execution && resumable) {
+      await uploadMigrationFunction(client, workspaceId, name, code, appName, appId, "update");
+      await client.resumeWorkflowExecution({ workspaceId, executionId: execution.id });
+      logger.info(`Resuming migration ${migrationLabel} from the steps that have not completed.`);
+      return await waitForSteps(options, execution.id);
+    }
+    const reason = !execution
+      ? "its earlier run is no longer available"
+      : execution.status === WorkflowExecution_Status.CANCELED
+        ? "its earlier run was canceled"
+        : "its steps changed since the run that failed";
+    logger.warn(
+      `Migration ${migrationLabel} cannot be resumed because ${reason}; every step runs again.`,
+    );
+  }
+
+  await assertNoActiveExecution(client, workspaceId, name, migrationLabel);
+  await reclaimLeftovers(client, workspaceId, name, jobFunctionNames);
+
+  let workflowId: string | undefined;
+  let executionId: string | undefined;
+  try {
+    await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
+    const versions: Record<string, bigint> = {};
+    for (const jobFunctionName of [runnerName, name]) {
+      const { jobFunction } = await client.createWorkflowJobFunction({
+        workspaceId,
+        jobFunctionName,
+        scriptRef: name,
+        publishExecutionEvents: false,
+      });
+      await writeMetadataLabelsDirect(
+        client,
+        await buildMetaRequest({
+          trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
+          appName,
+          appId,
+        }),
+      );
+      if (jobFunction?.version === undefined) {
+        throw internalError(
+          `Temporary migration job function '${jobFunctionName}' was created without a version.`,
+        );
+      }
+      versions[jobFunctionName] = jobFunction.version;
+    }
+
+    const { workflow } = await client.createWorkflow({
+      workspaceId,
+      workflowName: name,
+      mainJobFunctionName: name,
+      jobFunctions: versions,
+    });
+    workflowId = workflow?.id;
+    if (!workflowId) {
+      throw internalError(`Temporary migration workflow '${name}' was created without an id.`);
+    }
+    await writeMetadataLabelsDirect(
+      client,
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "workflow", name),
+        appName,
+        appId,
+        metadata: { [MIGRATION_PLAN_LABEL_KEY]: plan },
+      }),
+    );
+
+    ({ executionId } = await client.startWorkflow({
+      workspaceId,
+      workflowId,
+      authInvoker: invoker,
+    }));
+  } catch (error) {
+    await teardown(client, workspaceId, name, workflowId, jobFunctionNames);
+    throw error;
+  }
+
+  await options.onExecutionStarted(executionId);
+  const result = await waitForSteps(options, executionId);
+  if (!result.success && !result.stepsMayHaveCommitted && !options.inProgress) {
+    await teardown(client, workspaceId, name, workflowId, jobFunctionNames);
+  }
+  return result;
+}
+
+/**
+ * Remove the temporary resources of a multi-step migration once its
+ * checkpoint is committed. Best effort, like the teardown after a run.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ * @param migrationNumber - Migration number
+ */
+export async function removeMigrationWorkflowResources(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  migrationNumber: number,
+): Promise<void> {
+  const name = migrationWorkflowResourceName(namespace, migrationNumber);
+  await reclaimLeftovers(client, workspaceId, name, [name, migrationStepRunnerName(name)]);
 }

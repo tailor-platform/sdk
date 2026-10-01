@@ -11,6 +11,7 @@ import {
   generateMigrationPgliteSchema,
   writePgliteSchemaFile,
 } from "./pglite-schema-generator";
+import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import {
   DB_PGLITE_SCHEMA_FILE_NAME,
   formatMigrationNumber,
@@ -71,6 +72,41 @@ function tableNamed(tables: ReturnType<typeof buildPreMigrationTables>, name: st
   if (!found) throw new Error(`table ${name} missing from ${tables.map((t) => t.name).join()}`);
   return found;
 }
+
+describe("buildPreMigrationSnapshot", () => {
+  test("keeps type attributes besides fields and indexes, with the relaxations applied", () => {
+    const withSettings = { ...user, settings: { aggregation: true, publishEvents: true } };
+    const result = buildPreMigrationSnapshot(
+      snapshot(withSettings),
+      diff([
+        {
+          kind: "field_added",
+          tableName: "User",
+          fieldName: "region",
+          after: snapshotField("string", { required: true }),
+        },
+      ]),
+    );
+
+    expect(result.namespace).toBe("tailordb");
+    expect(result.tables.User).toMatchObject({
+      pluralForm: "Users",
+      settings: { aggregation: true, publishEvents: true },
+    });
+    expect(result.tables.User!.fields.region).toMatchObject({ required: false });
+  });
+
+  test("retains a table the migration removes so the script can still read it", () => {
+    const legacy = table("Legacy", { note: snapshotField("string") });
+    const result = buildPreMigrationSnapshot(
+      snapshot(user, legacy),
+      diff([{ kind: "table_removed", tableName: "Legacy", before: legacy }]),
+    );
+
+    expect(Object.keys(result.tables)).toEqual(["User", "Legacy"]);
+    expect(result.tables.Legacy).toEqual(legacy);
+  });
+});
 
 describe("buildPreMigrationTables", () => {
   test("a data-only migration keeps the snapshot as it is", () => {

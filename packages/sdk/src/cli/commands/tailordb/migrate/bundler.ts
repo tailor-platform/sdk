@@ -15,6 +15,47 @@ import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 
+async function buildEntry(entryPath: string, entryContent: string, projectDir: string) {
+  fs.writeFileSync(entryPath, entryContent);
+  const tsconfig = await resolveTSConfigWithFallback(projectDir);
+
+  // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
+  const bundleLog = createBundleLog({ tsconfig });
+  const result = await rolldown.build({
+    plugins: [
+      createGeneratedEntryResolverPlugin(entryPath, projectDir),
+      createTsconfigPathsPlugin(),
+      platformBundleDefinePlugin,
+    ],
+    input: entryPath,
+    write: false,
+    output: {
+      format: "esm",
+      sourcemap: false,
+      minify: false,
+      codeSplitting: false,
+      globals: {
+        tailordb: "tailordb",
+      },
+    },
+    external: ["tailordb"],
+    resolve: {
+      conditionNames: ["node", "import"],
+    },
+    tsconfig,
+    treeshake: {
+      moduleSideEffects: false,
+      annotations: true,
+      unknownGlobalSideEffects: false,
+    },
+    ...bundleLog.options,
+  } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
+
+  // Entry file remains in output directory (consistent with resolver/executor bundlers)
+  return result.output[0].code;
+}
+
 export interface MigrationBundleResult {
   namespace: string;
   migrationNumber: number;
@@ -74,51 +115,92 @@ export async function bundleMigrationScript(
       return { success: true };
     }
   `;
-  fs.writeFileSync(entryPath, entryContent);
-
-  const projectDir = baseDir ?? path.dirname(absoluteSourcePath);
-  const tsconfig = await resolveTSConfigWithFallback(projectDir);
-
-  // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
-  const bundleLog = createBundleLog({ tsconfig });
-  const result = await rolldown.build({
-    plugins: [
-      createGeneratedEntryResolverPlugin(entryPath, projectDir),
-      createTsconfigPathsPlugin(),
-      platformBundleDefinePlugin,
-    ],
-    input: entryPath,
-    write: false,
-    output: {
-      format: "esm",
-      sourcemap: false,
-      minify: false,
-      codeSplitting: false,
-      globals: {
-        tailordb: "tailordb",
-      },
-    },
-    external: ["tailordb"],
-    resolve: {
-      conditionNames: ["node", "import"],
-    },
-    tsconfig,
-    treeshake: {
-      moduleSideEffects: false,
-      annotations: true,
-      unknownGlobalSideEffects: false,
-    },
-    ...bundleLog.options,
-  } as rolldown.BuildOptions);
-  bundleLog.assertAllResolved();
-
-  const bundledCode = result.output[0].code;
-
-  // Entry file remains in output directory (consistent with resolver/executor bundlers)
+  const bundledCode = await buildEntry(
+    entryPath,
+    entryContent,
+    baseDir ?? path.dirname(absoluteSourcePath),
+  );
 
   return {
     namespace,
     migrationNumber,
     bundledCode,
   };
+}
+
+export interface BundleMigrationStepsOptions {
+  /** Path to the migration script exporting `steps`. */
+  sourceFile: string;
+  namespace: string;
+  migrationNumber: number;
+  /** Environment variables to inject into each step's context. */
+  env: Record<string, string | number | boolean>;
+  /** Step names in execution order, as validated from the script's source. */
+  order: readonly string[];
+  /** Job function the orchestrator starts once per step. */
+  runnerJobFunctionName: string;
+  /** Directory to resolve the bundler's tsconfig against; defaults to the script's directory. */
+  baseDir?: string;
+}
+
+/**
+ * Bundle a multi-step migration script.
+ *
+ * The bundle's `main` plays two roles. Called with `{ step }`, it runs that
+ * step in its own transaction. Called without one, it starts the runner job
+ * once per step in `order`, so every step commits separately.
+ * @param options - Bundle options
+ * @returns Bundled migration result
+ */
+export async function bundleMigrationSteps(
+  options: BundleMigrationStepsOptions,
+): Promise<MigrationBundleResult> {
+  const { sourceFile, namespace, migrationNumber, env, order, runnerJobFunctionName } = options;
+  const outputDir = path.resolve(getDistDir(), "migrations");
+  fs.mkdirSync(outputDir, { recursive: true });
+  const entryPath = path.join(
+    outputDir,
+    `migration_${namespace}_${migrationNumber}.steps.entry.js`,
+  );
+  const absoluteSourcePath = path.resolve(sourceFile).replace(/\\/g, "/");
+
+  const entryContent = ml /* js */ `
+    import { steps as _migrationSteps } from ${JSON.stringify(absoluteSourcePath)};
+    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
+
+    const STEP_ORDER = ${JSON.stringify(order)};
+    const RUNNER_JOB_FUNCTION = ${JSON.stringify(runnerJobFunctionName)};
+
+    function getDB(namespace) {
+      const client = new tailordb.Client({ namespace });
+      return new Kysely({
+        dialect: new TailordbDialect(client),
+      });
+    }
+
+    export async function main(input) {
+      const step = input && input.step;
+      if (step === undefined) {
+        for (const name of STEP_ORDER) {
+          tailor.workflow.execJobFunction(RUNNER_JOB_FUNCTION, { step: name });
+        }
+        return { success: true };
+      }
+      if (!STEP_ORDER.includes(step)) {
+        throw new Error(\`Unknown migration step "\${step}"\`);
+      }
+      const env = ${JSON.stringify(env)};
+      const db = getDB(${JSON.stringify(namespace)});
+      await db.transaction().execute(async (trx) => {
+        await _migrationSteps[step].run(trx, { env });
+      });
+      return { step };
+    }
+  `;
+  const bundledCode = await buildEntry(
+    entryPath,
+    entryContent,
+    options.baseDir ?? path.dirname(absoluteSourcePath),
+  );
+  return { namespace, migrationNumber, bundledCode };
 }

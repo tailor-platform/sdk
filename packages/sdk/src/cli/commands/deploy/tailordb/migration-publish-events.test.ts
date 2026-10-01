@@ -347,6 +347,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       namespace: "test-ns",
       migrationsDir: "/test/migrations",
       hasScript: options.hasScript ?? true,
+      scriptForm: (options.hasScript ?? true) ? { kind: "main" } : null,
       diff: {
         version: 1,
         namespace: "test-ns",

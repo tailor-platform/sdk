@@ -82,6 +82,7 @@ function createMockMigration(overrides: Partial<PendingMigration> = {}): Pending
     number: 1,
     scriptPath: "/path/0001/migrate.ts",
     hasScript: true,
+    scriptForm: { kind: "main" },
     diffPath: "/path/0001/diff.json",
     namespace: "tailordb",
     migrationsDir: "/path",

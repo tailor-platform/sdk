@@ -12,7 +12,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { parseMigrationNumberArg } from "./migration-number";
-import { fetchRemoteMigrationState } from "./remote-state";
+import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
@@ -64,6 +64,7 @@ async function set(options: SetOptions): Promise<void> {
   // 6. Get current migration state
   const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
   const currentState = await fetchRemoteMigrationState(client, trn);
+  assertNoMigrationInProgress(currentState, targetNamespace);
   const current = currentState.number;
   const currentMigration = current ?? 0;
   const currentHistoryId = currentState.historyIdInvalid

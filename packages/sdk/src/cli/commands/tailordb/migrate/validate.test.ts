@@ -577,6 +577,41 @@ describe("tailordb migration validate", () => {
     expect(report.migrationFiles).toEqual({ valid: true });
   });
 
+  test("fails when a multi-step migration script has an invalid step graph", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(
+      1,
+      "migrate.ts",
+      'export const steps = { recompute: { dependsOn: ["backfill"], run: async () => {} } };',
+    );
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles.error).toContain('depends on undefined step "backfill"');
+    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("accepts a multi-step migration script", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(
+      1,
+      "migrate.ts",
+      'export const steps = { backfill: { run: async () => {} }, recompute: { dependsOn: ["backfill"], run: async () => {} } };',
+    );
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles).toEqual({ valid: true });
+  });
+
   test("accepts unrelated TODO comments in migration scripts", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();

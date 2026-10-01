@@ -107,6 +107,22 @@ describe("db-types-generator", () => {
     );
   });
 
+  test.each([
+    ["an empty schema", {}],
+    ["a schema with tables", { User: { fields: { name: { type: "string", required: true } } } }],
+  ])("declares the multi-step script types for %s", async (_label, tables) => {
+    const snapshot = createMockSnapshot(tables, "tailordb");
+
+    const { content } = await generateContent(snapshot);
+
+    expect(content).toContain("export type MigrationStep = {");
+    expect(content).toContain("  dependsOn?: readonly string[];");
+    expect(content).toContain(
+      "  run: (trx: Transaction, context: MigrationContext) => Promise<void>;",
+    );
+    expect(content).toContain("export type MigrationSteps = Record<string, MigrationStep>;");
+  });
+
   type BasicFieldTypesCase = {
     testName: string;
     tableName: string;

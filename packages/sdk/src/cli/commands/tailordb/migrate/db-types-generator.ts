@@ -237,14 +237,29 @@ function generateDbTypesFromSnapshot(
     "",
     "export type Transaction = KyselyTransaction<Database>;",
     "",
-    "/** Context passed as the second argument to the migration's `main` function. */",
-    "export type MigrationContext = {",
-    "  env: keyof Env extends never ? Record<string, string | number | boolean> : Env;",
-    "};",
+    ...MIGRATION_SCRIPT_TYPE_LINES,
   ];
 
   return lines.join("\n") + "\n";
 }
+
+/** Script-facing types every generated db.ts declares after `Transaction`. */
+const MIGRATION_SCRIPT_TYPE_LINES = [
+  "/** Context passed as the second argument to the migration's `main` function and to each step. */",
+  "export type MigrationContext = {",
+  "  env: keyof Env extends never ? Record<string, string | number | boolean> : Env;",
+  "};",
+  "",
+  "/** One step of a multi-step migration. Each step runs in its own transaction. */",
+  "export type MigrationStep = {",
+  "  /** Steps that must complete before this one starts. */",
+  "  dependsOn?: readonly string[];",
+  "  run: (trx: Transaction, context: MigrationContext) => Promise<void>;",
+  "};",
+  "",
+  "/** Steps a migration exports as `steps` instead of `main`, keyed by step name. */",
+  "export type MigrationSteps = Record<string, MigrationStep>;",
+];
 
 /**
  * Generate an empty db.ts file for migrations with no tables
@@ -269,10 +284,7 @@ function generateEmptyDbTypes(namespace: string): string {
       "",
       "export type Transaction = KyselyTransaction<Database>;",
       "",
-      "/** Context passed as the second argument to the migration's `main` function. */",
-      "export type MigrationContext = {",
-      "  env: keyof Env extends never ? Record<string, string | number | boolean> : Env;",
-      "};",
+      ...MIGRATION_SCRIPT_TYPE_LINES,
     ].join("\n") + "\n"
   );
 }

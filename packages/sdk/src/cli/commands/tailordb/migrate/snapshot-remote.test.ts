@@ -15,6 +15,7 @@ import {
   compareRemoteWithSnapshot,
   createSnapshotFromRemoteTypes,
   formatSchemaDrifts,
+  MIGRATION_RESTRICTION_SETTINGS,
   SCHEMA_SNAPSHOT_VERSION,
   SCHEMA_FILE_NAME,
   type RemoteGqlPermission,
@@ -363,6 +364,87 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts).toEqual([]);
+    });
+
+    describe("ignoring settings that a running migration overrides", () => {
+      const fields = {
+        id: { type: "uuid", required: true },
+        email: { type: "string", required: true },
+      } as const;
+      const expected = (settings: Record<string, unknown>): SchemaSnapshot => ({
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        tables: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { ...fields },
+            settings,
+            permissions: {
+              record: {
+                create: [],
+                read: [{ conditions: [], permit: "allow" }],
+                update: [],
+                delete: [],
+              },
+            },
+          },
+        },
+      });
+      const restrictedRemote = (aggregation: boolean) => [
+        createMockRemoteType(
+          "User",
+          { ...fields },
+          {
+            settings: {
+              pluralForm: "Users",
+              aggregation,
+              bulkUpsert: false,
+              publishRecordEvents: false,
+              disableGqlOperations: { create: true, update: true, delete: true, read: true },
+            },
+            permission: {
+              create: [],
+              read: [{ conditions: [], permit: TailorDBType_Permission_Permit.ALLOW }],
+              update: [],
+              delete: [],
+            },
+          },
+        ),
+      ];
+
+      test("reports the restricted settings as drift by default", () => {
+        const drifts = compareRemoteWithSnapshot(
+          restrictedRemote(true),
+          expected({ aggregation: true, bulkUpsert: true, publishEvents: true }),
+        );
+        expect(drifts).toEqual([
+          expect.objectContaining({ tableName: "User", kind: "type_settings_mismatch" }),
+        ]);
+      });
+
+      test("accepts them when the comparison ignores restriction settings", () => {
+        const drifts = compareRemoteWithSnapshot(
+          restrictedRemote(true),
+          expected({ aggregation: true, bulkUpsert: true, publishEvents: true }),
+          [],
+          MIGRATION_RESTRICTION_SETTINGS,
+        );
+        expect(drifts).toEqual([]);
+      });
+
+      test("still reports other settings drift", () => {
+        const drifts = compareRemoteWithSnapshot(
+          restrictedRemote(false),
+          expected({ aggregation: true, publishEvents: true }),
+          [],
+          MIGRATION_RESTRICTION_SETTINGS,
+        );
+        expect(drifts).toEqual([
+          expect.objectContaining({ tableName: "User", kind: "type_settings_mismatch" }),
+        ]);
+      });
     });
 
     test("detects remote drift in table-level schema elements", () => {
