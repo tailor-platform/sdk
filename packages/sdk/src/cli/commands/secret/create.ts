@@ -36,7 +36,12 @@ export const createSecretCommand = defineAppCommand({
         message: "Do you want to proceed?",
         default: false,
       });
-      if (!confirmed) return;
+      if (!confirmed) {
+        throw CLIError({
+          code: "SECRET_CREATION_CANCELLED",
+          message: "Secret creation cancelled. The vault is still managed by the config.",
+        });
+      }
     }
     try {
       await client.createSecretManagerSecret({

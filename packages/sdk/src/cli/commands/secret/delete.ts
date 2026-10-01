@@ -34,8 +34,12 @@ export const deleteSecretCommand = defineAppCommand({
       });
 
       if (confirmation !== args.name) {
-        logger.info("Secret deletion cancelled.");
-        return;
+        throw CLIError({
+          code: "SECRET_DELETION_CANCELLED",
+          message: "Secret deletion cancelled: the entered name did not match.",
+          suggestion:
+            "Run the command again and enter the name exactly as shown, or pass --yes to skip the confirmation.",
+        });
       }
     }
 

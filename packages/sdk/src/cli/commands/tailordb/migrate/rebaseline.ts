@@ -292,8 +292,10 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
       default: false,
     });
     if (!confirmed) {
-      logger.info("Operation cancelled.");
-      return;
+      throw CLIError({
+        code: "MIGRATION_REBASELINE_CANCELLED",
+        message: "Migration re-baseline cancelled.",
+      });
     }
   }
 

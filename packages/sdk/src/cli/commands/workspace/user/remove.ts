@@ -2,6 +2,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
@@ -63,8 +64,10 @@ export const removeCommand = defineAppCommand({
         message: `Are you sure you want to remove user "${args.email}" from the workspace? (yes/no):`,
       });
       if (confirmation !== "yes") {
-        logger.info("User removal cancelled.");
-        return;
+        throw CLIError({
+          code: "WORKSPACE_USER_REMOVAL_CANCELLED",
+          message: "User removal cancelled.",
+        });
       }
     }
 

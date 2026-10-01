@@ -162,8 +162,10 @@ async function handleInitOption(
     });
 
     if (!confirmation) {
-      logger.info("Operation cancelled.");
-      process.exit(0);
+      throw CLIError({
+        code: "MIGRATION_GENERATE_CANCELLED",
+        message: "Migration generation cancelled. No migration files were deleted.",
+      });
     }
     logger.newline();
   }
@@ -1248,8 +1250,10 @@ async function generateDiffFromSnapshot(
       });
 
       if (!confirmation) {
-        logger.info("Migration generation cancelled.");
-        return;
+        throw CLIError({
+          code: "MIGRATION_GENERATE_CANCELLED",
+          message: "Migration generation cancelled.",
+        });
       }
       logger.newline();
     }

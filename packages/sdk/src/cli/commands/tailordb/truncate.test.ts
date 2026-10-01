@@ -1,5 +1,6 @@
+import { runCommand } from "@politty/zod";
 import { describe, test, expect, vi, aroundEach } from "vitest";
-import { truncate, type TruncateOptions } from "./truncate";
+import { truncate, truncateCommand, type TruncateOptions } from "./truncate";
 
 // Mock dependencies
 vi.mock("#/cli/shared/context", () => ({
@@ -99,6 +100,28 @@ describe("truncate command", () => {
       ],
     ])("throws error when %s", async (_, options, message) => {
       await expect(truncate(options)).rejects.toThrow(message);
+    });
+  });
+
+  describe("declined confirmation", () => {
+    test.each<[string, string[]]>([
+      ["--all", ["--all"]],
+      ["--namespace", ["--namespace", "tailordb"]],
+      ["table names", ["User"]],
+    ])("fails without truncating for %s", async (_, argv) => {
+      const { prompt } = await import("#/cli/shared/prompt");
+      vi.mocked(prompt.confirm).mockResolvedValue(false);
+      const client = await getMockClient();
+      vi.mocked(client.truncateTailorDBTypes).mockClear();
+      vi.mocked(client.truncateTailorDBType).mockClear();
+
+      const result = await runCommand(truncateCommand, argv);
+
+      expect(prompt.confirm).toHaveBeenCalledWith(expect.objectContaining({ default: false }));
+      expect(result.error).toMatchObject({ code: "TRUNCATE_CANCELLED" });
+
+      expect(client.truncateTailorDBTypes).not.toHaveBeenCalled();
+      expect(client.truncateTailorDBType).not.toHaveBeenCalled();
     });
   });
 
