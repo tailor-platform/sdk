@@ -1,10 +1,10 @@
 /**
- * Security lint of generated GitHub Actions workflows.
+ * Lint of generated GitHub Actions workflows.
  *
  * Each rendered workflow is written to its own temp repository and checked
- * with `zizmor` at every severity. The suites are skipped when the binary is
- * not available on PATH, so they never cause false negatives in environments
- * that have not run `aqua i`.
+ * with `actionlint` and with `zizmor` at every severity. The suites are skipped
+ * when either binary is not available on PATH, so they never cause false
+ * negatives in environments that have not run `aqua i`.
  *
  * Locally: run `aqua i` first, then these suites will execute as normal tests.
  */
@@ -31,6 +31,7 @@ function resolveBin(command: string): string {
   return result.status === 0 ? result.stdout.trim() : command;
 }
 
+const ACTIONLINT = resolveBin("actionlint");
 const ZIZMOR = resolveBin("zizmor");
 
 function isAvailable(command: string, args: string[]): boolean {
@@ -44,11 +45,8 @@ function isAvailable(command: string, args: string[]): boolean {
 
 type LintResult = { ok: boolean; output: string };
 
-function runZizmor(repoDir: string, workflowPath: string): LintResult {
-  const result = spawnSync(ZIZMOR, ["--offline", "--no-progress", workflowPath], {
-    encoding: "utf-8",
-    cwd: repoDir,
-  });
+function run(command: string, args: string[], cwd: string): LintResult {
+  const result = spawnSync(command, args, { encoding: "utf-8", cwd });
   return { ok: result.status === 0, output: `${result.stdout}${result.stderr}`.trim() };
 }
 
@@ -68,8 +66,9 @@ const COMMON = {
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const ERD_SCHEMA_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema.yml");
 
-// Suites are skipped entirely when zizmor is not on PATH (run `aqua i` first).
-const zizmorAvailable = isAvailable(ZIZMOR, ["--version"]);
+// Suites are skipped entirely when a linter is not on PATH (run `aqua i` first).
+const lintersAvailable =
+  isAvailable(ACTIONLINT, ["--version"]) && isAvailable(ZIZMOR, ["--version"]);
 
 function writeRepo(name: string, files: Record<string, string>): string {
   const repoDir = path.join(tmpDir, name);
@@ -80,10 +79,37 @@ function writeRepo(name: string, files: Record<string, string>): string {
   return repoDir;
 }
 
+// actionlint rejects the `$/` self-repository syntax (rhysd/actionlint#711), so it
+// checks a copy that references the same local actions through `./`.
+function lintRepo(name: string, workflow: string, files: Record<string, string>): LintResult {
+  const zizmorDir = writeRepo(`${name}-zizmor`, files);
+  const zizmor = run(ZIZMOR, ["--offline", "--no-progress", workflow], zizmorDir);
+  const actionlintDir = writeRepo(
+    `${name}-actionlint`,
+    Object.fromEntries(
+      Object.entries(files).map(([file, content]) => [
+        file,
+        content.replaceAll("uses: $/", "uses: ./"),
+      ]),
+    ),
+  );
+  // Without a `.git`, actionlint skips checking the inputs passed to local actions.
+  fs.mkdirSync(path.join(actionlintDir, ".git"));
+  const actionlint = run(ACTIONLINT, ["-no-color", workflow], actionlintDir);
+  return {
+    ok: zizmor.ok && actionlint.ok,
+    output: [
+      actionlint.ok ? "" : `actionlint:\n${actionlint.output}`,
+      zizmor.ok ? "" : `zizmor:\n${zizmor.output}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
+}
+
 function writeAndLint(name: string, content: string): LintResult {
   const workflow = `.github/workflows/${name}.yml`;
-  const repoDir = writeRepo(name, { [workflow]: content });
-  return runZizmor(repoDir, path.join(repoDir, workflow));
+  return lintRepo(name, workflow, { [workflow]: content });
 }
 
 describe("repository ERD schema workflow", () => {
@@ -200,10 +226,10 @@ describe("repository ERD schema workflow", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests (skipped when zizmor is not on PATH)
+// Tests (skipped when actionlint or zizmor is not on PATH)
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!zizmorAvailable)("security lint of renderBranchWorkflow", () => {
+describe.skipIf(!lintersAvailable)("lint of renderBranchWorkflow", () => {
   // All four package managers, no optional fields
   for (const pm of ALL_PM) {
     test(`branch / ${pm} / minimal`, () => {
@@ -283,7 +309,7 @@ describe.skipIf(!zizmorAvailable)("security lint of renderBranchWorkflow", () =>
   });
 });
 
-describe.skipIf(!zizmorAvailable)("security lint of renderTagWorkflow", () => {
+describe.skipIf(!lintersAvailable)("lint of renderTagWorkflow", () => {
   const cases = [
     ...ALL_PM.map((pm) => ({
       name: `tag / ${pm} / no guard / minimal`,
@@ -372,16 +398,15 @@ runs:
       shell: bash
 `;
 
-describe.skipIf(!zizmorAvailable)("security lint of renderCoordinateWorkflow", () => {
+describe.skipIf(!lintersAvailable)("lint of renderCoordinateWorkflow", () => {
   function lintCoordinate(name: string, content: string): LintResult {
     const workflow = `.github/workflows/${name}.yml`;
-    const repoDir = writeRepo(name, {
+    return lintRepo(name, workflow, {
       [workflow]: content,
       ".github/actions/tailor-setup/action.yml":
         "name: stub-setup\ndescription: stub\nruns:\n  using: composite\n  steps:\n    - run: echo stub\n      shell: bash\n",
       ".github/actions/tailor-api/action.yml": COMPOSITE_ACTION_STUB,
     });
-    return runZizmor(repoDir, path.join(repoDir, workflow));
   }
 
   const COORD_COMMON = {
@@ -425,7 +450,7 @@ describe.skipIf(!zizmorAvailable)("security lint of renderCoordinateWorkflow", (
   });
 });
 
-describe.skipIf(!zizmorAvailable)("security lint of renderPreviewWorkflow", () => {
+describe.skipIf(!lintersAvailable)("lint of renderPreviewWorkflow", () => {
   const PREVIEW_COMMON = {
     ...COMMON,
     branch: "main",
