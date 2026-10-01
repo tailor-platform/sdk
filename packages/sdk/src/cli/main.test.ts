@@ -125,6 +125,18 @@ describe("argument errors under JSON output", () => {
     expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
   }, 20_000);
 
+  test("includes the stack trace for an argument error with --verbose", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-argument-error-json-");
+
+    const result = runCli(["workspace", "list", "--bogus", "--json", "--verbose"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    const envelope = JSON.parse(result.stderr);
+    expect(envelope.error.code).toBe("INVALID_ARGUMENTS");
+    expect(envelope.error.stack).toContain("Error: Unknown flags: bogus");
+  }, 20_000);
+
   test("keeps the argument error annotation title without JSON output", () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
     using tmp = tempCwd("cli-argument-error-json-");

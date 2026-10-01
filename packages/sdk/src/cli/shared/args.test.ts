@@ -338,6 +338,25 @@ describe("resolveEarlyFailure", () => {
   ])("does not name $name INVALID_ARGUMENTS", ({ error }) => {
     expect(resolve(error, ["--json"]).code).toBeUndefined();
   });
+
+  test.each([
+    { argv: ["--json", "--verbose"], verbose: true },
+    { argv: ["--verbose"], verbose: true },
+    { argv: ["--json", "--verbose=false"], verbose: false },
+    { argv: ["--json"], verbose: false },
+  ])("applies verbose output from $argv", ({ argv, verbose }) => {
+    vi.stubEnv("DEBUG", undefined);
+    vi.stubEnv("RUNNER_DEBUG", undefined);
+    const previous = logger.verbose;
+    logger.verbose = false;
+    try {
+      resolve(new Error("Unknown flags: bogus"), argv);
+      expect(logger.verbose).toBe(verbose);
+    } finally {
+      logger.verbose = previous;
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe("createCommonArgs effects", () => {
