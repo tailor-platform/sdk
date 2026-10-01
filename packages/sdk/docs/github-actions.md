@@ -218,7 +218,12 @@ them. Everything else is yours, and re-running `setup` keeps it:
   managed job with `needs: tailor-deploy`.
 - **Your own top-level keys**, such as a workflow-level `env:` or `defaults:`.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
-  `container`, and `env`.
+  `container`, and `env`. On a managed job generated without an
+  `environment:` (such as `tailor-tag-guard` or `tailor-erd-preview`), you can
+  also add one, for example so a step you added there can read that GitHub
+  Environment's secrets. The `environment:` of `tailor-plan`, `tailor-deploy`,
+  and the preview jobs comes from `--environment`, so change it with that
+  option instead.
 - **These inputs of managed steps:** `ignore` on `tailor-generate-check` and
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
