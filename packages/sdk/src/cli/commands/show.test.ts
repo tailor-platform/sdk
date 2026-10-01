@@ -373,13 +373,26 @@ describe("show", () => {
       expect(listAuthOAuth2ClientsMock).not.toHaveBeenCalled();
     });
 
-    test("fails when OAuth2 clients cannot be listed", async () => {
+    test("warns and returns no OAuth2 clients when the credentials cannot list them", async () => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       mockConfig({ auth: { name: "local-auth", oauth2Clients } });
       listAuthOAuth2ClientsMock.mockRejectedValue(
         new ConnectError("permission denied", Code.PermissionDenied),
       );
 
-      await expect(show()).rejects.toThrow("permission denied");
+      const info = await show();
+
+      expect(info.oauth2Clients).toEqual([]);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"my-auth"'));
+    });
+
+    test("fails when listing OAuth2 clients fails for another reason", async () => {
+      mockConfig({ auth: { name: "local-auth", oauth2Clients } });
+      listAuthOAuth2ClientsMock.mockRejectedValue(
+        new ConnectError("unavailable", Code.Unavailable),
+      );
+
+      await expect(show()).rejects.toThrow("unavailable");
     });
   });
 });

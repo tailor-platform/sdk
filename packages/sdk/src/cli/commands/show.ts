@@ -10,6 +10,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
 import { createWorkspaceNameTransformer, resolveWorkspaceFolderName } from "./workspace/transform";
 import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
+import type { AuthOAuth2Client } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ShowOptions {
   workspaceId?: string;
@@ -126,15 +127,26 @@ async function fetchOAuth2Clients(
   if (!namespaceName || names.length === 0) {
     return [];
   }
-  const deployed = await fetchAllTolerant(async (pageToken, maxPageSize) => {
-    const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
-      workspaceId,
-      namespaceName,
-      pageToken,
-      pageSize: maxPageSize,
+  let deployed: AuthOAuth2Client[];
+  try {
+    deployed = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [oauth2Clients, nextPageToken];
     });
-    return [oauth2Clients, nextPageToken];
-  });
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.PermissionDenied) {
+      logger.warn(
+        `The current credentials cannot list OAuth2 clients in auth namespace "${namespaceName}", so none are shown.`,
+      );
+      return [];
+    }
+    throw error;
+  }
   const clientIds = new Map<string, string>();
   for (const oauth2Client of deployed) {
     logger.registerSecret(oauth2Client.clientSecret);
