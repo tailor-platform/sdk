@@ -6,9 +6,14 @@ import coordinateTemplate from "./coordinate.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
-// Bump on material template-structure changes (managed step ids, placeholders)
+// Only the release PR changes RELEASED_TEMPLATE_VERSION. A PR that changes the generated
+// templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead of bumping a number, so
+// concurrent template PRs make the same edit and merge without conflicts.
+const RELEASED_TEMPLATE_VERSION = 13;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 15;
+export const TEMPLATE_VERSION =
+  RELEASED_TEMPLATE_VERSION + (TEMPLATE_CHANGED_SINCE_RELEASE ? 1 : 0);
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
