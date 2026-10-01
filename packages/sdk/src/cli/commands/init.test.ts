@@ -96,6 +96,7 @@ describe("init command", () => {
     expect(result.error).toMatchObject({
       code: "INIT_SPAWN_FAILED",
       message: "Failed to run pnpm: spawnSync pnpm ENOENT",
+      suggestion: "Check that pnpm is installed and executable.",
       context: { command: "pnpm" },
     });
   });

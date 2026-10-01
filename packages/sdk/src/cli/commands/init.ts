@@ -53,7 +53,7 @@ export const initCommand = defineAppCommand({
       throw CLIError({
         code: "INIT_SPAWN_FAILED",
         message: `Failed to run ${packageManager}: ${result.error.message}`,
-        suggestion: `Ensure ${packageManager} is on your PATH, or run the command above directly.`,
+        suggestion: `Check that ${packageManager} is installed and executable.`,
         command: "init",
         context,
         cause: result.error,
