@@ -1,5 +1,40 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.7.0
+
+### Minor Changes
+
+- [#2475](https://github.com/tailor-platform/sdk/pull/2475) [`10ab737`](https://github.com/tailor-platform/sdk/commit/10ab73789d9865ec2e2fb6658e76b15841219834) Thanks [@toiroakr](https://github.com/toiroakr)! - Generated deploy jobs now expose the deployed workspace as job outputs, so a job of your own can use `needs:` to run tests or deploy extra assets against it:
+  
+  - `tailor setup ci preview`: the `tailor-preview-deploy` job exposes `workspace-id`, `workspace-name`, and `app-url` of the per-PR workspace.
+  - `tailor setup ci branch` and `tailor setup ci tag`: the `tailor-deploy` job exposes `workspace-id` and `app-url`.
+  
+  `tailor setup check` reports the template as outdated; run `tailor setup update` to regenerate every target.
+
+- [#2456](https://github.com/tailor-platform/sdk/pull/2456) [`afc057d`](https://github.com/tailor-platform/sdk/commit/afc057d41020e4ef6bde4e5cc3f5ff145daff7a7) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor setup ci env`, which reads `.github/tailor.lock` and prints, per GitHub Environment, the secrets and variables the generated workflows read, as `gh` commands (default) or as Terraform for the `integrations/github` provider (`--format terraform`). Each entry says what the value is and where to get it, required and optional entries (Slack notifications, `TAILOR_PLATFORM_FAIL_ON_DRIFT`, the preview folder) are listed separately, and no values are included in the output. Pass `--environment <name>` (repeatable) to print only those environments. When the `origin` remote is on github.com, the output names that repository. The `gh` output creates an environment only when it does not exist yet; the Terraform output's header lists how to pass the values and import existing environments and variables, and leaves their protection settings untouched.
+  
+  The Next steps printed by `setup ci branch`, `tag`, `preview`, and `coordinate` now point to this command for the environment just generated. As a result, `setup ci preview` no longer asks for `TAILOR_PLATFORM_WORKSPACE_ID`, which the preview workflow does not read, and instead lists `TAILOR_PLATFORM_ORGANIZATION_ID` (required, since a machine user cannot create a workspace without one) and `TAILOR_PLATFORM_FOLDER_ID`.
+  
+  `tailor setup check` no longer requires `TAILOR_PLATFORM_WORKSPACE_ID` or checks the Slack variables in the local shell; it only audits the generated files, the lock, and the config, so it runs the same locally and in CI.
+
+- [#2469](https://github.com/tailor-platform/sdk/pull/2469) [`a54be57`](https://github.com/tailor-platform/sdk/commit/a54be579c1579224b0d91cc40067702abf29b643) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor setup ci coordinate --action` now takes the action's name exactly as given to `tailor setup ci action` (its `--name`, or the config `name`), instead of also accepting it with a `tailor-` prefix. An action whose own name starts with `tailor-`, such as `tailor-crm`, is now passed as `--action tailor-crm` rather than `--action tailor-tailor-crm`. If you pass `--action tailor-api` for an action named `api`, the error now points you to `--action api`. `setup` remains a beta command, so this ships as an immediate change rather than going through a deprecation cycle.
+
+- [#2467](https://github.com/tailor-platform/sdk/pull/2467) [`deaba82`](https://github.com/tailor-platform/sdk/commit/deaba824bac609f0893ff7602a229cf491d1ea28) Thanks [@toiroakr](https://github.com/toiroakr)! - Reserve the `tailor-` id prefix in generated workflows and composite actions for the SDK. A job or step you add whose `id` starts with `tailor-` is now reported by `setup check` (rule key `reserved-id`), and re-running `setup` stops on it and names the id, instead of silently treating it as yours. Rename such ids (for example `tailor-build-frontend` to `build-frontend`) before upgrading. `setup` remains a beta command, so this ships as an immediate breaking change rather than going through a deprecation cycle.
+  
+  `--force` no longer replaces a job or step of yours whose id a new template starts to manage; `setup` stops and asks you to rename it instead. A step without the `tailor-` prefix is now always kept on regeneration, even when `.github/tailor.lock` lists its id, except the id an older template used for a step it has since renamed (such as `build-site` below) until the file is regenerated once.
+  
+  The composite action's static website build step is renamed from `build-site` to `tailor-build-site`, so every SDK-managed step carries the prefix. Re-running `setup ci action` renames it and keeps the `run:` command you wrote; the `build-site` input of the action is unchanged.
+  
+  A hand edit to an SDK-managed part now names the edited job, step, or top-level key (for example `"tailor-preview-deploy/tailor-preview-comment"`) in `setup check` and when re-running `setup`. Files whose lock entry was written by an older plugin keep the generic message until they are regenerated once.
+
+- [#2469](https://github.com/tailor-platform/sdk/pull/2469) [`9e7d50d`](https://github.com/tailor-platform/sdk/commit/9e7d50dfe3c03fb6a36ba18c57b88d22711e3c36) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor setup update`, which regenerates every workflow and composite action recorded in `.github/tailor.lock` with the flags each was generated with, so picking up a new workflow template no longer means re-running each `tailor setup ci` subcommand by hand. A target that cannot be regenerated (for example a hand-edited managed part) is listed at the end without stopping the others, and `--force` resets hand edits to managed parts of every target. `tailor setup check` now points at this command. Coordinators generated before this release do not record their `--action` grouping; re-run `tailor setup ci coordinate` once with the same flags so `update` can regenerate them.
+
+### Patch Changes
+
+- [#2465](https://github.com/tailor-platform/sdk/pull/2465) [`d8222e4`](https://github.com/tailor-platform/sdk/commit/d8222e40ab8f9668d19707bcc76fc7b134a08c26) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.19.0
+- Updated dependencies [[`72e295b`](https://github.com/tailor-platform/sdk/commit/72e295b422d243fef6e39f73590c34f2f10b68f5), [`f708521`](https://github.com/tailor-platform/sdk/commit/f708521ecc5c6e77fa5731d5256bbd483b49dc66), [`10ab737`](https://github.com/tailor-platform/sdk/commit/10ab73789d9865ec2e2fb6658e76b15841219834), [`978c332`](https://github.com/tailor-platform/sdk/commit/978c332fa0ae0d9256fd2f80d858fb68e0e8c76d), [`d8222e4`](https://github.com/tailor-platform/sdk/commit/d8222e40ab8f9668d19707bcc76fc7b134a08c26), [`e982853`](https://github.com/tailor-platform/sdk/commit/e98285358692428fbc07a3713a0cc056f04baffa), [`be6ffb2`](https://github.com/tailor-platform/sdk/commit/be6ffb2acea8fec95c9b7e90d52d35960cb7be14)]:
+  - @tailor-platform/sdk@2.24.0
+
 ## 0.6.0
 
 ### Minor Changes
