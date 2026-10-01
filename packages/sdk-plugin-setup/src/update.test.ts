@@ -29,7 +29,6 @@ const lockTarget = (
     ...inputs,
   },
   generatedIds: [],
-  ejectedIds: [],
   contentHash: "managed-v1:sha256:0",
 });
 
