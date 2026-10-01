@@ -1,24 +1,20 @@
 const RELEASED_PATTERN = /^const RELEASED_TEMPLATE_VERSION = (\d+);$/m;
 const CHANGED_PATTERN = /^const TEMPLATE_CHANGED_SINCE_RELEASE = (true|false);$/m;
-
-export type TemplateFingerprint = {
-  /** The template version these templates were released as. */
-  version: number;
-  /** Fingerprint of the templates rendered at that version. */
-  hash: string;
-};
+const FINGERPRINT_PATTERN = /^\/\/ Released template fingerprint: ([0-9a-f]+)$/m;
 
 export type TemplateVersionState = {
   /** `RELEASED_TEMPLATE_VERSION`: the last template version a release shipped. */
   releasedVersion: number;
   /** `TEMPLATE_CHANGED_SINCE_RELEASE`: whether a template change awaits the next release. */
   changedSinceRelease: boolean;
+  /** Fingerprint of the templates as `releasedVersion` rendered them. */
+  releasedFingerprint: string;
 };
 
 /**
- * Read the template version constants from a templates.ts source.
+ * Read the template version constants and the released fingerprint from a templates.ts source.
  * @param source - Contents of templates.ts
- * @returns The released version and whether a change is pending
+ * @returns The released version, whether a change is pending, and the released fingerprint
  */
 export function readTemplateVersionState(source: string): TemplateVersionState {
   const released = RELEASED_PATTERN.exec(source);
@@ -28,29 +24,34 @@ export function readTemplateVersionState(source: string): TemplateVersionState {
       "templates.ts must declare `const RELEASED_TEMPLATE_VERSION = <n>;` and `const TEMPLATE_CHANGED_SINCE_RELEASE = <true|false>;`",
     );
   }
-  return { releasedVersion: Number(released[1]), changedSinceRelease: changed[1] === "true" };
+  const fingerprint = FINGERPRINT_PATTERN.exec(source);
+  if (!fingerprint) {
+    throw new Error(
+      "templates.ts must record `// Released template fingerprint: <hash>` for RELEASED_TEMPLATE_VERSION",
+    );
+  }
+  return {
+    releasedVersion: Number(released[1]),
+    changedSinceRelease: changed[1] === "true",
+    releasedFingerprint: fingerprint[1],
+  };
 }
 
 /**
- * Explain how the template version constants disagree with the rendered templates.
- * @param params - The constants, the recorded fingerprint, and the current fingerprint
- * @param params.releasedVersion - `RELEASED_TEMPLATE_VERSION`
+ * Explain how the pending flag disagrees with the rendered templates.
+ * @param params - The pending flag, the released fingerprint, and the current fingerprint
  * @param params.changedSinceRelease - `TEMPLATE_CHANGED_SINCE_RELEASE`
- * @param params.recorded - The fingerprint recorded when that version was released
+ * @param params.releasedFingerprint - The fingerprint recorded when the last version was released
  * @param params.currentHash - Fingerprint of the templates as they render now
  * @returns A message describing the fix, or undefined when they agree
  */
 export function templateVersionDrift(params: {
-  releasedVersion: number;
   changedSinceRelease: boolean;
-  recorded: TemplateFingerprint;
+  releasedFingerprint: string;
   currentHash: string;
 }): string | undefined {
-  const { releasedVersion, changedSinceRelease, recorded, currentHash } = params;
-  if (recorded.version !== releasedVersion) {
-    return `template-fingerprint.json records version ${String(recorded.version)}, but RELEASED_TEMPLATE_VERSION is ${String(releasedVersion)}. Only the release PR updates either of them.`;
-  }
-  const rendersAsReleased = currentHash === recorded.hash;
+  const { changedSinceRelease, releasedFingerprint, currentHash } = params;
+  const rendersAsReleased = currentHash === releasedFingerprint;
   if (!changedSinceRelease && !rendersAsReleased) {
     return "The generated templates changed since the last release. Set `const TEMPLATE_CHANGED_SINCE_RELEASE = true;` in templates.ts so the next release bumps TEMPLATE_VERSION.";
   }
@@ -65,17 +66,17 @@ export type ResolvePendingTemplateVersionResult = {
   changed: boolean;
   /** The (possibly) rewritten templates.ts source. */
   source: string;
-  /** The fingerprint to record for the released version, when `changed` is true. */
-  fingerprint?: TemplateFingerprint;
+  /** The released template version, when `changed` is true. */
+  version?: number;
 };
 
 /**
  * Release a pending template change in a templates.ts source: bump
- * `RELEASED_TEMPLATE_VERSION` and clear `TEMPLATE_CHANGED_SINCE_RELEASE`.
- * A no-op when no template changed since the last release.
+ * `RELEASED_TEMPLATE_VERSION`, record the fingerprint it is released with, and clear
+ * `TEMPLATE_CHANGED_SINCE_RELEASE`. A no-op when no template changed since the last release.
  * @param source - Current contents of templates.ts
  * @param currentHash - Fingerprint of the templates as they render now
- * @returns The (possibly) rewritten source and the fingerprint to record
+ * @returns The (possibly) rewritten source and the released version
  */
 export function resolvePendingTemplateVersion(
   source: string,
@@ -89,8 +90,9 @@ export function resolvePendingTemplateVersion(
   return {
     changed: true,
     source: source
+      .replace(FINGERPRINT_PATTERN, `// Released template fingerprint: ${currentHash}`)
       .replace(RELEASED_PATTERN, `const RELEASED_TEMPLATE_VERSION = ${String(version)};`)
       .replace(CHANGED_PATTERN, "const TEMPLATE_CHANGED_SINCE_RELEASE = false;"),
-    fingerprint: { version, hash: currentHash },
+    version,
   };
 }

@@ -6,8 +6,9 @@ import coordinateTemplate from "./coordinate.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
-// Only the release PR changes RELEASED_TEMPLATE_VERSION; a PR that changes the generated
-// templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
+// Only the release PR changes RELEASED_TEMPLATE_VERSION and the fingerprint below; a PR that
+// changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
+// Released template fingerprint: 0edaf68f2a95aeb9a021c5fa2ba22115337e3759639020f598e7235679c39b9b
 const RELEASED_TEMPLATE_VERSION = 13;
 const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */

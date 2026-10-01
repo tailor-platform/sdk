@@ -2,7 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, expect, test } from "vitest";
 import { fingerprintOf, renderedTemplatesFingerprint } from "./template-fingerprint";
-import { readTemplateVersionState, templateVersionDrift } from "./template-version";
+import {
+  readTemplateVersionState,
+  resolvePendingTemplateVersion,
+  templateVersionDrift,
+} from "./template-version";
 
 const result = (content: string, generatedIds: string[] = ["tailor-plan"]) => ({
   name: "branch",
@@ -27,18 +31,31 @@ describe("fingerprintOf", () => {
 });
 
 describe("template version", () => {
-  test("marks a template change as pending until the next release records it", () => {
-    const source = fs.readFileSync(path.join(import.meta.dirname, "templates.ts"), "utf-8");
-    const recorded = JSON.parse(
-      fs.readFileSync(path.join(import.meta.dirname, "template-fingerprint.json"), "utf-8"),
-    ) as { version: number; hash: string };
+  const templatesPath = path.join(import.meta.dirname, "templates.ts");
+  const releasing = process.env.TEMPLATE_VERSION_RELEASE === "1";
 
-    const drift = templateVersionDrift({
-      ...readTemplateVersionState(source),
-      recorded,
-      currentHash: renderedTemplatesFingerprint(),
+  test.skipIf(releasing)(
+    "marks a template change as pending until the next release records it",
+    () => {
+      const drift = templateVersionDrift({
+        ...readTemplateVersionState(fs.readFileSync(templatesPath, "utf-8")),
+        currentHash: renderedTemplatesFingerprint(),
+      });
+
+      expect(drift).toBeUndefined();
+    },
+  );
+
+  test.runIf(releasing)("releases a pending template change into templates.ts", () => {
+    const result = resolvePendingTemplateVersion(
+      fs.readFileSync(templatesPath, "utf-8"),
+      renderedTemplatesFingerprint(),
+    );
+    if (result.changed) fs.writeFileSync(templatesPath, result.source, "utf-8");
+
+    expect(readTemplateVersionState(fs.readFileSync(templatesPath, "utf-8"))).toMatchObject({
+      changedSinceRelease: false,
+      releasedFingerprint: renderedTemplatesFingerprint(),
     });
-
-    expect(drift).toBeUndefined();
   });
 });

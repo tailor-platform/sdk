@@ -11,8 +11,7 @@
     "src/**/*.d.ts",
     "tsdown.config.ts",
     "vitest.config.ts",
-    "scripts/**/*.d.mts",
-    "scripts/**/*.ts"
+    "scripts/**/*.d.mts"
   ],
   "exclude": ["node_modules", "dist"]
 }
