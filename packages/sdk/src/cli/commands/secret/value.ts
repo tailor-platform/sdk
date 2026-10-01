@@ -44,9 +44,8 @@ export async function resolveSecretValue(
   if (stdin.isTTY === true) {
     throw CLIError({
       code: "SECRET_VALUE_STDIN_TTY",
-      message:
-        "--value-stdin reads the secret value from a pipe, but standard input is a terminal.",
-      suggestion: "Pipe the value into the command, or pass it with --value.",
+      message: "--value-stdin cannot read the secret value from a terminal.",
+      suggestion: "Pipe or redirect the value into the command, or pass it with --value.",
       command,
     });
   }
