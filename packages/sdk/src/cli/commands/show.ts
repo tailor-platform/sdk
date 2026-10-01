@@ -165,7 +165,7 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
   const staticWebsiteNames = config.staticWebsites?.length
     ? [...new Set(config.staticWebsites.map((website) => website.name))]
     : [];
-  const applicationResp = client.getApplication({
+  const applicationRequest = client.getApplication({
     workspaceId,
     applicationName: config.name,
   });
@@ -173,10 +173,10 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
     client.getWorkspace({
       workspaceId,
     }),
-    applicationResp,
+    applicationRequest,
     fetchAIGateways(client, workspaceId, aiGatewayNames),
     fetchStaticWebsites(client, workspaceId, staticWebsiteNames),
-    applicationResp.then(({ application }) =>
+    applicationRequest.then(({ application }) =>
       fetchOAuth2Clients(
         client,
         workspaceId,
