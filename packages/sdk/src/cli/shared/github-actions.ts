@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 import { isAbsolute, relative, resolve, sep } from "pathe";
+import { requestedJsonModeSource } from "./args";
 import {
   getErrorDiagnostics,
   withErrorDiagnostics,
@@ -47,26 +48,6 @@ function escapeProperty(value: string): string {
 }
 
 /**
- * Report whether `--json` was requested on the command line.
- *
- * A failure during argument validation ends the command before the `--json`
- * effect sets the logger's mode, so the flag is read from argv instead.
- * Tokens after `--` are positional values, never flags.
- * @returns True when argv requests JSON output
- */
-function jsonRequestedInArgv(): boolean {
-  const args = process.argv.slice(2);
-  const separator = args.indexOf("--");
-  const options = separator === -1 ? args : args.slice(0, separator);
-  return options.some((value) => {
-    const assignment = value.indexOf("=");
-    const name = assignment === -1 ? value : value.slice(0, assignment);
-    if (name !== "--json" && name !== "-j") return false;
-    return assignment === -1 || parseBoolean(value.slice(assignment + 1)) !== false;
-  });
-}
-
-/**
  * Report whether workflow commands should be written.
  *
  * Read at emission time rather than at import time so values loaded from
@@ -75,7 +56,7 @@ function jsonRequestedInArgv(): boolean {
  * @returns True when annotations should be emitted
  */
 export function annotationsEnabled(jsonMode: boolean): boolean {
-  if (jsonMode || jsonRequestedInArgv()) return false;
+  if (jsonMode || requestedJsonModeSource(process.argv.slice(2)) !== undefined) return false;
   if (process.env.GITHUB_ACTIONS !== "true") return false;
   return parseBoolean(process.env.TAILOR_GITHUB_ACTIONS_ANNOTATIONS) !== false;
 }

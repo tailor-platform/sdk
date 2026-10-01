@@ -5,7 +5,8 @@ import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
-import { JSON_OUTPUT_ENV_VAR, logger } from "./logger";
+import { withErrorDiagnostics } from "./error-diagnostics";
+import { JSON_OUTPUT_ENV_VAR, logger, type JsonModeSource } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -190,6 +191,54 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 const JSON_ARG_NAME = "json";
 const JSON_ARG_ALIAS = "j";
 
+let globalArgsApplied = false;
+
+/**
+ * Report what requested JSON output, reading the command line and the environment.
+ *
+ * A failure during argument parsing or validation ends the command before the
+ * `--json` effect sets the logger's mode, so the request is read from argv instead.
+ * Tokens after `--` are positional values, never flags.
+ * @param argv - Command-line arguments after the executable and script path
+ * @returns What requested JSON output, or undefined when it is off
+ */
+export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource | undefined {
+  const separator = argv.indexOf("--");
+  const options = separator === -1 ? argv : argv.slice(0, separator);
+  let flag: boolean | undefined;
+  for (const value of options) {
+    const assignment = value.indexOf("=");
+    const name = assignment === -1 ? value : value.slice(0, assignment);
+    if (name !== `--${JSON_ARG_NAME}` && name !== `-${JSON_ARG_ALIAS}`) continue;
+    const enabled = assignment === -1 || parseBoolean(value.slice(assignment + 1)) !== false;
+    flag = flag === true || enabled;
+  }
+  const envEnabled = parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;
+  if (flag === true) return envEnabled ? "both" : "flag";
+  if (flag === undefined && envEnabled) return "env";
+  return undefined;
+}
+
+/**
+ * Prepare a failure that ended the command before the global arguments were
+ * applied: turn on JSON output when the command line or the environment asked
+ * for it, and name a plain argument-parsing error `INVALID_ARGUMENTS`.
+ * @param error - Failure about to be rendered
+ * @param argv - Command-line arguments after the executable and script path
+ */
+export function resolveEarlyFailure(error: unknown, argv: readonly string[]): void {
+  if (globalArgsApplied) return;
+  const source = requestedJsonModeSource(argv);
+  if (source) logger.setJsonMode(true, source);
+  if (
+    error instanceof Error &&
+    Object.getPrototypeOf(error) === Error.prototype &&
+    !Object.hasOwn(error, "code")
+  ) {
+    withErrorDiagnostics(error, { code: "INVALID_ARGUMENTS" });
+  }
+}
+
 interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
   verboseAlias?: string;
@@ -235,6 +284,7 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       description: "Output as JSON",
       env: JSON_OUTPUT_ENV_VAR,
       effect: (value, { args }) => {
+        globalArgsApplied = true;
         const source = args.$source?.(JSON_ARG_NAME);
         const envAlsoEnabled =
           source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;

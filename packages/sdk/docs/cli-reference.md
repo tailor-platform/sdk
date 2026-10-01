@@ -42,11 +42,12 @@ keep table output. Other values are rejected. JSON mode also disables interactiv
 variable per invocation or per job rather than exporting it from a shell profile; a command that
 needed a prompt names what selected JSON when it refuses.
 
-Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
-a command failure under `--json` emits a JSON error envelope to stderr. Failures you can act on — an
-invalid or missing option, a resource that does not exist, an invalid configuration, or an unmet
-precondition — carry a stable `error.code` such as `PROFILE_NOT_FOUND`, `TAILORDB_NAMESPACE_NOT_FOUND`,
-or `MIGRATION_SCRIPT_REQUIRED`. Where a remediation exists, the envelope also includes
+Errors, warnings, progress, and diagnostic messages are written to stderr. A command failure under
+`--json` or `TAILOR_JSON_OUTPUT` emits a JSON error envelope to stderr, including a failure while
+parsing arguments: an unknown option or subcommand, or an option value that fails validation, is
+reported as `INVALID_ARGUMENTS`. Failures you can act on — an invalid or missing option, a resource
+that does not exist, an invalid configuration, or an unmet precondition — carry a stable `error.code`
+such as `PROFILE_NOT_FOUND`, `TAILORDB_NAMESPACE_NOT_FOUND`, or `MIGRATION_SCRIPT_REQUIRED`. Where a remediation exists, the envelope also includes
 `error.suggestion`, `error.help` (the `--help` invocation for the failing command), `error.next` (a
 runnable command), or `error.context`. `UNEXPECTED_ERROR` marks failures without a dedicated code,
 including SDK-internal errors. Diagnostic lines may precede the error envelope, and stdout is not
@@ -95,9 +96,9 @@ without reporting through the CLI's error path, such as one relaying a failed re
 writes no annotation.
 
 Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` (also `off`, `no`, or `0`) to turn annotations off.
-Passing `--json` also suppresses them, so a workflow step that parses `--json` output gets only the
-error envelope on stderr. The flag is honored even when the command fails during argument parsing,
-before the envelope itself becomes available.
+Passing `--json` or setting `TAILOR_JSON_OUTPUT` also suppresses them, so a workflow step that parses
+JSON output gets only the error envelope on stderr, even when the command fails during argument
+parsing.
 
 An annotation does not by itself fail a step: the step still fails on the CLI's exit code, which
 is unchanged. Workflows that already echo their own `::error::` around the CLI keep working;

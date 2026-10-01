@@ -11,6 +11,7 @@ import {
   parseDuration,
   positiveIntArg,
   recoveryContextArgs,
+  requestedJsonModeSource,
   resolveMachineUserInputSource,
   toPageDirection,
 } from "./args";
@@ -271,6 +272,33 @@ describe("resolveMachineUserInputSource", () => {
     expect(resolveMachineUserInputSource("bot", ["query", "--", "--machine-user", "bot"])).toBe(
       "env",
     );
+  });
+});
+
+describe("requestedJsonModeSource", () => {
+  aroundEach(async (runTest) => {
+    try {
+      await runTest();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  test.each([
+    { argv: [], env: undefined, expected: undefined },
+    { argv: ["workspace", "list", "--json"], env: undefined, expected: "flag" },
+    { argv: ["-j", "workspace", "list"], env: undefined, expected: "flag" },
+    { argv: ["workspace", "list", "--json=true"], env: undefined, expected: "flag" },
+    { argv: ["workspace", "list", "--json=false"], env: undefined, expected: undefined },
+    { argv: ["workspace", "list"], env: "1", expected: "env" },
+    { argv: ["workspace", "list", "--json"], env: "true", expected: "both" },
+    { argv: ["workspace", "list", "--json=false"], env: "1", expected: undefined },
+    { argv: ["workspace", "list"], env: "false", expected: undefined },
+    { argv: ["function", "test-run", "--", "--json"], env: undefined, expected: undefined },
+    { argv: ["deploy", "--no-json", "--jsonish"], env: undefined, expected: undefined },
+  ])("returns $expected for $argv with TAILOR_JSON_OUTPUT=$env", ({ argv, env, expected }) => {
+    vi.stubEnv("TAILOR_JSON_OUTPUT", env);
+    expect(requestedJsonModeSource(argv)).toBe(expected);
   });
 });
 
