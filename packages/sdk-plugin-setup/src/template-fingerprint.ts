@@ -43,6 +43,8 @@ function renderAll(): RenderedTemplate[] {
       ["branch-unrestricted", { kind: "branch", branch: "main" }],
       ["tag", { kind: "tag", tagPattern: "v*", branch: "main", restrictDispatch: true }],
       ["tag-unguarded", { kind: "tag", tagPattern: "v*" }],
+      ["tag-guarded-unrestricted", { kind: "tag", tagPattern: "v*", branch: "main" }],
+      ["tag-unguarded-restricted", { kind: "tag", tagPattern: "v*", restrictDispatch: true }],
     ] as const) {
       add(
         `coordinate-${name}/${packageManager}`,
@@ -86,6 +88,19 @@ function renderAll(): RenderedTemplate[] {
       branch: "main",
       seedValidate: true,
       migrationDriftCheck: true,
+      restrictDispatch: true,
+    }),
+  );
+  add(
+    "tag/guarded-unrestricted",
+    renderTagWorkflow({ ...COMMON, packageManager: "pnpm", tagPattern: "v*", branch: "main" }),
+  );
+  add(
+    "tag/unguarded-restricted",
+    renderTagWorkflow({
+      ...COMMON,
+      packageManager: "pnpm",
+      tagPattern: "v*",
       restrictDispatch: true,
     }),
   );
