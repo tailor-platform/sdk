@@ -363,7 +363,9 @@ export interface PublishStaticWebsiteResult {
 export interface DeployedStaticWebsite {
   name: string;
   url: string;
-  /** Uploads the directory at the absolute path `dir` and publishes it to this website. */
+  /** Name of the application whose config defines this website. */
+  application: string;
+  /** Uploads the directory at the absolute path `dir` and publishes it to this website. Only plugins registered in the config that defines the website can publish to it. */
   publish(dir: string): Promise<PublishStaticWebsiteResult>;
 }
 

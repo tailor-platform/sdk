@@ -25,9 +25,10 @@ function context(frontends: FrontendDefinition[]) {
   const publish = vi.fn<(site: string, dir: string) => Promise<PublishStaticWebsiteResult>>(
     async () => ({ url: "https://published", skippedFiles: [] }),
   );
-  const site = (name: string) => ({
+  const site = (name: string, application = "app") => ({
     name,
     url: `https://${name}`,
+    application,
     publish: (dir: string) => publish(name, dir),
   });
   const application = {
@@ -44,7 +45,7 @@ function context(frontends: FrontendDefinition[]) {
     workspaceId: "ws",
     application,
     applications: [application],
-    staticWebsites: { web: site("web"), admin: site("admin") },
+    staticWebsites: { web: site("web"), admin: site("admin"), other: site("other", "other-app") },
     configPath: application.configPath,
     pluginConfig: frontends,
     logger: { info: vi.fn(), warn: vi.fn(), success: vi.fn() },
@@ -127,7 +128,19 @@ describe("frontendPlugin", () => {
   });
   test("lists available sites when the requested site is outside this deploy", async () => {
     const { publish, run } = setup([{ site: "toString", distDir: "dist" }]);
-    await expect(run()).rejects.toThrow(/toString.*web, admin/);
+    await expect(run()).rejects.toThrow(/toString.*web, admin, other/);
+    expect(publish).not.toHaveBeenCalled();
+  });
+  test("rejects a site defined in another application's config before building", async () => {
+    const env = vi.fn();
+    const { publish, exec, run } = setup([
+      { site: "other", distDir: "dist", build: "pnpm build", env },
+    ]);
+    await expect(run()).rejects.toThrow(
+      'Static website "other" is defined in app "other-app", but frontendPlugin is registered in app "app"; register it in the config that defines the site',
+    );
+    expect(env).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
   });
   test("uploads existing assets without requiring a build command", async () => {

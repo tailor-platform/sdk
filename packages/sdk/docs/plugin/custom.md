@@ -293,7 +293,10 @@ export const plugins = definePlugins(deployedInfo);
 To publish assets, look up the site with `ctx.staticWebsites[name]` and await its
 `publish(dir)` with an absolute directory path. Only websites of applications
 included in this deploy appear in `ctx.staticWebsites`; any other name is
-`undefined`, so check the site before publishing. The result contains `url` and `skippedFiles`; report skipped
+`undefined`, so check the site before publishing. Every config's websites are
+listed so hooks can read their URLs, but `publish(dir)` succeeds only for a website
+declared in the config that registers the plugin; each site's `application` names
+the application whose config declares it. The result contains `url` and `skippedFiles`; report skipped
 files so users can correct files that could not be uploaded.
 
 To run a shell command such as a build, await `ctx.exec(command, { workingDir, env })`.

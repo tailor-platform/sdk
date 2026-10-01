@@ -43,6 +43,10 @@ export function frontendPlugin(
           throw new Error(
             `Static website "${name}" is not included in this deploy. Available sites: ${Object.keys(ctx.staticWebsites).join(", ")}`,
           );
+        if (site.application !== ctx.application.name)
+          throw new Error(
+            `Static website "${name}" is defined in app "${site.application}", but frontendPlugin is registered in app "${ctx.application.name}"; register it in the config that defines the site`,
+          );
         const workingDir = path.resolve(path.dirname(ctx.configPath), def.workingDir ?? ".");
         const distDir = path.resolve(workingDir, def.distDir);
         const env =

@@ -211,6 +211,12 @@ interface HookOwner {
   plugin: Plugin;
 }
 
+interface DeployedSite {
+  name: string;
+  url: string;
+  application: string;
+}
+
 function hookLabel(hook: HookOwner): string {
   return `${hook.plugin.id} (app: ${hook.target.application.name})`;
 }
@@ -251,17 +257,32 @@ export async function runDeployedHooks(
     );
   });
   const applications = loaded.map(({ application }) => application);
-  const staticWebsites: Record<string, DeployedStaticWebsite> = Object.create(null);
-  for (const { siteUrls } of loaded) {
+  const sites: Record<string, DeployedSite> = Object.create(null);
+  for (const [index, { siteUrls }] of loaded.entries()) {
+    const application = assertDefined(targets[index], "Deployed target missing").application.name;
     for (const site of siteUrls) {
-      if (Object.hasOwn(staticWebsites, site.name))
+      if (Object.hasOwn(sites, site.name))
         throw internalError(`Duplicate deployed static website "${site.name}"`);
-      staticWebsites[site.name] = {
-        ...site,
-        publish: (dir) => publishStaticWebsite(client, workspaceId, site.name, dir),
-      };
+      sites[site.name] = { ...site, application };
     }
   }
+  const staticWebsitesFor = (caller: string) => {
+    const staticWebsites: Record<string, DeployedStaticWebsite> = Object.create(null);
+    for (const site of Object.values(sites)) {
+      staticWebsites[site.name] = {
+        ...site,
+        publish: async (dir) => {
+          if (site.application !== caller)
+            throw CLIError({
+              code: "STATIC_WEBSITE_PUBLISH_FORBIDDEN",
+              message: `Static website "${site.name}" is defined in app "${site.application}"; only plugins registered in that config can publish to it`,
+            });
+          return publishStaticWebsite(client, workspaceId, site.name, dir);
+        },
+      };
+    }
+    return staticWebsites;
+  };
   const outputs: DeployedHookOutput[] = [];
   for (const [position, entry] of hooks.entries()) {
     const { target, index, plugin, hook } = entry;
@@ -273,7 +294,7 @@ export async function runDeployedHooks(
           workspaceId,
           application: assertDefined(applications[index], "Deployed application missing"),
           applications,
-          staticWebsites,
+          staticWebsites: staticWebsitesFor(target.application.name),
           configPath: target.config.path,
           pluginConfig: plugin.pluginConfig,
           logger: { info: logger.info, warn: logger.warn, success: logger.success },

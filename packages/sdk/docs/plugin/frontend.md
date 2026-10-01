@@ -55,8 +55,10 @@ the build writes. Omitting `workingDir` uses the config's directory. Absolute pa
 also accepted.
 
 `site` accepts either a `defineStaticWebSite()` result or a site name. The site
-must be declared by a config included in the deploy. With multiple configs,
-`site` may refer to any of their websites.
+must be declared in `staticWebsites` of the same config that registers
+`frontendPlugin`. With multiple configs, register each frontend in the config that
+declares its site; a site from another config fails before the build starts. The
+`env` callback can still read the URLs of other configs' sites.
 
 ## Build environment
 
@@ -94,7 +96,7 @@ The plugin runs even if no platform resources changed. It does not run during
 dry-run, build-only, generation, or migration test deployments. Dry-run lists the
 plugin as a pending deploy hook.
 
-An unknown site, failed build, missing output directory, or failed upload stops
+An unknown site, a site declared in another config, failed build, missing output directory, or failed upload stops
 later frontends and deploy hooks. Platform resources have already been applied;
 fix the error and run `tailor deploy` again. Successfully uploaded frontends are
 not rolled back. Skipped upload files produce warnings and are listed in the result.

@@ -95,7 +95,12 @@ describe("deployed hooks", () => {
           auth: { namespace: "auth", oauth2Clients: [{ name: "web", clientId: "public" }] },
         },
         staticWebsites: {
-          "app-web": { name: "app-web", url: "https://app-web", publish: expect.any(Function) },
+          "app-web": {
+            name: "app-web",
+            url: "https://app-web",
+            application: "app",
+            publish: expect.any(Function),
+          },
         },
       }),
     );
@@ -487,6 +492,37 @@ describe("deployed hooks", () => {
       ],
     });
     expect(deployStaticWebsite).not.toHaveBeenCalled();
+  });
+  test("rejects publishing to a static website defined by another application's config", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "deployed-hook-"));
+    try {
+      const { client } = clientMock();
+      await expect(
+        runDeployedHooks({
+          client,
+          workspaceId: "ws",
+          targets: [
+            target([], "web-app"),
+            target(
+              [
+                plugin(async (ctx) => {
+                  await ctx.staticWebsites["web-app-web"]?.publish(dir);
+                }),
+              ],
+              "admin-app",
+            ),
+          ],
+        }),
+      ).rejects.toMatchObject({
+        code: "DEPLOYED_HOOK_FAILED",
+        message: expect.stringContaining(
+          'Static website "web-app-web" is defined in app "web-app"; only plugins registered in that config can publish to it',
+        ),
+      });
+      expect(deployStaticWebsite).not.toHaveBeenCalled();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
   test("publishes an existing directory to the static website", async () => {
     using _logger = silenceLogger();
