@@ -32,30 +32,29 @@ describe("fingerprintOf", () => {
 
 describe("template version", () => {
   const templatesPath = path.join(import.meta.dirname, "templates.ts");
-  const releasing = process.env.TEMPLATE_VERSION_RELEASE === "1";
+  const driftOf = (source: string) =>
+    templateVersionDrift({
+      ...readTemplateVersionState(source),
+      currentHash: renderedTemplatesFingerprint(),
+    });
 
-  test.skipIf(releasing)(
-    "marks a template change as pending until the next release records it",
+  test("marks a template change as pending until the next release records it", () => {
+    expect(driftOf(fs.readFileSync(templatesPath, "utf-8"))).toBeUndefined();
+  });
+
+  test.runIf(process.env.TEMPLATE_VERSION_RELEASE === "1")(
+    "releases a pending template change into templates.ts",
     () => {
-      const drift = templateVersionDrift({
-        ...readTemplateVersionState(fs.readFileSync(templatesPath, "utf-8")),
-        currentHash: renderedTemplatesFingerprint(),
-      });
+      const source = fs.readFileSync(templatesPath, "utf-8");
+      expect(driftOf(source)).toBeUndefined();
 
-      expect(drift).toBeUndefined();
+      const result = resolvePendingTemplateVersion(source, renderedTemplatesFingerprint());
+      if (result.changed) fs.writeFileSync(templatesPath, result.source, "utf-8");
+
+      expect(readTemplateVersionState(fs.readFileSync(templatesPath, "utf-8"))).toMatchObject({
+        changedSinceRelease: false,
+        releasedFingerprint: renderedTemplatesFingerprint(),
+      });
     },
   );
-
-  test.runIf(releasing)("releases a pending template change into templates.ts", () => {
-    const result = resolvePendingTemplateVersion(
-      fs.readFileSync(templatesPath, "utf-8"),
-      renderedTemplatesFingerprint(),
-    );
-    if (result.changed) fs.writeFileSync(templatesPath, result.source, "utf-8");
-
-    expect(readTemplateVersionState(fs.readFileSync(templatesPath, "utf-8"))).toMatchObject({
-      changedSinceRelease: false,
-      releasedFingerprint: renderedTemplatesFingerprint(),
-    });
-  });
 });
