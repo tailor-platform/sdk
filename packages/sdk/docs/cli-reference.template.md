@@ -71,8 +71,9 @@ sets `RUNNER_DEBUG=1` when debug logging is enabled, so the same command automat
 these details in a debug run. These settings do not enable JSON output; pass `--json` separately.
 
 Capture the original failure's stderr and exit code before retrying. Failures before the CLI starts,
-a rejected `--json` or `TAILOR_JSON_OUTPUT` value, and argument errors in the bundled CLI plugins
-may still produce plain text when JSON output is requested. A failed deployment may have already
+a rejected `--json` or `TAILOR_JSON_OUTPUT` value, argument errors in the bundled CLI plugins, and
+the install hint for a CLI plugin that is not installed may still produce plain text when JSON output
+is requested. A failed deployment may have already
 applied changes, so inspect its output before deciding to run it again.
 
 ### GitHub Actions Annotations

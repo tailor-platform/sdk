@@ -218,23 +218,42 @@ function parseJsonArg(tokens: string[]): unknown {
 }
 
 /**
- * Report what requested JSON output, reading the command line and the environment.
- *
- * A failure during argument parsing or validation ends the command before the
- * `--json` effect sets the logger's mode, so the request is read from argv instead.
- * Tokens after `--` are positional values, never flags.
+ * Read the value the command line gives `--json`. Tokens after `--` are
+ * positional values, never flags.
  * @param argv - Command-line arguments after the executable and script path
- * @returns What requested JSON output, or undefined when it is off
+ * @returns `true`, `false`, a rejected value unchanged, or undefined when argv does not set it
  */
-export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource | undefined {
+function jsonFlagValue(argv: readonly string[]): unknown {
   const separator = argv.indexOf("--");
   const options = separator === -1 ? argv : argv.slice(0, separator);
-  const flag = parseJsonArg(
+  return parseJsonArg(
     options.filter((value) => {
       const [name] = value.split("=", 1);
       return name === `--${JSON_ARG_NAME}` || name === `-${JSON_ARG_ALIAS}`;
     }),
   );
+}
+
+/**
+ * Report whether the command line turns `--json` on.
+ *
+ * A failure during argument parsing or validation ends the command before the
+ * `--json` effect sets the logger's mode, so the flag is read from argv instead.
+ * @param argv - Command-line arguments after the executable and script path
+ * @returns True when argv sets `--json` or `-j` to true
+ */
+export function jsonFlagRequested(argv: readonly string[]): boolean {
+  return jsonFlagValue(argv) === true;
+}
+
+/**
+ * Report what requested JSON output, reading the command line and the environment
+ * the same way the `--json` effect would.
+ * @param argv - Command-line arguments after the executable and script path
+ * @returns What requested JSON output, or undefined when it is off
+ */
+export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource | undefined {
+  const flag = jsonFlagValue(argv);
   const env = process.env[JSON_OUTPUT_ENV_VAR];
   const envEnabled = env !== undefined && parseJsonArg([`--${JSON_ARG_NAME}=${env}`]) === true;
   if (flag === true) return envEnabled ? "both" : "flag";

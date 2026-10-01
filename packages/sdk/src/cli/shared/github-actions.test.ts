@@ -79,12 +79,12 @@ describe("github-actions", () => {
       expect(annotationsEnabled(false)).toBe(false);
     });
 
-    test("is off when TAILOR_JSON_OUTPUT requests JSON before its effect has run", () => {
+    test("stays on when TAILOR_JSON_OUTPUT is set but JSON mode is off", () => {
       process.env.GITHUB_ACTIONS = "true";
       process.env.TAILOR_JSON_OUTPUT = "1";
       using argv = vi.spyOn(process, "argv", "get");
       argv.mockReturnValue(["node", "tailor", "workspace", "list"]);
-      expect(annotationsEnabled(false)).toBe(false);
+      expect(annotationsEnabled(false)).toBe(true);
     });
 
     test("stays on for a json flag value the CLI rejects", () => {

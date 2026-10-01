@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 import { isAbsolute, relative, resolve, sep } from "pathe";
-import { requestedJsonModeSource } from "./args";
+import { jsonFlagRequested } from "./args";
 import {
   getErrorDiagnostics,
   withErrorDiagnostics,
@@ -56,7 +56,7 @@ function escapeProperty(value: string): string {
  * @returns True when annotations should be emitted
  */
 export function annotationsEnabled(jsonMode: boolean): boolean {
-  if (jsonMode || requestedJsonModeSource(process.argv.slice(2)) !== undefined) return false;
+  if (jsonMode || jsonFlagRequested(process.argv.slice(2))) return false;
   if (process.env.GITHUB_ACTIONS !== "true") return false;
   return parseBoolean(process.env.TAILOR_GITHUB_ACTIONS_ANNOTATIONS) !== false;
 }
