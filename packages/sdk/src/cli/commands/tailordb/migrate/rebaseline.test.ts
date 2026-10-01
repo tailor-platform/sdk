@@ -427,7 +427,7 @@ describe("tailordb migration rebaseline", () => {
     const result = await runCommand(rebaselineCommand, []);
 
     expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "MIGRATION_REBASELINE_CANCELLED" });
+    expect(result.error).toMatchObject({ code: "REBASELINE_CANCELLED" });
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
   });

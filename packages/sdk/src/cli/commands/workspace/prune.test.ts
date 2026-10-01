@@ -468,7 +468,7 @@ describe("workspace prune command", () => {
     const result = await runCommand(pruneCommand, ["--name", "e2e-ws-.*", "--older-than", "24h"]);
 
     expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "WORKSPACE_PRUNE_CANCELLED" });
+    expect(result.error).toMatchObject({ code: "PRUNE_CANCELLED" });
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
   });
 

@@ -511,7 +511,7 @@ export const pruneCommand = defineAppCommand({
       });
       if (!confirmed) {
         throw CLIError({
-          code: "WORKSPACE_PRUNE_CANCELLED",
+          code: "PRUNE_CANCELLED",
           message: "Prune cancelled. No workspaces were deleted.",
         });
       }
