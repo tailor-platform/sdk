@@ -1198,12 +1198,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: stepsForm },
       ]);
       vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
-      let goodsReceiptWrites = 0;
+      const goodsReceiptWrites: unknown[] = [];
       vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+        goodsReceiptWrites.push(structuredClone(request));
         // Restriction, Pre-phase, then the Post-phase write that fails.
-        if (++goodsReceiptWrites === 3) throw new Error("post-phase constraint violation");
+        if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
         return {} as never;
       });
 
@@ -1211,7 +1212,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         applyTailorDB(client, withInputs(createUpdatePlanResult()), "create-update"),
       ).rejects.toThrow("post-phase constraint violation");
 
-      expect(goodsReceiptWrites).toBe(3);
+      // The Pre-phase schema is written again, so the next deploy finds the
+      // shape the in-progress migration expects.
+      expect(goodsReceiptWrites).toHaveLength(4);
+      expect(goodsReceiptWrites[3]).toEqual(goodsReceiptWrites[1]);
       expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
       expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
     });

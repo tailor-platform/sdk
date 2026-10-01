@@ -257,6 +257,38 @@ function includeUndeletedTables(
   };
 }
 
+/**
+ * Return a partially applied migration's tables to their Pre-phase shape after
+ * its Post-phase stopped partway, so the next deploy finds the schema it resumes from.
+ * @param client - Operator client instance
+ * @param changeSet - TailorDB change set
+ * @param migration - Migration whose Post-phase failed
+ * @param tailorDBInputs - Deploy inputs
+ * @param attemptedTables - Tables the migration's phases touched
+ */
+async function reapplyPrePhaseAfterPostPhaseFailure(
+  client: OperatorClient,
+  changeSet: TailorDBChangeSet,
+  migration: PendingMigration,
+  tailorDBInputs: Parameters<typeof executeSingleMigrationPrePhase>[3],
+  attemptedTables: Set<string>,
+): Promise<void> {
+  try {
+    await executeSingleMigrationPrePhase(
+      client,
+      changeSet,
+      migration,
+      tailorDBInputs,
+      attemptedTables,
+    );
+  } catch (error) {
+    logger.warn(
+      `Could not return migration ${migration.namespace}/${formatMigrationNumber(migration.number)} to its pre-migration schema: ` +
+        `${error instanceof Error ? error.message : String(error)}. The original migration error is reported below.`,
+    );
+  }
+}
+
 async function removeRunResources(
   client: OperatorClient,
   workspaceId: string,
@@ -591,6 +623,13 @@ export async function applyTailorDB(
           } catch (error) {
             if (inProgress || runsSteps) {
               partialMigrations.set(migration.namespace, migration);
+              await reapplyPrePhaseAfterPostPhaseFailure(
+                client,
+                changeSet,
+                migration,
+                migrationContext.tailorDBInputs,
+                attemptedTables,
+              );
               throw error;
             }
             await rollbackSingleMigrationAfterFailure(
