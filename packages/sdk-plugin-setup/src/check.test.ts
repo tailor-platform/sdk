@@ -26,7 +26,6 @@ const baseTarget = (overrides: Partial<LockTarget> = {}): LockTarget => ({
     packageManager: "pnpm",
   },
   generatedIds: [],
-  ejectedIds: [],
   contentHash: "sha256:abc",
   ...overrides,
 });
@@ -38,6 +37,7 @@ const cleanState = (overrides: Partial<TargetState> = {}): TargetState => ({
   defaultBranch: "main",
   templateVersion: TEMPLATE_VERSION,
   erdNamespaces: ["tailordb"],
+  reservedIds: [],
   ...overrides,
 });
 
@@ -56,6 +56,18 @@ describe("findTargetDrift", () => {
       {},
       { fileExists: false, currentHash: null },
       ["missing-file"],
+    ],
+    [
+      "reports a hand edit named by the managed parts it changed",
+      {},
+      { currentHash: "sha256:zzz", editedParts: ["on"] },
+      ["hand-edit"],
+    ],
+    [
+      "reports a job or step of the user's that uses the reserved tailor- prefix",
+      {},
+      { reservedIds: ["tailor-deploy/tailor-build-frontend"] },
+      ["reserved-id"],
     ],
     [
       "reports an outdated template version",
@@ -167,6 +179,14 @@ describe("findTargetDrift", () => {
     );
     expect(findings.map((f) => f.rule)).toEqual(["hand-edit"]);
     expect(findings[0]?.message).toMatch(message);
+  });
+
+  test("points an outdated template at `tailor setup update`", () => {
+    const findings = findTargetDrift(
+      baseTarget({ templateVersion: TEMPLATE_VERSION - 1 }),
+      cleanState(),
+    );
+    expect(findings[0]?.message).toMatch(/Run `tailor setup update`/);
   });
 
   test("accumulates multiple findings", () => {
@@ -291,12 +311,9 @@ describe("checkGitHub (integration)", () => {
       erdPreview: false,
     },
     generatedIds: [],
-    ejectedIds: [],
     contentHash: "sha256:abc",
   });
 
-  // isCI (from std-env) skips the WORKSPACE_ID env check, so most drift-detection
-  // tests run here to focus on drift rather than local-mode preconditions.
   describe("in CI (isCI: true)", () => {
     let checkGitHub: typeof CheckGitHub;
     let logger: typeof Logger;
@@ -356,6 +373,48 @@ describe("checkGitHub (integration)", () => {
       await expect(check()).resolves.toBeUndefined();
     });
 
+    test("names a user step that uses the reserved tailor- prefix", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const content = fs.readFileSync(wfPath(), "utf-8");
+      fs.writeFileSync(
+        wfPath(),
+        content.replace(
+          "      - id: tailor-apply\n",
+          "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
+        ),
+      );
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/1 drift finding/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix.*Rename it \(e\.g\. "build-frontend"\).*reserved-id/,
+        ),
+      );
+    });
+
+    test("reports a user tailor- step in a legacy entry", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const generated = fs.readFileSync(wfPath(), "utf-8");
+      fs.writeFileSync(
+        wfPath(),
+        generated.replace(
+          "      - id: tailor-apply\n",
+          "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
+        ),
+      );
+      const lockFile = path.join(testDir, ".github/tailor.lock");
+      const lock = JSON.parse(fs.readFileSync(lockFile, "utf-8")) as {
+        targets: Array<{ contentHash: string }>;
+      };
+      for (const target of lock.targets) target.contentHash = hashContent(generated);
+      fs.writeFileSync(lockFile, JSON.stringify(lock));
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/drift/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix/),
+      );
+    });
+
     test("reports a workflow file that is not valid YAML", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       fs.appendFileSync(wfPath(), "jobs: [\n");
@@ -368,6 +427,23 @@ describe("checkGitHub (integration)", () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       editManagedPart();
       await expect(check()).rejects.toThrow(/drift/);
+    });
+
+    test("names the managed parts a hand edit changed", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      editManagedPart();
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/drift/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/edited by hand: "on"\. Revert them.*hand-edit/),
+      );
+    });
+
+    test("points the drift summary at `tailor setup update`", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      editManagedPart();
+      using _warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/Run `tailor setup update` to regenerate/);
     });
 
     test("emits the drift count marker after every finding", async () => {
@@ -413,17 +489,6 @@ describe("checkGitHub (integration)", () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       fs.rmSync(path.join(testDir, "tailor.config.ts"));
       await expect(check()).rejects.toThrow(/drift/);
-    });
-
-    test("skips WORKSPACE_ID check in CI mode", async () => {
-      await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      try {
-        await expect(check()).resolves.toBeUndefined();
-      } finally {
-        if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
-      }
     });
 
     test("detects ERD preview namespace drift", async () => {
@@ -478,7 +543,6 @@ describe("checkGitHub (integration)", () => {
               packageManager: "pnpm",
             },
             generatedIds: [],
-            ejectedIds: [],
             contentHash: hashContent(wfContent),
           },
         ],
@@ -535,31 +599,8 @@ describe("checkGitHub (integration)", () => {
       ).toBe(false);
     });
 
-    test("throws when WORKSPACE_ID is unset and a deploying target exists (local mode)", async () => {
+    test("does not require TAILOR_PLATFORM_WORKSPACE_ID in the local shell", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
-      try {
-        await expect(
-          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
-        ).rejects.toThrow(/TAILOR_PLATFORM_WORKSPACE_ID/);
-      } finally {
-        if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
-      }
-    });
-
-    test("skips WORKSPACE_ID check when only preview targets exist (local mode)", async () => {
-      await setupTarget({
-        kind: "preview",
-        workspaceName: "my-app",
-        region: "us-west",
-        dir: ".",
-        force: false,
-        outputDir: testDir,
-        gitRunner: () => "origin/main",
-        loadConfigName: async () => "my-app",
-        loadConfigId: async () => undefined,
-      });
       const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
       delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
       try {
@@ -568,6 +609,20 @@ describe("checkGitHub (integration)", () => {
         ).resolves.toBeUndefined();
       } finally {
         if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
+      }
+    });
+
+    test("does not check the Slack settings in the local shell", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const saved = process.env["TAILOR_SLACK_BOT_TOKEN"];
+      process.env["TAILOR_SLACK_BOT_TOKEN"] = "xoxb-local";
+      try {
+        await expect(
+          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+        ).resolves.toBeUndefined();
+      } finally {
+        if (saved === undefined) delete process.env["TAILOR_SLACK_BOT_TOKEN"];
+        else process.env["TAILOR_SLACK_BOT_TOKEN"] = saved;
       }
     });
   });

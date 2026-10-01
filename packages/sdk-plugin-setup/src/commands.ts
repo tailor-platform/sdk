@@ -1,16 +1,48 @@
-import { arg, confirmationArgs, defineAppCommand, defineCommand } from "@tailor-platform/sdk/cli";
+import {
+  arg,
+  confirmationArgs,
+  defineAppCommand,
+  defineCommand,
+  logBetaWarning,
+} from "@tailor-platform/sdk/cli";
 import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
-import { setupCoordinate, setupTarget } from "./generate";
+import { setupEnv } from "./env";
+import {
+  printCoordinateNextSteps,
+  printTargetNextSteps,
+  setupCoordinate,
+  setupTarget,
+} from "./generate";
 import { setupRenovate } from "./renovate";
+import { setupUpdate } from "./update";
 
 const checkCommand = defineAppCommand({
   name: "check",
   description: "Audit generated workflows for drift against the current config/repo (read-only).",
   args: z.strictObject({}),
   run: async () => {
+    logBetaWarning("setup");
     await checkGitHub({ outputDir: process.cwd() });
+  },
+});
+
+const envCommand = defineAppCommand({
+  name: "env",
+  description:
+    "Print the secrets and variables each GitHub Environment used by the generated workflows needs (read-only).",
+  args: z.strictObject({
+    format: arg(z.enum(["gh", "terraform"]).default("gh"), {
+      description: "Output format: gh CLI commands, or Terraform (integrations/github provider)",
+    }),
+    environment: arg(z.array(z.string().min(1)).default([]), {
+      description: "Only print this GitHub Environment. Repeat to print several",
+    }),
+  }),
+  run: (args) => {
+    logBetaWarning("setup");
+    setupEnv({ outputDir: process.cwd(), format: args.format, environments: args.environment });
   },
 });
 
@@ -25,7 +57,7 @@ const coordinateCommand = defineAppCommand({
     }),
     action: arg(z.array(z.string().min(1)).min(1), {
       description:
-        "Composite action to include. Repeat for separate deploy steps, or use commas to deploy actions as one multi-config group. tailor- prefix optional.",
+        "Composite action to include. Repeat for separate deploy steps, or use commas to deploy actions as one multi-config group. Takes the name given to setup ci action.",
     }),
     branch: arg(z.string().min(1).optional(), {
       description: "Branch target: deploy trigger branch (defaults to the detected default branch)",
@@ -45,8 +77,9 @@ const coordinateCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     const coordinateKind = args.tag ? "tag" : "branch";
-    await setupCoordinate({
+    const result = await setupCoordinate({
       coordinatorName: args.name,
       coordinateKind,
       actions: args.action,
@@ -56,6 +89,7 @@ const coordinateCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printCoordinateNextSteps(result);
   },
 });
 
@@ -80,7 +114,8 @@ const actionCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    await setupTarget({
+    logBetaWarning("setup");
+    const result = await setupTarget({
       kind: "action",
       workspaceName: args.name,
       dir: args.dir,
@@ -88,6 +123,7 @@ const actionCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printTargetNextSteps(result);
   },
 });
 
@@ -122,7 +158,8 @@ const branchCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    await setupTarget({
+    logBetaWarning("setup");
+    const result = await setupTarget({
       kind: "branch",
       workspaceName: args.name,
       branch: args.target,
@@ -133,6 +170,7 @@ const branchCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printTargetNextSteps(result);
   },
 });
 
@@ -167,7 +205,8 @@ const tagCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    await setupTarget({
+    logBetaWarning("setup");
+    const result = await setupTarget({
       kind: "tag",
       workspaceName: args.name,
       tagPattern: args["tag-pattern"],
@@ -178,6 +217,7 @@ const tagCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printTargetNextSteps(result);
   },
 });
 
@@ -211,7 +251,8 @@ const previewCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    await setupTarget({
+    logBetaWarning("setup");
+    const result = await setupTarget({
       kind: "preview",
       workspaceName: args.name,
       branch: args.branch,
@@ -222,6 +263,23 @@ const previewCommand = defineAppCommand({
       force: args.force,
       outputDir: process.cwd(),
     });
+    printTargetNextSteps(result);
+  },
+});
+
+const updateCommand = defineAppCommand({
+  name: "update",
+  description:
+    "Regenerate every workflow/action in .github/tailor.lock with the flags it was generated with.",
+  args: z.strictObject({
+    force: arg(z.boolean().default(false), {
+      description:
+        "Reset hand edits to SDK-managed parts of every target (your own jobs and steps are kept)",
+    }),
+  }),
+  run: async (args) => {
+    logBetaWarning("setup");
+    await setupUpdate({ force: args.force, outputDir: process.cwd() });
   },
 });
 
@@ -243,6 +301,7 @@ const depsCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await depsProviders[args.provider]({ outputDir: process.cwd() });
   },
 });
@@ -259,6 +318,7 @@ const deleteCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    logBetaWarning("setup");
     await setupDelete({ files: args.files, yes: args.yes, outputDir: process.cwd() });
   },
 });
@@ -266,13 +326,14 @@ const deleteCommand = defineAppCommand({
 const ciCommand = defineCommand({
   name: "ci",
   description:
-    "Generate a GitHub Actions deploy workflow or composite action, tracked in .github/tailor.lock and drift-checked by `setup check`.",
+    "Generate a GitHub Actions deploy workflow or composite action, tracked in .github/tailor.lock and drift-checked by `setup check`, and list the GitHub Environment settings they need.",
   subCommands: {
     branch: branchCommand,
     tag: tagCommand,
     preview: previewCommand,
     action: actionCommand,
     coordinate: coordinateCommand,
+    env: envCommand,
   },
 });
 
@@ -283,5 +344,6 @@ export const setupSubCommands = {
   deps: depsCommand,
   // Cross-cutting operations over lock-tracked files.
   check: checkCommand,
+  update: updateCommand,
   delete: deleteCommand,
 };

@@ -1,16 +1,19 @@
 import * as fs from "node:fs";
+import { logger } from "@tailor-platform/sdk/cli";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
+  printCoordinateNextSteps,
+  printTargetNextSteps,
   setupCoordinate,
   setupTarget,
   type BranchSetupOptions,
   type CoordinateSetupOptions,
 } from "./generate";
 import { detectDefaultBranch } from "./git";
-import { hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
+import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
 import { computeManagedHash, isManagedHash, normalizeActionContent } from "./managed";
 import {
   ACTIONS_SHA,
@@ -734,7 +737,6 @@ describe("decideAction", () => {
     templateVersion: 1,
     inputs: {} as never,
     generatedIds: rendered.generatedIds,
-    ejectedIds: [],
     contentHash: computeManagedHash(rendered.content, "workflow", rendered.generatedIds),
   };
   const legacyTarget = { ...target, contentHash: hashContent("name: managed\n") };
@@ -819,6 +821,7 @@ describe("decideAction", () => {
     const existing = {
       ...target,
       kind: "action" as const,
+      generatedIds: ["tailor-apply"],
       contentHash: hashContent(normalizeActionContent(original)),
     };
     expect(
@@ -1041,7 +1044,9 @@ export default defineConfig({
   test("silent regenerate when hash matches", async () => {
     const opts = baseOptions({ workspaceName: "my-app" });
     await setupTarget(opts);
-    await expect(setupTarget(opts)).resolves.toBeUndefined();
+    await expect(setupTarget(opts)).resolves.toMatchObject({
+      file: ".github/workflows/tailor-my-app.yml",
+    });
   });
 
   test("errors on a hand edit to a managed part without --force", async () => {
@@ -1053,7 +1058,7 @@ export default defineConfig({
       wf,
       generated.replace("timeout-minutes: 30", "timeout-minutes: 30\n    services: {}"),
     );
-    await expect(setupTarget(opts)).rejects.toThrow(/edited by hand.*--force/);
+    await expect(setupTarget(opts)).rejects.toThrow(/edited by hand: "tailor-plan"\..*--force/);
     await setupTarget({ ...opts, force: true });
     expect(fs.readFileSync(wf, "utf-8")).toBe(generated);
   });
@@ -1141,6 +1146,33 @@ export default defineConfig({
 
       expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
     });
+
+    test.each([false, true])(
+      "stops on a user tailor- step in a legacy entry, naming it (force: %s)",
+      async (force) => {
+        const opts = baseOptions({ workspaceName: "my-app" });
+        await setupTarget(opts);
+        const generated = fs.readFileSync(wfPath(), "utf-8");
+        const edited = generated.replace(
+          "      - id: tailor-apply\n",
+          "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
+        );
+        fs.writeFileSync(wfPath(), edited);
+        const lock = readLock(testDir);
+        const [target] = lock?.targets ?? [];
+        if (!lock || !target) throw new Error("expected a lock target");
+        writeLock(testDir, {
+          ...lock,
+          targets: [{ ...target, contentHash: hashContent(generated) }],
+        });
+
+        await expect(setupTarget({ ...opts, force })).rejects.toThrow(
+          /"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix/,
+        );
+
+        expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
+      },
+    );
 
     test("replaces an invalid YAML file of a legacy entry on --force", async () => {
       const opts = baseOptions({ workspaceName: "my-app" });
@@ -1262,13 +1294,57 @@ export default defineConfig({
         loadConfigName: async () => "cfg-app",
         loadConfigId: async () => undefined,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({ file: ".github/workflows/tailor-my-app-tag.yml" });
     const lock = readLock(testDir);
     expect(lock?.targets).toHaveLength(2);
     expect(lock?.targets.map((t) => t.file).toSorted()).toEqual([
       ".github/workflows/tailor-my-app-tag.yml",
       ".github/workflows/tailor-my-app.yml",
     ]);
+  });
+
+  test("next steps point to `tailor setup ci env` for the environment's secrets and variables", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    printTargetNextSteps(
+      await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" })),
+    );
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("tailor setup ci env --environment stg");
+    expect(output).not.toContain("gh secret set");
+  });
+
+  test("next steps leave where each value comes from to `tailor setup ci env`", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    printTargetNextSteps(
+      await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" })),
+    );
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("where each value comes from");
+    expect(output).not.toContain("tailor workspace create");
+  });
+
+  test("preview next steps do not ask for a workspace id", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    printTargetNextSteps(
+      await setupTarget({
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
+      }),
+    );
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("tailor setup ci env");
+    expect(output).not.toContain("TAILOR_PLATFORM_WORKSPACE_ID");
+    expect(output).not.toContain("tailor workspace create");
   });
 
   test("preview: generates a -preview.yml workflow and records kind in lock", async () => {
@@ -1397,7 +1473,7 @@ export default defineConfig({
     expect(lock?.targets[0]).toMatchObject({ inputs: { seedValidate: true } });
   });
 
-  test("action: preserves user-edited build-site run body on rerun without --force", async () => {
+  test("action: preserves user-edited tailor-build-site run body on rerun without --force", async () => {
     const actionOpts = (): Parameters<typeof setupTarget>[0] => ({
       kind: "action",
       workspaceName: "my-app",
@@ -1415,14 +1491,71 @@ export default defineConfig({
     // Simulate user customizing the build command
     const generated = fs.readFileSync(actionFile, "utf-8");
     const edited = generated.replace(
-      /(\s*- id: build-site[\s\S]*?run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/,
+      /(\s*- id: tailor-build-site[\s\S]*?run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/,
       (_, header, _body, tail) => `${header}\n        pnpm run build:static${tail}`,
     );
     fs.writeFileSync(actionFile, edited, "utf-8");
     // Second run: should preserve the custom build command
     await setupTarget(actionOpts());
+    expect(fs.readFileSync(actionFile, "utf-8")).not.toBe(generated);
     const afterRerun = fs.readFileSync(actionFile, "utf-8");
     expect(afterRerun).toContain("pnpm run build:static");
+  });
+
+  test("action: stops on a user step named tailor-build-site when the action has no static website, even with --force", async () => {
+    const opts: Parameters<typeof setupTarget>[0] = {
+      kind: "action",
+      workspaceName: "my-app",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+      loadHasStaticWebsites: async () => false,
+    };
+    await setupTarget(opts);
+    const actionFile = path.join(testDir, ".github/actions/tailor-my-app/action.yml");
+    const edited = fs
+      .readFileSync(actionFile, "utf-8")
+      .replace(
+        /( {4}- id: tailor-apply\n)/,
+        "    - id: tailor-build-site\n      shell: bash\n      run: pnpm run build:docs\n$1",
+      );
+    fs.writeFileSync(actionFile, edited, "utf-8");
+
+    await expect(setupTarget({ ...opts, force: true })).rejects.toThrow(
+      /"tailor-build-site" uses the tailor- prefix/,
+    );
+
+    expect(fs.readFileSync(actionFile, "utf-8")).toBe(edited);
+  });
+
+  test("action: keeps a user step named build-site when the action has no static website", async () => {
+    const opts: Parameters<typeof setupTarget>[0] = {
+      kind: "action",
+      workspaceName: "my-app",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+      loadHasStaticWebsites: async () => false,
+    };
+    await setupTarget(opts);
+    const actionFile = path.join(testDir, ".github/actions/tailor-my-app/action.yml");
+    const edited = fs
+      .readFileSync(actionFile, "utf-8")
+      .replace(
+        /( {4}- id: tailor-apply\n)/,
+        "    - id: build-site\n      shell: bash\n      run: pnpm run build:docs\n$1",
+      );
+    fs.writeFileSync(actionFile, edited, "utf-8");
+
+    await setupTarget(opts);
+
+    expect(fs.readFileSync(actionFile, "utf-8")).toBe(edited);
   });
 });
 
@@ -1501,6 +1634,16 @@ describe("setupCoordinate", () => {
     );
   });
 
+  test("next steps point to `tailor setup ci env` for the environment's secrets and variables", async () => {
+    await setupTarget(actionOpts("api"));
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    printCoordinateNextSteps(await setupCoordinate(coordinateOpts({ environment: "production" })));
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain("tailor setup ci env --environment production");
+    expect(output).not.toContain("gh secret set");
+  });
+
   test("groups comma-separated --action values into one multi-config plan and deploy step", async () => {
     writeAppConfig("api", "apps/api");
     writeAppConfig("worker", "apps/worker");
@@ -1528,6 +1671,20 @@ describe("setupCoordinate", () => {
     const lock = readLock(testDir);
     const target = lock?.targets.find((t) => t.kind === "coordinate" && t.workspaceName === "main");
     expect(target?.inputs.actionDirs).toEqual(["apps/api", "apps/worker"]);
+  });
+
+  test("records the --action grouping in the lock so the coordinator can be regenerated", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    writeAppConfig("web", "apps/web");
+    await setupTarget(actionOpts("api", "apps/api"));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+    await setupTarget(actionOpts("web", "apps/web"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["api, worker", "web"] }));
+
+    const target = findTarget(readLock(testDir), "coordinate", "main");
+    expect(target?.inputs.actionGroups).toEqual([["api", "worker"], ["web"]]);
   });
 
   test("builds static websites before a multi-config deploy", async () => {
@@ -1599,6 +1756,24 @@ describe("setupCoordinate", () => {
     await setupTarget(actionOpts("api"));
     await expect(setupCoordinate(coordinateOpts({ actions: ["missing-app"] }))).rejects.toThrow(
       /not found in .github\/tailor\.lock/,
+    );
+  });
+
+  test("takes an --action value as the exact action name, even one starting with tailor-", async () => {
+    writeAppConfig("tailor-crm", "apps/crm");
+    await setupTarget(actionOpts("tailor-crm", "apps/crm"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["tailor-crm"] }));
+
+    const target = findTarget(readLock(testDir), "coordinate", "main");
+    expect(target?.inputs.actionGroups).toEqual([["tailor-crm"]]);
+  });
+
+  test("suggests the name without tailor- when no action has the given name", async () => {
+    await setupTarget(actionOpts("api"));
+
+    await expect(setupCoordinate(coordinateOpts({ actions: ["tailor-api"] }))).rejects.toThrow(
+      /Action target "tailor-api" not found[\s\S]*--action api/,
     );
   });
 
