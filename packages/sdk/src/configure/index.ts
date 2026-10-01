@@ -53,6 +53,8 @@ export type {
   DeployedContext,
   DeployedHookResult,
   PluginOutputValue,
+  PluginExecOptions,
+  PluginExecResult,
   Plugin,
   PluginConfigs,
   PluginFieldExtensions,

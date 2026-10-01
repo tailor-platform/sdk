@@ -296,6 +296,15 @@ included in this deploy appear in `ctx.staticWebsites`; any other name is
 `undefined`, so check the site before publishing. The result contains `url` and `skippedFiles`; report skipped
 files so users can correct files that could not be uploaded.
 
+To run a shell command such as a build, await `ctx.exec(command, { workingDir, env })`.
+It rejects when the command exits with a non-zero code. By default the command's
+stdout and stderr both go to stderr so `tailor deploy --json` stdout stays parseable;
+pass `output: "capture"` to receive them as `stdout` and `stderr` instead, or
+`output: "ignore"` to discard them. Use `ctx.exec` rather than importing
+`node:child_process` in the plugin: `tailor.config.ts` is also bundled into
+functions that run on the Tailor Platform, such as auth hooks, and a plugin module
+that imports Node.js-only modules makes that bundle fail.
+
 Return JSON-serializable `outputs` to include a result in `deployedHooks` under
 `tailor deploy --json`. Each entry identifies the application and plugin. This
 key is omitted when no hook supplies outputs. `outputs` must be a plain object whose

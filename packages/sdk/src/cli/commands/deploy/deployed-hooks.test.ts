@@ -100,6 +100,25 @@ describe("deployed hooks", () => {
       }),
     );
   });
+  test("lets the hook run shell commands on the deploying machine", async () => {
+    const { client } = clientMock();
+    const [stored] = await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [
+        target([
+          plugin(async (ctx) => {
+            const { stdout } = await ctx.exec(`node -e "process.stdout.write('ran')"`, {
+              workingDir: tmpdir(),
+              output: "capture",
+            });
+            return { outputs: { stdout } };
+          }),
+        ]),
+      ],
+    });
+    expect(stored?.outputs).toEqual({ stdout: "ran" });
+  });
   test("collects every OAuth client page", async () => {
     const { client, methods } = clientMock();
     methods.listAuthOAuth2Clients.mockResolvedValueOnce({

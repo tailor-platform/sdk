@@ -1,5 +1,3 @@
-import { spawn } from "node:child_process";
-import { stat } from "node:fs/promises";
 import * as path from "pathe";
 import type { Plugin } from "#/plugin/types";
 import type { FrontendDefinition } from "./types";
@@ -10,49 +8,6 @@ export type { FrontendDefinition, FrontendEnvContext } from "./types";
 export const FrontendPluginID = "@tailor-platform/frontend";
 
 type FrontendOutput = { site: string; url: string; skippedFiles: string[] };
-
-interface BuildParams {
-  command: string;
-  workingDir: string;
-  env: Record<string, string>;
-}
-
-function ignoreMissingPath(error: unknown): undefined {
-  const code = error instanceof Error && "code" in error ? error.code : undefined;
-  if (code === "ENOENT" || code === "ENOTDIR") return undefined;
-  throw error;
-}
-
-async function buildFrontend(params: BuildParams): Promise<void> {
-  const { command, workingDir, env } = params;
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, {
-      shell: true,
-      cwd: workingDir,
-      env: { ...process.env, ...env },
-      stdio: ["ignore", process.stderr, process.stderr],
-    });
-    child.once("error", (error) => {
-      reject(
-        new Error(
-          `Failed to start frontend build: ${command} (working directory: ${workingDir}): ${error.message}`,
-          {
-            cause: error,
-          },
-        ),
-      );
-    });
-    child.once("close", (code, signal) => {
-      if (code === 0) resolve();
-      else
-        reject(
-          new Error(
-            `Frontend build failed: ${command} (working directory: ${workingDir}, exit code: ${code}${signal ? `, signal: ${signal}` : ""})`,
-          ),
-        );
-    });
-  });
-}
 
 /**
  * Build and upload frontend assets after a successful deployment.
@@ -102,13 +57,8 @@ export function frontendPlugin(
           ctx.logger.info(
             `Building frontend for site "${name}": ${def.build} (working directory: ${workingDir})`,
           );
-          await buildFrontend({ command: def.build, workingDir, env });
+          await ctx.exec(def.build, { workingDir, env });
         }
-        const info = await stat(distDir).catch(ignoreMissingPath);
-        if (!info?.isDirectory())
-          throw new Error(
-            `Frontend dist directory does not exist or is not a directory: ${distDir}`,
-          );
         const result = await site.publish(distDir);
         if (result.skippedFiles.length > 0) {
           ctx.logger.warn(

@@ -390,6 +390,25 @@ export interface PluginLogger {
   success(message: string): void;
 }
 
+export interface PluginExecOptions {
+  /** Directory to run the command in. */
+  workingDir: string;
+  /** Environment variables added to the environment `tailor` runs with. */
+  env?: Record<string, string>;
+  /**
+   * Where the command's output goes. `"stream"` (default) writes both stdout and stderr to stderr
+   * so `--json` results on stdout stay parseable, `"capture"` returns them, and `"ignore"` discards them.
+   */
+  output?: "stream" | "capture" | "ignore";
+}
+
+export interface PluginExecResult {
+  /** Captured stdout. Empty unless `output` is `"capture"`. */
+  stdout: string;
+  /** Captured stderr. Empty unless `output` is `"capture"`. */
+  stderr: string;
+}
+
 /** Values available after all applications in this deploy run have been applied. */
 export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
@@ -402,6 +421,13 @@ export interface DeployedContext<PluginConfig = unknown> {
   configPath: string;
   pluginConfig: PluginConfig;
   logger: PluginLogger;
+  /**
+   * Run a shell command on the machine running `tailor deploy`. Rejects when the command exits with a non-zero code.
+   * @param command - Shell command, such as `pnpm build`
+   * @param options - Working directory, added environment variables, and output handling
+   * @returns Captured output when `options.output` is `"capture"`
+   */
+  exec(command: string, options: PluginExecOptions): Promise<PluginExecResult>;
 }
 
 // Symbol keys only: string keys such as `toJSON?: never` would also reject interfaces with a data field of that name.

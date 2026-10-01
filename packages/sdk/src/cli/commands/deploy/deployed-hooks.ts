@@ -8,6 +8,7 @@ import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { deployStaticWebsite } from "../staticwebsite/deploy";
+import { execPluginCommand } from "./plugin-exec";
 import type {
   DeployedApplication,
   DeployedOAuth2Client,
@@ -276,6 +277,7 @@ export async function runDeployedHooks(
           configPath: target.config.path,
           pluginConfig: plugin.pluginConfig,
           logger: { info: logger.info, warn: logger.warn, success: logger.success },
+          exec: execPluginCommand,
         });
       });
       const hookOutputs = result?.outputs;
