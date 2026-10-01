@@ -66,6 +66,8 @@ export const restoreCommand = defineAppCommand({
         throw CLIError({
           code: "WORKSPACE_RESTORATION_CANCELLED",
           message: "Workspace restoration cancelled.",
+          suggestion:
+            'Run the command again and type "yes" to confirm, or pass --yes to skip the confirmation.',
         });
       }
     }

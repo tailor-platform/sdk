@@ -2,6 +2,7 @@ import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
+import { releaseVaultOwnership } from "./check-vault-managed";
 import { updateSecretCommand } from "./update";
 
 vi.mock("#/cli/shared/operator-context", () => ({
@@ -48,5 +49,6 @@ describe("secret update command", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "SECRET_UPDATE_CANCELLED" });
     expect(client.updateSecretManagerSecret).not.toHaveBeenCalled();
+    expect(releaseVaultOwnership).not.toHaveBeenCalled();
   });
 });

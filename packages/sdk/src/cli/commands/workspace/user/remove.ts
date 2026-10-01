@@ -67,6 +67,8 @@ export const removeCommand = defineAppCommand({
         throw CLIError({
           code: "WORKSPACE_USER_REMOVAL_CANCELLED",
           message: "User removal cancelled.",
+          suggestion:
+            'Run the command again and type "yes" to confirm, or pass --yes to skip the confirmation.',
         });
       }
     }
