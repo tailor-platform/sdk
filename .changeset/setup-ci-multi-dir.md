@@ -7,7 +7,7 @@
 
 `tailor setup ci branch` and `tailor setup ci preview` also accept `--paths` (repeatable) to trigger the workflow on changes outside the app directories, such as a frontend or shared packages.
 
-Branch and preview workflows with an app directory other than the repository root no longer filter their `on:` triggers by `paths`. They start on every pull request and push, and a new `tailor-changes` job skips the plan, deploy, and preview jobs when nothing under the app directories (or `--paths`) changed. Skipped jobs report success, so these checks can be required in branch protection. `setup` remains a beta command, so this ships as an immediate change rather than going through a deprecation cycle.
+Branch and preview workflows with an app directory other than the repository root no longer filter their `on:` triggers by `paths`. They start on every pull request and push, and a new `tailor-changes` job skips the plan, deploy, and preview jobs when nothing under the app directories (or `--paths`) changed. Skipped jobs report success, so these checks can be required in branch protection. If the `tailor-changes` job itself fails, those jobs fail instead of being skipped, so a required check cannot pass without them. `setup` remains a beta command, so this ships as an immediate change rather than going through a deprecation cycle.
 
 Branch workflows generated with `--erd-preview` now install the project dependencies before building the ERD preview, which the setup step does not do.
 

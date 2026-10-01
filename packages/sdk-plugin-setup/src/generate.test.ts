@@ -739,17 +739,39 @@ describe("change detection", () => {
     );
   };
 
-  test("runs the plan and preview deploy when change detection fails, so a required check cannot be bypassed", () => {
-    const branch = parseYAML(
-      renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a" }).content,
-    ) as Workflow;
-    const preview = parseYAML(
-      renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/a" }).content,
-    ) as Workflow;
+  test("fails every gated job when change detection fails, so a required check blocks merging", () => {
+    const branch = renderBranchWorkflow({
+      ...branchBase,
+      workingDirectory: "apps/a",
+      erdPreview: { namespaces: ["main"] },
+    });
+    const preview = renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/a" });
+    const branchJobs = (parseYAML(branch.content) as Workflow).jobs;
+    const previewJobs = (parseYAML(preview.content) as Workflow).jobs;
     const failed = { result: "failure", relevant: "" } as const;
 
-    expect(runsOnPullRequest(branch.jobs["tailor-plan"], failed)).toBe(true);
-    expect(runsOnPullRequest(preview.jobs["tailor-preview-deploy"], failed)).toBe(true);
+    expect(runsOnPullRequest(branchJobs["tailor-plan"], failed)).toBe(true);
+    expect(runsOnPullRequest(previewJobs["tailor-preview-deploy"], failed)).toBe(true);
+    for (const job of [
+      branchJobs["tailor-plan"],
+      branchJobs["tailor-deploy"],
+      branchJobs["tailor-erd-preview-matrix"],
+      previewJobs["tailor-preview-deploy"],
+    ]) {
+      expect(job?.steps?.[0]).toMatchObject({
+        id: "tailor-changes-guard",
+        if: "needs.tailor-changes.result != 'success'",
+        run: expect.stringContaining("exit 1"),
+      });
+    }
+    expect(branch.generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-plan/tailor-changes-guard",
+        "tailor-deploy/tailor-changes-guard",
+        "tailor-erd-preview-matrix/tailor-changes-guard",
+      ]),
+    );
+    expect(preview.generatedIds).toContain("tailor-preview-deploy/tailor-changes-guard");
   });
 
   test("skips the plan only when change detection succeeded and found nothing relevant", () => {
@@ -825,6 +847,7 @@ describe("change detection", () => {
 
     expect(jobs["tailor-changes"]).toBeUndefined();
     expect(jobs["tailor-plan"]?.needs).toBeUndefined();
+    expect(jobs["tailor-plan"]?.steps?.[0]?.id).toBe("tailor-checkout");
     expect(generatedIds).not.toContain("tailor-changes");
   });
 });

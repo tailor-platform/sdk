@@ -260,6 +260,21 @@ function changesIds(patterns: readonly string[] | undefined): string[] {
   return patterns ? ["tailor-changes", "tailor-changes/tailor-changes"] : [];
 }
 
+function changesGuard(patterns: readonly string[] | undefined): string | undefined {
+  if (!patterns) return undefined;
+  return [
+    "- id: tailor-changes-guard",
+    "  if: needs.tailor-changes.result != 'success'",
+    "  run: |",
+    `    echo "::error::Change detection (tailor-changes) did not succeed; re-run the failed jobs."`,
+    "    exit 1",
+  ].join("\n");
+}
+
+function changesGuardIds(job: string, patterns: readonly string[] | undefined): string[] {
+  return patterns ? [`${job}/tailor-changes-guard`] : [];
+}
+
 function perAppGenerateCheckSteps(apps: readonly RenderApp[]): string {
   return apps
     .flatMap((app) => [
@@ -443,12 +458,14 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     "DEPLOY_IF",
     gateOnChanges(branchDeployIf(params.restrictDispatch ?? false), patterns),
   );
+  out = line(out, "CHANGES_GUARD", changesGuard(patterns));
 
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
 
   const generatedIds: string[] = [
     ...changesIds(patterns),
     "tailor-plan",
+    ...changesGuardIds("tailor-plan", patterns),
     "tailor-plan/tailor-checkout",
     "tailor-plan/tailor-setup",
     "tailor-plan/tailor-install",
@@ -461,6 +478,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   if (erdPreview) {
     generatedIds.push(
       "tailor-erd-preview-matrix",
+      ...changesGuardIds("tailor-erd-preview-matrix", patterns),
       "tailor-erd-preview-matrix/tailor-checkout",
       "tailor-erd-preview-matrix/tailor-checkout-base",
       "tailor-erd-preview-matrix/tailor-erd-preview-matrix",
@@ -484,6 +502,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   }
   generatedIds.push(
     "tailor-deploy",
+    ...changesGuardIds("tailor-deploy", patterns),
     "tailor-deploy/tailor-checkout",
     "tailor-deploy/tailor-setup",
     "tailor-deploy/tailor-install",
@@ -595,6 +614,7 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   const patterns = changePatterns(params);
   out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
   out = line(out, "DEPLOY_IF", gateOnChanges(deployIf, patterns));
+  out = line(out, "CHANGES_GUARD", changesGuard(patterns));
 
   // Cleanup always runs on closed regardless of current labels: the label may have been
   // removed after a preview deploy, and the cleanup action is a no-op when no workspace exists.
@@ -612,6 +632,7 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   const generatedIds: string[] = [
     ...changesIds(patterns),
     "tailor-preview-deploy",
+    ...changesGuardIds("tailor-preview-deploy", patterns),
     "tailor-preview-deploy/tailor-checkout",
     "tailor-preview-deploy/tailor-setup",
     "tailor-preview-deploy/tailor-install",

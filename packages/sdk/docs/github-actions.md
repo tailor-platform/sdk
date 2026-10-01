@@ -486,8 +486,9 @@ the change touches `apps/backend/**`, and the plan, deploy, and ERD preview jobs
 are skipped when it does not. A skipped job reports success, so you can make
 these checks required in branch protection; a workflow that a `paths` trigger
 filter never started would leave them pending instead. If the `tailor-changes` job
-itself fails, the jobs run as if the change were relevant, so a required check
-cannot pass without them.
+itself fails (for example, on a GitHub API error), the plan, deploy, and ERD
+preview jobs fail too instead of being skipped, so a required check blocks
+merging and nothing is deployed. Re-run the failed jobs once the cause is gone.
 
 ### Deploying several apps together
 
