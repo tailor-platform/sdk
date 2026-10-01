@@ -63,7 +63,7 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: ./.github/actions/tailor-setup
+        uses: $/.github/actions/tailor-setup
       # __PER_APP_PLAN_STEPS__
 
   tailor-deploy:
@@ -83,5 +83,5 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: ./.github/actions/tailor-setup
+        uses: $/.github/actions/tailor-setup
       # __PER_APP_DEPLOY_STEPS__

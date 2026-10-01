@@ -1,12 +1,12 @@
 /**
- * Actionlint validation for generated GitHub Actions workflows.
+ * Security lint of generated GitHub Actions workflows.
  *
- * Each rendered workflow is written to a temp directory and validated with
- * `actionlint`. The test suite is skipped when the `actionlint` binary is not
- * available on PATH (e.g. a machine without aqua installed), so it never
- * causes false negatives in environments that have not run `aqua i`.
+ * Each rendered workflow is written to its own temp repository and checked
+ * with `zizmor` at every severity. The suites are skipped when the binary is
+ * not available on PATH, so they never cause false negatives in environments
+ * that have not run `aqua i`.
  *
- * Locally: run `aqua i` first, then this suite will execute as normal tests.
+ * Locally: run `aqua i` first, then these suites will execute as normal tests.
  */
 
 import { spawnSync } from "node:child_process";
@@ -22,8 +22,19 @@ import {
 } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
 
-function isActionlintAvailable(): boolean {
-  const result = spawnSync("actionlint", ["--version"], {
+const REPO_ROOT = path.resolve(process.cwd(), "../..");
+
+// Not the bare command: aqua's proxy picks the version from the aqua.yaml above
+// its working directory, and the temp repositories have none.
+function resolveBin(command: string): string {
+  const result = spawnSync("aqua", ["which", command], { encoding: "utf-8", cwd: REPO_ROOT });
+  return result.status === 0 ? result.stdout.trim() : command;
+}
+
+const ZIZMOR = resolveBin("zizmor");
+
+function isAvailable(command: string, args: string[]): boolean {
+  const result = spawnSync(command, args, {
     encoding: "utf-8",
     timeout: 5000,
     killSignal: "SIGKILL",
@@ -33,12 +44,12 @@ function isActionlintAvailable(): boolean {
 
 type LintResult = { ok: boolean; output: string };
 
-function runActionlint(workflowPath: string): LintResult {
-  const result = spawnSync("actionlint", ["-color", workflowPath], {
+function runZizmor(repoDir: string, workflowPath: string): LintResult {
+  const result = spawnSync(ZIZMOR, ["--offline", "--no-progress", workflowPath], {
     encoding: "utf-8",
+    cwd: repoDir,
   });
-  const output = `${result.stdout}${result.stderr}`.trim();
-  return { ok: result.status === 0, output };
+  return { ok: result.status === 0, output: `${result.stdout}${result.stderr}`.trim() };
 }
 
 let tmpDir: string;
@@ -46,7 +57,6 @@ let tmpDir: string;
 aroundAll(async (runSuite) => {
   using tmp = tempDir("workflow-lint-");
   tmpDir = tmp.dir;
-  fs.mkdirSync(path.join(tmpDir, ".github", "workflows"), { recursive: true });
   await runSuite();
 });
 
@@ -56,16 +66,24 @@ const COMMON = {
 };
 
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
-const REPO_ROOT = path.resolve(process.cwd(), "../..");
 const ERD_SCHEMA_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema.yml");
 
-// Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
-const actionlintAvailable = isActionlintAvailable();
+// Suites are skipped entirely when zizmor is not on PATH (run `aqua i` first).
+const zizmorAvailable = isAvailable(ZIZMOR, ["--version"]);
+
+function writeRepo(name: string, files: Record<string, string>): string {
+  const repoDir = path.join(tmpDir, name);
+  for (const [file, content] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(repoDir, file)), { recursive: true });
+    fs.writeFileSync(path.join(repoDir, file), content, "utf-8");
+  }
+  return repoDir;
+}
 
 function writeAndLint(name: string, content: string): LintResult {
-  const filePath = path.join(tmpDir, ".github", "workflows", `${name}.yml`);
-  fs.writeFileSync(filePath, content, "utf-8");
-  return runActionlint(filePath);
+  const workflow = `.github/workflows/${name}.yml`;
+  const repoDir = writeRepo(name, { [workflow]: content });
+  return runZizmor(repoDir, path.join(repoDir, workflow));
 }
 
 describe("repository ERD schema workflow", () => {
@@ -182,10 +200,10 @@ describe("repository ERD schema workflow", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests (skipped when actionlint is not on PATH)
+// Tests (skipped when zizmor is not on PATH)
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWorkflow", () => {
+describe.skipIf(!zizmorAvailable)("security lint of renderBranchWorkflow", () => {
   // All four package managers, no optional fields
   for (const pm of ALL_PM) {
     test(`branch / ${pm} / minimal`, () => {
@@ -196,7 +214,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
         erdPreview: null,
       });
       const { ok, output } = writeAndLint(`branch-${pm}`, content);
-      expect(ok, `actionlint errors for branch/${pm}:\n${output}`).toBe(true);
+      expect(ok, `lint errors for branch/${pm}:\n${output}`).toBe(true);
     });
   }
 
@@ -210,7 +228,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       workingDirectory: "apps/backend",
     });
     const { ok, output } = writeAndLint("branch-pnpm-dir", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 
   // explicit environment
@@ -223,7 +241,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       environment: "production",
     });
     const { ok, output } = writeAndLint("branch-pnpm-env", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 
   test("branch / pnpm / with ERD preview", () => {
@@ -234,7 +252,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
     });
     const { ok, output } = writeAndLint("branch-pnpm-erd-preview", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 
   // seed validation + workingDirectory + environment
@@ -249,7 +267,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       environment: "staging",
     });
     const { ok, output } = writeAndLint("branch-npm-dir-env", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 
   test("branch / pnpm / with restricted dispatch", () => {
@@ -261,11 +279,11 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       restrictDispatch: true,
     });
     const { ok, output } = writeAndLint("branch-pnpm-restrict", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 });
 
-describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflow", () => {
+describe.skipIf(!zizmorAvailable)("security lint of renderTagWorkflow", () => {
   const cases = [
     ...ALL_PM.map((pm) => ({
       name: `tag / ${pm} / no guard / minimal`,
@@ -314,7 +332,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflo
   test.each(cases)("$name", ({ fileName, params }) => {
     const { content } = renderTagWorkflow({ ...COMMON, ...params });
     const { ok, output } = writeAndLint(fileName, content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 });
 
@@ -354,49 +372,16 @@ runs:
       shell: bash
 `;
 
-describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinateWorkflow", () => {
-  let cTmpDir: string;
-
-  aroundAll(async (runSuite) => {
-    using tmp = tempDir("coord-lint-");
-    cTmpDir = tmp.dir;
-    fs.mkdirSync(path.join(cTmpDir, ".github", "workflows"), { recursive: true });
-    fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-setup"), { recursive: true });
-    fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-api"), { recursive: true });
-    // Use an inline stub instead of renderTailorSetupAction output to avoid
-    // remote action references (tailor-platform/actions/setup@...) that would
-    // cause actionlint to perform network lookups and hang in offline CI.
-    fs.writeFileSync(
-      path.join(cTmpDir, ".github", "actions", "tailor-setup", "action.yml"),
-      "name: stub-setup\ndescription: stub\nruns:\n  using: composite\n  steps:\n    - run: echo stub\n      shell: bash\n",
-    );
-    fs.writeFileSync(
-      path.join(cTmpDir, ".github", "actions", "tailor-api", "action.yml"),
-      COMPOSITE_ACTION_STUB,
-    );
-    await runSuite();
-  });
-
+describe.skipIf(!zizmorAvailable)("security lint of renderCoordinateWorkflow", () => {
   function lintCoordinate(name: string, content: string): LintResult {
-    const wfPath = path.join(cTmpDir, ".github", "workflows", `${name}.yml`);
-    fs.writeFileSync(wfPath, content);
-    // Run from REPO_ROOT (the sdk repo root) rather than from cTmpDir so that
-    // the aqua proxy resolves actionlint from the project's aqua.yaml rather
-    // than from a temp dir that has no aqua config.  Local uses: references
-    // (./.github/actions/...) will not resolve from REPO_ROOT but we ignore
-    // those errors so actionlint still validates the workflow structure.
-    const result = spawnSync(
-      "actionlint",
-      ["-color", "-ignore", "action ./.github/actions/tailor-[^ ]+ is not found", wfPath],
-      {
-        encoding: "utf-8",
-        cwd: REPO_ROOT,
-        timeout: 15000,
-        killSignal: "SIGKILL",
-      },
-    );
-    const output = `${result.stdout}${result.stderr}`.trim();
-    return { ok: result.status === 0, output };
+    const workflow = `.github/workflows/${name}.yml`;
+    const repoDir = writeRepo(name, {
+      [workflow]: content,
+      ".github/actions/tailor-setup/action.yml":
+        "name: stub-setup\ndescription: stub\nruns:\n  using: composite\n  steps:\n    - run: echo stub\n      shell: bash\n",
+      ".github/actions/tailor-api/action.yml": COMPOSITE_ACTION_STUB,
+    });
+    return runZizmor(repoDir, path.join(repoDir, workflow));
   }
 
   const COORD_COMMON = {
@@ -413,7 +398,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinate
       branch: "main",
     });
     const { ok, output } = lintCoordinate("coord-branch", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 
   test("coordinate / tag", () => {
@@ -424,7 +409,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinate
       tagPattern: "v*",
     });
     const { ok, output } = lintCoordinate("coord-tag", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 
   test.each(["branch", "tag"] as const)("coordinate / %s / restricted dispatch", (kind) => {
@@ -436,11 +421,11 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinate
       restrictDispatch: true,
     });
     const { ok, output } = lintCoordinate(`coord-${kind}-restrict`, content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    expect(ok, `lint errors:\n${output}`).toBe(true);
   });
 });
 
-describe.skipIf(!actionlintAvailable)("actionlint validation of renderPreviewWorkflow", () => {
+describe.skipIf(!zizmorAvailable)("security lint of renderPreviewWorkflow", () => {
   const PREVIEW_COMMON = {
     ...COMMON,
     branch: "main",
@@ -451,13 +436,13 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderPreviewWor
   test("preview / pnpm / all PRs", () => {
     const { content } = renderPreviewWorkflow({ ...PREVIEW_COMMON, requirePreviewLabel: false });
     const { ok, output } = writeAndLint("preview-pnpm-all", content);
-    expect(ok, `actionlint errors for preview/pnpm/all-prs:\n${output}`).toBe(true);
+    expect(ok, `lint errors for preview/pnpm/all-prs:\n${output}`).toBe(true);
   });
 
   test("preview / pnpm / label-triggered", () => {
     const { content } = renderPreviewWorkflow({ ...PREVIEW_COMMON, requirePreviewLabel: true });
     const { ok, output } = writeAndLint("preview-pnpm-label", content);
-    expect(ok, `actionlint errors for preview/pnpm/label-triggered:\n${output}`).toBe(true);
+    expect(ok, `lint errors for preview/pnpm/label-triggered:\n${output}`).toBe(true);
   });
 
   test("preview / pnpm / with workingDirectory", () => {
@@ -466,6 +451,6 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderPreviewWor
       workingDirectory: "apps/backend",
     });
     const { ok, output } = writeAndLint("preview-pnpm-dir", content);
-    expect(ok, `actionlint errors for preview/pnpm/workingDirectory:\n${output}`).toBe(true);
+    expect(ok, `lint errors for preview/pnpm/workingDirectory:\n${output}`).toBe(true);
   });
 });
