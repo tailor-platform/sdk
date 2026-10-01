@@ -123,6 +123,28 @@ describe.each([
     vi.clearAllMocks();
   });
 
+  test("sends the value passed with --value", async () => {
+    const client = stubClient();
+
+    const result = await runCommand(command, [
+      "--vault-name",
+      "api-keys",
+      "--name",
+      "stripe",
+      "--value",
+      "sk_live_flag",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(logger.registerSecret).toHaveBeenCalledWith("sk_live_flag");
+    expect(client[rpc]).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      secretmanagerVaultName: "api-keys",
+      secretmanagerSecretName: "stripe",
+      secretmanagerSecretValue: "sk_live_flag",
+    });
+  });
+
   test("sends the value piped to standard input with --value-stdin", async () => {
     const client = stubClient();
     vi.spyOn(process, "stdin", "get").mockReturnValue(

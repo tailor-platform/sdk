@@ -1,3 +1,4 @@
+import { buffer } from "node:stream/consumers";
 import { CLIError } from "#/cli/shared/errors";
 
 /** Parsed `--value` / `--value-stdin` options. */
@@ -48,13 +49,10 @@ export async function resolveSecretValue(
     });
   }
 
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of stdin) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-  }
+  const bytes = await buffer(stdin);
   let text: string;
   try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch (error) {
     throw CLIError({
       code: "SECRET_VALUE_INVALID_UTF8",
@@ -63,11 +61,7 @@ export async function resolveSecretValue(
       cause: error,
     });
   }
-  const value = text.endsWith("\r\n")
-    ? text.slice(0, -2)
-    : text.endsWith("\n")
-      ? text.slice(0, -1)
-      : text;
+  const value = text.replace(/\r?\n$/, "");
   if (value === "") {
     throw CLIError({
       code: "SECRET_VALUE_EMPTY",
