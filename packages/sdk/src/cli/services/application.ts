@@ -58,6 +58,7 @@ import type { PluginManager } from "#/plugin/manager";
 import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
 import type { IdP } from "#/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";
+import type { TailorDBServiceConfigInput } from "#/types/tailordb.generated";
 
 type SecretVault = {
   readonly vaultName: string;
@@ -119,6 +120,39 @@ type DefineTailorDBResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
+/**
+ * Inputs for {@link createOwnedTailorDBService}.
+ */
+export interface CreateOwnedTailorDBServiceParams {
+  /** Namespace name */
+  namespace: string;
+  /** The namespace's entry in the config's `db` */
+  serviceConfig: TailorDBServiceConfigInput;
+  /** Directory the namespace's `files` globs resolve from */
+  baseDir: string;
+  /** Plugins of the config that owns the namespace */
+  pluginManager?: PluginManager;
+}
+
+/**
+ * Create the TailorDB service for a namespace owned by a config.
+ * @param params - Service inputs
+ * @returns TailorDB service whose tables are not yet loaded
+ */
+export function createOwnedTailorDBService(
+  params: CreateOwnedTailorDBServiceParams,
+): TailorDBService {
+  const { namespace, serviceConfig, baseDir, pluginManager } = params;
+  // Parse config through schema to normalize gqlOperations
+  const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
+  return createTailorDBService({
+    namespace,
+    config: parsedConfig,
+    pluginManager,
+    baseDir,
+  });
+}
+
 function defineTailorDB(
   config: TailorDBServiceInput | undefined,
   baseDir: string,
@@ -136,15 +170,9 @@ function defineTailorDB(
     if ("external" in serviceConfig) {
       externalTailorDBNamespaces.push(namespace);
     } else {
-      // Parse config through schema to normalize gqlOperations
-      const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
-      const tailorDB = createTailorDBService({
-        namespace,
-        config: parsedConfig,
-        pluginManager,
-        baseDir,
-      });
-      tailorDBServices.push(tailorDB);
+      tailorDBServices.push(
+        createOwnedTailorDBService({ namespace, serviceConfig, baseDir, pluginManager }),
+      );
     }
     subgraphs.push({ Type: "tailordb", Name: namespace });
   }
