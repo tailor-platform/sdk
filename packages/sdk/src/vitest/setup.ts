@@ -7,7 +7,7 @@
  * a flag set by injectMocks() during environment setup).
  */
 import { pathToFileURL } from "node:url";
-import { beforeAll } from "vitest";
+import { afterAll, beforeAll } from "vitest";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
 
 function isTailorRuntime(): boolean {
@@ -91,18 +91,38 @@ export async function loadDefaultDateRepresentationFromConfig(
   }
 }
 
+const DEFAULT_DATE_REPRESENTATION_KEY = "__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION";
+
+/**
+ * Apply `defaultDateRepresentation` the way deployed resolver bundles do.
+ * @param representation - The config's representation, or undefined to clear it
+ * @returns A function that restores the previous value
+ */
+export function applyDefaultDateRepresentation(
+  representation: "string" | "date" | "temporal" | undefined,
+): () => void {
+  const store = globalThis as Record<string, unknown>;
+  const hadPrevious = DEFAULT_DATE_REPRESENTATION_KEY in store;
+  const previous = store[DEFAULT_DATE_REPRESENTATION_KEY];
+  const set = (value: unknown, present: boolean) => {
+    if (present) store[DEFAULT_DATE_REPRESENTATION_KEY] = value;
+    else delete store[DEFAULT_DATE_REPRESENTATION_KEY];
+  };
+  set(representation, representation !== undefined);
+  return () => set(previous, hadPrevious);
+}
+
+let restoreDefaultDateRepresentation: (() => void) | undefined;
+
 // Load secrets and defaultDateRepresentation from tailor.config.ts if config path is provided via env var
 beforeAll(async () => {
   if (!isTailorRuntime()) return;
   const configPath = process.env.__TAILOR_RUNTIME_CONFIG;
   if (!configPath) return;
 
-  const representation = await loadDefaultDateRepresentationFromConfig(configPath);
-  if (representation) {
-    (
-      globalThis as { __TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION?: string }
-    ).__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION = representation;
-  }
+  restoreDefaultDateRepresentation = applyDefaultDateRepresentation(
+    await loadDefaultDateRepresentationFromConfig(configPath),
+  );
 
   const store = await loadSecretsFromConfig(configPath);
   if (store) {
@@ -110,4 +130,9 @@ beforeAll(async () => {
     // across tests, so we deliberately do not dispose (which would reset it).
     mockSecretmanager().setSecrets(store);
   }
+});
+
+afterAll(() => {
+  restoreDefaultDateRepresentation?.();
+  restoreDefaultDateRepresentation = undefined;
 });

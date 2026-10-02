@@ -1,8 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { aroundAll, describe, expect, test } from "vitest";
+import { afterEach, aroundAll, describe, expect, test } from "vitest";
 import {
+  applyDefaultDateRepresentation,
   extractVaultStore,
   loadDefaultDateRepresentationFromConfig,
   loadSecretsFromConfig,
@@ -161,5 +162,41 @@ describe("loadDefaultDateRepresentationFromConfig", () => {
     expect(
       await loadDefaultDateRepresentationFromConfig(join(tmpDir, "does-not-exist.mjs")),
     ).toBeUndefined();
+  });
+});
+
+describe("applyDefaultDateRepresentation", () => {
+  const KEY = "__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION";
+  const store = globalThis as Record<string, unknown>;
+
+  afterEach(() => {
+    delete store[KEY];
+  });
+
+  test("sets the default and restores the previous value", () => {
+    store[KEY] = "date";
+
+    const restore = applyDefaultDateRepresentation("temporal");
+    expect(store[KEY]).toBe("temporal");
+
+    restore();
+    expect(store[KEY]).toBe("date");
+  });
+
+  test("clears a default left by another config when this config sets none", () => {
+    store[KEY] = "temporal";
+
+    const restore = applyDefaultDateRepresentation(undefined);
+    expect(KEY in store).toBe(false);
+
+    restore();
+    expect(store[KEY]).toBe("temporal");
+  });
+
+  test("removes the default on restore when none was set before", () => {
+    const restore = applyDefaultDateRepresentation("temporal");
+
+    restore();
+    expect(KEY in store).toBe(false);
   });
 });

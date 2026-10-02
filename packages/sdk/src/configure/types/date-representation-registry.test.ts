@@ -4,7 +4,7 @@ import { join } from "node:path";
 import ts from "typescript";
 import { afterAll, describe, expect, test } from "vitest";
 
-const TYPES_DIR = import.meta.dirname;
+const SRC_DIR = join(import.meta.dirname, "..", "..");
 
 const tempDirs: string[] = [];
 
@@ -30,23 +30,26 @@ function diagnosticsFor(source: string): string[] {
       module: ts.ModuleKind.ESNext,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       lib: ["lib.es2022.d.ts"],
+      paths: {
+        "@tailor-platform/sdk": [join(SRC_DIR, "configure", "index.ts")],
+        "@tailor-platform/sdk/runtime": [join(SRC_DIR, "runtime", "index.ts")],
+      },
     },
   });
 
   return ts
-    .getPreEmitDiagnostics(program)
+    .getPreEmitDiagnostics(program, program.getSourceFile(fileName))
     .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " "));
 }
 
 describe("DateRepresentationRegistry", () => {
-  test("an augmented default representation types t.date(), t.datetime(), and t.time() fields that omit as", () => {
+  test("a tailor.d.ts-style augmentation of @tailor-platform/sdk types t.date(), t.datetime(), and t.time() fields that omit as", () => {
     expect(
       diagnosticsFor(`
-        import type { Temporal } from "${join(TYPES_DIR, "..", "..", "runtime", "temporal")}";
-        import { t } from "${join(TYPES_DIR, "type")}";
-        import type { output } from "${join(TYPES_DIR, "..", "..", "types", "helpers")}";
+        import { t } from "@tailor-platform/sdk";
+        import type { Temporal } from "@tailor-platform/sdk/runtime";
 
-        declare module "${join(TYPES_DIR, "field.types")}" {
+        declare module "@tailor-platform/sdk" {
           interface DateRepresentationRegistry {
             default: "temporal";
           }
@@ -58,7 +61,7 @@ describe("DateRepresentationRegistry", () => {
           time: t.time({ array: true }),
           legacy: t.datetime({ as: "string" }),
         });
-        type Output = output<typeof fields>;
+        type Output = t.output<typeof fields>;
 
         const value: Output = {
           day: {} as Temporal.PlainDate,
