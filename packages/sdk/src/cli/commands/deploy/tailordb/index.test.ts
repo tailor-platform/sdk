@@ -2296,7 +2296,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       path.join(migrationDir, "diff.json"),
       JSON.stringify({
         ...createMockMigrationDiff({ namespace: "test-tailordb" }),
-        version: 7,
+        version: 8,
       }),
     );
     const planResult = makePlanResult(true);
@@ -2305,7 +2305,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
       code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
-      details: expect.stringMatching(/supports migration file format versions 1-6/),
+      details: expect.stringMatching(/supports migration file format versions 1-7/),
     });
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();

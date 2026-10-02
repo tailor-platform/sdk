@@ -1681,12 +1681,14 @@ describe("template-generator", () => {
       expect(script).toContain(
         "const db = createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true });",
       );
+      expect(script).toContain("tailor-runtime");
     });
 
     test("reads Date values from PGlite for a migration without a temporal record", () => {
       const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
 
       expect(script).toContain("const db = createKyselyPGlite<Unmigrated<Database>>(pglite);");
+      expect(script).not.toContain("tailor-runtime");
     });
 
     test("quotes a namespace that is not an identifier", () => {

@@ -17,18 +17,41 @@ const TIMESTAMPTZ_ARRAY_OID = 1185;
 
 type Converter = (value: unknown, temporal: typeof TemporalTypes) => unknown;
 
-const toPlainDate: Converter = (value, temporal) =>
-  value instanceof Date
-    ? new temporal.PlainDate(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate())
-    : value;
-const toInstant: Converter = (value, temporal) =>
-  value instanceof Date ? temporal.Instant.fromEpochMilliseconds(value.getTime()) : value;
+const toPlainDate: Converter = (value, temporal) => {
+  if (value instanceof Date) {
+    return new temporal.PlainDate(
+      value.getUTCFullYear(),
+      value.getUTCMonth() + 1,
+      value.getUTCDate(),
+    );
+  }
+  return typeof value === "string" ? temporal.PlainDate.from(value) : value;
+};
+const toInstant: Converter = (value, temporal) => {
+  if (value instanceof Date) return temporal.Instant.fromEpochMilliseconds(value.getTime());
+  return typeof value === "string" ? temporal.Instant.from(value) : value;
+};
 const toPlainTime: Converter = (value, temporal) =>
   typeof value === "string" ? temporal.PlainTime.from(value) : value;
+
+function parseArrayLiteral(text: string): (string | null)[] {
+  const body = text.slice(1, -1);
+  if (body === "") return [];
+  return body.split(",").map((element) => {
+    if (element === "NULL") return null;
+    return element.startsWith('"') ? element.slice(1, -1) : element;
+  });
+}
+
 const eachElement =
   (convert: Converter): Converter =>
-  (value, temporal) =>
-    Array.isArray(value) ? value.map((element) => convert(element, temporal)) : value;
+  (value, temporal) => {
+    const elements =
+      typeof value === "string" && value.startsWith("{") ? parseArrayLiteral(value) : value;
+    return Array.isArray(elements)
+      ? elements.map((element) => (element === null ? null : convert(element, temporal)))
+      : elements;
+  };
 
 const CONVERTERS: Record<number, Converter> = {
   [DATE_OID]: toPlainDate,

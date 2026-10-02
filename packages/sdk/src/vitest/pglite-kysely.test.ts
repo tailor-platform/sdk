@@ -127,7 +127,7 @@ interface TemporalDatabase {
     day: string | Temporal.PlainDate;
     at: Date | Temporal.Instant;
     time: string | Temporal.PlainTime;
-    days: (string | Temporal.PlainDate)[];
+    days: (string | Temporal.PlainDate | null)[];
   };
 }
 
@@ -185,7 +185,7 @@ describe("createKyselyPGlite Temporal support", () => {
     expect(row.at.toString()).toBe("2026-03-14T09:30:00.123Z");
     expect(row.time).toBeInstanceOf(Temporal.PlainTime);
     expect(row.time.toString()).toBe("09:30:15.5");
-    expect(row.days.map((day) => day.toString())).toEqual(["2026-03-14"]);
+    expect(row.days.map((day) => day?.toString())).toEqual(["2026-03-14"]);
   });
 
   test("keeps the values PGlite returns when temporal is not enabled", async () => {
@@ -195,5 +195,32 @@ describe("createKyselyPGlite Temporal support", () => {
     const row = await db.selectFrom("Event").selectAll().executeTakeFirstOrThrow();
 
     expect(row).toEqual(pgliteEventRow());
+  });
+
+  test("reads Temporal values from the Postgres text that older PGlite versions return", async () => {
+    const { client } = createStubClient(
+      [
+        {
+          day: "2026-03-14",
+          at: "2026-03-14 09:30:00.123456+00",
+          time: "09:30:15.5",
+          days: '{2026-03-14,NULL,"2026-03-15"}',
+        },
+      ],
+      undefined,
+      eventFields,
+    );
+    const db = createKyselyPGlite<TemporalDatabase>(client, { temporal: true });
+
+    const row = await db.selectFrom("Event").selectAll().executeTakeFirstOrThrow();
+
+    expect(row.day.toString()).toBe("2026-03-14");
+    expect(row.at.toString()).toBe("2026-03-14T09:30:00.123456Z");
+    expect(row.time.toString()).toBe("09:30:15.5");
+    expect(row.days.map((day) => day?.toString() ?? null)).toEqual([
+      "2026-03-14",
+      null,
+      "2026-03-15",
+    ]);
   });
 });
