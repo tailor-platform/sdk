@@ -526,10 +526,13 @@ tailor setup ci preview --name erp --region asia-northeast \
   --paths "apps/*/frontend/**" --paths "modules/**" --paths pnpm-lock.yaml
 ```
 
-The patterns are checked after the app directories, with the same syntax as
-GitHub's `paths` filters. A pattern starting with `!` excludes matching paths,
-so it can also exclude files inside an app directory, for example
-`--paths '!apps/erp/backend/**/*.md'`. An app at the repository root already
+The patterns are checked after the app directories, in order, and the last
+pattern that matches a changed file decides whether it counts. `*` matches
+within one path segment, `**` matches any number of segments, and a pattern
+starting with `!` excludes matching paths, so it can also exclude files inside
+an app directory, for example `--paths '!apps/erp/backend/**/*.md'`. Other glob
+characters (`?`, `+`, `[ ]`, `{ }`, `( )`, and `\`) are not supported, and
+`setup ci` rejects a pattern that contains them. An app at the repository root already
 runs on every change, so `--paths` is not accepted with `--dir .`.
 
 ## Rollback

@@ -1966,6 +1966,26 @@ export default defineConfig({
         ),
       ).rejects.toThrow(/Invalid --paths/);
     });
+
+    test.each([
+      "apps/[id]/**",
+      "apps/?/**",
+      "apps/{a,b}/**",
+      "apps/a+/**",
+      "apps/(group)/**",
+      "apps\\a/**",
+    ])(
+      "rejects %s, whose glob characters the change detection does not support",
+      async (pattern) => {
+        writeApp("apps/erp/backend");
+
+        await expect(
+          setupTarget(
+            baseOptions({ workspaceName: "erp", dir: "apps/erp/backend", extraPaths: [pattern] }),
+          ),
+        ).rejects.toThrow(/Invalid --paths .*only `\*`, `\*\*`, and a leading `!`/);
+      },
+    );
   });
 
   describe("multiple --dir", () => {

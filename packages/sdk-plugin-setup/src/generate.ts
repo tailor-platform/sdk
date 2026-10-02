@@ -263,6 +263,7 @@ function validateDir(dir: string): void {
 // GitHub evaluates, so only line breaks and expressions could escape it.
 // oxlint-disable-next-line no-control-regex
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
+const UNSUPPORTED_GLOB_RE = /[?+[\]{}()\\]/;
 
 function isSafePathPattern(pattern: string): boolean {
   return (
@@ -281,6 +282,12 @@ function resolveExtraPaths(options: SetupTargetOptions, dirs: readonly string[])
       throw new Error(
         `Invalid --paths ${JSON.stringify(pattern)}. A pattern cannot contain line breaks or ` +
           "control characters, a ${{ }} expression, or leading or trailing whitespace.",
+      );
+    }
+    if (UNSUPPORTED_GLOB_RE.test(pattern)) {
+      throw new Error(
+        `Invalid --paths ${JSON.stringify(pattern)}. Change detection supports only \`*\`, ` +
+          "`**`, and a leading `!`; the characters ? + [ ] { } ( ) and \\ are not supported.",
       );
     }
   }

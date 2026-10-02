@@ -150,7 +150,7 @@ const branchCommand = defineAppCommand({
     }),
     paths: arg(z.array(z.string().min(1)).default([]), {
       description:
-        "Extra paths filter pattern (repeatable) that also triggers the workflow, besides the app directories",
+        "Extra path pattern (repeatable) whose changes also run the workflow, besides the app directories. Supports `*`, `**`, and a leading `!` to exclude",
     }),
     dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
@@ -250,7 +250,7 @@ const previewCommand = defineAppCommand({
     }),
     paths: arg(z.array(z.string().min(1)).default([]), {
       description:
-        "Extra paths filter pattern (repeatable) that also triggers the workflow, besides the app directories",
+        "Extra path pattern (repeatable) whose changes also run the workflow, besides the app directories. Supports `*`, `**`, and a leading `!` to exclude",
     }),
     dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
