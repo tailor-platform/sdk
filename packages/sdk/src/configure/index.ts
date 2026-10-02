@@ -38,6 +38,7 @@ export {
   type SecretVaultName,
   type SecretNameFor,
 } from "#/configure/types/secret-vault-name";
+export { type DateRepresentationRegistry } from "#/configure/types/field.types";
 
 export * from "#/configure/services/index";
 

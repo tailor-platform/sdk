@@ -371,7 +371,7 @@ function decimal<const Opt extends FieldOptions>(options?: Opt) {
  */
 function date<const Opt extends DateFieldOptions = FieldOptions>(options?: Opt) {
   const field = createTailorField<"date", Opt, DateFieldValue<Opt["as"]>>("date", options);
-  if (options?.as === "date" || options?.as === "temporal") {
+  if (options?.as !== undefined) {
     field._metadata.as = options.as;
   }
   return field;
@@ -390,7 +390,7 @@ function datetime<const Opt extends DateTimeFieldOptions = FieldOptions>(options
     "datetime",
     options,
   );
-  if (options?.as === "date" || options?.as === "temporal") {
+  if (options?.as !== undefined) {
     field._metadata.as = options.as;
   }
   return field;
@@ -406,7 +406,7 @@ function datetime<const Opt extends DateTimeFieldOptions = FieldOptions>(options
  */
 function time<const Opt extends TimeFieldOptions = FieldOptions>(options?: Opt) {
   const field = createTailorField<"time", Opt, TimeFieldValue<Opt["as"]>>("time", options);
-  if (options?.as === "date" || options?.as === "temporal") {
+  if (options?.as !== undefined) {
     field._metadata.as = options.as;
   }
   return field;

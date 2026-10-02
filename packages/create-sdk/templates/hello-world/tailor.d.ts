@@ -14,6 +14,7 @@ declare module "@tailor-platform/sdk" {
   interface AIGatewayNameRegistry {}
   interface AuthNamespaceNameRegistry {}
   interface SecretVaultNameRegistry {}
+  interface DateRepresentationRegistry {}
 }
 
 export {};

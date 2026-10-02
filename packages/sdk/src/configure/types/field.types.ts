@@ -64,50 +64,85 @@ export type FieldOptions = {
   array?: boolean;
 };
 
+// Interface for module augmentation
+// Users can extend via: declare module "@tailor-platform/sdk" { interface DateRepresentationRegistry { default: "temporal"; } }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface DateRepresentationRegistry {}
+
+type DefaultDateRepresentation = DateRepresentationRegistry extends { default: infer D }
+  ? D
+  : undefined;
+
+type ResolveDateRepresentation<As, Default> = As extends "string" | "date" | "temporal"
+  ? As
+  : Default;
+
 /** Options for a date field. */
 export type DateFieldOptions = FieldOptions & {
   /**
    * Use a Date at midnight UTC, or a Temporal.PlainDate, instead of a
-   * YYYY-MM-DD string. Defaults to string.
+   * YYYY-MM-DD string. Defaults to `defaultDateRepresentation`, or string.
    */
   as?: "string" | "date" | "temporal";
 };
 
-export type DateFieldValue<As> = As extends "date"
-  ? Date
-  : As extends "temporal"
-    ? Temporal.PlainDate
-    : string;
+/**
+ * Value type of a date field, with `Default` applied when `as` is omitted.
+ * Generic over the default so type tests need not augment `DateRepresentationRegistry`.
+ */
+export type DateFieldValueFor<As, Default> = DateValueOf<ResolveDateRepresentation<As, Default>>;
+
+type DateValueOf<R> = R extends "date" ? Date : R extends "temporal" ? Temporal.PlainDate : string;
+
+export type DateFieldValue<As> = DateFieldValueFor<As, DefaultDateRepresentation>;
 
 /** Options for a datetime field. */
 export type DateTimeFieldOptions = FieldOptions & {
-  /** Choose string, Date, or Temporal.Instant values. Defaults to string input and string | Date output. */
+  /**
+   * Choose string, Date, or Temporal.Instant values. Defaults to
+   * `defaultDateRepresentation`, or string input and string | Date output.
+   */
   as?: "string" | "date" | "temporal";
 };
 
-export type DateTimeFieldValue<As> = As extends "date"
+/**
+ * Value type of a datetime field, with `Default` applied when `as` is omitted.
+ * Generic over the default so type tests need not augment `DateRepresentationRegistry`.
+ */
+export type DateTimeFieldValueFor<As, Default> = DateTimeValueOf<
+  ResolveDateRepresentation<As, Default>
+>;
+
+type DateTimeValueOf<R> = R extends "date"
   ? Date
-  : As extends "temporal"
+  : R extends "temporal"
     ? Temporal.Instant
-    : As extends "string"
+    : R extends "string"
       ? string
       : string | Date;
+
+export type DateTimeFieldValue<As> = DateTimeFieldValueFor<As, DefaultDateRepresentation>;
 
 /** Options for a time field. */
 export type TimeFieldOptions = FieldOptions & {
   /**
    * Choose HH:mm strings, Date values on 1970-01-01 UTC, or Temporal.PlainTime values.
-   * Defaults to string. Date output uses UTC hours/minutes and ignores the date.
+   * Defaults to `defaultDateRepresentation`, or string. Date output uses UTC
+   * hours/minutes and ignores the date.
    * Seconds and fractional seconds are truncated in both representations.
    */
   as?: "string" | "date" | "temporal";
 };
 
-export type TimeFieldValue<As> = As extends "date"
-  ? Date
-  : As extends "temporal"
-    ? Temporal.PlainTime
-    : string;
+/**
+ * Value type of a time field, with `Default` applied when `as` is omitted.
+ * Generic over the default so type tests need not augment `DateRepresentationRegistry`.
+ */
+export type TimeFieldValueFor<As, Default> = TimeValueOf<ResolveDateRepresentation<As, Default>>;
+
+type TimeValueOf<R> = R extends "date" ? Date : R extends "temporal" ? Temporal.PlainTime : string;
+
+export type TimeFieldValue<As> = TimeFieldValueFor<As, DefaultDateRepresentation>;
 
 // Return Output type based on FieldOptions.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;

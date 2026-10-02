@@ -1,5 +1,6 @@
 /**
- * Vitest setup file that seeds the SecretManager mock from `tailor.config.ts`.
+ * Vitest setup file that seeds the SecretManager mock and the default date
+ * representation from `tailor.config.ts`.
  *
  * This file is auto-injected by tailorRuntime() but only activates when
  * the tailor-runtime environment is active (detected via __tailorRuntimeActive,
@@ -67,11 +68,41 @@ export async function loadSecretsFromConfig(
   }
 }
 
-// Load secrets from tailor.config.ts if config path is provided via env var
+const DATE_REPRESENTATIONS: readonly unknown[] = ["string", "date", "temporal"];
+
+/**
+ * Load `defaultDateRepresentation` from a tailor.config.ts file.
+ *
+ * Returns undefined on any failure, like `loadSecretsFromConfig`.
+ * @param configPath - Absolute path to tailor.config.ts
+ * @returns The configured representation, or undefined if unavailable
+ */
+export async function loadDefaultDateRepresentationFromConfig(
+  configPath: string,
+): Promise<"string" | "date" | "temporal" | undefined> {
+  try {
+    const config = await import(pathToFileURL(configPath).href);
+    const value: unknown = config.default?.defaultDateRepresentation;
+    return DATE_REPRESENTATIONS.includes(value)
+      ? (value as "string" | "date" | "temporal")
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Load secrets and defaultDateRepresentation from tailor.config.ts if config path is provided via env var
 beforeAll(async () => {
   if (!isTailorRuntime()) return;
   const configPath = process.env.__TAILOR_RUNTIME_CONFIG;
   if (!configPath) return;
+
+  const representation = await loadDefaultDateRepresentationFromConfig(configPath);
+  if (representation) {
+    (
+      globalThis as { __TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION?: string }
+    ).__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION = representation;
+  }
 
   const store = await loadSecretsFromConfig(configPath);
   if (store) {

@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, test, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createResolver } from "#/configure/services/resolver/resolver";
 import { t } from "#/configure/types/type";
 import { ResolverSchema } from "#/parser/service/resolver/schema";
@@ -390,5 +390,44 @@ describe("parseDateFields", () => {
         path: ["rows", "[0]", "day"],
       },
     ]);
+  });
+});
+
+describe("default date representation", () => {
+  const DEFAULT_KEY = "__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION";
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("parses fields that omit as with the default representation", () => {
+    vi.stubGlobal(DEFAULT_KEY, "temporal");
+    const value = { day: "2024-02-29", at: "2024-02-29T15:45:12.123Z", time: "09:30" };
+
+    expect(
+      parse(t.object({ day: t.date(), at: t.datetime(), time: t.time() }), value).value,
+    ).toEqual({
+      day: Temporal.PlainDate.from("2024-02-29"),
+      at: Temporal.Instant.from("2024-02-29T15:45:12.123Z"),
+      time: Temporal.PlainTime.from("09:30"),
+    });
+  });
+
+  test("keeps an explicit as over the default representation", () => {
+    vi.stubGlobal(DEFAULT_KEY, "temporal");
+    const value = { day: "2024-02-29", at: "2024-02-29T15:45:12.123Z" };
+
+    expect(
+      parse(t.object({ day: t.date({ as: "string" }), at: t.datetime({ as: "date" }) }), value)
+        .value,
+    ).toEqual({ day: "2024-02-29", at: new Date("2024-02-29T15:45:12.123Z") });
+  });
+
+  test("serializes fields that omit as with the default representation", () => {
+    vi.stubGlobal(DEFAULT_KEY, "date");
+
+    expect(
+      serializeDateFields(t.object({ day: t.date() }), { day: new Date("2024-02-29T00:00:00Z") }),
+    ).toEqual({ day: "2024-02-29" });
   });
 });

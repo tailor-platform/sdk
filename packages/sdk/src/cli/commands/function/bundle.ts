@@ -32,7 +32,7 @@ import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import type { LogLevelInput } from "#/configure/config/types";
+import type { AppConfig, LogLevelInput } from "#/configure/config/types";
 import type { Resolver } from "#/types/resolver.generated";
 import type { DetectedFunction } from "./detect";
 
@@ -67,6 +67,8 @@ interface BundleForRunOptions {
   workspaceId: string;
   /** For resolvers: the `defaultPermission` of the namespace owning the file */
   defaultPermission?: Resolver["permission"];
+  /** Representation of date fields that omit `as` */
+  defaultDateRepresentation?: AppConfig["defaultDateRepresentation"];
 }
 
 interface BundleForRunResult {
@@ -100,6 +102,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     machineUser,
     workspaceId,
     defaultPermission: options.defaultPermission,
+    defaultDateRepresentation: options.defaultDateRepresentation,
   });
   fs.writeFileSync(entryPath, entryContent);
 
@@ -111,7 +114,13 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
       createGeneratedEntryResolverPlugin(entryPath, baseDir),
       createTsconfigPathsPlugin(),
       detected.type === "resolver"
-        ? createPlatformBundleDefinePlugin(resolverDateRepresentations(detected.fields))
+        ? createPlatformBundleDefinePlugin({
+            dateRepresentations: resolverDateRepresentations(
+              detected.fields,
+              options.defaultDateRepresentation,
+            ),
+            defaultDateRepresentation: options.defaultDateRepresentation,
+          })
         : platformBundleDefinePlugin,
     ],
     input: entryPath,
@@ -154,6 +163,8 @@ type GenerateEntryOptions = {
   workspaceId: string;
   /** For resolvers: the `defaultPermission` of the namespace owning the file */
   defaultPermission?: Resolver["permission"];
+  /** Representation of date fields that omit `as` */
+  defaultDateRepresentation?: AppConfig["defaultDateRepresentation"];
 };
 
 /**
@@ -162,7 +173,15 @@ type GenerateEntryOptions = {
  * @returns Entry file content string
  */
 function generateEntry(options: GenerateEntryOptions): string {
-  const { detected, sourceFile, env, machineUser, workspaceId, defaultPermission } = options;
+  const {
+    detected,
+    sourceFile,
+    env,
+    machineUser,
+    workspaceId,
+    defaultPermission,
+    defaultDateRepresentation,
+  } = options;
   const absoluteSourcePath = path.resolve(sourceFile);
 
   switch (detected.type) {
@@ -190,6 +209,7 @@ function generateEntry(options: GenerateEntryOptions): string {
       });
       const { importStatement, resultExpr } = buildResolverResultSerialization(
         detected.fields?.output,
+        defaultDateRepresentation,
       );
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";

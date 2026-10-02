@@ -102,6 +102,7 @@ export const AppConfigSchema = z
     inlineSourcemap: z.boolean().optional(),
     logLevel: logLevelSchema.optional(),
     buildOptions: buildOptionsSchema.optional(),
+    defaultDateRepresentation: z.enum(["string", "date", "temporal"]).optional(),
     metadata: metadataSchema.optional(),
     db: z.unknown().optional(),
     resolver: z.unknown().optional(),

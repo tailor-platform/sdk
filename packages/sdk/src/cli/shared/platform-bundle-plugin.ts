@@ -1,3 +1,4 @@
+import type { AppConfig } from "#/configure/config/types";
 import type * as rolldown from "rolldown";
 
 // Match the exact `process.env.__TAILOR_PLATFORM_BUNDLE` member-expression: the
@@ -25,6 +26,8 @@ const WITHOUT_DATE_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE\b/g;
 const WITHOUT_TEMPORAL_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL\b/g;
+const DEFAULT_DATE_REPRESENTATION =
+  /(?<![\w$.])globalThis\.__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION\b/g;
 
 /**
  * Date representations whose conversion code a bundle keeps.
@@ -35,13 +38,29 @@ export type BundledDateRepresentations = {
 };
 
 /**
+ * Options for the platform bundle define plugin.
+ */
+export type PlatformBundleDefineOptions = {
+  /** Date representations whose conversion code the bundle keeps */
+  dateRepresentations?: BundledDateRepresentations;
+  /** The config's `defaultDateRepresentation` */
+  defaultDateRepresentation?: AppConfig["defaultDateRepresentation"];
+};
+
+/**
  * Create the platform bundle define plugin.
- * @param dateRepresentations - Date representations whose conversion code the bundle keeps
+ * @param options - Date representations to keep and the default date representation
  * @returns Rolldown plugin folding the platform bundle gates
  */
 export function createPlatformBundleDefinePlugin(
-  dateRepresentations: BundledDateRepresentations = { date: true, temporal: true },
+  options: PlatformBundleDefineOptions = {},
 ): rolldown.Plugin {
+  const { dateRepresentations = { date: true, temporal: true }, defaultDateRepresentation } =
+    options;
+  const defaultDateRepresentationLiteral =
+    defaultDateRepresentation === undefined
+      ? "undefined"
+      : JSON.stringify(defaultDateRepresentation);
   return {
     name: "tailor-platform-bundle-define",
     transform(code) {
@@ -50,7 +69,8 @@ export function createPlatformBundleDefinePlugin(
         code: code
           .replace(GATE, "true")
           .replace(WITHOUT_DATE_GATE, String(!dateRepresentations.date))
-          .replace(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal)),
+          .replace(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal))
+          .replace(DEFAULT_DATE_REPRESENTATION, defaultDateRepresentationLiteral),
       };
     },
     resolveId(source) {

@@ -204,6 +204,21 @@ createResolver({
 
 All three field types support `array`, `optional`, nested objects, and input validators with the selected representation. Both deployed resolvers and `tailor function run` convert input and output. Executors using `resolverExecutedTrigger` receive date, datetime, and time results as strings.
 
+#### Project-Wide Default Representation
+
+To use one representation for every `t.date()`, `t.datetime()`, and `t.time()` field that omits `as`, set `defaultDateRepresentation` in `defineConfig()`:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  defaultDateRepresentation: "temporal",
+});
+```
+
+With this setting, `t.date()` works like `t.date({ as: "temporal" })` in both its type and its runtime conversion. A field's own `as` takes precedence, so `t.datetime({ as: "string" })` keeps string values. The accepted values are `"string"`, `"date"`, and `"temporal"`; `"string"` makes `t.datetime()` output `string` instead of `string | Date`.
+
+Field types read the setting from the generated `tailor.d.ts`, so run `tailor generate` (or `tailor deploy`) after changing it. Deployed resolvers, `tailor function run` for resolvers, and the [`tailor-runtime` Vitest environment](../testing.md#loading-secrets-from-config) configured with `tailorRuntime({ config })` apply it when they convert input and output, including `t` fields parsed inside a resolver `body` with `parseDateFields`. `t` fields are meant for resolvers: executors, workflow jobs, and other functions do not apply the setting, so `t` fields parsed there keep string values unless they set `as`. TailorDB `db.*` fields have no `as` option and are unaffected, and executors using `resolverExecutedTrigger` still receive strings.
+
 The SDK supplies Temporal types, so existing projects can use `as: "temporal"` without changing `compilerOptions.lib`. To construct values or name their types, import `Temporal` from the SDK:
 
 ```typescript

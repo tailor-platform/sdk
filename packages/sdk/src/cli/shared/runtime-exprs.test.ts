@@ -6,6 +6,7 @@ import {
   buildResolverResultSerialization,
   buildResolverValidatedInputExpr,
   buildResolverPermissionGuardExpr,
+  resolverDateRepresentations,
 } from "./runtime-exprs";
 import type { TailorField } from "#/types/field.generated";
 
@@ -514,9 +515,37 @@ describe("buildResolverResultSerialization", () => {
     );
   });
 
+  test("serializes dates when an output field that omits as falls back to the default representation", () => {
+    expect(buildResolverResultSerialization(field("date"), "temporal").resultExpr).toBe(
+      "serializeDateFields(_internalResolver.output, result)",
+    );
+  });
+
+  test("returns the result as-is when an explicit string as overrides the default representation", () => {
+    expect(
+      buildResolverResultSerialization(field("date", { as: "string" }), "temporal").resultExpr,
+    ).toBe("result");
+  });
+
   test("serializes dates when the output shape is unknown", () => {
     expect(buildResolverResultSerialization(undefined).importStatement).toContain(
       "serializeDateFields",
     );
+  });
+});
+
+describe("resolverDateRepresentations", () => {
+  const field = (
+    type: TailorField["type"],
+    metadata: TailorField["metadata"] = {},
+  ): TailorField => ({ type, metadata, fields: {} });
+
+  test("bundles only the default representation for fields that omit as", () => {
+    expect(
+      resolverDateRepresentations(
+        { input: { day: field("date") }, output: field("datetime", { as: "string" }) },
+        "temporal",
+      ),
+    ).toEqual({ date: false, temporal: true });
   });
 });

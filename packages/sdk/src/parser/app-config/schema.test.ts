@@ -249,4 +249,22 @@ describe("AppConfigSchema", () => {
       });
     });
   });
+  describe("defaultDateRepresentation", () => {
+    test.each(["string", "date", "temporal"])("accepts %s", (value) => {
+      expect(
+        AppConfigSchema.safeParse({ name: "my-app", defaultDateRepresentation: value }).success,
+      ).toBe(true);
+    });
+
+    test("rejects a value that is not a date representation", () => {
+      const result = AppConfigSchema.safeParse({
+        name: "my-app",
+        defaultDateRepresentation: "instant",
+      });
+      if (result.success) {
+        throw new Error("Expected AppConfigSchema parsing to fail");
+      }
+      expect(result.error.issues[0]?.path).toEqual(["defaultDateRepresentation"]);
+    });
+  });
 });

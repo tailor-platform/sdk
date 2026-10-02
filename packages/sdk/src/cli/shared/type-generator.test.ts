@@ -59,6 +59,27 @@ describe("generateTypeDefinition", () => {
       args: [undefined, undefined, undefined, undefined, ["primary-idp", "backoffice"]],
       expected: ["interface IdpNameRegistry", '"primary-idp": true;', "backoffice: true;"],
     },
+    {
+      name: "generates empty DateRepresentationRegistry when no default date representation is configured",
+      args: [undefined, undefined],
+      expected: ["interface DateRepresentationRegistry {}"],
+    },
+    {
+      name: "generates DateRepresentationRegistry with the default date representation",
+      args: [
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "temporal",
+      ],
+      expected: ["interface DateRepresentationRegistry", 'default: "temporal";'],
+    },
   ])("should $name", ({ args, expected }) => {
     const result = generateTypeDefinition(...args);
     for (const substring of expected) {

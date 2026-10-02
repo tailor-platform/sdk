@@ -690,6 +690,7 @@ export async function loadApplication(
       bundleLogLevel,
       tsconfigCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      defaultDateRepresentation: config.defaultDateRepresentation,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);

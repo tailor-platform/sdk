@@ -34,6 +34,7 @@ export type AppConfigParsed = {
           | undefined;
       }
     | undefined;
+  defaultDateRepresentation?: "string" | "date" | "temporal" | undefined;
   metadata?:
     | {
         [x: string]: string;

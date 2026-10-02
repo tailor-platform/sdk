@@ -28,7 +28,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
-import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, AppConfig, LogLevel } from "#/configure/config/types";
 import type { Resolver } from "#/types/resolver.generated";
 
 interface ResolverInfo {
@@ -60,6 +60,8 @@ export interface BundleResolversOptions {
   tsconfigCache?: TsconfigLookupCache;
   /** Globals each installed package may reference */
   allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+  /** Representation of date fields that omit `as` */
+  defaultDateRepresentation?: AppConfig["defaultDateRepresentation"];
 }
 
 /**
@@ -86,6 +88,7 @@ export async function bundleResolvers(
     bundleLogLevel = "DEBUG",
     tsconfigCache,
     allowedRuntimeGlobals,
+    defaultDateRepresentation,
   } = options;
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config, baseDir);
@@ -134,6 +137,7 @@ export async function bundleResolvers(
       bundleLogLevel,
       tsconfigCache,
       allowedRuntimeGlobals,
+      defaultDateRepresentation,
     }),
   );
 
@@ -165,6 +169,7 @@ async function bundleSingleResolver(
     bundleLogLevel = "DEBUG",
     tsconfigCache,
     allowedRuntimeGlobals,
+    defaultDateRepresentation,
   } = options;
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -174,7 +179,11 @@ async function bundleSingleResolver(
     // config file, not in any resolver source, so a cached bundle would
     // otherwise survive a change to it. Encoded as a pair rather than joined,
     // so no separator has to be a character neither value can contain.
-    extraContext: JSON.stringify([serializedStartContext, defaultPermission ?? null]),
+    extraContext: JSON.stringify([
+      serializedStartContext,
+      defaultPermission ?? null,
+      defaultDateRepresentation ?? null,
+    ]),
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -193,7 +202,10 @@ async function bundleSingleResolver(
         permission: resolver.permission,
         defaultPermission,
       });
-      const { importStatement, resultExpr } = buildResolverResultSerialization(resolver.output);
+      const { importStatement, resultExpr } = buildResolverResultSerialization(
+        resolver.output,
+        defaultDateRepresentation,
+      );
 
       const entryContent = ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
@@ -223,7 +235,10 @@ async function bundleSingleResolver(
       }
       plugins.push(
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(resolverDateRepresentations(resolver)),
+        createPlatformBundleDefinePlugin({
+          dateRepresentations: resolverDateRepresentations(resolver, defaultDateRepresentation),
+          defaultDateRepresentation,
+        }),
         ...cachePlugins,
       );
 

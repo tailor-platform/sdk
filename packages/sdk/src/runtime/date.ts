@@ -96,29 +96,47 @@ function describeReceivedValue(value: unknown): string {
 
 type DateRepresentation = "date" | "temporal";
 
+type DefaultDateRepresentationGlobal = {
+  __TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION?: FieldMetadata["as"];
+};
+
 /**
  * Get the Date or Temporal representation a field converts its values to.
  * @param type - Field type
  * @param as - The field's `as` option
+ * @param defaultAs - Representation used when `as` is omitted; defaults to the bundled `defaultDateRepresentation`
  * @returns The representation, or undefined when values stay strings
  * @internal
  */
 export function dateRepresentationOf(
   type: TailorFieldType,
   as: FieldMetadata["as"],
+  defaultAs: FieldMetadata["as"] = (globalThis as DefaultDateRepresentationGlobal)
+    .__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION,
 ): DateRepresentation | undefined {
+  const representation = as ?? defaultAs;
   return (type === "date" || type === "datetime" || type === "time") &&
-    (as === "date" || as === "temporal")
-    ? as
+    (representation === "date" || representation === "temporal")
+    ? representation
     : undefined;
 }
 
+/**
+ * Which fields `hasDateRepresentationFields` matches.
+ */
+export type DateRepresentationMatch = {
+  /** Only match fields using this representation */
+  representation?: DateRepresentation;
+  /** Representation of fields that omit `as`; defaults to the bundled `defaultDateRepresentation` */
+  defaultRepresentation?: FieldMetadata["as"];
+};
+
 function isDateRepresentationField(
   field: DateRepresentationField,
-  representation?: DateRepresentation,
+  match: DateRepresentationMatch,
 ): boolean {
-  const as = dateRepresentationOf(field.type, field.metadata.as);
-  return as !== undefined && (representation === undefined || as === representation);
+  const as = dateRepresentationOf(field.type, field.metadata.as, match.defaultRepresentation);
+  return as !== undefined && (match.representation === undefined || as === match.representation);
 }
 
 type DateSerializer = (type: TailorFieldType, value: unknown, path: string) => string;
@@ -211,17 +229,17 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
 /**
  * Check whether a field or any of its nested fields uses a Date or Temporal representation.
  * @param field - Field to inspect
- * @param representation - Only match fields using this representation
+ * @param match - Representation to match and the default for fields that omit `as`
  * @returns Whether serializeDateFields would convert any value of the field
  * @internal
  */
 export function hasDateRepresentationFields(
   field: DateRepresentationField,
-  representation?: DateRepresentation,
+  match: DateRepresentationMatch = {},
 ): boolean {
   return (
-    isDateRepresentationField(field, representation) ||
-    Object.values(field.fields).some((child) => hasDateRepresentationFields(child, representation))
+    isDateRepresentationField(field, match) ||
+    Object.values(field.fields).some((child) => hasDateRepresentationFields(child, match))
   );
 }
 

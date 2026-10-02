@@ -209,4 +209,12 @@ export interface AppConfig<
   logLevel?: LogLevelInput;
   /** Options for how resolvers, executors, workflow jobs, and other functions are bundled. */
   buildOptions?: BuildOptions;
+  /**
+   * Value representation used by `t.date()`, `t.datetime()`, and `t.time()`
+   * fields that omit `as`. A field's own `as` option takes precedence.
+   * Run `tailor generate` after changing it so `tailor.d.ts` updates the
+   * field types.
+   * @example defaultDateRepresentation: "temporal"
+   */
+  defaultDateRepresentation?: "string" | "date" | "temporal";
 }

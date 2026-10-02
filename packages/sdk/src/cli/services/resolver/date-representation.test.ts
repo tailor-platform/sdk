@@ -370,4 +370,63 @@ describe("resolver Date representation bundles", () => {
       expect(code).not.toContain("Invalid calendar date");
     },
   );
+  test.each(["production", "function run"] as const)(
+    "converts fields that omit as with defaultDateRepresentation through %s",
+    async (mode) => {
+      using tmp = tempCwd("sdk-date-representation-default-");
+      const scopeDir = path.join(tmp.dir, "node_modules/@tailor-platform");
+      fs.mkdirSync(scopeDir, { recursive: true });
+      fs.symlinkSync(path.resolve(__dirname, "../../../.."), path.join(scopeDir, "sdk"), "dir");
+      const sourceFile = path.join(tmp.dir, "resolver.mjs");
+      fs.writeFileSync(
+        sourceFile,
+        `
+      import { createResolver, t } from "@tailor-platform/sdk";
+      import { Temporal } from "@tailor-platform/sdk/runtime";
+      export default createResolver({
+        name: "defaultTemporalRoundTrip",
+        operation: "query",
+        input: { day: t.date(), label: t.date({ as: "string" }) },
+        body: async ({ input }) => {
+          if (!(input.day instanceof Temporal.PlainDate) || typeof input.label !== "string") {
+            throw new Error("Expected the default representation for day only");
+          }
+          return { day: input.day.add({ days: 1 }), label: input.label };
+        },
+        output: t.object({ day: t.date(), label: t.date({ as: "string" }) }),
+      });
+    `,
+      );
+      const detected = await detectFunctionType({ filePath: sourceFile });
+      const code =
+        mode === "production"
+          ? (
+              await bundleResolvers({
+                namespace: "date",
+                config: { files: ["./resolver.mjs"] },
+                baseDir: tmp.dir,
+                defaultDateRepresentation: "temporal",
+              })
+            ).get("defaultTemporalRoundTrip")!
+          : (
+              await bundleForRun({
+                detected,
+                sourceFile,
+                baseDir: tmp.dir,
+                machineUser: { name: "test", id: "test", attributes: null, attributeList: [] },
+                workspaceId: "test",
+                defaultDateRepresentation: "temporal",
+              })
+            ).bundledCode;
+      const bundlePath = path.join(tmp.dir, "bundle.mjs");
+      fs.writeFileSync(bundlePath, code);
+      const { main } = await import(pathToFileURL(bundlePath).href);
+      const input = { day: "2024-02-29", label: "2024-02-29" };
+
+      await expect(
+        main(mode === "production" ? { input, caller: null, env: {} } : input),
+      ).resolves.toEqual({ day: "2024-03-01", label: "2024-02-29" });
+      expect(code).not.toContain("Expected a Date with a 4-digit year");
+    },
+  );
 });

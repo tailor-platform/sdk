@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
-import { extractVaultStore, loadSecretsFromConfig } from "./setup";
+import {
+  extractVaultStore,
+  loadDefaultDateRepresentationFromConfig,
+  loadSecretsFromConfig,
+} from "./setup";
 
 describe("extractVaultStore", () => {
   test("unwraps a defineSecretManager() shape via the .vaults field", () => {
@@ -123,5 +127,39 @@ describe("loadSecretsFromConfig", () => {
     );
     const store = await loadSecretsFromConfig(path);
     expect(store).toEqual({ aws: { K: "ts-v" } });
+  });
+});
+
+describe("loadDefaultDateRepresentationFromConfig", () => {
+  let tmpDir: string;
+
+  aroundAll(async (runSuite) => {
+    tmpDir = mkdtempSync(join(tmpdir(), "tailor-runtime-date-representation-"));
+    await runSuite();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("reads defaultDateRepresentation from a default-exported config object", async () => {
+    const path = join(tmpDir, "temporal.mjs");
+    writeFileSync(path, `export default { defaultDateRepresentation: "temporal" };`, "utf8");
+    expect(await loadDefaultDateRepresentationFromConfig(path)).toBe("temporal");
+  });
+
+  test("returns undefined when the config does not set defaultDateRepresentation", async () => {
+    const path = join(tmpDir, "unset.mjs");
+    writeFileSync(path, `export default { name: "app" };`, "utf8");
+    expect(await loadDefaultDateRepresentationFromConfig(path)).toBeUndefined();
+  });
+
+  test("returns undefined for a value that is not a date representation", async () => {
+    const path = join(tmpDir, "invalid.mjs");
+    writeFileSync(path, `export default { defaultDateRepresentation: "instant" };`, "utf8");
+    expect(await loadDefaultDateRepresentationFromConfig(path)).toBeUndefined();
+  });
+
+  test("swallows errors and returns undefined for a missing config file", async () => {
+    expect(
+      await loadDefaultDateRepresentationFromConfig(join(tmpDir, "does-not-exist.mjs")),
+    ).toBeUndefined();
   });
 });

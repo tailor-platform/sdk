@@ -37,11 +37,31 @@ describe("createPlatformBundleDefinePlugin", () => {
   });
 
   test("folds the gates of representations the bundle leaves out to true", () => {
-    expect(run(code, createPlatformBundleDefinePlugin({ date: false, temporal: true }))).toBe(
-      "read(true, false);",
-    );
-    expect(run(code, createPlatformBundleDefinePlugin({ date: true, temporal: false }))).toBe(
-      "read(false, true);",
-    );
+    expect(
+      run(
+        code,
+        createPlatformBundleDefinePlugin({ dateRepresentations: { date: false, temporal: true } }),
+      ),
+    ).toBe("read(true, false);");
+    expect(
+      run(
+        code,
+        createPlatformBundleDefinePlugin({ dateRepresentations: { date: true, temporal: false } }),
+      ),
+    ).toBe("read(false, true);");
+  });
+});
+
+describe("default date representation", () => {
+  const code = "read(globalThis.__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION);";
+
+  test("folds the configured default date representation to its literal", () => {
+    expect(
+      run(code, createPlatformBundleDefinePlugin({ defaultDateRepresentation: "temporal" })),
+    ).toBe('read("temporal");');
+  });
+
+  test("folds a missing default date representation to undefined", () => {
+    expect(run(code)).toBe("read(undefined);");
   });
 });
