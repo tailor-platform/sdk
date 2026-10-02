@@ -37,10 +37,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - id: tailor-tag-guard
         uses: tailor-platform/actions/tag-guard@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           target-branch: __BRANCH__
+          github-token: ${{ github.token }}
   # __TAG_GUARD_JOB_END__
 
   tailor-plan:
@@ -58,8 +60,10 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
-        uses: ./.github/actions/tailor-setup
+        uses: $/.github/actions/tailor-setup
       # __PER_APP_PLAN_STEPS__
 
   tailor-deploy:
@@ -76,6 +80,8 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
-        uses: ./.github/actions/tailor-setup
+        uses: $/.github/actions/tailor-setup
       # __PER_APP_DEPLOY_STEPS__

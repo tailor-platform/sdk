@@ -199,6 +199,14 @@ Running a workflow setup subcommand creates or updates:
 The workflow file. The `name:` field is set to `Tailor (<workspace-name>)` so
 you can distinguish multiple workspaces in the Actions UI.
 
+Every checkout in the workflow sets `persist-credentials: false`, so the GitHub
+token is not left in `.git/config` while the job installs and runs your
+project's code. The tag guard step passes the job token only to its
+`git fetch`, and the plan step passes it to its `git fetch` and to the step that
+posts the plan comment on the pull request; neither writes it to `.git/config`.
+If installing your dependencies fetches git repositories
+that require authentication, configure the credentials in your own step.
+
 See [Customizing the generated workflow](#customizing-the-generated-workflow)
 for what you can edit.
 

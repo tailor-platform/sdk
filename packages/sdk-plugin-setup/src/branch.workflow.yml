@@ -38,6 +38,8 @@ jobs:
       # __CHANGES_GUARD__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
         uses: tailor-platform/actions/setup@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
@@ -634,6 +636,8 @@ jobs:
       # __CHANGES_GUARD__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
         uses: tailor-platform/actions/setup@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:

@@ -8,7 +8,7 @@ import tagTemplate from "./tag.workflow.yml";
 
 // Bump on material template-structure changes (managed step ids, placeholders)
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 16;
+export const TEMPLATE_VERSION = 17;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -804,7 +804,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
 
   const singleAppDeployStep = (group: CoordinateAppGroup, app: CoordinateApp) => [
     `- id: tailor-deploy-${group.id}`,
-    `  uses: ./.github/actions/tailor-${app.name}`,
+    `  uses: $/.github/actions/tailor-${app.name}`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${app.name}`,
@@ -817,7 +817,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
   ];
   const buildSiteStep = (app: CoordinateApp) => [
     `- id: tailor-build-site-${app.name}`,
-    `  uses: ./.github/actions/tailor-${app.name}`,
+    `  uses: $/.github/actions/tailor-${app.name}`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${app.name}`,
@@ -833,7 +833,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     ...group.apps.filter((app) => app.hasStaticWebsites).flatMap(buildSiteStep),
     `- id: tailor-deploy-${group.id}`,
     // Grouped deploys reuse one app action; keep action.yml parameterized by config/deploy/build-site inputs.
-    `  uses: ./.github/actions/tailor-${firstApp(group).name}`,
+    `  uses: $/.github/actions/tailor-${firstApp(group).name}`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${coordinatorName}/${group.id}`,

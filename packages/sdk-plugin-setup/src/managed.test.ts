@@ -318,6 +318,23 @@ describe("computeManagedHash", () => {
     expect(content).toBe(edited);
   });
 
+  test("still ignores user-mapping in a coordinator generated with ./ action references", () => {
+    const coordinate = variants.find(([name]) => name === "coordinate branch")?.[2];
+    if (!coordinate) throw new Error("missing coordinate variant");
+    const hash = (c: string) => computeManagedHash(c, "workflow", coordinate.generatedIds);
+    const older = coordinate.content.replaceAll(
+      "uses: $/.github/actions/",
+      "uses: ./.github/actions/",
+    );
+    expect(older).not.toBe(coordinate.content);
+    const edited = older.replace(
+      /( {6}- id: tailor-deploy-api\n(?:        .*\n)*? {8}with:\n)/,
+      "$1          user-mapping: ${{ vars.TAILOR_SLACK_USER_MAPPING }}\n",
+    );
+    expect(edited).not.toBe(older);
+    expect(hash(edited)).toBe(hash(older));
+  });
+
   test("ignores the tailor-build-site run command but not its removal", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
     const hash = (c: string) => computeManagedHash(c, "action", action.generatedIds);
