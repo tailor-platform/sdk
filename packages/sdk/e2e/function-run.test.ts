@@ -245,7 +245,7 @@ describe("E2E: function run", { concurrent: false }, () => {
         arg: '{"name":"Test User","email":"test@example.com"}',
       });
 
-      expect(result.success).toBe(true);
+      expect(result).toMatchObject({ success: true });
       // Log should contain typeof info from the resolver
       expect(result.logs).toContain("typeof metadata.created:");
       const parsed = JSON.parse(result.result);

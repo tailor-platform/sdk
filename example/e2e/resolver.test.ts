@@ -26,7 +26,13 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(9);
+    expect(pipelineResolvers.length).toBe(10);
+
+    const temporalRoundTrip = pipelineResolvers.find((e) => e.name === "temporalRoundTrip");
+    expect(temporalRoundTrip).toMatchObject({
+      name: "temporalRoundTrip",
+      operationType: "mutation",
+    });
 
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
