@@ -184,7 +184,7 @@ describe("createKyselyPGlite Temporal support", () => {
     expect(row.at).toBeInstanceOf(Temporal.Instant);
     expect(row.at.toString()).toBe("2026-03-14T09:30:00.123Z");
     expect(row.time).toBeInstanceOf(Temporal.PlainTime);
-    expect(row.time.toString()).toBe("09:30:15.5");
+    expect(row.time.toString()).toBe("09:30:00");
     expect(row.days.map((day) => day?.toString())).toEqual(["2026-03-14"]);
   });
 
@@ -215,8 +215,8 @@ describe("createKyselyPGlite Temporal support", () => {
     const row = await db.selectFrom("Event").selectAll().executeTakeFirstOrThrow();
 
     expect(row.day.toString()).toBe("2026-03-14");
-    expect(row.at.toString()).toBe("2026-03-14T09:30:00.123456Z");
-    expect(row.time.toString()).toBe("09:30:15.5");
+    expect(row.at.toString()).toBe("2026-03-14T09:30:00.123Z");
+    expect(row.time.toString()).toBe("09:30:00");
     expect(row.days.map((day) => day?.toString() ?? null)).toEqual([
       "2026-03-14",
       null,

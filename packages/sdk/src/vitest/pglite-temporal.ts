@@ -29,10 +29,13 @@ const toPlainDate: Converter = (value, temporal) => {
 };
 const toInstant: Converter = (value, temporal) => {
   if (value instanceof Date) return temporal.Instant.fromEpochMilliseconds(value.getTime());
-  return typeof value === "string" ? temporal.Instant.from(value) : value;
+  if (typeof value !== "string") return value;
+  return temporal.Instant.fromEpochMilliseconds(temporal.Instant.from(value).epochMilliseconds);
 };
 const toPlainTime: Converter = (value, temporal) =>
-  typeof value === "string" ? temporal.PlainTime.from(value) : value;
+  typeof value === "string"
+    ? temporal.PlainTime.from(value).round({ smallestUnit: "minute", roundingMode: "trunc" })
+    : value;
 
 function parseArrayLiteral(text: string): (string | null)[] {
   const body = text.slice(1, -1);
