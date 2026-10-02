@@ -270,6 +270,51 @@ describe("bundleResolvers", () => {
     expect(guarded.get("cached")).toContain("access denied");
   });
 
+  test("rebuilds a cached resolver when defaultDateRepresentation changes", async () => {
+    using tmp = tempCwd("sdk-bundler-default-date-cache-");
+    writeSdkDependency(tmp.dir);
+    fs.writeFileSync(
+      path.join(tmp.dir, "node_modules/@tailor-platform/sdk/runtime.js"),
+      'export const serializeDateFields = () => "serialized";\n',
+    );
+    fs.writeFileSync(
+      path.join(tmp.dir, "resolver.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "cached",\n` +
+        `  body: async () => "2026-10-02",\n` +
+        `  output: { type: "date", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+    const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
+    const run = async (
+      defaultDateRepresentation?: Parameters<
+        typeof bundleResolvers
+      >[0]["defaultDateRepresentation"],
+    ) => {
+      const code = (
+        await bundleResolvers({
+          namespace: "cache",
+          config: { files: ["./resolver.ts"] },
+          baseDir: tmp.dir,
+          defaultDateRepresentation,
+          cache,
+        })
+      ).get("cached")!;
+      const { main } = await import(
+        `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`
+      );
+      return main({ input: undefined });
+    };
+    vi.stubGlobal("tailor", { context: { getInvoker: () => null } });
+    try {
+      await expect(run()).resolves.toBe("2026-10-02");
+      await expect(run("temporal")).resolves.toBe("serialized");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("resolves tsconfig relative to baseDir, not process.cwd()", async () => {
     using _tmp = tempCwd("sdk-bundler-tsconfig-");
     const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-bundler-tsconfig-other-"));
