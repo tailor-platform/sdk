@@ -6,7 +6,6 @@ import {
   type TemporalTime,
   type ObjectColumnType,
   type Serial,
-  type GetDBConfig,
   type NamespaceDB,
   type NamespaceInsertable,
   type NamespaceSelectable,
@@ -187,13 +186,7 @@ export interface Namespace {
   }
 }
 
-const getDBBase = createGetDB<Namespace>();
-export function getDB<const N extends keyof Namespace & string>(
-  namespace: N,
-  config?: Omit<GetDBConfig, "temporal">,
-) {
-  return getDBBase(namespace, { ...config, temporal: true });
-}
+export const getDB = createGetDB<Namespace>({ temporal: true });
 
 export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
 

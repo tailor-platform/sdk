@@ -192,14 +192,10 @@ describe("KyselyTypePlugin integration tests", () => {
       const content = result.files[0]!.content;
       expect(content).toContain("type TemporalDate");
       expect(content).toContain("type TemporalInstant");
-      expect(content).toContain("type GetDBConfig");
       expect(content).toContain("birthDate: TemporalDate");
       expect(content).toContain("lastLogin: TemporalInstant");
-      expect(content).toContain("const getDBBase = createGetDB<Namespace>();");
-      expect(content).toContain("export function getDB");
-      expect(content).toContain('config?: Omit<GetDBConfig, "temporal">');
-      expect(content).toContain("return getDBBase(namespace, { ...config, temporal: true });");
-      // The default (non-temporal) path must not be present alongside it.
+      expect(content).toContain("export const getDB = createGetDB<Namespace>({ temporal: true });");
+      expect(content).not.toContain("GetDBConfig");
       expect(content).not.toContain("export const getDB = createGetDB<Namespace>();");
     });
 

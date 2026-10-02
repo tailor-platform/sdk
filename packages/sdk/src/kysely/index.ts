@@ -43,23 +43,23 @@ export {
 
 export { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
-/** The host `Temporal` namespace, re-exported so generated code never imports `temporal-spec` directly (avoids phantom dependency issues with pnpm). */
+/** Types of the `Temporal` values that date/datetime/time columns read back as when Temporal mode is enabled. */
 export type { Temporal } from "temporal-spec";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
-/** Column type for a `date` field read back as `Temporal.PlainDate` (`getDB`'s `temporal` option). */
+/** Column type for a `date` field read back as `Temporal.PlainDate` (`createGetDB`'s `temporal` option). */
 export type TemporalDate = ColumnType<
   Temporal.PlainDate,
   Temporal.PlainDate | string,
   Temporal.PlainDate | string
 >;
-/** Column type for a `datetime` field read back as `Temporal.Instant` (`getDB`'s `temporal` option). */
+/** Column type for a `datetime` field read back as `Temporal.Instant` (`createGetDB`'s `temporal` option). */
 export type TemporalInstant = ColumnType<
   Temporal.Instant,
   Temporal.Instant | string,
   Temporal.Instant | string
 >;
-/** Column type for a `time` field read back as `Temporal.PlainTime` (`getDB`'s `temporal` option). */
+/** Column type for a `time` field read back as `Temporal.PlainTime` (`createGetDB`'s `temporal` option). */
 export type TemporalTime = ColumnType<
   Temporal.PlainTime,
   Temporal.PlainTime | string,
@@ -102,31 +102,32 @@ type FlattenColumns<T> = { [K in keyof T]: T[K] } & {};
 export type TailordbKysely<DB> = Kysely<DB>;
 export type NamespaceDB<NS, N extends keyof NS = keyof NS> = TailordbKysely<NS[N]>;
 
-/** Options accepted by a `getDB` function created with {@link createGetDB}. */
-export type GetDBConfig = Omit<KyselyConfig, "dialect"> & {
+/** Options for {@link createGetDB}. */
+export type CreateGetDBOptions = {
   /**
    * When `true`, date/datetime/time fields with no explicit `as` come back as
-   * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` instead of `Date`. Pass
-   * the same value to `IsTemporal` on {@link TailorDBSelectable} (and the `temporal`
-   * option `kyselyTypePlugin` was configured with, for generated table types) so the
-   * static types match this runtime behavior. Defaults to `false`.
+   * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` instead of `Date`
+   * (date/datetime) or `string` (time). Match the `temporal` option `kyselyTypePlugin`
+   * was configured with so the generated table types agree with this runtime behavior.
+   * Defaults to `false`.
    */
   temporal?: boolean;
 };
 
 /**
  * Create a namespace-aware getDB function for generated code.
+ * @param options - Settings applied to every Kysely instance the returned `getDB` creates
  * @returns A getDB function that creates Kysely instances for specific namespaces
  */
-export function createGetDB<NS>() {
+export function createGetDB<NS>(options: CreateGetDBOptions = {}) {
+  const temporal = options.temporal ?? false;
   return function getDB<const N extends keyof NS & string>(
     namespace: N,
-    config?: GetDBConfig,
+    config?: Omit<KyselyConfig, "dialect">,
   ): TailordbKysely<NS[N]> {
-    const { temporal, ...kyselyConfig } = config ?? {};
     const client = new tailordb.Client({ namespace, temporal });
     return new Kysely<NS[N]>({
-      ...kyselyConfig,
+      ...config,
       dialect: new TailordbDialect(client),
     });
   };
@@ -293,7 +294,8 @@ type TailorDBColumns<T extends TailorDBColumnsSource, IsTemporal extends boolean
  * the generated table types agree: `.serial()` fields are never caller-supplied,
  * `.default()` / `.hooks({ create })` fields may be omitted, optional fields stay
  * optional, `id` is platform-generated, and a date/datetime/time field with no explicit
- * `as` reads back as `Date` (or its `Temporal` counterpart when `IsTemporal` is `true`).
+ * `as` reads back as `Date` (date/datetime) or `string` (time), or as its `Temporal`
+ * counterpart when `IsTemporal` is `true`.
  *
  * Pass a field collection when the fields are a type parameter — a shared module that
  * lets each project extend a table with its own fields cannot name a generated table
@@ -307,8 +309,8 @@ type TailorDBColumns<T extends TailorDBColumnsSource, IsTemporal extends boolean
  * than a readable shape.
  * @param IsTemporal - Pass `true` to accept `Temporal.PlainDate`/`Temporal.Instant`/
  * `Temporal.PlainTime` (alongside a plain string) for date/datetime/time fields with no
- * explicit `as`, matching a `getDB` call made with `{ temporal: true }`. Defaults to
- * `false`.
+ * explicit `as`, matching a `getDB` created with `createGetDB({ temporal: true })`.
+ * Defaults to `false`.
  * @example
  * function createInput<const F extends Record<string, TailorAnyDBField>>(fields: F) {
  *   return (input: TailorDBInsertable<F>) => { ... };
@@ -323,7 +325,8 @@ export type TailorDBInsertable<
  * Read shape of a TailorDB table or field collection. See {@link TailorDBInsertable}.
  * @param IsTemporal - Pass `true` to read date/datetime/time fields with no explicit
  * `as` back as `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime`, matching a
- * `getDB` call made with `{ temporal: true }`. Defaults to `false` (`Date`).
+ * `getDB` created with `createGetDB({ temporal: true })`. Defaults to `false` (`Date` for
+ * date/datetime, `string` for time).
  */
 export type TailorDBSelectable<
   T extends TailorDBColumnsSource,

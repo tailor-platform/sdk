@@ -13,8 +13,8 @@ type KyselyTypePluginOptions = {
   /**
    * When `true`, generated tables map date/datetime/time fields to
    * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` columns instead of
-   * their `Date`/`string` defaults. Call the generated `getDB` with
-   * `{ temporal: true }` to match this at runtime. Defaults to `false`.
+   * their `Date`/`string` defaults, and the generated `getDB` reads them back as those
+   * Temporal values. Defaults to `false`.
    */
   temporal?: boolean;
 };

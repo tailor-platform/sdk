@@ -15,7 +15,7 @@ export type FieldColumnType =
  * `time` to `string`, because that's what the function runtime hands back for them by
  * default. With `temporal: true`, `date`/`datetime`/`time` resolve to their
  * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` counterparts instead,
- * matching a `getDB` call made with `{ temporal: true }`.
+ * matching a `getDB` created with `createGetDB({ temporal: true })`.
  *
  * `enum` and `nested` carry their own shape, so each generator resolves them
  * before reaching here; passing either is a caller bug rather than a `string`

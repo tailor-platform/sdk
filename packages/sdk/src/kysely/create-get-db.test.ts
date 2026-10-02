@@ -24,32 +24,31 @@ describe("createGetDB", () => {
     delete (globalThis as unknown as StubGlobal).tailordb;
   });
 
-  test("constructs tailordb.Client with temporal: undefined when no config is given", () => {
+  test("constructs tailordb.Client with temporal: false by default", () => {
     const constructorSpy = installStubClient();
     const getDB = createGetDB<{ ns: object }>();
 
     getDB("ns");
 
-    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: undefined });
+    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: false });
   });
 
-  test("passes temporal: true through to tailordb.Client", () => {
+  test("constructs tailordb.Client with the temporal setting given to createGetDB", () => {
+    const constructorSpy = installStubClient();
+    const getDB = createGetDB<{ ns: object }>({ temporal: true });
+
+    getDB("ns");
+
+    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: true });
+  });
+
+  test("ignores a temporal key smuggled into the getDB config", () => {
     const constructorSpy = installStubClient();
     const getDB = createGetDB<{ ns: object }>();
 
+    // @ts-expect-error -- temporal is fixed by createGetDB, not per getDB call
     getDB("ns", { temporal: true });
 
-    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: true });
-  });
-
-  test("does not forward temporal into the Kysely dialect config", () => {
-    const constructorSpy = installStubClient();
-    const getDB = createGetDB<{ ns: object }>();
-
-    // Kysely's own config keys (e.g. plugins) must still reach Kysely; temporal must not.
-    const db = getDB("ns", { temporal: true, plugins: [] });
-
-    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: true });
-    expect(db).toBeDefined();
+    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: false });
   });
 });

@@ -297,9 +297,8 @@ export async function processKyselyType(
  * Generate unified types file from multiple namespaces.
  * @param namespaceData - Namespace metadata
  * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`;
- * bakes `temporal: true` into the generated `getDB` so its runtime behavior always
- * matches the Temporal column types the tables above were generated with. Defaults to
- * `false`.
+ * passed to `createGetDB` so the generated `getDB` always reads back the Temporal values
+ * the tables above are typed with. Defaults to `false`.
  * @returns Generated types file contents
  */
 export function generateUnifiedKyselyTypes(
@@ -340,9 +339,6 @@ export function generateUnifiedKyselyTypes(
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");
   }
-  if (temporal) {
-    utilityTypeImports.push("type GetDBConfig");
-  }
 
   const importsSection = multiline /* ts */ `
     import {
@@ -376,23 +372,11 @@ export function generateUnifiedKyselyTypes(
 
   const namespaceInterface = `export interface Namespace {\n${namespaceInterfaces}\n}`;
 
-  const getDBFunction = temporal
-    ? multiline /* ts */ `
-        const getDBBase = createGetDB<Namespace>();
-        export function getDB<const N extends keyof Namespace & string>(
-          namespace: N,
-          config?: Omit<GetDBConfig, "temporal">,
-        ) {
-          return getDBBase(namespace, { ...config, temporal: true });
-        }
+  const getDBFunction = multiline /* ts */ `
+    export const getDB = createGetDB<Namespace>(${temporal ? "{ temporal: true }" : ""});
 
-        export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
-      `
-    : multiline /* ts */ `
-        export const getDB = createGetDB<Namespace>();
-
-        export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
-      `;
+    export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
+  `;
 
   const utilityTypeExports = multiline /* ts */ `
     export type Transaction<K extends keyof Namespace | DB = keyof Namespace> =
