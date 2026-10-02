@@ -7,6 +7,7 @@
 import * as fs from "node:fs/promises";
 import { generatePgliteSchemaModule, type DDLTableConfig } from "#/utils/tailordb-ddl";
 import { writeDbTypesFile } from "./db-types-generator";
+import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
   applyPreMigrationFieldAdjustmentsToSnapshot,
   applyPreMigrationIndexAdjustmentsToSnapshot,
@@ -162,6 +163,9 @@ async function recordTemporalMode(diffPath: string, temporal: boolean): Promise<
   const raw = JSON.parse(await fs.readFile(diffPath, "utf-8")) as Record<string, unknown>;
   if (temporal) {
     raw.temporal = true;
+    if (typeof raw.version !== "number" || raw.version < SCHEMA_SNAPSHOT_VERSION) {
+      raw.version = SCHEMA_SNAPSHOT_VERSION;
+    }
   } else if (Object.hasOwn(raw, "temporal")) {
     delete raw.temporal;
   } else {

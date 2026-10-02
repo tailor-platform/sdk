@@ -4,6 +4,7 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
   addMigrationScriptFiles,
   clearMigrationScriptSkipped,
@@ -97,6 +98,24 @@ describe("addMigrationScriptFiles", () => {
     await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, temporal: true });
 
     expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).temporal).toBe(true);
+  });
+
+  test("raises a legacy migration to the current format version when recording temporal", async () => {
+    setupMigration({ version: 3 });
+
+    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, temporal: true });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(
+      SCHEMA_SNAPSHOT_VERSION,
+    );
+  });
+
+  test("keeps a legacy migration's format version when db.ts uses Date types", async () => {
+    setupMigration({ version: 3 });
+
+    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(3);
   });
 
   test("creates db.pglite.ts next to db.ts", async () => {
