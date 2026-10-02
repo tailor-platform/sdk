@@ -1957,6 +1957,9 @@ export default defineConfig({
       ["a workflow expression", "${{ github.token }}"],
       ["a line break", "modules/**\nsha-head: x"],
       ["surrounding whitespace", " modules/** "],
+      ["a C1 control character (NEL)", "modules/**\u0085sha-head: x"],
+      ["a Unicode line separator", "modules/**\u2028sha-head: x"],
+      ["a Unicode paragraph separator", "modules/**\u2029sha-head: x"],
     ])("rejects a pattern containing %s", async (_label, pattern) => {
       writeApp("apps/erp/backend");
 

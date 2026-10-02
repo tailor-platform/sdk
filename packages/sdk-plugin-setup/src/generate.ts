@@ -262,7 +262,7 @@ function validateDir(dir: string): void {
 // `--paths` patterns are embedded one per line into a YAML block scalar that
 // GitHub evaluates, so only line breaks and expressions could escape it.
 // oxlint-disable-next-line no-control-regex
-const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 const UNSUPPORTED_GLOB_RE = /[?+[\]{}()\\]/;
 
 function isSafePathPattern(pattern: string): boolean {
