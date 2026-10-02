@@ -242,6 +242,15 @@ The command requires a clean state: if the namespace has schema changes that are
 
 A data-only migration runs in **every** workspace the history is applied to, including freshly created ones. Write the script so it is safe against tables with no matching rows (a set-based `UPDATE` with a `WHERE` clause is naturally a no-op on an empty table). For a fix that should run in a single environment only, or that is too large for one transaction, run it outside the migration history instead.
 
+To run a fix outside the migration history, scaffold a one-off script with [`tailor function script`](../cli/function.md#function-script) and execute it against one workspace with [`tailor function run`](../cli/function.md#function-run). When the project configures `kyselyTypePlugin`, the script uses the same `getDB()` as resolvers, so it can call the same Kysely code. Nothing is recorded in the migration history, so the script runs only where and when you run it:
+
+```bash
+tailor function script scripts/fix-prices.ts
+tailor function run scripts/fix-prices.ts --workspace-id <workspace-id> --arg '{"dryRun":true}'
+```
+
+`--arg` is passed as the argument of the script's default-exported function, which is useful for switching between a dry run and the actual write. Each `function run` is a single function execution bound by its execution-time limit; split a large fix into batches and re-run it with idempotent `where` clauses (see [Performance and Large Tables](#performance-and-large-tables)).
+
 ## Configuration
 
 ```typescript
