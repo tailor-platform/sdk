@@ -81,7 +81,7 @@ describe("machineuser list", () => {
     ]);
   });
 
-  test("prints the id column in table output without the timestamp columns", async () => {
+  test("prints the id column in table output", async () => {
     let output = "";
     using _stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
       output += String(chunk);
@@ -94,6 +94,18 @@ describe("machineuser list", () => {
     expect(output).toMatch(/│\s+id\s+│/);
     expect(output).toContain("9f1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d");
     expect(output).toContain("ci-bot");
+  });
+
+  test("omits the timestamp columns from table output", async () => {
+    let output = "";
+    using _stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      output += String(chunk);
+      return true;
+    });
+
+    const result = await runCommand(listCommand, []);
+
+    expect(result.success).toBe(true);
     expect(output).not.toContain("createdAt");
     expect(output).not.toContain("updatedAt");
   });
