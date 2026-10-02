@@ -1,10 +1,13 @@
+import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
 import {
   extractAttributesFromConfig,
   generateTypeDefinition,
+  generateUserTypes,
   resolveTypeDefinitionPath,
 } from "./type-generator";
 import type { AttributeListConfig, AttributesConfig } from "./type-generator";
@@ -584,5 +587,29 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
 
     const content = generateTypeDefinition(undefined, undefined);
     expect(content).toContain("interface SecretVaultNameRegistry {}");
+  });
+});
+
+describe("generateUserTypes", () => {
+  test("refuses to write tailor.d.ts when another one in the same tsconfig declares a different defaultDateRepresentation", async () => {
+    using tmp = tempCwd("sdk-generate-user-types-conflict-");
+    fs.writeFileSync(path.join(tmp.dir, "tsconfig.json"), JSON.stringify({ include: ["**/*.ts"] }));
+    fs.mkdirSync(path.join(tmp.dir, "apps/user"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp.dir, "apps/user/tailor.d.ts"),
+      generateTypeDefinition(undefined, undefined),
+    );
+    const configPath = path.join(tmp.dir, "apps/admin/tailor.config.ts");
+
+    await expect(
+      generateUserTypes({
+        config: { name: "admin", defaultDateRepresentation: "temporal" },
+        configPath,
+      }),
+    ).rejects.toMatchObject({
+      code: "DEFAULT_DATE_REPRESENTATION_CONFLICT",
+      details: expect.stringContaining(path.join("apps", "user", "tailor.d.ts")),
+    });
+    expect(fs.existsSync(path.join(tmp.dir, "apps/admin/tailor.d.ts"))).toBe(false);
   });
 });

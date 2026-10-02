@@ -1,5 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { findDateRepresentationConflicts } from "#/cli/shared/date-representation-conflict";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
@@ -410,6 +412,41 @@ export function resolveTypeDefinitionPath(configPath: string): string {
   return path.join(path.dirname(path.resolve(configPath)), "tailor.d.ts");
 }
 
+function describeRepresentation(representation: AppConfig["defaultDateRepresentation"]): string {
+  return representation === undefined ? "unset" : JSON.stringify(representation);
+}
+
+function assertNoDateRepresentationConflicts(
+  outputPath: string,
+  configPath: string,
+  representation: AppConfig["defaultDateRepresentation"],
+): void {
+  const result = findDateRepresentationConflicts(outputPath, representation);
+  if (!result || result.conflicts.length === 0) return;
+  const relative = (file: string) => path.relative(process.cwd(), file);
+  throw CLIError({
+    code: "DEFAULT_DATE_REPRESENTATION_CONFLICT",
+    message: `defaultDateRepresentation is ${describeRepresentation(representation)} in ${relative(configPath)}, but other tailor.d.ts files included by ${relative(result.tsconfigPath)} declare a different value.`,
+    details: result.conflicts
+      .map(
+        (conflict) =>
+          `${relative(conflict.file)}: ${describeRepresentation(conflict.representation)}`,
+      )
+      .join("\n"),
+    suggestion:
+      "Use the same defaultDateRepresentation in every tailor.config.ts whose tailor.d.ts this tsconfig.json includes, or give each application its own tsconfig.json.",
+    context: {
+      configPath,
+      tsconfigPath: result.tsconfigPath,
+      defaultDateRepresentation: representation ?? null,
+      conflicts: result.conflicts.map((conflict) => ({
+        file: conflict.file,
+        defaultDateRepresentation: conflict.representation ?? null,
+      })),
+    },
+  });
+}
+
 /**
  * Options for generating user type definitions
  */
@@ -427,6 +464,8 @@ interface GenerateUserTypesOptions {
  */
 export async function generateUserTypes(options: GenerateUserTypesOptions): Promise<void> {
   const { config, configPath } = options;
+  const outputPath = resolveTypeDefinitionPath(configPath);
+  assertNoDateRepresentationConflicts(outputPath, configPath, config.defaultDateRepresentation);
   try {
     const {
       attributes,
@@ -486,8 +525,6 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       secretVaultNames,
       config.defaultDateRepresentation,
     );
-    const outputPath = resolveTypeDefinitionPath(configPath);
-
     // Write to file
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, typeDefContent);
