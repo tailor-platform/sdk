@@ -67,7 +67,6 @@ function emptyResults(): PlanResults {
         executorUsedTables: new Set<string>(),
         config: {} as PlanResults["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
-        temporal: false,
         namespacesWithMigrations: [],
         migrationFileState: {},
         checkpointRepairs: [],

@@ -24,11 +24,6 @@ export interface PlanContext {
   noSchemaCheck?: boolean;
   forceApplyAll?: boolean;
   /**
-   * Whether `kyselyTypePlugin` was configured with `{ temporal: true }`. Not set
-   * on `forRemoval` plans, which never execute migration scripts.
-   */
-  temporal?: boolean;
-  /**
    * Set of IdP names that have at least one executor with an idpUser trigger.
    * Controls how `publishEvents` defaults on each IdP service. Empty when
    * no idpUser triggers are defined.

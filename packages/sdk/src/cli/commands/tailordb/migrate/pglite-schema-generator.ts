@@ -158,8 +158,21 @@ export async function tryWritePgliteSchemaFile(
   }
 }
 
+async function recordTemporalMode(diffPath: string, temporal: boolean): Promise<void> {
+  const raw = JSON.parse(await fs.readFile(diffPath, "utf-8")) as Record<string, unknown>;
+  if (temporal) {
+    raw.temporal = true;
+  } else if (Object.hasOwn(raw, "temporal")) {
+    delete raw.temporal;
+  } else {
+    return;
+  }
+  await fs.writeFile(diffPath, JSON.stringify(raw, null, 2));
+}
+
 /**
- * Write `db.ts` and `db.pglite.ts` for a migration.
+ * Write `db.ts` and `db.pglite.ts` for a migration, and record in its `diff.json`
+ * whether `db.ts` uses Temporal column types so the script later runs in that mode.
  * @param options - Snapshot, diff, and destination
  * @returns Paths of the written files
  */
@@ -182,6 +195,7 @@ export async function writeMigrationTypeFiles(
     expandPlans,
     temporal,
   );
+  await recordTemporalMode(getMigrationFilePath(migrationsDir, migrationNumber, "diff"), temporal);
   return {
     dbTypesPath,
     ...(await tryWritePgliteSchemaFile(previousSnapshot, diff, migrationsDir, migrationNumber)),

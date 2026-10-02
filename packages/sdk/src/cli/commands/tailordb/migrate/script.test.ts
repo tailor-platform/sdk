@@ -91,6 +91,14 @@ describe("addMigrationScriptFiles", () => {
     expect(fs.existsSync(migrationFile(MIGRATE_TEST_FILE_NAME))).toBe(false);
   });
 
+  test("records temporal: true in diff.json when db.ts is generated with Temporal types", async () => {
+    setupMigration();
+
+    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, temporal: true });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).temporal).toBe(true);
+  });
+
   test("creates db.pglite.ts next to db.ts", async () => {
     setupMigration();
 

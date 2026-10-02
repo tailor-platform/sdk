@@ -697,7 +697,6 @@ describe("migration", () => {
         configDir: "/project",
         appName: "test-app",
         appId: "test-app-id",
-        temporal: false,
         ...overrides,
       };
     }
@@ -783,13 +782,19 @@ describe("migration", () => {
       });
     });
 
-    test("forwards the context's temporal flag to bundleMigrationScript", async () => {
-      const migrations = [createMockMigration({ number: 1, hasScript: true })];
+    test("runs each migration script with the temporal mode recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ temporal: true }),
+        }),
+        createMockMigration({ number: 2, hasScript: true }),
+      ];
 
-      await executeMigrations(createMockContext({ temporal: true }), migrations);
+      await executeMigrations(createMockContext(), migrations);
 
-      expect(bundleMigrationScriptMock).toHaveBeenCalledTimes(1);
-      expect(bundleMigrationScriptMock.mock.calls[0]![5]).toBe(true);
+      expect(bundleMigrationScriptMock.mock.calls.map((call) => call[5])).toEqual([true, false]);
     });
 
     test("executes only the subset with hasScript=true when mixed with breaking changes", async () => {

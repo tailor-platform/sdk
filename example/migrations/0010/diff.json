@@ -23,5 +23,6 @@
   ],
   "hasWarnings": false,
   "warnings": [],
-  "requiresMigrationScript": true
+  "requiresMigrationScript": true,
+  "temporal": true
 }

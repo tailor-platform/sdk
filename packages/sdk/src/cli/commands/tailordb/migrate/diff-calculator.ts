@@ -327,6 +327,12 @@ export interface MigrationDiff {
   requiresMigrationScript: boolean;
   /** Explicit acknowledgment that this migration needs no script despite breaking changes or data-loss warnings */
   scriptSkipped?: ScriptSkippedInfo;
+  /**
+   * Whether this migration's `db.ts` was generated with Temporal column types, so its
+   * script runs against a `tailordb.Client` created with `{ temporal: true }`. Absent
+   * means `false`.
+   */
+  temporal?: boolean;
 }
 
 /**
