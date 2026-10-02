@@ -190,6 +190,7 @@ function generateDbTypesFromSnapshot(
   const usedUtilityTypes = new Set<
     "Timestamp" | "Serial" | "TemporalDate" | "TemporalInstant" | "TemporalTime"
   >();
+  let usedColumnType = false;
   let usedArrayColumnType = false;
   let usesTemporalNamespace = false;
 
@@ -198,6 +199,7 @@ function generateDbTypesFromSnapshot(
   for (const type of tables) {
     const result = generateTableType(type, breakingChangeFields, temporal);
     for (const usedType of result.usedUtilityTypes) usedUtilityTypes.add(usedType);
+    usedColumnType = usedColumnType || result.usedColumnType;
     usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
     usesTemporalNamespace = usesTemporalNamespace || result.usesTemporalNamespace;
     typeDefinitions.push(result.typeDef);
@@ -206,11 +208,10 @@ function generateDbTypesFromSnapshot(
   // Build imports. Timestamp/Generated/Serial/Temporal* come from
   // @tailor-platform/sdk/kysely (not redeclared here) so this file always reflects
   // whatever those utility types currently mean, the same as ColumnType/Transaction do.
-  const imports: string[] = [
-    "type ColumnType",
-    "type Transaction as KyselyTransaction",
-    "type Generated",
-  ];
+  const imports: string[] = ["type Transaction as KyselyTransaction", "type Generated"];
+  if (usedColumnType) {
+    imports.unshift("type ColumnType");
+  }
   if (usedArrayColumnType) {
     imports.push("type ArrayColumnType");
   }

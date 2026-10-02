@@ -225,19 +225,7 @@ type NestedColumn<F, IsTemporal extends boolean> =
     ? ObjectColumnType<FlattenColumns<NestedProps<NestedFieldsOf<F>, IsTemporal>>>
     : FlattenColumns<NestedProps<NestedFieldsOf<F>, IsTemporal>>;
 
-// `as: "temporal"` already resolves ElementOutput to a concrete Temporal.* type (see
-// `DateFieldValue`/`DateTimeFieldValue`/`TimeFieldValue`) that the runtime and the
-// generator agree on, so that's the only case this checks for — an explicit `as: "date"`
-// still lands in the `false` branch below (same as no `as` at all) and keeps today's
-// `Timestamp`/`string` mapping, only becoming Temporal when `getDB` is given
-// `{ temporal: true }`. That's an unavoidable type-level blind spot: `as`'s value isn't
-// tracked at the type level, only its effect on ElementOutput is, so a field explicitly
-// pinned to "date" while IsTemporal is true still resolves to a Temporal column here.
-type HasExplicitTemporalAs<T> = T extends Temporal.PlainDate | Temporal.Instant | Temporal.PlainTime
-  ? true
-  : false;
-
-type DefaultDateColumn<
+type DateColumn<
   Type extends "date" | "datetime" | "time",
   IsTemporal extends boolean,
 > = IsTemporal extends true
@@ -254,9 +242,7 @@ type ElementColumn<F, IsTemporal extends boolean> =
   DBFieldType<F> extends "nested"
     ? NestedColumn<F, IsTemporal>
     : DBFieldType<F> extends "date" | "datetime" | "time"
-      ? HasExplicitTemporalAs<ElementOutput<F>> extends true
-        ? ElementOutput<F>
-        : DefaultDateColumn<DBFieldType<F>, IsTemporal>
+      ? DateColumn<DBFieldType<F>, IsTemporal>
       : ElementOutput<F>;
 
 // A ColumnType cannot sit inside an array — Kysely only unwraps it at the top level of a

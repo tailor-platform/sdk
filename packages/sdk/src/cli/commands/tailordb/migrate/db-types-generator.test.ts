@@ -115,6 +115,40 @@ describe("db-types-generator", () => {
     expectedContains: string[];
   };
 
+  test("omits the ColumnType import when no column needs it", async () => {
+    const snapshot = createMockSnapshot(
+      { User: { fields: { name: { type: "string", required: true } } } },
+      "tailordb",
+    );
+
+    const { content } = await generateContent(snapshot);
+
+    expect(content).not.toContain("type ColumnType");
+  });
+
+  test("imports ColumnType when a column is typed with it", async () => {
+    const snapshot = createMockSnapshot(
+      { User: { fields: { name: { type: "string", required: true } } } },
+      "tailordb",
+    );
+    const diff = createMockMigrationDiff({
+      changes: [
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "name",
+          before: { type: "string", required: false },
+          after: { type: "string", required: true },
+        },
+      ],
+    });
+
+    const { content } = await generateContent(snapshot, 1, diff);
+
+    expect(content).toContain("ColumnType<");
+    expect(content).toContain("type ColumnType");
+  });
+
   describe("writeDbTypesFile with basic field types", () => {
     test.each<BasicFieldTypesCase>([
       {
