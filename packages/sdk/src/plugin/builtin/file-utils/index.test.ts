@@ -31,6 +31,9 @@ describe("FileUtilsPlugin", () => {
       baseDir: "/test",
       configPath: "tailor.config.ts",
       pluginConfig: { distPath: testDistPath },
+      loadTailorDB: () => {
+        throw new Error("loadTailorDB is not expected to be called");
+      },
     };
   }
 

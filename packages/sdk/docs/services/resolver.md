@@ -365,6 +365,29 @@ createResolver({
 });
 ```
 
+### Querying Namespaces of Another Application
+
+`getDB()` accepts the namespaces defined in this application's `db`. To also query a TailorDB namespace that another application's `tailor.config.ts` defines, list it in `additionalNamespaces`. `configPath` is relative to the directory of the config that registers the plugin:
+
+```typescript
+export const plugins = definePlugins(
+  kyselyTypePlugin({
+    distPath: "./generated/tailordb.ts",
+    additionalNamespaces: [
+      { configPath: "../billing-app/tailor.config.ts", namespaces: ["billing"] },
+    ],
+  }),
+);
+```
+
+`tailor generate` reads the table definitions of `billing` from that config, applying its namespace plugins, and adds the namespace to the generated types, so `getDB("billing")` becomes available. This option only affects the generated types: it does not add `billing` to this application's `db`. To also include it in this application's subgraph, declare it as `billing: { external: true }` in `db` as well. When `pgliteSchemaPath` is set, the generated schema module includes `billing` too.
+
+Omit `namespaces` to include every namespace that the other config's `db` defines without `external: true`. The generated types then follow that config: a namespace added there is added here on the next `tailor generate`. List the namespaces explicitly to keep the generated types unchanged when the other application adds one.
+
+`tailor generate` fails when a listed namespace is not defined in the other config's `db` or is `{ external: true }` there, when `namespaces` is omitted and the other config has no namespace without `external: true`, when an included namespace is defined in this application's `db` without `external: true`, or when the same namespace is included more than once.
+
+A table name may exist in both an own namespace and an additional namespace, unless you also declare the additional namespace as `{ external: true }` in `db`: `deploy` requires table names to be unique across local and external TailorDB namespaces. Queries stay per namespace: `getDB("billing").selectFrom("User")` accepts only the columns of `billing`'s `User`. The name-keyed helper types from the generated file do not: `Table<"User">` becomes a union of every namespace's `User` table, and `Insertable<"User">`, `Selectable<"User">`, and `Updateable<"User">` keep only the columns those tables share. Use `getDB()` query results instead of these helper types for such a table.
+
 ## Query vs Mutation
 
 Use `operation: "query"` for read operations and `operation: "mutation"` for write operations:

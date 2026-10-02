@@ -147,13 +147,14 @@ onNamespaceLoaded(context) {
 
 **Context** (`TailorDBReadyContext`):
 
-| Field          | Type                      | Description                                                     |
-| -------------- | ------------------------- | --------------------------------------------------------------- |
-| `tailordb`     | `TailorDBNamespaceData[]` | All namespaces with tables, source info, and plugin attachments |
-| `auth`         | `GeneratorAuthInput?`     | Auth configuration (machine users, OAuth2 clients, etc.)        |
-| `baseDir`      | `string`                  | Output directory for generated files                            |
-| `configPath`   | `string`                  | Path to `tailor.config.ts`                                      |
-| `pluginConfig` | `PluginConfig`            | Plugin-level config from `definePlugins()`                      |
+| Field          | Type                                                            | Description                                                                                                                                                                                                                              |
+| -------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tailordb`     | `TailorDBNamespaceData[]`                                       | All namespaces with tables, source info, and plugin attachments                                                                                                                                                                          |
+| `auth`         | `GeneratorAuthInput?`                                           | Auth configuration (machine users, OAuth2 clients, etc.)                                                                                                                                                                                 |
+| `baseDir`      | `string`                                                        | Output directory for generated files                                                                                                                                                                                                     |
+| `configPath`   | `string`                                                        | Path to `tailor.config.ts`                                                                                                                                                                                                               |
+| `pluginConfig` | `PluginConfig`                                                  | Plugin-level config from `definePlugins()`                                                                                                                                                                                               |
+| `loadTailorDB` | `(configPath, namespaces?) => Promise<TailorDBNamespaceData[]>` | Loads namespaces owned by another `tailor.config.ts` (absolute path), with that config's namespace plugins applied. Omit `namespaces` to load every namespace there without `external: true`. That config's generation hooks do not run. |
 
 `TailorDBNamespaceData` contains:
 
@@ -194,7 +195,7 @@ onTailorDBReady(ctx) {
 
 **Context** (`ResolverReadyContext`):
 
-All fields from `TailorDBReadyContext`, plus:
+All fields from `TailorDBReadyContext` except `loadTailorDB`, plus:
 
 | Field       | Type                      | Description                         |
 | ----------- | ------------------------- | ----------------------------------- |

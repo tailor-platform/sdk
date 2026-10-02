@@ -14,6 +14,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { createTailorDBNamespaceLoader } from "#/cli/shared/tailordb-namespaces";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
@@ -75,6 +76,7 @@ export function createGenerationManager(params: {
 
   // Get plugins that have generation hooks
   const generationPlugins = pluginManager?.getPluginsWithGenerationHooks() ?? [];
+  const loadTailorDB = createTailorDBNamespaceLoader();
 
   // =========================================================================
   // Plugin phase-complete hook runner
@@ -134,6 +136,7 @@ export function createGenerationManager(params: {
           baseDir: pluginBaseDir,
           configPath: config.path,
           pluginConfig: plugin.pluginConfig,
+          loadTailorDB,
         });
         break;
       case "onResolverReady":

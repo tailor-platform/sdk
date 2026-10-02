@@ -90,6 +90,14 @@ export interface TailorDBReadyContext<PluginConfig = unknown> {
   configPath: string;
   /** Plugin-level configuration passed via definePlugins() */
   pluginConfig: PluginConfig;
+  /**
+   * Load TailorDB namespaces owned by another tailor.config.ts, with their tables
+   * and namespace plugins applied. The other config's generation hooks are not run.
+   * @param configPath - Absolute path to the other tailor.config.ts
+   * @param namespaces - Namespace names in the other config's `db`; omit to load every namespace there without `external: true`
+   * @returns The namespace data, in the given order (config order when omitted)
+   */
+  loadTailorDB(configPath: string, namespaces?: string[]): Promise<TailorDBNamespaceData[]>;
 }
 
 /**

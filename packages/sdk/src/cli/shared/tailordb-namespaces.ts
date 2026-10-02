@@ -1,4 +1,9 @@
-import { defineApplication, type Application } from "#/cli/services/application";
+import * as path from "pathe";
+import {
+  createOwnedTailorDBService,
+  defineApplication,
+  type Application,
+} from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
 import { loadConfig, type LoadedConfig } from "./config-loader";
 import { generateUserTypes } from "./type-generator";
@@ -109,4 +114,111 @@ export async function loadTailorDBNamespaces(
 ): Promise<LoadedTailorDBNamespaces> {
   const { config, plugins, namespaces } = await loadApplicationNamespaces(options);
   return { config, plugins, namespaces };
+}
+
+/**
+ * Load TailorDB namespaces owned by a given tailor.config.ts.
+ */
+export type TailorDBNamespaceLoader = (
+  configPath: string,
+  namespaces?: string[],
+) => Promise<TailorDBNamespaceData[]>;
+
+/**
+ * List the namespaces a config defines without `external: true`.
+ * @param config - Loaded config
+ * @returns Namespace names in config order
+ */
+function ownedNamespacesOf(config: LoadedConfig): string[] {
+  const owned = Object.entries(config.db ?? {})
+    .filter(([, serviceConfig]) => !("external" in serviceConfig))
+    .map(([namespace]) => namespace);
+  if (owned.length === 0) {
+    throw new Error(`${config.path} defines no TailorDB namespace without external: true.`);
+  }
+  return owned;
+}
+
+interface LoadedNamespaceSource {
+  config: LoadedConfig;
+  pluginManager: PluginManager | undefined;
+}
+
+/**
+ * Load one namespace a config owns, with that config's namespace plugins applied.
+ * @param source - The owning config and its plugins
+ * @param namespace - Namespace name in that config's `db`
+ * @returns The namespace data
+ */
+async function loadNamespace(
+  source: LoadedNamespaceSource,
+  namespace: string,
+): Promise<TailorDBNamespaceData> {
+  const { config, pluginManager } = source;
+  const serviceConfig =
+    config.db && Object.hasOwn(config.db, namespace) ? config.db[namespace] : undefined;
+  if (!serviceConfig) {
+    throw new Error(`TailorDB namespace "${namespace}" not found in config.db of ${config.path}.`);
+  }
+  if ("external" in serviceConfig) {
+    throw new Error(
+      `TailorDB namespace "${namespace}" is external in ${config.path}. Point configPath at the config that defines its tables.`,
+    );
+  }
+  const db = createOwnedTailorDBService({
+    namespace,
+    serviceConfig,
+    baseDir: path.dirname(config.path),
+    pluginManager,
+  });
+  await db.loadTypes();
+  await db.processNamespacePlugins();
+  return {
+    namespace,
+    tables: { ...db.types },
+    sourceInfo: new Map(Object.entries(db.typeSourceInfo)),
+    pluginAttachments: db.pluginAttachments,
+  };
+}
+
+/**
+ * Create a loader that reads TailorDB namespaces owned by other configs: the
+ * namespace's tables are loaded from that config's `db` entry with that
+ * config's namespace plugins applied. None of its generation hooks run.
+ * @returns The namespace loader
+ */
+export function createTailorDBNamespaceLoader(): TailorDBNamespaceLoader {
+  const configs = new Map<string, Promise<LoadedNamespaceSource>>();
+  const namespaces = new Map<string, Promise<TailorDBNamespaceData>>();
+
+  const loadConfigOnce = (configPath: string) => {
+    let loaded = configs.get(configPath);
+    if (!loaded) {
+      loaded = loadConfig(configPath).then(({ config, plugins }) => ({
+        config,
+        pluginManager: plugins.length > 0 ? new PluginManager(plugins) : undefined,
+      }));
+      configs.set(configPath, loaded);
+    }
+    return loaded;
+  };
+
+  const loadNamespaceOnce = (source: LoadedNamespaceSource, namespace: string) => {
+    const key = `${source.config.path}\0${namespace}`;
+    let loaded = namespaces.get(key);
+    if (!loaded) {
+      loaded = loadNamespace(source, namespace);
+      namespaces.set(key, loaded);
+    }
+    return loaded;
+  };
+
+  return async (configPath, selected) => {
+    const source = await loadConfigOnce(configPath);
+    const loaded: TailorDBNamespaceData[] = [];
+    for (const namespace of selected ?? ownedNamespacesOf(source.config)) {
+      loaded.push(await loadNamespaceOnce(source, namespace));
+    }
+    return loaded;
+  };
 }

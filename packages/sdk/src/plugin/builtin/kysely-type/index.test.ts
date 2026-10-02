@@ -1,11 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { parseTypes } from "#/parser/service/tailordb/index";
 import { toSchemaOutput } from "#/utils/test/internal";
 import { processKyselyType } from "./type-processor";
 import { kyselyTypePlugin, KyselyGeneratorID } from "./index";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
-import type { TailorDBReadyContext } from "#/plugin/types";
+import type { TailorDBNamespaceData, TailorDBReadyContext } from "#/plugin/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
@@ -62,6 +62,9 @@ describe("KyselyTypePlugin integration tests", () => {
       baseDir: "/test",
       configPath: "tailor.config.ts",
       pluginConfig: { distPath: testDistPath },
+      loadTailorDB: () => {
+        throw new Error("loadTailorDB is not expected to be called");
+      },
     };
   }
 
@@ -310,6 +313,232 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(content).not.toContain("type ObjectColumnType");
       expect(content).not.toContain("type ArrayColumnType");
       expect(content).not.toContain("type Timestamp");
+    });
+  });
+
+  describe("additionalNamespaces", () => {
+    const invoiceType = db.table("Invoice", { amount: db.int() });
+    const ownNamespaces = [
+      { namespace: "tailordb", tables: { User: parseTailorDBType(toSchemaOutput(mockBasicType)) } },
+    ];
+
+    function fakeLoadTailorDB() {
+      return vi.fn(
+        async (_configPath: string, namespaces: string[]): Promise<TailorDBNamespaceData[]> =>
+          namespaces.map((namespace) => ({
+            namespace,
+            tables: { Invoice: parseTailorDBType(toSchemaOutput(invoiceType)) },
+            sourceInfo: new Map(),
+            pluginAttachments: new Map(),
+          })),
+      );
+    }
+
+    function runWithAdditionalNamespaces(
+      additionalNamespaces: unknown,
+      loadTailorDB: TailorDBReadyContext["loadTailorDB"],
+    ) {
+      const options = {
+        distPath: testDistPath,
+        additionalNamespaces: additionalNamespaces as {
+          configPath: string;
+          namespaces?: string[];
+        }[],
+      };
+      return kyselyTypePlugin(options).onTailorDBReady!({
+        ...createCtx(ownNamespaces),
+        configPath: "/app/tailor.config.ts",
+        pluginConfig: options,
+        loadTailorDB,
+      });
+    }
+
+    test("adds a namespace loaded from another config to the generated Namespace interface", async () => {
+      const loadTailorDB = fakeLoadTailorDB();
+
+      const result = await runWithAdditionalNamespaces(
+        [{ configPath: "../billing/tailor.config.ts", namespaces: ["billing"] }],
+        loadTailorDB,
+      );
+
+      expect(loadTailorDB).toHaveBeenCalledWith("/billing/tailor.config.ts", ["billing"]);
+      const content = result.files[0]!.content;
+      expect(content).toContain('"tailordb": {');
+      expect(content).toContain('"billing": {');
+      expect(content).toContain("Invoice: {");
+    });
+
+    test("keeps a table name shared with this config's namespaces under each namespace", async () => {
+      const result = await runWithAdditionalNamespaces(
+        [{ configPath: "../billing/tailor.config.ts", namespaces: ["billing"] }],
+        async (_configPath, namespaces = []) =>
+          namespaces.map((namespace) => ({
+            namespace,
+            tables: {
+              User: parseTailorDBType(toSchemaOutput(db.table("User", { plan: db.string() }))),
+            },
+            sourceInfo: new Map(),
+            pluginAttachments: new Map(),
+          })),
+      );
+
+      const content = result.files[0]!.content;
+      expect(content).toMatch(/"tailordb": \{\n {4}User: \{[^}]*email: string;/);
+      expect(content).toMatch(/"billing": \{\n {4}User: \{[^}]*plan: string;/);
+    });
+
+    test("rejects an additional namespace whose name is already a namespace of this config", async () => {
+      const loadTailorDB = fakeLoadTailorDB();
+
+      await expect(
+        runWithAdditionalNamespaces(
+          [{ configPath: "../billing/tailor.config.ts", namespaces: ["tailordb"] }],
+          loadTailorDB,
+        ),
+      ).rejects.toThrow(
+        'additionalNamespaces: namespace "tailordb" is already defined in this config\'s db.',
+      );
+      expect(loadTailorDB).not.toHaveBeenCalled();
+    });
+
+    test("rejects the same namespace listed twice in additionalNamespaces", async () => {
+      const loadTailorDB = fakeLoadTailorDB();
+
+      await expect(
+        runWithAdditionalNamespaces(
+          [
+            { configPath: "../billing/tailor.config.ts", namespaces: ["billing"] },
+            { configPath: "../legacy/tailor.config.ts", namespaces: ["billing"] },
+          ],
+          loadTailorDB,
+        ),
+      ).rejects.toThrow('additionalNamespaces: namespace "billing" is included more than once.');
+      expect(loadTailorDB).not.toHaveBeenCalled();
+    });
+
+    test("names the additionalNamespaces entry when loading it fails", async () => {
+      const loadTailorDB = vi.fn(async () => {
+        throw new Error('TailorDB namespace "billing" is not defined');
+      });
+
+      await expect(
+        runWithAdditionalNamespaces(
+          [{ configPath: "../billing/tailor.config.ts", namespaces: ["billing"] }],
+          loadTailorDB,
+        ),
+      ).rejects.toThrow(
+        'additionalNamespaces[0]: failed to load from /billing/tailor.config.ts: TailorDB namespace "billing" is not defined',
+      );
+    });
+
+    test.each([
+      [
+        "a non-array",
+        { configPath: "../billing/tailor.config.ts" },
+        "additionalNamespaces must be an array.",
+      ],
+      [
+        "a non-object entry",
+        ["../billing/tailor.config.ts"],
+        "additionalNamespaces[0] must be an object.",
+      ],
+      [
+        "an entry without configPath",
+        [{ namespaces: ["billing"] }],
+        "additionalNamespaces[0].configPath must be a non-empty string.",
+      ],
+      [
+        "an empty configPath",
+        [{ configPath: "", namespaces: ["billing"] }],
+        "additionalNamespaces[0].configPath must be a non-empty string.",
+      ],
+      [
+        "a string namespaces",
+        [{ configPath: "../billing/tailor.config.ts", namespaces: "billing" }],
+        "additionalNamespaces[0].namespaces must be a non-empty array of non-empty strings.",
+      ],
+      [
+        "an empty namespaces array",
+        [{ configPath: "../billing/tailor.config.ts", namespaces: [] }],
+        "additionalNamespaces[0].namespaces must be a non-empty array of non-empty strings.",
+      ],
+      [
+        "a non-string namespace in a later entry",
+        [
+          { configPath: "../billing/tailor.config.ts", namespaces: ["billing"] },
+          { configPath: "../audit/tailor.config.ts", namespaces: ["audit", 1] },
+        ],
+        "additionalNamespaces[1].namespaces must be a non-empty array of non-empty strings.",
+      ],
+    ])("rejects %s before loading anything", async (_case, additionalNamespaces, message) => {
+      const loadTailorDB = fakeLoadTailorDB();
+
+      await expect(runWithAdditionalNamespaces(additionalNamespaces, loadTailorDB)).rejects.toThrow(
+        message,
+      );
+      expect(loadTailorDB).not.toHaveBeenCalled();
+    });
+
+    describe("when namespaces is omitted", () => {
+      function loadTailorDBReturning(...namespaces: string[]) {
+        return vi.fn(
+          async (_configPath: string, _namespaces?: string[]): Promise<TailorDBNamespaceData[]> =>
+            namespaces.map((namespace) => ({
+              namespace,
+              tables: { Invoice: parseTailorDBType(toSchemaOutput(invoiceType)) },
+              sourceInfo: new Map(),
+              pluginAttachments: new Map(),
+            })),
+        );
+      }
+
+      test("adds every namespace the loader returns for that config", async () => {
+        const loadTailorDB = loadTailorDBReturning("billing", "audit");
+
+        const result = await runWithAdditionalNamespaces(
+          [{ configPath: "../billing/tailor.config.ts" }],
+          loadTailorDB,
+        );
+
+        expect(loadTailorDB).toHaveBeenCalledWith("/billing/tailor.config.ts", undefined);
+        const content = result.files[0]!.content;
+        expect(content).toContain('"billing": {');
+        expect(content).toContain('"audit": {');
+      });
+
+      test("rejects a loaded namespace whose name is already a namespace of this config", async () => {
+        await expect(
+          runWithAdditionalNamespaces(
+            [{ configPath: "../billing/tailor.config.ts" }],
+            loadTailorDBReturning("billing", "tailordb"),
+          ),
+        ).rejects.toThrow(
+          'additionalNamespaces: namespace "tailordb" is already defined in this config\'s db.',
+        );
+      });
+
+      test("rejects pointing configPath at this config itself", async () => {
+        const loadTailorDB = loadTailorDBReturning("tailordb");
+
+        await expect(
+          runWithAdditionalNamespaces([{ configPath: "./tailor.config.ts" }], loadTailorDB),
+        ).rejects.toThrow(
+          'additionalNamespaces: namespace "tailordb" is already defined in this config\'s db.',
+        );
+        expect(loadTailorDB).toHaveBeenCalledWith("/app/tailor.config.ts", undefined);
+      });
+
+      test("rejects a namespace loaded from more than one entry", async () => {
+        await expect(
+          runWithAdditionalNamespaces(
+            [
+              { configPath: "../billing/tailor.config.ts" },
+              { configPath: "../legacy/tailor.config.ts", namespaces: ["billing"] },
+            ],
+            loadTailorDBReturning("billing"),
+          ),
+        ).rejects.toThrow('additionalNamespaces: namespace "billing" is included more than once.');
+      });
     });
   });
 });

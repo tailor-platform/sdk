@@ -7,6 +7,7 @@ import { defineApplication } from "#/cli/services/application";
 import { errorToJson, serializeError } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { createTailorDBNamespaceLoader } from "#/cli/shared/tailordb-namespaces";
 import { PluginManager } from "#/plugin/manager";
 import { createGenerationManager } from "./service";
 import type { Application } from "#/cli/services/application";
@@ -49,6 +50,10 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => {
     },
   };
 });
+
+vi.mock("#/cli/shared/tailordb-namespaces", () => ({
+  createTailorDBNamespaceLoader: vi.fn(() => vi.fn()),
+}));
 
 function loadedTailorDBService(namespace: string, tableNames: string[]): TailorDBService {
   const types = Object.fromEntries(
@@ -192,6 +197,23 @@ describe("GenerationManager", () => {
         "generated",
         expect.any(Function),
       );
+    });
+
+    test("passes onTailorDBReady a loader for namespaces owned by other configs", async () => {
+      const loadTailorDB = vi.fn();
+      vi.mocked(createTailorDBNamespaceLoader).mockReturnValueOnce(loadTailorDB);
+      const onTailorDBReady = vi.fn().mockResolvedValue({ files: [] });
+      const manager = createGenerationManager({
+        application: applicationWithTailorDBServices(mockConfig, []),
+        config: mockConfig,
+        pluginManager: new PluginManager([
+          { id: "test-plugin", description: "Test plugin", onTailorDBReady },
+        ]),
+      });
+
+      await manager.generate();
+
+      expect(onTailorDBReady).toHaveBeenCalledWith(expect.objectContaining({ loadTailorDB }));
     });
 
     test("reports a failed plugin while another plugin is still pending", async () => {

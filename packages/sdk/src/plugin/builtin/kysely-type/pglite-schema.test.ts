@@ -50,10 +50,19 @@ function parsed(
   return parseTypes(toSchemaOutputs(tables), namespace, {});
 }
 
+type PGliteTestPluginConfig = {
+  distPath: string;
+  pgliteSchemaPath?: string;
+  additionalNamespaces?: { configPath: string; namespaces: string[] }[];
+};
+
 function ctx(
   namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
-  pluginConfig: { distPath: string; pgliteSchemaPath?: string },
-): TailorDBReadyContext<typeof pluginConfig> {
+  pluginConfig: PGliteTestPluginConfig,
+  loadTailorDB: TailorDBReadyContext["loadTailorDB"] = () => {
+    throw new Error("loadTailorDB is not expected to be called");
+  },
+): TailorDBReadyContext<PGliteTestPluginConfig> {
   return {
     tailordb: namespaces.map((ns) => ({
       namespace: ns.namespace,
@@ -65,6 +74,7 @@ function ctx(
     baseDir: "/test",
     configPath: "tailor.config.ts",
     pluginConfig,
+    loadTailorDB,
   };
 }
 
@@ -156,6 +166,31 @@ describe("kyselyTypePlugin pgliteSchemaPath", () => {
       config.distPath,
       config.pgliteSchemaPath,
     ]);
+  });
+
+  test("includes namespaces loaded from additionalNamespaces in the schema module", async () => {
+    const config = {
+      distPath: "/out/tailordb.ts",
+      pgliteSchemaPath: "/out/tailordb.pglite.ts",
+      additionalNamespaces: [
+        { configPath: "../billing/tailor.config.ts", namespaces: ["billing"] },
+      ],
+    };
+    const result = await kyselyTypePlugin(config).onTailorDBReady!(
+      ctx(namespaces, config, async (_configPath, additional = []) =>
+        additional.map((namespace) => ({
+          namespace,
+          tables: parsed({ Ticket: ticket }, namespace),
+          sourceInfo: new Map(),
+          pluginAttachments: new Map(),
+        })),
+      ),
+    );
+
+    const schemaModule = result.files[1]!.content;
+    expect(schemaModule).toContain('  "tailordb": `');
+    expect(schemaModule).toContain('  "billing": `');
+    expect(schemaModule).toContain('CREATE TABLE IF NOT EXISTS "Ticket" (');
   });
 
   test("emits only the types when not configured", async () => {

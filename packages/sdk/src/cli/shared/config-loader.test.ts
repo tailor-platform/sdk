@@ -57,6 +57,9 @@ describe("loadConfig", () => {
         baseDir: path.dirname(configPath),
         configPath,
         pluginConfig: undefined,
+        loadTailorDB: () => {
+          throw new Error("loadTailorDB is not expected to be called");
+        },
       }),
     ).toEqual({ files: [{ path: "output.txt", content: "preserved" }] });
   });
