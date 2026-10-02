@@ -25,10 +25,9 @@ function context(frontends: FrontendDefinition[]) {
   const publish = vi.fn<(site: string, dir: string) => Promise<PublishStaticWebsiteResult>>(
     async () => ({ url: "https://published", skippedFiles: [] }),
   );
-  const site = (name: string, application = "app") => ({
+  const site = (name: string) => ({
     name,
     url: `https://${name}`,
-    application,
     publish: (dir: string) => publish(name, dir),
   });
   const application = {
@@ -37,6 +36,15 @@ function context(frontends: FrontendDefinition[]) {
     url: "https://app",
     domain: "app",
     aiGateways: [],
+    staticWebsites: { web: site("web"), admin: site("admin") },
+  };
+  const otherApplication = {
+    name: "other-app",
+    configPath: join(root, "apps/other/tailor.config.ts"),
+    url: "https://other-app",
+    domain: "other-app",
+    aiGateways: [],
+    staticWebsites: { other: { name: "other", url: "https://other" } },
   };
   const exec = vi.fn<(command: string, options: PluginExecOptions) => Promise<PluginExecResult>>(
     async () => ({ stdout: "", stderr: "" }),
@@ -44,8 +52,7 @@ function context(frontends: FrontendDefinition[]) {
   const ctx: DeployedContext<FrontendDefinition[]> = {
     workspaceId: "ws",
     application,
-    applications: [application],
-    staticWebsites: { web: site("web"), admin: site("admin"), other: site("other", "other-app") },
+    applications: [application, otherApplication],
     configPath: application.configPath,
     pluginConfig: frontends,
     logger: { info: vi.fn(), warn: vi.fn(), success: vi.fn() },
@@ -98,7 +105,7 @@ describe("frontendPlugin", () => {
         site: { name: "web" } as StaticWebsiteConfig,
         workingDir: "../web",
         distDir: "dist",
-        env: async ({ site, application, workspaceId, applications, staticWebsites }) => {
+        env: async ({ site, application, workspaceId, applications }) => {
           await Promise.resolve();
           return {
             FRONTEND_TEST_VALUE: [
@@ -106,7 +113,8 @@ describe("frontendPlugin", () => {
               application.url,
               workspaceId,
               applications.length,
-              staticWebsites.admin?.url,
+              application.staticWebsites.admin?.url,
+              applications[1]?.staticWebsites.other?.url,
             ].join("|"),
           };
         },
@@ -116,7 +124,7 @@ describe("frontendPlugin", () => {
     await run();
     expect(exec).toHaveBeenCalledExactlyOnceWith(build, {
       workingDir: join(root, "apps/web"),
-      env: { FRONTEND_TEST_VALUE: "https://web|https://app|ws|1|https://admin" },
+      env: { FRONTEND_TEST_VALUE: "https://web|https://app|ws|2|https://admin|https://other" },
     });
     expect(publish).toHaveBeenCalledExactlyOnceWith("web", join(root, "apps/web/dist"));
   });
@@ -126,9 +134,11 @@ describe("frontendPlugin", () => {
     await expect(run()).rejects.toThrow("Command failed: pnpm build");
     expect(publish).not.toHaveBeenCalled();
   });
-  test("lists available sites when the requested site is outside this deploy", async () => {
+  test("lists the config's sites when no application in this deploy declares the requested site", async () => {
     const { publish, run } = setup([{ site: "toString", distDir: "dist" }]);
-    await expect(run()).rejects.toThrow(/toString.*web, admin, other/);
+    await expect(run()).rejects.toThrow(
+      'Static website "toString" is not declared in the config that registers frontendPlugin (app "app"). Available sites: web, admin',
+    );
     expect(publish).not.toHaveBeenCalled();
   });
   test("rejects a site defined in another application's config before building", async () => {

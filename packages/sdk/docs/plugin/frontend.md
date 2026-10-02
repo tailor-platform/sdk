@@ -58,7 +58,7 @@ also accepted.
 must be declared in `staticWebsites` of the same config that registers
 `frontendPlugin`. With multiple configs, register each frontend in the config that
 declares its site; a site from another config fails before the build starts. The
-`env` callback can still read the URLs of other configs' sites.
+`env` callback can still read the URLs of other configs' sites from `applications`.
 
 ## Build environment
 
@@ -68,7 +68,9 @@ parent process. Choose variable names for your frontend framework; the plugin
 does not add a prefix.
 
 The callback receives the destination `site`, the registering `application`, all
-`applications` in the deploy, `staticWebsites` indexed by name, and `workspaceId`.
+`applications` in the deploy, and `workspaceId`. Each application lists its static
+websites by name under `staticWebsites`, so `application.staticWebsites.admin?.url`
+reads another site of the same config.
 Only public OAuth client IDs are provided. Values embedded into browser assets
 are visible to visitors, so supply only values intended for public use.
 

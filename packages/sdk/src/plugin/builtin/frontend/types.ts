@@ -17,8 +17,9 @@ export interface FrontendDefinition {
 export interface FrontendEnvContext {
   /** Upload destination for this frontend. */
   site: DeployedStaticWebsite;
+  /** Application whose config registers this frontend. */
   application: DeployedApplication;
+  /** Every application in this deploy run. Read other configs' site URLs from their `staticWebsites`. */
   applications: readonly DeployedApplication[];
-  staticWebsites: Readonly<Partial<Record<string, DeployedStaticWebsite>>>;
   workspaceId: string;
 }

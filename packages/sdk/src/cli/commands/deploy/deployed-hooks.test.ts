@@ -93,13 +93,8 @@ describe("deployed hooks", () => {
           domain: "app.example",
           aiGateways: [{ name: "ai", url: "https://ai" }],
           auth: { namespace: "auth", oauth2Clients: [{ name: "web", clientId: "public" }] },
-        },
-        staticWebsites: {
-          "app-web": {
-            name: "app-web",
-            url: "https://app-web",
-            application: "app",
-            publish: expect.any(Function),
+          staticWebsites: {
+            "app-web": { name: "app-web", url: "https://app-web", publish: expect.any(Function) },
           },
         },
       }),
@@ -148,7 +143,10 @@ describe("deployed hooks", () => {
         await Promise.resolve();
         seen.push(`${ctx.application.name}:${id}`);
         expect(ctx.applications).toHaveLength(2);
-        expect(Object.keys(ctx.staticWebsites)).toEqual(["a-web", "b-web"]);
+        expect(ctx.applications.map((app) => Object.keys(app.staticWebsites))).toEqual([
+          ["a-web"],
+          ["b-web"],
+        ]);
       }, id);
     await runDeployedHooks({
       client,
@@ -452,12 +450,12 @@ describe("deployed hooks", () => {
     });
     expect(hook).not.toHaveBeenCalled();
   });
-  test("exposes only the static websites of this deploy", async () => {
+  test("exposes only the static websites the config declares", async () => {
     const { client } = clientMock();
     const hook = vi.fn();
     await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
-    const { staticWebsites } = hook.mock.calls[0]?.[0] as DeployedContext;
-    expect(staticWebsites["toString"]).toBeUndefined();
+    const { application } = hook.mock.calls[0]?.[0] as DeployedContext;
+    expect(application.staticWebsites["toString"]).toBeUndefined();
   });
   test("rejects missing publish directories with an absolute path", async () => {
     const { client } = clientMock();
@@ -468,7 +466,7 @@ describe("deployed hooks", () => {
         target([
           plugin(async (ctx) => {
             await expect(
-              ctx.staticWebsites["app-web"]?.publish("/missing/deployed-hook-build"),
+              ctx.application.staticWebsites["app-web"]?.publish("/missing/deployed-hook-build"),
             ).rejects.toThrow("/missing/deployed-hook-build");
           }),
         ]),
@@ -486,43 +484,38 @@ describe("deployed hooks", () => {
       targets: [
         target([
           plugin(async (ctx) => {
-            await expect(ctx.staticWebsites["app-web"]?.publish(dir)).rejects.toThrow("EACCES");
+            await expect(ctx.application.staticWebsites["app-web"]?.publish(dir)).rejects.toThrow(
+              "EACCES",
+            );
           }),
         ]),
       ],
     });
     expect(deployStaticWebsite).not.toHaveBeenCalled();
   });
-  test("rejects publishing to a static website defined by another application's config", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "deployed-hook-"));
-    try {
-      const { client } = clientMock();
-      await expect(
-        runDeployedHooks({
-          client,
-          workspaceId: "ws",
-          targets: [
-            target([], "web-app"),
-            target(
-              [
-                plugin(async (ctx) => {
-                  await ctx.staticWebsites["web-app-web"]?.publish(dir);
-                }),
-              ],
-              "admin-app",
-            ),
-          ],
-        }),
-      ).rejects.toMatchObject({
-        code: "DEPLOYED_HOOK_FAILED",
-        message: expect.stringContaining(
-          'Static website "web-app-web" is defined in app "web-app"; only plugins registered in that config can publish to it',
-        ),
-      });
-      expect(deployStaticWebsite).not.toHaveBeenCalled();
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  test("lists another application's static websites with their URLs but no publish", async () => {
+    const { client } = clientMock();
+    const hook = vi.fn();
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([], "web-app"), target([plugin(hook)], "admin-app")],
+    });
+    const { applications } = hook.mock.calls[0]?.[0] as DeployedContext;
+    expect(applications.find((app) => app.name === "web-app")?.staticWebsites).toEqual({
+      "web-app-web": { name: "web-app-web", url: "https://web-app-web" },
+    });
+  });
+  test("keeps other applications' static websites out of the registering application", async () => {
+    const { client } = clientMock();
+    const hook = vi.fn();
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([], "web-app"), target([plugin(hook)], "admin-app")],
+    });
+    const { application } = hook.mock.calls[0]?.[0] as DeployedContext;
+    expect(Object.keys(application.staticWebsites)).toEqual(["admin-app-web"]);
   });
   test("publishes an existing directory to the static website", async () => {
     using _logger = silenceLogger();
@@ -535,7 +528,7 @@ describe("deployed hooks", () => {
         targets: [
           target([
             plugin(async (ctx: DeployedContext) => {
-              expect(await ctx.staticWebsites["app-web"]?.publish(dir)).toEqual({
+              expect(await ctx.application.staticWebsites["app-web"]?.publish(dir)).toEqual({
                 url: "https://published",
                 skippedFiles: [],
               });
@@ -566,7 +559,9 @@ describe("deployed hooks", () => {
         targets: [
           target([
             plugin(async (ctx) => {
-              await expect(ctx.staticWebsites["app-web"]?.publish(file)).rejects.toThrow(file);
+              await expect(
+                ctx.application.staticWebsites["app-web"]?.publish(file),
+              ).rejects.toThrow(file);
             }),
           ]),
         ],

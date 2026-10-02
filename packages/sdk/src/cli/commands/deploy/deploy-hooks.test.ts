@@ -256,8 +256,10 @@ test("runs a hook once after remaining resources are applied even when the plan 
   await deploy({ yes: true, noValidate: true });
   expect(hook).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
-      application: expect.objectContaining({ url: "https://app" }),
-      staticWebsites: { web: expect.objectContaining({ name: "web", url: "https://web" }) },
+      application: expect.objectContaining({
+        url: "https://app",
+        staticWebsites: { web: expect.objectContaining({ name: "web", url: "https://web" }) },
+      }),
     }),
   );
 });

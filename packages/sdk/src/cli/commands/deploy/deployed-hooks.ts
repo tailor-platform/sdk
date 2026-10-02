@@ -2,19 +2,14 @@ import { stat } from "node:fs/promises";
 import * as path from "pathe";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { fetchPaged, getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { deployStaticWebsite } from "../staticwebsite/deploy";
 import { execPluginCommand } from "./plugin-exec";
-import type {
-  DeployedApplication,
-  DeployedOAuth2Client,
-  DeployedStaticWebsite,
-  Plugin,
-} from "#/plugin/types";
+import type { DeployedApplication, DeployedOAuth2Client, Plugin } from "#/plugin/types";
 import type { JsonValue } from "#/types/helpers";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
@@ -31,7 +26,6 @@ interface DeployedHookOutput {
 
 interface LoadedTarget {
   application: DeployedApplication;
-  siteUrls: { name: string; url: string }[];
 }
 
 async function loadSiteUrl(
@@ -77,6 +71,12 @@ function oauth2ClientLoader(client: OperatorClient, workspaceId: string): LoadOA
   };
 }
 
+function byName<T extends { name: string }>(items: readonly T[]): Record<string, T> {
+  const record: Record<string, T> = Object.create(null);
+  for (const item of items) record[item.name] = item;
+  return record;
+}
+
 async function loadDeployedTarget(
   client: OperatorClient,
   workspaceId: string,
@@ -88,7 +88,7 @@ async function loadDeployedTarget(
     authService: target.application.authService,
     config: target.config,
   });
-  const [response, siteUrls, gateways, oauth2Clients] = await Promise.all([
+  const [response, sites, gateways, oauth2Clients] = await Promise.all([
     client.getApplication({ workspaceId, applicationName: name }),
     Promise.all(
       target.application.staticWebsiteServices.map(async (site) => ({
@@ -122,6 +122,7 @@ async function loadDeployedTarget(
       url: application.url,
       domain: application.domain,
       aiGateways: gateways,
+      staticWebsites: byName(sites),
       ...(namespace
         ? {
             auth: {
@@ -131,7 +132,6 @@ async function loadDeployedTarget(
           }
         : {}),
     },
-    siteUrls,
   };
 }
 
@@ -211,12 +211,6 @@ interface HookOwner {
   plugin: Plugin;
 }
 
-interface DeployedSite {
-  name: string;
-  url: string;
-  application: string;
-}
-
 function hookLabel(hook: HookOwner): string {
   return `${hook.plugin.id} (app: ${hook.target.application.name})`;
 }
@@ -257,32 +251,19 @@ export async function runDeployedHooks(
     );
   });
   const applications = loaded.map(({ application }) => application);
-  const sites: Record<string, DeployedSite> = Object.create(null);
-  for (const [index, { siteUrls }] of loaded.entries()) {
-    const application = assertDefined(targets[index], "Deployed target missing").application.name;
-    for (const site of siteUrls) {
-      if (Object.hasOwn(sites, site.name))
-        throw internalError(`Duplicate deployed static website "${site.name}"`);
-      sites[site.name] = { ...site, application };
-    }
-  }
-  const staticWebsitesFor = (caller: string) => {
-    const staticWebsites: Record<string, DeployedStaticWebsite> = Object.create(null);
-    for (const site of Object.values(sites)) {
-      staticWebsites[site.name] = {
-        ...site,
-        publish: async (dir) => {
-          if (site.application !== caller)
-            throw CLIError({
-              code: "STATIC_WEBSITE_PUBLISH_FORBIDDEN",
-              message: `Static website "${site.name}" is defined in app "${site.application}"; only plugins registered in that config can publish to it`,
-            });
-          return publishStaticWebsite(client, workspaceId, site.name, dir);
-        },
-      };
-    }
-    return staticWebsites;
-  };
+  const publishable = (application: DeployedApplication) => ({
+    ...application,
+    staticWebsites: byName(
+      Object.values(application.staticWebsites).map((site) => {
+        const { name, url } = assertDefined(site, "Deployed static website missing");
+        return {
+          name,
+          url,
+          publish: (dir: string) => publishStaticWebsite(client, workspaceId, name, dir),
+        };
+      }),
+    ),
+  });
   const outputs: DeployedHookOutput[] = [];
   for (const [position, entry] of hooks.entries()) {
     const { target, index, plugin, hook } = entry;
@@ -292,9 +273,10 @@ export async function runDeployedHooks(
         span.setAttribute("app.name", target.application.name);
         return hook.call(plugin, {
           workspaceId,
-          application: assertDefined(applications[index], "Deployed application missing"),
+          application: publishable(
+            assertDefined(applications[index], "Deployed application missing"),
+          ),
           applications,
-          staticWebsites: staticWebsitesFor(target.application.name),
           configPath: target.config.path,
           pluginConfig: plugin.pluginConfig,
           logger: { info: logger.info, warn: logger.warn, success: logger.success },

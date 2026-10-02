@@ -363,9 +363,11 @@ export interface PublishStaticWebsiteResult {
 export interface DeployedStaticWebsite {
   name: string;
   url: string;
-  /** Name of the application whose config defines this website. */
-  application: string;
-  /** Uploads the directory at the absolute path `dir` and publishes it to this website. Only plugins registered in the config that defines the website can publish to it. */
+}
+
+/** A static website declared in the config that registers the plugin, which the plugin can publish to. */
+export interface PublishableStaticWebsite extends DeployedStaticWebsite {
+  /** Uploads the directory at the absolute path `dir` and publishes it to this website. */
   publish(dir: string): Promise<PublishStaticWebsiteResult>;
 }
 
@@ -374,7 +376,9 @@ export interface DeployedOAuth2Client {
   clientId: string;
 }
 
-export interface DeployedApplication {
+export interface DeployedApplication<
+  StaticWebsite extends DeployedStaticWebsite = DeployedStaticWebsite,
+> {
   /** SDK-managed application ID from defineConfig(); undefined when the config has none. */
   id?: string;
   name: string;
@@ -383,6 +387,8 @@ export interface DeployedApplication {
   url: string;
   domain: string;
   aiGateways: { name: string; url: string }[];
+  /** Static websites declared in this application's config, keyed by name. */
+  staticWebsites: Readonly<Partial<Record<string, StaticWebsite>>>;
   auth?: { namespace: string; oauth2Clients: DeployedOAuth2Client[] };
 }
 
@@ -414,11 +420,10 @@ export interface PluginExecResult {
 /** Values available after all applications in this deploy run have been applied. */
 export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
-  /** Application whose config registers this plugin. */
-  application: DeployedApplication;
+  /** Application whose config registers this plugin. Only its static websites can be published. */
+  application: DeployedApplication<PublishableStaticWebsite>;
+  /** Every application in this deploy run, including the registering one. */
   applications: readonly DeployedApplication[];
-  /** Static websites of every application in this deploy run, keyed by name. */
-  staticWebsites: Readonly<Partial<Record<string, DeployedStaticWebsite>>>;
   /** Absolute path of the config registering this plugin. */
   configPath: string;
   pluginConfig: PluginConfig;

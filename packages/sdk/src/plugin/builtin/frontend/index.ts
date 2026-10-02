@@ -38,15 +38,16 @@ export function frontendPlugin(
       const frontends: FrontendOutput[] = [];
       for (const def of ctx.pluginConfig) {
         const name = typeof def.site === "string" ? def.site : def.site.name;
-        const site = Object.hasOwn(ctx.staticWebsites, name) ? ctx.staticWebsites[name] : undefined;
-        if (!site)
+        const sites = ctx.application.staticWebsites;
+        const site = Object.hasOwn(sites, name) ? sites[name] : undefined;
+        if (!site) {
+          const owner = ctx.applications.find((app) => Object.hasOwn(app.staticWebsites, name));
           throw new Error(
-            `Static website "${name}" is not included in this deploy. Available sites: ${Object.keys(ctx.staticWebsites).join(", ")}`,
+            owner
+              ? `Static website "${name}" is defined in app "${owner.name}", but frontendPlugin is registered in app "${ctx.application.name}"; register it in the config that defines the site`
+              : `Static website "${name}" is not declared in the config that registers frontendPlugin (app "${ctx.application.name}"). Available sites: ${Object.keys(sites).join(", ")}`,
           );
-        if (site.application !== ctx.application.name)
-          throw new Error(
-            `Static website "${name}" is defined in app "${site.application}", but frontendPlugin is registered in app "${ctx.application.name}"; register it in the config that defines the site`,
-          );
+        }
         const workingDir = path.resolve(path.dirname(ctx.configPath), def.workingDir ?? ".");
         const distDir = path.resolve(workingDir, def.distDir);
         const env =
@@ -54,7 +55,6 @@ export function frontendPlugin(
             site,
             application: ctx.application,
             applications: ctx.applications,
-            staticWebsites: ctx.staticWebsites,
             workspaceId: ctx.workspaceId,
           })) ?? {};
         if (def.build) {

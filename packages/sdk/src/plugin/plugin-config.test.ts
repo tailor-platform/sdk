@@ -9,7 +9,12 @@ import type {
   TablePluginOutput,
   TailorDBTableForPlugin,
 } from "#/configure/index";
-import type { DeployedContext, DeployedStaticWebsite, Plugin } from "#/plugin/types";
+import type {
+  DeployedContext,
+  DeployedStaticWebsite,
+  Plugin,
+  PublishableStaticWebsite,
+} from "#/plugin/types";
 import type { PluginConfig } from "#/types/plugin-config.generated";
 
 describe("PluginConfig generated type alignment", () => {
@@ -52,8 +57,15 @@ test("accepts only JSON values as deploy hook outputs", () => {
   expect(plugin.onDeployed).toBeTypeOf("function");
 });
 
-test("models static websites outside the deploy as possibly missing", () => {
-  expectTypeOf<DeployedContext["staticWebsites"]["web"]>().toEqualTypeOf<
+test("models static websites the config does not declare as possibly missing", () => {
+  expectTypeOf<DeployedContext["application"]["staticWebsites"]["web"]>().toEqualTypeOf<
+    PublishableStaticWebsite | undefined
+  >();
+});
+
+test("gives other applications' static websites no publish method", () => {
+  expectTypeOf<DeployedContext["applications"][number]["staticWebsites"]["web"]>().toEqualTypeOf<
     DeployedStaticWebsite | undefined
   >();
+  expectTypeOf<DeployedStaticWebsite>().not.toHaveProperty("publish");
 });

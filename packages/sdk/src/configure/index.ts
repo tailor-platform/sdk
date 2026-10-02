@@ -46,6 +46,7 @@ export { defineConfig, definePlugins } from "#/configure/config/index";
 // Plugin types for custom plugin development
 export type {
   DeployedStaticWebsite,
+  PublishableStaticWebsite,
   DeployedOAuth2Client,
   DeployedApplication,
   PluginLogger,
