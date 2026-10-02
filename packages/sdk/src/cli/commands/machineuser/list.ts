@@ -19,6 +19,7 @@ export interface ListMachineUsersOptions {
 }
 
 export interface MachineUserInfo {
+  id: string;
   name: string;
   clientId: string;
   clientSecret: string;
@@ -35,6 +36,7 @@ export interface MachineUserInfo {
 function machineUserInfo(user: MachineUser): MachineUserInfo {
   logger.registerSecret(user.clientSecret);
   return {
+    id: user.id,
     name: user.name,
     clientId: user.clientId,
     clientSecret: user.clientSecret,

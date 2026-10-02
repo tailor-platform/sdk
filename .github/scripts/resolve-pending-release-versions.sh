@@ -6,8 +6,11 @@
 #   - `prereleaseUntil: V2_NEXT_PENDING` and `until: NEXT_RELEASE` codemod
 #     boundaries (packages/sdk-codemod/src/registry.ts)
 #   - `@deprecated since NEXT_RELEASE` markers (packages/sdk/src/**)
+#   - a pending `TEMPLATE_CHANGED_SINCE_RELEASE` in
+#     packages/sdk-plugin-setup/src/templates.ts, released as the next
+#     `RELEASED_TEMPLATE_VERSION` with its template fingerprint
 #
-# Both describe the version a change ships in, which is unknown while the
+# All describe the version a change ships in, which is unknown while the
 # change is being written, so they are authored against a sentinel and fixed
 # up here. See .agents/rules/deprecation.md.
 #
@@ -46,6 +49,7 @@ git checkout --quiet --detach
 PREVIOUS_SDK_VERSION="$(git show "${original_ref}:packages/sdk/package.json" | jq -r .version)" \
   pnpm codemod:resolve-pending
 pnpm deprecations:resolve-pending
+pnpm setup:template-version:resolve-pending
 
 mapfile -t resolved_paths < <(git diff --name-only)
 if [ "${#resolved_paths[@]}" -eq 0 ]; then

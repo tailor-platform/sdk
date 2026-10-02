@@ -75,11 +75,11 @@ The CLI module cannot import from configure directly (except configure pure type
 
 ## Package Exports
 
-| Entry point                     | Source module       | Used by                                                          |
-| ------------------------------- | ------------------- | ---------------------------------------------------------------- |
-| `@tailor-platform/sdk`          | `configure/`        | SDK users in `tailor.config.ts`, resolvers, executors, workflows |
-| `@tailor-platform/sdk/cli`      | `cli/lib.ts`        | Programmatic CLI access (e.g., `getDB()`)                        |
-| `@tailor-platform/sdk/test`     | `utils/test/`       | Test utilities (`createTailorDBHook`, etc.)                      |
-| `@tailor-platform/sdk/kysely`   | `kysely/`           | Kysely type re-exports                                           |
-| `@tailor-platform/sdk/plugin`   | `plugin/`           | Custom plugin development                                        |
-| `@tailor-platform/sdk/plugin/*` | `plugin/builtin/*/` | Built-in plugins (kysely-type, enum-constants, file-utils, seed) |
+| Entry point                     | Source module       | Used by                                                                    |
+| ------------------------------- | ------------------- | -------------------------------------------------------------------------- |
+| `@tailor-platform/sdk`          | `configure/`        | SDK users in `tailor.config.ts`, resolvers, executors, workflows           |
+| `@tailor-platform/sdk/cli`      | `cli/lib.ts`        | Programmatic CLI access (e.g., `getDB()`)                                  |
+| `@tailor-platform/sdk/test`     | `utils/test/`       | Test utilities (`createTailorDBHook`, etc.)                                |
+| `@tailor-platform/sdk/kysely`   | `kysely/`           | Kysely type re-exports                                                     |
+| `@tailor-platform/sdk/plugin`   | `plugin/`           | Custom plugin development                                                  |
+| `@tailor-platform/sdk/plugin/*` | `plugin/builtin/*/` | Built-in plugins (kysely-type, enum-constants, file-utils, seed, frontend) |
