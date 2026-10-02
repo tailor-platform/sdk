@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { createGetDB } from "./index";
 
-type StubGlobal = { tailordb?: { Client: typeof tailordb.Client } };
-
 function installStubClient() {
   const constructorSpy = vi.fn();
   class StubClient {
@@ -15,13 +13,13 @@ function installStubClient() {
       return { rows: [], command: "SELECT", rowCount: 0 };
     }
   }
-  (globalThis as unknown as StubGlobal).tailordb = { Client: StubClient };
+  vi.stubGlobal("tailordb", { Client: StubClient });
   return constructorSpy;
 }
 
 describe("createGetDB", () => {
   afterEach(() => {
-    delete (globalThis as unknown as StubGlobal).tailordb;
+    vi.unstubAllGlobals();
   });
 
   test("constructs tailordb.Client with temporal: false by default", () => {

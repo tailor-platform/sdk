@@ -4,7 +4,8 @@ import { getDB } from "../generated/tailordb";
 
 export default createResolver({
   name: "insertNestedProfileWithDate",
-  description: "Insert a NestedProfile with Date in nested object and verify round-trip",
+  description:
+    "Insert a NestedProfile with a Temporal.Instant in a nested object and verify round-trip",
   operation: "mutation",
   input: {
     name: t.string().description("User's name"),
@@ -19,7 +20,7 @@ export default createResolver({
   body: async ({ input }) => {
     const db = getDB("tailordb");
 
-    // Insert with Date object in nested field
+    // Insert with a Temporal.Instant in a nested field
     const inserted = await db
       .insertInto("NestedProfile")
       .values({
