@@ -1,0 +1,3 @@
+import { sql } from "@typed-sql/postgres";
+const role = "OWNER";
+export const query = sql`SELECT "email" FROM "Account" WHERE "role" = ${role}`;

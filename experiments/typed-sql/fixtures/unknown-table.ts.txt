@@ -1,0 +1,2 @@
+import { sql } from "@typed-sql/postgres";
+export const query = sql`SELECT "email" FROM "MissingAccount"`;

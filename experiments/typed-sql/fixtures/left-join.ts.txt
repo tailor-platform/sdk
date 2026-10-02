@@ -1,0 +1,15 @@
+import { sql } from "@typed-sql/postgres";
+import type { QueryRow } from "@typed-sql/core";
+
+export const query = sql`
+  SELECT a."email", p."title", p."budget"
+  FROM "Account" AS a
+  LEFT JOIN "Project" AS p ON p."ownerId" = a."id"
+  WHERE a."id" = ${"00000000-0000-0000-0000-000000000001"}
+`;
+
+export function consume(row: QueryRow<typeof query>): string {
+  const title: string | null = row.title;
+  const budget: string | null = row.budget;
+  return `${row.email}: ${title ?? "none"} (${budget ?? "0"})`;
+}
