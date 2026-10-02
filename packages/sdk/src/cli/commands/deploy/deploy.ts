@@ -41,6 +41,7 @@ import {
   type MissingDependentApp,
 } from "./confirm";
 import { fetchMissingDependentApps } from "./dependency-records";
+import { runDeployedHooks } from "./deployed-hooks";
 import {
   buildDeploymentTargets,
   loadDeployConfigs,
@@ -130,6 +131,7 @@ interface DeployInternalContext {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   suppressResultOutput?: boolean;
+  skipDeployedHooks?: boolean;
 }
 
 // None of these resource kinds can embed `env` or this run's rebuilt bundle
@@ -994,12 +996,22 @@ async function deployInternal(
     // one, so printing this first-pass plan would only show output that's
     // about to be superseded. Dry run never rebuilds (it returns right
     // below), so it always shows this first pass instead.
+    const pendingDeployedHooks = internalContext?.skipDeployedHooks
+      ? []
+      : targets.flatMap((target) =>
+          target.plugins
+            .filter((plugin) => plugin.onDeployed)
+            .map((plugin) => ({ application: target.application.name, pluginId: plugin.id })),
+        );
     let planSummary: PlanSummary | undefined =
       dryRun || !needsUrlResolution
-        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun })
+        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun, pendingDeployedHooks })
         : undefined;
 
     if (dryRun) {
+      for (const { application, pluginId } of pendingDeployedHooks) {
+        logger.info(`Hook to run after apply: "${pluginId}" (app "${application}")`);
+      }
       logger.info("Dry run enabled. No changes applied.");
       return undefined;
     }
@@ -1042,11 +1054,16 @@ async function deployInternal(
       await applyRemainingResources(client, workspaceId, deployments);
     }
 
+    const deployedHooks = internalContext?.skipDeployedHooks
+      ? []
+      : await runDeployedHooks({ client, workspaceId, targets });
+
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {
         logger.out({
           summary: assertDefined(planSummary, "planSummary was never printed before this point"),
           status: "applied",
+          ...(deployedHooks.length ? { deployedHooks } : {}),
         });
       } else {
         logger.success("Successfully applied changes.");
@@ -1082,6 +1099,7 @@ export function deployMigrationTestBaseline(
     migrationTestBaselines: baselines,
     migrationTestSnapshots: baselineSnapshots,
     suppressResultOutput: true,
+    skipDeployedHooks: true,
   });
 }
 
@@ -1098,6 +1116,7 @@ export function deployMigrationTestTarget(
   return deployInternal(options, undefined, {
     migrationTestSnapshots: snapshots,
     suppressResultOutput: true,
+    skipDeployedHooks: true,
   });
 }
 

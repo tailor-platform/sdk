@@ -30,6 +30,7 @@ const OPTIONAL_HOOK_KEYS = [
   "onTailorDBReady",
   "onResolverReady",
   "onExecutorReady",
+  "onDeployed",
 ] as const;
 
 /**
