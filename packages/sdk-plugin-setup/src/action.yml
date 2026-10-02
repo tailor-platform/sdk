@@ -54,7 +54,7 @@ runs:
   using: composite
   steps:
     # __STATIC_WEBSITE_BUILD_START__
-    - id: build-site
+    - id: tailor-build-site
       if: inputs.build-site == 'true'
       shell: bash
       run: |

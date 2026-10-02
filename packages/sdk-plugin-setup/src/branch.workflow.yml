@@ -35,6 +35,7 @@ jobs:
       group: tailor-plan-__WORKSPACE_NAME__-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
     steps:
+      # __CHANGES_GUARD__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -100,6 +101,7 @@ jobs:
       app-dirs: ${{ steps.tailor-erd-preview-matrix.outputs['app-dirs'] }}
       base-app-dirs: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dirs'] }}
     steps:
+      # __CHANGES_GUARD__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -627,7 +629,11 @@ jobs:
     concurrency:
       group: tailor-deploy-__WORKSPACE_NAME__
       cancel-in-progress: false
+    outputs:
+      workspace-id: ${{ steps.tailor-apply.outputs.workspace-id }}
+      app-url: ${{ steps.tailor-apply.outputs.app-url }}
     steps:
+      # __CHANGES_GUARD__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -25,7 +25,12 @@ jobs:
     concurrency:
       group: tailor-preview-__WORKSPACE_NAME__-${{ github.event.pull_request.number }}
       cancel-in-progress: true
+    outputs:
+      workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
+      workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
+      app-url: ${{ steps.tailor-preview-deploy.outputs.app-url }}
     steps:
+      # __CHANGES_GUARD__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

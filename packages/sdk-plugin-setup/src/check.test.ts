@@ -26,7 +26,6 @@ const baseTarget = (overrides: Partial<LockTarget> = {}): LockTarget => ({
     packageManager: "pnpm",
   },
   generatedIds: [],
-  ejectedIds: [],
   contentHash: "sha256:abc",
   ...overrides,
 });
@@ -38,6 +37,7 @@ const cleanState = (overrides: Partial<TargetState> = {}): TargetState => ({
   defaultBranch: "main",
   templateVersion: TEMPLATE_VERSION,
   erdNamespaces: ["tailordb"],
+  reservedIds: [],
   ...overrides,
 });
 
@@ -56,6 +56,18 @@ describe("findTargetDrift", () => {
       {},
       { fileExists: false, currentHash: null },
       ["missing-file"],
+    ],
+    [
+      "reports a hand edit named by the managed parts it changed",
+      {},
+      { currentHash: "sha256:zzz", editedParts: ["on"] },
+      ["hand-edit"],
+    ],
+    [
+      "reports a job or step of the user's that uses the reserved tailor- prefix",
+      {},
+      { reservedIds: ["tailor-deploy/tailor-build-frontend"] },
+      ["reserved-id"],
     ],
     [
       "reports an outdated template version",
@@ -373,7 +385,6 @@ describe("checkGitHub (integration)", () => {
       erdPreview: false,
     },
     generatedIds: [],
-    ejectedIds: [],
     contentHash: "sha256:abc",
   });
 
@@ -489,6 +500,48 @@ describe("checkGitHub (integration)", () => {
       await expect(check()).resolves.toBeUndefined();
     });
 
+    test("names a user step that uses the reserved tailor- prefix", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const content = fs.readFileSync(wfPath(), "utf-8");
+      fs.writeFileSync(
+        wfPath(),
+        content.replace(
+          "      - id: tailor-apply\n",
+          "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
+        ),
+      );
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/1 drift finding/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix.*Rename it \(e\.g\. "build-frontend"\).*reserved-id/,
+        ),
+      );
+    });
+
+    test("reports a user tailor- step in a legacy entry", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const generated = fs.readFileSync(wfPath(), "utf-8");
+      fs.writeFileSync(
+        wfPath(),
+        generated.replace(
+          "      - id: tailor-apply\n",
+          "      - id: tailor-build-frontend\n        run: echo build\n      - id: tailor-apply\n",
+        ),
+      );
+      const lockFile = path.join(testDir, ".github/tailor.lock");
+      const lock = JSON.parse(fs.readFileSync(lockFile, "utf-8")) as {
+        targets: Array<{ contentHash: string }>;
+      };
+      for (const target of lock.targets) target.contentHash = hashContent(generated);
+      fs.writeFileSync(lockFile, JSON.stringify(lock));
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/drift/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/"tailor-deploy\/tailor-build-frontend" uses the tailor- prefix/),
+      );
+    });
+
     test("reports a workflow file that is not valid YAML", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       fs.appendFileSync(wfPath(), "jobs: [\n");
@@ -501,6 +554,16 @@ describe("checkGitHub (integration)", () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       editManagedPart();
       await expect(check()).rejects.toThrow(/drift/);
+    });
+
+    test("names the managed parts a hand edit changed", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      editManagedPart();
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/drift/);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/edited by hand: "on"\. Revert them.*hand-edit/),
+      );
     });
 
     test("points the drift summary at `tailor setup update`", async () => {
@@ -607,7 +670,6 @@ describe("checkGitHub (integration)", () => {
               packageManager: "pnpm",
             },
             generatedIds: [],
-            ejectedIds: [],
             contentHash: hashContent(wfContent),
           },
         ],

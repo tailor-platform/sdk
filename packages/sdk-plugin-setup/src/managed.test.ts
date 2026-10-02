@@ -3,6 +3,10 @@ import { parseDocument } from "yaml";
 import {
   ManagedMergeError,
   computeManagedHash,
+  computeManagedParts,
+  describeReservedId,
+  findEditedParts,
+  findReservedIds,
   isManagedHash,
   mergeUserContent,
   type Layout,
@@ -16,6 +20,7 @@ import {
   type RenderBranchParams,
   type RenderResult,
 } from "./templates";
+import type { LockInputs } from "./lock";
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -131,8 +136,6 @@ function idsIn(content: string, layout: Layout): string[] {
   );
 }
 
-const SLOTS = new Set(["build-site"]);
-
 describe.each(variants)("%s template", (_name, layout, render) => {
   test("round-trips through the merge unchanged when there is nothing to keep", () => {
     const result = mergeUserContent({
@@ -146,13 +149,17 @@ describe.each(variants)("%s template", (_name, layout, render) => {
     expect(result).toEqual({ content: render.content, dropped: [] });
   });
 
+  test("gives every job and step it emits an id with the reserved tailor- prefix", () => {
+    for (const id of idsIn(render.content, layout)) {
+      expect(id.slice(id.lastIndexOf("/") + 1)).toMatch(/^tailor-/);
+    }
+  });
+
   test("declares exactly the job and step ids it emits", () => {
     const emitted = idsIn(render.content, layout);
     expect(new Set(emitted).size).toBe(emitted.length);
     expect(new Set(render.generatedIds).size).toBe(render.generatedIds.length);
-    expect(emitted.filter((id) => !SLOTS.has(id)).toSorted()).toEqual(
-      render.generatedIds.toSorted(),
-    );
+    expect(emitted.toSorted()).toEqual(render.generatedIds.toSorted());
   });
 });
 
@@ -160,6 +167,22 @@ const render = renderBranchWorkflow(branchBase);
 const lockHash = computeManagedHash(render.content, "workflow", render.generatedIds);
 const hashOf = (content: string): string =>
   computeManagedHash(content, "workflow", render.generatedIds);
+
+const legacyBuildSiteAction = (): { content: string; ids: string[]; inputs: LockInputs } => {
+  const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
+  return {
+    content: action.content.replace("- id: tailor-build-site\n", "- id: build-site\n"),
+    ids: action.generatedIds.filter((id) => id !== "tailor-build-site"),
+    inputs: {
+      branch: null,
+      tagPattern: null,
+      environment: "my-app",
+      dir: ".",
+      packageManager: "pnpm",
+      hasStaticWebsites: true,
+    },
+  };
+};
 
 const addStepAfterInstall = (content: string, job: string, step: string): string =>
   content.replace(
@@ -312,7 +335,7 @@ describe("computeManagedHash", () => {
     expect(hash(edited)).toBe(hash(older));
   });
 
-  test("ignores the build-site slot body but not its removal", () => {
+  test("ignores the tailor-build-site run command but not its removal", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
     const hash = (c: string) => computeManagedHash(c, "action", action.generatedIds);
     const edited = action.content.replace(
@@ -321,8 +344,153 @@ describe("computeManagedHash", () => {
     );
     expect(edited).not.toBe(action.content);
     expect(hash(edited)).toBe(hash(action.content));
-    const removed = action.content.replace(/ {4}- id: build-site\n(?:      .*\n)+/, "");
+    const removed = action.content.replace(/ {4}- id: tailor-build-site\n(?:      .*\n)+/, "");
     expect(hash(removed)).not.toBe(hash(action.content));
+  });
+
+  test("hashes a build-site step an older template wrote like the slot it became", () => {
+    const { content, ids, inputs } = legacyBuildSiteAction();
+    const hash = (c: string) => computeManagedHash(c, "action", ids, inputs);
+    const editedRun = content.replace(
+      /(run: \|\n)(?:        #.*\n)+ {8}true\n/,
+      "$1        pnpm build\n",
+    );
+    expect(editedRun).not.toBe(content);
+    expect(hash(editedRun)).toBe(hash(content));
+    const editedIf = content.replace("if: inputs.build-site == 'true'", "if: always()");
+    expect(editedIf).not.toBe(content);
+    expect(hash(editedIf)).not.toBe(hash(content));
+  });
+});
+
+describe("computeManagedHash for a non-prefixed id the lock records", () => {
+  test("ignores edits to that step, since only tailor- ids are the SDK's", () => {
+    const withStep = (run: string) =>
+      addStepAfterInstall(
+        render.content,
+        "tailor-deploy",
+        `      - id: registry-auth\n        run: ${run}\n`,
+      );
+    const ids = [...render.generatedIds, "tailor-deploy/registry-auth"];
+    expect(computeManagedHash(withStep("echo edited"), "workflow", ids)).toBe(
+      computeManagedHash(withStep("echo auth"), "workflow", ids),
+    );
+  });
+});
+
+describe("computeManagedHash for a tailor-build-site step the lock does not record", () => {
+  test("ignores the step, so only the reserved prefix reports it", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app" });
+    const edited = action.content.replace(
+      /( {4}- id: tailor-apply\n)/,
+      "    - id: tailor-build-site\n      shell: bash\n      run: pnpm run build:docs\n$1",
+    );
+    expect(edited).not.toBe(action.content);
+    expect(computeManagedHash(edited, "action", action.generatedIds)).toBe(
+      computeManagedHash(action.content, "action", action.generatedIds),
+    );
+    expect(findReservedIds(edited, "action", action.generatedIds)).toEqual(["tailor-build-site"]);
+  });
+});
+
+describe("findEditedParts", () => {
+  const recorded = computeManagedParts(render.content, "workflow", render.generatedIds);
+  const edited = (content: string) =>
+    findEditedParts(recorded, computeManagedParts(content, "workflow", render.generatedIds));
+
+  test.each([
+    ["nothing for an untouched file", (c: string) => c, []],
+    [
+      "nothing for the user's own steps and editable fields",
+      (c: string) =>
+        addStepAfterInstall(c, "tailor-deploy", USER_STEP).replace(
+          /( {2}tailor-deploy:[\s\S]*?)timeout-minutes: 30/,
+          "$1timeout-minutes: 90",
+        ),
+      [],
+    ],
+    [
+      "a managed step whose content changed",
+      (c: string) =>
+        c.replace(/( {6}- id: tailor-apply\n)/, "$1        env:\n          FOO: bar\n"),
+      ["tailor-deploy/tailor-apply"],
+    ],
+    [
+      "a managed top-level key",
+      (c: string) => c.replace('branches: ["main"]', 'branches: ["develop"]'),
+      ["on"],
+    ],
+    [
+      "a removed managed step",
+      (c: string) => c.replace(/ {6}- id: tailor-drift-check\n(?:        .*\n)+/, ""),
+      ["tailor-plan", "tailor-plan/tailor-drift-check"],
+    ],
+    [
+      "a renamed managed job once, without its steps",
+      (c: string) => c.replace("  tailor-deploy:", "  my-deploy:"),
+      ["tailor-deploy"],
+    ],
+  ])("names %s", (_name, edit, expected) => {
+    expect(edited(edit(render.content))).toEqual(expected);
+  });
+
+  test("names the job whose managed steps were reordered", () => {
+    const reordered = render.content.replace(
+      /( {6}- id: tailor-setup\n(?:        .*\n)+)( {6}- id: tailor-install\n(?:        .*\n)+)/,
+      "$2$1",
+    );
+    expect(reordered).not.toBe(render.content);
+    expect(edited(reordered)).toEqual(["tailor-plan"]);
+  });
+
+  test("names a changed condition on the composite action's tailor-build-site step", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
+    const parts = (c: string) => computeManagedParts(c, "action", action.generatedIds);
+    const changed = action.content.replace("if: inputs.build-site == 'true'", "if: always()");
+    expect(findEditedParts(parts(action.content), parts(changed))).toEqual(["tailor-build-site"]);
+  });
+});
+
+describe("describeReservedId", () => {
+  test("suggests the id without the prefix", () => {
+    expect(describeReservedId("tailor-deploy/tailor-build-frontend")).toContain(
+      'Rename it (e.g. "build-frontend")',
+    );
+  });
+
+  test("leaves out the suggestion when nothing follows the prefix", () => {
+    expect(describeReservedId("tailor-deploy/tailor-")).toBe(
+      '"tailor-deploy/tailor-" uses the tailor- prefix reserved for SDK-managed jobs and steps. ' +
+        "Rename it; --force does not rename it.",
+    );
+  });
+});
+
+describe("findReservedIds", () => {
+  test("lists the user's jobs and steps whose ids use the tailor- prefix", () => {
+    const edited = `${addStepAfterInstall(
+      render.content,
+      "tailor-deploy",
+      "      - id: tailor-build-frontend\n        run: echo build\n",
+    )}  tailor-lint:\n    runs-on: ubuntu-latest\n    steps:\n      - id: tailor-checkout\n        run: echo lint\n`;
+    expect(findReservedIds(edited, "workflow", render.generatedIds)).toEqual([
+      "tailor-deploy/tailor-build-frontend",
+      "tailor-lint",
+      "tailor-lint/tailor-checkout",
+    ]);
+  });
+
+  test("lists a composite action step whose id uses the tailor- prefix", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app" });
+    const edited = action.content.replace(
+      /( {4}- id: tailor-apply\n)/,
+      "    - id: tailor-upload\n      shell: bash\n      run: echo up\n$1",
+    );
+    expect(findReservedIds(edited, "action", action.generatedIds)).toEqual(["tailor-upload"]);
+  });
+
+  test("lists nothing for a freshly generated file", () => {
+    expect(findReservedIds(render.content, "workflow", render.generatedIds)).toEqual([]);
   });
 });
 
@@ -408,7 +576,7 @@ describe("mergeUserContent", () => {
     expect(content).toBe(render.content);
   });
 
-  test("rejects a user node whose id the new template now manages unless forced", () => {
+  test("rejects a user node whose id the new template now manages, even when forced", () => {
     const edited = render.content.replace(
       /( {2}tailor-plan:[\s\S]*? {6}- id: tailor-install\n(?:        .*\n)+)/,
       "$1      - id: tailor-seed-validate\n        run: echo mine\n",
@@ -422,9 +590,59 @@ describe("mergeUserContent", () => {
       renderedIds: next.generatedIds,
     };
     expect(() => mergeUserContent({ ...args, force: false })).toThrow(
-      /tailor-plan\/tailor-seed-validate/,
+      /"tailor-plan\/tailor-seed-validate" uses the tailor- prefix/,
     );
-    expect(mergeUserContent({ ...args, force: true }).content).toBe(next.content);
+    expect(() => mergeUserContent({ ...args, force: true })).toThrow(
+      /"tailor-plan\/tailor-seed-validate" uses the tailor- prefix/,
+    );
+  });
+
+  test.each([
+    [
+      "a user step in a managed job",
+      (c: string) =>
+        addStepAfterInstall(
+          c,
+          "tailor-deploy",
+          "      - id: tailor-build-frontend\n        run: echo build\n",
+        ),
+      "tailor-deploy/tailor-build-frontend",
+    ],
+    [
+      "a user job",
+      (c: string) =>
+        `${c}  tailor-lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo lint\n`,
+      "tailor-lint",
+    ],
+    [
+      "a step in a user job",
+      (c: string) =>
+        `${c}  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - id: tailor-checkout\n        run: echo lint\n`,
+      "lint/tailor-checkout",
+    ],
+  ])("rejects %s with a tailor- id, even when forced", (_name, edit, id) => {
+    const edited = edit(render.content);
+    expect(edited).not.toBe(render.content);
+    const message = `"${id}" uses the tailor- prefix reserved for SDK-managed jobs and steps`;
+    expect(() => merge(edited, render)).toThrow(message);
+    expect(() => merge(edited, render, true)).toThrow(message);
+  });
+
+  test("keeps a user step whose id the lock wrongly records as managed", () => {
+    const edited = addStepAfterInstall(
+      render.content,
+      "tailor-deploy",
+      "      - id: build-frontend\n        run: echo build\n",
+    );
+    const { content } = mergeUserContent({
+      current: edited,
+      rendered: render.content,
+      layout: "workflow",
+      previousIds: [...render.generatedIds, "tailor-deploy/build-frontend"],
+      renderedIds: render.generatedIds,
+      force: true,
+    });
+    expect(content).toBe(edited);
   });
 
   test("rejects, or with force drops, user steps whose managed job was removed", () => {
@@ -462,7 +680,7 @@ describe("mergeUserContent", () => {
     ).toThrow(/after-erd.*tailor-erd-preview/);
   });
 
-  test("keeps a user-edited build-site slot body and user steps in a composite action", () => {
+  test("keeps a user-edited tailor-build-site run command and user steps in a composite action", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
     const edited = action.content
       .replace(/(run: \|\n)(?:        #.*\n)+ {8}true\n/, "$1        pnpm build\n")
@@ -482,12 +700,66 @@ describe("mergeUserContent", () => {
       runs: { steps: Array<Record<string, unknown>> };
     };
     expect(doc.runs.steps.map((s) => s["id"] ?? s["name"])).toEqual([
-      "build-site",
+      "tailor-build-site",
       "Upload",
       "tailor-apply",
       "tailor-notify",
     ]);
     expect(doc.runs.steps[0]?.["run"]).toBe("pnpm build\n");
+  });
+
+  test("moves the run command of a build-site step an older template wrote into tailor-build-site", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
+    const legacy = legacyBuildSiteAction();
+    const edited = legacy.content.replace(
+      /(run: \|\n)(?:        #.*\n)+ {8}true\n/,
+      "$1        pnpm build\n",
+    );
+    const { content } = mergeUserContent({
+      current: edited,
+      rendered: action.content,
+      layout: "action",
+      previousIds: legacy.ids,
+      previousInputs: legacy.inputs,
+      renderedIds: action.generatedIds,
+      force: false,
+    });
+    const doc = parseDocument(content).toJS() as {
+      runs: { steps: Array<Record<string, unknown>> };
+    };
+    expect(doc.runs.steps.map((s) => s["id"])).toEqual([
+      "tailor-build-site",
+      "tailor-apply",
+      "tailor-notify",
+    ]);
+    expect(doc.runs.steps[0]?.["run"]).toBe("pnpm build\n");
+  });
+
+  test("keeps a user step right after the build-site step an older template wrote", () => {
+    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
+    const legacy = legacyBuildSiteAction();
+    const edited = legacy.content.replace(
+      /( {4}- id: tailor-apply\n)/,
+      "    - name: Upload\n      shell: bash\n      run: echo up\n$1",
+    );
+    const { content } = mergeUserContent({
+      current: edited,
+      rendered: action.content,
+      layout: "action",
+      previousIds: legacy.ids,
+      previousInputs: legacy.inputs,
+      renderedIds: action.generatedIds,
+      force: false,
+    });
+    const doc = parseDocument(content).toJS() as {
+      runs: { steps: Array<Record<string, unknown>> };
+    };
+    expect(doc.runs.steps.map((s) => s["id"] ?? s["name"])).toEqual([
+      "tailor-build-site",
+      "Upload",
+      "tailor-apply",
+      "tailor-notify",
+    ]);
   });
 
   test("keeps user nodes whose ids are Object.prototype keys", () => {
