@@ -872,7 +872,7 @@ describe("renderTagWorkflow", () => {
 describe("Tailor Platform action pins", () => {
   test("pins every generated Tailor Platform action to the release pin", () => {
     expect(ACTIONS_SHA).toMatch(/^[0-9a-f]{40}$/);
-    expect(ACTIONS_VERSION).toMatch(/^\S+$/);
+    expect(ACTIONS_VERSION).toMatch(/^v\d+\.\d+\.\d+$/);
 
     const contents = [
       renderBranchWorkflow({ ...branchBase, migrationDriftCheck: true }).content,
@@ -910,30 +910,24 @@ describe("Tailor Platform action pins", () => {
     }
   });
 
-  test.skipIf(!/^v[\d.]+$/.test(ACTIONS_VERSION))(
-    "Renovate's custom manager regex actually matches this file's ACTIONS_SHA/ACTIONS_VERSION declarations",
-    () => {
-      const renovateConfig = JSON.parse(
-        fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
-      ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
+  test("Renovate's custom manager regex actually matches this file's ACTIONS_SHA/ACTIONS_VERSION declarations", () => {
+    const renovateConfig = JSON.parse(
+      fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
+    ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
 
-      const manager = renovateConfig.customManagers.find((m) =>
-        m.managerFilePatterns.some((p) => p.includes("templates")),
-      );
-      expect(manager).toBeDefined();
+    const manager = renovateConfig.customManagers.find((m) =>
+      m.managerFilePatterns.some((p) => p.includes("templates")),
+    );
+    expect(manager).toBeDefined();
 
-      const templatesSource = fs.readFileSync(
-        path.join(import.meta.dirname, "templates.ts"),
-        "utf8",
-      );
-      const match = new RegExp(manager!.matchStrings[0]).exec(templatesSource);
+    const templatesSource = fs.readFileSync(path.join(import.meta.dirname, "templates.ts"), "utf8");
+    const match = new RegExp(manager!.matchStrings[0]).exec(templatesSource);
 
-      expect(match?.groups).toEqual({
-        currentDigest: ACTIONS_SHA,
-        currentValue: ACTIONS_VERSION,
-      });
-    },
-  );
+    expect(match?.groups).toEqual({
+      currentDigest: ACTIONS_SHA,
+      currentValue: ACTIONS_VERSION,
+    });
+  });
 });
 
 describe("drift check failure policy", () => {

@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/tag-guard@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           target-branch: "__BRANCH__"
           github-token: ${{ github.token }}
@@ -49,16 +49,16 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/setup@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/install@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       # __GENERATE_CHECK_START__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/generate-check@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -71,20 +71,20 @@ jobs:
       # __SEED_VALIDATE_END__
       # __PER_APP_SEED_VALIDATE__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/drift-check@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/migration-drift-check@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __MIGRATION_DRIFT_CHECK_END__
       # __PER_APP_MIGRATION_DRIFT_CHECK__
       - id: tailor-plan
-        uses: tailor-platform/actions/plan@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/plan@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
@@ -111,15 +111,15 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/setup@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/install@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/deploy@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
@@ -150,7 +150,7 @@ jobs:
           fi
       - id: tailor-notify
         if: always() && steps.tailor-slack-prereq.outputs.ready == 'true'
-        uses: tailor-platform/actions/notify@673f134587307b7d61bd9080edbb3130d352003c # fix/plan-tag-guard-scoped-fetch-auth
+        uses: tailor-platform/actions/notify@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           provider: slack
           status: ${{ job.status }}
