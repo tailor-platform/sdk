@@ -285,7 +285,10 @@ export async function addMigrationScriptFiles(
   result.pgliteTestRequested = pgliteTestRequested;
   // The PGlite scaffold imports ./db.pglite, so it is only written when that file exists.
   if (pgliteTestRequested && fs.existsSync(pgliteSchemaPath)) {
-    await fsPromises.writeFile(pgliteTestPath, generateMigrationPgliteTestScript(diff));
+    await fsPromises.writeFile(
+      pgliteTestPath,
+      generateMigrationPgliteTestScript(loadDiff(diffPath)),
+    );
     result.pgliteTestPath = pgliteTestPath;
   }
 

@@ -898,6 +898,8 @@ describe("0005 add required email", () => {
 ```
 
 Pass nested field values as JavaScript objects or arrays of objects, without `JSON.stringify`.
+
+When the migration was generated with `kyselyTypePlugin({ temporal: true })`, its `db.ts` types date, datetime, and time columns as `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime`, and deploy runs the script with those values. Create the instance with `createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })` so PGlite reads them back the same way; the scaffold adds the option for such migrations. A migration generated before `temporal` was enabled still runs with `Date` values on deploy, so its test leaves the option out.
 Generated migration types use `Record<string, unknown>` for each nested object so scripts can
 work with both old and new members during a migration; narrow member values before using them.
 

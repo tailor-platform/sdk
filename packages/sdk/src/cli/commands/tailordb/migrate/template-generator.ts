@@ -411,7 +411,7 @@ import { pgliteSchema } from "./db.pglite";
 import { main } from "./migrate";
 
 const pglite = new PGlite();
-const db = createKyselyPGlite<Unmigrated<Database>>(pglite);
+const db = createKyselyPGlite<Unmigrated<Database>>(pglite${diff.temporal ? ", { temporal: true }" : ""});
 
 // PGlite loads Postgres on first use, which can take longer than the default hook timeout.
 beforeAll(async () => {

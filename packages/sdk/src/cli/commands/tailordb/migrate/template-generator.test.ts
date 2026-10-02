@@ -1675,6 +1675,20 @@ describe("template-generator", () => {
       expect(script).toContain('describe("tailordb migration (PGlite)"');
     });
 
+    test("reads Temporal values from PGlite for a migration recorded as temporal", () => {
+      const script = generateMigrationPgliteTestScript(createMockMigrationDiff({ temporal: true }));
+
+      expect(script).toContain(
+        "const db = createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true });",
+      );
+    });
+
+    test("reads Date values from PGlite for a migration without a temporal record", () => {
+      const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
+
+      expect(script).toContain("const db = createKyselyPGlite<Unmigrated<Database>>(pglite);");
+    });
+
     test("quotes a namespace that is not an identifier", () => {
       const script = generateMigrationPgliteTestScript(
         createMockMigrationDiff({ namespace: "main-db" }),

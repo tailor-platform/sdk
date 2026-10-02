@@ -128,6 +128,22 @@ describe("addMigrationScriptFiles", () => {
     expect(content).toContain("createKyselyPGlite<Unmigrated<Database>>(pglite)");
   });
 
+  test("scaffolds a Temporal PGlite test when db.ts is generated with Temporal types", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      pgliteAvailable: true,
+      temporal: true,
+    });
+
+    expect(fs.readFileSync(result.pgliteTestPath!, "utf-8")).toContain(
+      "createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })",
+    );
+  });
+
   test("skips the PGlite test scaffold when PGlite is not installed", async () => {
     setupMigration();
 
