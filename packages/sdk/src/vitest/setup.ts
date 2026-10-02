@@ -8,6 +8,7 @@
  */
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll } from "vitest";
+import { isInResolverTestScope } from "../configure/services/resolver/test-resolver-scope";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
 
 function isTailorRuntime(): boolean {
@@ -94,22 +95,23 @@ export async function loadDefaultDateRepresentationFromConfig(
 const DEFAULT_DATE_REPRESENTATION_KEY = "__TAILOR_PLATFORM_BUNDLE_DEFAULT_DATE_REPRESENTATION";
 
 /**
- * Apply `defaultDateRepresentation` the way deployed resolver bundles do.
+ * Apply `defaultDateRepresentation` the way deployed resolver bundles do: only
+ * code running inside a resolver `body` sees it.
  * @param representation - The config's representation, or undefined to clear it
  * @returns A function that restores the previous value
  */
 export function applyDefaultDateRepresentation(
   representation: "string" | "date" | "temporal" | undefined,
 ): () => void {
-  const store = globalThis as Record<string, unknown>;
-  const hadPrevious = DEFAULT_DATE_REPRESENTATION_KEY in store;
-  const previous = store[DEFAULT_DATE_REPRESENTATION_KEY];
-  const set = (value: unknown, present: boolean) => {
-    if (present) store[DEFAULT_DATE_REPRESENTATION_KEY] = value;
-    else delete store[DEFAULT_DATE_REPRESENTATION_KEY];
+  const previous = Object.getOwnPropertyDescriptor(globalThis, DEFAULT_DATE_REPRESENTATION_KEY);
+  Object.defineProperty(globalThis, DEFAULT_DATE_REPRESENTATION_KEY, {
+    configurable: true,
+    get: () => (isInResolverTestScope() ? representation : undefined),
+  });
+  return () => {
+    if (previous) Object.defineProperty(globalThis, DEFAULT_DATE_REPRESENTATION_KEY, previous);
+    else delete (globalThis as Record<string, unknown>)[DEFAULT_DATE_REPRESENTATION_KEY];
   };
-  set(representation, representation !== undefined);
-  return () => set(previous, hadPrevious);
 }
 
 let restoreDefaultDateRepresentation: (() => void) | undefined;

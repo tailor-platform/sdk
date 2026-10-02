@@ -443,7 +443,7 @@ export default defineConfig({
 });
 ```
 
-This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config, and applies the config's [`defaultDateRepresentation`](./services/resolver.md#project-wide-default-representation) to `t` fields that omit `as`. You can still override with `mockSecretmanager({ secrets: ... })` in individual tests: a per-test overlay applies only within that test, and the config-loaded secrets remain available to every other test.
+This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config, and applies the config's [`defaultDateRepresentation`](./services/resolver.md#project-wide-default-representation) to `t` fields that omit `as` while a resolver `body` runs, as deployed resolvers do. Executors, workflow jobs, and other functions called in the same test keep string values, matching their deployed behavior. You can still override with `mockSecretmanager({ secrets: ... })` in individual tests: a per-test overlay applies only within that test, and the config-loaded secrets remain available to every other test.
 
 ### Per-Project Configuration
 

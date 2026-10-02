@@ -2,6 +2,7 @@ import { describe, expectTypeOf, test, expect } from "vitest";
 import { db } from "#/configure/services/tailordb/index";
 import { t } from "#/configure/types/index";
 import { createResolver } from "./resolver";
+import { isInResolverTestScope } from "./test-resolver-scope";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
@@ -704,5 +705,24 @@ describe("createResolver", () => {
       expect(resolver.input).toBeUndefined();
       expect(resolver.description).toBeUndefined();
     });
+  });
+});
+
+describe("createResolver test scope", () => {
+  test("runs the body inside the resolver test scope", async () => {
+    const resolver = createResolver({
+      name: "scoped",
+      operation: "query",
+      body: async () => {
+        await Promise.resolve();
+        return isInResolverTestScope();
+      },
+      output: t.bool(),
+    });
+
+    await expect(
+      resolver.body({ input: undefined, caller: null, invoker: null, env: {} } as never),
+    ).resolves.toBe(true);
+    expect(isInResolverTestScope()).toBe(false);
   });
 });

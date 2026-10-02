@@ -1,5 +1,6 @@
 import { t, type TailorAnyField, type TailorField } from "#/configure/types/type";
 import { brandValue } from "#/utils/brand";
+import { withResolverTestScope } from "./test-resolver-scope";
 import type { ResolverPermission } from "#/configure/services/resolver/permission";
 import type { MachineUserName } from "#/configure/types/machine-user";
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
@@ -112,10 +113,15 @@ export function createResolver<
     typeof obj === "object" && obj !== null && "type" in obj && typeof obj.type === "string";
 
   const normalizedOutput = isTailorField(config.output) ? config.output : t.object(config.output);
+  const userBody = config.body;
+  const body = process.env.__TAILOR_PLATFORM_BUNDLE
+    ? userBody
+    : (context: Context<Input>) => withResolverTestScope(() => userBody(context));
 
   return brandValue(
     {
       ...config,
+      body,
       output: normalizedOutput,
     } as ResolverReturn<Input, Output>,
     "resolver",

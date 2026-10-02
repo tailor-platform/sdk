@@ -2,6 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, aroundAll, describe, expect, test } from "vitest";
+import { createResolver } from "../configure/services/resolver/resolver";
+import { withResolverTestScope } from "../configure/services/resolver/test-resolver-scope";
+import { t } from "../configure/types/type";
+import { Temporal } from "../runtime/temporal";
 import {
   applyDefaultDateRepresentation,
   extractVaultStore,
@@ -173,13 +177,46 @@ describe("applyDefaultDateRepresentation", () => {
     delete store[KEY];
   });
 
-  test("sets the default and restores the previous value", () => {
+  test("exposes the default only inside a resolver body", () => {
+    const restore = applyDefaultDateRepresentation("temporal");
+
+    expect(store[KEY]).toBeUndefined();
+    expect(withResolverTestScope(() => store[KEY])).toBe("temporal");
+    restore();
+  });
+
+  test("applies the default to t fields parsed in a resolver body but not in other functions", async () => {
+    const restore = applyDefaultDateRepresentation("temporal");
+    const payload = t.object({ day: t.date() });
+    const parseDay = () =>
+      (
+        payload.parse({ value: { day: "2026-10-02" }, data: {}, invoker: null }) as {
+          value?: { day: unknown };
+        }
+      ).value?.day;
+    const resolver = createResolver({
+      name: "parsesDay",
+      operation: "query",
+      body: async () => parseDay() instanceof Temporal.PlainDate,
+      output: t.bool(),
+    });
+
+    try {
+      await expect(
+        resolver.body({ input: undefined, caller: null, invoker: null, env: {} } as never),
+      ).resolves.toBe(true);
+      expect(parseDay()).toBe("2026-10-02");
+    } finally {
+      restore();
+    }
+  });
+
+  test("restores the previous value", () => {
     store[KEY] = "date";
 
     const restore = applyDefaultDateRepresentation("temporal");
-    expect(store[KEY]).toBe("temporal");
-
     restore();
+
     expect(store[KEY]).toBe("date");
   });
 
@@ -187,7 +224,7 @@ describe("applyDefaultDateRepresentation", () => {
     store[KEY] = "temporal";
 
     const restore = applyDefaultDateRepresentation(undefined);
-    expect(KEY in store).toBe(false);
+    expect(withResolverTestScope(() => store[KEY])).toBeUndefined();
 
     restore();
     expect(store[KEY]).toBe("temporal");
