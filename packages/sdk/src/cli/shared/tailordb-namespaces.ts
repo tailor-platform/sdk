@@ -190,6 +190,7 @@ async function loadNamespace(
 export function createTailorDBNamespaceLoader(): TailorDBNamespaceLoader {
   const configs = new Map<string, Promise<LoadedNamespaceSource>>();
   const namespaces = new Map<string, Promise<TailorDBNamespaceData>>();
+  let previousLoad: Promise<unknown> = Promise.resolve();
 
   const loadConfigOnce = (configPath: string) => {
     let loaded = configs.get(configPath);
@@ -207,7 +208,8 @@ export function createTailorDBNamespaceLoader(): TailorDBNamespaceLoader {
     const key = `${source.config.path}\0${namespace}`;
     let loaded = namespaces.get(key);
     if (!loaded) {
-      loaded = loadNamespace(source, namespace);
+      loaded = previousLoad.then(() => loadNamespace(source, namespace));
+      previousLoad = loaded.catch(() => undefined);
       namespaces.set(key, loaded);
     }
     return loaded;

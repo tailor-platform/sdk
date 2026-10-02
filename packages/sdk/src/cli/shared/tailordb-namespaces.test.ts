@@ -141,6 +141,37 @@ export const plugins = [{
     delete counter.__namespaceLoads;
   });
 
+  test("loads one namespace at a time even when namespaces are requested concurrently", async () => {
+    const configPath = writeProject({
+      "tailor.config.ts": `
+export default { name: "billing-app", db: { billing: { files: [] }, audit: { files: [] } } };
+export const plugins = [{
+  id: "overlap-recorder",
+  description: "Records overlapping namespace loads",
+  importPath: "@example/overlap-recorder",
+  onNamespaceLoaded: async () => {
+    const state = globalThis.__namespaceLoadOverlap;
+    state.active += 1;
+    state.max = Math.max(state.max, state.active);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    state.active -= 1;
+    return {};
+  },
+}];
+`,
+    });
+    const overlap = { active: 0, max: 0 };
+    const state = globalThis as { __namespaceLoadOverlap?: typeof overlap };
+    state.__namespaceLoadOverlap = overlap;
+
+    using _logger = silenceLogger("error", "log");
+    const loadTailorDB = createTailorDBNamespaceLoader();
+    await Promise.all([loadTailorDB(configPath, ["billing"]), loadTailorDB(configPath, ["audit"])]);
+
+    expect(overlap.max).toBe(1);
+    delete state.__namespaceLoadOverlap;
+  });
+
   test.each([
     ["missing", 'TailorDB namespace "missing" not found in config.db of'],
     ["toString", 'TailorDB namespace "toString" not found in config.db of'],
