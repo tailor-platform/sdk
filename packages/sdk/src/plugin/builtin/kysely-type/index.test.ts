@@ -470,6 +470,21 @@ describe("KyselyTypePlugin integration tests", () => {
         ],
         "additionalNamespaces[1].namespaces must be a non-empty array of non-empty strings.",
       ],
+      [
+        "a hole in the entries",
+        Object.assign([], { 1: { configPath: "../billing/tailor.config.ts" } }),
+        "additionalNamespaces[0] must be an object.",
+      ],
+      [
+        "a hole in namespaces",
+        [
+          {
+            configPath: "../billing/tailor.config.ts",
+            namespaces: Object.assign(["billing"], { 2: "audit" }),
+          },
+        ],
+        "additionalNamespaces[0].namespaces must be a non-empty array of non-empty strings.",
+      ],
     ])("rejects %s before loading anything", async (_case, additionalNamespaces, message) => {
       const loadTailorDB = fakeLoadTailorDB();
 

@@ -49,7 +49,7 @@ function assertAdditionalNamespaces(
   if (!Array.isArray(value)) {
     throw new Error("additionalNamespaces must be an array.");
   }
-  value.forEach((entry: unknown, index) => {
+  Array.from(value).forEach((entry: unknown, index) => {
     const label = `additionalNamespaces[${index}]`;
     if (typeof entry !== "object" || entry === null) {
       throw new Error(`${label} must be an object.`);
@@ -62,7 +62,9 @@ function assertAdditionalNamespaces(
       namespaces !== undefined &&
       (!Array.isArray(namespaces) ||
         namespaces.length === 0 ||
-        !namespaces.every((namespace) => typeof namespace === "string" && namespace !== ""))
+        !Array.from(namespaces).every(
+          (namespace) => typeof namespace === "string" && namespace !== "",
+        ))
     ) {
       throw new Error(`${label}.namespaces must be a non-empty array of non-empty strings.`);
     }
