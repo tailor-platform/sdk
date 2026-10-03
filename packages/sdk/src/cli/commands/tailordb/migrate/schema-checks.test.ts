@@ -161,4 +161,21 @@ describe("buildInProgressSnapshot", () => {
       expect(computeSourceScriptHash(expected.fields)).toBe(deployedScriptHash(previous, diff));
     },
   );
+
+  test("hashes the table scripts the deploy wrote while a removed nested member is kept for the script", () => {
+    const before = snapshotField("nested", {
+      fields: { street: snapshotField("string"), legacy: scripted('"legacy"') },
+    });
+    const after = snapshotField("nested", { fields: { street: snapshotField("string") } });
+    const previous = userSnapshot({ name: scripted('"name"'), address: before });
+    const diff = createMockMigrationDiff({
+      changes: [{ kind: "field_modified", tableName: "User", fieldName: "address", before, after }],
+      requiresMigrationScript: true,
+    });
+
+    const expected = buildInProgressSnapshot(previous, diff).tables.User!;
+
+    expect(expected.fields.address?.fields?.legacy).toBeDefined();
+    expect(computeSourceScriptHash(expected.fields)).toBe(deployedScriptHash(previous, diff));
+  });
 });

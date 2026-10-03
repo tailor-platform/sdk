@@ -743,7 +743,7 @@ export async function applyTailorDB(
             );
           }
 
-          settleRestorationSettings();
+          if (!inProgress) settleRestorationSettings();
 
           try {
             await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);

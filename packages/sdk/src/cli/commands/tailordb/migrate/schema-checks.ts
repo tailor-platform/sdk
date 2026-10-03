@@ -17,6 +17,7 @@ import {
   formatDiffSummary,
   type MigrationDiff,
 } from "./diff-calculator";
+import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import { fetchRemoteMigrationState } from "./remote-state";
 import {
@@ -35,6 +36,7 @@ import {
   stripFieldScriptProps,
   type RemoteGqlPermission,
   type SchemaSnapshot,
+  type SnapshotFieldConfig,
   type SnapshotGqlOperations,
   type SnapshotSettings,
   type TailorDBSnapshotType,
@@ -239,8 +241,9 @@ function deployComparableSnapshot(
 
 /**
  * The schema a deploy leaves on the remote while a migration is in progress:
- * its Pre-phase schema, where the fields kept for the script carry no scripts
- * because the deploy adds them after building the table's scripts.
+ * its Pre-phase schema, where the fields and nested members kept for the
+ * script carry no scripts because the deploy adds them after building the
+ * table's scripts.
  * @param previousSnapshot - Schema before the migration
  * @param diff - The migration's diff
  * @returns Snapshot the remote schema must match
@@ -251,18 +254,32 @@ export function buildInProgressSnapshot(
 ): SchemaSnapshot {
   const snapshot = buildPreMigrationSnapshot(previousSnapshot, diff);
   for (const change of diff.changes) {
-    const keptFieldName =
-      change.kind === "field_removed"
-        ? change.fieldName
-        : change.kind === "field_renamed"
-          ? change.previousFieldName
-          : undefined;
-    if (keptFieldName === undefined) continue;
     const fields = snapshot.tables[change.tableName]?.fields;
-    const kept = fields?.[keptFieldName];
-    if (fields && kept) fields[keptFieldName] = stripFieldScriptProps(kept);
+    if (!fields) continue;
+    if (change.kind === "field_removed") {
+      stripKeptFieldScripts(fields, change.fieldName);
+    } else if (change.kind === "field_renamed") {
+      stripKeptFieldScripts(fields, change.previousFieldName);
+    } else if (change.kind === "field_modified") {
+      for (const member of collectNestedMemberChanges(change.before, change.after)) {
+        if (member.kind !== "removed") continue;
+        const parentMembers = getNestedMember(
+          fields[change.fieldName],
+          member.path.slice(0, -1),
+        )?.fields;
+        const memberName = member.path.at(-1);
+        if (parentMembers && memberName !== undefined) {
+          stripKeptFieldScripts(parentMembers, memberName);
+        }
+      }
+    }
   }
   return snapshot;
+}
+
+function stripKeptFieldScripts(fields: Record<string, SnapshotFieldConfig>, name: string): void {
+  const kept = Object.hasOwn(fields, name) ? fields[name] : undefined;
+  if (kept) fields[name] = stripFieldScriptProps(kept);
 }
 
 function reconstructPreMigrationSnapshot(
