@@ -1,3 +1,5 @@
+import { CLIError } from "./errors";
+
 type ListTailorDBTypesClient = {
   listTailorDBTypes(args: { workspaceId: string; namespaceName: string }): Promise<{
     tailordbTypes: Array<{ name: string }>;
@@ -30,36 +32,35 @@ export async function resolveTableNamespaces(
     requestedTablesByLowercase.set(key, [tableName]);
   }
 
-  const unresolvedTables = new Set(args.tableNames);
   const tableNamespaceMap = new Map<string, string>();
 
-  for (const namespace of args.namespaces) {
-    if (unresolvedTables.size === 0) {
-      break;
-    }
+  if (args.tableNames.length === 0) return tableNamespaceMap;
 
-    try {
-      const { tailordbTypes } = await args.client.listTailorDBTypes({
+  for (const namespace of args.namespaces) {
+    const result = await args.client
+      .listTailorDBTypes({
         workspaceId: args.workspaceId,
         namespaceName: namespace,
-      });
+      })
+      .catch(() => undefined);
+    if (!result) continue;
 
-      for (const type of tailordbTypes) {
-        const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
-        if (!matchedRequestedTypes) {
-          continue;
-        }
+    for (const type of result.tailordbTypes) {
+      const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
+      if (!matchedRequestedTypes) continue;
 
-        for (const requestedTableName of matchedRequestedTypes) {
-          if (tableNamespaceMap.has(requestedTableName)) {
-            continue;
-          }
-          tableNamespaceMap.set(requestedTableName, namespace);
-          unresolvedTables.delete(requestedTableName);
+      for (const requestedTableName of matchedRequestedTypes) {
+        const previousNamespace = tableNamespaceMap.get(requestedTableName);
+        if (previousNamespace !== undefined && previousNamespace !== namespace) {
+          throw CLIError({
+            code: "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS",
+            message: `Table "${requestedTableName}" exists in multiple namespaces: ${previousNamespace}, ${namespace}.`,
+            suggestion: "Use a config containing only the intended namespace.",
+            context: { table: requestedTableName, namespaces: [previousNamespace, namespace] },
+          });
         }
+        tableNamespaceMap.set(requestedTableName, namespace);
       }
-    } catch {
-      continue;
     }
   }
 

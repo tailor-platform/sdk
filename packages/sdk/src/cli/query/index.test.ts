@@ -28,6 +28,7 @@ vi.mock("../shared/editor", () => ({
 }));
 
 const mockClient = {
+  listTailorDBTypes: vi.fn(),
   getApplication: vi.fn(),
   getAuthMachineUser: vi.fn(),
 };
@@ -207,6 +208,32 @@ describe("query", () => {
         name: "query-sql-sales.js",
       }),
     );
+  });
+
+  test.each([
+    ["referenced", "owned"],
+    ["owned", "referenced"],
+  ])("rejects SQL writes when a table exists in both %s and %s", async (first, second) => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const actual = await vi.importActual<{ resolveTableNamespaces: typeof resolveTableNamespaces }>(
+      "../shared/tailordb-namespace",
+    );
+    const { executeScript } = await import("../shared/script-executor");
+    vi.mocked(extractAllNamespaces).mockReturnValue([first, second]);
+    vi.mocked(resolveTableNamespaces).mockImplementation(actual.resolveTableNamespaces);
+    mockClient.listTailorDBTypes.mockResolvedValue({ tailordbTypes: [{ name: "User" }] });
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: 'delete from "User";',
+      }),
+    ).rejects.toMatchObject({ code: "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS" });
+    expect(executeScript).not.toHaveBeenCalled();
   });
 
   test("rejects blank SQL query string with parse error", async () => {

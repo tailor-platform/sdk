@@ -15,9 +15,9 @@ vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn().mockResolvedValue({
     truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
     truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
-    listTailorDBTypes: vi.fn().mockResolvedValue({
-      tailordbTypes: [{ name: "User" }, { name: "Order" }],
-    }),
+    listTailorDBTypes: vi.fn().mockImplementation(async ({ namespaceName }) => ({
+      tailordbTypes: namespaceName === "tailordb" ? [{ name: "User" }, { name: "Order" }] : [],
+    })),
   }),
 }));
 
