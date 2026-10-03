@@ -52,6 +52,21 @@ describe("createTailorDBNamespaceLoader", () => {
     expect(Object.keys(namespace!.tables)).toEqual(["Invoice"]);
   });
 
+  test("does not load consumer tables when the owner's file patterns match nothing", async () => {
+    const configPath = writeProject({
+      "tailor.config.ts": `export default { name: "billing-app", db: { billing: { files: ["./tailordb/*.ts"] } } };`,
+      "consumer/tailordb/invoice.ts": invoiceTable,
+    });
+    using _cwd = vi
+      .spyOn(process, "cwd")
+      .mockReturnValue(path.join(path.dirname(configPath), "consumer"));
+    using _logger = silenceLogger("error", "log", "warn");
+
+    const [namespace] = await createTailorDBNamespaceLoader()(configPath, ["billing"]);
+
+    expect(Object.keys(namespace!.tables)).toEqual([]);
+  });
+
   test("loads each config once for several of its namespaces", async () => {
     const configPath = writeProject({
       "tailor.config.ts": `export default { name: "billing-app", db: { billing: { files: ["./tailordb/*.ts"] }, audit: { files: [] } } };`,

@@ -173,11 +173,15 @@ async function loadNamespace(
       message: `TailorDB namespace "${namespace}" is external in ${config.path}. Point schemaFrom at the config that defines its tables.`,
     });
   }
+  const baseDir = path.dirname(config.path);
   const db = createOwnedTailorDBService({
     namespace,
-    serviceConfig: entry.schemaSource.config,
+    serviceConfig: {
+      ...entry.schemaSource.config,
+      files: entry.schemaSource.config.files.map((pattern) => path.resolve(baseDir, pattern)),
+    },
     configPath: config.path,
-    baseDir: path.dirname(config.path),
+    baseDir,
     dateDefault: effectiveDateDefault(config),
     pluginManager,
   });
