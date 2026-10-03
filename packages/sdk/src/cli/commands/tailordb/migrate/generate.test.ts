@@ -88,7 +88,7 @@ describe("tailordb migration generate with warning-tier changes", () => {
             db: Object.fromEntries(
               state.namespaces.map(({ namespace, migrationsDir }) => [
                 namespace,
-                { migration: { directory: migrationsDir } },
+                { files: [], migration: { directory: migrationsDir } },
               ]),
             ),
           },
@@ -185,7 +185,7 @@ describe("tailordb migration generate field rename preflight", () => {
             db: Object.fromEntries(
               state.namespaces.map(({ namespace, migrationsDir }) => [
                 namespace,
-                { migration: { directory: migrationsDir } },
+                { files: [], migration: { directory: migrationsDir } },
               ]),
             ),
           },
@@ -301,7 +301,7 @@ describe("tailordb migration generate with an unsupported field type change", ()
             db: Object.fromEntries(
               state.namespaces.map(({ namespace, migrationsDir }) => [
                 namespace,
-                { migration: { directory: migrationsDir } },
+                { files: [], migration: { directory: migrationsDir } },
               ]),
             ),
           },
@@ -619,7 +619,7 @@ describe("tailordb migration generate nested member rename preflight", () => {
             db: Object.fromEntries(
               state.namespaces.map(({ namespace, migrationsDir }) => [
                 namespace,
-                { migration: { directory: migrationsDir } },
+                { files: [], migration: { directory: migrationsDir } },
               ]),
             ),
           },
@@ -761,7 +761,7 @@ describe("tailordb migration generate type rename preflight", () => {
             db: Object.fromEntries(
               state.namespaces.map(({ namespace, migrationsDir }) => [
                 namespace,
-                { migration: { directory: migrationsDir } },
+                { files: [], migration: { directory: migrationsDir } },
               ]),
             ),
           },
@@ -891,7 +891,7 @@ describe("tailordb migration generate --data-only", () => {
             db: Object.fromEntries(
               state.namespaces.map(({ namespace, migrationsDir }) => [
                 namespace,
-                { migration: { directory: migrationsDir } },
+                { files: [], migration: { directory: migrationsDir } },
               ]),
             ),
           },

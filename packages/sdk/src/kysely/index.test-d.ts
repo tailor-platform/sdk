@@ -7,6 +7,8 @@ import type {
   Timestamp,
   NamespaceInsertable,
   NamespaceSelectable,
+  NamespaceTable,
+  NamespaceUpdateable,
   Serial,
   Insertable,
   Selectable,
@@ -96,6 +98,31 @@ describe("NamespaceSelectable", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
     expectTypeOf<ReceiptSelectable["eventDates"]>().toEqualTypeOf<Date[]>();
+  });
+});
+
+type SharedTableNameNamespace = {
+  tailordb: { User: { id: Generated<string>; email: string } };
+  billing: { User: { id: Generated<string>; plan: string } };
+};
+
+describe("table names shared by namespaces", () => {
+  test("Table is a union of each namespace's table", () => {
+    expectTypeOf<NamespaceTable<SharedTableNameNamespace, "User">>().toEqualTypeOf<
+      SharedTableNameNamespace["tailordb"]["User"] | SharedTableNameNamespace["billing"]["User"]
+    >();
+  });
+
+  test("Insertable, Selectable, and Updateable keep only the shared columns", () => {
+    expectTypeOf<NamespaceSelectable<SharedTableNameNamespace, "User">>().toEqualTypeOf<{
+      id: string;
+    }>();
+    expectTypeOf<NamespaceInsertable<SharedTableNameNamespace, "User">>().toEqualTypeOf<{
+      id?: string;
+    }>();
+    expectTypeOf<NamespaceUpdateable<SharedTableNameNamespace, "User">>().toEqualTypeOf<{
+      id?: string;
+    }>();
   });
 });
 

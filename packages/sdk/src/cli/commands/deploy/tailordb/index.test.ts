@@ -1271,7 +1271,7 @@ describe("planTailorDB (service level)", () => {
       const config = {
         path: path.join(migrationsDir, "tailor.config.ts"),
         name: appName,
-        db: { "test-tailordb": { migration: { directory: "." } } },
+        db: { "test-tailordb": { files: [], migration: { directory: "." } } },
       } as unknown as LoadedConfig;
       const ctx: PlanContext = {
         client,

@@ -7,13 +7,14 @@ import { defineApplication } from "#/cli/services/application";
 import { errorToJson, serializeError } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { createTailorDBNamespaceLoader } from "#/cli/shared/tailordb-namespaces";
 import { PluginManager } from "#/plugin/manager";
 import { createGenerationManager } from "./service";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
-import type { Plugin } from "#/plugin/types";
+import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 
 vi.mock("node:fs", () => {
   return {
@@ -49,6 +50,10 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => {
     },
   };
 });
+
+vi.mock("#/cli/shared/tailordb-namespaces", () => ({
+  createTailorDBNamespaceLoader: vi.fn(() => vi.fn()),
+}));
 
 function loadedTailorDBService(namespace: string, tableNames: string[]): TailorDBService {
   const types = Object.fromEntries(
@@ -142,6 +147,59 @@ describe("GenerationManager", () => {
   });
 
   describe("generate", () => {
+    test("loads referenced definitions once and shares them across every generation phase", async () => {
+      const referenced: TailorDBNamespaceData[] = ["shared", "sql"].map((namespace) => ({
+        namespace,
+        tables: { User: { name: "User" } as TailorDBType },
+        sourceInfo: new Map(),
+        pluginAttachments: new Map(),
+      }));
+      const loader = vi
+        .fn()
+        .mockResolvedValueOnce([referenced[0]])
+        .mockResolvedValueOnce([referenced[1]]);
+      vi.mocked(createTailorDBNamespaceLoader).mockReturnValueOnce(loader);
+      const hooks = {
+        onTailorDBReady: vi.fn().mockResolvedValue({ files: [] }),
+        onResolverReady: vi.fn().mockResolvedValue({ files: [] }),
+        onExecutorReady: vi.fn().mockResolvedValue({ files: [] }),
+      };
+      const config: LoadedConfig = {
+        name: "app",
+        path: "/repo/consumer/tailor.config.ts",
+        db: {
+          own: { files: [] },
+          visible: { subgraph: true },
+          shared: { subgraph: true, schemaFrom: "../owner/tailor.config.ts" },
+          sql: { subgraph: false, schemaFrom: "../owner/tailor.config.ts" },
+        },
+      };
+      const manager = createGenerationManager({
+        config,
+        application: applicationWithTailorDBServices(config, [
+          loadedTailorDBService("own", ["User"]),
+        ]),
+        pluginManager: new PluginManager([
+          { id: "first", description: "First", ...hooks },
+          { id: "second", description: "Second", onTailorDBReady: hooks.onTailorDBReady },
+        ]),
+      });
+      await manager.generate();
+      expect(loader.mock.calls).toEqual([
+        ["/repo/owner/tailor.config.ts", ["shared"]],
+        ["/repo/owner/tailor.config.ts", ["sql"]],
+      ]);
+      for (const hook of Object.values(hooks)) {
+        expect(hook).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tailordb: [expect.objectContaining({ namespace: "own" })],
+            referencedTailordb: referenced,
+          }),
+        );
+      }
+      expect(Object.keys(manager.services.tailordb)).toEqual(["own"]);
+    });
+
     test("executes complete generation process", async () => {
       const application = defineApplication({ config: mockConfig });
       const manager = createGenerationManager({

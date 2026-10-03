@@ -3,6 +3,109 @@
 export type LogLevelEnum = "DEBUG" | "INFO" | "WARN" | "ERROR" | "SILENT";
 export type LogLevelEnumInput = LogLevelEnum;
 
+export type TailorDBReferenceConfig =
+  | {
+      subgraph: true;
+      schemaFrom?: string | undefined;
+    }
+  | {
+      subgraph: false;
+      schemaFrom: string;
+    };
+export type TailorDBReferenceConfigInput = TailorDBReferenceConfig;
+
+export type AppConfigParsedInput = {
+  name: string;
+  id?: string | undefined;
+  env?:
+    | {
+        [x: string]:
+          | string
+          | number
+          | boolean
+          | {
+              value: string | number;
+              allowSecretReason: string;
+            };
+      }
+    | undefined;
+  cors?: string[] | undefined;
+  allowedIpAddresses?: string[] | undefined;
+  disableIntrospection?: boolean | undefined;
+  inlineSourcemap?: boolean | undefined;
+  logLevel?: string | undefined;
+  buildOptions?:
+    | {
+        inlineSourcemap?: boolean | undefined;
+        logLevel?: string | undefined;
+        allowedRuntimeGlobals?:
+          | {
+              [x: string]: true | string[];
+            }
+          | undefined;
+      }
+    | undefined;
+  metadata?:
+    | {
+        [x: string]: string;
+      }
+    | undefined;
+  db?:
+    | {
+        [x: string]:
+          | {
+              /** Glob patterns for TailorDB table definition files */
+              files: string[];
+              /** Glob patterns to exclude from table discovery */
+              ignores?: string[] | undefined;
+              /** Migration configuration */
+              migration?:
+                | {
+                    /** Directory containing migration files */
+                    directory: string;
+                    /** Machine user name for migration execution */
+                    machineUser?: string | undefined;
+                  }
+                | undefined;
+              /** Default GraphQL operations for all tables in this service */
+              gqlOperations?:
+                | "query"
+                | {
+                    /** Enable create mutation (default: true) */
+                    create?: boolean | undefined;
+                    /** Enable update mutation (default: true) */
+                    update?: boolean | undefined;
+                    /** Enable delete mutation (default: true) */
+                    delete?: boolean | undefined;
+                    /** Enable read queries - get, list, aggregation (default: true) */
+                    read?: boolean | undefined;
+                  }
+                | undefined;
+            }
+          | {
+              subgraph: true;
+              schemaFrom?: string | undefined;
+            }
+          | {
+              subgraph: false;
+              schemaFrom: string;
+            }
+          | {
+              external: true;
+            };
+      }
+    | undefined;
+  resolver?: unknown;
+  idp?: unknown;
+  auth?: unknown;
+  executor?: unknown;
+  workflow?: unknown;
+  httpAdapter?: unknown;
+  staticWebsites?: unknown;
+  aiGateways?: unknown;
+  secrets?: unknown;
+};
+
 export type AppConfigParsed = {
   name: string;
   id?: string | undefined;
@@ -39,7 +142,50 @@ export type AppConfigParsed = {
         [x: string]: string;
       }
     | undefined;
-  db?: unknown;
+  db?:
+    | {
+        [x: string]:
+          | {
+              /** Glob patterns for TailorDB table definition files */
+              files: string[];
+              /** Glob patterns to exclude from table discovery */
+              ignores?: string[] | undefined;
+              /** Migration configuration */
+              migration?:
+                | {
+                    /** Directory containing migration files */
+                    directory: string;
+                    /** Machine user name for migration execution */
+                    machineUser?: string | undefined;
+                  }
+                | undefined;
+              /** Default GraphQL operations for all tables in this service */
+              gqlOperations?:
+                | {
+                    /** Enable create mutation (default: true) */
+                    create?: boolean | undefined;
+                    /** Enable update mutation (default: true) */
+                    update?: boolean | undefined;
+                    /** Enable delete mutation (default: true) */
+                    delete?: boolean | undefined;
+                    /** Enable read queries - get, list, aggregation (default: true) */
+                    read?: boolean | undefined;
+                  }
+                | undefined;
+            }
+          | {
+              subgraph: true;
+              schemaFrom?: string | undefined;
+            }
+          | {
+              subgraph: false;
+              schemaFrom: string;
+            }
+          | {
+              external: true;
+            };
+      }
+    | undefined;
   resolver?: unknown;
   idp?: unknown;
   auth?: unknown;
@@ -50,7 +196,6 @@ export type AppConfigParsed = {
   aiGateways?: unknown;
   secrets?: unknown;
 };
-export type AppConfigParsedInput = AppConfigParsed;
 
 export type NormalizedDbEntry =
   | {
@@ -82,7 +227,12 @@ export type NormalizedDbEntry =
   | {
       owned: false;
       inSubgraph: boolean;
-      schemaSource: undefined;
+      schemaSource?:
+        | {
+            kind: "config";
+            path: string;
+          }
+        | undefined;
     };
 export type NormalizedDbEntryInput = NormalizedDbEntry;
 
@@ -117,7 +267,12 @@ export type NormalizedDb = {
     | {
         owned: false;
         inSubgraph: boolean;
-        schemaSource: undefined;
+        schemaSource?:
+          | {
+              kind: "config";
+              path: string;
+            }
+          | undefined;
       };
 };
 export type NormalizedDbInput = NormalizedDb;

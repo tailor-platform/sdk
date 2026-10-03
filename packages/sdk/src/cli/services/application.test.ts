@@ -451,3 +451,26 @@ export default createWorkflow({ name: "caller-workflow", mainJob: callerJob });
     );
   });
 });
+
+describe("TailorDB namespace membership", () => {
+  test("deploys owned definitions and exposes only subgraph members to auth and executor resolution", () => {
+    const application = defineApplication({
+      config: {
+        name: "app",
+        path: "tailor.config.ts",
+        db: {
+          own: { files: [] },
+          legacy: { external: true },
+          visible: { subgraph: true },
+          shared: { subgraph: true, schemaFrom: "owner.ts" },
+          sql: { subgraph: false, schemaFrom: "owner.ts" },
+        },
+      },
+    });
+    expect(application.tailorDBServices.map((db) => db.namespace)).toEqual(["own"]);
+    expect(application.subgraphs).toEqual(
+      ["own", "legacy", "visible", "shared"].map((Name) => ({ Type: "tailordb", Name })),
+    );
+    expect(application.externalTailorDBNamespaces).toEqual(["legacy", "visible", "shared"]);
+  });
+});

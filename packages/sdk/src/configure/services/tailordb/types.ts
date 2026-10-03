@@ -9,6 +9,7 @@ import type {
   TailorFieldType,
 } from "#/configure/types/field.types";
 import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
+import type { TailorDBReferenceConfigInput } from "#/types/app-config.generated";
 import type { DeepReadonly, InferFieldsOutput, output, Prettify } from "#/types/helpers";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
@@ -328,8 +329,23 @@ export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
 
 export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "keyOnly";
 
-type TailorDBExternalConfig = { external: true };
+type NonOwnedOptions = { [Key in keyof TailorDBServiceConfigInput]?: never };
+
+type TailorDBExternalConfig = NonOwnedOptions & {
+  external: true;
+  subgraph?: never;
+  schemaFrom?: never;
+};
+
+type TailorDBOwnedConfig = TailorDBServiceConfigInput & {
+  external?: never;
+  subgraph?: never;
+  schemaFrom?: never;
+};
+
+type TailorDBReferenceConfig = TailorDBReferenceConfigInput &
+  NonOwnedOptions & { external?: never };
 
 export type TailorDBServiceInput = {
-  [namespace: string]: TailorDBServiceConfigInput | TailorDBExternalConfig;
+  [namespace: string]: TailorDBOwnedConfig | TailorDBExternalConfig | TailorDBReferenceConfig;
 };

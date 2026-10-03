@@ -32,10 +32,19 @@ describe("extractAllNamespaces", () => {
       db: {
         owned: { files: ["./owned/*.ts"] },
         "shared-db": { external: true },
+        visible: { subgraph: true },
+        shared: { subgraph: true, schemaFrom: "owner.ts" },
+        sql: { subgraph: false, schemaFrom: "owner.ts" },
       },
     });
 
-    expect(extractAllNamespaces(config)).toEqual(["owned", "shared-db"]);
+    expect(extractAllNamespaces(config)).toEqual([
+      "owned",
+      "shared-db",
+      "visible",
+      "shared",
+      "sql",
+    ]);
   });
 });
 
@@ -61,6 +70,9 @@ describe("extractOwnedNamespaces", () => {
       db: {
         owned: { files: ["./owned/*.ts"] },
         "shared-db": { external: true },
+        visible: { subgraph: true },
+        shared: { subgraph: true, schemaFrom: "owner.ts" },
+        sql: { subgraph: false, schemaFrom: "owner.ts" },
       },
     });
 

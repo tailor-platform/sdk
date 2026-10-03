@@ -1,4 +1,4 @@
-import { loadTailorDBNamespaces, logger } from "@tailor-platform/sdk/cli";
+import { extractOwnedNamespaces, loadTailorDBNamespaces, logger } from "@tailor-platform/sdk/cli";
 import { z } from "zod";
 import { TailorDBErdPluginID } from "./index";
 import type { LoadedConfig, Plugin, TailorDBNamespaceData } from "@tailor-platform/sdk/cli";
@@ -64,14 +64,11 @@ export function resolveErdSites(
   }
 
   const issues: ErdSiteIssue[] = [];
+  const ownedNamespaces = extractOwnedNamespaces(config);
   const websiteNames = new Set((config.staticWebsites ?? []).map((website) => website.name));
   for (const [namespace, site] of Object.entries(parsed.data.sites)) {
-    const dbConfig = config.db?.[namespace];
-    if (!dbConfig || "external" in dbConfig) {
-      const available = Object.entries(config.db ?? {})
-        .filter(([, candidate]) => !("external" in candidate))
-        .map(([name]) => name)
-        .join(", ");
+    if (!ownedNamespaces.includes(namespace)) {
+      const available = ownedNamespaces.join(", ");
       issues.push({
         namespace,
         message:

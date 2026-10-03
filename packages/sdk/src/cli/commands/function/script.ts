@@ -126,6 +126,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
       explicit: args.namespace,
       sidecarNamespace: existingSidecarNamespace,
       remote: args.remote,
+      useProjectTypes: !useGeneratedDbTypes,
     });
     if (existingSidecarNamespace !== undefined && existingSidecarNamespace !== namespace) {
       throw CLIError({
@@ -257,6 +258,7 @@ interface ResolveNamespaceOptions {
   explicit: string | undefined;
   sidecarNamespace: string | undefined;
   remote: boolean;
+  useProjectTypes: boolean;
 }
 
 /**
@@ -265,18 +267,18 @@ interface ResolveNamespaceOptions {
  * @returns The namespace name
  */
 function resolveNamespace(options: ResolveNamespaceOptions): string {
-  const { config, explicit, sidecarNamespace, remote } = options;
+  const { config, explicit, sidecarNamespace, remote, useProjectTypes } = options;
   const allNamespaces = extractAllNamespaces(config);
-  const ownedNamespaces = Object.entries(normalizedDbOf(config))
-    .filter(([, entry]) => entry.schemaSource !== undefined)
+  const schemaNamespaces = Object.entries(normalizedDbOf(config))
+    .filter(([, entry]) => (useProjectTypes ? entry.schemaSource !== undefined : entry.owned))
     .map(([name]) => name);
-  const configured = remote ? allNamespaces : ownedNamespaces;
+  const configured = remote ? allNamespaces : schemaNamespaces;
 
   if (explicit) {
-    if (!remote && !ownedNamespaces.includes(explicit)) {
+    if (!remote && !schemaNamespaces.includes(explicit)) {
       throw CLIError({
         code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
-        message: `Namespace "${explicit}" is not owned by the config and requires --remote.`,
+        message: `Namespace "${explicit}" has no available local schema and requires --remote.`,
         command: "function script",
       });
     }
@@ -284,10 +286,10 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
   }
 
   if (sidecarNamespace !== undefined) {
-    if (!remote && !ownedNamespaces.includes(sidecarNamespace)) {
+    if (!remote && !schemaNamespaces.includes(sidecarNamespace)) {
       throw CLIError({
         code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
-        message: `Namespace "${sidecarNamespace}" is not owned by the config and requires --remote.`,
+        message: `Namespace "${sidecarNamespace}" has no available local schema and requires --remote.`,
         command: "function script",
       });
     }
@@ -308,7 +310,7 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
   if (!remote && allNamespaces.length > 0) {
     throw CLIError({
       code: "TAILORDB_NAMESPACE_NOT_CONFIGURED",
-      message: `No owned TailorDB namespace is defined in the config. External namespaces require --remote: ${allNamespaces.join(", ")}.`,
+      message: `No local TailorDB schema is available. These namespaces require --remote: ${allNamespaces.join(", ")}.`,
     });
   }
   throw CLIError({

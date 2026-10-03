@@ -35,6 +35,27 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
+  test("preserves db input options and exposes normalized namespace facts separately", async () => {
+    const configPath = writeConfig(`export default { name: "app", db: {
+      own: { files: [], gqlOperations: "query" },
+      shared: { subgraph: false, schemaFrom: "../owner/tailor.config.ts" },
+    } };`);
+    const { config } = await loadConfig(configPath);
+    expect(config.db?.own?.gqlOperations).toBe("query");
+    expect(config.normalizedDb?.shared).toEqual({
+      owned: false,
+      inSubgraph: false,
+      schemaSource: { kind: "config", path: "../owner/tailor.config.ts" },
+    });
+  });
+
+  test("rejects invalid db entries when loading a config file", async () => {
+    const configPath = writeConfig(
+      `export default { name: "app", db: { shared: { subgraph: false } } };`,
+    );
+    await expect(loadConfig(configPath)).rejects.toThrow(/db.shared/);
+  });
+
   test("preserves class plugin state when invoking generation hooks", async () => {
     const configPath = writeConfig(`
       export default { name: "test-app" };
