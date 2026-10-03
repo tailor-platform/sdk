@@ -93,6 +93,27 @@ const dbEntrySchema = z.union([
   z.strictObject({ external: z.literal(true) }),
 ]);
 
+const attachedServiceSchema = z.strictObject({ attach: z.literal(true) });
+const externalServiceSchema = z.strictObject({ external: z.literal(true) });
+const serviceReferenceSchema = z.union([attachedServiceSchema, externalServiceSchema]);
+const namedServiceReferenceSchema = z.union([
+  attachedServiceSchema.extend({ name: z.string().min(1) }),
+  externalServiceSchema.extend({ name: z.string().min(1) }),
+]);
+
+function serviceEntrySchema(named: boolean) {
+  return z.unknown().superRefine((value, ctx) => {
+    if (!value || typeof value !== "object" || !("attach" in value || "external" in value)) {
+      return;
+    }
+    const schema = named ? namedServiceReferenceSchema : serviceReferenceSchema;
+    const result = schema.safeParse(value);
+    if (!result.success) {
+      for (const issue of result.error.issues) ctx.addIssue({ ...issue });
+    }
+  });
+}
+
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
  * top-level fields with platform-side constraints (notably `id`); fields
@@ -117,9 +138,9 @@ export const AppConfigSchema = z
     buildOptions: buildOptionsSchema.optional(),
     metadata: metadataSchema.optional(),
     db: z.record(z.string(), dbEntrySchema).optional(),
-    resolver: z.unknown().optional(),
-    idp: z.unknown().optional(),
-    auth: z.unknown().optional(),
+    resolver: z.record(z.string(), serviceEntrySchema(false)).optional(),
+    idp: z.array(serviceEntrySchema(true)).optional(),
+    auth: serviceEntrySchema(true).optional(),
     executor: z.unknown().optional(),
     workflow: z.unknown().optional(),
     httpAdapter: z.unknown().optional(),

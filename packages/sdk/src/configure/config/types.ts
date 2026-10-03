@@ -81,6 +81,8 @@ export type ExecutorServiceInput = ExecutorServiceConfig;
 export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
 
 export type ResolverServiceConfig = {
+  external?: never;
+  attach?: never;
   /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
   files: string[];
   ignores?: string[];
@@ -95,9 +97,22 @@ export type ResolverServiceConfig = {
    */
   defaultPermission?: ResolverPermission;
 };
-export type ResolverExternalConfig = { external: true };
+type ResolverNonOwnedOptions = {
+  [Key in Exclude<keyof ResolverServiceConfig, "external" | "attach">]?: never;
+};
+
+export type ResolverExternalConfig = ResolverNonOwnedOptions & {
+  /** @deprecated since NEXT_RELEASE — use `attach: true` instead. codemod: v3/external-to-attach */
+  external: true;
+  attach?: never;
+};
+
+export type ResolverAttachedConfig = ResolverNonOwnedOptions & {
+  attach: true;
+  external?: never;
+};
 export type ResolverServiceInput = {
-  [namespace: string]: ResolverServiceConfig | ResolverExternalConfig;
+  [namespace: string]: ResolverServiceConfig | ResolverExternalConfig | ResolverAttachedConfig;
 };
 
 export type WorkflowServiceConfig = {

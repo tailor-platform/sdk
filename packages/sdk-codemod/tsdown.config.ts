@@ -68,6 +68,8 @@ export default defineConfig([
         "codemods/v3/relation-toward-table/scripts/transform.ts",
       "v3/define-config-build-options/scripts/transform":
         "codemods/v3/define-config-build-options/scripts/transform.ts",
+      "v3/external-to-attach/scripts/transform":
+        "codemods/v3/external-to-attach/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node22",

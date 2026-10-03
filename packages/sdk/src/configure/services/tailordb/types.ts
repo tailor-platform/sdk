@@ -332,6 +332,7 @@ export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "k
 type NonOwnedOptions = { [Key in keyof TailorDBServiceConfigInput]?: never };
 
 type TailorDBExternalConfig = NonOwnedOptions & {
+  /** @deprecated since NEXT_RELEASE — use `attach: true` instead. codemod: v3/external-to-attach */
   external: true;
   attach?: never;
   schemaFrom?: never;

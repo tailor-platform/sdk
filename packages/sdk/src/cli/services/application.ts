@@ -190,7 +190,8 @@ function defineResolver(
   }
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
-    if (!("external" in serviceConfig)) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+    if (serviceConfig.external !== true && serviceConfig.attach !== true) {
       const resolverService = createResolverService(namespace, serviceConfig, baseDir);
       resolverServices.push(resolverService);
     }
@@ -227,7 +228,8 @@ function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
       throw new Error(`IdP with name "${name}" already defined.`);
     }
     idpNames.add(name);
-    if (!("external" in idpConfig)) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+    if (idpConfig.external !== true && idpConfig.attach !== true) {
       const idp = IdPSchema.parse(stripIdpProviderHelper(idpConfig));
       idpServices.push(idp);
     }
@@ -254,7 +256,8 @@ function defineAuth(
   }
 
   let authService: AuthService | undefined;
-  if (!("external" in config)) {
+  // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+  if (config.external !== true && config.attach !== true) {
     authService = createAuthService(
       AuthConfigSchema.parse(config),
       tailorDBServices,

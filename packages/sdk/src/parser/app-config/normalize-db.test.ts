@@ -3,6 +3,7 @@ import { normalizeDb } from "./normalize-db";
 
 describe("normalizeDb", () => {
   test("keeps owned definitions and legacy external membership separate", () => {
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify legacy attachment compatibility until v3.
     expect(normalizeDb({ local: { files: ["tables/*.ts"] }, shared: { external: true } })).toEqual({
       local: {
         owned: true,
