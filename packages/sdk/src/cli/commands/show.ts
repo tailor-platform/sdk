@@ -80,15 +80,8 @@ async function fetchAIGateways(
 ): Promise<AIGatewayInfo[]> {
   const gateways = await Promise.all(
     names.map(async (name) => {
-      try {
-        const { aigateway } = await client.getAIGateway({ workspaceId, aigatewayName: name });
-        return aigateway ? { name: aigateway.name, url: aigateway.url } : undefined;
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return undefined;
-        }
-        throw error;
-      }
+      const resp = await getOrNull(() => client.getAIGateway({ workspaceId, aigatewayName: name }));
+      return resp?.aigateway ? { name: resp.aigateway.name, url: resp.aigateway.url } : undefined;
     }),
   );
   return gateways.filter((gateway): gateway is AIGatewayInfo => gateway !== undefined);
