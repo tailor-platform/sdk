@@ -6,6 +6,7 @@ import { JSON_FOOTER_MARKER } from "#/cli/crashreport/writer";
 import { userAgent } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import type { CrashReport } from "#/cli/crashreport/report";
 
 export const sendCommand = defineAppCommand({
@@ -39,6 +40,7 @@ export const sendCommand = defineAppCommand({
 
     if (success) {
       logger.success("Crash report submitted successfully. Thank you!");
+      printMutationResult({ changed: true, id: report.id, file: args.file });
     } else {
       logger.error("Failed to submit crash report. The server may be unavailable.");
       process.exit(1);

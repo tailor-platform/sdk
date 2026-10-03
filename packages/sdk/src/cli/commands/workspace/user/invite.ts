@@ -3,6 +3,7 @@ import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -40,6 +41,15 @@ async function loadOptions(options: InviteUserOptions) {
  * @returns Promise that resolves when invitation is sent
  */
 export async function inviteUser(options: InviteUserOptions): Promise<void> {
+  await inviteUserInWorkspace(options);
+}
+
+/**
+ * Invite a user to a workspace.
+ * @param options - Options identifying the user, role, and workspace
+ * @returns ID of the workspace the user was invited to
+ */
+async function inviteUserInWorkspace(options: InviteUserOptions): Promise<string> {
   const { client, workspaceId, email, role } = await loadOptions(options);
 
   await client.inviteWorkspacePlatformUser({
@@ -47,6 +57,7 @@ export async function inviteUser(options: InviteUserOptions): Promise<void> {
     email,
     role,
   });
+  return workspaceId;
 }
 
 export const inviteCommand = defineAppCommand({
@@ -64,7 +75,7 @@ export const inviteCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    await inviteUser({
+    const workspaceId = await inviteUserInWorkspace({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       email: args.email,
@@ -72,5 +83,6 @@ export const inviteCommand = defineAppCommand({
     });
 
     logger.success(`User "${args.email}" invited successfully with role "${args.role}".`);
+    printMutationResult({ changed: true, workspaceId, email: args.email, role: args.role });
   },
 });

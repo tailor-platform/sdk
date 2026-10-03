@@ -3,6 +3,7 @@ import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { createPatOperatorClient } from "./user";
 
@@ -25,5 +26,6 @@ export const deleteCommand = defineAppCommand({
     });
 
     logger.success(`Personal access token "${args.name}" deleted successfully.`);
+    printMutationResult({ changed: true, name: args.name });
   },
 });
