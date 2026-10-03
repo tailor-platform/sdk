@@ -6,25 +6,25 @@ describe("TailorDB configuration", () => {
   test.each([
     { files: [] },
     { external: true },
-    { subgraph: true },
-    { subgraph: true, schemaFrom: "../owner/tailor.config.ts" },
-    { subgraph: false, schemaFrom: "../owner/tailor.config.ts" },
+    { attach: true },
+    { attach: true, schemaFrom: "../owner/tailor.config.ts" },
+    { attach: false, schemaFrom: "../owner/tailor.config.ts" },
   ])("accepts %j", (entry) => {
     expect(AppConfigSchema.safeParse({ name: "app", db: { shared: entry } }).success).toBe(true);
   });
 
   test.each([
-    { files: [], subgraph: true },
+    { files: [], attach: true },
     { files: [], schemaFrom: "owner.ts" },
     { files: [], external: true },
-    { subgraph: false },
+    { attach: false },
     { schemaFrom: "owner.ts" },
-    { external: true, subgraph: true },
+    { external: true, attach: true },
     { external: true, schemaFrom: "owner.ts" },
-    { subgraph: true, ignores: [] },
-    { subgraph: true, migration: { directory: "migrations" } },
-    { subgraph: true, gqlOperations: {} },
-    { subgraph: false, schemaFrom: "" },
+    { attach: true, ignores: [] },
+    { attach: true, migration: { directory: "migrations" } },
+    { attach: true, gqlOperations: {} },
+    { attach: false, schemaFrom: "" },
     {},
     "invalid",
   ])("rejects %j", (entry) => {
@@ -34,9 +34,9 @@ describe("TailorDB configuration", () => {
   test("normalizes referenced definitions independently of subgraph membership", () => {
     expect(
       normalizeDb({
-        visible: { subgraph: true },
-        shared: { subgraph: true, schemaFrom: "owner.ts" },
-        sql: { subgraph: false, schemaFrom: "other.ts" },
+        visible: { attach: true },
+        shared: { attach: true, schemaFrom: "owner.ts" },
+        sql: { attach: false, schemaFrom: "other.ts" },
       }),
     ).toEqual({
       visible: { owned: false, inSubgraph: true, schemaSource: undefined },

@@ -333,13 +333,13 @@ type NonOwnedOptions = { [Key in keyof TailorDBServiceConfigInput]?: never };
 
 type TailorDBExternalConfig = NonOwnedOptions & {
   external: true;
-  subgraph?: never;
+  attach?: never;
   schemaFrom?: never;
 };
 
 type TailorDBOwnedConfig = TailorDBServiceConfigInput & {
   external?: never;
-  subgraph?: never;
+  attach?: never;
   schemaFrom?: never;
 };
 

@@ -15,7 +15,7 @@ test("generates from local referenced definitions without running the owner's ge
       `
 export default { name: "consumer", db: {
   local: { files: ["./tables.ts"] },
-  shared: { subgraph: false, schemaFrom: "../owner/tailor.config.ts" },
+  shared: { attach: false, schemaFrom: "../owner/tailor.config.ts" },
 } };
 export const plugins = [{
   id: "definitions", description: "Write loaded definitions",
@@ -43,7 +43,7 @@ export const user = db.table("User", { email: db.string() })
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 export default { name: "owner", db: {
   shared: { files: [] },
-  unrelated: { subgraph: false, schemaFrom: "does-not-exist.ts" },
+  unrelated: { attach: false, schemaFrom: "does-not-exist.ts" },
 } };
 export const plugins = [{
   id: "namespace-table", description: "Define shared User", importPath: "@example/namespace-table",

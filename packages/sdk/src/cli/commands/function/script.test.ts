@@ -296,13 +296,13 @@ describe("function script", () => {
   });
 
   test.each([true, false])(
-    "selects referenced definitions with kyselyTypePlugin (subgraph: %s)",
-    async (subgraph) => {
+    "selects referenced definitions with kyselyTypePlugin (attach: %s)",
+    async (attach) => {
       using tmp = tempCwd("sdk-function-script-");
       using _logger = silenceLogger("info", "success", "warn");
       mockConfig(fs.realpathSync(tmp.dir), {
         plugins: [kyselyPluginStub],
-        db: { own: { files: [] }, shared: { subgraph, schemaFrom: "owner.ts" } },
+        db: { own: { files: [] }, shared: { attach, schemaFrom: "owner.ts" } },
       });
       const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "shared"]);
       expect(result.success).toBe(true);
@@ -317,7 +317,7 @@ describe("function script", () => {
   test("requires remote schema for referenced definitions without kyselyTypePlugin", async () => {
     using tmp = tempCwd("sdk-function-script-");
     mockConfig(fs.realpathSync(tmp.dir), {
-      db: { shared: { subgraph: false, schemaFrom: "owner.ts" } },
+      db: { shared: { attach: false, schemaFrom: "owner.ts" } },
     });
     const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "shared"]);
     expect(result.success).toBe(false);

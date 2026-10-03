@@ -68,9 +68,9 @@ describe("resolveErdSites", () => {
   });
 
   test.each([
-    { subgraph: true },
-    { subgraph: true, schemaFrom: "owner.ts" },
-    { subgraph: false, schemaFrom: "owner.ts" },
+    { attach: true },
+    { attach: true, schemaFrom: "owner.ts" },
+    { attach: false, schemaFrom: "owner.ts" },
   ] as const)("rejects non-owned ERD site namespaces: %j", (entry) => {
     const loadedConfig: LoadedConfig = { ...config, db: { ...config.db, shared: entry } };
     const plugins = [tailordbErdPlugin({ sites: { shared: "main-erd" } })] as Plugin[];

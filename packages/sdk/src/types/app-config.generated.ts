@@ -5,11 +5,11 @@ export type LogLevelEnumInput = LogLevelEnum;
 
 export type TailorDBReferenceConfig =
   | {
-      subgraph: true;
+      attach: true;
       schemaFrom?: string | undefined;
     }
   | {
-      subgraph: false;
+      attach: false;
       schemaFrom: string;
     };
 export type TailorDBReferenceConfigInput = TailorDBReferenceConfig;
@@ -83,11 +83,11 @@ export type AppConfigParsedInput = {
                 | undefined;
             }
           | {
-              subgraph: true;
+              attach: true;
               schemaFrom?: string | undefined;
             }
           | {
-              subgraph: false;
+              attach: false;
               schemaFrom: string;
             }
           | {
@@ -174,11 +174,11 @@ export type AppConfigParsed = {
                 | undefined;
             }
           | {
-              subgraph: true;
+              attach: true;
               schemaFrom?: string | undefined;
             }
           | {
-              subgraph: false;
+              attach: false;
               schemaFrom: string;
             }
           | {

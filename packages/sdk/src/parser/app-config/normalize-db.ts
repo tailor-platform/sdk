@@ -18,7 +18,7 @@ export function normalizeDb(db: TailorDBServiceInput | undefined): NormalizedDb 
           }
         : {
             owned: false,
-            inSubgraph: entry.external === true || entry.subgraph === true,
+            inSubgraph: entry.external === true || entry.attach === true,
             schemaSource:
               entry.schemaFrom === undefined
                 ? undefined

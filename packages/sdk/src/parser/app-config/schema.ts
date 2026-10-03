@@ -83,8 +83,8 @@ const buildOptionsSchema = z.strictObject({
 const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;
 
 export const TailorDBReferenceConfigSchema = z.union([
-  z.strictObject({ subgraph: z.literal(true), schemaFrom: z.string().min(1).optional() }),
-  z.strictObject({ subgraph: z.literal(false), schemaFrom: z.string().min(1) }),
+  z.strictObject({ attach: z.literal(true), schemaFrom: z.string().min(1).optional() }),
+  z.strictObject({ attach: z.literal(false), schemaFrom: z.string().min(1) }),
 ]);
 
 const dbEntrySchema = z.union([

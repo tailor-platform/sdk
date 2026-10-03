@@ -461,9 +461,9 @@ describe("TailorDB namespace membership", () => {
         db: {
           own: { files: [] },
           legacy: { external: true },
-          visible: { subgraph: true },
-          shared: { subgraph: true, schemaFrom: "owner.ts" },
-          sql: { subgraph: false, schemaFrom: "owner.ts" },
+          visible: { attach: true },
+          shared: { attach: true, schemaFrom: "owner.ts" },
+          sql: { attach: false, schemaFrom: "owner.ts" },
         },
       },
     });
