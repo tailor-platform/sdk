@@ -196,7 +196,7 @@ async function resolveNamespaceForNamespacePlugin(
 
   for (const namespace of Object.keys(config.db)) {
     const dbConfig = config.db[namespace] as DbNamespaceConfig;
-    if (dbConfig.external) continue;
+    if (!dbConfig.files) continue;
 
     const output = await plugin.onNamespaceLoaded({
       pluginConfig,
@@ -380,7 +380,7 @@ async function getGeneratedTableForNamespacePlugin(
   if (config.db) {
     for (const namespace of Object.keys(config.db)) {
       const dbConfig = config.db[namespace] as DbNamespaceConfig;
-      if (dbConfig.external) continue;
+      if (!dbConfig.files) continue;
 
       const cacheKey = getCacheKey(`namespace:ns=${namespace}`, pluginConfig);
       const cached = pluginCache.get(cacheKey);

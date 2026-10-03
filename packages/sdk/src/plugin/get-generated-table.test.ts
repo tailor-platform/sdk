@@ -198,6 +198,41 @@ describe("getGeneratedTable", () => {
   });
 
   describe("namespace plugin", () => {
+    test.each([
+      { attach: true },
+      { attach: false, schemaFrom: "./owner.config.mjs" },
+      { external: true },
+    ])("resolves only owned namespaces, including cached results: %j", async (reference) => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{
+  id: "ns-plugin", description: "test", importPath: "@test/ns-plugin",
+  onNamespaceLoaded({ namespace }) {
+    globalThis.__testProcessNamespaceCalls.push(namespace);
+    return { tables: { auditLog: { name: namespace + "AuditLog", fields: {} } } };
+  },
+}];
+export default { db: { shared: ${JSON.stringify(reference)}, main: { files: [] } } };
+`,
+      );
+      globalThis.__testProcessNamespaceCalls = [];
+      const table = await getGeneratedTable(configPath, "ns-plugin", null, "auditLog");
+      expect(table.name).toBe("mainAuditLog");
+      expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
+
+      const ownerPath = path.join(path.dirname(configPath), "owner.config.mjs");
+      fs.writeFileSync(
+        ownerPath,
+        `export { plugins } from "./tailor.config.mjs";
+export default { db: { shared: { files: [] } } };
+`,
+      );
+      const ownerTable = await getGeneratedTable(ownerPath, "ns-plugin", null, "auditLog");
+      expect(ownerTable.name).toBe("sharedAuditLog");
+      expect(await getGeneratedTable(configPath, "ns-plugin", null, "auditLog")).toBe(table);
+      expect(globalThis.__testProcessNamespaceCalls).toEqual(["main", "shared"]);
+    });
+
     test("onNamespaceLoaded is called only once per namespace during resolution", async () => {
       fs.writeFileSync(
         configPath,
