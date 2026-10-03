@@ -9,7 +9,6 @@ export const entry = [
   "src/plugin/builtin/enum-constants/index.ts",
   "src/plugin/builtin/file-utils/index.ts",
   "src/plugin/builtin/seed/index.ts",
-  "src/plugin/builtin/frontend/index.ts",
   "src/seed/index.ts",
   "src/vitest/index.ts",
   "src/vitest/environment.ts",

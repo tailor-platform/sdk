@@ -3,14 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { frontendPlugin } from "./index";
-import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
+import type { FrontendDefinition } from "./types";
 import type {
   DeployedContext,
   PluginExecOptions,
   PluginExecResult,
   PublishStaticWebsiteResult,
-} from "#/plugin/types";
-import type { FrontendDefinition } from "./types";
+  StaticWebsiteConfig,
+} from "@tailor-platform/sdk";
 
 let root: string;
 aroundEach(async (runTest) => {
@@ -49,25 +49,26 @@ function context(frontends: FrontendDefinition[]) {
   const exec = vi.fn<(command: string, options: PluginExecOptions) => Promise<PluginExecResult>>(
     async () => ({ stdout: "", stderr: "" }),
   );
+  const logger = { info: vi.fn(), warn: vi.fn(), success: vi.fn() };
   const ctx: DeployedContext<FrontendDefinition[]> = {
     workspaceId: "ws",
     application,
     applications: [application, otherApplication],
     configPath: application.configPath,
     pluginConfig: frontends,
-    logger: { info: vi.fn(), warn: vi.fn(), success: vi.fn() },
+    logger,
     exec,
   };
-  return { ctx, publish, exec };
+  return { ctx, publish, exec, logger };
 }
 function setup(frontends: [FrontendDefinition, ...FrontendDefinition[]]) {
   const plugin = frontendPlugin(...frontends);
-  const { ctx, publish, exec } = context(frontends);
+  const { ctx, publish, exec, logger } = context(frontends);
   const run = async () => {
     if (!plugin.onDeployed) throw new Error("onDeployed hook missing");
     return plugin.onDeployed(ctx);
   };
-  return { ctx, publish, exec, run };
+  return { ctx, publish, exec, logger, run };
 }
 describe("frontendPlugin", () => {
   test("accepts only static website definitions or names as site", () => {
@@ -154,25 +155,23 @@ describe("frontendPlugin", () => {
     expect(publish).not.toHaveBeenCalled();
   });
   test("uploads existing assets without requiring a build command", async () => {
-    const { ctx, publish, exec, run } = setup([{ site: "web", distDir: "dist" }]);
+    const { logger, publish, exec, run } = setup([{ site: "web", distDir: "dist" }]);
     expect(await run()).toEqual({
       outputs: { frontends: [{ site: "web", url: "https://published", skippedFiles: [] }] },
     });
     expect(publish).toHaveBeenCalledExactlyOnceWith("web", join(root, "apps/backend/dist"));
     expect(exec).not.toHaveBeenCalled();
-    expect(ctx.logger.info).not.toHaveBeenCalled();
-    expect(ctx.logger.success).toHaveBeenCalledWith(
-      'Frontend deployed to "web": https://published',
-    );
+    expect(logger.info).not.toHaveBeenCalled();
+    expect(logger.success).toHaveBeenCalledWith('Frontend deployed to "web": https://published');
   });
   test("warns about files that were skipped during upload", async () => {
-    const { ctx, publish, run } = setup([{ site: "web", distDir: root }]);
+    const { logger, publish, run } = setup([{ site: "web", distDir: root }]);
     publish.mockResolvedValue({
       url: "https://published",
       skippedFiles: ["bad.bin"],
     });
     await run();
-    expect(ctx.logger.warn).toHaveBeenCalledExactlyOnceWith(
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
       expect.stringMatching(/some files failed to upload.*\n {2}- bad\.bin$/s),
     );
   });

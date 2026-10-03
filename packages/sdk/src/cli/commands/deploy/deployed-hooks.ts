@@ -13,11 +13,15 @@ import type { DeployedApplication, DeployedOAuth2Client, Plugin } from "#/plugin
 import type { JsonValue } from "#/types/helpers";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
-interface RunDeployedHooksParams {
+interface LoadDeployedApplicationsParams {
   client: OperatorClient;
   workspaceId: string;
   targets: readonly BuiltDeploymentTarget[];
 }
+interface RunDeployedHooksParams extends LoadDeployedApplicationsParams {
+  applications?: readonly DeployedApplication[];
+}
+
 interface DeployedHookOutput {
   application: string;
   pluginId: string;
@@ -135,6 +139,22 @@ async function loadDeployedTarget(
   };
 }
 
+/**
+ * Load deployed URLs and public OAuth client IDs for each application in config order.
+ * @param params - Deployed targets and workspace client
+ * @returns Deployed application information without publish methods or client secrets
+ */
+export async function loadDeployedApplications(
+  params: LoadDeployedApplicationsParams,
+): Promise<DeployedApplication[]> {
+  const { client, workspaceId, targets } = params;
+  const loadOAuth2Clients = oauth2ClientLoader(client, workspaceId);
+  const loaded = await Promise.all(
+    targets.map((target) => loadDeployedTarget(client, workspaceId, target, loadOAuth2Clients)),
+  );
+  return loaded.map(({ application }) => application);
+}
+
 function ignoreMissingPath(error: unknown): undefined {
   const code = error instanceof Error && "code" in error ? error.code : undefined;
   if (code === "ENOENT" || code === "ENOTDIR") return undefined;
@@ -240,17 +260,15 @@ export async function runDeployedHooks(
   );
   if (hooks.length === 0) return [];
 
-  const loadOAuth2Clients = oauth2ClientLoader(client, workspaceId);
-  const loaded = await Promise.all(
-    targets.map((target) => loadDeployedTarget(client, workspaceId, target, loadOAuth2Clients)),
-  ).catch((error: unknown) => {
-    throw deployedHookFailure(
-      "loading the deployed information for onDeployed hooks failed",
-      error,
-      hooks.map(hookLabel),
-    );
-  });
-  const applications = loaded.map(({ application }) => application);
+  const applications =
+    params.applications ??
+    (await loadDeployedApplications(params).catch((error: unknown) => {
+      throw deployedHookFailure(
+        "loading the deployed information for onDeployed hooks failed",
+        error,
+        hooks.map(hookLabel),
+      );
+    }));
   const publishable = (application: DeployedApplication) => ({
     ...application,
     staticWebsites: byName(

@@ -41,7 +41,7 @@ import {
   type MissingDependentApp,
 } from "./confirm";
 import { fetchMissingDependentApps } from "./dependency-records";
-import { runDeployedHooks } from "./deployed-hooks";
+import { loadDeployedApplications, runDeployedHooks } from "./deployed-hooks";
 import {
   buildDeploymentTargets,
   loadDeployConfigs,
@@ -1054,15 +1054,33 @@ async function deployInternal(
       await applyRemainingResources(client, workspaceId, deployments);
     }
 
+    const applications =
+      logger.jsonMode && !internalContext?.suppressResultOutput
+        ? await loadDeployedApplications({ client, workspaceId, targets }).catch(
+            (error: unknown) => {
+              throw CLIError({
+                code: "DEPLOY_RESULT_LOAD_FAILED",
+                message:
+                  "Platform resources were applied successfully, but loading the deployed application information failed.",
+                details: error instanceof Error ? error.message : String(error),
+                suggestion:
+                  "Fix the error and run tailor deploy again. Unchanged resources are not re-applied.",
+                cause: error,
+              });
+            },
+          )
+        : undefined;
     const deployedHooks = internalContext?.skipDeployedHooks
       ? []
-      : await runDeployedHooks({ client, workspaceId, targets });
+      : await runDeployedHooks({ client, workspaceId, targets, applications });
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {
         logger.out({
           summary: assertDefined(planSummary, "planSummary was never printed before this point"),
           status: "applied",
+          workspaceId,
+          applications,
           ...(deployedHooks.length ? { deployedHooks } : {}),
         });
       } else {

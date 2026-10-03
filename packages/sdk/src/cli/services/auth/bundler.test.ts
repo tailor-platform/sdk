@@ -63,7 +63,7 @@ export default {
   test("bundles a before-login hook from a config that registers frontendPlugin", async () => {
     const frontendModule = path.resolve(
       import.meta.dirname,
-      "../../../plugin/builtin/frontend/index.ts",
+      "../../../../../sdk-plugin-frontend/src/index.ts",
     );
     const configFile = writeConfig(`
 import { frontendPlugin } from ${JSON.stringify(frontendModule)};

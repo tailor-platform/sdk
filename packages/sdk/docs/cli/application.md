@@ -74,6 +74,28 @@ tailor deploy [options]
 | `--clean-cache`                         | -     | Clean the bundle cache before building                                               | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+**JSON result:**
+
+After a successful `tailor deploy --json`, stdout includes `status: "applied"`,
+`summary`, `workspaceId`, and `applications` in config order. Each application
+includes its `name`, `configPath`, endpoint `url`, `domain`, `aiGateways`, and
+`staticWebsites` keyed by site name. If Auth is configured, `auth` includes its
+`namespace` and `oauth2Clients` with each client's `name` and public `clientId`.
+Client secrets are excluded. These fields are returned even when no deploy plugin
+is registered or no resources changed.
+
+Plugins that return outputs add entries under `deployedHooks`. For example, the
+frontend plugin provides upload results in `deployedHooks[].outputs.frontends`.
+
+```sh
+tailor deploy --json > deploy-result.json
+jq '.applications[] | {name, url, staticWebsites, auth}' deploy-result.json
+```
+
+Dry-run and build-only deployments do not return deployed application information.
+If resources were applied but loading the JSON result fails, the command reports
+`DEPLOY_RESULT_LOAD_FAILED`; fix the error and run `tailor deploy` again.
+
 **Workspace Selection:**
 
 After validating the configuration file, `deploy` resolves a workspace before bundling the
