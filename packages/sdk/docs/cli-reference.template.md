@@ -26,9 +26,10 @@ human-readable text or empty stdout.
 
 Many commands that change state print a JSON object describing the outcome. Its `changed` field
 reports whether the command changed anything: it is `false` when the command finished without a
-change, for example because the requested state was already in place. The other fields identify what
-the command acted on and report details of the outcome. Other state-changing commands print a result
-without `changed`, or do not report a result yet and leave stdout empty even when `--json` is passed.
+change, for example because the requested state was already in place. A command that cannot tell
+whether anything changed reports `true`. The other fields identify what the command acted on and
+report details of the outcome. Other state-changing commands print a result without `changed`, or do
+not report a result yet and leave stdout empty even when `--json` is passed.
 
 Set `TAILOR_JSON_OUTPUT=true` (or `1`) to default every command to JSON without passing `--json`
 each time. This is intended for agents, scripts, and CI steps that parse CLI output. An explicit

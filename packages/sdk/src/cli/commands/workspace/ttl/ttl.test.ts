@@ -126,21 +126,30 @@ describe("workspace ttl", () => {
       expect(decodeExpiresAt(written.labels[expiresAtLabelKey])).toBeDefined();
     });
 
-    test("prints the workspace and its new expiry under JSON output", async () => {
-      const client = stubClient();
-      using _json = jsonMode();
-      using _logger = silenceLogger("success");
-      using stdout = captureStdout();
+    test("prints the workspace and the expiry it records under JSON output", async () => {
+      vi.useFakeTimers({ now: Date.parse("2026-10-04T00:00:00.750Z"), toFake: ["Date"] });
+      try {
+        const client = stubClient();
+        using _json = jsonMode();
+        using _logger = silenceLogger("success");
+        using stdout = captureStdout();
 
-      await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "1h"]);
+        await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "1h"]);
 
-      const written = client.setMetadata.mock.calls[0]?.[0] as { labels: Record<string, string> };
-      const recorded = decodeExpiresAt(written.labels[expiresAtLabelKey]);
-      const printed = JSON.parse(stdout.output);
-      expect(printed).toEqual({ changed: true, workspaceId, expiresAt: expect.any(String) });
-      expect(Math.abs(Date.parse(printed.expiresAt) - (recorded?.getTime() ?? 0))).toBeLessThan(
-        1000,
-      );
+        const written = client.setMetadata.mock.calls[0]?.[0] as {
+          labels: Record<string, string>;
+        };
+        expect(decodeExpiresAt(written.labels[expiresAtLabelKey])?.toISOString()).toBe(
+          "2026-10-04T01:00:00.000Z",
+        );
+        expect(JSON.parse(stdout.output)).toEqual({
+          changed: true,
+          workspaceId,
+          expiresAt: "2026-10-04T01:00:00.000Z",
+        });
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     test("reports no change under JSON output when the workspace already records that expiry", async () => {
@@ -160,7 +169,7 @@ describe("workspace ttl", () => {
         expect(JSON.parse(stdout.output)).toEqual({
           changed: false,
           workspaceId,
-          expiresAt: expect.any(String),
+          expiresAt: "2026-10-04T01:00:00.000Z",
         });
       } finally {
         vi.useRealTimers();
