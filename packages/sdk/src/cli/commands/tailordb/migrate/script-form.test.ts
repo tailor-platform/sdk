@@ -18,6 +18,15 @@ describe("analyzeMigrationScriptSource", () => {
     expect(analyze('export * from "./impl";')).toEqual({ kind: "main" });
   });
 
+  test("rejects steps next to a re-export that may also export main", () => {
+    expect(() =>
+      analyze(ml`
+        export * from "./legacy";
+        export const steps = { backfill: { run: async (trx) => {} } };
+      `),
+    ).toThrow("cannot tell whether `export *` also exports `main`");
+  });
+
   test("reads steps and their dependencies in declaration order", () => {
     const form = analyze(ml`
       import type { MigrationSteps } from "./db";

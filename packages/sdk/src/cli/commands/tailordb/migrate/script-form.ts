@@ -190,6 +190,12 @@ export function analyzeMigrationScriptSource(
   if (exports.hasMain && exportsSteps) {
     throw invalidScript(filePath, "it exports both `main` and `steps`; keep one.");
   }
+  if (exportsSteps && exports.hasUnreadableExports) {
+    throw invalidScript(
+      filePath,
+      "it exports `steps`, but the deploy cannot tell whether `export *` also exports `main`; export only `steps`.",
+    );
+  }
   if (exports.hasMain || (!exportsSteps && exports.hasUnreadableExports)) return { kind: "main" };
   if (!exportsSteps) {
     throw invalidScript(filePath, "it must export either `main` or `steps`.");
