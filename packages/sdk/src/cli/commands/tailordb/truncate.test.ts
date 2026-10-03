@@ -15,9 +15,9 @@ vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn().mockResolvedValue({
     truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
     truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
-    listTailorDBTypes: vi.fn().mockResolvedValue({
-      tailordbTypes: [{ name: "User" }, { name: "Order" }],
-    }),
+    listTailorDBTypes: vi.fn().mockImplementation(async ({ namespaceName }) => ({
+      tailordbTypes: namespaceName === "tailordb" ? [{ name: "User" }, { name: "Order" }] : [],
+    })),
   }),
 }));
 
@@ -125,7 +125,10 @@ describe("truncate command", () => {
         config: {
           db: {
             owned: { files: ["./owned/*.ts"] },
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
+            visible: { attach: true },
+            shared: { attach: true, schemaFrom: "owner.ts" },
+            sql: { attach: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -146,7 +149,10 @@ describe("truncate command", () => {
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
+            visible: { attach: true },
+            shared: { attach: true, schemaFrom: "owner.ts" },
+            sql: { attach: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -184,7 +190,10 @@ describe("truncate command", () => {
         config: {
           db: {
             owned: { files: ["./owned/*.ts"] },
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
+            visible: { attach: true },
+            shared: { attach: true, schemaFrom: "owner.ts" },
+            sql: { attach: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);

@@ -193,7 +193,7 @@ describe("deployed hooks", () => {
     const hook = vi.fn();
     const external = target([plugin(hook)]);
     Object.assign(external.application, { authService: undefined });
-    Object.assign(external.config, { auth: { name: "shared-auth", external: true } });
+    Object.assign(external.config, { auth: { name: "shared-auth", attach: true } });
     await runDeployedHooks({ client, workspaceId: "ws", targets: [external] });
     expect(methods.listAuthOAuth2Clients).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "shared-auth" }),

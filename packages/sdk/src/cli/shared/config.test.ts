@@ -31,11 +31,20 @@ describe("extractAllNamespaces", () => {
     const config = createConfig({
       db: {
         owned: { files: ["./owned/*.ts"] },
-        "shared-db": { external: true },
+        "shared-db": { attach: true },
+        visible: { attach: true },
+        shared: { attach: true, schemaFrom: "owner.ts" },
+        sql: { attach: false, schemaFrom: "owner.ts" },
       },
     });
 
-    expect(extractAllNamespaces(config)).toEqual(["owned", "shared-db"]);
+    expect(extractAllNamespaces(config)).toEqual([
+      "owned",
+      "shared-db",
+      "visible",
+      "shared",
+      "sql",
+    ]);
   });
 });
 
@@ -60,7 +69,10 @@ describe("extractOwnedNamespaces", () => {
     const config = createConfig({
       db: {
         owned: { files: ["./owned/*.ts"] },
-        "shared-db": { external: true },
+        "shared-db": { attach: true },
+        visible: { attach: true },
+        shared: { attach: true, schemaFrom: "owner.ts" },
+        sql: { attach: false, schemaFrom: "owner.ts" },
       },
     });
 

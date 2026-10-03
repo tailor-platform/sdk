@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { normalizeDb } from "#/parser/app-config/normalize-db";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
@@ -8,8 +9,10 @@ import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
-import type { AppConfig, EnvValue } from "#/configure/config/types";
+import type { EnvValue } from "#/configure/config/types";
+import type { NormalizedAppConfig } from "#/parser/app-config/types";
 import type { Plugin } from "#/plugin/types";
+import type { NormalizedDb } from "#/types/app-config.generated";
 
 /**
  * App config whose `env` entries have been resolved to the values that get
@@ -17,12 +20,12 @@ import type { Plugin } from "#/plugin/types";
  * is unwrapped during loading, so nothing downstream can deploy a wrapper
  * object or the reason string alongside the value.
  */
-export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
+export type ResolvedEnvAppConfig = Omit<NormalizedAppConfig, "env"> & {
   env?: Record<string, EnvValue>;
 };
 
 /** Loaded configuration with resolved path. */
-export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
+export type LoadedConfig = ResolvedEnvAppConfig & { path: string; normalizedDb?: NormalizedDb };
 
 export interface LoadConfigOptions {
   /** Import cache-busting value for callers that reload the config module after a rebuild. */
@@ -86,7 +89,7 @@ export async function loadConfig(
     );
   }
 
-  const appConfig = configModule.default as AppConfig;
+  const appConfig = validated.data as NormalizedAppConfig;
   try {
     await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
   } catch (error) {
@@ -140,6 +143,7 @@ export async function loadConfig(
       ...appConfig,
       ...(env ? { env } : {}),
       path: resolvedPath,
+      normalizedDb: normalizeDb(appConfig.db),
     } as LoadedConfig,
     plugins: allPlugins,
   };

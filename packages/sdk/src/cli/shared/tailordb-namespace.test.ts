@@ -23,26 +23,32 @@ describe("resolveTableNamespaces", () => {
     expect(result.get("Event")).toBe("analytics");
   });
 
-  test("continues when one namespace call fails", async () => {
+  test("propagates namespace lookup failures", async () => {
+    const failure = new Error("failed");
     const client = {
       listTailorDBTypes: vi
         .fn()
-        .mockRejectedValueOnce(new Error("failed"))
+        .mockRejectedValueOnce(failure)
         .mockResolvedValueOnce(namesResult("User")),
     };
 
-    const result = await resolveTableNamespaces({
-      workspaceId: "workspace-id",
-      namespaces: ["main", "analytics"],
-      tableNames: ["User"],
-      client,
-    });
-
-    expect(result.get("User")).toBe("analytics");
+    await expect(
+      resolveTableNamespaces({
+        workspaceId: "workspace-id",
+        namespaces: ["main", "analytics"],
+        tableNames: ["User"],
+        client,
+      }),
+    ).rejects.toBe(failure);
   });
 
-  test("stops querying when all tables are resolved", async () => {
-    const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("User")) };
+  test("checks remaining namespaces after finding the requested table", async () => {
+    const client = {
+      listTailorDBTypes: vi
+        .fn()
+        .mockResolvedValueOnce(namesResult("User"))
+        .mockResolvedValueOnce(namesResult("Event")),
+    };
 
     await resolveTableNamespaces({
       workspaceId: "workspace-id",
@@ -51,7 +57,28 @@ describe("resolveTableNamespaces", () => {
       client,
     });
 
-    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
+    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects ambiguous table names case-insensitively", async () => {
+    const client = {
+      listTailorDBTypes: vi
+        .fn()
+        .mockResolvedValueOnce(namesResult("User"))
+        .mockResolvedValueOnce(namesResult("user")),
+    };
+
+    await expect(
+      resolveTableNamespaces({
+        workspaceId: "workspace-id",
+        namespaces: ["main", "shared"],
+        tableNames: ["user"],
+        client,
+      }),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS",
+      context: { table: "user", namespaces: ["main", "shared"] },
+    });
   });
 
   test("matches requested type names case-insensitively", async () => {

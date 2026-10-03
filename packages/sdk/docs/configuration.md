@@ -148,32 +148,60 @@ export default defineConfig({
 
 ### External Resources
 
-You can reference resources managed by Terraform or other SDK projects to include them in your application's subgraph. External resources are not deployed by this project but can be used for shared access across multiple applications.
+Use `attach: true` to connect services owned by another application or managed by Terraform to your application. Attached services participate in your application's GraphQL API without being deployed by this project.
 
 ```typescript
 export default defineConfig({
   name: "my-app",
   db: {
-    "shared-db": { external: true },
+    "shared-db": { attach: true },
   },
   resolver: {
-    "my-resolver": { external: true },
+    "my-resolver": { attach: true },
   },
-  auth: { name: "shared-auth", external: true },
-  idp: [{ name: "shared-idp", external: true }],
+  auth: { name: "shared-auth", attach: true },
+  idp: [{ name: "shared-idp", attach: true }],
 });
 ```
 
-**external**: Set to `true` to reference an external resource. The resource must already exist and be managed by another project (e.g., Terraform or another SDK application).
+`external: true` is deprecated in favor of `attach: true`. It remains supported until v3; the v3 upgrade codemod migrates these settings.
 
-When using external resources:
+When attaching existing services:
 
 - The resource itself is not deployed by this project
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
-- TailorDB table names must remain unique across local and external TailorDB namespaces; `deploy` checks external TailorDB table names before applying changes
+- TailorDB table names must remain unique across owned and attached TailorDB namespaces; `deploy` checks attached TailorDB table names before applying changes
 - Destructive operations like `tailordb truncate` (and `tailor seed apply --truncate`) automatically exclude external resources to prevent accidental data loss in shared resources
 - Subscribing an executor to an external resource's events requires the config that owns the resource in the same `deploy`. Publishing is then enabled automatically, and `deploy` records the dependency so a later deploy without that config asks for confirmation instead of silently turning publishing off
+
+An attached TailorDB namespace also participates in application cloning, and the platform prevents deleting the namespace while it remains attached. Its tables are available for auth user-profile and executor record-trigger resolution.
+
+### TailorDB Definitions from Another Application
+
+Use `schemaFrom` when an application needs generated artifacts for a TailorDB namespace owned by another application in the same repository. Point it at the owning `tailor.config.ts`:
+
+```typescript
+export default defineConfig({
+  name: "reporting",
+  db: {
+    billing: {
+      attach: false,
+      schemaFrom: "../billing/tailor.config.ts",
+    },
+  },
+});
+```
+
+The path is relative to the config declaring `schemaFrom`. The target must define the same namespace name with `files`; a target that only attaches or references that namespace is rejected. References are not followed through another `schemaFrom`.
+
+`tailor generate` reads those local definitions, including tables produced by the owning namespace's plugins, and supplies them to generation plugins. The owning application's generation hooks do not run. Generation requires no login or connection to a workspace.
+
+Choose `attach: false` for definitions without attaching the namespace to the application. It does not add GraphQL access, clone its data, prevent its deletion, or include its tables in auth user-profile and executor record-trigger resolution. Choose `attach: true` with the same `schemaFrom` to both attach the namespace and read its definitions. Owned entries keep using `files` and cannot also set `attach` or `schemaFrom`.
+
+With `kyselyTypePlugin`, referenced definitions are included in the generated `getDB("billing")` types and, when configured, the `pgliteSchemaPath` module. Other generation plugins decide how to use referenced definitions. Seed, file-utils, and enum-constants continue to process only owned tables.
+
+SQL access to a namespace in the workspace does not require a `db` declaration. `schemaFrom` provides local definitions for generation; it does not grant access. Table names may overlap between owned namespaces and references with `attach: false`: `getDB("billing")` keeps its namespace-specific types, while `Table<"User">` becomes a union and `Insertable`, `Selectable`, and `Updateable` expose only shared columns. Attached namespaces still require unique table names across the application's GraphQL API.
 
 ### Built-in IdP
 
