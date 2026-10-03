@@ -18,6 +18,7 @@
     "codemod:docs:check": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --check",
     "codemod:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-boundaries.ts",
     "deprecations:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-deprecations.ts",
+    "setup:template-version:resolve-pending": "TEMPLATE_VERSION_RELEASE=1 pnpm --filter @tailor-platform/sdk-plugin-setup exec vitest run src/template-fingerprint.test.ts",
     "check": "pnpm run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
     "check:codemod-docs": "pnpm run codemod:docs:check",
@@ -57,8 +58,8 @@
     "knip": "6.38.0",
     "lefthook": "2.1.14",
     "madge": "8.0.0",
-    "oxfmt": "0.70.0",
-    "oxlint": "1.85.0",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
     "pkg-pr-new": "0.0.88",
     "publint": "0.3.24",
     "tsx": "4.23.15",
@@ -67,5 +68,5 @@
   "engines": {
     "node": ">= 22.18.0"
   },
-  "packageManager": "pnpm@12.7.0"
+  "packageManager": "pnpm@12.8.1"
 }

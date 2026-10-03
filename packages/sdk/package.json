@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "2.23.0",
+  "version": "2.24.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -71,6 +71,11 @@
       "types": "./dist/plugin/builtin/file-utils/index.d.mts",
       "import": "./dist/plugin/builtin/file-utils/index.mjs",
       "default": "./dist/plugin/builtin/file-utils/index.mjs"
+    },
+    "./plugin/frontend": {
+      "types": "./dist/plugin/builtin/frontend/index.d.mts",
+      "import": "./dist/plugin/builtin/frontend/index.mjs",
+      "default": "./dist/plugin/builtin/frontend/index.mjs"
     },
     "./plugin/seed": {
       "types": "./dist/plugin/builtin/seed/index.d.mts",
@@ -188,7 +193,7 @@
     "@opentelemetry/resources": "2.11.0",
     "@opentelemetry/sdk-trace-node": "2.11.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
-    "@oxc-project/types": "0.151.0",
+    "@oxc-project/types": "0.152.0",
     "@politty/zod": "0.3.0",
     "@secretlint/core": "13.0.6",
     "@secretlint/secretlint-rule-preset-recommend": "13.0.6",
@@ -237,8 +242,8 @@
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "5.0.1",
     "eslint-plugin-zod": "4.14.2",
-    "oxfmt": "0.70.0",
-    "oxlint": "1.85.0",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
     "oxlint-tsgolint": "7.0.2003",
     "sonda": "0.14.0",
     "tsdown": "0.23.0",

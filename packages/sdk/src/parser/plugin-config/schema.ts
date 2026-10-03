@@ -18,6 +18,7 @@ export const PluginConfigSchema = z
     onTailorDBReady: functionSchema.optional(),
     onResolverReady: functionSchema.optional(),
     onExecutorReady: functionSchema.optional(),
+    onDeployed: functionSchema.optional(),
   })
   .refine(
     (p) => {

@@ -19,6 +19,7 @@ import {
   resolveLockedAppIds,
 } from "./app-id-lock";
 import { ensureConfigIdForDeploy, warnMissingAppId } from "./config-id-injector";
+import type { Plugin } from "#/plugin/types";
 
 type LoadedDeployConfig = Awaited<ReturnType<typeof loadConfig>>;
 
@@ -56,6 +57,7 @@ type BuildDeploymentTargetParams = {
 };
 
 export type BuiltDeploymentTarget = {
+  plugins: readonly Plugin[];
   config: Awaited<ReturnType<typeof loadConfig>>["config"];
   application: Application;
   workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
@@ -171,6 +173,7 @@ async function buildDeploymentTarget(
   }
 
   return {
+    plugins,
     config,
     application,
     workflowBuildResult,

@@ -1,5 +1,46 @@
 # @tailor-platform/sdk
 
+## 2.24.0
+
+### Minor Changes
+
+- [#2459](https://github.com/tailor-platform/sdk/pull/2459) [`72e295b`](https://github.com/tailor-platform/sdk/commit/72e295b422d243fef6e39f73590c34f2f10b68f5) Thanks [@toiroakr](https://github.com/toiroakr)! - When a resolver, executor, or workflow job fails to build with `FORBIDDEN_RUNTIME_GLOBAL` because it references a Node-only global such as `process` or `Buffer`, the error now names where the reference is: the file in your own code, or the installed package (code under `node_modules`). A reference from an installed package can be allowed with the new `buildOptions.allowedRuntimeGlobals` option of `defineConfig()`, keyed by package name, with the globals to allow or `true` for all of them — for example `buildOptions: { allowedRuntimeGlobals: { "@ai-sdk/gateway": ["Buffer"] } }` — once you have confirmed that the package's code referencing it never runs for your use. The error's suggestion shows the entry to add. `buildOptions.allowedRuntimeGlobals` has no effect on your own code.
+
+- [#2463](https://github.com/tailor-platform/sdk/pull/2463) [`f708521`](https://github.com/tailor-platform/sdk/commit/f708521ecc5c6e77fa5731d5256bbd483b49dc66) Thanks [@toiroakr](https://github.com/toiroakr)! - `defineConfig()` accepts `buildOptions`, which groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `inlineSourcemap`, `logLevel`, and `allowedRuntimeGlobals`. The top-level `inlineSourcemap` and `logLevel` still work but are deprecated and will be removed in v3; `tailor upgrade` moves them into `buildOptions` with the `v3/define-config-build-options` codemod. Setting the same option both at the top level and in `buildOptions` fails config validation instead of silently using one of them.
+  
+  ```ts
+  export default defineConfig({
+    name: "my-app",
+    buildOptions: {
+      inlineSourcemap: false,
+      logLevel: "WARN",
+    },
+  });
+  ```
+
+### Patch Changes
+
+- [#2475](https://github.com/tailor-platform/sdk/pull/2475) [`10ab737`](https://github.com/tailor-platform/sdk/commit/10ab73789d9865ec2e2fb6658e76b15841219834) Thanks [@toiroakr](https://github.com/toiroakr)! - Generated deploy jobs now expose the deployed workspace as job outputs, so a job of your own can use `needs:` to run tests or deploy extra assets against it:
+  
+  - `tailor setup ci preview`: the `tailor-preview-deploy` job exposes `workspace-id`, `workspace-name`, and `app-url` of the per-PR workspace.
+  - `tailor setup ci branch` and `tailor setup ci tag`: the `tailor-deploy` job exposes `workspace-id` and `app-url`.
+  
+  `tailor setup check` reports the template as outdated; run `tailor setup update` to regenerate every target.
+
+- [#2464](https://github.com/tailor-platform/sdk/pull/2464) [`978c332`](https://github.com/tailor-platform/sdk/commit/978c332fa0ae0d9256fd2f80d858fb68e0e8c76d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update secretlint monorepo to v13.0.6
+
+- [#2465](https://github.com/tailor-platform/sdk/pull/2465) [`d8222e4`](https://github.com/tailor-platform/sdk/commit/d8222e40ab8f9668d19707bcc76fc7b134a08c26) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.19.0
+
+- [#2458](https://github.com/tailor-platform/sdk/pull/2458) [`e982853`](https://github.com/tailor-platform/sdk/commit/e98285358692428fbc07a3713a0cc056f04baffa) Thanks [@toiroakr](https://github.com/toiroakr)! - Deploying a resolver, executor, or workflow no longer fails with `FORBIDDEN_RUNTIME_GLOBAL` for a Node-only global such as `process` that is only used after checking that it exists — for example `if (typeof process !== "undefined") { ... process.env.FOO ... }`, an early exit such as `if (typeof process === "undefined") return;` followed by `process.env.FOO`, or `typeof process < "u" && process.emitWarning(message)`. A global used without such a check is still reported — for example the `Buffer.from(...)` inside `@ai-sdk/gateway`, which the Vercel AI SDK (`ai`) depends on.
+
+- [#2457](https://github.com/tailor-platform/sdk/pull/2457) [`be6ffb2`](https://github.com/tailor-platform/sdk/commit/be6ffb2acea8fec95c9b7e90d52d35960cb7be14) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `workflow.start()` and job `.start()` calls that built and deployed but threw "workflow.start() is rewritten at build time and unavailable in the bundle" at runtime. These calls are now rewritten when:
+  
+  - the workflow file is imported through a `tsconfig.json` `compilerOptions.paths` alias (e.g. `import workflow from "@/workflow/syncGLBalances"`)
+  - the workflow is default-exported as the result of a helper function that calls `createWorkflow()` (e.g. `export default module.workflows.syncGLBalances.create(mainJob)`); wrapping the helper result in another `createWorkflow({ ...helperResult, name: "..." })` call is no longer needed
+  - the workflow file is imported as a namespace (`import * as wf from "./workflows/sync"; wf.default.start(...)`)
+  
+  A `.start()` call on an import from a workflow file that still cannot be rewritten — such as a helper-created workflow exported under a named export — now fails the build instead of deploying code that throws at runtime. The runtime error for an unrewritten `workflow.start()` also names the workflow.
+
 ## 2.23.0
 
 ### Minor Changes
