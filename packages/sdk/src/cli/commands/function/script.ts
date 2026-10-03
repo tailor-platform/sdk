@@ -61,7 +61,7 @@ export const scriptCommand = defineAppCommand({
 
 By default, when the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
-Pass \`--remote\` to generate the script-scoped files from the deployed schema instead, even when \`kyselyTypePlugin\` is configured. This is required for an external namespace. Re-running the command refreshes \`db.ts\` and \`db.snapshot.json\` from the selected source and leaves the script itself untouched.`,
+Pass \`--remote\` to generate the script-scoped files from the deployed schema instead, even when \`kyselyTypePlugin\` is configured. For a namespace owned elsewhere, local project types are available when both \`schemaFrom\` and \`kyselyTypePlugin\` are configured; otherwise use \`--remote\`. Re-running the command refreshes \`db.ts\` and \`db.snapshot.json\` from the selected source and leaves the script itself untouched.`,
   examples: [
     {
       cmd: "scripts/fix-prices.ts",

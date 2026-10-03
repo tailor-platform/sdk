@@ -147,13 +147,16 @@ onNamespaceLoaded(context) {
 
 **Context** (`TailorDBReadyContext`):
 
-| Field          | Type                      | Description                                                     |
-| -------------- | ------------------------- | --------------------------------------------------------------- |
-| `tailordb`     | `TailorDBNamespaceData[]` | All namespaces with tables, source info, and plugin attachments |
-| `auth`         | `GeneratorAuthInput?`     | Auth configuration (machine users, OAuth2 clients, etc.)        |
-| `baseDir`      | `string`                  | Output directory for generated files                            |
-| `configPath`   | `string`                  | Path to `tailor.config.ts`                                      |
-| `pluginConfig` | `PluginConfig`            | Plugin-level config from `definePlugins()`                      |
+| Field                | Type                       | Description                                                       |
+| -------------------- | -------------------------- | ----------------------------------------------------------------- |
+| `tailordb`           | `TailorDBNamespaceData[]`  | Owned namespaces with tables, source info, and plugin attachments |
+| `referencedTailordb` | `TailorDBNamespaceData[]?` | Namespaces read from `db` entries with `schemaFrom`               |
+| `auth`               | `GeneratorAuthInput?`      | Auth configuration (machine users, OAuth2 clients, etc.)          |
+| `baseDir`            | `string`                   | Output directory for generated files                              |
+| `configPath`         | `string`                   | Path to `tailor.config.ts`                                        |
+| `pluginConfig`       | `PluginConfig`             | Plugin-level config from `definePlugins()`                        |
+
+Referenced definitions include the owning namespace's plugin-generated tables. Reading them does not invoke that application's generation hooks. Plugins can use `referencedTailordb ?? []` when they need these definitions; plugins that only process owned tables can continue to use `tailordb`. The same optional field is available to `onResolverReady` and `onExecutorReady`.
 
 `TailorDBNamespaceData` contains:
 
