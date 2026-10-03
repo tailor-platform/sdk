@@ -373,7 +373,7 @@ describe("show", () => {
       expect(listAuthOAuth2ClientsMock).not.toHaveBeenCalled();
     });
 
-    test("warns and returns no OAuth2 clients when the credentials cannot list them", async () => {
+    test("warns and returns null OAuth2 clients when the credentials cannot list them", async () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       mockConfig({ auth: { name: "local-auth", oauth2Clients } });
       listAuthOAuth2ClientsMock.mockRejectedValue(
@@ -382,7 +382,7 @@ describe("show", () => {
 
       const info = await show();
 
-      expect(info.oauth2Clients).toEqual([]);
+      expect(info.oauth2Clients).toBeNull();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"my-auth"'));
     });
 

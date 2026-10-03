@@ -56,7 +56,8 @@ export interface ShowOAuth2ClientInfo {
 export interface ShowInfo extends ApplicationInfo, WorkspaceInfo {
   aiGateways: AIGatewayInfo[];
   staticWebsites: ShowStaticWebsiteInfo[];
-  oauth2Clients: ShowOAuth2ClientInfo[];
+  /** `null` when the current credentials cannot list OAuth2 clients. */
+  oauth2Clients: ShowOAuth2ClientInfo[] | null;
 }
 
 function applicationInfo(app: Application): ApplicationInfo {
@@ -116,7 +117,7 @@ async function fetchOAuth2Clients(
   workspaceId: string,
   namespaceName: string,
   names: string[],
-): Promise<ShowOAuth2ClientInfo[]> {
+): Promise<ShowOAuth2ClientInfo[] | null> {
   if (!namespaceName || names.length === 0) {
     return [];
   }
@@ -134,9 +135,9 @@ async function fetchOAuth2Clients(
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.PermissionDenied) {
       logger.warn(
-        `The current credentials cannot list OAuth2 clients in auth namespace "${namespaceName}", so none are shown.`,
+        `The current credentials cannot list OAuth2 clients in auth namespace "${namespaceName}", so oauth2Clients is null.`,
       );
-      return [];
+      return null;
     }
     throw error;
   }
