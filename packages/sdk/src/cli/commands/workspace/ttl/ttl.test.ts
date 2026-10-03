@@ -4,6 +4,8 @@ import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { writePlatformConfig } from "#/cli/shared/context";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { decodeExpiresAt, expiresAtLabelKey } from "../expiry";
@@ -124,6 +126,23 @@ describe("workspace ttl", () => {
       expect(decodeExpiresAt(written.labels[expiresAtLabelKey])).toBeDefined();
     });
 
+    test("prints the workspace and its new expiry under JSON output", async () => {
+      const client = stubClient();
+      using _json = jsonMode();
+      using _logger = silenceLogger("success");
+      using stdout = captureStdout();
+
+      await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "1h"]);
+
+      const written = client.setMetadata.mock.calls[0]?.[0] as { labels: Record<string, string> };
+      const recorded = decodeExpiresAt(written.labels[expiresAtLabelKey]);
+      const printed = JSON.parse(stdout.output);
+      expect(printed).toEqual({ changed: true, workspaceId, expiresAt: expect.any(String) });
+      expect(Math.abs(Date.parse(printed.expiresAt) - (recorded?.getTime() ?? 0))).toBeLessThan(
+        1000,
+      );
+    });
+
     test("rejects a duration it cannot parse before calling the platform", async () => {
       const client = stubClient();
       using _logger = silenceLogger("success", "error");
@@ -147,6 +166,20 @@ describe("workspace ttl", () => {
       expect(written).toBeDefined();
       expect(expiresAtLabelKey in written.labels).toBe(false);
       expect(written.labels["sdk-name"]).toBe("keep-me");
+    });
+
+    test.each<{ name: string; labels: Record<string, string>; changed: boolean }>([
+      { name: "a recorded expiry", labels: { [expiresAtLabelKey]: "s-1" }, changed: true },
+      { name: "no expiry", labels: {}, changed: false },
+    ])("prints whether it dropped $name under JSON output", async ({ labels, changed }) => {
+      stubClient(labels);
+      using _json = jsonMode();
+      using _logger = silenceLogger("success");
+      using stdout = captureStdout();
+
+      await runCommand(clearCommand, ["--workspace-id", workspaceId]);
+
+      expect(JSON.parse(stdout.output)).toEqual({ changed, workspaceId, expiresAt: null });
     });
 
     test("succeeds without writing when the workspace records no expiry", async () => {

@@ -20,6 +20,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { assertDefined } from "#/utils/assert";
 import {
   getNamespacesWithMigrations,
@@ -349,8 +350,16 @@ async function script(options: ScriptOptions): Promise<void> {
     logger.success(
       `Recorded that migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)} intentionally has no migration script`,
     );
+    const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
     logger.info(`  Reason: ${scriptSkipped.reason}`);
-    logger.info(`  Diff file: ${getMigrationFilePath(migrationsDir, migrationNumber, "diff")}`);
+    logger.info(`  Diff file: ${diffPath}`);
+    printMutationResult({
+      changed: true,
+      namespace: targetNamespace,
+      migrationNumber,
+      scriptSkipped: { reason: scriptSkipped.reason, acknowledgedAt: scriptSkipped.acknowledgedAt },
+      diffPath,
+    });
     return;
   }
   if (options.reason !== undefined) {
@@ -367,6 +376,24 @@ async function script(options: ScriptOptions): Promise<void> {
     migrationNumber,
     withTest: options.withTest,
     pgliteAvailable,
+  });
+  printMutationResult({
+    changed: Boolean(
+      result.clearedScriptSkip ||
+      result.migratePath ||
+      result.pgliteSchemaPath ||
+      result.testPath ||
+      result.pgliteTestPath,
+    ),
+    namespace: targetNamespace,
+    migrationNumber,
+    migratePath: result.migratePath ?? null,
+    dbTypesPath: result.dbTypesPath ?? null,
+    pgliteSchemaPath: result.pgliteSchemaPath ?? null,
+    pgliteSchemaError: result.pgliteSchemaError ?? null,
+    testPath: result.testPath ?? null,
+    pgliteTestPath: result.pgliteTestPath ?? null,
+    clearedScriptSkip: result.clearedScriptSkip ?? false,
   });
 
   if (result.clearedScriptSkip) {

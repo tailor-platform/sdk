@@ -3,6 +3,7 @@ import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -18,15 +19,20 @@ const setTtlOptionsSchema = z.object({
 
 type SetTtlOptions = z.input<typeof setTtlOptionsSchema>;
 
+interface WorkspaceExpiry {
+  workspaceId: string;
+  expiresAt: Date;
+}
+
 /**
  * Record a workspace's prune expiry, replacing whatever it recorded before.
  *
  * The expiry runs from now rather than from the workspace's creation, so a
  * duration shorter than the workspace's age still leaves it a full window.
  * @param options - Expiry options
- * @returns The instant the workspace becomes prunable
+ * @returns The workspace and the instant it becomes prunable
  */
-async function setWorkspaceTtl(options: SetTtlOptions): Promise<Date> {
+async function setWorkspaceTtl(options: SetTtlOptions): Promise<WorkspaceExpiry> {
   const validated = parseOptions(setTtlOptionsSchema, options);
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: validated.profile,
@@ -35,7 +41,7 @@ async function setWorkspaceTtl(options: SetTtlOptions): Promise<Date> {
 
   const expiresAt = new Date(Date.now() + parseAge(validated.ttl));
   await writeWorkspaceExpiry(client, workspaceId, expiresAt);
-  return expiresAt;
+  return { workspaceId, expiresAt };
 }
 
 export const setCommand = defineAppCommand({
@@ -54,12 +60,13 @@ export const setCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const expiresAt = await setWorkspaceTtl({
+    const { workspaceId, expiresAt } = await setWorkspaceTtl({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       ttl: args.ttl,
     });
 
     logger.success(`Workspace becomes prunable at ${expiresAt.toISOString()}.`);
+    printMutationResult({ changed: true, workspaceId, expiresAt: expiresAt.toISOString() });
   },
 });

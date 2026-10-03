@@ -4,6 +4,8 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   addMigrationScriptFiles,
   clearMigrationScriptSkipped,
@@ -590,5 +592,136 @@ describe("script command with an existing migrate.ts", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/already exists/);
+  });
+});
+
+describe("script command under JSON output", () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    vi.stubEnv("EDITOR", "");
+    vi.stubEnv("VISUAL", "");
+    testDir = makeTestDir("json");
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        path: path.join(path.dirname(testDir), "tailor.config.ts"),
+        db: { tailordb: { migration: { directory: testDir } } },
+      },
+      plugins: [],
+    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  function migrationFile(name: string): string {
+    return path.join(testDir, formatMigrationNumber(1), name);
+  }
+
+  test("prints the created script files", async () => {
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      namespace: "tailordb",
+      migrationNumber: 1,
+      migratePath: migrationFile(MIGRATE_FILE_NAME),
+      dbTypesPath: migrationFile(DB_TYPES_FILE_NAME),
+      pgliteSchemaPath: migrationFile(DB_PGLITE_SCHEMA_FILE_NAME),
+      pgliteSchemaError: null,
+      testPath: null,
+      pgliteTestPath: null,
+      clearedScriptSkip: false,
+    });
+  });
+
+  test("prints the recorded script skip", async () => {
+    writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+    );
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(scriptCommand, [
+      "0001",
+      "--no-script",
+      "--reason",
+      "no rows yet",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      namespace: "tailordb",
+      migrationNumber: 1,
+      scriptSkipped: { reason: "no rows yet", acknowledgedAt: expect.any(String) },
+      diffPath: migrationFile(DIFF_FILE_NAME),
+    });
+  });
+
+  test("prints a cleared stale skip record", async () => {
+    writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+        scriptSkipped: { reason: "no data", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+      }),
+    );
+    writeMigrateFile(testDir, 1);
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      changed: true,
+      migratePath: null,
+      clearedScriptSkip: true,
+    });
+  });
+
+  test("reports no change when no requested file could be added", async () => {
+    writeInitialSchema(testDir, {
+      User: {
+        ...snapshotType("User"),
+        fields: {
+          ...snapshotType("User").fields,
+          code: { type: "string", required: true, serial: { start: 1, format: "%o" } },
+        },
+      },
+    });
+    writeDiffFile(testDir, 1, createMockMigrationDiff());
+    writeMigrateFile(testDir, 1);
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+    fs.writeFileSync(migrationFile(MIGRATE_TEST_FILE_NAME), "// existing unit test");
+    const pgliteDir = path.join(testDir, "node_modules", "@electric-sql", "pglite");
+    fs.mkdirSync(pgliteDir, { recursive: true });
+    fs.writeFileSync(path.join(pgliteDir, "package.json"), '{"name":"@electric-sql/pglite"}');
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(scriptCommand, ["0001", "--with-test"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      changed: false,
+      pgliteSchemaPath: null,
+      pgliteSchemaError: expect.any(String),
+      pgliteTestPath: null,
+    });
   });
 });

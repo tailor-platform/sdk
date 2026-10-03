@@ -4,6 +4,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 
 export const deleteCommand = defineAppCommand({
   name: "delete",
@@ -27,5 +28,6 @@ export const deleteCommand = defineAppCommand({
     writePlatformConfig(config);
 
     logger.success(`Profile "${args.name}" deleted successfully.`);
+    printMutationResult({ changed: true, name: args.name });
   },
 });

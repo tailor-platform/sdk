@@ -9,6 +9,8 @@ import {
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { logoutCommand } from "./logout";
 
@@ -130,6 +132,75 @@ describe("logout --profile", () => {
     await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
       'User "u@example.com" not found',
     );
+  });
+
+  test("prints the logged-out user and the revocation under JSON output", async () => {
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(logoutCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      user: "u@example.com",
+      revoked: true,
+    });
+  });
+
+  test("reports an unrevoked token that was still deleted under JSON output", async () => {
+    revokeMock.mockRejectedValueOnce(new Error("revocation endpoint unavailable"));
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(logoutCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      user: "u@example.com",
+      revoked: false,
+    });
+  });
+
+  test("reports no change when nobody is logged in under JSON output", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({ changed: false, user: null, revoked: false });
+  });
+
+  test("reports clearing a current user that has no stored token under JSON output", async () => {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {},
+      profiles: {},
+      current_user: "stale@example.com",
+    });
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      user: "stale@example.com",
+      revoked: false,
+    });
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
   });
 
   test("clears current user when profile logout removes the default token while env selects another platform", async () => {

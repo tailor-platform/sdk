@@ -31,8 +31,11 @@ For commands that return structured results, passing `--json` writes one parseab
 to stdout on success. Empty successful result sets are emitted as JSON values such as `[]`, not as
 human-readable text or empty stdout.
 
-Commands that only perform side effects and do not define a structured result may leave stdout empty
-even when `--json` is passed.
+Commands that change state print a JSON object describing the outcome. Its `changed` field reports
+whether the command changed anything: it is `false` when the command finished without a change, for
+example because the requested state was already in place. The other fields identify what the command
+acted on. Some state-changing commands do not report a result yet and leave stdout empty even when
+`--json` is passed.
 
 Set `TAILOR_JSON_OUTPUT=true` (or `1`) to default every command to JSON without passing `--json`
 each time. This is intended for agents, scripts, and CI steps that parse CLI output. An explicit
