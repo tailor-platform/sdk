@@ -20,7 +20,11 @@ import type {
 
 /** How a migration script is executed. */
 export type MigrationScriptForm =
-  | { kind: "main" }
+  | {
+      kind: "main";
+      /** The script also exports `steps`, which `main` takes precedence over. */
+      ignoredSteps?: true;
+    }
   | { kind: "steps"; steps: MigrationStepNode[]; order: string[] };
 
 const STEP_KEYS = new Set(["run", "dependsOn"]);
@@ -187,16 +191,9 @@ export function analyzeMigrationScriptSource(
 
   const exports = collectExports(program);
   const exportsSteps = exports.stepsInit !== undefined || exports.stepsExportedIndirectly;
-  if (exports.hasMain && exportsSteps) {
-    throw invalidScript(filePath, "it exports both `main` and `steps`; keep one.");
+  if (exports.hasMain || exports.hasUnreadableExports) {
+    return exportsSteps ? { kind: "main", ignoredSteps: true } : { kind: "main" };
   }
-  if (exportsSteps && exports.hasUnreadableExports) {
-    throw invalidScript(
-      filePath,
-      "it exports `steps`, but the deploy cannot tell whether `export *` also exports `main`; export only `steps`.",
-    );
-  }
-  if (exports.hasMain || (!exportsSteps && exports.hasUnreadableExports)) return { kind: "main" };
   if (!exportsSteps) {
     throw invalidScript(filePath, "it must export either `main` or `steps`.");
   }
@@ -223,4 +220,13 @@ export function analyzeMigrationScriptSource(
  */
 export function analyzeMigrationScript(filePath: string): MigrationScriptForm {
   return analyzeMigrationScriptSource(fs.readFileSync(filePath, "utf-8"), filePath);
+}
+
+/**
+ * Warning for a script whose `steps` export is ignored in favor of `main`.
+ * @param migrationLabel - Namespace and migration number, e.g. `main-db/0003`
+ * @returns Warning message
+ */
+export function ignoredStepsWarning(migrationLabel: string): string {
+  return `Migration ${migrationLabel}: migrate.ts exports \`steps\` next to \`main\` (or an \`export *\` that may provide it), so \`main\` runs and \`steps\` is ignored. Remove the export you do not use.`;
 }

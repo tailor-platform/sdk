@@ -532,6 +532,28 @@ describe("migration", () => {
       expect(suggestion).toContain("delete migrate.ts");
     });
 
+    test("runs main and warns when migrate.ts also exports steps", async () => {
+      const client = createMockClient({ tailordb: 0 });
+      writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+      writeMigrateFile(
+        testDir,
+        1,
+        "export async function main() {}\nexport const steps = { backfill: { run: async () => {} } };",
+      );
+      vi.mocked(logger.warn).mockClear();
+
+      const result = await detectPendingMigrations(client, workspaceId, [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ]);
+
+      expect(result[0]!.scriptForm).toEqual({ kind: "main", ignoredSteps: true });
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Migration tailordb/0001: migrate.ts exports `steps` next to `main`",
+        ),
+      );
+    });
+
     test("includes breaking change migration with script", async () => {
       const client = createMockClient({ tailordb: 0 });
 

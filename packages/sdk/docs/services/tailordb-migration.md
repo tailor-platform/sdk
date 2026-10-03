@@ -400,7 +400,7 @@ export const steps = {
 } satisfies MigrationSteps;
 ```
 
-- A script exports either `main` or `steps`, not both.
+- A script exports either `main` or `steps`. If it exports both, `main` runs as before and `steps` is ignored with a warning from `tailor deploy` and `tailor tailordb migration validate`.
 - Each step is an object with a `run` function — it receives its own transaction and the same `MigrationContext` as `main` — and an optional `dependsOn` list naming the steps that must complete before it starts.
 - Steps with no dependency between them have no guaranteed order. Declaration order is not execution order, and a future SDK version may run independent steps concurrently, so declare `dependsOn` for every ordering your steps rely on.
 - Declare `steps` directly as `export const steps = { ... }`, with each step written inside it as an object literal with a literal name and `dependsOn` list. Step names start with a letter and contain only letters, digits, and underscores, up to 64 characters. `tailor tailordb migration validate` and `tailor deploy` reject unknown dependencies and cycles before anything is changed.

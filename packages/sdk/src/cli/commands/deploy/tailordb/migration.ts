@@ -23,7 +23,10 @@ import {
   type MigrationInProgress,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
-import { analyzeMigrationScript } from "#/cli/commands/tailordb/migrate/script-form";
+import {
+  analyzeMigrationScript,
+  ignoredStepsWarning,
+} from "#/cli/commands/tailordb/migrate/script-form";
 import {
   loadDiff,
   getMigrationFiles,
@@ -194,11 +197,15 @@ export async function detectPendingMigrations(
         );
       }
 
+      const scriptForm = hasScript ? analyzeMigrationScript(scriptPath) : null;
+      if (scriptForm?.kind === "main" && scriptForm.ignoredSteps) {
+        logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(file.number)}`));
+      }
       pendingMigrations.push({
         number: file.number,
         scriptPath,
         hasScript,
-        scriptForm: hasScript ? analyzeMigrationScript(scriptPath) : null,
+        scriptForm,
         diffPath,
         namespace,
         migrationsDir,

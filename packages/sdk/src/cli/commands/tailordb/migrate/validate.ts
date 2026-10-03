@@ -32,7 +32,7 @@ import {
   verifyRemoteSchema,
   type MigrationCheckResult,
 } from "./schema-checks";
-import { analyzeMigrationScript } from "./script-form";
+import { analyzeMigrationScript, ignoredStepsWarning } from "./script-form";
 import {
   assertValidMigrationFiles,
   formatMigrationNumber,
@@ -155,13 +155,13 @@ function assertMigrationScriptsReady(
   const conflicting: number[] = [];
   const unreviewed: number[] = [];
   const unacknowledgedWarnings: UnacknowledgedWarningMigration[] = [];
-  const scriptPaths: string[] = [];
+  const scriptPaths: [number, string][] = [];
   for (const file of getMigrationFiles(migrationsDir)) {
     if (file.type !== "diff") continue;
     const diff = loadDiff(file.path);
     const migrateFilePath = getMigrationFilePath(migrationsDir, file.number, "migrate");
     const hasScript = fs.existsSync(migrateFilePath);
-    if (hasScript) scriptPaths.push(migrateFilePath);
+    if (hasScript) scriptPaths.push([file.number, migrateFilePath]);
     if (diff.requiresMigrationScript && !diff.scriptSkipped && !hasScript) {
       missing.push(file.number);
     }
@@ -206,7 +206,12 @@ function assertMigrationScriptsReady(
       suggestion: `Review each ${MIGRATION_REVIEW_REQUIRED_MARKER} marker, then remove the marker and its associated \`never\` annotation.`,
     });
   }
-  for (const scriptPath of scriptPaths) analyzeMigrationScript(scriptPath);
+  for (const [migrationNumber, scriptPath] of scriptPaths) {
+    const form = analyzeMigrationScript(scriptPath);
+    if (form.kind === "main" && form.ignoredSteps) {
+      logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(migrationNumber)}`));
+    }
+  }
   return unacknowledgedWarnings;
 }
 

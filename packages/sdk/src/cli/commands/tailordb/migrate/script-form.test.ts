@@ -18,13 +18,13 @@ describe("analyzeMigrationScriptSource", () => {
     expect(analyze('export * from "./impl";')).toEqual({ kind: "main" });
   });
 
-  test("rejects steps next to a re-export that may also export main", () => {
-    expect(() =>
+  test("keeps running main when steps sits next to a re-export that may export it", () => {
+    expect(
       analyze(ml`
         export * from "./legacy";
         export const steps = { backfill: { run: async (trx) => {} } };
       `),
-    ).toThrow("cannot tell whether `export *` also exports `main`");
+    ).toEqual({ kind: "main", ignoredSteps: true });
   });
 
   test("reads steps and their dependencies in declaration order", () => {
@@ -72,13 +72,13 @@ describe("analyzeMigrationScriptSource", () => {
     );
   });
 
-  test("rejects a script that exports both main and steps", () => {
-    expect(() =>
+  test("keeps running main, as before steps existed, when a script exports both", () => {
+    expect(
       analyze(ml`
         export async function main(trx) {}
         export const steps = { backfill: { run: async (trx) => {} } };
       `),
-    ).toThrow("it exports both `main` and `steps`");
+    ).toEqual({ kind: "main", ignoredSteps: true });
   });
 
   test("rejects steps that are not declared as an object literal", () => {
