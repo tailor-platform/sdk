@@ -176,5 +176,19 @@ export async function main(trx: Transaction): Promise<void> {
       // The wrapper always defines and forwards an env binding
       expect(result.bundledCode).toContain("env");
     });
+
+    test("passes temporal: false to tailordb.Client by default", async () => {
+      const scriptPath = writeMigration("  // Migration");
+      const result = await bundleMigrationScript(scriptPath, "tailordb", 9);
+
+      expect(result.bundledCode).toContain("temporal: false");
+    });
+
+    test("passes temporal: true to tailordb.Client when requested", async () => {
+      const scriptPath = writeMigration("  // Migration");
+      const result = await bundleMigrationScript(scriptPath, "tailordb", 10, {}, undefined, true);
+
+      expect(result.bundledCode).toContain("temporal: true");
+    });
   });
 });

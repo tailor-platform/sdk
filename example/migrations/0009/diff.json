@@ -1,0 +1,139 @@
+{
+  "version": 6,
+  "namespace": "tailordb",
+  "createdAt": "2026-10-01T01:38:36.442Z",
+  "changes": [
+    {
+      "kind": "table_added",
+      "tableName": "TemporalCheck",
+      "after": {
+        "name": "TemporalCheck",
+        "pluralForm": "TemporalCheckList",
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "eventDate": {
+            "type": "date",
+            "required": true
+          },
+          "eventDatetime": {
+            "type": "datetime",
+            "required": true
+          },
+          "eventTime": {
+            "type": "time",
+            "required": true
+          }
+        },
+        "settings": {},
+        "permissions": {
+          "record": {
+            "create": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "read": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              },
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "_loggedIn"
+                    },
+                    "eq",
+                    true
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "update": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "delete": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ]
+          },
+          "gql": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "actions": ["read"],
+              "permit": "allow"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": false
+}

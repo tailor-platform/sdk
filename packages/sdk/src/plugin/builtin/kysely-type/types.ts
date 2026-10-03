@@ -25,6 +25,9 @@ export interface KyselyFieldConfig {
 /** Utility types from `@tailor-platform/sdk/kysely` that a generated type actually uses. */
 export interface UsedUtilityTypes {
   Timestamp: boolean;
+  TemporalDate: boolean;
+  TemporalInstant: boolean;
+  TemporalTime: boolean;
   Serial: boolean;
   ObjectColumnType: boolean;
   ArrayColumnType: boolean;

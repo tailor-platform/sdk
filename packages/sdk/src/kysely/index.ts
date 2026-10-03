@@ -28,6 +28,7 @@ import type {
   TailorAnyDBType,
 } from "#/configure/services/tailordb/types";
 import type { output, TypeLevelError } from "#/types/helpers";
+import type { Temporal } from "temporal-spec";
 
 export {
   type ColumnType,
@@ -42,7 +43,28 @@ export {
 
 export { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
+/** Types of the `Temporal` values that date/datetime/time columns read back as when Temporal mode is enabled. */
+export type { Temporal } from "temporal-spec";
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+/** Column type for a `date` field read back as `Temporal.PlainDate` (`createGetDB`'s `temporal` option). */
+export type TemporalDate = ColumnType<
+  Temporal.PlainDate,
+  Temporal.PlainDate | string,
+  Temporal.PlainDate | string
+>;
+/** Column type for a `datetime` field read back as `Temporal.Instant` (`createGetDB`'s `temporal` option). */
+export type TemporalInstant = ColumnType<
+  Temporal.Instant,
+  Temporal.Instant | string,
+  Temporal.Instant | string
+>;
+/** Column type for a `time` field read back as `Temporal.PlainTime` (`createGetDB`'s `temporal` option). */
+export type TemporalTime = ColumnType<
+  Temporal.PlainTime,
+  Temporal.PlainTime | string,
+  Temporal.PlainTime | string
+>;
 type ResolveSelect<T> = T extends ColumnType<infer S, unknown, unknown> ? S : T;
 type ResolveInsert<T> = T extends ColumnType<unknown, infer I, unknown> ? I : T;
 type ResolveUpdate<T> = T extends ColumnType<unknown, unknown, infer U> ? U : T;
@@ -80,19 +102,33 @@ type FlattenColumns<T> = { [K in keyof T]: T[K] } & {};
 export type TailordbKysely<DB> = Kysely<DB>;
 export type NamespaceDB<NS, N extends keyof NS = keyof NS> = TailordbKysely<NS[N]>;
 
+/** Options for {@link createGetDB}. */
+export type CreateGetDBOptions = {
+  /**
+   * When `true`, date/datetime/time fields with no explicit `as` come back as
+   * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` instead of `Date`
+   * (date/datetime) or `string` (time). Match the `temporal` option `kyselyTypePlugin`
+   * was configured with so the generated table types agree with this runtime behavior.
+   * Defaults to `false`.
+   */
+  temporal?: boolean;
+};
+
 /**
  * Create a namespace-aware getDB function for generated code.
+ * @param options - Settings applied to every Kysely instance the returned `getDB` creates
  * @returns A getDB function that creates Kysely instances for specific namespaces
  */
-export function createGetDB<NS>() {
+export function createGetDB<NS>(options: CreateGetDBOptions = {}) {
+  const temporal = options.temporal ?? false;
   return function getDB<const N extends keyof NS & string>(
     namespace: N,
     config?: Omit<KyselyConfig, "dialect">,
   ): TailordbKysely<NS[N]> {
-    const client = new tailordb.Client({ namespace });
+    const client = new tailordb.Client({ namespace, temporal });
     return new Kysely<NS[N]>({
-      dialect: new TailordbDialect(client),
       ...config,
+      dialect: new TailordbDialect(client),
     });
   };
 }
@@ -150,25 +186,33 @@ type ElementOutput<F> =
 type NestedFieldsOf<F> = F extends TailorAnyDBField ? F["fields"] : never;
 
 // Nested props carry the same column mapping as top-level ones, so a datetime inside an
-// object also resolves to Timestamp. The optional marker matches what the output type
-// gives them, which is what the generator emits too.
+// object also resolves to Timestamp (or its Temporal counterpart under `IsTemporal`). The
+// optional marker matches what the output type gives them, which is what the generator
+// emits too.
 // `-readonly` because a field collection is inferred with `const`, and the generated
 // table interfaces declare their nested props mutable.
-type NestedProps<Fields> = {
-  -readonly [K in keyof Fields as null extends output<Fields[K]> ? never : K]: DBColumn<Fields[K]>;
+type NestedProps<Fields, IsTemporal extends boolean> = {
+  -readonly [K in keyof Fields as null extends output<Fields[K]> ? never : K]: DBColumn<
+    Fields[K],
+    IsTemporal
+  >;
 } & {
-  -readonly [K in keyof Fields as null extends output<Fields[K]> ? K : never]?: DBColumn<Fields[K]>;
+  -readonly [K in keyof Fields as null extends output<Fields[K]> ? K : never]?: DBColumn<
+    Fields[K],
+    IsTemporal
+  >;
 };
 
 // The generator reaches for ObjectColumnType only when the object holds something whose
-// select and insert types differ: a timestamp, an optional prop, or a filled-in one.
-type NestedNeedsColumnType<Fields> = true extends {
-  [K in keyof Fields]: DBFieldType<Fields[K]> extends "date" | "datetime"
-    ? true
-    : null extends output<Fields[K]>
+// select and insert types differ: a date/datetime/time field with no explicit `as` (which
+// resolves to a ColumnType, Temporal or not), an optional prop, or a filled-in one.
+type NestedNeedsColumnType<Fields, IsTemporal extends boolean> = true extends {
+  [K in keyof Fields]: DBFieldType<Fields[K]> extends "nested"
+    ? NestedNeedsColumnType<NestedFieldsOf<Fields[K]>, IsTemporal>
+    : ElementColumn<Fields[K], IsTemporal> extends ColumnType<unknown, unknown, unknown>
       ? true
-      : DBFieldType<Fields[K]> extends "nested"
-        ? NestedNeedsColumnType<NestedFieldsOf<Fields[K]>>
+      : null extends output<Fields[K]>
+        ? true
         : Fields[K] extends TailorAnyDBField
           ? IsAutoFilledDBField<Fields[K]>
           : false;
@@ -176,43 +220,57 @@ type NestedNeedsColumnType<Fields> = true extends {
   ? true
   : false;
 
-type NestedColumn<F> =
-  NestedNeedsColumnType<NestedFieldsOf<F>> extends true
-    ? ObjectColumnType<FlattenColumns<NestedProps<NestedFieldsOf<F>>>>
-    : FlattenColumns<NestedProps<NestedFieldsOf<F>>>;
+type NestedColumn<F, IsTemporal extends boolean> =
+  NestedNeedsColumnType<NestedFieldsOf<F>, IsTemporal> extends true
+    ? ObjectColumnType<FlattenColumns<NestedProps<NestedFieldsOf<F>, IsTemporal>>>
+    : FlattenColumns<NestedProps<NestedFieldsOf<F>, IsTemporal>>;
 
-type ElementColumn<F> =
-  DBFieldType<F> extends "date" | "datetime"
+type DateColumn<
+  Type extends "date" | "datetime" | "time",
+  IsTemporal extends boolean,
+> = IsTemporal extends true
+  ? Type extends "date"
+    ? TemporalDate
+    : Type extends "datetime"
+      ? TemporalInstant
+      : TemporalTime
+  : Type extends "date" | "datetime"
     ? Timestamp
-    : DBFieldType<F> extends "nested"
-      ? NestedColumn<F>
+    : string;
+
+type ElementColumn<F, IsTemporal extends boolean> =
+  DBFieldType<F> extends "nested"
+    ? NestedColumn<F, IsTemporal>
+    : DBFieldType<F> extends "date" | "datetime" | "time"
+      ? DateColumn<DBFieldType<F>, IsTemporal>
       : ElementOutput<F>;
 
 // A ColumnType cannot sit inside an array — Kysely only unwraps it at the top level of a
 // table property — so an array of them keeps the ColumnType outermost.
-type ArrayedColumn<F> =
+type ArrayedColumn<F, IsTemporal extends boolean> =
   IsArrayDBField<F> extends true
-    ? ElementColumn<F> extends ColumnType<unknown, unknown, unknown>
-      ? ArrayColumnType<ElementColumn<F>>
-      : ElementColumn<F>[]
-    : ElementColumn<F>;
+    ? ElementColumn<F, IsTemporal> extends ColumnType<unknown, unknown, unknown>
+      ? ArrayColumnType<ElementColumn<F, IsTemporal>>
+      : ElementColumn<F, IsTemporal>[]
+    : ElementColumn<F, IsTemporal>;
 
-type NullableColumn<F> = null extends output<F> ? ArrayedColumn<F> | null : ArrayedColumn<F>;
+type NullableColumn<F, IsTemporal extends boolean> =
+  null extends output<F> ? ArrayedColumn<F, IsTemporal> | null : ArrayedColumn<F, IsTemporal>;
 
-type DBColumn<F> = F extends TailorAnyDBField
+type DBColumn<F, IsTemporal extends boolean> = F extends TailorAnyDBField
   ? IsReadOnlyDBField<F> extends true
-    ? Serial<NullableColumn<F>>
+    ? Serial<NullableColumn<F, IsTemporal>>
     : IsAutoFilledDBField<F> extends true
-      ? Generated<NullableColumn<F>>
-      : NullableColumn<F>
+      ? Generated<NullableColumn<F, IsTemporal>>
+      : NullableColumn<F, IsTemporal>
   : never;
 
 // The column map the three derived types are built from. Not exported: it is how the
 // mapping is expressed, not something callers need to name.
-type TailorDBColumns<T extends TailorDBColumnsSource> = {
+type TailorDBColumns<T extends TailorDBColumnsSource, IsTemporal extends boolean> = {
   [K in keyof DBFieldsOf<T>]: K extends "id"
     ? Generated<output<DBFieldsOf<T>[K]>>
-    : DBColumn<DBFieldsOf<T>[K]>;
+    : DBColumn<DBFieldsOf<T>[K], IsTemporal>;
 };
 
 /**
@@ -221,7 +279,9 @@ type TailorDBColumns<T extends TailorDBColumnsSource> = {
  * Each field resolves to the column type `kyselyTypePlugin` writes for it, so this and
  * the generated table types agree: `.serial()` fields are never caller-supplied,
  * `.default()` / `.hooks({ create })` fields may be omitted, optional fields stay
- * optional, `id` is platform-generated, and a date or datetime reads back as `Date`.
+ * optional, `id` is platform-generated, and a date/datetime/time field with no explicit
+ * `as` reads back as `Date` (date/datetime) or `string` (time), or as its `Temporal`
+ * counterpart when `IsTemporal` is `true`.
  *
  * Pass a field collection when the fields are a type parameter — a shared module that
  * lets each project extend a table with its own fields cannot name a generated table
@@ -233,21 +293,34 @@ type TailorDBColumns<T extends TailorDBColumnsSource> = {
  * it: while `F` is still an unresolved type parameter the mapping stays deferred, so
  * assigning to it inside the function body reports the unevaluated conditional rather
  * than a readable shape.
+ * @param IsTemporal - Pass `true` to accept `Temporal.PlainDate`/`Temporal.Instant`/
+ * `Temporal.PlainTime` (alongside a plain string) for date/datetime/time fields with no
+ * explicit `as`, matching a `getDB` created with `createGetDB({ temporal: true })`.
+ * Defaults to `false`.
  * @example
  * function createInput<const F extends Record<string, TailorAnyDBField>>(fields: F) {
  *   return (input: TailorDBInsertable<F>) => { ... };
  * }
  */
-export type TailorDBInsertable<T extends TailorDBColumnsSource> = FlattenColumns<
-  Insertable<TailorDBColumns<T>>
->;
+export type TailorDBInsertable<
+  T extends TailorDBColumnsSource,
+  IsTemporal extends boolean = false,
+> = FlattenColumns<Insertable<TailorDBColumns<T, IsTemporal>>>;
 
-/** Read shape of a TailorDB table or field collection. See {@link TailorDBInsertable}. */
-export type TailorDBSelectable<T extends TailorDBColumnsSource> = FlattenColumns<
-  Selectable<TailorDBColumns<T>>
->;
+/**
+ * Read shape of a TailorDB table or field collection. See {@link TailorDBInsertable}.
+ * @param IsTemporal - Pass `true` to read date/datetime/time fields with no explicit
+ * `as` back as `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime`, matching a
+ * `getDB` created with `createGetDB({ temporal: true })`. Defaults to `false` (`Date` for
+ * date/datetime, `string` for time).
+ */
+export type TailorDBSelectable<
+  T extends TailorDBColumnsSource,
+  IsTemporal extends boolean = false,
+> = FlattenColumns<Selectable<TailorDBColumns<T, IsTemporal>>>;
 
 /** Update input for a TailorDB table or field collection. See {@link TailorDBInsertable}. */
-export type TailorDBUpdateable<T extends TailorDBColumnsSource> = FlattenColumns<
-  Updateable<TailorDBColumns<T>>
->;
+export type TailorDBUpdateable<
+  T extends TailorDBColumnsSource,
+  IsTemporal extends boolean = false,
+> = FlattenColumns<Updateable<TailorDBColumns<T, IsTemporal>>>;
