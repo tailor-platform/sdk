@@ -3,7 +3,7 @@ import { z } from "zod";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { type initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { extractOwnedNamespaces } from "#/cli/shared/config";
+import { normalizedDbOf, extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -147,8 +147,8 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
 
     // Validate namespace exists in config and is not external
     if (!namespaces.includes(namespace)) {
-      const dbConfig = config.db?.[namespace];
-      if (dbConfig && "external" in dbConfig) {
+      const dbConfig = normalizedDbOf(config)[namespace];
+      if (dbConfig && !dbConfig.owned) {
         throw CLIError({
           code: "TAILORDB_NAMESPACE_EXTERNAL",
           message: `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here.`,

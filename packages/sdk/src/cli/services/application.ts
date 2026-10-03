@@ -27,6 +27,7 @@ import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { buildOptionsOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
+import { normalizedDbOf } from "#/cli/shared/config";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -60,12 +61,13 @@ import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-poin
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
-import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
+import type { NormalizedDb } from "#/types/app-config.generated";
 import type { IdP } from "#/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";
+import type { TailorDBServiceConfigInput } from "#/types/tailordb.generated";
 import type { z } from "zod";
 
 type SecretVault = {
@@ -169,8 +171,38 @@ type DefineTailorDBResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
+interface CreateOwnedTailorDBServiceParams {
+  namespace: string;
+  serviceConfig: TailorDBServiceConfigInput;
+  configPath: string;
+  baseDir: string;
+  dateDefault: EffectiveDateDefault;
+  pluginManager?: PluginManager;
+}
+
+/**
+ * Create a service for one namespace owned by a config.
+ * @param params - Namespace definition and owning config context
+ * @returns Service whose tables have not yet been loaded
+ */
+function createOwnedTailorDBService(params: CreateOwnedTailorDBServiceParams): TailorDBService {
+  const { namespace, serviceConfig, configPath, baseDir, dateDefault, pluginManager } = params;
+  return createTailorDBService({
+    namespace,
+    config: parseServiceConfig(TailorDBServiceConfigSchema, serviceConfig, {
+      file: configPath,
+      configKey: "db",
+      key: namespace,
+      name: namespace,
+    }),
+    baseDir,
+    dateDefault,
+    pluginManager,
+  });
+}
+
 function defineTailorDB(
-  config: TailorDBServiceInput | undefined,
+  config: NormalizedDb,
   configPath: string,
   baseDir: string,
   dateDefault: EffectiveDateDefault,
@@ -180,33 +212,24 @@ function defineTailorDB(
   const externalTailorDBNamespaces: string[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  if (!config) {
-    return { tailorDBServices, externalTailorDBNamespaces, subgraphs };
-  }
-
-  for (const [namespace, serviceConfig] of Object.entries(config)) {
-    if ("external" in serviceConfig) {
-      externalTailorDBNamespaces.push(namespace);
-    } else {
-      // Parse config through schema to normalize gqlOperations
-      const parsedConfig = parseServiceConfig(TailorDBServiceConfigSchema, serviceConfig, {
-        file: configPath,
-        configKey: "db",
-        key: namespace,
-        name: namespace,
-      });
-      const tailorDB = createTailorDBService({
-        namespace,
-        config: parsedConfig,
-        pluginManager,
-        baseDir,
-        dateDefault,
-      });
-      tailorDBServices.push(tailorDB);
+  for (const [namespace, entry] of Object.entries(config)) {
+    if (entry.owned) {
+      tailorDBServices.push(
+        createOwnedTailorDBService({
+          namespace,
+          serviceConfig: entry.schemaSource.config,
+          configPath,
+          baseDir,
+          dateDefault,
+          pluginManager,
+        }),
+      );
     }
-    subgraphs.push({ Type: "tailordb", Name: namespace });
+    if (entry.inSubgraph) {
+      subgraphs.push({ Type: "tailordb", Name: namespace });
+      if (!entry.owned) externalTailorDBNamespaces.push(namespace);
+    }
   }
-
   return { tailorDBServices, externalTailorDBNamespaces, subgraphs };
 }
 
@@ -510,7 +533,7 @@ function defineServices(
   pluginManager?: PluginManager,
 ): DefineServicesResult {
   const tailordbResult = defineTailorDB(
-    config.db,
+    normalizedDbOf(config),
     config.path,
     baseDir,
     effectiveDateDefault(config),

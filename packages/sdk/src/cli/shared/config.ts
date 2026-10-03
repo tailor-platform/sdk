@@ -1,40 +1,32 @@
+import { normalizeDb } from "#/parser/app-config/normalize-db";
+import type { NormalizedDb } from "#/types/app-config.generated";
 import type { LoadedConfig } from "./config-loader";
 
 /**
- * Extracts every namespace key declared under `config.db`, including those
- * declared with `{ external: true }`.
- * @param config - Loaded application configuration.
- * @returns Namespace names in insertion order.
+ * Read normalized namespaces, including configurations constructed by CLI consumers.
+ * @param config - Application configuration
+ * @returns Normalized namespace entries
  */
-export function extractAllNamespaces(config: LoadedConfig): string[] {
-  const namespaces = new Set<string>();
-
-  if (config.db) {
-    for (const namespaceName of Object.keys(config.db)) {
-      namespaces.add(namespaceName);
-    }
-  }
-
-  return Array.from(namespaces);
+export function normalizedDbOf(config: Pick<LoadedConfig, "db" | "normalizedDb">): NormalizedDb {
+  return config.normalizedDb ?? normalizeDb(config.db);
 }
 
 /**
- * Extracts namespace keys under `config.db` that this app owns
- * (i.e. not declared with `{ external: true }`). Use this for destructive
- * operations like `tailordb truncate --all` to avoid touching namespaces
- * owned by other apps.
- * @param config - Loaded application configuration.
- * @returns Owned namespace names in insertion order.
+ * Extract every configured namespace.
+ * @param config - Loaded application configuration
+ * @returns Namespace names in config order
+ */
+export function extractAllNamespaces(config: LoadedConfig): string[] {
+  return Object.keys(normalizedDbOf(config));
+}
+
+/**
+ * Extract namespaces deployed by this application.
+ * @param config - Loaded application configuration
+ * @returns Owned namespace names in config order
  */
 export function extractOwnedNamespaces(config: LoadedConfig): string[] {
-  const namespaces = new Set<string>();
-
-  if (config.db) {
-    for (const [namespaceName, nsConfig] of Object.entries(config.db)) {
-      if ("external" in nsConfig) continue;
-      namespaces.add(namespaceName);
-    }
-  }
-
-  return Array.from(namespaces);
+  return Object.entries(normalizedDbOf(config))
+    .filter(([, entry]) => entry.owned)
+    .map(([name]) => name);
 }

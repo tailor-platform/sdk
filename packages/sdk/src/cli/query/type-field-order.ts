@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { normalizedDbOf } from "#/cli/shared/config";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
@@ -18,14 +19,14 @@ export async function loadTypeFieldOrder(
   namespace: string,
 ): Promise<TypeFieldOrderMap> {
   const fieldOrder: TypeFieldOrderMap = new Map();
-  const dbConfig = config.db?.[namespace];
+  const dbConfig = normalizedDbOf(config)[namespace];
 
-  if (!dbConfig || !("files" in dbConfig) || dbConfig.files.length === 0) {
+  if (!dbConfig || !dbConfig.owned || dbConfig.schemaSource.config.files.length === 0) {
     return fieldOrder;
   }
 
   const baseDir = path.dirname(config.path);
-  const typeFiles = loadFilesWithIgnores(dbConfig, baseDir);
+  const typeFiles = loadFilesWithIgnores(dbConfig.schemaSource.config, baseDir);
 
   await Promise.all(
     typeFiles.map(async (typeFile) => {
