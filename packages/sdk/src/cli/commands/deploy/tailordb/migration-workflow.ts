@@ -215,13 +215,10 @@ async function findMigrationWorkflowId(
   workspaceId: string,
   name: string,
 ): Promise<string | undefined> {
-  try {
-    const { workflow } = await client.getWorkflowByName({ workspaceId, workflowName: name });
-    return workflow?.id;
-  } catch (error) {
-    if (isNotFoundError(error)) return undefined;
-    throw error;
-  }
+  const response = await getOrNull(() =>
+    client.getWorkflowByName({ workspaceId, workflowName: name }),
+  );
+  return response?.workflow?.id;
 }
 
 interface CreateMigrationWorkflowParams {
