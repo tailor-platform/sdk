@@ -590,3 +590,32 @@ describe("logs command detail output", () => {
     expect(getFunctionExecution).not.toHaveBeenCalled();
   });
 });
+
+describe("logs command list output", () => {
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    await runTest();
+  });
+
+  test("--json lists the default 50 executions and reports that more exist", async () => {
+    using stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listFunctionExecutions: vi.fn(async ({ pageSize }: { pageSize: number }) => ({
+        executions: Array.from({ length: pageSize }, (_, index) =>
+          functionExecution({ id: `exec-${index}` }),
+        ),
+        nextPageToken: "more",
+      })),
+    } as unknown as OperatorClient);
+
+    const result = await runCommand(logsCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toHaveLength(50);
+    expect(stripAnsi(stderr.output)).toContain(
+      "More results exist beyond --limit 50. Raise --limit to see more.",
+    );
+  });
+});
