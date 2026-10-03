@@ -10,7 +10,7 @@ import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
-import { fetchRemoteMigrationState } from "./remote-state";
+import { fetchRemoteMigrationState, isStaleMigrationInProgress } from "./remote-state";
 import {
   getMigrationFiles,
   loadDiff,
@@ -203,10 +203,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       label: formatMigrationNumber(num),
       ...(descriptions.has(num) ? { description: descriptions.get(num) } : {}),
     }));
-    const inProgress =
-      remoteState.inProgress && remoteState.inProgress.number > currentMigration
-        ? remoteState.inProgress
-        : null;
+    const inProgress = isStaleMigrationInProgress(remoteState) ? null : remoteState.inProgress;
 
     rows.push({
       status: "ok",

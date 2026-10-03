@@ -88,6 +88,18 @@ export async function fetchRemoteMigrationState(
 }
 
 /**
+ * Whether the in-progress record names a migration the checkpoint already
+ * covers, so it no longer describes the namespace.
+ * @param state - Remote migration state of the namespace
+ * @returns True for a leftover record
+ */
+export function isStaleMigrationInProgress(state: RemoteMigrationState): boolean {
+  return (
+    state.inProgress !== null && state.number !== null && state.inProgress.number <= state.number
+  );
+}
+
+/**
  * Refuse a command that rewrites migration state while a migration is
  * partially applied; only a deploy can finish it consistently.
  * @param state - Remote migration state of the namespace
@@ -101,6 +113,6 @@ export function assertNoMigrationInProgress(state: RemoteMigrationState, namespa
       ? `Migration ${namespace}/${formatMigrationNumber(state.inProgress.number)} is partially applied by an earlier deploy.`
       : `Namespace "${namespace}" records a partially applied migration that cannot be read.`,
     suggestion:
-      "Run `tailor deploy` to finish the migration first; steps that already completed do not run again.",
+      "Finish the migration with a deploy first; steps that already completed do not run again.",
   });
 }

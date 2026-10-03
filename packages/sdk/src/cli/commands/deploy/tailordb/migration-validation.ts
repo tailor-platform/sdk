@@ -5,6 +5,11 @@ import {
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
+  isStaleMigrationInProgress,
+  type MigrationInProgress,
+  type RemoteMigrationState,
+} from "#/cli/commands/tailordb/migrate/remote-state";
+import {
   checkMigrationDiffs,
   formatMigrationCheckResults,
   formatRemoteVerificationResults,
@@ -22,10 +27,6 @@ import {
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { detectPendingMigrations } from "./migration";
-import type {
-  MigrationInProgress,
-  RemoteMigrationState,
-} from "#/cli/commands/tailordb/migrate/remote-state";
 import type {
   MigrationCheckpointRepair,
   PendingMigration,
@@ -107,7 +108,7 @@ function validateMigrationsInProgress(
     const inProgress = state.inProgress;
     if (!inProgress) continue;
     const migrationLabel = `${namespace}/${formatMigrationNumber(inProgress.number)}`;
-    if (state.number !== null && inProgress.number <= state.number) {
+    if (isStaleMigrationInProgress(state)) {
       result.staleInProgress.push({ namespace, migrationNumber: inProgress.number });
       continue;
     }

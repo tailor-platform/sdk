@@ -1,6 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test } from "vitest";
-import { fetchRemoteMigrationState } from "./remote-state";
+import {
+  fetchRemoteMigrationState,
+  isStaleMigrationInProgress,
+  type RemoteMigrationState,
+} from "./remote-state";
 import type { OperatorClient } from "#/cli/shared/client";
 
 function clientWithLabels(labels: Record<string, string> | undefined): OperatorClient {
@@ -64,5 +68,26 @@ describe("fetchRemoteMigrationState", () => {
       inProgress: null,
       inProgressInvalid: false,
     });
+  });
+});
+
+describe("isStaleMigrationInProgress", () => {
+  const state = (number: number | null, inProgress: number | null): RemoteMigrationState => ({
+    metadataExists: true,
+    number,
+    historyId: null,
+    historyIdInvalid: false,
+    inProgress: inProgress === null ? null : { number: inProgress },
+    inProgressInvalid: false,
+  });
+
+  test.each([
+    ["the checkpoint already covers the migration", state(3, 3), true],
+    ["the checkpoint moved past the migration", state(4, 3), true],
+    ["the migration is the next one", state(2, 3), false],
+    ["no checkpoint was recorded", state(null, 3), false],
+    ["nothing is in progress", state(3, null), false],
+  ])("%s", (_label, input, expected) => {
+    expect(isStaleMigrationInProgress(input)).toBe(expected);
   });
 });
