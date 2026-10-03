@@ -27,6 +27,21 @@ describe("analyzeMigrationScriptSource", () => {
     ).toEqual({ kind: "main", ignoredSteps: true });
   });
 
+  test("ignores type-only exports when telling main from steps", () => {
+    const form = analyze(ml`
+      export type * from "./db";
+      export type { Transaction as steps } from "./db";
+      export const steps = { backfill: { run: async (trx) => {} } };
+    `);
+    expect(form).toMatchObject({ kind: "steps", order: ["backfill"] });
+    expect(
+      analyze(ml`
+        export type { Transaction as steps } from "./db";
+        export async function main(trx) {}
+      `),
+    ).toEqual({ kind: "main" });
+  });
+
   test("reads steps and their dependencies in declaration order", () => {
     const form = analyze(ml`
       import type { MigrationSteps } from "./db";

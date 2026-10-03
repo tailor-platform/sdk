@@ -87,11 +87,12 @@ function collectExports(program: Program): ExportedNames {
   };
   for (const statement of program.body) {
     if (statement.type === "ExportAllDeclaration") {
+      if (statement.exportKind === "type") continue;
       if (!statement.exported) result.hasUnreadableExports = true;
       else if (propertyName(statement.exported) === "main") result.hasMain = true;
       continue;
     }
-    if (statement.type !== "ExportNamedDeclaration") continue;
+    if (statement.type !== "ExportNamedDeclaration" || statement.exportKind === "type") continue;
     const declaration = statement.declaration;
     if (declaration?.type === "FunctionDeclaration" && declaration.id?.name === "main") {
       result.hasMain = true;
@@ -111,6 +112,7 @@ function collectExports(program: Program): ExportedNames {
       }
     }
     for (const specifier of statement.specifiers) {
+      if (specifier.exportKind === "type") continue;
       const exported = propertyName(specifier.exported);
       if (exported === "main") result.hasMain = true;
       if (exported === "steps") result.stepsExportedIndirectly = true;

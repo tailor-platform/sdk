@@ -111,6 +111,27 @@ describe("runMigrationSteps", () => {
     expect(seen).toEqual([{ STAGE: "test" }, { STAGE: "test" }]);
   });
 
+  test("gives every step its own context, as separate deploy jobs do", async () => {
+    const seen: unknown[] = [];
+
+    await runMigrationSteps(
+      {
+        first: {
+          run: async (_trx: Trx, context: Context) => {
+            context.env.LEAKED = true;
+          },
+        },
+        second: {
+          dependsOn: ["first"],
+          run: async (_trx: Trx, { env }: Context) => void seen.push(env),
+        },
+      },
+      { transaction: (step) => db.transaction().execute(step), env: { STAGE: "test" } },
+    );
+
+    expect(seen).toEqual([{ STAGE: "test" }]);
+  });
+
   test("rejects a step graph the deploy would reject", async () => {
     await expect(
       runMigrationSteps(

@@ -59,10 +59,10 @@ export async function runMigrationSteps<Trx, Context extends { env: unknown }>(
   const order = orderMigrationSteps(
     Object.entries(steps).map(([name, step]) => ({ name, dependsOn: step.dependsOn ?? [] })),
   );
-  const context = { env: options.env ?? {} } as Context;
   const completed: string[] = [];
   for (const name of order) {
     const step = assertDefined(steps[name], `Migration step "${name}" is not defined.`);
+    const context = { env: structuredClone(options.env ?? {}) } as Context;
     try {
       await options.transaction((trx) => step.run(trx, context));
     } catch (error) {
