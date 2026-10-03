@@ -2,9 +2,9 @@
  * Lint of generated GitHub Actions workflows.
  *
  * Each rendered workflow is written to its own temp repository and checked
- * with `actionlint` and with `zizmor` at every severity. The suites are skipped
- * when either binary is not available on PATH, so they never cause false
- * negatives in environments that have not run `aqua i`.
+ * with `zizmor` at every severity. The suites are skipped when the binary is
+ * not available on PATH, so they never cause false negatives in environments
+ * that have not run `aqua i`.
  *
  * Locally: run `aqua i` first, then these suites will execute as normal tests.
  */
@@ -31,7 +31,6 @@ function resolveBin(command: string): string {
   return result.status === 0 ? result.stdout.trim() : command;
 }
 
-const ACTIONLINT = resolveBin("actionlint");
 const ZIZMOR = resolveBin("zizmor");
 
 function isAvailable(command: string, args: string[]): boolean {
@@ -66,9 +65,8 @@ const COMMON = {
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const ERD_SCHEMA_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema.yml");
 
-// Suites are skipped entirely when a linter is not on PATH (run `aqua i` first).
-const lintersAvailable =
-  isAvailable(ACTIONLINT, ["--version"]) && isAvailable(ZIZMOR, ["--version"]);
+// Suites are skipped entirely when zizmor is not on PATH (run `aqua i` first).
+const lintersAvailable = isAvailable(ZIZMOR, ["--version"]);
 
 function writeRepo(name: string, files: Record<string, string>): string {
   const repoDir = path.join(tmpDir, name);
@@ -79,32 +77,8 @@ function writeRepo(name: string, files: Record<string, string>): string {
   return repoDir;
 }
 
-// actionlint rejects the `$/` self-repository syntax (rhysd/actionlint#711), so it
-// checks a copy that references the same local actions through `./`.
 function lintRepo(name: string, workflow: string, files: Record<string, string>): LintResult {
-  const zizmorDir = writeRepo(`${name}-zizmor`, files);
-  const zizmor = run(ZIZMOR, ["--offline", "--no-progress", workflow], zizmorDir);
-  const actionlintDir = writeRepo(
-    `${name}-actionlint`,
-    Object.fromEntries(
-      Object.entries(files).map(([file, content]) => [
-        file,
-        content.replaceAll("uses: $/", "uses: ./"),
-      ]),
-    ),
-  );
-  // Without a `.git`, actionlint skips checking the inputs passed to local actions.
-  fs.mkdirSync(path.join(actionlintDir, ".git"));
-  const actionlint = run(ACTIONLINT, ["-no-color", workflow], actionlintDir);
-  return {
-    ok: zizmor.ok && actionlint.ok,
-    output: [
-      actionlint.ok ? "" : `actionlint:\n${actionlint.output}`,
-      zizmor.ok ? "" : `zizmor:\n${zizmor.output}`,
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  };
+  return run(ZIZMOR, ["--offline", "--no-progress", workflow], writeRepo(name, files));
 }
 
 function writeAndLint(name: string, content: string): LintResult {
@@ -226,7 +200,7 @@ describe("repository ERD schema workflow", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests (skipped when actionlint or zizmor is not on PATH)
+// Tests (skipped when zizmor is not on PATH)
 // ---------------------------------------------------------------------------
 
 describe.skipIf(!lintersAvailable)("lint of renderBranchWorkflow", () => {

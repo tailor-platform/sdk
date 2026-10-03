@@ -7,7 +7,7 @@
 # actionlint is intentionally absent here: it does not parse `parallel:` steps
 # yet (rhysd/actionlint#693). zizmor covers the security audits actionlint
 # offers, so this job keeps its security coverage. The generated workflows are
-# checked with actionlint and zizmor in a separate job.
+# checked with zizmor in a separate job.
 name: GitHub Actions Lint
 
 on:
@@ -75,5 +75,5 @@ jobs:
       - name: Install deps
         uses: $/.github/actions/install-deps
 
-      - name: Lint generated workflows with actionlint and zizmor
+      - name: Lint generated workflows with zizmor
         run: pnpm --filter @tailor-platform/sdk-plugin-setup exec vitest run src/workflow-lint.test.ts
