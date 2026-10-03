@@ -18,10 +18,10 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   initOperatorClient: vi.fn().mockResolvedValue({
     truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
     truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
-    listTailorDBTypes: vi.fn().mockResolvedValue({
-      tailordbTypes: [{ name: "User" }, { name: "Order" }],
+    listTailorDBTypes: vi.fn().mockImplementation(async ({ namespaceName }) => ({
+      tailordbTypes: namespaceName === "tailordb" ? [{ name: "User" }, { name: "Order" }] : [],
       nextPageToken: "",
-    }),
+    })),
   }),
 }));
 
@@ -354,10 +354,10 @@ describe("truncate command", () => {
       vi.mocked(initOperatorClient).mockResolvedValue({
         truncateTailorDBType: vi.fn(),
         truncateTailorDBTypes: vi.fn(),
-        listTailorDBTypes: vi.fn().mockResolvedValue({
-          tailordbTypes: [{ name: "User" }, { name: "Order" }],
+        listTailorDBTypes: vi.fn().mockImplementation(async ({ namespaceName }) => ({
+          tailordbTypes: namespaceName === "tailordb" ? [{ name: "User" }, { name: "Order" }] : [],
           nextPageToken: "",
-        }),
+        })),
       } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
       using _json = jsonMode();
 

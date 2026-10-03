@@ -79,8 +79,13 @@ describe("resolveTableNamespaces", () => {
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
   });
 
-  test("stops querying when all tables are resolved", async () => {
-    const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("User")) };
+  test("checks remaining namespaces after finding the requested table", async () => {
+    const client = {
+      listTailorDBTypes: vi
+        .fn()
+        .mockResolvedValueOnce(namesResult("User"))
+        .mockResolvedValueOnce(namesResult("Event")),
+    };
 
     await resolveTableNamespaces({
       workspaceId: "workspace-id",
@@ -89,7 +94,28 @@ describe("resolveTableNamespaces", () => {
       client,
     });
 
-    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
+    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects ambiguous table names case-insensitively", async () => {
+    const client = {
+      listTailorDBTypes: vi
+        .fn()
+        .mockResolvedValueOnce(namesResult("User"))
+        .mockResolvedValueOnce(namesResult("user")),
+    };
+
+    await expect(
+      resolveTableNamespaces({
+        workspaceId: "workspace-id",
+        namespaces: ["main", "shared"],
+        tableNames: ["user"],
+        client,
+      }),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS",
+      context: { table: "user", namespaces: ["main", "shared"] },
+    });
   });
 
   test("stops paging a namespace once every table is resolved", async () => {

@@ -1,4 +1,5 @@
 import { MAX_PAGE_SIZE } from "./client";
+import { CLIError } from "./errors";
 
 type ListTailorDBTypesClient = {
   listTailorDBTypes(args: {
@@ -38,14 +39,14 @@ export async function resolveTableNamespaces(
     requestedTablesByLowercase.set(key, [tableName]);
   }
 
-  const unresolvedTables = new Set(args.tableNames);
   const tableNamespaceMap = new Map<string, string>();
 
-  for (const namespace of args.namespaces) {
-    if (unresolvedTables.size === 0) {
-      break;
-    }
+  if (args.tableNames.length === 0) return tableNamespaceMap;
 
+  const requestedTableCount = new Set(args.tableNames).size;
+
+  for (const namespace of args.namespaces) {
+    const foundInNamespace = new Set<string>();
     let pageToken = "";
     do {
       const { tailordbTypes, nextPageToken } = await args.client.listTailorDBTypes({
@@ -57,21 +58,25 @@ export async function resolveTableNamespaces(
 
       for (const type of tailordbTypes) {
         const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
-        if (!matchedRequestedTypes) {
-          continue;
-        }
+        if (!matchedRequestedTypes) continue;
 
         for (const requestedTableName of matchedRequestedTypes) {
-          if (tableNamespaceMap.has(requestedTableName)) {
-            continue;
+          const previousNamespace = tableNamespaceMap.get(requestedTableName);
+          if (previousNamespace !== undefined && previousNamespace !== namespace) {
+            throw CLIError({
+              code: "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS",
+              message: `Table "${requestedTableName}" exists in multiple namespaces: ${previousNamespace}, ${namespace}.`,
+              suggestion: "Use a config containing only the intended namespace.",
+              context: { table: requestedTableName, namespaces: [previousNamespace, namespace] },
+            });
           }
           tableNamespaceMap.set(requestedTableName, namespace);
-          unresolvedTables.delete(requestedTableName);
+          foundInNamespace.add(requestedTableName);
         }
       }
 
       pageToken = nextPageToken;
-    } while (pageToken && unresolvedTables.size > 0);
+    } while (pageToken && foundInNamespace.size < requestedTableCount);
   }
 
   return tableNamespaceMap;
