@@ -71,7 +71,7 @@ const aiGateway = defineAIGateway("my-aigateway", {}); // defaults to "shared-au
 
 export default defineConfig({
   name: "my-app",
-  auth: { name: "shared-auth", external: true },
+  auth: { name: "shared-auth", attach: true },
   aiGateways: [aiGateway],
 });
 ```

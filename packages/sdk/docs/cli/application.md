@@ -176,7 +176,7 @@ To deploy interdependent applications to the same workspace in one run, pass com
 tailor deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.ts
 ```
 
-When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `external: true` during the same deploy.
+When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `attach: true` during the same deploy.
 
 Names that identify a resource across the whole workspace, such as application, executor, workflow, and static website names and service namespaces, must be unique across all configs in one deploy. Otherwise, `deploy` fails before planning any changes and lists every duplicate with the config files that define it.
 
