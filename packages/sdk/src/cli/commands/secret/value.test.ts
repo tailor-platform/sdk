@@ -40,9 +40,9 @@ describe("resolveSecretValue", () => {
   test("returns --value without reading standard input", async () => {
     const stdin = input(["unused"]);
 
-    await expect(
-      resolveSecretValue({ value: "sk_live", "value-stdin": false }, stdin, "secret create"),
-    ).resolves.toBe("sk_live");
+    await expect(resolveSecretValue({ value: "sk_live" }, stdin, "secret create")).resolves.toBe(
+      "sk_live",
+    );
     expect(stdin.readableEnded).toBe(false);
   });
 
@@ -58,42 +58,32 @@ describe("resolveSecretValue", () => {
     },
     { name: "inner newlines", chunks: ["line1\nline2\n"], expected: "line1\nline2" },
   ])("reads standard input with $name", async ({ chunks, expected }) => {
-    await expect(
-      resolveSecretValue({ "value-stdin": true }, input(chunks), "secret create"),
-    ).resolves.toBe(expected);
+    await expect(resolveSecretValue({}, input(chunks), "secret create")).resolves.toBe(expected);
   });
 
-  test("rejects --value together with --value-stdin", async () => {
-    await expect(
-      resolveSecretValue({ value: "x", "value-stdin": true }, input(["y"]), "secret update"),
-    ).rejects.toMatchObject({ code: "SECRET_VALUE_OPTIONS_CONFLICT", command: "secret update" });
-  });
+  test("requires --value when standard input is a terminal", async () => {
+    const stdin = input(["x"], true);
 
-  test("requires --value or --value-stdin", async () => {
-    await expect(
-      resolveSecretValue({ "value-stdin": false }, input([]), "secret create"),
-    ).rejects.toMatchObject({ code: "SECRET_VALUE_REQUIRED", command: "secret create" });
-  });
-
-  test("refuses to wait for a value typed into a terminal", async () => {
-    await expect(
-      resolveSecretValue({ "value-stdin": true }, input(["x"], true), "secret create"),
-    ).rejects.toMatchObject({ code: "SECRET_VALUE_STDIN_TTY" });
+    await expect(resolveSecretValue({}, stdin, "secret update")).rejects.toMatchObject({
+      code: "SECRET_VALUE_REQUIRED",
+      command: "secret update",
+    });
+    expect(stdin.readableEnded).toBe(false);
   });
 
   test.each([
     { name: "nothing", chunks: [] },
     { name: "only a newline", chunks: ["\n"] },
-  ])("rejects standard input that contains $name", async ({ chunks }) => {
-    await expect(
-      resolveSecretValue({ "value-stdin": true }, input(chunks), "secret create"),
-    ).rejects.toMatchObject({ code: "SECRET_VALUE_EMPTY" });
+  ])("requires --value when standard input contains $name", async ({ chunks }) => {
+    await expect(resolveSecretValue({}, input(chunks), "secret create")).rejects.toMatchObject({
+      code: "SECRET_VALUE_REQUIRED",
+    });
   });
 
   test("keeps a leading byte order mark", async () => {
     await expect(
       resolveSecretValue(
-        { "value-stdin": true },
+        {},
         input([Buffer.from([0xef, 0xbb, 0xbf, 0x73, 0x6b, 0x0a])]),
         "secret create",
       ),
@@ -103,9 +93,7 @@ describe("resolveSecretValue", () => {
   test("accepts standard input at the size limit", async () => {
     const value = "a".repeat(MAX_PIPED_SECRET_KIB * 1024);
 
-    await expect(
-      resolveSecretValue({ "value-stdin": true }, input([value]), "secret create"),
-    ).resolves.toBe(value);
+    await expect(resolveSecretValue({}, input([value]), "secret create")).resolves.toBe(value);
   });
 
   test.each([
@@ -114,15 +102,15 @@ describe("resolveSecretValue", () => {
   ])("accepts a value at the size limit followed by a $name", async ({ newline }) => {
     const value = "a".repeat(MAX_PIPED_SECRET_KIB * 1024);
 
-    await expect(
-      resolveSecretValue({ "value-stdin": true }, input([value, newline]), "secret create"),
-    ).resolves.toBe(value);
+    await expect(resolveSecretValue({}, input([value, newline]), "secret create")).resolves.toBe(
+      value,
+    );
   });
 
   test("rejects a value over the size limit even with a trailing newline", async () => {
     await expect(
       resolveSecretValue(
-        { "value-stdin": true },
+        {},
         input(["a".repeat(MAX_PIPED_SECRET_KIB * 1024 + 1), "\n"]),
         "secret create",
       ),
@@ -132,7 +120,7 @@ describe("resolveSecretValue", () => {
   test("rejects standard input over the size limit", async () => {
     await expect(
       resolveSecretValue(
-        { "value-stdin": true },
+        {},
         input([
           "a".repeat((MAX_PIPED_SECRET_KIB / 2) * 1024),
           "a".repeat((MAX_PIPED_SECRET_KIB / 2) * 1024 + 1),
@@ -144,11 +132,7 @@ describe("resolveSecretValue", () => {
 
   test("rejects standard input that is not valid UTF-8", async () => {
     await expect(
-      resolveSecretValue(
-        { "value-stdin": true },
-        input([Buffer.from([0x73, 0x6b, 0xff])]),
-        "secret create",
-      ),
+      resolveSecretValue({}, input([Buffer.from([0x73, 0x6b, 0xff])]), "secret create"),
     ).rejects.toMatchObject({ code: "SECRET_VALUE_INVALID_UTF8" });
   });
 });
@@ -197,19 +181,13 @@ describe.each([
     });
   });
 
-  test("sends the value piped to standard input with --value-stdin", async () => {
+  test("sends the value piped to standard input when --value is omitted", async () => {
     const client = stubClient();
     vi.spyOn(process, "stdin", "get").mockReturnValue(
       input(["sk_live_piped\n"]) as unknown as typeof process.stdin,
     );
 
-    const result = await runCommand(command, [
-      "--vault-name",
-      "api-keys",
-      "--name",
-      "stripe",
-      "--value-stdin",
-    ]);
+    const result = await runCommand(command, ["--vault-name", "api-keys", "--name", "stripe"]);
 
     expect(result.success).toBe(true);
     expect(logger.registerSecret).toHaveBeenCalledWith("sk_live_piped");
@@ -223,6 +201,9 @@ describe.each([
 
   test("rejects a missing value before contacting the platform", async () => {
     stubClient();
+    vi.spyOn(process, "stdin", "get").mockReturnValue(
+      input([], true) as unknown as typeof process.stdin,
+    );
 
     const result = await runCommand(command, ["--vault-name", "api-keys", "--name", "stripe"]);
 

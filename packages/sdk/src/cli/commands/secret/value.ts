@@ -1,22 +1,21 @@
 import { CLIError } from "#/cli/shared/errors";
 
-/** Largest secret value `--value-stdin` accepts, in KiB. */
+/** Largest secret value accepted from standard input, in KiB. */
 export const MAX_PIPED_SECRET_KIB = 128;
 
-/** Parsed `--value` / `--value-stdin` options. */
+/** Parsed `--value` option. */
 export interface SecretValueArgs {
   value?: string | undefined;
-  "value-stdin": boolean;
 }
 
-/** Stream the secret value is read from when `--value-stdin` is set. */
+/** Stream the secret value is read from when `--value` is omitted. */
 export type SecretValueInput = AsyncIterable<string | Uint8Array> & { isTTY?: boolean | undefined };
 
 /**
- * Resolve the secret value from `--value`, or from standard input with `--value-stdin`.
+ * Resolve the secret value from `--value`, or from standard input when `--value` is omitted.
  * A piped value is limited to {@link MAX_PIPED_SECRET_KIB} KiB, and one trailing newline is removed from it.
- * @param args - Parsed `--value` / `--value-stdin` options
- * @param stdin - Stream read when `--value-stdin` is set
+ * @param args - Parsed `--value` option
+ * @param stdin - Stream read when `--value` is omitted
  * @param command - Command path shown in the error's help hint
  * @returns The secret value
  */
@@ -25,30 +24,15 @@ export async function resolveSecretValue(
   stdin: SecretValueInput,
   command: string,
 ): Promise<string> {
-  if (args.value !== undefined && args["value-stdin"]) {
-    throw CLIError({
-      code: "SECRET_VALUE_OPTIONS_CONFLICT",
-      message: "--value and --value-stdin cannot be used together.",
-      command,
-    });
-  }
   if (args.value !== undefined) return args.value;
-  if (!args["value-stdin"]) {
-    throw CLIError({
+  const missing = (reason: string) =>
+    CLIError({
       code: "SECRET_VALUE_REQUIRED",
-      message: "No secret value was given.",
-      suggestion: "Pass --value, or pipe the value to standard input with --value-stdin.",
+      message: `No secret value was given: --value is omitted and standard input ${reason}.`,
+      suggestion: "Pass --value, or pipe or redirect the value into the command.",
       command,
     });
-  }
-  if (stdin.isTTY === true) {
-    throw CLIError({
-      code: "SECRET_VALUE_STDIN_TTY",
-      message: "--value-stdin cannot read the secret value from a terminal.",
-      suggestion: "Pipe or redirect the value into the command, or pass it with --value.",
-      command,
-    });
-  }
+  if (stdin.isTTY === true) throw missing("is a terminal");
 
   const maxBytes = MAX_PIPED_SECRET_KIB * 1024;
   const tooLarge = () =>
@@ -78,12 +62,6 @@ export async function resolveSecretValue(
   }
   const value = text.replace(/\r?\n$/, "");
   if (Buffer.byteLength(value) > maxBytes) throw tooLarge();
-  if (value === "") {
-    throw CLIError({
-      code: "SECRET_VALUE_EMPTY",
-      message: "The secret value read from standard input is empty.",
-      command,
-    });
-  }
+  if (value === "") throw missing("is empty");
   return value;
 }
