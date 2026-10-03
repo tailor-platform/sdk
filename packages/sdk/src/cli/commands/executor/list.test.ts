@@ -91,5 +91,8 @@ describe("executor list", () => {
     expect(info.mock.calls.map(([message]) => message)).toEqual([
       "More results exist beyond --limit 1. Raise --limit to see more.",
     ]);
+    expect(info.mock.invocationCallOrder[0]).toBeGreaterThan(
+      Math.max(...stdout.mock.invocationCallOrder),
+    );
   });
 });
