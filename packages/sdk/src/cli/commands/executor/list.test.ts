@@ -70,4 +70,26 @@ describe("executor list", () => {
       `To see webhook URLs, run \`tailor executor webhook list --workspace-id=${workspaceId} '--profile=dev$1'\` in PowerShell or \`tailor executor webhook list --workspace-id=${workspaceId} "--profile=dev$1"\` in cmd.exe`,
     );
   });
+
+  test("reports more executors beyond --limit after listing only the ones shown", async () => {
+    const scheduleExecutor = {
+      name: "nightly",
+      disabled: false,
+      triggerConfig: { config: { case: "schedule", value: {} } },
+    } as unknown as ExecutorExecutor;
+    vi.mocked(fetchPaged).mockResolvedValue([scheduleExecutor, webhookExecutor]);
+    using stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    using info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+
+    const result = await runCommand(listCommand, ["--workspace-id", workspaceId, "--limit", "1"]);
+
+    expect(result.success).toBe(true);
+    expect(fetchPaged).toHaveBeenCalledWith(expect.any(Function), { limit: 2 });
+    const printed = stdout.mock.calls.map(([chunk]) => String(chunk)).join("");
+    expect(printed).toContain("nightly");
+    expect(printed).not.toContain("on-webhook");
+    expect(info.mock.calls.map(([message]) => message)).toEqual([
+      "More results exist beyond --limit 1. Raise --limit to see more.",
+    ]);
+  });
 });

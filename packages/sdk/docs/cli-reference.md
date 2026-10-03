@@ -31,6 +31,11 @@ For commands that return structured results, passing `--json` writes one parseab
 to stdout on success. Empty successful result sets are emitted as JSON values such as `[]`, not as
 human-readable text or empty stdout.
 
+List commands return at most `--limit` items. When more exist, the list is followed by a notice on
+stderr, `More results exist beyond --limit N. Raise --limit to see more.`, while stdout keeps the
+same array. Log listings such as `executor jobs`, `function logs`, and `workflow executions` default
+to `--limit 50`; pass `--limit 0` to list everything.
+
 Commands that only perform side effects and do not define a structured result may leave stdout empty
 even when `--json` is passed.
 

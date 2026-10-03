@@ -2,6 +2,7 @@ import { z } from "zod";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 
@@ -65,12 +66,15 @@ export const listCommand = defineAppCommand({
   }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
-    const websites = await listStaticWebsites({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      order: args.order,
-      limit: args.limit,
-    });
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      listStaticWebsites({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        order: args.order,
+        limit,
+      }),
+    );
+    const websites = listed.items;
 
     const formatted = jsonOutput
       ? websites
@@ -92,5 +96,6 @@ export const listCommand = defineAppCommand({
         });
 
     logger.out(formatted);
+    reportTruncation(listed, args.limit);
   },
 });

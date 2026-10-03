@@ -5,6 +5,7 @@ import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cl
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { vaultArgs } from "./args";
@@ -71,14 +72,18 @@ export const listSecretCommand = defineAppCommand({
   }),
   run: async (args) => {
     try {
-      const secrets = await secretList({
-        workspaceId: args["workspace-id"],
-        profile: args.profile,
-        vaultName: args["vault-name"],
-        order: args.order,
-        limit: args.limit,
-      });
+      const listed = await fetchWithinLimit(args.limit, (limit) =>
+        secretList({
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+          vaultName: args["vault-name"],
+          order: args.order,
+          limit,
+        }),
+      );
+      const secrets = listed.items;
       logger.out(secrets);
+      reportTruncation(listed, args.limit);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         throw CLIError({

@@ -4,6 +4,7 @@ import { type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
+import { fetchWithinLimit, reportTruncation, type LimitedItems } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { profileNameSchema } from "#/cli/shared/profile-name";
 import { fetchReportedExpiries, type ReportedExpiry } from "./expiry";
@@ -36,30 +37,36 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
 }
 
 /**
- * List workspaces along with the prune expiry each one records.
+ * List workspaces along with the prune expiry each one records, and whether `limit` left any out.
  *
  * The expiries are read per workspace, so this stays out of the plain listing
  * path that deploy uses to pick a workspace.
  * @param options - Workspace listing options
- * @returns List of workspaces, each carrying its recorded expiry
+ * @returns Workspaces, each carrying its recorded expiry, and whether more exist beyond the limit
  */
 export async function listWorkspacesWithExpiry(
   options?: ListWorkspacesOptions,
-): Promise<WorkspaceInfoWithExpiry[]> {
+): Promise<LimitedItems<WorkspaceInfoWithExpiry>> {
   const profile = profileNameSchema.optional().parse(options?.profile);
   const accessToken = await loadAccessToken({ profile });
   const platformConfig = await loadPlatformClientConfig({ profile });
   const client = await initOperatorClient(accessToken, platformConfig);
-  const workspaces = await listWorkspacesWithClient(client, options);
+  const listed = await fetchWithinLimit(options?.limit, (limit) =>
+    fetchWorkspaces(client, { ...options, limit }),
+  );
+  const workspaces = await workspaceInfosWithFolderNames(client, listed.items);
   const expiries = await fetchReportedExpiries(
     client,
     workspaces.map(({ id }) => id),
     new Date(),
   );
-  return workspaces.map((workspace, index) => {
-    const expiresAt = expiries[index];
-    return { ...workspace, expiresAt: expiresAt === undefined ? "unavailable" : expiresAt };
-  });
+  return {
+    items: workspaces.map((workspace, index) => {
+      const expiresAt = expiries[index];
+      return { ...workspace, expiresAt: expiresAt === undefined ? "unavailable" : expiresAt };
+    }),
+    truncated: listed.truncated,
+  };
 }
 
 /**
@@ -72,8 +79,15 @@ export async function listWorkspacesWithClient(
   client: Parameters<typeof workspaceInfosWithFolderNames>[0],
   options?: ListWorkspacesOptions,
 ): Promise<WorkspaceInfo[]> {
+  return workspaceInfosWithFolderNames(client, await fetchWorkspaces(client, options));
+}
+
+async function fetchWorkspaces(
+  client: Parameters<typeof workspaceInfosWithFolderNames>[0],
+  options?: ListWorkspacesOptions,
+) {
   const pageDirection = toPageDirection(options?.order);
-  const workspaces = await fetchPaged(
+  return fetchPaged(
     async (pageToken, pageSize) => {
       const { workspaces, nextPageToken } = await client.listWorkspaces({
         pageToken,
@@ -84,8 +98,6 @@ export async function listWorkspacesWithClient(
     },
     { limit: options?.limit },
   );
-
-  return workspaceInfosWithFolderNames(client, workspaces);
 }
 
 export const listCommand = defineAppCommand({
@@ -104,7 +116,7 @@ export const listCommand = defineAppCommand({
       limit: args.limit,
       profile: args.profile,
     });
-    logger.out(workspaces, {
+    logger.out(workspaces.items, {
       display: {
         name: workspaceNameTransformer,
         folderName: null,
@@ -113,5 +125,6 @@ export const listCommand = defineAppCommand({
         updatedAt: null,
       },
     });
+    reportTruncation(workspaces, args.limit);
   },
 });

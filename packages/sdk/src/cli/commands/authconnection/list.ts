@@ -4,6 +4,7 @@ import { z } from "zod";
 import { paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -45,19 +46,22 @@ export const listAuthConnectionCommand = defineAppCommand({
 
     try {
       const pageDirection = toPageDirection(args.order);
-      const connections = await fetchPaged(
-        async (pageToken, pageSize) => {
-          const { connections, nextPageToken } = await client.listAuthConnections({
-            workspaceId,
-            pageToken,
-            pageSize,
-            pageDirection,
-          });
-          return [connections, nextPageToken];
-        },
-        { limit: args.limit },
+      const listed = await fetchWithinLimit(args.limit, (limit) =>
+        fetchPaged(
+          async (pageToken, pageSize) => {
+            const { connections, nextPageToken } = await client.listAuthConnections({
+              workspaceId,
+              pageToken,
+              pageSize,
+              pageDirection,
+            });
+            return [connections, nextPageToken];
+          },
+          { limit },
+        ),
       );
-      logger.out(connections.map(connectionInfo));
+      logger.out(listed.items.map(connectionInfo));
+      reportTruncation(listed, args.limit);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         logger.out([]);

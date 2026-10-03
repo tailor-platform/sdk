@@ -2,6 +2,7 @@ import { z } from "zod";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
@@ -50,12 +51,15 @@ export const listCommand = defineAppCommand({
   }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
-    const workflows = await listWorkflows({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      order: args.order,
-      limit: args.limit,
-    });
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      listWorkflows({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        order: args.order,
+        limit,
+      }),
+    );
+    const workflows = listed.items;
 
     if (workflows.length === 0) {
       logger.info("No workflows found.");
@@ -64,5 +68,6 @@ export const listCommand = defineAppCommand({
       }
     }
     logger.out(workflows);
+    reportTruncation(listed, args.limit);
   },
 });

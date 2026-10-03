@@ -4,6 +4,7 @@ import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
@@ -67,14 +68,18 @@ export const listCommand = defineAppCommand({
     ...paginationArgs(),
   }),
   run: async (args) => {
-    const oauth2Clients = await listOAuth2Clients({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      configPath: args.config,
-      order: args.order,
-      limit: args.limit,
-    });
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      listOAuth2Clients({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        configPath: args.config,
+        order: args.order,
+        limit,
+      }),
+    );
+    const oauth2Clients = listed.items;
 
     logger.out(oauth2Clients);
+    reportTruncation(listed, args.limit);
   },
 });

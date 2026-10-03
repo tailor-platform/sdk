@@ -4,6 +4,7 @@ import { positiveIntArg } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { userOrganizationInfo, type UserOrganizationInfo } from "./transform";
 
@@ -42,7 +43,8 @@ export const listCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    const organizations = await listOrganizations({ limit: args.limit });
-    logger.out(organizations);
+    const listed = await fetchWithinLimit(args.limit, (limit) => listOrganizations({ limit }));
+    logger.out(listed.items);
+    reportTruncation(listed, args.limit);
   },
 });

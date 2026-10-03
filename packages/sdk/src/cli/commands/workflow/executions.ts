@@ -25,6 +25,7 @@ import {
   toFunctionLogEntryInfo,
   joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { styles, logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { waitArgs } from "./args";
@@ -429,15 +430,20 @@ export const executionsCommand = defineAppCommand({
         logger.out(execution);
       }
     } else {
-      const executions = await listWorkflowExecutions({
-        workspaceId: args["workspace-id"],
-        profile: args.profile,
-        workflow: args["workflow-name"] === undefined ? undefined : { name: args["workflow-name"] },
-        status: args.status,
-        order: args.order,
-        limit: args.limit,
-      });
+      const listed = await fetchWithinLimit(args.limit, (limit) =>
+        listWorkflowExecutions({
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+          workflow:
+            args["workflow-name"] === undefined ? undefined : { name: args["workflow-name"] },
+          status: args.status,
+          order: args.order,
+          limit,
+        }),
+      );
+      const executions = listed.items;
       logger.out(executions);
+      reportTruncation(listed, args.limit);
     }
   },
 });
