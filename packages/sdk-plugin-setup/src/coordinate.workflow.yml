@@ -33,14 +33,16 @@ jobs:
     outputs:
       on-branch: ${{ steps.tailor-tag-guard.outputs.on-branch }}
     steps:
-      - id: tailor-checkout # zizmor: ignore[artipacked] tag-guard runs git fetch, which needs the persisted token on private repositories
+      - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/tag-guard@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           target-branch: __BRANCH__
+          github-token: ${{ github.token }}
   # __TAG_GUARD_JOB_END__
 
   tailor-plan:
@@ -56,8 +58,10 @@ jobs:
       group: tailor-plan-__WORKSPACE_NAME__-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
     steps:
-      - id: tailor-checkout # zizmor: ignore[artipacked] the plan action runs git fetch on pull requests, which needs the persisted token on private repositories
+      - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
         uses: ./.github/actions/tailor-setup # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server
       # __PER_APP_PLAN_STEPS__

@@ -24,14 +24,16 @@ jobs:
     outputs:
       on-branch: ${{ steps.tailor-tag-guard.outputs.on-branch }}
     steps:
-      - id: tailor-checkout # zizmor: ignore[artipacked] tag-guard runs git fetch, which needs the persisted token on private repositories
+      - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/tag-guard@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           target-branch: "__BRANCH__"
+          github-token: ${{ github.token }}
   # __TAG_GUARD_JOB_END__
   tailor-plan:
     # __PLAN_NEEDS__
@@ -47,15 +49,15 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/setup@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/install@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/generate-check@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -65,19 +67,19 @@ jobs:
         # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/drift-check@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/migration-drift-check@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __MIGRATION_DRIFT_CHECK_END__
       - id: tailor-plan
-        uses: tailor-platform/actions/plan@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/plan@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -106,15 +108,15 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/setup@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/install@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/deploy@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -144,7 +146,7 @@ jobs:
           fi
       - id: tailor-notify
         if: always() && steps.tailor-slack-prereq.outputs.ready == 'true'
-        uses: tailor-platform/actions/notify@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/notify@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
         with:
           provider: slack
           status: ${{ job.status }}
