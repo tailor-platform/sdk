@@ -330,7 +330,7 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(fs.realpathSync(tmp.dir), {
       plugins: [kyselyPluginStub],
-      db: { tailordb: { files: [] }, theirs: { external: true } },
+      db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
 
     const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "theirs"]);
@@ -343,7 +343,7 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(fs.realpathSync(tmp.dir), {
       plugins: [kyselyPluginStub],
-      db: { tailordb: { files: [] }, theirs: { external: true } },
+      db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
 
     await runCommand(scriptCommand, ["scripts/fix.ts"]);
@@ -401,7 +401,7 @@ describe("function script", () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(fs.realpathSync(tmp.dir), {
-      db: { tailordb: { files: [] }, theirs: { external: true } },
+      db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
 
     await runCommand(scriptCommand, ["scripts/fix.ts"]);
@@ -416,7 +416,7 @@ describe("function script", () => {
   test("requires --remote for an external-only config and auto-selects it remotely", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { db: { theirs: { external: true } } });
+    mockConfig(fs.realpathSync(tmp.dir), { db: { theirs: { attach: true } } });
 
     const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
 
@@ -440,7 +440,7 @@ describe("function script", () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(fs.realpathSync(tmp.dir), {
-      db: { tailordb: { files: [] }, theirs: { external: true } },
+      db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
 
     const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "theirs"]);
@@ -455,7 +455,7 @@ describe("function script", () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(fs.realpathSync(tmp.dir), {
-      db: { tailordb: { files: [] }, theirs: { external: true } },
+      db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(
       normalizeSchemaSnapshot({ ...makeSnapshot(), namespace: "theirs" }),
@@ -475,7 +475,7 @@ describe("function script", () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(fs.realpathSync(tmp.dir), {
-      db: { tailordb: { files: [] }, theirs: { external: true } },
+      db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
 
     const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
@@ -509,7 +509,7 @@ describe("function script", () => {
   test("requires --remote to refresh a sidecar pinned to an external namespace", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { db: { theirs: { external: true } } });
+    mockConfig(fs.realpathSync(tmp.dir), { db: { theirs: { attach: true } } });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(
       normalizeSchemaSnapshot({ ...makeSnapshot(), namespace: "theirs" }),
     );

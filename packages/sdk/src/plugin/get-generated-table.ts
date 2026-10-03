@@ -118,7 +118,6 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
 
 interface DbNamespaceConfig {
   files?: string[];
-  external?: boolean;
 }
 
 /**
@@ -141,8 +140,7 @@ async function resolveNamespaceForTable(
 
   for (const [namespace, nsConfig] of Object.entries(config.db)) {
     const dbConfig = nsConfig as DbNamespaceConfig;
-    // Skip external namespaces (no files to resolve)
-    if (dbConfig.external || !dbConfig.files) continue;
+    if (!dbConfig.files) continue;
 
     for (const pattern of dbConfig.files) {
       const absolutePattern = path.resolve(configDir, pattern);

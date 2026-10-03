@@ -12,32 +12,30 @@ import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-
 import { defineApplication, loadApplication } from "./application";
 import type { OperatorClient } from "#/cli/shared/client";
 
-test.each([{ attach: true } as const, { external: true } as const])(
-  "attaches existing services without creating owned services: %j",
-  (reference) => {
-    const config = {
-      ...defineConfig({
-        name: "app",
-        db: { shared: reference },
-        resolver: { shared: reference },
-        auth: { name: "shared-auth", ...reference },
-        idp: [{ name: "shared-idp", ...reference }],
-      }),
-      path: "tailor.config.ts",
-    };
-    const application = defineApplication({ config });
-    expect(application.tailorDBServices).toEqual([]);
-    expect(application.resolverServices).toEqual([]);
-    expect(application.idpServices).toEqual([]);
-    expect(application.authService).toBeUndefined();
-    expect(application.subgraphs).toEqual([
-      { Type: "tailordb", Name: "shared" },
-      { Type: "pipeline", Name: "shared" },
-      { Type: "idp", Name: "shared-idp" },
-      { Type: "auth", Name: "shared-auth" },
-    ]);
-  },
-);
+test("attaches existing services without creating owned services", () => {
+  const reference = { attach: true } as const;
+  const config = {
+    ...defineConfig({
+      name: "app",
+      db: { shared: reference },
+      resolver: { shared: reference },
+      auth: { name: "shared-auth", ...reference },
+      idp: [{ name: "shared-idp", ...reference }],
+    }),
+    path: "tailor.config.ts",
+  };
+  const application = defineApplication({ config });
+  expect(application.tailorDBServices).toEqual([]);
+  expect(application.resolverServices).toEqual([]);
+  expect(application.idpServices).toEqual([]);
+  expect(application.authService).toBeUndefined();
+  expect(application.subgraphs).toEqual([
+    { Type: "tailordb", Name: "shared" },
+    { Type: "pipeline", Name: "shared" },
+    { Type: "idp", Name: "shared-idp" },
+    { Type: "auth", Name: "shared-auth" },
+  ]);
+});
 
 describe("defineAuth parse wiring", () => {
   test("preserves an explicit userProfile.namespace through AuthConfigSchema.parse", async () => {
@@ -135,7 +133,7 @@ describe("AI Gateway authNamespace default", () => {
     const config = {
       ...defineConfig({
         name: "testApp",
-        auth: { name: "shared-auth", external: true },
+        auth: { name: "shared-auth", attach: true },
         aiGateways: [aiGateway],
       }),
       path: "tailor.config.ts",
@@ -487,8 +485,6 @@ describe("TailorDB namespace membership", () => {
         path: "tailor.config.ts",
         db: {
           own: { files: [] },
-          // oxlint-disable-next-line typescript/no-deprecated -- Verify legacy attachment compatibility until v3.
-          legacy: { external: true },
           visible: { attach: true },
           shared: { attach: true, schemaFrom: "owner.ts" },
           sql: { attach: false, schemaFrom: "owner.ts" },
@@ -497,8 +493,8 @@ describe("TailorDB namespace membership", () => {
     });
     expect(application.tailorDBServices.map((db) => db.namespace)).toEqual(["own"]);
     expect(application.subgraphs).toEqual(
-      ["own", "legacy", "visible", "shared"].map((Name) => ({ Type: "tailordb", Name })),
+      ["own", "visible", "shared"].map((Name) => ({ Type: "tailordb", Name })),
     );
-    expect(application.externalTailorDBNamespaces).toEqual(["legacy", "visible", "shared"]);
+    expect(application.externalTailorDBNamespaces).toEqual(["visible", "shared"]);
   });
 });

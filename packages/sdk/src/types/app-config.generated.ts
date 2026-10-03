@@ -54,33 +54,26 @@ export type AppConfigParsedInput = {
     | {
         [x: string]:
           | {
-              /** Glob patterns for TailorDB table definition files */
               files: string[];
-              /** Glob patterns to exclude from table discovery */
               ignores?: string[] | undefined;
-              /** Migration configuration */
               migration?:
                 | {
-                    /** Directory containing migration files */
                     directory: string;
-                    /** Machine user name for migration execution */
-                    machineUser?: string | undefined;
+                    machineUser?: string | undefined | undefined;
                   }
                 | undefined;
-              /** Default GraphQL operations for all tables in this service */
               gqlOperations?:
                 | "query"
                 | {
-                    /** Enable create mutation (default: true) */
-                    create?: boolean | undefined;
-                    /** Enable update mutation (default: true) */
-                    update?: boolean | undefined;
-                    /** Enable delete mutation (default: true) */
-                    delete?: boolean | undefined;
-                    /** Enable read queries - get, list, aggregation (default: true) */
-                    read?: boolean | undefined;
+                    create?: boolean | undefined | undefined;
+                    update?: boolean | undefined | undefined;
+                    delete?: boolean | undefined | undefined;
+                    read?: boolean | undefined | undefined;
                   }
                 | undefined;
+            }
+          | {
+              external: true;
             }
           | {
               attach: true;
@@ -89,9 +82,6 @@ export type AppConfigParsedInput = {
           | {
               attach: false;
               schemaFrom: string;
-            }
-          | {
-              external: true;
             };
       }
     | undefined;
@@ -150,32 +140,26 @@ export type AppConfigParsed = {
     | {
         [x: string]:
           | {
-              /** Glob patterns for TailorDB table definition files */
               files: string[];
-              /** Glob patterns to exclude from table discovery */
               ignores?: string[] | undefined;
-              /** Migration configuration */
               migration?:
                 | {
-                    /** Directory containing migration files */
                     directory: string;
-                    /** Machine user name for migration execution */
-                    machineUser?: string | undefined;
+                    machineUser?: string | undefined | undefined;
                   }
                 | undefined;
-              /** Default GraphQL operations for all tables in this service */
               gqlOperations?:
+                | "query"
                 | {
-                    /** Enable create mutation (default: true) */
-                    create?: boolean | undefined;
-                    /** Enable update mutation (default: true) */
-                    update?: boolean | undefined;
-                    /** Enable delete mutation (default: true) */
-                    delete?: boolean | undefined;
-                    /** Enable read queries - get, list, aggregation (default: true) */
-                    read?: boolean | undefined;
+                    create?: boolean | undefined | undefined;
+                    update?: boolean | undefined | undefined;
+                    delete?: boolean | undefined | undefined;
+                    read?: boolean | undefined | undefined;
                   }
                 | undefined;
+            }
+          | {
+              attach: true;
             }
           | {
               attach: true;
@@ -184,9 +168,6 @@ export type AppConfigParsed = {
           | {
               attach: false;
               schemaFrom: string;
-            }
-          | {
-              external: true;
             };
       }
     | undefined;

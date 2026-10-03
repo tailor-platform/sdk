@@ -9,7 +9,8 @@ import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
-import type { AppConfig, EnvValue } from "#/configure/config/types";
+import type { EnvValue } from "#/configure/config/types";
+import type { NormalizedAppConfig } from "#/parser/app-config/types";
 import type { Plugin } from "#/plugin/types";
 import type { NormalizedDb } from "#/types/app-config.generated";
 
@@ -19,7 +20,7 @@ import type { NormalizedDb } from "#/types/app-config.generated";
  * is unwrapped during loading, so nothing downstream can deploy a wrapper
  * object or the reason string alongside the value.
  */
-export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
+export type ResolvedEnvAppConfig = Omit<NormalizedAppConfig, "env"> & {
   env?: Record<string, EnvValue>;
 };
 
@@ -88,7 +89,7 @@ export async function loadConfig(
     );
   }
 
-  const appConfig = configModule.default as AppConfig;
+  const appConfig = validated.data as NormalizedAppConfig;
   try {
     await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
   } catch (error) {

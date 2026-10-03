@@ -125,7 +125,7 @@ describe("truncate command", () => {
         config: {
           db: {
             owned: { files: ["./owned/*.ts"] },
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
             visible: { attach: true },
             shared: { attach: true, schemaFrom: "owner.ts" },
             sql: { attach: false, schemaFrom: "owner.ts" },
@@ -149,7 +149,7 @@ describe("truncate command", () => {
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
             visible: { attach: true },
             shared: { attach: true, schemaFrom: "owner.ts" },
             sql: { attach: false, schemaFrom: "owner.ts" },
@@ -190,7 +190,7 @@ describe("truncate command", () => {
         config: {
           db: {
             owned: { files: ["./owned/*.ts"] },
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
             visible: { attach: true },
             shared: { attach: true, schemaFrom: "owner.ts" },
             sql: { attach: false, schemaFrom: "owner.ts" },

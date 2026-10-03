@@ -39,11 +39,9 @@ import {
   type ExecutorServiceInput,
   type HttpAdapterServiceInput,
   type LogLevel,
-  type ResolverServiceInput,
   type WorkflowServiceConfig,
 } from "#/configure/config/types";
-import { type AuthConfig } from "#/configure/services/auth/types";
-import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
+import { type IdPOwnConfig } from "#/configure/services/idp/types";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -178,10 +176,7 @@ type DefineResolverResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function defineResolver(
-  config: ResolverServiceInput | undefined,
-  baseDir: string,
-): DefineResolverResult {
+function defineResolver(config: LoadedConfig["resolver"], baseDir: string): DefineResolverResult {
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -190,8 +185,7 @@ function defineResolver(
   }
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
-    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-    if (serviceConfig.external !== true && serviceConfig.attach !== true) {
+    if (serviceConfig.attach !== true) {
       const resolverService = createResolverService(namespace, serviceConfig, baseDir);
       resolverServices.push(resolverService);
     }
@@ -213,7 +207,7 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
   return config;
 }
 
-function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
+function defineIdp(config: LoadedConfig["idp"]): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -228,8 +222,7 @@ function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
       throw new Error(`IdP with name "${name}" already defined.`);
     }
     idpNames.add(name);
-    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-    if (idpConfig.external !== true && idpConfig.attach !== true) {
+    if (idpConfig.attach !== true) {
       const idp = IdPSchema.parse(stripIdpProviderHelper(idpConfig));
       idpServices.push(idp);
     }
@@ -245,7 +238,7 @@ type DefineAuthResult = {
 };
 
 function defineAuth(
-  config: AuthConfig | undefined,
+  config: LoadedConfig["auth"],
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
 ): DefineAuthResult {
@@ -256,8 +249,7 @@ function defineAuth(
   }
 
   let authService: AuthService | undefined;
-  // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-  if (config.external !== true && config.attach !== true) {
+  if (config.attach !== true) {
     authService = createAuthService(
       AuthConfigSchema.parse(config),
       tailorDBServices,

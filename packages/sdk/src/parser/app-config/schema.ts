@@ -87,30 +87,42 @@ export const TailorDBReferenceConfigSchema = z.union([
   z.strictObject({ attach: z.literal(false), schemaFrom: z.string().min(1) }),
 ]);
 
-const dbEntrySchema = z.union([
-  TailorDBServiceConfigSchema,
-  TailorDBReferenceConfigSchema,
-  z.strictObject({ external: z.literal(true) }),
-]);
-
 const attachedServiceSchema = z.strictObject({ attach: z.literal(true) });
 const externalServiceSchema = z.strictObject({ external: z.literal(true) });
-const serviceReferenceSchema = z.union([attachedServiceSchema, externalServiceSchema]);
+const legacyServiceReferenceSchema = externalServiceSchema.transform(() => ({
+  attach: true as const,
+}));
+const serviceReferenceSchema = z.union([attachedServiceSchema, legacyServiceReferenceSchema]);
 const namedServiceReferenceSchema = z.union([
   attachedServiceSchema.extend({ name: z.string().min(1) }),
-  externalServiceSchema.extend({ name: z.string().min(1) }),
+  externalServiceSchema
+    .extend({ name: z.string().min(1) })
+    .transform(({ name }) => ({ name, attach: true as const })),
+]);
+
+const dbEntrySchema = z.union([
+  z.custom<TailorDBServiceConfigInput>().superRefine((value, ctx) => {
+    const result = TailorDBServiceConfigSchema.safeParse(value);
+    if (!result.success) {
+      for (const issue of result.error.issues) ctx.addIssue({ ...issue });
+    }
+  }),
+  TailorDBReferenceConfigSchema,
+  legacyServiceReferenceSchema,
 ]);
 
 function serviceEntrySchema(named: boolean) {
-  return z.unknown().superRefine((value, ctx) => {
+  return z.unknown().transform((value, ctx) => {
     if (!value || typeof value !== "object" || !("attach" in value || "external" in value)) {
-      return;
+      return value;
     }
     const schema = named ? namedServiceReferenceSchema : serviceReferenceSchema;
     const result = schema.safeParse(value);
     if (!result.success) {
       for (const issue of result.error.issues) ctx.addIssue({ ...issue });
+      return z.NEVER;
     }
+    return result.data;
   });
 }
 

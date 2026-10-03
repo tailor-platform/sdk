@@ -1,12 +1,12 @@
-import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { NormalizedDb } from "#/types/app-config.generated";
+import type { NormalizedAppConfig } from "./types";
 
 /**
  * Normalize namespace ownership, subgraph membership, and definition sources.
  * @param db - Configured TailorDB namespaces
  * @returns Normalized namespaces in config order
  */
-export function normalizeDb(db: TailorDBServiceInput | undefined): NormalizedDb {
+export function normalizeDb(db: NormalizedAppConfig["db"]): NormalizedDb {
   return Object.fromEntries(
     Object.entries(db ?? {}).map(([namespace, entry]) => [
       namespace,
@@ -18,8 +18,7 @@ export function normalizeDb(db: TailorDBServiceInput | undefined): NormalizedDb 
           }
         : {
             owned: false,
-            // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-            inSubgraph: entry.external === true || entry.attach === true,
+            inSubgraph: entry.attach === true,
             schemaSource:
               entry.schemaFrom === undefined
                 ? undefined
