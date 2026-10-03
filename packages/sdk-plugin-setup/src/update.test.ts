@@ -153,6 +153,42 @@ describe("planUpdate", () => {
     expect(plan).toMatchObject({ kind: "target", options: { kind: "preview", branch: undefined } });
   });
 
+  test.each(["branch", "preview"] as const)(
+    "%s: regenerates a multi-directory target with every recorded app directory and extra path",
+    (kind) => {
+      const plan = planUpdate(
+        lockTarget(kind, "erp", {
+          dir: ".",
+          apps: [{ dir: "apps/erp/backend" }, { dir: "apps/users/backend" }],
+          paths: ["modules/**"],
+          region: "us-west",
+        }),
+        common,
+      );
+
+      expect(plan).toMatchObject({
+        kind: "target",
+        options: { dir: ["apps/erp/backend", "apps/users/backend"], extraPaths: ["modules/**"] },
+      });
+    },
+  );
+
+  test("tag: regenerates a multi-directory target with every recorded app directory", () => {
+    const plan = planUpdate(
+      lockTarget("tag", "erp", {
+        dir: ".",
+        tagPattern: "v*",
+        apps: [{ dir: "apps/erp/backend" }, { dir: "apps/users/backend" }],
+      }),
+      common,
+    );
+
+    expect(plan).toMatchObject({
+      kind: "target",
+      options: { dir: ["apps/erp/backend", "apps/users/backend"] },
+    });
+  });
+
   test("action: regenerates with the recorded name, dir and environment only", () => {
     const plan = planUpdate(
       lockTarget("action", "api", {
@@ -374,6 +410,32 @@ describe("setupUpdate", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  test("keeps the app directories and extra paths of multi-directory branch and preview targets", async () => {
+    writeAppConfig("apps/erp/backend");
+    writeAppConfig("apps/users/backend");
+    fs.writeFileSync(
+      path.join(testDir, "package.json"),
+      JSON.stringify({ private: true, devDependencies: { "@tailor-platform/sdk": "1.0.0" } }),
+    );
+    const multi = {
+      workspaceName: "erp",
+      dir: ["apps/erp/backend", "apps/users/backend"],
+      extraPaths: ["modules/**"],
+    };
+    await generate({ kind: "branch", erdPreview: false, ...multi });
+    await generate({ kind: "preview", region: "us-west", ...multi });
+    const before = readLock(testDir)?.targets.map((t) => t.inputs);
+    ageLock();
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    const after = readLock(testDir)?.targets.map((t) => t.inputs);
+    expect(after?.map((inputs) => [inputs.apps, inputs.paths])).toEqual(
+      before?.map((inputs) => [inputs.apps, inputs.paths]),
+    );
+    expect(after?.[0]?.apps?.map((app) => app.dir)).toEqual(multi.dir);
   });
 
   test("regenerates grouped actions before the coordinator that reads them", async () => {
