@@ -595,7 +595,7 @@ describe("script command with an existing migrate.ts", () => {
   });
 });
 
-describe("script command under JSON output", () => {
+describe("script command results", () => {
   let testDir: string;
 
   beforeEach(() => {
@@ -642,6 +642,53 @@ describe("script command under JSON output", () => {
       pgliteTestPath: null,
       clearedScriptSkip: false,
     });
+  });
+
+  test("reports the recorded script skip that creating the script removed", async () => {
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+        scriptSkipped: { reason: "no data", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+      }),
+    );
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      changed: true,
+      migratePath: migrationFile(MIGRATE_FILE_NAME),
+      clearedScriptSkip: true,
+    });
+  });
+
+  test("keeps the added-script summary when creating the script removes a recorded skip", async () => {
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+        scriptSkipped: { reason: "no data", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+      }),
+    );
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(true);
+    const stderr = vi
+      .mocked(process.stderr.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join("");
+    expect(stderr).toContain("Added migration script");
+    expect(stderr).not.toContain("Cleared the stale script skip record");
   });
 
   test("prints the recorded script skip", async () => {

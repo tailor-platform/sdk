@@ -107,13 +107,14 @@ export async function fetchWorkspaceExpiry(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param expiresAt - Instant the workspace becomes prunable
+ * @returns Whether the recorded expiry changed
  */
 export async function writeWorkspaceExpiry(
   client: MetadataLabelClient,
   workspaceId: string,
   expiresAt: Date,
-): Promise<void> {
-  await writeMetadataLabelsDirect(client, {
+): Promise<boolean> {
+  return writeMetadataLabelsDirect(client, {
     trn: workspaceTrn(workspaceId),
     labels: { [expiresAtLabelKey]: encodeExpiresAt(expiresAt) },
   });

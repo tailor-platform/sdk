@@ -19,9 +19,10 @@ const setTtlOptionsSchema = z.object({
 
 type SetTtlOptions = z.input<typeof setTtlOptionsSchema>;
 
-interface WorkspaceExpiry {
+interface RecordedExpiry {
   workspaceId: string;
   expiresAt: Date;
+  changed: boolean;
 }
 
 /**
@@ -30,9 +31,9 @@ interface WorkspaceExpiry {
  * The expiry runs from now rather than from the workspace's creation, so a
  * duration shorter than the workspace's age still leaves it a full window.
  * @param options - Expiry options
- * @returns The workspace and the instant it becomes prunable
+ * @returns The workspace, the instant it becomes prunable, and whether that changed its expiry
  */
-async function setWorkspaceTtl(options: SetTtlOptions): Promise<WorkspaceExpiry> {
+async function setWorkspaceTtl(options: SetTtlOptions): Promise<RecordedExpiry> {
   const validated = parseOptions(setTtlOptionsSchema, options);
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: validated.profile,
@@ -40,8 +41,8 @@ async function setWorkspaceTtl(options: SetTtlOptions): Promise<WorkspaceExpiry>
   });
 
   const expiresAt = new Date(Date.now() + parseAge(validated.ttl));
-  await writeWorkspaceExpiry(client, workspaceId, expiresAt);
-  return { workspaceId, expiresAt };
+  const changed = await writeWorkspaceExpiry(client, workspaceId, expiresAt);
+  return { workspaceId, expiresAt, changed };
 }
 
 export const setCommand = defineAppCommand({
@@ -60,13 +61,13 @@ export const setCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const { workspaceId, expiresAt } = await setWorkspaceTtl({
+    const { workspaceId, expiresAt, changed } = await setWorkspaceTtl({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       ttl: args.ttl,
     });
 
     logger.success(`Workspace becomes prunable at ${expiresAt.toISOString()}.`);
-    printMutationResult({ changed: true, workspaceId, expiresAt: expiresAt.toISOString() });
+    printMutationResult({ changed, workspaceId, expiresAt: expiresAt.toISOString() });
   },
 });

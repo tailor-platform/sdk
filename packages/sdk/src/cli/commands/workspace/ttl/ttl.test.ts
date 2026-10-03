@@ -8,7 +8,7 @@ import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
-import { decodeExpiresAt, expiresAtLabelKey } from "../expiry";
+import { decodeExpiresAt, encodeExpiresAt, expiresAtLabelKey } from "../expiry";
 import { clearCommand } from "./clear";
 import { setCommand } from "./set";
 
@@ -141,6 +141,30 @@ describe("workspace ttl", () => {
       expect(Math.abs(Date.parse(printed.expiresAt) - (recorded?.getTime() ?? 0))).toBeLessThan(
         1000,
       );
+    });
+
+    test("reports no change under JSON output when the workspace already records that expiry", async () => {
+      const now = Date.parse("2026-10-04T00:00:00.500Z");
+      vi.useFakeTimers({ now, toFake: ["Date"] });
+      try {
+        const client = stubClient({
+          [expiresAtLabelKey]: encodeExpiresAt(new Date(now + 3_600_000)),
+        });
+        using _json = jsonMode();
+        using _logger = silenceLogger("success");
+        using stdout = captureStdout();
+
+        await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "1h"]);
+
+        expect(client.setMetadata).not.toHaveBeenCalled();
+        expect(JSON.parse(stdout.output)).toEqual({
+          changed: false,
+          workspaceId,
+          expiresAt: expect.any(String),
+        });
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     test("rejects a duration it cannot parse before calling the platform", async () => {

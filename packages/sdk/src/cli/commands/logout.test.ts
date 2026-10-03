@@ -203,6 +203,29 @@ describe("logout --profile", () => {
     expect(config.current_user).toBeNull();
   });
 
+  test("reports no change for a profile user with no stored token under JSON output", async () => {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {},
+      profiles: { dev: { user: "stale@example.com", workspace_id: validUUID } },
+      current_user: "other@example.com",
+    });
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(logoutCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: false,
+      user: "stale@example.com",
+      revoked: false,
+    });
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBe("other@example.com");
+  });
+
   test("clears current user when profile logout removes the default token while env selects another platform", async () => {
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({

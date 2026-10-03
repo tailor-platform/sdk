@@ -81,7 +81,7 @@ export interface AddMigrationScriptFilesResult {
   pgliteTestPath?: string;
   /** True when this run was asked for a PGlite test that migrate.pglite.test.ts did not already have. */
   pgliteTestRequested?: boolean;
-  /** True when a stale --no-script acknowledgment was cleared because migrate.ts already exists. */
+  /** True when this run removed a recorded --no-script acknowledgment. */
   clearedScriptSkip?: boolean;
 }
 
@@ -256,6 +256,7 @@ export async function addMigrationScriptFiles(
     result.pgliteSchemaPath = typeFiles.pgliteSchemaPath;
     result.pgliteSchemaError = typeFiles.pgliteSchemaError;
     clearMigrationScriptSkipped(diffPath);
+    if (diff.scriptSkipped) result.clearedScriptSkip = true;
   } else if (withTest && previousSnapshot) {
     // A script created before db.pglite.ts existed gets the schema its tests need.
     Object.assign(
@@ -396,7 +397,7 @@ async function script(options: ScriptOptions): Promise<void> {
     clearedScriptSkip: result.clearedScriptSkip ?? false,
   });
 
-  if (result.clearedScriptSkip) {
+  if (result.clearedScriptSkip && !result.migratePath) {
     logger.success(
       `Cleared the stale script skip record for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
     );
