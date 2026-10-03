@@ -33,6 +33,7 @@ describe("crashreport list --json", () => {
     fs.writeFileSync(path.join(tmpDir, "2026-03-02T00-00-00.crash.log"), "report 2");
 
     using stdout = captureStdout();
+    using stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(listCommand, ["--limit", "1"]);
@@ -44,6 +45,9 @@ describe("crashreport list --json", () => {
         path: path.join(tmpDir, "2026-03-02T00-00-00.crash.log"),
       },
     ]);
+    expect(stderr.output).toContain(
+      "More results exist beyond --limit 1. Raise --limit to see more.",
+    );
   });
 
   test.each([

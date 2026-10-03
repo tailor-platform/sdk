@@ -32,6 +32,7 @@ import {
   downloadFunctionScript,
   scriptNameToRegistryName,
 } from "#/cli/shared/function-script-download";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
@@ -557,26 +558,29 @@ Stack traces are mapped only when the execution includes a content hash for the 
       printFunctionExecutionOutcome({ detail, bundledCode });
     } else {
       const pageDirection = toPageDirection(args.order);
-      const executions = await fetchPaged(
-        async (pageToken, pageSize) => {
-          const { executions, nextPageToken } = await client.listFunctionExecutions({
-            workspaceId,
-            pageToken,
-            pageSize,
-            pageDirection,
-          });
-          return [executions, nextPageToken];
-        },
-        { limit: args.limit },
+      const listed = await fetchWithinLimit(args.limit, (limit) =>
+        fetchPaged(
+          async (pageToken, pageSize) => {
+            const { executions, nextPageToken } = await client.listFunctionExecutions({
+              workspaceId,
+              pageToken,
+              pageSize,
+              pageDirection,
+            });
+            return [executions, nextPageToken];
+          },
+          { limit },
+        ),
       );
 
-      const logs = executions.map(toFunctionExecutionListInfo);
+      const logs = listed.items.map(toFunctionExecutionListInfo);
 
       if (logs.length === 0 && !args.json) {
         logger.info("No function execution logs found.");
         return;
       }
       logger.out(logs);
+      await reportTruncation(listed, args.limit);
     }
   },
 });
