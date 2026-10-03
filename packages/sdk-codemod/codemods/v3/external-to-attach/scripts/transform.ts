@@ -9,7 +9,13 @@ import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 type Finding = { node: SgNode; reason: string };
-type Analysis = { root: SgNode; edits: Edit[]; findings: Finding[] };
+type Analysis = {
+  root: SgNode;
+  edits: Edit[];
+  findings: Finding[];
+  ownedBuilders: Set<string>;
+  sdkNamespaces: Set<string>;
+};
 
 function entries(node: SgNode): SgNode[] {
   return node
@@ -43,6 +49,21 @@ function objectEntries(node: SgNode, analysis: Analysis): SgNode[] | null {
 }
 
 function migrateService(node: SgNode, named: boolean, analysis: Analysis): void {
+  if (named && node.kind() === "call_expression") {
+    const callee = node.field("function");
+    if (callee?.kind() === "identifier" && analysis.ownedBuilders.has(callee.text())) return;
+    if (callee?.kind() === "member_expression") {
+      const object = callee.field("object");
+      const property = callee.field("property");
+      if (
+        object?.kind() === "identifier" &&
+        analysis.sdkNamespaces.has(object.text()) &&
+        property &&
+        ["defineAuth", "defineIdp"].includes(property.text())
+      )
+        return;
+    }
+  }
   const properties = objectEntries(node, analysis);
   if (!properties) return;
   const legacy = properties.filter((entry) => entryKey(entry) === "external");
@@ -90,7 +111,14 @@ function analyzeConfig(node: SgNode, analysis: Analysis): void {
 
 function analyze(source: string, filePath: string): Analysis {
   const root = parse(/\.[jt]sx$/u.test(filePath) ? Lang.Tsx : Lang.TypeScript, source).root();
-  const analysis: Analysis = { root, edits: [], findings: [] };
+  const analysis: Analysis = {
+    root,
+    edits: [],
+    findings: [],
+    ownedBuilders: new Set(),
+    sdkNamespaces: new Set(),
+  };
+  const declared = localDeclarationNames(root);
   const functions = new Set<string>();
   const namespaces = new Set<string>();
   for (const statement of findImportStatements(root)) {
@@ -103,9 +131,14 @@ function analyze(source: string, filePath: string): Analysis {
       if (binding.source !== "@tailor-platform/sdk" || binding.typeOnly) continue;
       if (binding.importedName === "defineConfig") functions.add(binding.localName);
       if (binding.localName === namespaceName) namespaces.add(binding.localName);
+      if (!declared.has(binding.localName)) {
+        if (binding.importedName === "defineAuth" || binding.importedName === "defineIdp") {
+          analysis.ownedBuilders.add(binding.localName);
+        }
+        if (binding.localName === namespaceName) analysis.sdkNamespaces.add(binding.localName);
+      }
     }
   }
-  const declared = localDeclarationNames(root);
   for (const call of root.findAll({ rule: { kind: "call_expression" } })) {
     const callee = call.field("function");
     let name: string | undefined;
