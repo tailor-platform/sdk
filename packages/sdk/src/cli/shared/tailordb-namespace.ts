@@ -37,13 +37,10 @@ export async function resolveTableNamespaces(
   if (args.tableNames.length === 0) return tableNamespaceMap;
 
   for (const namespace of args.namespaces) {
-    const result = await args.client
-      .listTailorDBTypes({
-        workspaceId: args.workspaceId,
-        namespaceName: namespace,
-      })
-      .catch(() => undefined);
-    if (!result) continue;
+    const result = await args.client.listTailorDBTypes({
+      workspaceId: args.workspaceId,
+      namespaceName: namespace,
+    });
 
     for (const type of result.tailordbTypes) {
       const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());

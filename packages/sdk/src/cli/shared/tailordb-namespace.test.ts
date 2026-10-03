@@ -23,22 +23,23 @@ describe("resolveTableNamespaces", () => {
     expect(result.get("Event")).toBe("analytics");
   });
 
-  test("continues when one namespace call fails", async () => {
+  test("propagates namespace lookup failures", async () => {
+    const failure = new Error("failed");
     const client = {
       listTailorDBTypes: vi
         .fn()
-        .mockRejectedValueOnce(new Error("failed"))
+        .mockRejectedValueOnce(failure)
         .mockResolvedValueOnce(namesResult("User")),
     };
 
-    const result = await resolveTableNamespaces({
-      workspaceId: "workspace-id",
-      namespaces: ["main", "analytics"],
-      tableNames: ["User"],
-      client,
-    });
-
-    expect(result.get("User")).toBe("analytics");
+    await expect(
+      resolveTableNamespaces({
+        workspaceId: "workspace-id",
+        namespaces: ["main", "analytics"],
+        tableNames: ["User"],
+        client,
+      }),
+    ).rejects.toBe(failure);
   });
 
   test("checks remaining namespaces after finding the requested table", async () => {
