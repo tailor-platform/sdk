@@ -422,7 +422,7 @@ type EventSourceLookup = {
 /**
  * TailorDB namespaces the config declares as owned elsewhere.
  * @param target - Deployment target declaring the executor
- * @returns Namespace names declared with `external: true`
+ * @returns Attached TailorDB namespace names owned by another application
  */
 function externalTailorDBNamespaces(target: BuiltDeploymentTarget): ReadonlyArray<string> {
   return target.application.externalTailorDBNamespaces;

@@ -5,6 +5,14 @@ import { describe, expect, test } from "vitest";
 import { NEXT_RELEASE, V2_NEXT_PENDING, allCodemods, getApplicableCodemods } from "./registry";
 
 describe("getApplicableCodemods", () => {
+  test("offers external to attach when crossing the v3 removal boundary", () => {
+    const id = "v3/external-to-attach";
+    expect(getApplicableCodemods("1.0.0", "3.0.0").map((entry) => entry.id)).toContain(id);
+    expect(getApplicableCodemods("2.24.0", "3.0.0").map((entry) => entry.id)).toContain(id);
+    expect(getApplicableCodemods("2.24.0", "2.25.0").map((entry) => entry.id)).not.toContain(id);
+    expect(getApplicableCodemods("3.0.0", "3.1.0").map((entry) => entry.id)).not.toContain(id);
+  });
+
   test("returns codemods when upgrading across their version boundary", () => {
     const codemods = getApplicableCodemods("1.33.0", "2.0.0");
     expect(codemods.length).toBeGreaterThan(0);

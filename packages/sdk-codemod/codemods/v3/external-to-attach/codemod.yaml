@@ -1,0 +1,5 @@
+name: "@tailor-platform/external-to-attach"
+version: "1.0.0"
+description: "Rename external service references to attach in Tailor SDK configs"
+engine: jssg
+language: typescript

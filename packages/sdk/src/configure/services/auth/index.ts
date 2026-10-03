@@ -94,6 +94,7 @@ export type {
   AuthServiceInput,
   AuthConfig,
   AuthExternalConfig,
+  AuthAttachedConfig,
   AuthOwnConfig,
   DefinedAuth,
 } from "#/configure/services/auth/types";

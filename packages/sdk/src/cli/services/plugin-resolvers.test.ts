@@ -619,7 +619,11 @@ describe("plugin-generated resolvers", () => {
     },
   );
 
-  test("rejects generated resolvers targeting an external namespace", async () => {
+  test.each([
+    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+    ["external", { external: true } as const],
+    ["attached", { attach: true } as const],
+  ])("rejects generated resolvers targeting an %s namespace", async (_kind, mainResolver) => {
     const pluginManager = new PluginManager([
       {
         id: "queries",
@@ -640,7 +644,7 @@ describe("plugin-generated resolvers", () => {
       ...defineConfig({
         name: "test-app",
         db: { main: { files: [] } },
-        resolver: { main: { external: true } },
+        resolver: { main: mainResolver },
       }),
       path: path.join(baseDir, "tailor.config.ts"),
     };

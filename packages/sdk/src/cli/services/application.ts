@@ -260,7 +260,8 @@ function defineResolver(
   }
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
-    if (!("external" in serviceConfig)) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+    if (serviceConfig.external !== true && serviceConfig.attach !== true) {
       const resolverService = createResolverService(namespace, serviceConfig, baseDir, plugins);
       resolverServices.push(resolverService);
     }
@@ -285,7 +286,8 @@ export function definePluginResolverServices(
   const resolverServices: ResolverService[] = [];
   for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
     const serviceConfig = config.resolver?.[namespace];
-    if (serviceConfig && "external" in serviceConfig) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+    if (serviceConfig && (serviceConfig.external === true || serviceConfig.attach === true)) {
       throw CLIError({
         code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
         message: `Plugin "${pluginId}" cannot generate resolvers in external namespace "${namespace}".`,
@@ -334,7 +336,8 @@ function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string)
       throw new Error(`IdP with name "${name}" already defined.`);
     }
     idpNames.add(name);
-    if (!("external" in idpConfig)) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+    if (idpConfig.external !== true && idpConfig.attach !== true) {
       const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
         file: configPath,
         configKey: "idp",
@@ -367,7 +370,8 @@ function defineAuth(
   }
 
   let authService: AuthService | undefined;
-  if (!("external" in config)) {
+  // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+  if (config.external !== true && config.attach !== true) {
     authService = createAuthService(
       parseServiceConfig(AuthConfigSchema, config, {
         file: configPath,

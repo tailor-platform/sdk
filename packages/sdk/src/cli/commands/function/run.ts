@@ -364,7 +364,7 @@ type ResolveMachineUserNameOptions = {
   cliMachineUserSource: MachineUserInputSource | undefined;
   profile: string | undefined;
   authConfig:
-    | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
+    | { name: string; external?: boolean; attach?: boolean; machineUsers?: Record<string, unknown> }
     | undefined;
 };
 
@@ -386,7 +386,7 @@ async function resolveMachineUserName(options: ResolveMachineUserNameOptions): P
     return resolved;
   }
 
-  if (authConfig && !("external" in authConfig && authConfig.external)) {
+  if (authConfig && authConfig.external !== true && authConfig.attach !== true) {
     const machineUsers = authConfig.machineUsers;
     if (machineUsers) {
       const keys = Object.keys(machineUsers);
@@ -409,7 +409,7 @@ interface ResolveMachineUserOptions {
   authNamespace: string;
   machineUserName: string;
   authConfig:
-    | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
+    | { name: string; external?: boolean; attach?: boolean; machineUsers?: Record<string, unknown> }
     | undefined;
 }
 

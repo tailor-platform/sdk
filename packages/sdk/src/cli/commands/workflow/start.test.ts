@@ -105,7 +105,7 @@ describe("startWorkflow", () => {
     vi.mocked(loadConfig).mockResolvedValueOnce({
       config: {
         name: "my-app",
-        auth: { name: "external-auth", external: true },
+        auth: { name: "external-auth", attach: true },
       },
     } as Awaited<ReturnType<typeof loadConfig>>);
     getApplicationMock.mockResolvedValueOnce({

@@ -10,5 +10,6 @@ export type {
 export type {
   ResolverServiceConfig,
   ResolverExternalConfig,
+  ResolverAttachedConfig,
   ResolverServiceInput,
 } from "#/configure/config/types";

@@ -66,7 +66,8 @@ export function resolveResolverDefaultPermissionForFile(
   const targetFile = path.resolve(filePath);
   const owners: Array<{ namespace: string; config: ResolverServiceConfig }> = [];
   for (const [namespace, serviceConfig] of Object.entries(config)) {
-    if ("external" in serviceConfig) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
+    if (serviceConfig.external === true || serviceConfig.attach === true) {
       continue;
     }
     const files = loadFilesWithIgnores(serviceConfig, baseDir);

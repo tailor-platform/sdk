@@ -26,7 +26,9 @@ describe("resolveResolverDefaultPermissionForFile", () => {
     return {
       main: { files: ["./main/*.ts"], defaultPermission: loggedIn },
       public: { files: ["./public/*.ts"], defaultPermission: "allowAnonymous" },
+      // oxlint-disable-next-line typescript/no-deprecated -- Verify legacy attachment compatibility until v3.
       remote: { external: true },
+      attached: { attach: true },
     };
   }
 

@@ -42,7 +42,11 @@ export function defineIdp<const TClients extends string[]>(
   return result as typeof result & IdpDefinitionBrand;
 }
 
-export type { IdPConfig, IdPExternalConfig } from "#/configure/services/idp/types";
+export type {
+  IdPConfig,
+  IdPExternalConfig,
+  IdPAttachedConfig,
+} from "#/configure/services/idp/types";
 
 export type { IdPPermission, IdPPermissionCondition } from "./permission";
 export { unsafeAllowAllIdPPermission } from "./permission";

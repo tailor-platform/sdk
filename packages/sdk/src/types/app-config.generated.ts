@@ -95,8 +95,12 @@ export type AppConfigParsedInput = {
             };
       }
     | undefined;
-  resolver?: unknown;
-  idp?: unknown;
+  resolver?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  idp?: unknown[] | undefined;
   auth?: unknown;
   executor?: unknown;
   workflow?: unknown;
@@ -197,8 +201,12 @@ export type AppConfigParsed = {
             };
       }
     | undefined;
-  resolver?: unknown;
-  idp?: unknown;
+  resolver?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  idp?: unknown[] | undefined;
   auth?: unknown;
   executor?: unknown;
   workflow?: unknown;

@@ -18,6 +18,7 @@ export function normalizeDb(db: TailorDBServiceInput | undefined): NormalizedDb 
           }
         : {
             owned: false,
+            // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
             inSubgraph: entry.external === true || entry.attach === true,
             schemaSource:
               entry.schemaFrom === undefined
