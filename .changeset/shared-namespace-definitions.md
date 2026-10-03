@@ -8,4 +8,4 @@ Read TailorDB definitions from another application's local `tailor.config.ts` th
 
 Use `attach: true` for existing TailorDB, resolver, auth, and IdP services. Deprecate `external: true` while preserving compatibility until v3, with a codemod to migrate existing configurations. Keep local ERD generation and file watching scoped to owned namespaces.
 
-Reject inferred SQL queries when a table name matches multiple configured namespaces, preventing config order from selecting the wrong database.
+Reject inferred SQL queries when a table name matches multiple configured namespaces or a namespace lookup fails, preventing execution against an ambiguous or incompletely verified database.
