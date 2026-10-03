@@ -129,6 +129,23 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
+  test("does not report an in-progress record the checkpoint already passed", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0002", "sdk-migration-in-progress": "m0002" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
+    expect(row).toMatchObject({ status: "ok", currentMigration: 2 });
+    expect(row).not.toHaveProperty("inProgressMigration");
+  });
+
   test("tells the user how an in-progress migration continues", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: {

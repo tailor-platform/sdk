@@ -108,9 +108,18 @@ describe("analyzeMigrationScriptSource", () => {
     ).toThrow("step names must be written literally");
   });
 
+  test("asks for a step defined elsewhere to be written inside steps", () => {
+    expect(() =>
+      analyze(ml`
+        const backfill = { run: async (trx) => {} };
+        export const steps = { backfill };
+      `),
+    ).toThrow("written inside `steps`");
+  });
+
   test("rejects a step that is a bare function instead of { run }", () => {
     expect(() => analyze("export const steps = { backfill: async (trx) => {} };")).toThrow(
-      'Step "backfill" must be an object with a `run` function',
+      'Step "backfill" must be an object literal with a `run` function',
     );
   });
 

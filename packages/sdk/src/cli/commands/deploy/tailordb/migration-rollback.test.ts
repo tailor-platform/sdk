@@ -1295,6 +1295,46 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(settings.disableGqlOperations).not.toEqual(restrictedOperations);
     });
 
+    test("lifts maintenance mode when a resumed migration's checkpoint write cannot be confirmed", async () => {
+      const client = createMockClient();
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      const restrictedOperations = { create: true, update: true, delete: true, read: true };
+      const restricted = {
+        bulkUpsert: false,
+        publishRecordEvents: false,
+        disableGqlOperations: restrictedOperations,
+      };
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [
+          { name: "GoodsReceipt", schema: { settings: restricted } },
+          { name: "StockReservation", schema: { settings: restricted } },
+        ],
+      } as never);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+      vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+        new Error("checkpoint update failed"),
+      );
+
+      await expect(
+        applyTailorDB(client, withInputs(createMockPlanResult()), "create-update"),
+      ).rejects.toThrow("checkpoint update failed");
+
+      const lastSettings = (tableName: string) => {
+        const writes = vi.mocked(client.updateTailorDBType).mock.calls.filter(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (call) => (call[0] as any)?.tailordbType?.name === tableName,
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (writes.at(-1)?.[0] as any)?.tailordbType?.schema?.settings;
+      };
+      expect(lastSettings("GoodsReceipt")).toBeDefined();
+      expect(lastSettings("GoodsReceipt").disableGqlOperations).not.toEqual(restrictedOperations);
+      expect(lastSettings("StockReservation")).toBeDefined();
+      expect(lastSettings("StockReservation").disableGqlOperations).not.toEqual(
+        restrictedOperations,
+      );
+    });
+
     test("leaves an in-progress migration's schema alone when the deploy fails before reaching it", async () => {
       const client = createMockClient();
       remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });

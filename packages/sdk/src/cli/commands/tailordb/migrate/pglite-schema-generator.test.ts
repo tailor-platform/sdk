@@ -137,6 +137,48 @@ describe("buildPreMigrationSnapshot", () => {
     expect(result.tables.User!.typeHookExpr).toEqual({ create: "before" });
     expect(result.tables.User!.fields.score).toMatchObject({ type: "integer" });
   });
+
+  test("keeps removed nested members and relaxes a renamed one, as the deploy's Pre-phase does", () => {
+    const before = snapshotField("nested", {
+      fields: {
+        zip: snapshotField("string", { required: true }),
+        geo: snapshotField("nested", {
+          fields: {
+            lat: snapshotField("float", { required: true }),
+            lng: snapshotField("float", { required: true }),
+          },
+        }),
+      },
+    });
+    const after = snapshotField("nested", {
+      fields: {
+        zipCode: snapshotField("string", { required: true }),
+        geo: snapshotField("nested", {
+          fields: { lat: snapshotField("float", { required: true }) },
+        }),
+      },
+    });
+    const result = buildPreMigrationSnapshot(
+      snapshot(table("Customer", { address: before })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Customer",
+          fieldName: "address",
+          before,
+          after,
+          memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+        },
+      ]),
+    );
+
+    const address = result.tables.Customer!.fields.address!;
+    expect(address.fields?.zipCode).toMatchObject({ required: false });
+    expect(address.fields?.zip).toMatchObject({ type: "string", required: true });
+    expect(Object.keys(address.fields?.geo?.fields ?? {})).toEqual(["lat", "lng"]);
+    expect(after.fields?.zipCode).toMatchObject({ required: true });
+    expect(Object.keys(after.fields?.geo?.fields ?? {})).toEqual(["lat"]);
+  });
 });
 
 describe("buildPreMigrationTables", () => {

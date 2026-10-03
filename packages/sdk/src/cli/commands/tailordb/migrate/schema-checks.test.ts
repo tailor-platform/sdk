@@ -1,7 +1,20 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
-import { logRemoteDriftGuidance } from "./schema-checks";
-import { MISSING_REMOTE_SCRIPT_HASH_SUFFIX } from "./snapshot";
+import {
+  computeSourceScriptHash,
+  extractSourceScriptHash,
+} from "#/parser/service/tailordb/type-script";
+import { buildInProgressSnapshot, logRemoteDriftGuidance } from "./schema-checks";
+import {
+  applyDiffToSnapshot,
+  MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
+  SCHEMA_SNAPSHOT_VERSION,
+  type SchemaSnapshot,
+} from "./snapshot";
+import { generateTailorDBTypeManifestFromSnapshot } from "./snapshot-manifest";
+import { createMockMigrationDiff } from "./test-helpers/migration-diff";
+import { snapshotField } from "./test-helpers/schema-fixtures";
+import type { MigrationDiff } from "./diff-calculator";
 import type { SchemaDrift } from "./types";
 
 const missingHashDrift: SchemaDrift = {
@@ -86,4 +99,66 @@ describe("logRemoteDriftGuidance", () => {
     logRemoteDriftGuidance([{ hasDrift: true, drifts: [scriptNotOnRemoteDrift] }]);
     expect(hintWasLogged(infoSpy)).toBe(false);
   });
+});
+
+const scripted = (expr: string) => snapshotField("string", { hooks: { create: { expr } } });
+
+function userSnapshot(fields: Record<string, ReturnType<typeof snapshotField>>): SchemaSnapshot {
+  return {
+    version: SCHEMA_SNAPSHOT_VERSION,
+    namespace: "tailordb",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    tables: {
+      User: {
+        name: "User",
+        pluralForm: "Users",
+        fields: { id: snapshotField("uuid", { required: true }), ...fields },
+      },
+    },
+  };
+}
+
+function deployedScriptHash(previous: SchemaSnapshot, diff: MigrationDiff): string | undefined {
+  const target = applyDiffToSnapshot(previous, diff).tables.User!;
+  const expr = generateTailorDBTypeManifestFromSnapshot(target).schema?.typeHook?.create?.expr;
+  return expr ? extractSourceScriptHash(expr) : undefined;
+}
+
+describe("buildInProgressSnapshot", () => {
+  test.each([
+    [
+      "a removed field",
+      {
+        kind: "field_removed",
+        tableName: "User",
+        fieldName: "legacy",
+        before: scripted('"legacy"'),
+      },
+    ],
+    [
+      "the old field of a rename",
+      {
+        kind: "field_renamed",
+        tableName: "User",
+        fieldName: "renamed",
+        previousFieldName: "legacy",
+        before: scripted('"legacy"'),
+        after: snapshotField("string"),
+      },
+    ],
+  ] as const)(
+    "hashes the table scripts the deploy wrote while %s is kept for the script",
+    (_label, change) => {
+      const previous = userSnapshot({ name: scripted('"name"'), legacy: scripted('"legacy"') });
+      const diff = createMockMigrationDiff({
+        changes: [change],
+        requiresMigrationScript: true,
+      });
+
+      const expected = buildInProgressSnapshot(previous, diff).tables.User!;
+
+      expect(expected.fields.legacy).toBeDefined();
+      expect(computeSourceScriptHash(expected.fields)).toBe(deployedScriptHash(previous, diff));
+    },
+  );
 });

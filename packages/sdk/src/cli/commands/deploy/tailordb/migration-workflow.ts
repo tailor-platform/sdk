@@ -25,6 +25,7 @@ import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
+import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -470,14 +471,15 @@ function prefixLines(text: string, prefix: string): string {
 /** Label recording which step plan a temporary migration workflow was created for. */
 const MIGRATION_PLAN_LABEL_KEY = "sdk-migration-plan";
 
-const ACTIVE_EXECUTION_STATUSES: ReadonlySet<WorkflowExecution_Status> = new Set([
-  WorkflowExecution_Status.UNSPECIFIED,
-  WorkflowExecution_Status.PENDING,
-  WorkflowExecution_Status.PENDING_RESUME,
-  WorkflowExecution_Status.PENDING_RETRY,
-  WorkflowExecution_Status.RUNNING,
-  WorkflowExecution_Status.WAITING,
+const TERMINAL_EXECUTION_STATUSES: ReadonlySet<WorkflowExecution_Status> = new Set([
+  WorkflowExecution_Status.SUCCESS,
+  WorkflowExecution_Status.FAILED,
+  WorkflowExecution_Status.CANCELED,
 ]);
+
+function isExecutionActive(execution: WorkflowExecution): boolean {
+  return !TERMINAL_EXECUTION_STATUSES.has(execution.status);
+}
 
 /**
  * Name of the job function that runs one step of a multi-step migration.
@@ -507,8 +509,12 @@ export interface MigrationStepsWorkflowOptions extends LongRunningMigrationOptio
    * the execution it recorded, when it got that far.
    */
   inProgress?: { executionId?: string };
+  /** Called once no other execution of the migration is active, before a new one is created. */
+  onBeforeStart: () => Promise<void>;
   /** Called as soon as a new execution exists, before waiting on it. */
   onExecutionStarted: (executionId: string) => Promise<void>;
+  /** Reports what happens to an earlier run; defaults to the logger. */
+  notify?: (level: "info" | "warn", message: string) => void;
   /** Called while waiting, with the number of steps that have completed. */
   onProgress?: (completedSteps: number, totalSteps: number) => void;
 }
@@ -520,7 +526,7 @@ export interface MigrationStepsWorkflowResult {
   executionId?: string;
   completedSteps: string[];
   failedSteps: string[];
-  /** Whether any step may have committed: one completed, or the outcome could not be observed. */
+  /** Whether any step may have committed: a job succeeded, or the outcome could not be observed. */
   stepsMayHaveCommitted: boolean;
 }
 
@@ -579,9 +585,7 @@ async function assertNoActiveExecution(
   name: string,
   migrationLabel: string,
 ): Promise<void> {
-  const active = (await listMigrationExecutions(client, workspaceId, name)).find((execution) =>
-    ACTIVE_EXECUTION_STATUSES.has(execution.status),
-  );
+  const active = (await listMigrationExecutions(client, workspaceId, name)).find(isExecutionActive);
   if (active) {
     throw CLIError({
       code: "MIGRATION_EXECUTION_ACTIVE",
@@ -643,7 +647,9 @@ async function summarizeSteps(
     executionId: execution.id,
     completedSteps: steps.completed,
     failedSteps: steps.failed,
-    stepsMayHaveCommitted: steps.completed.length > 0,
+    stepsMayHaveCommitted: execution.jobExecutions.some(
+      (job) => job.status === WorkflowJobExecution_Status.SUCCESS,
+    ),
   };
   if (execution.status === WorkflowExecution_Status.SUCCESS) return { success: true, ...base };
   const error =
@@ -666,14 +672,21 @@ async function waitForSteps(
     // loop exits when the workflow execution reaches a terminal status
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (true) {
-      const { execution } = await client.getWorkflowExecution({ workspaceId, executionId });
+      let execution: WorkflowExecution | undefined;
+      try {
+        ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
+      } catch (error) {
+        if (!isRetryableWaitError(error)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        continue;
+      }
       if (!execution) {
         throw CLIError({
           code: "WORKFLOW_EXECUTION_NOT_FOUND",
           message: `Migration workflow execution '${executionId}' not found.`,
         });
       }
-      if (!ACTIVE_EXECUTION_STATUSES.has(execution.status)) {
+      if (!isExecutionActive(execution)) {
         return await summarizeSteps(client, workspaceId, execution, runnerName, order);
       }
       options.onProgress?.(
@@ -717,6 +730,7 @@ export async function executeMigrationStepsAsWorkflow(
   const jobFunctionNames = [runnerName, name];
   const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
   const plan = migrationPlanFingerprint(order);
+  const notify = options.notify ?? ((level, message) => logger[level](message));
 
   if (options.inProgress) {
     const execution = await findRecordedExecution(
@@ -728,8 +742,11 @@ export async function executeMigrationStepsAsWorkflow(
     const workflowId = await findMigrationWorkflowId(client, workspaceId, name);
     const planUnchanged =
       workflowId !== undefined && (await readWorkflowPlan(client, workspaceId, name)) === plan;
-    if (execution && ACTIVE_EXECUTION_STATUSES.has(execution.status)) {
-      logger.info(`Migration ${migrationLabel} is still running from an earlier deploy; waiting.`);
+    if (execution && isExecutionActive(execution)) {
+      notify(
+        "info",
+        `Migration ${migrationLabel} is still running from an earlier deploy; waiting.`,
+      );
       const earlier = await waitForSteps(options, execution.id);
       if (planUnchanged) return earlier;
     } else if (execution?.status === WorkflowExecution_Status.SUCCESS && planUnchanged) {
@@ -738,7 +755,10 @@ export async function executeMigrationStepsAsWorkflow(
     if (execution?.status === WorkflowExecution_Status.FAILED && planUnchanged) {
       await uploadMigrationFunction(client, workspaceId, name, code, appName, appId, "update");
       await client.resumeWorkflowExecution({ workspaceId, executionId: execution.id });
-      logger.info(`Resuming migration ${migrationLabel} from the steps that have not completed.`);
+      notify(
+        "info",
+        `Resuming migration ${migrationLabel} from the steps that have not completed.`,
+      );
       return await waitForSteps(options, execution.id);
     }
     const reason =
@@ -747,12 +767,14 @@ export async function executeMigrationStepsAsWorkflow(
         : execution.status === WorkflowExecution_Status.CANCELED
           ? "its earlier run was canceled"
           : "its steps changed since its earlier run";
-    logger.warn(
+    notify(
+      "warn",
       `Migration ${migrationLabel} cannot be resumed because ${reason}; every step runs again.`,
     );
   }
 
   await assertNoActiveExecution(client, workspaceId, name, migrationLabel);
+  await options.onBeforeStart();
   await reclaimLeftovers(client, workspaceId, name, jobFunctionNames);
 
   const created: CreatedMigrationWorkflow = {};

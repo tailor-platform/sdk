@@ -254,7 +254,7 @@ const MIGRATION_SCRIPT_TYPE_LINES = [
   "export type MigrationStep = {",
   "  /** Steps that must complete before this one starts. */",
   "  dependsOn?: readonly string[];",
-  "  run: (trx: Transaction, context: MigrationContext) => Promise<void>;",
+  "  run: (trx: Transaction, context: MigrationContext) => Promise<unknown>;",
   "};",
   "",
   "/** Steps a migration exports as `steps` instead of `main`, keyed by step name. */",

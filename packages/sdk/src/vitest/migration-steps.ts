@@ -11,7 +11,7 @@ export interface RunnableMigrationStep<Trx, Context> {
   /** Steps that must complete before this one starts. */
   readonly dependsOn?: readonly string[];
   /** The step body; it receives its own transaction. */
-  run: (trx: Trx, context: Context) => Promise<void>;
+  run: (trx: Trx, context: Context) => Promise<unknown>;
 }
 
 export interface RunMigrationStepsOptions<Trx, Context extends { env: unknown }> {
@@ -20,7 +20,7 @@ export interface RunMigrationStepsOptions<Trx, Context extends { env: unknown }>
    * `(run) => db.transaction().execute(run)` for a PGlite-backed Kysely, or
    * `(run) => mock.withTx(run)` for `createKyselyMock`.
    */
-  transaction: (run: (trx: Trx) => Promise<void>) => Promise<unknown>;
+  transaction: (run: (trx: Trx) => Promise<unknown>) => Promise<unknown>;
   /** Values passed as `env` to every step; defaults to `{}`. */
   env?: Context["env"];
 }

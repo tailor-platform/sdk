@@ -92,6 +92,8 @@ interface ExecutionResult {
   success: boolean;
   logs?: string;
   error?: string;
+  /** Thrown in place of a plain migration failure once the logs are shown. */
+  failure?: Error;
 }
 
 // ============================================================================
@@ -387,6 +389,35 @@ function partiallyAppliedError(
 }
 
 /**
+ * Clear the in-progress record of a migration whose steps did not commit.
+ * When the record cannot be cleared, the migration stays in progress so the
+ * Pre-phase schema matches what the record describes.
+ * @param options - Execution options
+ * @param migration - Migration whose run failed
+ * @param cause - The run's failure
+ * @param notify - Reports the record that could not be cleared
+ * @returns The error to raise instead when the record could not be cleared
+ */
+async function releaseMigrationInProgress(
+  options: MigrationExecutionOptions,
+  migration: PendingMigration,
+  cause: unknown,
+  notify: (level: "warn", message: string) => void,
+): Promise<Error | undefined> {
+  try {
+    await clearMigrationInProgress(options.client, options.workspaceId, migration.namespace);
+    return undefined;
+  } catch (error) {
+    notify(
+      "warn",
+      `Could not clear the in-progress record of migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
+        `${error instanceof Error ? error.message : String(error)}. The next deploy runs every step again.`,
+    );
+    return partiallyAppliedError(migration, { completedSteps: [], failedSteps: [] }, cause);
+  }
+}
+
+/**
  * Execute a multi-step migration, recording it as in progress until its
  * checkpoint is committed.
  * @param options - Execution options
@@ -417,9 +448,12 @@ async function executeStepsMigration(
     ),
   });
 
-  if (!inProgress) {
-    await writeMigrationInProgress(client, workspaceId, migration.namespace, migration.number);
-  }
+  const notify = (level: "info" | "warn", message: string) => {
+    sp.stop();
+    logger[level](message);
+    sp.start();
+  };
+  let recorded = inProgress !== undefined;
   let started = inProgress !== undefined;
   let result: MigrationStepsWorkflowResult;
   try {
@@ -433,11 +467,12 @@ async function executeStepsMigration(
       appName,
       appId,
       order: form.order,
-      ...(inProgress
-        ? {
-            inProgress: inProgress.executionId ? { executionId: inProgress.executionId } : {},
-          }
-        : {}),
+      inProgress,
+      notify,
+      onBeforeStart: async () => {
+        await writeMigrationInProgress(client, workspaceId, migration.namespace, migration.number);
+        recorded = true;
+      },
       onExecutionStarted: async (executionId) => {
         started = true;
         await writeMigrationInProgress(
@@ -453,11 +488,14 @@ async function executeStepsMigration(
       },
     });
   } catch (error) {
-    if (started) {
+    const anotherRunActive = isCLIError(error) && error.code === "MIGRATION_EXECUTION_ACTIVE";
+    if (started || anotherRunActive) {
       throw partiallyAppliedError(migration, { completedSteps: [], failedSteps: [] }, error);
     }
-    await clearMigrationInProgress(client, workspaceId, migration.namespace);
-    throw error;
+    const failure = recorded
+      ? await releaseMigrationInProgress(options, migration, error, notify)
+      : undefined;
+    throw failure ?? error;
   }
 
   if (result.success) {
@@ -468,18 +506,26 @@ async function executeStepsMigration(
       logs: result.logs,
     };
   }
-  if (result.stepsMayHaveCommitted || inProgress) {
-    if (result.logs) logger.error(`Logs:\n${result.logs}`);
-    throw partiallyAppliedError(migration, result, result.error ?? "Migration failed");
-  }
-  await clearMigrationInProgress(client, workspaceId, migration.namespace);
-  return {
+  const failed = {
     namespace: migration.namespace,
     migrationNumber: migration.number,
     success: false,
     logs: result.logs,
     error: result.error,
   };
+  if (result.stepsMayHaveCommitted || inProgress) {
+    return {
+      ...failed,
+      failure: partiallyAppliedError(migration, result, result.error ?? "Migration failed"),
+    };
+  }
+  const failure = await releaseMigrationInProgress(
+    options,
+    migration,
+    result.error ?? "Migration failed",
+    notify,
+  );
+  return failure ? { ...failed, failure } : failed;
 }
 
 /**
@@ -570,7 +616,10 @@ export async function executeMigrations(
         if (result.logs) {
           logger.error(`Logs:\n${result.logs}`);
         }
-        throw CLIError({ code: "MIGRATION_FAILED", message: result.error ?? "Migration failed" });
+        throw (
+          result.failure ??
+          CLIError({ code: "MIGRATION_FAILED", message: result.error ?? "Migration failed" })
+        );
       }
     }
   }

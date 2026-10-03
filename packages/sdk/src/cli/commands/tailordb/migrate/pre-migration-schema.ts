@@ -35,7 +35,7 @@
  */
 
 import { assertDefined } from "#/utils/assert";
-import { collectNestedMemberChanges } from "./nested-members";
+import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { applyDiffToSnapshot, isBreakingIndexChange } from "./snapshot";
 import {
   convertFieldConfigToProto,
@@ -212,9 +212,7 @@ export function applyPreMigrationFieldAdjustments(
 
 /**
  * {@link applyPreMigrationFieldAdjustments} on snapshot-shaped fields, for
- * describing the Pre-phase schema outside a deploy. Nested members are left
- * as the target declares them: the snapshot consumers read a nested field as
- * one value.
+ * describing the Pre-phase schema outside a deploy.
  * @param fields - Snapshot field map to adjust (mutated in place)
  * @param typeChanges - Changes for this table, keyed by fieldName
  */
@@ -224,6 +222,20 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
 ): void {
   relaxFieldsForPreMigration(fields, typeChanges, {
     toField: (config) => structuredClone(config),
+    adjustNestedMembers: (field, change) => {
+      for (const member of collectNestedMemberChanges(change.before, change.after)) {
+        if (member.kind !== "removed") continue;
+        const parentMembers = getNestedMember(field, member.path.slice(0, -1))?.fields;
+        const memberName = member.path.at(-1);
+        if (!parentMembers || memberName === undefined) continue;
+        defineRecordEntry(parentMembers, memberName, structuredClone(member.before));
+      }
+      for (const rename of change.memberRenames ?? []) {
+        const renamed = getNestedMember(field, rename.path);
+        if (renamed?.required) renamed.required = false;
+        if (renamed?.unique) renamed.unique = false;
+      }
+    },
   });
 }
 

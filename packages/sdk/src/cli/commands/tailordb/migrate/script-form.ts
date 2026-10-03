@@ -127,7 +127,10 @@ function readSteps(filePath: string, object: ObjectExpression): MigrationStepNod
     }
     const value = unwrapExpression(property.value);
     if (property.method || property.kind !== "init" || value.type !== "ObjectExpression") {
-      throw invalidScript(filePath, `Step "${name}" must be an object with a \`run\` function.`);
+      throw invalidScript(
+        filePath,
+        `Step "${name}" must be an object literal with a \`run\` function, written inside \`steps\`.`,
+      );
     }
 
     let hasRun = false;

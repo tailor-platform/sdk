@@ -203,6 +203,10 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       label: formatMigrationNumber(num),
       ...(descriptions.has(num) ? { description: descriptions.get(num) } : {}),
     }));
+    const inProgress =
+      remoteState.inProgress && remoteState.inProgress.number > currentMigration
+        ? remoteState.inProgress
+        : null;
 
     rows.push({
       status: "ok",
@@ -210,10 +214,10 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       currentMigration,
       currentMigrationLabel: formatMigrationNumber(currentMigration),
       pendingMigrations,
-      ...(remoteState.inProgress
+      ...(inProgress
         ? {
-            inProgressMigration: remoteState.inProgress.number,
-            inProgressMigrationLabel: formatMigrationNumber(remoteState.inProgress.number),
+            inProgressMigration: inProgress.number,
+            inProgressMigrationLabel: formatMigrationNumber(inProgress.number),
           }
         : {}),
     });

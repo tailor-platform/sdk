@@ -118,7 +118,7 @@ describe("db-types-generator", () => {
     expect(content).toContain("export type MigrationStep = {");
     expect(content).toContain("  dependsOn?: readonly string[];");
     expect(content).toContain(
-      "  run: (trx: Transaction, context: MigrationContext) => Promise<void>;",
+      "  run: (trx: Transaction, context: MigrationContext) => Promise<unknown>;",
     );
     expect(content).toContain("export type MigrationSteps = Record<string, MigrationStep>;");
   });

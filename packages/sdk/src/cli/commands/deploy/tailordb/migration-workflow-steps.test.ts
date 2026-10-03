@@ -188,6 +188,7 @@ function run(
     appId: "app-1",
     pollIntervalMs: 0,
     order: ORDER,
+    onBeforeStart: vi.fn(async () => {}),
     onExecutionStarted: vi.fn(async () => {}),
     ...overrides,
   });
@@ -380,15 +381,78 @@ describe("executeMigrationStepsAsWorkflow", () => {
     expect(result).toMatchObject({ success: true, completedSteps: ORDER });
   });
 
+  test("keeps waiting while the run reports a status this SDK does not know", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [99 as WorkflowExecution_Status, WorkflowExecution_Status.SUCCESS],
+        jobs: ALL_STEPS_SUCCEEDED,
+      },
+    });
+
+    const result = await run(client);
+
+    expect(result).toMatchObject({ success: true, completedSteps: ORDER });
+  });
+
+  test("keeps waiting through a transient error while polling the run", async () => {
+    const { client, raw } = createStepsClient({
+      run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+    });
+    raw.getWorkflowExecution.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
+
+    const result = await run(client);
+
+    expect(result).toMatchObject({ success: true, completedSteps: ORDER });
+  });
+
+  test("treats a step that succeeded without a recorded position as possibly committed", async () => {
+    const { client, calls } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.FAILED],
+        jobs: [
+          { status: WorkflowJobExecution_Status.FAILED },
+          { name: RUNNER, status: WorkflowJobExecution_Status.SUCCESS },
+          { ...runnerJob(1, WorkflowJobExecution_Status.FAILED), error: "boom" },
+        ],
+      },
+    });
+
+    const result = await run(client);
+
+    expect(result).toMatchObject({ success: false, stepsMayHaveCommitted: true });
+    expect(calls.slice(calls.indexOf("startWorkflow"))).not.toContain("deleteWorkflow");
+  });
+
   test("refuses to reclaim leftovers while one of their executions is still active", async () => {
+    const onBeforeStart = vi.fn(async () => {});
     const { client, raw } = createStepsClient({
       existingWorkflow: { id: "wf-old" },
       listed: [{ id: "exec-old", status: WorkflowExecution_Status.RUNNING }],
     });
 
-    await expect(run(client)).rejects.toMatchObject({ code: "MIGRATION_EXECUTION_ACTIVE" });
+    await expect(run(client, { onBeforeStart })).rejects.toMatchObject({
+      code: "MIGRATION_EXECUTION_ACTIVE",
+    });
     expect(raw.deleteWorkflow).not.toHaveBeenCalled();
     expect(raw.startWorkflow).not.toHaveBeenCalled();
+    expect(onBeforeStart).not.toHaveBeenCalled();
+  });
+
+  test("calls onBeforeStart once no other execution is active and before starting a run", async () => {
+    const { client, calls } = createStepsClient({
+      run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+    });
+    const onBeforeStart = vi.fn(async () => {
+      calls.push("onBeforeStart");
+    });
+
+    await run(client, { onBeforeStart });
+
+    expect(onBeforeStart).toHaveBeenCalledOnce();
+    expect(calls.indexOf("onBeforeStart")).toBeGreaterThan(calls.indexOf("listWorkflowExecutions"));
+    expect(calls.indexOf("onBeforeStart")).toBeLessThan(calls.indexOf("startWorkflow"));
   });
 
   describe("when the migration is already in progress", () => {
@@ -461,6 +525,23 @@ describe("executeMigrationStepsAsWorkflow", () => {
       expect(result.success).toBe(true);
       expect(raw.startWorkflow).toHaveBeenCalledOnce();
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
+    });
+
+    test("reports through notify and calls onBeforeStart before running every step again", async () => {
+      const { client, calls } = createStepsClient({
+        run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+      });
+      const notify = vi.fn();
+      const onBeforeStart = vi.fn(async () => {
+        calls.push("onBeforeStart");
+      });
+
+      await run(client, { inProgress: { executionId: "exec-gone" }, notify, onBeforeStart });
+
+      expect(notify).toHaveBeenCalledWith("warn", expect.stringContaining("every step runs again"));
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(onBeforeStart).toHaveBeenCalledOnce();
+      expect(calls.indexOf("onBeforeStart")).toBeLessThan(calls.indexOf("startWorkflow"));
     });
 
     test("does not run the steps again when the earlier run already succeeded", async () => {

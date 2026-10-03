@@ -954,7 +954,7 @@ function compareScriptHashes(
   return drifts;
 }
 
-function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig {
+export function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig {
   const {
     hooks: _hooks,
     validate: _validate,

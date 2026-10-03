@@ -82,6 +82,21 @@ describe("runMigrationSteps", () => {
     expect(await messages()).toEqual(["backfill"]);
   });
 
+  test("accepts a step that returns its query result", async () => {
+    await db.deleteFrom("Log").execute();
+
+    await runMigrationSteps(
+      {
+        backfill: {
+          run: (trx: Trx) => trx.insertInto("Log").values({ id: 1, message: "result" }).execute(),
+        },
+      },
+      { transaction: (step) => db.transaction().execute(step) },
+    );
+
+    expect(await messages()).toEqual(["result"]);
+  });
+
   test("passes env to every step", async () => {
     const seen: Context["env"][] = [];
 

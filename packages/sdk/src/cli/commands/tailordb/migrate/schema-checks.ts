@@ -32,6 +32,7 @@ import {
   loadDiff,
   MIGRATION_RESTRICTION_SETTINGS,
   MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
+  stripFieldScriptProps,
   type RemoteGqlPermission,
   type SchemaSnapshot,
   type SnapshotGqlOperations,
@@ -236,6 +237,34 @@ function deployComparableSnapshot(
   return { ...snapshot, tables };
 }
 
+/**
+ * The schema a deploy leaves on the remote while a migration is in progress:
+ * its Pre-phase schema, where the fields kept for the script carry no scripts
+ * because the deploy adds them after building the table's scripts.
+ * @param previousSnapshot - Schema before the migration
+ * @param diff - The migration's diff
+ * @returns Snapshot the remote schema must match
+ */
+export function buildInProgressSnapshot(
+  previousSnapshot: SchemaSnapshot,
+  diff: MigrationDiff,
+): SchemaSnapshot {
+  const snapshot = buildPreMigrationSnapshot(previousSnapshot, diff);
+  for (const change of diff.changes) {
+    const keptFieldName =
+      change.kind === "field_removed"
+        ? change.fieldName
+        : change.kind === "field_renamed"
+          ? change.previousFieldName
+          : undefined;
+    if (keptFieldName === undefined) continue;
+    const fields = snapshot.tables[change.tableName]?.fields;
+    const kept = fields?.[keptFieldName];
+    if (fields && kept) fields[keptFieldName] = stripFieldScriptProps(kept);
+  }
+  return snapshot;
+}
+
 function reconstructPreMigrationSnapshot(
   migrationsDir: string,
   migrationNumber: number,
@@ -243,7 +272,7 @@ function reconstructPreMigrationSnapshot(
   const previous = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
   if (!previous || !fs.existsSync(diffPath)) return null;
-  return buildPreMigrationSnapshot(previous, loadDiff(diffPath));
+  return buildInProgressSnapshot(previous, loadDiff(diffPath));
 }
 
 /**

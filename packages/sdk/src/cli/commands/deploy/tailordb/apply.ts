@@ -562,6 +562,7 @@ export async function applyTailorDB(
       );
       let migrationFailure: { error: unknown } | undefined;
       const partialMigrations = new Map<string, PendingMigration>();
+      const reachedMigrations = new Set<PendingMigration>();
       try {
         // A committed checkpoint drops its migration from the next run's pending set.
         await applyMigrationRestrictions(
@@ -573,6 +574,7 @@ export async function applyTailorDB(
           migrationContext.workspaceId,
         );
         for (const migration of pendingMigrations) {
+          reachedMigrations.add(migration);
           const attemptedTables = new Set<string>();
           const inProgress = inProgressMigrations[migration.namespace]?.number === migration.number;
           const runsSteps = migration.scriptForm?.kind === "steps";
@@ -647,6 +649,26 @@ export async function applyTailorDB(
           const postMigrationSnapshot = migrationSnapshotCache.load(migration);
           restorationSnapshots.set(migration.namespace, postMigrationSnapshot);
           const expectedHistoryId = migrationHistoryIds[migration.namespace] ?? null;
+          const settleRestorationSettings = () => {
+            const input = migrationContext.tailorDBInputs.find(
+              (entry) => entry.namespace === migration.namespace,
+            );
+            if (!input) return;
+            const committedSettings = resolveMigrationSnapshotSettings(
+              postMigrationSnapshot,
+              input,
+              migrationContext.executorUsedTables,
+            );
+            for (const [tableName, settings] of previousRestorationSettings ?? []) {
+              if (previousRestorationSnapshot?.tables[tableName]) continue;
+              const restrictedByEarlierDeploy =
+                inProgress && postMigrationSnapshot.tables[tableName] !== undefined;
+              if (!restrictedByEarlierDeploy) committedSettings.set(tableName, settings);
+            }
+            restorationSettings.set(migration.namespace, committedSettings);
+          };
+          // A resumed migration's captured settings are the restrictions an earlier deploy left.
+          if (inProgress) settleRestorationSettings();
 
           try {
             await updateMigrationLabel(
@@ -721,23 +743,7 @@ export async function applyTailorDB(
             );
           }
 
-          const input = migrationContext.tailorDBInputs.find(
-            (entry) => entry.namespace === migration.namespace,
-          );
-          if (input) {
-            const committedSettings = resolveMigrationSnapshotSettings(
-              postMigrationSnapshot,
-              input,
-              migrationContext.executorUsedTables,
-            );
-            for (const [tableName, settings] of previousRestorationSettings ?? []) {
-              if (previousRestorationSnapshot?.tables[tableName]) continue;
-              const restrictedByEarlierDeploy =
-                inProgress && postMigrationSnapshot.tables[tableName] !== undefined;
-              if (!restrictedByEarlierDeploy) committedSettings.set(tableName, settings);
-            }
-            restorationSettings.set(migration.namespace, committedSettings);
-          }
+          settleRestorationSettings();
 
           try {
             await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
@@ -805,8 +811,7 @@ export async function applyTailorDB(
 
       for (const migration of pendingMigrations) {
         const resumed = inProgressMigrations[migration.namespace]?.number === migration.number;
-        const committed = restorationCheckpoints.get(migration.namespace)?.number ?? -1;
-        if (resumed && committed < migration.number) {
+        if (resumed && !reachedMigrations.has(migration)) {
           partialMigrations.set(migration.namespace, migration);
         }
       }
