@@ -68,6 +68,6 @@ export const listCommand = defineAppCommand({
       }
     }
     logger.out(workflows);
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });

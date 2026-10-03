@@ -125,6 +125,6 @@ export const listCommand = defineAppCommand({
         updatedAt: null,
       },
     });
-    reportTruncation(workspaces, args.limit);
+    await reportTruncation(workspaces, args.limit);
   },
 });

@@ -61,7 +61,7 @@ export const listAuthConnectionCommand = defineAppCommand({
         ),
       );
       logger.out(listed.items.map(connectionInfo));
-      reportTruncation(listed, args.limit);
+      await reportTruncation(listed, args.limit);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         logger.out([]);

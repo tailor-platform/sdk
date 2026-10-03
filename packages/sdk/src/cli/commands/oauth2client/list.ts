@@ -80,6 +80,6 @@ export const listCommand = defineAppCommand({
     const oauth2Clients = listed.items;
 
     logger.out(oauth2Clients);
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });

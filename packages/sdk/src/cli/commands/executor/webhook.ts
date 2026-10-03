@@ -93,7 +93,7 @@ const listWebhookCommand = defineAppCommand({
         disabled: (v) => (v ? styles.warning("true") : styles.dim("false")),
       },
     });
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
 
     if (!jsonOutput) {
       const trigger = {

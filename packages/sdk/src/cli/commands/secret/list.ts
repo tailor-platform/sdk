@@ -83,7 +83,7 @@ export const listSecretCommand = defineAppCommand({
       );
       const secrets = listed.items;
       logger.out(secrets);
-      reportTruncation(listed, args.limit);
+      await reportTruncation(listed, args.limit);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         throw CLIError({

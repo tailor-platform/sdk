@@ -67,7 +67,7 @@ export const listCommand = defineAppCommand({
 
     if (jsonOutput) {
       logger.out(formatCrashReportFiles(files, config.localDir));
-      reportTruncation(listed, args.limit);
+      await reportTruncation(listed, args.limit);
       return;
     }
 
@@ -75,6 +75,6 @@ export const listCommand = defineAppCommand({
     for (const file of files) {
       logger.log(`  ${file}`);
     }
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });

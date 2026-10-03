@@ -443,7 +443,7 @@ export const executionsCommand = defineAppCommand({
       );
       const executions = listed.items;
       logger.out(executions);
-      reportTruncation(listed, args.limit);
+      await reportTruncation(listed, args.limit);
     }
   },
 });

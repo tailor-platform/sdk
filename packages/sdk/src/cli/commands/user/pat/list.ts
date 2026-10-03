@@ -50,6 +50,6 @@ export const listCommand = defineAppCommand({
         lastUsedAt: (value) => (value === null ? "never" : humanizeRelativeTime(value as Date)),
       },
     });
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });

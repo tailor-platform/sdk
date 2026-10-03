@@ -76,6 +76,6 @@ export const listCommand = defineAppCommand({
     const vaults = listed.items;
 
     logger.out(vaults);
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });

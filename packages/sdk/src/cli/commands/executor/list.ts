@@ -81,7 +81,7 @@ export const listCommand = defineAppCommand({
         disabled: (v) => (v ? styles.warning("true") : styles.dim("false")),
       },
     });
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
 
     // Show hint if there are webhook executors (non-JSON mode only)
     if (!jsonOutput) {

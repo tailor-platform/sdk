@@ -116,6 +116,6 @@ export const listCommand = defineAppCommand({
 
     // Show machine users info
     logger.out(machineUsers, { display: { createdAt: null, updatedAt: null } });
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });

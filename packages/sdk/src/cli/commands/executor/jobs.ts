@@ -879,7 +879,7 @@ export const jobsCommand = defineAppCommand({
       );
       const jobs = listed.items;
       logger.out(jobs);
-      reportTruncation(listed, args.limit);
+      await reportTruncation(listed, args.limit);
     }
   },
 });

@@ -45,6 +45,6 @@ export const listCommand = defineAppCommand({
   run: async (args) => {
     const listed = await fetchWithinLimit(args.limit, (limit) => listOrganizations({ limit }));
     logger.out(listed.items);
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });

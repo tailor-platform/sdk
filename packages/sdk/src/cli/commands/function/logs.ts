@@ -580,7 +580,7 @@ Stack traces are mapped only when the execution includes a content hash for the 
         return;
       }
       logger.out(logs);
-      reportTruncation(listed, args.limit);
+      await reportTruncation(listed, args.limit);
     }
   },
 });

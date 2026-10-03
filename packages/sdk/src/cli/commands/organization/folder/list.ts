@@ -71,6 +71,6 @@ export const listCommand = defineAppCommand({
     );
     const folders = listed.items;
     logger.out(folders, { display: { updatedAt: null } });
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });

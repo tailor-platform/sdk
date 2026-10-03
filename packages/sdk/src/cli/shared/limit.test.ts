@@ -23,6 +23,16 @@ describe("fetchWithinLimit", () => {
     expect(fetch).toHaveBeenCalledWith(3);
   });
 
+  test("keeps the probe within safe integers for the largest accepted limit", async () => {
+    const fetch = vi.fn().mockResolvedValue(["a"]);
+
+    await expect(fetchWithinLimit(Number.MAX_SAFE_INTEGER, fetch)).resolves.toEqual({
+      items: ["a"],
+      truncated: false,
+    });
+    expect(fetch).toHaveBeenCalledWith(Number.MAX_SAFE_INTEGER);
+  });
+
   test("reports no truncation when the limit covers every item", async () => {
     const fetch = vi.fn().mockResolvedValue(["a", "b"]);
 
@@ -34,21 +44,41 @@ describe("fetchWithinLimit", () => {
 });
 
 describe("reportTruncation", () => {
-  test("tells the caller that more results exist beyond the limit", () => {
+  test("tells the caller that more results exist beyond the limit", async () => {
     using info = vi.spyOn(logger, "info").mockImplementation(() => {});
 
-    reportTruncation({ items: ["a"], truncated: true }, 1);
+    await reportTruncation({ items: ["a"], truncated: true }, 1);
 
     expect(info).toHaveBeenCalledWith(
       "More results exist beyond --limit 1. Raise --limit to see more.",
     );
   });
 
-  test("stays silent when nothing was cut", () => {
+  test("stays silent when nothing was cut", async () => {
     using info = vi.spyOn(logger, "info").mockImplementation(() => {});
 
-    reportTruncation({ items: ["a"], truncated: false }, 1);
+    await reportTruncation({ items: ["a"], truncated: false }, 1);
 
     expect(info).not.toHaveBeenCalled();
+  });
+
+  test("waits for buffered list output to flush before the notice", async () => {
+    using info = vi.spyOn(logger, "info").mockImplementation(() => {});
+    using _buffered = vi.spyOn(process.stdout, "writableLength", "get").mockReturnValue(1);
+    let flushed: (() => void) | undefined;
+    using _write = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((_chunk: unknown, callback?: unknown) => {
+        if (typeof callback === "function") flushed = callback as () => void;
+        return false;
+      });
+
+    const reported = reportTruncation({ items: ["a"], truncated: true }, 1);
+    await Promise.resolve();
+
+    expect(info).not.toHaveBeenCalled();
+    flushed?.();
+    await reported;
+    expect(info).toHaveBeenCalledOnce();
   });
 });

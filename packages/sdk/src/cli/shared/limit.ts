@@ -17,18 +17,24 @@ export async function fetchWithinLimit<T>(
   fetch: (limit: number | undefined) => Promise<T[]>,
 ): Promise<LimitedItems<T>> {
   if (!limit) return { items: await fetch(limit), truncated: false };
-  const items = await fetch(limit + 1);
+  const items = await fetch(Math.min(limit + 1, Number.MAX_SAFE_INTEGER));
   if (items.length <= limit) return { items, truncated: false };
   return { items: items.slice(0, limit), truncated: true };
 }
 
 /**
- * Tell the caller that `--limit` cut the output short. Call it after printing the items so the
- * notice follows them.
+ * Tell the caller that `--limit` cut the output short. Call it after printing the items; it waits
+ * for the printed items to flush so the notice follows them even when stdout and stderr share a pipe.
  * @param result - Items returned by {@link fetchWithinLimit}
  * @param limit - The `--limit` in effect
  */
-export function reportTruncation(result: LimitedItems<unknown>, limit: number | undefined): void {
+export async function reportTruncation(
+  result: LimitedItems<unknown>,
+  limit: number | undefined,
+): Promise<void> {
   if (!result.truncated) return;
+  if (process.stdout.writableLength > 0) {
+    await new Promise<void>((resolve) => process.stdout.write("", () => resolve()));
+  }
   logger.info(`More results exist beyond --limit ${limit}. Raise --limit to see more.`);
 }

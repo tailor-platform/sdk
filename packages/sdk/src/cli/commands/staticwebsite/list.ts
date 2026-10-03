@@ -96,6 +96,6 @@ export const listCommand = defineAppCommand({
         });
 
     logger.out(formatted);
-    reportTruncation(listed, args.limit);
+    await reportTruncation(listed, args.limit);
   },
 });
