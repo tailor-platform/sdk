@@ -1,5 +1,8 @@
-import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
-import type { DeployedApplication, DeployedStaticWebsite } from "#/plugin/types";
+import type {
+  DeployedApplication,
+  DeployedStaticWebsite,
+  StaticWebsiteConfig,
+} from "@tailor-platform/sdk";
 
 export interface FrontendDefinition {
   /** Static website included in this deploy. Accepts a name or a defineStaticWebSite result. */

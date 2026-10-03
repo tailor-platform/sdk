@@ -72,11 +72,6 @@
       "import": "./dist/plugin/builtin/file-utils/index.mjs",
       "default": "./dist/plugin/builtin/file-utils/index.mjs"
     },
-    "./plugin/frontend": {
-      "types": "./dist/plugin/builtin/frontend/index.d.mts",
-      "import": "./dist/plugin/builtin/frontend/index.mjs",
-      "default": "./dist/plugin/builtin/frontend/index.mjs"
-    },
     "./plugin/seed": {
       "types": "./dist/plugin/builtin/seed/index.d.mts",
       "import": "./dist/plugin/builtin/seed/index.mjs",

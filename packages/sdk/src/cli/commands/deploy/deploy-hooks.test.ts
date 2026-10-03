@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   prerequisite: vi.fn(),
   getApplication: vi.fn(),
   getStaticWebsite: vi.fn(),
+  getAIGateway: vi.fn(),
+  listAuthOAuth2Clients: vi.fn(),
 }));
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
@@ -25,7 +27,12 @@ vi.mock(import("./deployment-target"), async (original) => ({
 vi.mock("./workspace", () => ({
   resolveDeployWorkspace: async () => ({
     workspaceId: "ws",
-    client: { getApplication: mocks.getApplication, getStaticWebsite: mocks.getStaticWebsite },
+    client: {
+      getApplication: mocks.getApplication,
+      getStaticWebsite: mocks.getStaticWebsite,
+      getAIGateway: mocks.getAIGateway,
+      listAuthOAuth2Clients: mocks.listAuthOAuth2Clients,
+    },
   }),
 }));
 vi.mock("./metadata-lookup", () => ({
@@ -243,6 +250,11 @@ beforeEach(() => {
   mocks.results = emptyResults();
   mocks.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
   mocks.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
+  mocks.getAIGateway.mockResolvedValue({ aigateway: { name: "ai", url: "https://ai" } });
+  mocks.listAuthOAuth2Clients.mockResolvedValue({
+    oauth2Clients: [{ name: "web", clientId: "public-id", clientSecret: "private-secret" }],
+    nextPageToken: "",
+  });
 });
 function register(hook: NonNullable<Plugin["onDeployed"]>) {
   mocks.target.plugins = [{ id: "hook", description: "deploy test", onDeployed: hook }];
@@ -280,6 +292,7 @@ test("includes pending hooks in the JSON dry-run result", async () => {
   expect(logger.out).toHaveBeenCalledWith(
     expect.objectContaining({ pendingDeployedHooks: [{ application: "app", pluginId: "hook" }] }),
   );
+  expect(mocks.getApplication).not.toHaveBeenCalled();
 });
 test("omits pendingDeployedHooks from the JSON dry-run result without deploy hooks", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
@@ -291,13 +304,16 @@ test("omits pendingDeployedHooks from the JSON dry-run result without deploy hoo
 });
 test("does not execute hooks in build-only mode", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
   const hook = vi.fn();
   register(hook);
   await deploy({ buildOnly: true });
   expect(hook).not.toHaveBeenCalled();
+  expect(mocks.getApplication).not.toHaveBeenCalled();
 });
 test("does not execute hooks during a migration baseline deploy", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
   const hook = vi.fn();
   register(hook);
   await deployMigrationTestBaseline({ yes: true, noValidate: true }, new Map(), new Map());
@@ -306,6 +322,7 @@ test("does not execute hooks during a migration baseline deploy", async () => {
 });
 test("does not execute hooks during a migration target deploy", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
   const hook = vi.fn();
   register(hook);
   await deployMigrationTestTarget({ yes: true, noValidate: true }, new Map());
@@ -320,16 +337,37 @@ test("adds hook outputs to the JSON deployment result", async () => {
   expect(logger.out).toHaveBeenCalledWith(
     expect.objectContaining({
       status: "applied",
+      applications: [expect.objectContaining({ url: "https://app" })],
       deployedHooks: [{ application: "app", pluginId: "hook", outputs: { value: 42 } }],
     }),
   );
 });
+test("loads application information only once for the JSON result and hooks", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  register(() => {});
+  await deploy({ yes: true, noValidate: true });
+  expect(mocks.getApplication).toHaveBeenCalledExactlyOnceWith({
+    workspaceId: "ws",
+    applicationName: "app",
+  });
+  expect(mocks.getStaticWebsite).toHaveBeenCalledExactlyOnceWith({
+    workspaceId: "ws",
+    name: "web",
+  });
+});
+
 test("omits deployedHooks when a hook returns no outputs", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();
   register(() => {});
   await deploy({ yes: true, noValidate: true });
-  expect(logger.out).toHaveBeenLastCalledWith({ summary: expect.any(Object), status: "applied" });
+  expect(logger.out).toHaveBeenLastCalledWith({
+    summary: expect.any(Object),
+    status: "applied",
+    workspaceId: "ws",
+    applications: expect.any(Array),
+  });
 });
 test("does not fetch hook context when no deploy hook is registered", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
@@ -366,4 +404,64 @@ test("does not execute hooks after resource application fails", async () => {
   mocks.apply.mockRejectedValueOnce(new Error("apply failed"));
   await expect(deploy({ yes: true, noValidate: true })).rejects.toThrow("apply failed");
   expect(hook).not.toHaveBeenCalled();
+});
+
+test("includes deployed application and website URLs in JSON without registering a hook", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.out).toHaveBeenLastCalledWith({
+    summary: expect.any(Object),
+    status: "applied",
+    workspaceId: "ws",
+    applications: [
+      {
+        name: "app",
+        configPath: "/repo/tailor.config.ts",
+        url: "https://app",
+        domain: "app",
+        aiGateways: [],
+        staticWebsites: { web: { name: "web", url: "https://web" } },
+      },
+    ],
+  });
+});
+
+test("includes AI Gateway URLs and public OAuth clients without client secrets in JSON", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  mocks.target.config.aiGateways = [
+    { name: "ai" },
+  ] as BuiltDeploymentTarget["config"]["aiGateways"];
+  mocks.target.application = {
+    ...mocks.target.application,
+    authService: {
+      config: { name: "auth" },
+    } as BuiltDeploymentTarget["application"]["authService"],
+  };
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.out).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      applications: [
+        expect.objectContaining({
+          aiGateways: [{ name: "ai", url: "https://ai" }],
+          auth: { namespace: "auth", oauth2Clients: [{ name: "web", clientId: "public-id" }] },
+        }),
+      ],
+    }),
+  );
+  expect(JSON.stringify(vi.mocked(logger.out).mock.calls)).not.toContain("private-secret");
+});
+
+test("reports that resources were applied when loading the JSON result fails", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  mocks.getApplication.mockRejectedValueOnce(new Error("application lookup failed"));
+  await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOY_RESULT_LOAD_FAILED",
+    details: "application lookup failed",
+    message: expect.stringContaining("resources were applied successfully"),
+  });
+  expect(mocks.apply).toHaveBeenCalledOnce();
+  expect(logger.out).not.toHaveBeenCalledWith(expect.objectContaining({ status: "applied" }));
 });

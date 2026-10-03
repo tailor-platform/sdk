@@ -46,6 +46,7 @@ jobs:
               - 'packages/eslint-plugin-sdk/**'
               - 'packages/sdk-codemod/**'
               - 'packages/sdk-plugin-tailordb-erd/**'
+              - 'packages/sdk-plugin-frontend/**'
               - 'packages/tailor-proto/**'
 
       - name: Fail if no changeset
