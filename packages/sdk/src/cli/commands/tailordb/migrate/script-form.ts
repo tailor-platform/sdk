@@ -25,7 +25,7 @@ export type MigrationScriptForm =
       /** The script also exports `steps`, which `main` takes precedence over. */
       ignoredSteps?: true;
     }
-  | { kind: "steps"; steps: MigrationStepNode[]; order: string[] };
+  | { kind: "steps"; order: string[] };
 
 const STEP_KEYS = new Set(["run", "dependsOn"]);
 
@@ -209,7 +209,7 @@ export function analyzeMigrationScriptSource(
 
   const steps = readSteps(filePath, init);
   try {
-    return { kind: "steps", steps, order: orderMigrationSteps(steps) };
+    return { kind: "steps", order: orderMigrationSteps(steps) };
   } catch (error) {
     throw invalidScript(filePath, error instanceof Error ? error.message : String(error));
   }

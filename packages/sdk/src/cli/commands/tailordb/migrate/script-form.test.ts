@@ -60,11 +60,6 @@ describe("analyzeMigrationScriptSource", () => {
 
     expect(form).toEqual({
       kind: "steps",
-      steps: [
-        { name: "recomputeTotals", dependsOn: ["backfillInvoice"] },
-        { name: "backfillInvoice", dependsOn: [] },
-        { name: "backfillUser", dependsOn: [] },
-      ],
       order: ["backfillInvoice", "recomputeTotals", "backfillUser"],
     });
   });

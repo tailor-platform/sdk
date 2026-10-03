@@ -1093,14 +1093,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   });
 
   describe("a multi-step migration whose steps partly committed", () => {
-    const stepsForm: MigrationScriptForm = {
-      kind: "steps",
-      steps: [
-        { name: "backfill", dependsOn: [] },
-        { name: "recompute", dependsOn: ["backfill"] },
-      ],
-      order: ["backfill", "recompute"],
-    };
+    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill", "recompute"] };
 
     function mkStepsMigration(): PendingMigration {
       return { ...mkAddTypeMigration(1, "StockReservation"), scriptForm: stepsForm };

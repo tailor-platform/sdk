@@ -510,8 +510,8 @@ export interface MigrationStepsWorkflowOptions extends LongRunningMigrationOptio
   onBeforeStart: () => Promise<void>;
   /** Called as soon as a new execution exists, before waiting on it. */
   onExecutionStarted: (executionId: string) => Promise<void>;
-  /** Reports what happens to an earlier run; defaults to the logger. */
-  notify?: (level: "info" | "warn", message: string) => void;
+  /** Reports what happens to an earlier run. */
+  notify: (level: "info" | "warn", message: string) => void;
   /** Called while waiting, with the number of steps that have completed. */
   onProgress?: (completedSteps: number, totalSteps: number) => void;
 }
@@ -727,7 +727,7 @@ export async function executeMigrationStepsAsWorkflow(
   const jobFunctionNames = [runnerName, name];
   const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
   const plan = migrationPlanFingerprint(order);
-  const notify = options.notify ?? ((level, message) => logger[level](message));
+  const { notify } = options;
 
   if (options.inProgress) {
     const execution = await findRecordedExecution(

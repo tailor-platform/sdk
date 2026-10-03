@@ -190,6 +190,7 @@ function run(
     order: ORDER,
     onBeforeStart: vi.fn(async () => {}),
     onExecutionStarted: vi.fn(async () => {}),
+    notify: (level, message) => logger[level](message),
     ...overrides,
   });
 }

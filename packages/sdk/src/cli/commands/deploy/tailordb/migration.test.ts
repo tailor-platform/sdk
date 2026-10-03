@@ -748,11 +748,7 @@ describe("migration", () => {
       await runTest();
     });
 
-    const stepsForm: MigrationScriptForm = {
-      kind: "steps",
-      steps: [{ name: "backfill", dependsOn: [] }],
-      order: ["backfill"],
-    };
+    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill"] };
 
     function stepsContext(setMetadataMock: ReturnType<typeof vi.fn>): MigrationContext {
       return {
@@ -837,11 +833,7 @@ describe("migration", () => {
 
     test("keeps the remediation of a failure that is not a step's own", async () => {
       const migration = createMockMigration({
-        scriptForm: {
-          kind: "steps",
-          steps: [{ name: "backfill", dependsOn: [] }],
-          order: ["backfill"],
-        },
+        scriptForm: { kind: "steps", order: ["backfill"] },
       });
       executeMigrationStepsAsWorkflowMock.mockRejectedValueOnce(
         CLIError({
