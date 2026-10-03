@@ -96,3 +96,9 @@ export {
   type PGliteQueryResult,
   type Unmigrated,
 } from "./pglite-kysely";
+export {
+  MigrationStepError,
+  runMigrationSteps,
+  type RunMigrationStepsOptions,
+  type RunnableMigrationStep,
+} from "./migration-steps";

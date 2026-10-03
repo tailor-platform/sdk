@@ -22,7 +22,7 @@ import {
 } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { parseMigrationNumberArg } from "./migration-number";
-import { fetchRemoteMigrationNumber } from "./remote-state";
+import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
@@ -262,7 +262,9 @@ async function sync(options: SyncOptions): Promise<void> {
   });
 
   const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
-  const current = await fetchRemoteMigrationNumber(client, trn);
+  const currentState = await fetchRemoteMigrationState(client, trn);
+  assertNoMigrationInProgress(currentState, target.namespace);
+  const current = currentState.number;
   const remoteTypes = await fetchRemoteTypes(client, workspaceId, target.namespace);
   const existingTypeNames = new Set(remoteTypes.map((t) => t.name));
   const { creates, updates, deletes } = compareSnapshotWithRemote(snapshot, existingTypeNames);

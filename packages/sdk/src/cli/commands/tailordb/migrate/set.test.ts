@@ -224,6 +224,40 @@ describe("tailordb migration set", () => {
     },
   );
 
+  test("refuses to move the checkpoint elsewhere while a migration is in progress", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
+    });
+
+    const result = await runCommand(setCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/partially applied/);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("marks the in-progress migration as completed and clears its record", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-migration-in-progress": "m0002",
+          "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60",
+          "sdk-name": "my-app",
+        },
+      },
+    });
+
+    const result = await runCommand(setCommand, ["2", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0002", "sdk-name": "my-app" },
+      }),
+    );
+  });
+
   test("rejects migration numbers above 9999", async () => {
     const result = await runCommand(setCommand, ["12345", "--yes"]);
 

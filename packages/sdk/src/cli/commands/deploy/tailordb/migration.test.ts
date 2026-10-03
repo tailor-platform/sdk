@@ -16,6 +16,8 @@ import {
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_LABEL_KEY,
 } from "#/cli/commands/tailordb/migrate/types";
+import { CLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { withMetadataWriteBatch } from "../label";
 import {
   detectPendingMigrations,
@@ -26,9 +28,9 @@ import {
   type MigrationContext,
 } from "./migration";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
+import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { CLIError } from "#/cli/shared/errors";
 
 // Mock label.ts for resourceTrn
 vi.mock("../label", async (importOriginal) => ({
@@ -55,13 +57,15 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => ({
 }));
 
 // Mock spinner so tests don't render TTY frames
+const spinnerMock = vi.hoisted(() => ({
+  succeed: vi.fn(),
+  fail: vi.fn(),
+  stop: vi.fn(),
+  start: vi.fn(),
+  text: "",
+}));
 vi.mock("#/cli/shared/spinner", () => ({
-  spinner: () => ({
-    start: () => ({
-      succeed: vi.fn(),
-      fail: vi.fn(),
-    }),
-  }),
+  spinner: () => ({ start: () => spinnerMock }),
 }));
 
 // Mock the bundler and the workflow executor so executeMigrations can run
@@ -69,10 +73,17 @@ vi.mock("#/cli/shared/spinner", () => ({
 const bundleMigrationScriptMock = vi.fn();
 vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
+  bundleMigrationSteps: async () => ({ bundledCode: "// bundled steps" }),
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
+const executeMigrationStepsAsWorkflowMock = vi.fn();
 vi.mock("./migration-workflow", () => ({
   executeMigrationAsWorkflow: (...args: unknown[]) => executeMigrationAsWorkflowMock(...args),
+  executeMigrationStepsAsWorkflow: (...args: unknown[]) =>
+    executeMigrationStepsAsWorkflowMock(...args),
+  migrationStepRunnerName: (name: string) => `${name}--step`,
+  migrationWorkflowResourceName: (namespace: string, number: number) =>
+    `tailordb-migration--${namespace}--${number}`,
 }));
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations_service__");
@@ -82,6 +93,7 @@ function createMockMigration(overrides: Partial<PendingMigration> = {}): Pending
     number: 1,
     scriptPath: "/path/0001/migrate.ts",
     hasScript: true,
+    scriptForm: { kind: "main" },
     diffPath: "/path/0001/diff.json",
     namespace: "tailordb",
     migrationsDir: "/path",
@@ -520,6 +532,28 @@ describe("migration", () => {
       expect(suggestion).toContain("delete migrate.ts");
     });
 
+    test("runs main and warns when migrate.ts also exports steps", async () => {
+      const client = createMockClient({ tailordb: 0 });
+      writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+      writeMigrateFile(
+        testDir,
+        1,
+        "export async function main() {}\nexport const steps = { backfill: { run: async () => {} } };",
+      );
+      vi.mocked(logger.warn).mockClear();
+
+      const result = await detectPendingMigrations(client, workspaceId, [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ]);
+
+      expect(result[0]!.scriptForm).toEqual({ kind: "main", ignoredSteps: true });
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Migration tailordb/0001: migrate.ts exports `steps` next to `main`",
+        ),
+      );
+    });
+
     test("includes breaking change migration with script", async () => {
       const client = createMockClient({ tailordb: 0 });
 
@@ -712,6 +746,109 @@ describe("migration", () => {
         logs: "",
       });
       await runTest();
+    });
+
+    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill"] };
+
+    function stepsContext(setMetadataMock: ReturnType<typeof vi.fn>): MigrationContext {
+      return {
+        ...createMockContext(),
+        client: createMetadataClient({ labels: {} }, setMetadataMock),
+      };
+    }
+
+    test("treats another deploy's active run as in progress without touching its records", async () => {
+      const setMetadataMock = vi.fn();
+      const migration = createMockMigration({ scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockRejectedValueOnce(
+        CLIError({
+          code: "MIGRATION_EXECUTION_ACTIVE",
+          message: "Migration tailordb/0001 has an execution that is still running (exec-2).",
+        }),
+      );
+
+      await expect(
+        executeMigrations(stepsContext(setMetadataMock), [migration]),
+      ).rejects.toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
+      expect(setMetadataMock).not.toHaveBeenCalled();
+    });
+
+    test("keeps the migration in progress when its in-progress record cannot be cleared", async () => {
+      const client = {
+        getMetadata: vi
+          .fn()
+          .mockResolvedValueOnce({ metadata: { labels: {} } })
+          .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable)),
+        setMetadata: vi.fn(),
+      } as unknown as OperatorClient;
+      const migration = createMockMigration({ scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: { onBeforeStart?: () => Promise<void> }) => {
+          await options.onBeforeStart?.();
+          throw new Error("could not create the workflow");
+        },
+      );
+
+      await expect(
+        executeMigrations({ ...createMockContext(), client }, [migration]),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        message: expect.stringContaining("could not create the workflow"),
+      });
+    });
+
+    test("pauses the spinner for notices and reports a partial failure before its logs", async () => {
+      const migration = createMockMigration({ scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: { notify?: (level: "info" | "warn", message: string) => void }) => {
+          options.notify?.("warn", "cannot be resumed; every step runs again");
+          return {
+            success: false,
+            logs: "[backfill] boom",
+            error: "boom",
+            executionId: "exec-1",
+            completedSteps: ["backfill"],
+            failedSteps: [],
+            stepsMayHaveCommitted: true,
+          };
+        },
+      );
+      vi.mocked(logger.warn).mockClear();
+      vi.mocked(logger.error).mockClear();
+      spinnerMock.stop.mockClear();
+      spinnerMock.start.mockClear();
+      spinnerMock.fail.mockClear();
+
+      await expect(
+        executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } }),
+      ).rejects.toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
+
+      const order = (mock: { mock: { invocationCallOrder: number[] } }) =>
+        mock.mock.invocationCallOrder[0] ?? Number.NaN;
+      expect(order(spinnerMock.stop)).toBeLessThan(order(vi.mocked(logger.warn)));
+      expect(order(vi.mocked(logger.warn))).toBeLessThan(order(spinnerMock.start));
+      expect(vi.mocked(logger.error)).toHaveBeenCalledWith("Logs:\n[backfill] boom");
+      expect(order(spinnerMock.fail)).toBeLessThan(order(vi.mocked(logger.error)));
+    });
+
+    test("keeps the remediation of a failure that is not a step's own", async () => {
+      const migration = createMockMigration({
+        scriptForm: { kind: "steps", order: ["backfill"] },
+      });
+      executeMigrationStepsAsWorkflowMock.mockRejectedValueOnce(
+        CLIError({
+          code: "MIGRATION_EXECUTION_ACTIVE",
+          message: "Migration tailordb/0001 has an execution that is still running (exec-2).",
+          suggestion: "Wait for it to finish, then deploy again.",
+        }),
+      );
+
+      await expect(
+        executeMigrations(createMockContext(), [migration], { tailordb: { number: 1 } }),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        suggestion: expect.stringContaining("Wait for it to finish, then deploy again."),
+      });
     });
 
     test("runs a migration as a workflow rather than a synchronous script execution", async () => {

@@ -7,6 +7,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { logger } from "#/cli/shared/logger";
 import { formatMigrationNumber } from "./migration-number";
 import type { MigrationDiff } from "./diff-calculator";
+import type { MigrationScriptForm } from "./script-form";
 
 // ============================================================================
 // Label Constants
@@ -30,6 +31,15 @@ export const MIGRATION_LABEL_KEY = "sdk-migration";
 
 /** Label key identifying which migration history ID is deployed. */
 export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
+
+/**
+ * Label key naming the migration whose steps have partly committed, so the
+ * next deploy resumes it instead of treating the schema as drift.
+ */
+export const MIGRATION_IN_PROGRESS_LABEL_KEY = "sdk-migration-in-progress";
+
+/** Label key holding the execution of the migration named by the in-progress label. */
+export const MIGRATION_EXECUTION_LABEL_KEY = "sdk-migration-execution";
 
 /** Valid migration history ID syntax for metadata label values. */
 export const MIGRATION_HISTORY_ID_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
@@ -62,6 +72,8 @@ export interface PendingMigration {
   scriptPath: string;
   /** Whether a migration script file exists on disk for this migration */
   hasScript: boolean;
+  /** How the script runs; null when there is no script */
+  scriptForm: MigrationScriptForm | null;
   /** Path to diff file */
   diffPath: string;
   /** Namespace this migration belongs to */
@@ -112,6 +124,25 @@ export function parseMigrationLabelNumber(label: string): number | null {
  */
 export function parseMigrationHistoryId(label: string): string | null {
   return MIGRATION_HISTORY_ID_PATTERN.test(label) ? label : null;
+}
+
+/**
+ * Encode a workflow execution id as a metadata label value.
+ * @param executionId - Execution UUID
+ * @returns Label value
+ */
+export function executionIdToLabel(executionId: string): string {
+  return `e${executionId.replaceAll("-", "").toLowerCase()}`;
+}
+
+/**
+ * Decode a workflow execution id written by {@link executionIdToLabel}.
+ * @param label - Label value
+ * @returns Execution UUID, or null for malformed input
+ */
+export function parseExecutionLabel(label: string): string | null {
+  const match = /^e([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})$/.exec(label);
+  return match ? match.slice(1).join("-") : null;
 }
 
 /**
@@ -241,6 +272,8 @@ export interface RemoteSchemaVerificationResult {
   rebaselinePending?: RebaselinePendingInfo;
   /** Safe checkpoint reset offered after the remote schema matched the local baseline */
   checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
+  /** Set when the namespace records a migration left in progress */
+  migrationInProgress?: boolean;
   /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

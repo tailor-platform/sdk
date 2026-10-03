@@ -7,6 +7,7 @@
  * state.
  */
 
+import * as fs from "node:fs";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
@@ -16,6 +17,8 @@ import {
   formatDiffSummary,
   type MigrationDiff,
 } from "./diff-calculator";
+import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
+import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import { fetchRemoteMigrationState } from "./remote-state";
 import {
   reconstructSnapshotFromMigrations,
@@ -26,9 +29,14 @@ import {
   createSnapshotType,
   createSnapshotFromRemoteTypes,
   getLatestMigrationNumber,
+  getMigrationFilePath,
+  loadDiff,
+  MIGRATION_RESTRICTION_SETTINGS,
   MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
+  stripFieldScriptProps,
   type RemoteGqlPermission,
   type SchemaSnapshot,
+  type SnapshotFieldConfig,
   type SnapshotGqlOperations,
   type SnapshotSettings,
   type TailorDBSnapshotType,
@@ -232,6 +240,59 @@ function deployComparableSnapshot(
 }
 
 /**
+ * The schema a deploy leaves on the remote while a migration is in progress:
+ * its Pre-phase schema, where the fields and nested members kept for the
+ * script carry no scripts because the deploy adds them after building the
+ * table's scripts.
+ * @param previousSnapshot - Schema before the migration
+ * @param diff - The migration's diff
+ * @returns Snapshot the remote schema must match
+ */
+export function buildInProgressSnapshot(
+  previousSnapshot: SchemaSnapshot,
+  diff: MigrationDiff,
+): SchemaSnapshot {
+  const snapshot = buildPreMigrationSnapshot(previousSnapshot, diff);
+  for (const change of diff.changes) {
+    const fields = snapshot.tables[change.tableName]?.fields;
+    if (!fields) continue;
+    if (change.kind === "field_removed") {
+      stripKeptFieldScripts(fields, change.fieldName);
+    } else if (change.kind === "field_renamed") {
+      stripKeptFieldScripts(fields, change.previousFieldName);
+    } else if (change.kind === "field_modified") {
+      for (const member of collectNestedMemberChanges(change.before, change.after)) {
+        if (member.kind !== "removed") continue;
+        const parentMembers = getNestedMember(
+          fields[change.fieldName],
+          member.path.slice(0, -1),
+        )?.fields;
+        const memberName = member.path.at(-1);
+        if (parentMembers && memberName !== undefined) {
+          stripKeptFieldScripts(parentMembers, memberName);
+        }
+      }
+    }
+  }
+  return snapshot;
+}
+
+function stripKeptFieldScripts(fields: Record<string, SnapshotFieldConfig>, name: string): void {
+  const kept = Object.hasOwn(fields, name) ? fields[name] : undefined;
+  if (kept) fields[name] = stripFieldScriptProps(kept);
+}
+
+function reconstructPreMigrationSnapshot(
+  migrationsDir: string,
+  migrationNumber: number,
+): SchemaSnapshot | null {
+  const previous = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
+  const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  if (!previous || !fs.existsSync(diffPath)) return null;
+  return buildInProgressSnapshot(previous, loadDiff(diffPath));
+}
+
+/**
  * Verify remote schema matches the expected snapshot state
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
@@ -325,12 +386,17 @@ export async function verifyRemoteSchema(
       continue;
     }
     const expectedMigrationNumber = checkpointRepair?.to ?? remoteMigrationNumber;
+    const inProgressNumber =
+      !checkpointRepair && remoteState.inProgress?.number === remoteMigrationNumber + 1
+        ? remoteState.inProgress.number
+        : undefined;
 
-    // Reconstruct the snapshot that the remote schema must match.
-    const expectedSnapshot = reconstructSnapshotFromMigrations(
-      migrationsDir,
-      expectedMigrationNumber,
-    );
+    // Reconstruct the snapshot that the remote schema must match. A migration
+    // left in progress keeps its Pre-phase schema until a deploy completes it.
+    const expectedSnapshot =
+      inProgressNumber === undefined
+        ? reconstructSnapshotFromMigrations(migrationsDir, expectedMigrationNumber)
+        : reconstructPreMigrationSnapshot(migrationsDir, inProgressNumber);
     if (!expectedSnapshot) {
       // No snapshots exist - skip verification
       results.push({
@@ -359,6 +425,7 @@ export async function verifyRemoteSchema(
       remoteTypes,
       expectedDeploySnapshot,
       remoteGqlPermissions,
+      inProgressNumber === undefined ? [] : MIGRATION_RESTRICTION_SETTINGS,
     );
 
     results.push({
@@ -367,6 +434,9 @@ export async function verifyRemoteSchema(
       drifts,
       hasDrift: drifts.length > 0,
       ...(checkpointRepair && drifts.length === 0 ? { checkpointRepair } : {}),
+      ...(remoteState.inProgress || remoteState.inProgressInvalid
+        ? { migrationInProgress: true }
+        : {}),
     });
   }
 

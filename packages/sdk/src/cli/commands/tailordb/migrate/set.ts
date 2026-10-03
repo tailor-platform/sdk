@@ -12,14 +12,20 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { parseMigrationNumberArg } from "./migration-number";
-import { fetchRemoteMigrationState } from "./remote-state";
+import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
   formatMigrationNumber,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import { MIGRATION_HISTORY_LABEL_KEY, MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
+import {
+  MIGRATION_EXECUTION_LABEL_KEY,
+  MIGRATION_HISTORY_LABEL_KEY,
+  MIGRATION_IN_PROGRESS_LABEL_KEY,
+  MIGRATION_LABEL_KEY,
+  sanitizeMigrationLabel,
+} from "./types";
 
 interface SetOptions {
   configPath?: string;
@@ -64,6 +70,8 @@ async function set(options: SetOptions): Promise<void> {
   // 6. Get current migration state
   const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
   const currentState = await fetchRemoteMigrationState(client, trn);
+  const completesInProgress = currentState.inProgress?.number === migrationNumber;
+  if (!completesInProgress) assertNoMigrationInProgress(currentState, targetNamespace);
   const current = currentState.number;
   const currentMigration = current ?? 0;
   const currentHistoryId = currentState.historyIdInvalid
@@ -82,6 +90,13 @@ async function set(options: SetOptions): Promise<void> {
   logger.log(`Current migration history ID: ${styles.bold(currentHistoryId)}`);
   logger.log(`New migration history ID: ${styles.bold(newHistoryId)}`);
   logger.newline();
+
+  if (completesInProgress) {
+    logger.warn(
+      `Migration ${formatMigrationNumber(migrationNumber)} is in progress. Setting the checkpoint to it marks it as completed and clears its in-progress record; do this only when its schema changes are already applied.`,
+    );
+    logger.newline();
+  }
 
   if (migrationNumber < currentMigration) {
     logger.warn(
@@ -116,7 +131,12 @@ async function set(options: SetOptions): Promise<void> {
       [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
       ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
     },
-    remove: historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
+    remove: [
+      ...(historyId ? [] : [MIGRATION_HISTORY_LABEL_KEY]),
+      ...(completesInProgress
+        ? [MIGRATION_IN_PROGRESS_LABEL_KEY, MIGRATION_EXECUTION_LABEL_KEY]
+        : []),
+    ],
   });
 
   logger.success(
