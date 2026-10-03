@@ -169,9 +169,9 @@ describe("GenerationManager", () => {
         path: "/repo/consumer/tailor.config.ts",
         db: {
           own: { files: [] },
-          visible: { subgraph: true },
-          shared: { subgraph: true, schemaFrom: "../owner/tailor.config.ts" },
-          sql: { subgraph: false, schemaFrom: "../owner/tailor.config.ts" },
+          visible: { attach: true },
+          shared: { attach: true, schemaFrom: "../owner/tailor.config.ts" },
+          sql: { attach: false, schemaFrom: "../owner/tailor.config.ts" },
         },
       };
       const manager = createGenerationManager({

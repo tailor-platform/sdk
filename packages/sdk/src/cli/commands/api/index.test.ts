@@ -94,8 +94,8 @@ describe("api command workspaceId injection (end-to-end body contract)", () => {
         name: "app",
         path: "tailor.config.ts",
         db: {
-          visible: { subgraph: true },
-          sql: { subgraph: false, schemaFrom: "owner.ts" },
+          visible: { attach: true },
+          sql: { attach: false, schemaFrom: "owner.ts" },
         },
       },
       plugins: [],
@@ -110,7 +110,7 @@ describe("api command workspaceId injection (end-to-end body contract)", () => {
         name: "app",
         path: "tailor.config.ts",
         db: {
-          sql: { subgraph: false, schemaFrom: "owner.ts" },
+          sql: { attach: false, schemaFrom: "owner.ts" },
         },
       },
       plugins: [],

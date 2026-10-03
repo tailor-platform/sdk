@@ -38,7 +38,7 @@ describe("loadConfig", () => {
   test("preserves db input options and exposes normalized namespace facts separately", async () => {
     const configPath = writeConfig(`export default { name: "app", db: {
       own: { files: [], gqlOperations: "query" },
-      shared: { subgraph: false, schemaFrom: "../owner/tailor.config.ts" },
+      shared: { attach: false, schemaFrom: "../owner/tailor.config.ts" },
     } };`);
     const { config } = await loadConfig(configPath);
     expect(config.db?.own?.gqlOperations).toBe("query");
@@ -51,7 +51,7 @@ describe("loadConfig", () => {
 
   test("rejects invalid db entries when loading a config file", async () => {
     const configPath = writeConfig(
-      `export default { name: "app", db: { shared: { subgraph: false } } };`,
+      `export default { name: "app", db: { shared: { attach: false } } };`,
     );
     await expect(loadConfig(configPath)).rejects.toThrow(/db.shared/);
   });

@@ -23,8 +23,8 @@ describe("resolveWatchPaths", () => {
         name: "app",
         path: configPath,
         db: {
-          visible: { subgraph: true },
-          shared: { subgraph: false, schemaFrom: "owner.ts" },
+          visible: { attach: true },
+          shared: { attach: false, schemaFrom: "owner.ts" },
         },
       },
       sites: {},

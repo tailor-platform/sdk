@@ -187,9 +187,9 @@ export const plugins = [{
   });
 
   test.each([
-    { subgraph: true },
-    { subgraph: true, schemaFrom: "missing.config.ts" },
-    { subgraph: false, schemaFrom: "missing.config.ts" },
+    { attach: true },
+    { attach: true, schemaFrom: "missing.config.ts" },
+    { attach: false, schemaFrom: "missing.config.ts" },
   ])("rejects a non-owned namespace without following its reference: %j", async (entry) => {
     const configPath = writeProject({
       "tailor.config.ts": `export default { name: "other-app", db: { shared: ${JSON.stringify(entry)} } };`,
