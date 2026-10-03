@@ -22,7 +22,7 @@ import type {
   TailorField as FullTailorField,
   TailorAnyField as FullTailorAnyField,
 } from "#/configure/types/type";
-import type { AppConfigParsed as MinimalAppConfig } from "#/types/app-config.generated";
+import type { AppConfigParsedInput as MinimalAppConfig } from "#/types/app-config.generated";
 
 describe("configure/ full types extend types/ minimal structural interfaces", () => {
   test("TailorField (full) extends TailorField (minimal)", () => {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/schema";
 import { isForbiddenGlobal } from "#/utils/node-builtins";
 import { LOG_LEVELS } from "./log-level";
 import type { TailorDBServiceConfigInput } from "#/types/tailordb.generated";
@@ -90,10 +91,21 @@ const buildOptionsSchema = z.strictObject({
 
 const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;
 
+export const TailorDBReferenceConfigSchema = z.union([
+  z.strictObject({ subgraph: z.literal(true), schemaFrom: z.string().min(1).optional() }),
+  z.strictObject({ subgraph: z.literal(false), schemaFrom: z.string().min(1) }),
+]);
+
+const dbEntrySchema = z.union([
+  TailorDBServiceConfigSchema,
+  TailorDBReferenceConfigSchema,
+  z.strictObject({ external: z.literal(true) }),
+]);
+
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
  * top-level fields with platform-side constraints (notably `id`); fields
- * that carry SDK builder objects (`auth`, `idp`, `db`, ...) are accepted
+ * that carry SDK builder objects (`auth`, `idp`, ...) are accepted
  * as opaque values, since their internal shapes are validated by their
  * own factory functions and parser-level schemas.
  *
@@ -123,7 +135,7 @@ export const AppConfigSchema = z
       })
       .optional(),
     metadata: metadataSchema.optional(),
-    db: z.unknown().optional(),
+    db: z.record(z.string(), dbEntrySchema).optional(),
     resolver: z.unknown().optional(),
     idp: z.unknown().optional(),
     auth: z.unknown().optional(),
@@ -158,7 +170,7 @@ export const NormalizedDbEntrySchema = z.union([
   z.strictObject({
     owned: z.literal(false),
     inSubgraph: z.boolean(),
-    schemaSource: z.undefined(),
+    schemaSource: z.strictObject({ kind: z.literal("config"), path: z.string() }).optional(),
   }),
 ]);
 

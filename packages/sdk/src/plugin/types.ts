@@ -78,8 +78,10 @@ export interface ResolverNamespaceData {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface TailorDBReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their tables and metadata */
+  /** TailorDB namespaces owned by this application, with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
+  /** Definitions referenced from other applications through config.db */
+  referencedTailordb?: TailorDBNamespaceData[];
   /** Auth configuration */
   auth?: GeneratorAuthInput;
   /** Base directory for generated files */
@@ -95,8 +97,10 @@ export interface TailorDBReadyContext<PluginConfig = unknown> {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ResolverReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their tables and metadata */
+  /** TailorDB namespaces owned by this application, with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
+  /** Definitions referenced from other applications through config.db */
+  referencedTailordb?: TailorDBNamespaceData[];
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
   /** Auth configuration */
@@ -114,8 +118,10 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ExecutorReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their tables and metadata */
+  /** TailorDB namespaces owned by this application, with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
+  /** Definitions referenced from other applications through config.db */
+  referencedTailordb?: TailorDBNamespaceData[];
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
   /** All executors, keyed by executor name */

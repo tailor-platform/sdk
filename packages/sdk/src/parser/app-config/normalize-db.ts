@@ -10,12 +10,19 @@ export function normalizeDb(db: TailorDBServiceInput | undefined): NormalizedDb 
   return Object.fromEntries(
     Object.entries(db ?? {}).map(([namespace, entry]) => [
       namespace,
-      "external" in entry
-        ? { owned: false, inSubgraph: true, schemaSource: undefined }
-        : {
+      entry.files !== undefined
+        ? {
             owned: true,
             inSubgraph: true,
             schemaSource: { kind: "files", config: entry },
+          }
+        : {
+            owned: false,
+            inSubgraph: entry.external === true || entry.subgraph === true,
+            schemaSource:
+              entry.schemaFrom === undefined
+                ? undefined
+                : { kind: "config", path: entry.schemaFrom },
           },
     ]),
   );

@@ -177,7 +177,7 @@ function getWatchPatterns(config: LoadedConfig, results: ErdBuildResult[]): stri
   const patterns = [config.path];
   for (const namespace of namespaces) {
     const dbConfig = config.db?.[namespace];
-    if (dbConfig && !("external" in dbConfig)) {
+    if (dbConfig?.files) {
       patterns.push(...dbConfig.files);
     }
   }

@@ -185,7 +185,9 @@ interface CreateOwnedTailorDBServiceParams {
  * @param params - Namespace definition and owning config context
  * @returns Service whose tables have not yet been loaded
  */
-function createOwnedTailorDBService(params: CreateOwnedTailorDBServiceParams): TailorDBService {
+export function createOwnedTailorDBService(
+  params: CreateOwnedTailorDBServiceParams,
+): TailorDBService {
   const { namespace, serviceConfig, configPath, baseDir, dateDefault, pluginManager } = params;
   return createTailorDBService({
     namespace,

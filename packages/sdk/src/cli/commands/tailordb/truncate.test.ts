@@ -185,6 +185,9 @@ describe("truncate command", () => {
           db: {
             owned: { files: ["./owned/*.ts"] },
             "shared-db": { external: true },
+            visible: { subgraph: true },
+            shared: { subgraph: true, schemaFrom: "owner.ts" },
+            sql: { subgraph: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -206,6 +209,9 @@ describe("truncate command", () => {
         config: {
           db: {
             "shared-db": { external: true },
+            visible: { subgraph: true },
+            shared: { subgraph: true, schemaFrom: "owner.ts" },
+            sql: { subgraph: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -244,6 +250,9 @@ describe("truncate command", () => {
           db: {
             owned: { files: ["./owned/*.ts"] },
             "shared-db": { external: true },
+            visible: { subgraph: true },
+            shared: { subgraph: true, schemaFrom: "owner.ts" },
+            sql: { subgraph: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);

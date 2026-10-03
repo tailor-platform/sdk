@@ -15,6 +15,25 @@ describe("resolveWatchPaths", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
+  test("does not treat non-owned namespace entries as file globs", async () => {
+    const configPath = path.join(tempDir, "tailor.config.ts");
+    fs.writeFileSync(configPath, "export default {};");
+    const context: LocalErdSchemaContext = {
+      config: {
+        name: "app",
+        path: configPath,
+        db: {
+          visible: { subgraph: true },
+          shared: { subgraph: false, schemaFrom: "owner.ts" },
+        },
+      },
+      sites: {},
+      namespaces: [],
+    };
+    const results = [{ namespace: "visible" }, { namespace: "shared" }] as ErdBuildResult[];
+    await expect(resolveWatchPaths(context, results)).resolves.toEqual([configPath]);
+  });
+
   test("expands TailorDB file globs and includes the literal base directory", async () => {
     const configPath = path.join(tempDir, "tailor.config.ts");
     const typeDir = path.join(tempDir, "tailordb");
