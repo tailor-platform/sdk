@@ -53,6 +53,43 @@ const other = { db: { shared: { external: true } } };
   });
 
   test.each([
+    ['import { defineAuth, defineIdp } from "@tailor-platform/sdk";', "defineAuth", "defineIdp"],
+    ['import { defineAuth as auth, defineIdp as idp } from "@tailor-platform/sdk";', "auth", "idp"],
+    ['import * as sdk from "@tailor-platform/sdk";', "sdk.defineAuth", "sdk.defineIdp"],
+  ])("does not request manual migration for owned SDK builders: %s", (imports, auth, idp) => {
+    const source = `${IMPORT}${imports}
+export default defineConfig({
+  db: { own: { files: ["./tailordb/*.ts"] } },
+  resolver: { own: { files: ["./resolvers/*.ts"] } },
+  auth: ${auth}("auth", { machineUserAttributes: {}, machineUsers: [] }),
+  idp: [${idp}("idp", { clients: ["default"] })],
+});`;
+
+    expect(transform(source)).toBeNull();
+    expect(reviewFindings(source, "tailor.config.ts", "tailor.config.ts")).toEqual([]);
+  });
+
+  test.each([
+    ['import { defineAuth } from "other";', 'defineConfig({ auth: defineAuth("auth", {}) });'],
+    ['import * as sdk from "other";', 'defineConfig({ auth: sdk.defineAuth("auth", {}) });'],
+    [
+      'import { defineAuth } from "@tailor-platform/sdk";',
+      'function build(defineAuth) { return defineConfig({ auth: defineAuth("auth", {}) }); }',
+    ],
+    [
+      'import * as sdk from "@tailor-platform/sdk";',
+      'function build(sdk) { return defineConfig({ auth: sdk.defineAuth("auth", {}) }); }',
+    ],
+  ])("keeps manual migration findings for unresolved builders: %s", (imports, body) => {
+    const source = `${IMPORT}${imports}\n${body}`;
+
+    expect(transform(source)).toBeNull();
+    expect(reviewFindings(source, "config.ts", "config.ts")).toEqual([
+      expect.objectContaining({ message: expect.stringContaining("not an object literal") }),
+    ]);
+  });
+
+  test.each([
     ["config variable", "defineConfig(config)", "object literal"],
     ["config spread", "defineConfig({ ...config })", "spread or computed"],
     ["db variable", "defineConfig({ db })", "object literal"],
