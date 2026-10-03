@@ -612,6 +612,21 @@ describe("tailordb migration validate", () => {
     expect(report.migrationFiles).toEqual({ valid: true });
   });
 
+  test("warns that steps is ignored when a script also exports main", async () => {
+    using stderr = captureStderr();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(
+      1,
+      "migrate.ts",
+      "export async function main() {}\nexport const steps = { backfill: { run: async () => {} } };",
+    );
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("migrate.ts exports `steps` next to `main`");
+  });
+
   test("accepts unrelated TODO comments in migration scripts", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
