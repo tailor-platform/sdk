@@ -47,7 +47,7 @@ export async function inviteUser(options: InviteUserOptions): Promise<void> {
 /**
  * Invite a user to a workspace.
  * @param options - Options identifying the user, role, and workspace
- * @returns The workspace the user belongs to
+ * @returns ID of the workspace the user was invited to
  */
 async function inviteUserInWorkspace(options: InviteUserOptions): Promise<string> {
   const { client, workspaceId, email, role } = await loadOptions(options);

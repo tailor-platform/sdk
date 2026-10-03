@@ -26,7 +26,7 @@ interface ClearedExpiry {
  *
  * A workspace recording no expiry is never deleted by `prune --expired`.
  * @param options - Clear options
- * @returns The workspace, and whether it recorded an expiry to drop
+ * @returns The workspace, and whether an expiry label was removed
  */
 async function clearWorkspaceTtl(options: ClearTtlOptions): Promise<ClearedExpiry> {
   const validated = parseOptions(clearTtlOptionsSchema, options);

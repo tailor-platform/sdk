@@ -127,7 +127,7 @@ export async function writeWorkspaceExpiry(
  * a blank expiry as a recorded one.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @returns Whether the workspace recorded an expiry to drop
+ * @returns Whether an expiry label was removed
  */
 export async function clearWorkspaceExpiry(
   client: MetadataLabelClient,
