@@ -5,7 +5,7 @@ import * as path from "pathe";
 import { normalizedDbOf } from "#/cli/shared/config";
 import { CLIError } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";
-import type { AppConfig } from "#/configure/config/types";
+import type { NormalizedAppConfig } from "#/parser/app-config/types";
 
 // ============================================================================
 // Types
@@ -36,12 +36,12 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
 
 /**
  * Get namespaces that have migrations configured
- * @param {AppConfig} config - Application configuration
+ * @param {NormalizedAppConfig} config - Application configuration
  * @param {string} configDir - Configuration directory path
  * @returns {NamespaceWithMigrations[]} Array of namespaces with migrations configured
  */
 export function getNamespacesWithMigrations(
-  config: AppConfig,
+  config: NormalizedAppConfig,
   configDir: string,
 ): NamespaceWithMigrations[] {
   const result: NamespaceWithMigrations[] = [];

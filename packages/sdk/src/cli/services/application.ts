@@ -46,11 +46,9 @@ import {
   type ExecutorServiceInput,
   type HttpAdapterServiceInput,
   type LogLevel,
-  type ResolverServiceInput,
   type WorkflowServiceConfig,
 } from "#/configure/config/types";
-import { type AuthConfig } from "#/configure/services/auth/types";
-import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
+import { type IdPOwnConfig } from "#/configure/services/idp/types";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -248,7 +246,7 @@ function pluginResolverSource(
 }
 
 function defineResolver(
-  config: ResolverServiceInput | undefined,
+  config: LoadedConfig["resolver"],
   baseDir: string,
   plugins: PluginResolverSource | undefined,
 ): DefineResolverResult {
@@ -260,8 +258,7 @@ function defineResolver(
   }
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
-    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-    if (serviceConfig.external !== true && serviceConfig.attach !== true) {
+    if (serviceConfig.attach !== true) {
       const resolverService = createResolverService(namespace, serviceConfig, baseDir, plugins);
       resolverServices.push(resolverService);
     }
@@ -286,8 +283,7 @@ export function definePluginResolverServices(
   const resolverServices: ResolverService[] = [];
   for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
     const serviceConfig = config.resolver?.[namespace];
-    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-    if (serviceConfig && (serviceConfig.external === true || serviceConfig.attach === true)) {
+    if (serviceConfig?.attach === true) {
       throw CLIError({
         code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
         message: `Plugin "${pluginId}" cannot generate resolvers in external namespace "${namespace}".`,
@@ -321,7 +317,7 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
   return config;
 }
 
-function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string): DefineIdpResult {
+function defineIdp(config: LoadedConfig["idp"], configPath: string): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -336,8 +332,7 @@ function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string)
       throw new Error(`IdP with name "${name}" already defined.`);
     }
     idpNames.add(name);
-    // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-    if (idpConfig.external !== true && idpConfig.attach !== true) {
+    if (idpConfig.attach !== true) {
       const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
         file: configPath,
         configKey: "idp",
@@ -358,7 +353,7 @@ type DefineAuthResult = {
 };
 
 function defineAuth(
-  config: AuthConfig | undefined,
+  config: LoadedConfig["auth"],
   configPath: string,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
@@ -370,8 +365,7 @@ function defineAuth(
   }
 
   let authService: AuthService | undefined;
-  // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-  if (config.external !== true && config.attach !== true) {
+  if (config.attach !== true) {
     authService = createAuthService(
       parseServiceConfig(AuthConfigSchema, config, {
         file: configPath,

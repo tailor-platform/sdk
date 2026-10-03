@@ -35,6 +35,28 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
+  test("returns canonical attachments for every legacy service reference", async () => {
+    const configPath = writeConfig(`export default {
+      name: "app",
+      db: { shared: { external: true } },
+      resolver: { shared: { external: true } },
+      auth: { name: "shared-auth", external: true },
+      idp: [{ name: "shared-idp", external: true }],
+    };`);
+
+    const { config } = await loadConfig(configPath);
+
+    expect(config.db).toEqual({ shared: { attach: true } });
+    expect(config.resolver).toEqual({ shared: { attach: true } });
+    expect(config.auth).toEqual({ name: "shared-auth", attach: true });
+    expect(config.idp).toEqual([{ name: "shared-idp", attach: true }]);
+    expect(config.normalizedDb?.shared).toEqual({
+      owned: false,
+      inSubgraph: true,
+      schemaSource: undefined,
+    });
+  });
+
   test("preserves db input options and exposes normalized namespace facts separately", async () => {
     const configPath = writeConfig(`export default { name: "app", db: {
       own: { files: [], gqlOperations: "query" },

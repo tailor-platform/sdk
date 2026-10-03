@@ -106,8 +106,7 @@ async function fetchStaticWebsites(
 }
 
 function oauth2ClientNames(auth: LoadedConfig["auth"]): string[] {
-  // oxlint-disable-next-line typescript/no-deprecated -- Legacy configs remain supported until v3.
-  if (!auth || auth.external === true || auth.attach === true) {
+  if (!auth || auth.attach === true) {
     return [];
   }
   return Object.keys(auth.oauth2Clients ?? {});

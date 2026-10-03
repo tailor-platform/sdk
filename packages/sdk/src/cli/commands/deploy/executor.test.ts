@@ -177,7 +177,7 @@ describe("planExecutor", () => {
       idpServices,
       authService: options?.authName ? { config: { name: options.authName } } : undefined,
       config: options?.externalAuthName
-        ? { auth: { name: options.externalAuthName, external: true } }
+        ? { auth: { name: options.externalAuthName, attach: true } }
         : {},
     } as unknown as Application;
   }
