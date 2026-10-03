@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isForbiddenGlobal } from "#/utils/node-builtins";
 import { LOG_LEVELS } from "./log-level";
+import type { TailorDBServiceConfigInput } from "#/types/tailordb.generated";
 
 const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -125,3 +126,21 @@ export const AppConfigSchema = z
       }
     }
   });
+
+export const NormalizedDbEntrySchema = z.union([
+  z.strictObject({
+    owned: z.literal(true),
+    inSubgraph: z.literal(true),
+    schemaSource: z.strictObject({
+      kind: z.literal("files"),
+      config: z.custom<TailorDBServiceConfigInput>(),
+    }),
+  }),
+  z.strictObject({
+    owned: z.literal(false),
+    inSubgraph: z.boolean(),
+    schemaSource: z.undefined(),
+  }),
+]);
+
+export const NormalizedDbSchema = z.record(z.string(), NormalizedDbEntrySchema);

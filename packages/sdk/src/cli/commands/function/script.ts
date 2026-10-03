@@ -16,7 +16,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { workspaceArgs, configArg, DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { extractAllNamespaces, extractOwnedNamespaces } from "#/cli/shared/config";
+import { extractAllNamespaces, normalizedDbOf } from "#/cli/shared/config";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
@@ -267,7 +267,9 @@ interface ResolveNamespaceOptions {
 function resolveNamespace(options: ResolveNamespaceOptions): string {
   const { config, explicit, sidecarNamespace, remote } = options;
   const allNamespaces = extractAllNamespaces(config);
-  const ownedNamespaces = extractOwnedNamespaces(config);
+  const ownedNamespaces = Object.entries(normalizedDbOf(config))
+    .filter(([, entry]) => entry.schemaSource !== undefined)
+    .map(([name]) => name);
   const configured = remote ? allNamespaces : ownedNamespaces;
 
   if (explicit) {

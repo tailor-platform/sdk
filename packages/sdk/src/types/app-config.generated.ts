@@ -51,3 +51,73 @@ export type AppConfigParsed = {
   secrets?: unknown;
 };
 export type AppConfigParsedInput = AppConfigParsed;
+
+export type NormalizedDbEntry =
+  | {
+      owned: true;
+      inSubgraph: true;
+      schemaSource: {
+        kind: "files";
+        config: {
+          files: string[];
+          ignores?: string[] | undefined;
+          migration?:
+            | {
+                directory: string;
+                machineUser?: string | undefined | undefined;
+              }
+            | undefined;
+          gqlOperations?:
+            | "query"
+            | {
+                create?: boolean | undefined | undefined;
+                update?: boolean | undefined | undefined;
+                delete?: boolean | undefined | undefined;
+                read?: boolean | undefined | undefined;
+              }
+            | undefined;
+        };
+      };
+    }
+  | {
+      owned: false;
+      inSubgraph: boolean;
+      schemaSource: undefined;
+    };
+export type NormalizedDbEntryInput = NormalizedDbEntry;
+
+export type NormalizedDb = {
+  [x: string]:
+    | {
+        owned: true;
+        inSubgraph: true;
+        schemaSource: {
+          kind: "files";
+          config: {
+            files: string[];
+            ignores?: string[] | undefined;
+            migration?:
+              | {
+                  directory: string;
+                  machineUser?: string | undefined | undefined;
+                }
+              | undefined;
+            gqlOperations?:
+              | "query"
+              | {
+                  create?: boolean | undefined | undefined;
+                  update?: boolean | undefined | undefined;
+                  delete?: boolean | undefined | undefined;
+                  read?: boolean | undefined | undefined;
+                }
+              | undefined;
+          };
+        };
+      }
+    | {
+        owned: false;
+        inSubgraph: boolean;
+        schemaSource: undefined;
+      };
+};
+export type NormalizedDbInput = NormalizedDb;

@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { normalizeDb } from "#/parser/app-config/normalize-db";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
@@ -10,6 +11,7 @@ import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
+import type { NormalizedDb } from "#/types/app-config.generated";
 
 /**
  * App config whose `env` entries have been resolved to the values that get
@@ -22,7 +24,7 @@ export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
 };
 
 /** Loaded configuration with resolved path. */
-export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
+export type LoadedConfig = ResolvedEnvAppConfig & { path: string; normalizedDb?: NormalizedDb };
 
 export interface LoadConfigOptions {
   /** Import cache-busting value for callers that reload the config module after a rebuild. */
@@ -140,6 +142,7 @@ export async function loadConfig(
       ...appConfig,
       ...(env ? { env } : {}),
       path: resolvedPath,
+      normalizedDb: normalizeDb(appConfig.db),
     } as LoadedConfig,
     plugins: allPlugins,
   };

@@ -63,13 +63,13 @@ describe("loadConfig", () => {
 
   test("collects plugins from the `plugins` export", async () => {
     const configPath = writeConfig(`
-      export default { name: "test-app", db: { marker: "preserved" } };
+      export default { name: "test-app", db: { marker: { files: ["tables/*.ts"] } } };
       export const plugins = [{ id: "first", description: "First plugin", custom: "kept" }];
     `);
 
     const { config, plugins } = await loadConfig(configPath);
 
-    expect(config.db).toEqual({ marker: "preserved" });
+    expect(config.db).toEqual({ marker: { files: ["tables/*.ts"] } });
     expect(plugins).toEqual([{ id: "first", description: "First plugin", custom: "kept" }]);
   });
 

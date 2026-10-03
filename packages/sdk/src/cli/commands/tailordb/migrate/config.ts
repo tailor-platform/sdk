@@ -1,8 +1,8 @@
+import * as path from "pathe";
 /**
  * Migration configuration utilities
  */
-
-import * as path from "pathe";
+import { normalizedDbOf } from "#/cli/shared/config";
 import { CLIError } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";
 import type { AppConfig } from "#/configure/config/types";
@@ -46,8 +46,9 @@ export function getNamespacesWithMigrations(
 ): NamespaceWithMigrations[] {
   const result: NamespaceWithMigrations[] = [];
 
-  for (const namespace of Object.keys(config.db ?? {})) {
-    const dbConfig = config.db?.[namespace];
+  for (const [namespace, entry] of Object.entries(normalizedDbOf(config))) {
+    if (!entry.owned) continue;
+    const dbConfig = entry.schemaSource.config;
     if (!hasMigrationConfig(dbConfig)) continue;
 
     const migrationsDir = path.resolve(configDir, dbConfig.migration.directory);
