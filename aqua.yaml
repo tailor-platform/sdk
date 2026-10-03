@@ -9,6 +9,6 @@ registries:
   - type: standard
     ref: v4.570.0 # renovate: depName=aquaproj/aqua-registry
 packages:
-  - name: rhysd/actionlint@v1.7.12
+  - name: zizmorcore/zizmor@v1.30.1
   - name: suzuki-shunsuke/ghalint@v1.5.6
   - name: bufbuild/buf@v1.73.0

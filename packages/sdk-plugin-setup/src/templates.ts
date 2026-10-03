@@ -8,8 +8,8 @@ import tagTemplate from "./tag.workflow.yml";
 
 // Only the release PR changes RELEASED_TEMPLATE_VERSION and the fingerprint below; a PR that
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
-// Released template fingerprint: 0edaf68f2a95aeb9a021c5fa2ba22115337e3759639020f598e7235679c39b9b
-const RELEASED_TEMPLATE_VERSION = 13;
+// Released template fingerprint: 84367ce3976bfba8b9b972ac23f656b84a62d778aae3b36273ae54b2917e6e06
+const RELEASED_TEMPLATE_VERSION = 15;
 const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
@@ -471,8 +471,8 @@ export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   return { content: out, generatedIds };
 }
 
-export const ACTIONS_SHA = "19c81ce6530e0c79e7ab7753dea32233997006e7";
-export const ACTIONS_VERSION = "v2.3.5";
+export const ACTIONS_SHA = "d4ac2604a2267eed2f121ed1830db5d6ea4ebecf";
+export const ACTIONS_VERSION = "v2.4.0";
 
 /**
  * Render the coordinator workflow that orchestrates per-app composite actions.
@@ -601,7 +601,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
 
   const singleAppDeployStep = (group: CoordinateAppGroup, app: CoordinateApp) => [
     `- id: tailor-deploy-${group.id}`,
-    `  uses: ./.github/actions/tailor-${app.name}`,
+    `  uses: ./.github/actions/tailor-${app.name} # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${app.name}`,
@@ -614,7 +614,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
   ];
   const buildSiteStep = (app: CoordinateApp) => [
     `- id: tailor-build-site-${app.name}`,
-    `  uses: ./.github/actions/tailor-${app.name}`,
+    `  uses: ./.github/actions/tailor-${app.name} # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${app.name}`,
@@ -630,7 +630,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     ...group.apps.filter((app) => app.hasStaticWebsites).flatMap(buildSiteStep),
     `- id: tailor-deploy-${group.id}`,
     // Grouped deploys reuse one app action; keep action.yml parameterized by config/deploy/build-site inputs.
-    `  uses: ./.github/actions/tailor-${firstApp(group).name}`,
+    `  uses: ./.github/actions/tailor-${firstApp(group).name} # zizmor: ignore[self-repository] $/ needs runner 2.336.0+ and is unavailable on GitHub Enterprise Server`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
     `    name: ${coordinatorName}/${group.id}`,
