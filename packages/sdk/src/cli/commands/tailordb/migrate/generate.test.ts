@@ -5,7 +5,8 @@ import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
-import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { generateCommand } from "./generate";
 import { loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
@@ -1138,5 +1139,159 @@ describe("tailordb migration generate declined confirmations", () => {
     });
     expect(fs.existsSync(path.join(declined.migrationsDir, "0001"))).toBe(false);
     expect(fs.existsSync(path.join(accepted.migrationsDir, "0001", "diff.json"))).toBe(true);
+  });
+});
+
+describe("tailordb migration generate JSON output", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.stubEnv("EDITOR", undefined);
+    vi.stubEnv("VISUAL", undefined);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-json-test-"));
+    state.namespaces = [];
+    vi.mocked(loadConfig).mockImplementation(
+      async () =>
+        ({
+          config: {
+            path: path.join(tmpDir, "tailor.config.ts"),
+            db: Object.fromEntries(
+              state.namespaces.map(({ namespace, migrationsDir }) => [
+                namespace,
+                { migration: { directory: migrationsDir } },
+              ]),
+            ),
+          },
+          plugins: [],
+        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+    );
+    vi.mocked(canPrompt).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function migrationFile(entry: TestNamespace, number: string, name: string): string {
+    return path.join(entry.migrationsDir, number, name);
+  }
+
+  test("prints the generated migration", async () => {
+    const userWithoutName = parsedType("User");
+    delete userWithoutName.fields.name;
+    const entry = addNamespace(tmpDir, "tailordb", "User", userWithoutName);
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      clearedNamespaces: [],
+      migrations: [
+        {
+          namespace: "tailordb",
+          migrationNumber: 1,
+          schemaPath: null,
+          diffPath: migrationFile(entry, "0001", "diff.json"),
+          migratePath: null,
+          dbTypesPath: null,
+          pgliteSchemaPath: null,
+          pgliteSchemaError: null,
+        },
+      ],
+    });
+  });
+
+  test("reports no change when the schema matches the last migration", async () => {
+    addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: false,
+      clearedNamespaces: [],
+      migrations: [],
+    });
+  });
+
+  test("reports no change when no namespace has migrations configured", async () => {
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: false,
+      clearedNamespaces: [],
+      migrations: [],
+    });
+  });
+
+  test("prints the cleared directory and the new baseline with --init", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(generateCommand, ["--init", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      clearedNamespaces: ["tailordb"],
+      migrations: [
+        {
+          namespace: "tailordb",
+          migrationNumber: 0,
+          schemaPath: migrationFile(entry, "0000", "schema.json"),
+          diffPath: null,
+          migratePath: null,
+          dbTypesPath: null,
+          pgliteSchemaPath: null,
+          pgliteSchemaError: null,
+        },
+      ],
+    });
+  });
+
+  test("prints a data-only migration without opening the configured editor", async () => {
+    vi.stubEnv("EDITOR", "true");
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      clearedNamespaces: [],
+      migrations: [
+        {
+          namespace: "tailordb",
+          migrationNumber: 1,
+          schemaPath: null,
+          diffPath: migrationFile(entry, "0001", "diff.json"),
+          migratePath: migrationFile(entry, "0001", "migrate.ts"),
+          dbTypesPath: migrationFile(entry, "0001", "db.ts"),
+          pgliteSchemaPath: migrationFile(entry, "0001", "db.pglite.ts"),
+          pgliteSchemaError: null,
+        },
+      ],
+    });
+    const stderr = vi
+      .mocked(process.stderr.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join("");
+    expect(stderr).not.toContain("Opening migrate.ts");
   });
 });

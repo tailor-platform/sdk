@@ -7,6 +7,8 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { syncCommand } from "./sync";
 import {
   parsedType,
@@ -191,6 +193,52 @@ describe("tailordb migration sync", () => {
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
       }),
     );
+  });
+
+  test("prints the applied snapshot under JSON output", async () => {
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      workspaceId: "12345678-1234-4abc-8def-123456789012",
+      namespace: "tailordb",
+      previousMigrationNumber: 2,
+      migrationNumber: 1,
+      historyId: null,
+      tables: { created: ["Post"], updated: ["User"], deleted: ["Stale"] },
+      gqlPermissions: { set: [], deleted: [] },
+    });
+  });
+
+  test("reports no change under JSON output when the remote already matches an empty snapshot", async () => {
+    fs.rmSync(state.migrationsDir, { recursive: true, force: true });
+    writeInitialSchema(state.migrationsDir, {});
+    state.localTypes = {};
+    state.listTailorDBTypes.mockResolvedValue({ tailordbTypes: [], nextPageToken: "" });
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0000", "sdk-name": "my-app" } },
+    });
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(syncCommand, ["0", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: false,
+      workspaceId: "12345678-1234-4abc-8def-123456789012",
+      namespace: "tailordb",
+      previousMigrationNumber: 0,
+      migrationNumber: 0,
+      historyId: null,
+      tables: { created: [], updated: [], deleted: [] },
+      gqlPermissions: { set: [], deleted: [] },
+    });
+    expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
   test("sets the current migration history ID from a re-baselined snapshot", async () => {

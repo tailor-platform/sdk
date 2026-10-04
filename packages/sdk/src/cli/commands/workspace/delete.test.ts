@@ -5,6 +5,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { deleteCommand } from "./delete";
 
 vi.mock("#/cli/shared/client", () => ({
@@ -22,6 +23,8 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => ({
   logger: {
     info: vi.fn(),
     success: vi.fn(),
+    out: vi.fn(),
+    jsonMode: false,
   },
 }));
 
@@ -133,6 +136,24 @@ describe("workspace delete command", () => {
     expect(result.success).toBe(false);
     expect(writePlatformConfig).toHaveBeenCalledWith({
       profiles: { live: { workspace_id: "id-other" } },
+    });
+  });
+
+  test("prints the deleted workspace and its removed profiles under JSON output", async () => {
+    stubClient();
+    vi.mocked(readPlatformConfig).mockResolvedValue({
+      profiles: { dev: { workspace_id: workspaceId }, other: { workspace_id: "other" } },
+    } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>);
+    using _json = jsonMode();
+
+    const result = await runCommand(deleteCommand, ["--workspace-id", workspaceId, "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(logger.out).toHaveBeenCalledWith({
+      changed: true,
+      workspaceId,
+      name: "sample-space",
+      removedProfiles: ["dev"],
     });
   });
 });

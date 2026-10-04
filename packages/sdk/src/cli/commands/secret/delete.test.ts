@@ -2,6 +2,8 @@ import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { deleteSecretCommand } from "./delete";
 
 vi.mock("#/cli/shared/operator-context", () => ({
@@ -67,6 +69,33 @@ describe("secret delete command", () => {
       workspaceId: "workspace-1",
       secretmanagerVaultName: "api-keys",
       secretmanagerSecretName: "stripe",
+    });
+  });
+
+  test("prints the secret and vault under JSON output", async () => {
+    const client = { deleteSecretManagerSecret: vi.fn().mockResolvedValue({}) };
+    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
+      client,
+      workspaceId: "workspace-1",
+    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(deleteSecretCommand, [
+      "--vault-name",
+      "api-keys",
+      "--name",
+      "stripe",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      workspaceId: "workspace-1",
+      vaultName: "api-keys",
+      name: "stripe",
+      vaultOwnershipReleased: false,
     });
   });
 });

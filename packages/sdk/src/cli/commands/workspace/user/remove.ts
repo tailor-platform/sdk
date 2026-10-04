@@ -4,6 +4,7 @@ import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
@@ -39,12 +40,22 @@ async function loadOptions(options: RemoveUserOptions) {
  * @returns Promise that resolves when removal completes
  */
 export async function removeUser(options: RemoveUserOptions): Promise<void> {
+  await removeUserFromWorkspace(options);
+}
+
+/**
+ * Remove a user from a workspace.
+ * @param options - Options identifying the user and workspace
+ * @returns ID of the workspace the user was removed from
+ */
+async function removeUserFromWorkspace(options: RemoveUserOptions): Promise<string> {
   const { client, workspaceId, email } = await loadOptions(options);
 
   await client.removeWorkspacePlatformUser({
     workspaceId,
     email,
   });
+  return workspaceId;
 }
 
 export const removeCommand = defineAppCommand({
@@ -73,12 +84,13 @@ export const removeCommand = defineAppCommand({
       }
     }
 
-    await removeUser({
+    const workspaceId = await removeUserFromWorkspace({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       email: args.email,
     });
 
     logger.success(`User "${args.email}" removed from workspace.`);
+    printMutationResult({ changed: true, workspaceId, email: args.email });
   },
 });

@@ -691,6 +691,23 @@ describe("script command results", () => {
     expect(stderr).not.toContain("Cleared the stale script skip record");
   });
 
+  test("does not open the configured editor under JSON output", async () => {
+    vi.stubEnv("EDITOR", "true");
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+    using _json = jsonMode();
+    using _stdout = captureStdout();
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(true);
+    const stderr = vi
+      .mocked(process.stderr.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join("");
+    expect(stderr).not.toContain("Opening migrate.ts");
+  });
+
   test("prints the recorded script skip", async () => {
     writeDiffFile(
       testDir,

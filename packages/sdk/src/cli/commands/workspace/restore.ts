@@ -6,6 +6,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -77,5 +78,6 @@ export const restoreCommand = defineAppCommand({
     });
 
     logger.success(`Workspace "${workspaceId}" restored successfully.`);
+    printMutationResult({ changed: true, workspaceId });
   },
 });
