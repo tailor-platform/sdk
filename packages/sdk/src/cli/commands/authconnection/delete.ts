@@ -30,8 +30,12 @@ export const deleteAuthConnectionCommand = defineAppCommand({
       });
 
       if (confirmation !== args.name) {
-        logger.info("Auth connection deletion cancelled.");
-        return;
+        throw CLIError({
+          code: "AUTH_CONNECTION_DELETION_CANCELLED",
+          message: "Auth connection deletion cancelled: the entered name did not match.",
+          suggestion:
+            "Run the command again and enter the name exactly as shown, or pass --yes to skip the confirmation.",
+        });
       }
     }
 

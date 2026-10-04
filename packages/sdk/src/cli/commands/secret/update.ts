@@ -39,7 +39,12 @@ export const updateSecretCommand = defineAppCommand({
         message: "Do you want to proceed?",
         default: false,
       });
-      if (!confirmed) return;
+      if (!confirmed) {
+        throw CLIError({
+          code: "SECRET_UPDATE_CANCELLED",
+          message: "Secret update cancelled. The vault is still managed by the config.",
+        });
+      }
     }
     try {
       await client.updateSecretManagerSecret({

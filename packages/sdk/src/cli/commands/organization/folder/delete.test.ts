@@ -3,6 +3,7 @@ import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
 import { deleteCommand } from "./delete";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -15,6 +16,12 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
 
 vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
+}));
+
+vi.mock("#/cli/shared/prompt", () => ({
+  prompt: {
+    confirm: vi.fn(),
+  },
 }));
 
 vi.mock("#/cli/shared/logger", async (importOriginal) => ({
@@ -77,6 +84,32 @@ describe("organization folder delete", () => {
 
     expect(result.error?.message).toBe(`Folder "${FOLDER_ID}" not found.`);
     expect(result.error?.cause).toBe(failure);
+    expect(client.deleteOrganizationFolder).not.toHaveBeenCalled();
+  });
+
+  test("deletes when the confirmation is accepted", async () => {
+    const client = mockClient({});
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(deleteCommand, argv.slice(0, -1));
+
+    expect(result.success).toBe(true);
+    expect(client.deleteOrganizationFolder).toHaveBeenCalledWith({
+      organizationId: ORGANIZATION_ID,
+      folderId: FOLDER_ID,
+    });
+  });
+
+  test("fails without deleting when the confirmation is declined", async () => {
+    const client = mockClient({});
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    const result = await runCommand(deleteCommand, argv.slice(0, -1));
+
+    expect(prompt.confirm).toHaveBeenCalledWith({
+      message: 'Are you sure you want to delete folder "docs"?',
+    });
+    expect(result.error).toMatchObject({ code: "FOLDER_DELETION_CANCELLED" });
     expect(client.deleteOrganizationFolder).not.toHaveBeenCalled();
   });
 

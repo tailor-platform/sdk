@@ -102,8 +102,7 @@ export async function setupDelete(options: DeleteOptions): Promise<void> {
       default: false,
     });
     if (!confirmed) {
-      logger.info("Delete cancelled.");
-      return;
+      throw new Error("Delete cancelled. No files were changed.");
     }
   }
 
