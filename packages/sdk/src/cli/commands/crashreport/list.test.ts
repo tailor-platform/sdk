@@ -1,7 +1,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
+import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import { orderAndLimitCrashReports } from "./list";
 
 vi.mock("std-env", () => ({
@@ -61,6 +64,25 @@ describe("crashreport list command", () => {
     const config = await mockConfigWithLocalDir(path.join(tmpDir, "does-not-exist"));
 
     expect(fs.existsSync(config.localDir)).toBe(false);
+  });
+
+  test("reports more crash reports beyond --limit after listing only the ones shown", async () => {
+    fs.writeFileSync(path.join(tmpDir, "2026-03-01T00-00-00.crash.log"), "report 1");
+    fs.writeFileSync(path.join(tmpDir, "2026-03-02T00-00-00.crash.log"), "report 2");
+    await mockConfigWithLocalDir(tmpDir);
+    const { listCommand } = await import("./list");
+    using stderr = captureStderr();
+
+    const result = await runCommand(listCommand, ["--limit", "1"]);
+
+    expect(result.success).toBe(true);
+    const output = stripAnsi(stderr.output);
+    const listed = output.indexOf("2026-03-02T00-00-00.crash.log");
+    expect(listed).toBeGreaterThan(-1);
+    expect(output).not.toContain("2026-03-01T00-00-00.crash.log");
+    expect(
+      output.indexOf("More results exist beyond --limit 1. Raise --limit to see more."),
+    ).toBeGreaterThan(listed);
   });
 });
 

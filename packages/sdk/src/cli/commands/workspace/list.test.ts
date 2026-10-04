@@ -78,7 +78,7 @@ describe("listWorkspacesWithExpiry", () => {
       "trn:v1:workspace:ws-broken": { [expiresAtLabelKey]: "not-an-expiry" },
     });
 
-    const workspaces = await listWorkspacesWithExpiry();
+    const { items: workspaces } = await listWorkspacesWithExpiry();
 
     expect(workspaces.map(({ name, expiresAt: reported }) => [name, reported])).toEqual([
       ["expiring", expiresAt.toISOString()],
@@ -86,5 +86,15 @@ describe("listWorkspacesWithExpiry", () => {
       ["broken", "invalid"],
       ["unreadable", "unavailable"],
     ]);
+  });
+
+  test("reports more workspaces beyond the limit without reading the extra one's expiry", async () => {
+    const client = stubClient({});
+
+    const listed = await listWorkspacesWithExpiry({ limit: 2 });
+
+    expect(listed.truncated).toBe(true);
+    expect(listed.items.map(({ name }) => name)).toEqual(["expiring", "bare"]);
+    expect(client.getMetadata).toHaveBeenCalledTimes(2);
   });
 });

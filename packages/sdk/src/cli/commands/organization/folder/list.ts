@@ -4,6 +4,7 @@ import { orderArg, organizationArgs, paginationArgs, toPageDirection } from "#/c
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { folderListInfo, type FolderListInfo } from "../transform";
@@ -60,12 +61,16 @@ export const listCommand = defineAppCommand({
     ...paginationArgs(),
   }),
   run: async (args) => {
-    const folders = await listFolders({
-      organizationId: args["organization-id"],
-      parentFolderId: args["parent-folder-id"],
-      order: args.order,
-      limit: args.limit,
-    });
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      listFolders({
+        organizationId: args["organization-id"],
+        parentFolderId: args["parent-folder-id"],
+        order: args.order,
+        limit,
+      }),
+    );
+    const folders = listed.items;
     logger.out(folders, { display: { updatedAt: null } });
+    await reportTruncation(listed, args.limit);
   },
 });
