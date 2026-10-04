@@ -263,11 +263,10 @@ describe("workspace create", () => {
     });
   });
 
-  test("persists the explicit console URL, not a console-next-rewritten one, when the active profile also has a platform_url", async () => {
+  test("persists the explicit console URL, not the one inferred from platform_url, when the active profile also has a platform_url", async () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
-    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -301,7 +300,7 @@ describe("workspace create", () => {
     const config = await readPlatformConfig();
     expect(config.profiles.bootstrap).toMatchObject({
       platform_url: "https://api.dev.tailor.tech",
-      console_url: "https://console.dev.tailor.tech",
+      console_url: "https://console.other.tailor.tech",
     });
   });
 

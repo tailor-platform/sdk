@@ -4,7 +4,6 @@ import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConsoleBaseUrl, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
-import { parseBoolean } from "#/cli/shared/parse-boolean";
 
 export const openAuthConnectionCommand = defineAppCommand({
   name: "open",
@@ -15,10 +14,7 @@ export const openAuthConnectionCommand = defineAppCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
-    const consolePath =
-      parseBoolean(process.env.TAILOR_CONSOLE_NEXT) === true
-        ? `/workspaces/${workspaceId}/services/auth-connections`
-        : `/workspaces/${workspaceId}/settings/connections`;
+    const consolePath = `/workspaces/${workspaceId}/services/auth-connections`;
     const consoleBaseUrl = await loadConsoleBaseUrl({
       profile: args.profile,
       ...(args["workspace-id"] !== undefined ? { allowMissingProfile: true } : {}),
