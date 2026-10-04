@@ -1,7 +1,5 @@
 # TailorDB Migrations
 
-> **Beta:** The `tailordb migration` command and the migration runtime are beta features. They may introduce breaking changes in future releases. The CLI emits a beta warning on every invocation.
-
 The migration system tracks changes to your TailorDB table definitions over time and applies them to deployed workspaces with optional data transformation scripts.
 
 For the CLI command reference, see [`tailordb migration`](../cli/tailordb.md#tailordb-migration). This document covers concepts, workflows, and operational guidance.

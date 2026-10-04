@@ -4,7 +4,6 @@ import * as path from "pathe";
 import { z } from "zod";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { deploymentArgs } from "#/cli/shared/args";
-import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError, errorSummary } from "#/cli/shared/errors";
@@ -548,8 +547,6 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
  * @param {ValidateOptions} options - Command options
  */
 async function validate(options: ValidateOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
-
   const collected = await collectValidationReports(options);
   const { reports } = collected;
   const invalidCount = reports.filter((r) => !r.valid).length;
