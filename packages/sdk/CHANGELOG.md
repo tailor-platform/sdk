@@ -1,5 +1,25 @@
 # @tailor-platform/sdk
 
+## 2.25.0
+
+### Minor Changes
+
+- [#2468](https://github.com/tailor-platform/sdk/pull/2468) [`3c87be0`](https://github.com/tailor-platform/sdk/commit/3c87be0cdfbf3fe8b7cdedbdf0d64339b781c25e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add an onDeployed plugin hook with deployed application IDs and URLs, public OAuth client IDs, and publishing to static websites. Hooks run after successful deploys, including deploys without resource changes, and can return structured JSON outputs.
+
+- [#2468](https://github.com/tailor-platform/sdk/pull/2468) [`7451944`](https://github.com/tailor-platform/sdk/commit/74519445be5000fcbc0ce0f0bd3c6abfb3275b2f) Thanks [@toiroakr](https://github.com/toiroakr)! - Add the frontendPlugin builtin to build and upload frontend assets during tailor deploy, using deployed URLs and public OAuth client IDs as build environment variables.
+
+- [#2497](https://github.com/tailor-platform/sdk/pull/2497) [`efcca78`](https://github.com/tailor-platform/sdk/commit/efcca789538fde0f7f05d8de4854c771b03ebbf0) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Include the machine user `id` in `tailor machineuser list` output so machine users can be matched against the invoker id available in resolvers and executors.
+
+- [#2486](https://github.com/tailor-platform/sdk/pull/2486) [`caa34b4`](https://github.com/tailor-platform/sdk/commit/caa34b450fb92b8993e6f3c29c890918bb69b1f6) Thanks [@dqn](https://github.com/dqn)! - `tailor secret create` and `tailor secret update` now read the secret value from standard input when `--value` is omitted, keeping it out of shell history and process listings: `printf '%s' "$VALUE" | tailor secret create --vault-name <vault> --name <name>`. The piped value can be up to 128 KiB, and one trailing newline is removed from it. Without `--value`, a terminal or empty standard input fails with `SECRET_VALUE_REQUIRED`.
+
+- [#2485](https://github.com/tailor-platform/sdk/pull/2485) [`d06f314`](https://github.com/tailor-platform/sdk/commit/d06f3143341a8c4161989e5cd906bda8fbbf5014) Thanks [@dqn](https://github.com/dqn)! - `tailor show` (and the programmatic `show()`) now also lists each deployed static website defined in `staticWebsites` with its URL and description, and each deployed OAuth2 client defined in `auth`'s `oauth2Clients` with its client ID, so a CI step can read both from one `tailor show --json` call right after `tailor deploy`. Client secrets are never included. Credentials that cannot list OAuth2 clients, such as the workspace viewer role, get a warning and `oauth2Clients: null`, which sets that case apart from an application with no deployed OAuth2 clients.
+
+### Patch Changes
+
+- [#2484](https://github.com/tailor-platform/sdk/pull/2484) [`7454455`](https://github.com/tailor-platform/sdk/commit/7454455239749dea7cd4660db76769e2fd4ca356) Thanks [@dqn](https://github.com/dqn)! - `tailor init` now exits non-zero when project scaffolding fails, instead of exiting 0. It reports `INIT_FAILED` when `create @tailor-platform/sdk` exits with a non-zero code or is terminated by a signal, and `INIT_SPAWN_FAILED` when the package manager cannot be started.
+
+- [#2492](https://github.com/tailor-platform/sdk/pull/2492) [`46590a4`](https://github.com/tailor-platform/sdk/commit/46590a460ed382456109b4c440aeb411266a0adb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
 ## 2.24.0
 
 ### Minor Changes
