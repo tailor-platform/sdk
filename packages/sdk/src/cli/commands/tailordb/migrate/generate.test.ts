@@ -1263,6 +1263,33 @@ describe("tailordb migration generate JSON output", () => {
     });
   });
 
+  test("prints both migrations of a field conversion", async () => {
+    const parsed = parsedType("User");
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, array: true } };
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsed);
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      clearedNamespaces: [],
+      migrations: ["0001", "0002"].map((number) => ({
+        namespace: "tailordb",
+        migrationNumber: Number(number),
+        schemaPath: null,
+        diffPath: migrationFile(entry, number, "diff.json"),
+        migratePath: migrationFile(entry, number, "migrate.ts"),
+        dbTypesPath: migrationFile(entry, number, "db.ts"),
+        pgliteSchemaPath: migrationFile(entry, number, "db.pglite.ts"),
+        pgliteSchemaError: null,
+      })),
+    });
+  });
+
   test("prints a data-only migration without opening the configured editor", async () => {
     vi.stubEnv("EDITOR", "true");
     const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
