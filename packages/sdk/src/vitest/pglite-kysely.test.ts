@@ -159,7 +159,7 @@ describe("createKyselyPGlite Temporal support", () => {
       .insertInto("Event")
       .values({
         day: Temporal.PlainDate.from("2026-03-14"),
-        at: Temporal.Instant.from("2026-03-14T09:30:00.123Z"),
+        at: Temporal.Instant.from("2026-03-14T09:30:00.123456789Z"),
         time: Temporal.PlainTime.from("09:30:15"),
         days: [Temporal.PlainDate.from("2026-03-14")],
       })
