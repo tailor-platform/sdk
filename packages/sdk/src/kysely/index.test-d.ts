@@ -356,13 +356,13 @@ describe("temporal option", () => {
     expectTypeOf<TailorDBSelectable<typeof fields>["at"]>().toEqualTypeOf<string>();
   });
 
-  test("resolves a Temporal time field nested inside an object", () => {
+  test("keeps a time field nested inside an object as a string", () => {
     const fields = {
       schedule: db.object({ startTime: db.time(), day: db.date() }),
     };
 
     expectTypeOf<TailorDBSelectable<typeof fields, true>["schedule"]>().toEqualTypeOf<{
-      startTime: Temporal.PlainTime;
+      startTime: string;
       day: Temporal.PlainDate;
     }>();
   });

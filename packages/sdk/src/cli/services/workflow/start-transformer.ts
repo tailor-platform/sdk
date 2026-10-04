@@ -8,11 +8,17 @@ import {
   type StartTarget,
 } from "#/cli/shared/start-context";
 import {
+  createTsconfigLookupCache,
+  matchTsconfigPaths,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
+import {
   type ASTNode,
   type Replacement,
   type StartCallInfo,
   applyReplacements,
   getModuleExportName,
+  getNamespaceStartCallInfo,
   getStartCallInfo,
 } from "./ast-utils";
 import type { Program } from "@oxc-project/types";
@@ -21,6 +27,22 @@ import type { Plugin } from "rolldown";
 export interface ResolvedStartCall extends StartCallInfo {
   kind: "job" | "workflow";
   targetName: string;
+}
+
+interface UndetectableImport {
+  importSource: string;
+  importedName: string;
+}
+
+interface NamespaceImport {
+  importSource: string;
+  module: StartModuleBindings;
+}
+
+interface LocalTargets {
+  targets: Map<string, StartTarget>;
+  undetectableImports: Map<string, UndetectableImport>;
+  namespaceImports: Map<string, NamespaceImport>;
 }
 
 const START_CALL_RE = /\.start(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*\n)*\(/;
@@ -238,23 +260,36 @@ function walkBindingAware(
   walk(program as unknown as ASTNode, new Set());
 }
 
-function resolveRelativeImport(
+function findModule(context: StartContext, candidatePath: string): StartModuleBindings | undefined {
+  const modulePath = normalizeFilePath(candidatePath);
+  return context.modules.get(modulePath) ?? context.modules.get(path.join(modulePath, "index"));
+}
+
+function resolveImport(
   context: StartContext,
   currentFilePath: string,
   importSource: string,
+  tsconfigCache: TsconfigLookupCache,
 ): StartModuleBindings | undefined {
-  if (!importSource.startsWith(".")) return undefined;
   const currentDirectory = path.dirname(currentFilePath.replace(/[?#].*$/, ""));
-  const modulePath = normalizeFilePath(path.resolve(currentDirectory, importSource));
-  return context.modules.get(modulePath) ?? context.modules.get(path.join(modulePath, "index"));
+  if (importSource.startsWith(".")) {
+    return findModule(context, path.resolve(currentDirectory, importSource));
+  }
+  for (const candidate of matchTsconfigPaths(importSource, currentDirectory, tsconfigCache)) {
+    const found = findModule(context, candidate);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 function collectLocalTargets(
   program: Program,
   context: StartContext,
   currentFilePath: string,
-): Map<string, StartTarget> {
+): LocalTargets {
   const targets = new Map<string, StartTarget>();
+  const undetectableImports = new Map<string, UndetectableImport>();
+  const namespaceImports = new Map<string, NamespaceImport>();
   const currentModule = context.modules.get(normalizeFilePath(currentFilePath));
   if (currentModule) {
     for (const [localName, target] of currentModule.localBindings) {
@@ -262,15 +297,19 @@ function collectLocalTargets(
     }
   }
 
+  const tsconfigCache = context.tsconfigCache ?? createTsconfigLookupCache();
   for (const statement of program.body) {
     if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue;
     const importSource = statement.source.value;
     if (typeof importSource !== "string") continue;
-    const importedModule = resolveRelativeImport(context, currentFilePath, importSource);
+    const importedModule = resolveImport(context, currentFilePath, importSource, tsconfigCache);
     if (!importedModule) continue;
 
     for (const specifier of statement.specifiers) {
-      if (specifier.type === "ImportNamespaceSpecifier") continue;
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaceImports.set(specifier.local.name, { importSource, module: importedModule });
+        continue;
+      }
       if (specifier.type === "ImportSpecifier" && specifier.importKind === "type") continue;
 
       const importedName =
@@ -279,23 +318,86 @@ function collectLocalTargets(
           : getModuleExportName(specifier.imported);
       if (!importedName) continue;
       const target = importedModule.exports.get(importedName);
-      if (!target) continue;
+      if (!target) {
+        undetectableImports.set(specifier.local.name, { importSource, importedName });
+        continue;
+      }
       targets.set(specifier.local.name, target);
     }
   }
 
-  return targets;
+  return { targets, undetectableImports, namespaceImports };
+}
+
+function undetectableStartCallError(
+  calleeText: string,
+  currentFilePath: string,
+  { importSource, importedName }: UndetectableImport,
+): Error {
+  const exportLabel = importedName === "default" ? "default export" : `export "${importedName}"`;
+  return new Error(
+    `${calleeText}() in ${currentFilePath} cannot be rewritten: ` +
+      `"${importSource}" is a workflow file, but its ${exportLabel} is not a ` +
+      `workflow or job the build can detect. The build rewrites .start() on the file's ` +
+      `default-exported workflow (including one returned from a helper function) and on ` +
+      `workflows and jobs created in that file with createWorkflow({ name: "..." }) or ` +
+      `createWorkflowJob({ name: "...", body }) using a literal name; any other .start() ` +
+      `would fail at runtime after deploy.`,
+  );
+}
+
+function assertNoUndetectableStartCalls(
+  program: Program,
+  sourceText: string,
+  { undetectableImports, namespaceImports }: LocalTargets,
+  currentFilePath: string,
+): void {
+  const names = new Set([...undetectableImports.keys(), ...namespaceImports.keys()]);
+  walkBindingAware(program, names, (node, shadowedNames) => {
+    const namespaceCall = getNamespaceStartCallInfo(node, sourceText);
+    if (namespaceCall && !shadowedNames.has(namespaceCall.identifierName)) {
+      const namespaceImport = namespaceImports.get(namespaceCall.identifierName);
+      if (namespaceImport && !namespaceImport.module.exports.has(namespaceCall.memberName)) {
+        throw undetectableStartCallError(namespaceCall.calleeText, currentFilePath, {
+          importSource: namespaceImport.importSource,
+          importedName: namespaceCall.memberName,
+        });
+      }
+    }
+
+    const startCall = getStartCallInfo(node, sourceText);
+    if (!startCall || shadowedNames.has(startCall.identifierName)) return;
+    const undetectable = undetectableImports.get(startCall.identifierName);
+    if (!undetectable) return;
+    throw undetectableStartCallError(
+      `${startCall.identifierName}.start`,
+      currentFilePath,
+      undetectable,
+    );
+  });
 }
 
 function detectStartCallsWithTargets(
   program: Program,
   sourceText: string,
-  targets: Map<string, StartTarget>,
+  { targets, namespaceImports }: LocalTargets,
 ): ResolvedStartCall[] {
   const calls: ResolvedStartCall[] = [];
-  const targetNames = new Set(targets.keys());
+  const targetNames = new Set([...targets.keys(), ...namespaceImports.keys()]);
 
   walkBindingAware(program, targetNames, (node, shadowedNames) => {
+    const namespaceCall = getNamespaceStartCallInfo(node, sourceText);
+    if (namespaceCall && !shadowedNames.has(namespaceCall.identifierName)) {
+      const target = namespaceImports
+        .get(namespaceCall.identifierName)
+        ?.module.exports.get(namespaceCall.memberName);
+      if (target) {
+        const { memberName: _memberName, calleeText: _calleeText, ...startCall } = namespaceCall;
+        calls.push({ ...startCall, kind: target.kind, targetName: target.name });
+      }
+      return;
+    }
+
     const startCall = getStartCallInfo(node, sourceText);
     if (!startCall || shadowedNames.has(startCall.identifierName)) return;
     const target = targets.get(startCall.identifierName);
@@ -327,6 +429,7 @@ export function transformStartCalls(
 ): string {
   const { program } = parseSync("input.ts", source);
   const localTargets = collectLocalTargets(program, startContext, currentFilePath);
+  assertNoUndetectableStartCalls(program, source, localTargets, currentFilePath);
   const { authNamespace } = startContext;
   const allStartCalls = detectStartCallsWithTargets(program, source, localTargets);
   const nestedStartCalls: Array<{ call: ResolvedStartCall; parent: ResolvedStartCall }> = [];

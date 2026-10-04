@@ -7,8 +7,9 @@ import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { secretValueArgs } from "./args";
+import { secretValueArgs, secretValueNotes } from "./args";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
+import { resolveSecretValue } from "./value";
 
 export const updateSecretCommand = defineAppCommand({
   name: "update",
@@ -18,8 +19,10 @@ export const updateSecretCommand = defineAppCommand({
     ...secretValueArgs,
     ...confirmationArgs,
   }),
+  notes: secretValueNotes("update"),
   run: async (args) => {
-    logger.registerSecret(args.value);
+    const value = await resolveSecretValue(args, process.stdin, "secret update");
+    logger.registerSecret(value);
     await assertWritable({ profile: args.profile });
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
@@ -36,14 +39,19 @@ export const updateSecretCommand = defineAppCommand({
         message: "Do you want to proceed?",
         default: false,
       });
-      if (!confirmed) return;
+      if (!confirmed) {
+        throw CLIError({
+          code: "SECRET_UPDATE_CANCELLED",
+          message: "Secret update cancelled. The vault is still managed by the config.",
+        });
+      }
     }
     try {
       await client.updateSecretManagerSecret({
         workspaceId,
         secretmanagerVaultName: args["vault-name"],
         secretmanagerSecretName: args.name,
-        secretmanagerSecretValue: args.value,
+        secretmanagerSecretValue: value,
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {

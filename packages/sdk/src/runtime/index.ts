@@ -68,9 +68,9 @@ export interface TailordbClientConstructor {
   /**
    * @param config - Client configuration
    * @param config.namespace - TailorDB namespace to connect to
-   * @param config.temporal - When `true`, `date`/`time`/`datetime` columns come back as
-   * `Temporal.PlainDate`/`Temporal.PlainTime`/`Temporal.Instant` instead of `Date`
-   * (date/datetime) or `string` (time). Defaults to `false`.
+   * @param config.temporal - When `true`, date/datetime fields and top-level time fields
+   * come back as `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` instead of
+   * `Date`/`string`. Nested time fields remain strings. Defaults to `false`.
    */
   new (config: { namespace: string; temporal?: boolean }): TailordbClientInstance;
 }

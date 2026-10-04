@@ -11,10 +11,10 @@ type KyselyTypePluginOptions = {
   distPath: string;
   pgliteSchemaPath?: string;
   /**
-   * When `true`, generated tables map date/datetime/time fields to
+   * When `true`, generated tables map date/datetime fields and top-level time fields to
    * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` columns instead of
    * their `Date`/`string` defaults, and the generated `getDB` reads them back as those
-   * Temporal values. Defaults to `false`.
+   * Temporal values. Nested time fields remain strings. Defaults to `false`.
    */
   temporal?: boolean;
 };
@@ -37,9 +37,10 @@ export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated types
  * @param options.pgliteSchemaPath - Output file path for the PGlite `CREATE TABLE` script module; omit to skip it
- * @param options.temporal - When `true`, generated tables map date/datetime/time fields
- * to their `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` counterparts
- * instead of `Date`/`string`. Defaults to `false`.
+ * @param options.temporal - When `true`, generated tables map date/datetime fields and
+ * top-level time fields to their `Temporal.PlainDate`/`Temporal.Instant`/
+ * `Temporal.PlainTime` counterparts instead of `Date`/`string`. Nested time fields
+ * remain strings. Defaults to `false`.
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function kyselyTypePlugin(

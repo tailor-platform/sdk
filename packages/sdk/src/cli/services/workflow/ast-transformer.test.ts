@@ -1,6 +1,8 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import {
   normalizeFilePath,
@@ -1088,6 +1090,168 @@ const result = await myWorkflow.start({ id: 1 });
 
       expect(result).toContain('tailor.workflow.startWorkflow("my-workflow", { id: 1 })');
       expect(result).not.toContain("myWorkflow.start");
+    });
+  });
+
+  describe("workflow import resolution", () => {
+    let tmpDir: string | undefined;
+
+    aroundEach(async (runTest) => {
+      await runTest();
+      if (tmpDir) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        tmpDir = undefined;
+      }
+    });
+
+    function createProject(paths: Record<string, string[]>) {
+      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "start-import-test-")));
+      fs.writeFileSync(
+        path.join(tmpDir, "tsconfig.json"),
+        JSON.stringify({ compilerOptions: { paths } }),
+      );
+      return tmpDir;
+    }
+
+    const source = `
+import syncWorkflow from "@/workflow/sync";
+
+export async function run() {
+  return await syncWorkflow.start({ id: 1 });
+}
+`;
+
+    test("transforms workflow.start() on a workflow imported through a tsconfig paths alias", () => {
+      const dir = createProject({ "@/*": ["./src/*"] });
+
+      const result = transformStartCalls(
+        source,
+        new Map(),
+        new Map(),
+        new Map([[path.join(dir, "src/workflow/sync.ts"), "sync-gl-balances"]]),
+        path.join(dir, "src/resolvers/run.ts"),
+      );
+
+      expect(result).toContain('tailor.workflow.startWorkflow("sync-gl-balances", { id: 1 })');
+    });
+
+    test("transforms workflow.start() when the alias points at a directory index file", () => {
+      const dir = createProject({ "@/*": ["./src/*"] });
+
+      const result = transformStartCalls(
+        source,
+        new Map(),
+        new Map(),
+        new Map([[path.join(dir, "src/workflow/sync/index.ts"), "sync-gl-balances"]]),
+        path.join(dir, "src/resolvers/run.ts"),
+      );
+
+      expect(result).toContain('tailor.workflow.startWorkflow("sync-gl-balances", { id: 1 })');
+    });
+
+    test("leaves workflow.start() untouched when the alias resolves outside the workflow files", () => {
+      const dir = createProject({ "@/*": ["./src/*"] });
+
+      const result = transformStartCalls(
+        source,
+        new Map(),
+        new Map(),
+        new Map([[path.join(dir, "src/other/sync.ts"), "sync-gl-balances"]]),
+        path.join(dir, "src/resolvers/run.ts"),
+      );
+
+      expect(result).toContain("syncWorkflow.start({ id: 1 })");
+    });
+  });
+
+  describe("undetectable workflow-file imports", () => {
+    const callerFile = path.resolve("src/resolvers/run.ts");
+    const syncFile = path.resolve("src/workflow/sync.ts");
+    const context: StartContext = {
+      modules: new Map([
+        [
+          normalizeFilePath(syncFile),
+          {
+            sourceFile: syncFile,
+            localBindings: new Map(),
+            exports: new Map([["syncStep", { kind: "job", name: "sync-step" }]]),
+          },
+        ],
+      ]),
+    };
+
+    test("throws when .start() is called on a named export the build cannot detect", () => {
+      const source = `
+import { syncWorkflow } from "../workflow/sync";
+
+export async function run() {
+  return await syncWorkflow.start({ id: 1 });
+}
+`;
+
+      expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
+        "syncWorkflow.start() in " +
+          callerFile +
+          ' cannot be rewritten: "../workflow/sync" is a workflow file, but its export "syncWorkflow" is not a workflow or job the build can detect.',
+      );
+    });
+
+    test("transforms .start() on a detectable export reached through a namespace import", () => {
+      const source = `
+import * as sync from "../workflow/sync";
+
+export async function run() {
+  return await sync.syncStep.start({ id: 1 });
+}
+`;
+
+      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+        'tailor.workflow.execJobFunction("sync-step", { id: 1 })',
+      );
+    });
+
+    test("throws when .start() is called through a namespace import on an export the build cannot detect", () => {
+      const source = `
+import * as sync from "../workflow/sync";
+
+export async function run() {
+  return await sync.default.start({ id: 1 });
+}
+`;
+
+      expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
+        "sync.default.start() in " +
+          callerFile +
+          ' cannot be rewritten: "../workflow/sync" is a workflow file, but its default export is not a workflow or job the build can detect.',
+      );
+    });
+
+    test("does not throw when the undetectable import is shadowed by a local binding", () => {
+      const source = `
+import { syncWorkflow } from "../workflow/sync";
+
+export async function run(syncWorkflow: { start(input: unknown): Promise<string> }) {
+  return await syncWorkflow.start({ id: 1 });
+}
+`;
+
+      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+        "syncWorkflow.start({ id: 1 })",
+      );
+    });
+
+    test("does not throw when the namespace import is shadowed by a local binding", () => {
+      const source = `
+import * as sync from "../workflow/sync";
+
+export async function run(sync: { default: { start(input: unknown): Promise<string> } }) {
+  return await sync.default.start({ id: 1 });
+}
+`;
+
+      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+        "sync.default.start({ id: 1 })",
+      );
     });
   });
 

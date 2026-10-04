@@ -25,8 +25,10 @@ export default defineConfig({
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
   disableIntrospection: false,
-  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
   metadata: { "erp-kit-version": "v1-2-3" },
+  buildOptions: {
+    logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
+  },
 });
 ```
 
@@ -58,12 +60,16 @@ export default defineConfig({
 
 Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. Because those retained labels count towards the platform's limit of 20 labels per resource, `deploy` reports the overflow and stops before changing the application when the labels it would leave behind exceed that limit. The labels are written when the application itself is deployed, so a config with no TailorDB, Resolver, IdP, or Auth service has no application to carry them.
 
-**Log Level**: Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`) calls are kept when deployment functions are bundled. Supported values are `"DEBUG"`, `"INFO"`, `"WARN"`, `"ERROR"`, and `"SILENT"`. The default is `"DEBUG"` and keeps all calls. `console.log` is treated as a DEBUG-level call (matching the platform's OpenTelemetry severity mapping), so it is dropped at `"INFO"` and above, alongside `console.debug` and `logger.debug`. `logger.setAttributes` has no severity and is never dropped, regardless of `logLevel`. For production deployments, use `"WARN"` to keep warn/error calls while dropping debug, log, and info calls:
+**Build Options**: `buildOptions` groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `logLevel` (below), `inlineSourcemap` (whether bundled functions embed an inline sourcemap for readable error stack traces; default `true`), and `allowedRuntimeGlobals` (see [Node-only globals](#node-only-globals)). The top-level `logLevel` and `inlineSourcemap` fields still work but are deprecated; `tailor upgrade` moves them into `buildOptions`. Setting the same option both at the top level and in `buildOptions` is rejected.
+
+**Log Level** (`buildOptions.logLevel`): Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`) calls are kept when deployment functions are bundled. Supported values are `"DEBUG"`, `"INFO"`, `"WARN"`, `"ERROR"`, and `"SILENT"`. The default is `"DEBUG"` and keeps all calls. `console.log` is treated as a DEBUG-level call (matching the platform's OpenTelemetry severity mapping), so it is dropped at `"INFO"` and above, alongside `console.debug` and `logger.debug`. `logger.setAttributes` has no severity and is never dropped, regardless of `logLevel`. For production deployments, use `"WARN"` to keep warn/error calls while dropping debug, log, and info calls:
 
 ```typescript
 export default defineConfig({
   name: "my-app",
-  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
+  buildOptions: {
+    logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
+  },
 });
 ```
 
@@ -120,6 +126,25 @@ Error [UNRESOLVED_IMPORT]: Could not resolve "@lib/missing" imported from "/path
 ```
 
 If the unresolved specifier is a Node.js built-in (e.g. `fs`, `crypto`, `path`), the suggestion explains that it is not available in the Tailor Platform runtime and, where one exists, names a Web-standard replacement (e.g. the Fetch API instead of `http`/`https`).
+
+#### Node-only globals
+
+The Tailor Platform runtime does not define Node-only globals such as `process`, `Buffer`, or `require`. When a bundled resolver, executor, or workflow job references one, the build fails with `FORBIDDEN_RUNTIME_GLOBAL`, naming the global and where it is referenced: the file in your own code, or the installed package (code under `node_modules`). A reference behind a `typeof` check, such as `if (typeof process !== "undefined") { ... }`, is not reported.
+
+You cannot change an installed package's code, and it may reference a global only on a code path your use never reaches. When you have confirmed that, allow the reference with `buildOptions.allowedRuntimeGlobals`, keyed by package name. List the globals to allow, or set `true` to allow all of them, including any the package only starts referencing in a later version. Code in that package that does reach the global throws a `ReferenceError` at runtime:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  buildOptions: {
+    allowedRuntimeGlobals: {
+      "@ai-sdk/gateway": ["Buffer"],
+    },
+  },
+});
+```
+
+`buildOptions.allowedRuntimeGlobals` has no effect on your own code. Packages from your own workspace (for example, a pnpm or npm workspace) are bundled from their source directory rather than from `node_modules`, so they count as your own code.
 
 ### External Resources
 

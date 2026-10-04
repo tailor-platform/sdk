@@ -44,6 +44,8 @@ export type LockInputs = {
   requirePreviewLabel?: boolean;
   /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
   actionDirs?: string[];
+  /** For `coordinate` kind: action names per deploy step, in deploy order. */
+  actionGroups?: string[][];
   erdPreview?: boolean;
   erdNamespaces?: string[];
   /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */
@@ -65,8 +67,8 @@ export type LockTarget = {
   inputs: LockInputs;
   /** Managed job/step ids: jobs as `<job>`, steps as `<job>/<step>`. */
   generatedIds: string[];
-  /** Reserved for future eject semantics; preserved as-is across regenerations. */
-  ejectedIds: string[];
+  /** Per-part hashes of the SDK-managed parts, used to name what a hand edit changed. */
+  managedHashes?: Record<string, string>;
   /**
    * `managed-v1:sha256:<hex>` of the SDK-managed parts of the rendered file.
    * Entries written by older plugins hold `sha256:<hex>` of the whole file.

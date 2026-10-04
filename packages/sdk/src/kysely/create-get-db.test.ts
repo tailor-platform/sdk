@@ -22,13 +22,13 @@ describe("createGetDB", () => {
     vi.unstubAllGlobals();
   });
 
-  test("constructs tailordb.Client with temporal: false by default", () => {
+  test("omits temporal from tailordb.Client config by default", () => {
     const constructorSpy = installStubClient();
     const getDB = createGetDB<{ ns: object }>();
 
     getDB("ns");
 
-    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: false });
+    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns" });
   });
 
   test("constructs tailordb.Client with the temporal setting given to createGetDB", () => {
@@ -40,6 +40,15 @@ describe("createGetDB", () => {
     expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: true });
   });
 
+  test("omits temporal from tailordb.Client config when disabled", () => {
+    const constructorSpy = installStubClient();
+    const getDB = createGetDB<{ ns: object }>({ temporal: false });
+
+    getDB("ns");
+
+    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns" });
+  });
+
   test("ignores a temporal key smuggled into the getDB config", () => {
     const constructorSpy = installStubClient();
     const getDB = createGetDB<{ ns: object }>();
@@ -47,6 +56,6 @@ describe("createGetDB", () => {
     // @ts-expect-error -- temporal is fixed by createGetDB, not per getDB call
     getDB("ns", { temporal: true });
 
-    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns", temporal: false });
+    expect(constructorSpy).toHaveBeenCalledWith({ namespace: "ns" });
   });
 });

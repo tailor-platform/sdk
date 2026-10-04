@@ -92,7 +92,7 @@ export async function bundleAuthHooks(
     prefix: sortedEnvPrefix,
   });
 
-  const code = await withCache({
+  const { code } = await withCache({
     cache,
     kind: "auth-hook",
     name: functionName,
@@ -155,7 +155,7 @@ export async function bundleAuthHooks(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      return result.output[0].code;
+      return { code: result.output[0].code, packageRuntimeGlobals: {} };
     },
   });
 

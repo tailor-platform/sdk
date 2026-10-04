@@ -159,7 +159,7 @@ describe("Kysely TypeProcessor", () => {
       expect(typeDef).toContain("optionalTimes: ArrayColumnType<TemporalTime> | null;");
     });
 
-    test("wraps a nested object holding a Temporal time field in ObjectColumnType", async () => {
+    test("keeps a nested time field as a string", async () => {
       const typeDef = await getTypeDef(
         db.table("Profile", {
           schedule: db.object({ startTime: db.time() }),
@@ -167,8 +167,8 @@ describe("Kysely TypeProcessor", () => {
         true,
       );
 
-      expect(typeDef).toContain("ObjectColumnType<{");
-      expect(typeDef).toContain("startTime: TemporalTime;");
+      expect(typeDef).toContain("schedule: {");
+      expect(typeDef).toContain("startTime: string;");
     });
 
     test("tracks the Temporal utility types actually used", async () => {

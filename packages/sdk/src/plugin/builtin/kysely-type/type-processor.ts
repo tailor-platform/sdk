@@ -87,7 +87,7 @@ function getNestedType(fieldConfig: KyselyFieldConfig, temporal: boolean): Field
   }
 
   const fieldResults = Object.entries(fields).map(([fieldName, config]) => {
-    const result = generateFieldType(config, temporal);
+    const result = generateFieldType(config, temporal, true);
     const optional = config.required !== true ? "?" : "";
     return {
       fieldType: `${fieldName}${optional}: ${result.type}`,
@@ -122,9 +122,14 @@ function getNestedType(fieldConfig: KyselyFieldConfig, temporal: boolean): Field
  * @param fieldConfig - The field configuration
  * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
  * types instead of their `Date`/`string` defaults
+ * @param nested - Whether the field is inside an object
  * @returns The base type with used utility types
  */
-function getBaseType(fieldConfig: KyselyFieldConfig, temporal: boolean): FieldTypeResult {
+function getBaseType(
+  fieldConfig: KyselyFieldConfig,
+  temporal: boolean,
+  nested: boolean,
+): FieldTypeResult {
   const fieldType = fieldConfig.type;
   const usedUtilityTypes = emptyUsedUtilityTypes();
 
@@ -135,7 +140,7 @@ function getBaseType(fieldConfig: KyselyFieldConfig, temporal: boolean): FieldTy
     return getNestedType(fieldConfig, temporal);
   }
 
-  const type = mapFieldTypeToColumnType(fieldType, temporal);
+  const type = mapFieldTypeToColumnType(fieldType, temporal && !(nested && fieldType === "time"));
   switch (type) {
     case "Timestamp":
       usedUtilityTypes.Timestamp = true;
@@ -163,10 +168,15 @@ function getBaseType(fieldConfig: KyselyFieldConfig, temporal: boolean): FieldTy
  * @param fieldConfig - The field configuration
  * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
  * types instead of their `Date`/`string` defaults
+ * @param nested - Whether the field is inside an object
  * @returns The complete field type with used utility types
  */
-function generateFieldType(fieldConfig: KyselyFieldConfig, temporal: boolean): FieldTypeResult {
-  const baseTypeResult = getBaseType(fieldConfig, temporal);
+function generateFieldType(
+  fieldConfig: KyselyFieldConfig,
+  temporal: boolean,
+  nested = false,
+): FieldTypeResult {
+  const baseTypeResult = getBaseType(fieldConfig, temporal, nested);
   const usedUtilityTypes = { ...baseTypeResult.usedUtilityTypes };
 
   const isArray = fieldConfig.array === true;

@@ -516,6 +516,9 @@ You can start a workflow execution from a resolver using `workflow.start()`.
 
 - `workflow.start(args, options?)` returns a workflow run ID (`Promise<string>`).
 - To run with machine-user permissions, pass `{ invoker: "<machine-user>" }`. The name is type-narrowed to the machine users defined in your auth config.
+- Import the workflow from its workflow file with a default import (or a namespace import, calling `wf.default.start(...)`), using a relative path or a `tsconfig.json` `paths` alias. The build replaces the `.start()` call with a platform call, so it has to recognize the workflow: export it as the file's default export — either `createWorkflow({ name: "..." })` itself or the result of a helper function that calls `createWorkflow()`.
+- Call `.start()` directly on the imported name (`orderProcessingWorkflow.start(...)`, or `wf.default.start(...)` for a namespace import). If you first assign the workflow to another variable (`const wf = orderProcessingWorkflow; wf.start(...)`) or pass it to a function, the call is neither rewritten nor checked, and fails at runtime.
+- If a `.start()` call is made on an export of a workflow file that the build cannot recognize as a workflow or job defined that way, the build fails. A `.start()` on a workflow imported from anywhere other than a workflow file (for example re-exported from a shared package) cannot be checked, and fails at runtime.
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";

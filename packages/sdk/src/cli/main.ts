@@ -34,7 +34,7 @@ import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
-import { commonArgs } from "./shared/args";
+import { commonArgs, globalArgsApplied, resolveEarlyFailure } from "./shared/args";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
@@ -147,6 +147,7 @@ void runMain(mainCommand, {
     }),
   cleanup: async ({ error }) => {
     if (error) {
+      if (!globalArgsApplied()) resolveEarlyFailure(error, process.argv.slice(2));
       let suggestion: string | undefined;
       if (logger.jsonMode) {
         logger.log(serializeError(error, { includeStack: logger.verbose }));

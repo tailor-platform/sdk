@@ -240,7 +240,7 @@ This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skele
 
 The command requires a clean state: if the namespace has schema changes that are not yet in migration files, generate the schema migration first. With multiple namespaces, pass `--namespace` to name the target. `--data-only` cannot be combined with `--init`, `--rename`, `--drop`, or `--expand-contract`.
 
-A data-only migration runs in **every** workspace the history is applied to, including freshly created ones. Write the script so it is safe against tables with no matching rows (a set-based `UPDATE` with a `WHERE` clause is naturally a no-op on an empty table). For a fix that should run in a single environment only, or that is too large for one transaction, run it outside the migration history instead.
+A data-only migration runs in **every** workspace the history is applied to, including freshly created ones. Write the script so it is safe against tables with no matching rows (a set-based `UPDATE` with a `WHERE` clause is naturally a no-op on an empty table). For a fix that should run in a single environment only, or that is too large for one transaction, run it outside the migration history instead, for example as a one-off script scaffolded with [`tailor function script`](../cli/function.md#function-script) and executed against a single workspace with [`tailor function run`](../cli/function.md#function-run).
 
 ## Configuration
 
@@ -899,7 +899,7 @@ describe("0005 add required email", () => {
 
 Pass nested field values as JavaScript objects or arrays of objects, without `JSON.stringify`.
 
-When the migration was generated with `kyselyTypePlugin({ temporal: true })`, its `db.ts` types date, datetime, and time columns as `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime`, and deploy runs the script with those values. Create the instance with `createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })` so PGlite reads them back the same way; the scaffold adds the option for such migrations. Run the test in the [`tailor-runtime` Vitest environment](../testing.md#temporal), which provides `Temporal`. A migration generated before `temporal` was enabled still runs with `Date` values on deploy, so its test leaves the option out.
+When the migration was generated with `kyselyTypePlugin({ temporal: true })`, its `db.ts` types date and datetime fields as `Temporal.PlainDate` and `Temporal.Instant`, and top-level time fields as `Temporal.PlainTime`; nested time fields remain strings. Deploy runs the script with those values. Create the instance with `createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })` so PGlite reads top-level temporal columns back the same way; the scaffold adds the option for such migrations. Run the test in the [`tailor-runtime` Vitest environment](../testing.md#temporal), which provides `Temporal`. A migration generated before `temporal` was enabled still runs with `Date` values on deploy, so its test leaves the option out.
 Generated migration types use `Record<string, unknown>` for each nested object so scripts can
 work with both old and new members during a migration; narrow member values before using them.
 

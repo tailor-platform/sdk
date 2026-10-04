@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.3.6
+
+### Patch Changes
+
+- [#2465](https://github.com/tailor-platform/sdk/pull/2465) [`d8222e4`](https://github.com/tailor-platform/sdk/commit/d8222e40ab8f9668d19707bcc76fc7b134a08c26) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.19.0
+- Updated dependencies [[`72e295b`](https://github.com/tailor-platform/sdk/commit/72e295b422d243fef6e39f73590c34f2f10b68f5), [`f708521`](https://github.com/tailor-platform/sdk/commit/f708521ecc5c6e77fa5731d5256bbd483b49dc66), [`10ab737`](https://github.com/tailor-platform/sdk/commit/10ab73789d9865ec2e2fb6658e76b15841219834), [`978c332`](https://github.com/tailor-platform/sdk/commit/978c332fa0ae0d9256fd2f80d858fb68e0e8c76d), [`d8222e4`](https://github.com/tailor-platform/sdk/commit/d8222e40ab8f9668d19707bcc76fc7b134a08c26), [`e982853`](https://github.com/tailor-platform/sdk/commit/e98285358692428fbc07a3713a0cc056f04baffa), [`be6ffb2`](https://github.com/tailor-platform/sdk/commit/be6ffb2acea8fec95c9b7e90d52d35960cb7be14)]:
+  - @tailor-platform/sdk@2.24.0
+
 ## 0.3.5
 
 ### Patch Changes

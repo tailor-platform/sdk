@@ -118,16 +118,18 @@ describe("setupDelete", () => {
     expect(readLock(testDir)?.appIds).toEqual(appIds);
   });
 
-  test("prompts for confirmation and aborts when declined", async () => {
+  test("prompts for confirmation and fails without deleting when declined", async () => {
     await setupTarget(branchOpts("my-app"));
     const wf = path.join(testDir, ".github/workflows/tailor-my-app.yml");
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
-    await setupDelete({
-      files: [".github/workflows/tailor-my-app.yml"],
-      yes: false,
-      outputDir: testDir,
-    });
+    await expect(
+      setupDelete({
+        files: [".github/workflows/tailor-my-app.yml"],
+        yes: false,
+        outputDir: testDir,
+      }),
+    ).rejects.toThrow("Delete cancelled. No files were changed.");
 
     expect(fs.existsSync(wf)).toBe(true);
     expect(readLock(testDir)?.targets).toHaveLength(1);

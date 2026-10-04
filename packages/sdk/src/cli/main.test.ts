@@ -65,6 +65,91 @@ describe("CLI error verbosity", () => {
   );
 });
 
+describe("argument errors under JSON output", () => {
+  test.each([
+    { name: "--json", args: ["--json"], extraEnv: {} },
+    { name: "-j", args: ["-j"], extraEnv: {} },
+    { name: "TAILOR_JSON_OUTPUT", args: [], extraEnv: { TAILOR_JSON_OUTPUT: "1" } },
+  ])(
+    "reports an unknown flag as INVALID_ARGUMENTS with $name",
+    ({ args, extraEnv }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-argument-error-json-");
+
+      const result = runCli(["workspace", "list", "--bogus", ...args], tmp.dir, extraEnv);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(JSON.parse(result.stderr)).toEqual({
+        error: { code: "INVALID_ARGUMENTS", message: "Unknown flags: bogus" },
+      });
+    },
+    20_000,
+  );
+
+  test("reports a schema validation failure as INVALID_ARGUMENTS", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-argument-error-json-");
+
+    const result = runCli(["workspace", "list", "--limit", "abc", "--json"], tmp.dir);
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    const envelope = JSON.parse(result.stderr);
+    expect(envelope.error.code).toBe("INVALID_ARGUMENTS");
+    expect(envelope.error.message).toContain("limit");
+  }, 20_000);
+
+  test("keeps a plain-text argument error when JSON output is explicitly disabled", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-argument-error-json-");
+
+    const result = runCli(["workspace", "list", "--bogus", "--json=false"], tmp.dir, {
+      TAILOR_JSON_OUTPUT: "1",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
+  }, 20_000);
+
+  test("keeps the plain-text argument error without JSON output", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-argument-error-json-");
+
+    const result = runCli(["workspace", "list", "--bogus"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
+  }, 20_000);
+
+  test("includes the stack trace for an argument error with --verbose", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-argument-error-json-");
+
+    const result = runCli(["workspace", "list", "--bogus", "--json", "--verbose"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    const envelope = JSON.parse(result.stderr);
+    expect(envelope.error.code).toBe("INVALID_ARGUMENTS");
+    expect(envelope.error.stack).toContain("Error: Unknown flags: bogus");
+  }, 20_000);
+
+  test("keeps the argument error annotation title without JSON output", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-argument-error-json-");
+
+    const result = runCli(["workspace", "list", "--bogus"], tmp.dir, { GITHUB_ACTIONS: "true" });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe(
+      "✖ Unknown flags: bogus\n::error title=Error::Unknown flags: bogus\n",
+    );
+  }, 20_000);
+});
+
 describe("parent command shortcuts", () => {
   test.each([
     { parent: ["workspace"], explicit: ["workspace", "list"] },

@@ -5,7 +5,8 @@ import { productBundle } from "../tailordb/productBundle";
 import { purchaseOrder } from "../tailordb/purchaseOrder";
 import { salesOrder } from "../tailordb/salesOrder";
 import { supplier } from "../tailordb/supplier";
-import type { Namespace } from "../generated/tailordb";
+import type { Namespace as TemporalNamespace } from "../generated/tailordb";
+import type { Namespace as DefaultNamespace } from "./fixtures/expected/db";
 import type { TailorAnyDBType } from "@tailor-platform/sdk";
 // Pins the input types derived from a table against the interfaces `kyselyTypePlugin`
 // actually generates for this project. Both come from the same table definitions, so any
@@ -24,8 +25,6 @@ import type {
   Updateable,
 } from "@tailor-platform/sdk/kysely";
 
-type Emitted = Namespace["tailordb"];
-
 type Flatten<T> = { [K in keyof T]: T[K] } & {};
 type Equal<Derived, Generated> = [Flatten<Derived>] extends [Flatten<Generated>]
   ? [Flatten<Generated>] extends [Flatten<Derived>]
@@ -33,10 +32,12 @@ type Equal<Derived, Generated> = [Flatten<Derived>] extends [Flatten<Generated>]
     : ["generated is not assignable to derived", Flatten<Derived>, Flatten<Generated>]
   : ["derived is not assignable to generated", Flatten<Derived>, Flatten<Generated>];
 
-// This project's kyselyTypePlugin is configured with `{ temporal: true }`.
-type IsTemporal = true;
-
-type Same<Table extends TailorAnyDBType, Name extends keyof Emitted> =
+type Same<
+  Table extends TailorAnyDBType,
+  Emitted extends Record<PropertyKey, unknown>,
+  Name extends keyof Emitted,
+  IsTemporal extends boolean,
+> =
   Equal<TailorDBInsertable<Table, IsTemporal>, Insertable<Emitted[Name]>> extends true
     ? Equal<TailorDBSelectable<Table, IsTemporal>, Selectable<Emitted[Name]>> extends true
       ? Equal<TailorDBUpdateable<Table, IsTemporal>, Updateable<Emitted[Name]>>
@@ -49,19 +50,31 @@ type Same<Table extends TailorAnyDBType, Name extends keyof Emitted> =
         Equal<TailorDBInsertable<Table, IsTemporal>, Insertable<Emitted[Name]>>,
       ];
 
+type SameInBothModes<
+  Table extends TailorAnyDBType,
+  Name extends keyof TemporalEmitted,
+> = Name extends keyof DefaultEmitted
+  ? Same<Table, TemporalEmitted, Name, true> extends true
+    ? Same<Table, DefaultEmitted, Name, false>
+    : ["temporal mode differs", Same<Table, TemporalEmitted, Name, true>]
+  : ["missing from default output", Name];
+
+type TemporalEmitted = TemporalNamespace["tailordb"];
+type DefaultEmitted = DefaultNamespace["tailordb"];
+
 type Assert<T extends true> = T;
 
 // Generated<Timestamp> on timestamps, plain scalars, nullable scalars.
-export type CustomerParity = Assert<Same<typeof customer, "Customer">>;
+export type CustomerParity = Assert<SameInBothModes<typeof customer, "Customer">>;
 // Serial<string> and Serial<number>, enum union or null.
-export type InvoiceParity = Assert<Same<typeof invoice, "Invoice">>;
+export type InvoiceParity = Assert<SameInBothModes<typeof invoice, "Invoice">>;
 // Array of a nested object with no optional prop stays a plain object array.
-export type ProductBundleParity = Assert<Same<typeof productBundle, "ProductBundle">>;
+export type ProductBundleParity = Assert<SameInBothModes<typeof productBundle, "ProductBundle">>;
 // Nested object array alongside an enum union.
-export type PurchaseOrderParity = Assert<Same<typeof purchaseOrder, "PurchaseOrder">>;
+export type PurchaseOrderParity = Assert<SameInBothModes<typeof purchaseOrder, "PurchaseOrder">>;
 // Timestamp | null, string[] | null, relation columns.
-export type SalesOrderParity = Assert<Same<typeof salesOrder, "SalesOrder">>;
+export type SalesOrderParity = Assert<SameInBothModes<typeof salesOrder, "SalesOrder">>;
 // Enum union of string literals.
-export type SupplierParity = Assert<Same<typeof supplier, "Supplier">>;
+export type SupplierParity = Assert<SameInBothModes<typeof supplier, "Supplier">>;
 // Objects wrapped in ObjectColumnType, including a datetime nested inside one.
-export type NestedProfileParity = Assert<Same<typeof nestedProfile, "NestedProfile">>;
+export type NestedProfileParity = Assert<SameInBothModes<typeof nestedProfile, "NestedProfile">>;

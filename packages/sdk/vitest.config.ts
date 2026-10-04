@@ -195,6 +195,7 @@ export default defineConfig({
       },
     ],
     environment: "node",
+    clearMocks: true,
     globals: true,
     watch: false,
     // The dedicated tsconfig narrows tsc to the type-test files and their

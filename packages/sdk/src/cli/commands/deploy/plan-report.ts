@@ -26,6 +26,16 @@ type PrintPlanOptions = {
   dryRun?: boolean;
 };
 
+/** Deploy hook that a dry run would run after applying resources. */
+interface PendingDeployedHook {
+  application: string;
+  pluginId: string;
+}
+
+type PrintDeploymentPlansOptions = PrintPlanOptions & {
+  pendingDeployedHooks?: readonly PendingDeployedHook[];
+};
+
 type JsonPlanPayload = {
   summary: PlanSummary;
   changes: Array<
@@ -338,7 +348,7 @@ function sumPlanSummaries(summaries: ReadonlyArray<PlanSummary>): PlanSummary {
 
 export function printDeploymentPlans(
   deployments: ReadonlyArray<PlannedDeployment>,
-  opts?: PrintPlanOptions,
+  opts?: PrintDeploymentPlansOptions,
 ): PlanSummary {
   if (logger.jsonMode && opts?.dryRun) {
     const reports = deployments.map((deployment) =>
@@ -350,6 +360,9 @@ export function printDeploymentPlans(
       changes: reports.flatMap((report) => report.json.changes),
       warnings: reports.flatMap((report) => report.json.warnings),
       conflicts: reports.flatMap((report) => report.json.conflicts),
+      ...(opts.pendingDeployedHooks?.length
+        ? { pendingDeployedHooks: opts.pendingDeployedHooks }
+        : {}),
     });
     return summary;
   }

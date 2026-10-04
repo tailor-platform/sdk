@@ -153,6 +153,16 @@ export default {
     await expect(getExtendedTable(configPath, order)).rejects.toThrow(/Invalid `plugins` export/);
   });
 
+  test("rejects a plugin whose onDeployed is not a function, as the CLI does", async () => {
+    writeTable('{ "first": {} }');
+    writeConfig(
+      `${extendingPlugin("first", "rank", "db.int()")}, { id: "deployed", description: "test", onDeployed: "not a function" }`,
+    );
+    const order = await loadTable();
+
+    await expect(getExtendedTable(configPath, order)).rejects.toThrow(/Invalid `plugins` export/);
+  });
+
   test("reports a plugin the config does not register", async () => {
     writeTable('{ "unregistered": {} }');
     writeConfig("");

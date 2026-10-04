@@ -229,6 +229,68 @@ export const mainJob = createWorkflowJob({
     }
   });
 
+  async function bundleEncodingJob(
+    packageName: string,
+    allowedRuntimeGlobals?: Record<string, string[]>,
+  ) {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-package-global-")));
+    const packageDir = path.join(tmpDir, "node_modules", packageName);
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(packageDir, "package.json"),
+      JSON.stringify({ name: packageName, type: "module", exports: { ".": "./index.js" } }),
+    );
+    fs.writeFileSync(
+      path.join(packageDir, "index.js"),
+      'export const encode = (text) => Buffer.from(text).toString("base64");\n',
+    );
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+import { encode } from "${packageName}";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => encode("hi"),
+});
+`,
+    );
+
+    try {
+      return await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        ["main-job"],
+        {},
+        { modules: new Map() },
+        tmpDir,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        allowedRuntimeGlobals,
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  test("rejects a job whose installed package references a forbidden global and names the package", async () => {
+    await expect(bundleEncodingJob("job-buffer-lib")).rejects.toThrow(
+      expect.objectContaining({ details: expect.stringContaining("job-buffer-lib") }),
+    );
+  });
+
+  test("bundles a job whose installed package references an allowed global", async () => {
+    const result = await bundleEncodingJob("job-allowed-buffer-lib", {
+      "job-allowed-buffer-lib": ["Buffer"],
+    });
+
+    expect(result.bundledCode.get("main-job")).toBeDefined();
+  });
+
   test("bundles a job that uses Web Standard globals", async () => {
     const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-web-standard-")));
     const sourceFile = path.join(tmpDir, "workflow.ts");
@@ -401,6 +463,131 @@ export default createWorkflow({ name: "workflow", mainJob });
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
       expect(result.usedJobNames).toEqual(["step-a", "main-job"]);
+      expect(result.bundledCode.get("main-job")).toMatch(/execJobFunction\([`'"]step-a/);
+    });
+
+    function writeFactoryWorkflow(dir: string, exportLine: string) {
+      const syncFile = path.join(dir, "sync.ts");
+      fs.writeFileSync(
+        syncFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+const defineSync = (mainJob: typeof syncStep) =>
+  createWorkflow({ name: "sync-gl-balances", mainJob });
+export const syncStep = createWorkflowJob({ name: "sync-step", body: async () => "synced" });
+${exportLine}
+`,
+      );
+      return syncFile;
+    }
+
+    function writeCaller(dir: string, importLine: string) {
+      const callerFile = path.join(dir, "caller.ts");
+      fs.writeFileSync(
+        callerFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+${importLine}
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await syncWorkflow.start({}),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      return callerFile;
+    }
+
+    test("rewrites .start() on a workflow-file default export created through a helper function", async () => {
+      const dir = createTempDir();
+      const syncFile = writeFactoryWorkflow(dir, "export default defineSync(syncStep);");
+      const callerFile = writeCaller(dir, 'import syncWorkflow from "./sync";');
+      const context = await buildStartContext({ files: [syncFile, callerFile] }, undefined, dir, [
+        { workflow: { name: "sync-gl-balances" }, sourceFile: syncFile },
+      ]);
+
+      const result = await bundleWorkflowJobs(
+        [
+          { name: "sync-step", exportName: "syncStep", sourceFile: syncFile },
+          { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
+        ],
+        ["main-job"],
+        {},
+        context,
+        dir,
+      );
+
+      expect(result.bundledCode.get("main-job")).toMatch(/startWorkflow\([`'"]sync-gl-balances/);
+    });
+
+    test("throws when a job starts a workflow-file named export created through a helper function", async () => {
+      const dir = createTempDir();
+      const syncFile = writeFactoryWorkflow(
+        dir,
+        "export const syncWorkflow = defineSync(syncStep);",
+      );
+      const callerFile = writeCaller(dir, 'import { syncWorkflow } from "./sync";');
+      const context = await buildStartContext(
+        { files: [syncFile, callerFile] },
+        undefined,
+        dir,
+        [],
+      );
+
+      await expect(
+        bundleWorkflowJobs(
+          [
+            { name: "sync-step", exportName: "syncStep", sourceFile: syncFile },
+            { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
+          ],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/syncWorkflow\.start\(\) .*cannot be rewritten/);
+    });
+
+    test("includes jobs referenced through a namespace import", async () => {
+      const dir = createTempDir();
+      const jobsFile = path.join(dir, "jobs.ts");
+      const callerFile = path.join(dir, "caller.ts");
+      fs.writeFileSync(
+        jobsFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+`,
+      );
+      fs.writeFileSync(
+        callerFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import * as jobs from "./jobs";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await jobs.step.start(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [jobsFile, callerFile] });
+
+      const result = await bundleWorkflowJobs(
+        [
+          { name: "step-a", exportName: "step", sourceFile: jobsFile },
+          { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
+        ],
+        ["main-job"],
+        {},
+        context,
+        dir,
+      );
+
+      expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
       expect(result.bundledCode.get("main-job")).toMatch(/execJobFunction\([`'"]step-a/);
     });
 
@@ -909,6 +1096,7 @@ export default createWorkflow({ name: "workflow", mainJob });
       ext: string;
       importPath: string;
       startArgs?: string;
+      tsconfigPaths?: Record<string, string[]>;
     };
 
     aroundEach(async (runTest) => {
@@ -920,10 +1108,30 @@ export default createWorkflow({ name: "workflow", mainJob });
     });
 
     const buildBundleFixture = (options: BuildBundleFixtureOptions) => {
-      const { ext, importPath, startArgs = `{ input: 0 }, { invoker: "admin" }` } = options;
+      const {
+        ext,
+        importPath,
+        startArgs = `{ input: 0 }, { invoker: "admin" }`,
+        tsconfigPaths,
+      } = options;
 
       // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
+      if (tsconfigPaths) {
+        fs.writeFileSync(
+          path.join(tmpDir, "tsconfig.json"),
+          JSON.stringify({
+            compilerOptions: {
+              paths: {
+                "@tailor-platform/sdk": [
+                  path.resolve(import.meta.dirname, "../../../configure/index.ts"),
+                ],
+                ...tsconfigPaths,
+              },
+            },
+          }),
+        );
+      }
 
       const simpleFile = path.join(tmpDir, `simple.${ext}`);
       fs.writeFileSync(
@@ -1007,9 +1215,14 @@ export default createWorkflow({
     test.each([
       { label: "cross-file default import", ext: "ts", importPath: "./simple" },
       { label: ".mts dependency files", ext: "mts", importPath: "./simple.mjs" },
+      {
+        label: "a tsconfig paths alias import",
+        ext: "ts",
+        importPath: "@/simple",
+        tsconfigPaths: { "@/*": ["./*"] },
+      },
     ])("transforms workflow.start() from $label", async (options) => {
-      const { ext, importPath } = options;
-      const result = await buildBundleFixture({ ext, importPath });
+      const result = await buildBundleFixture(options);
 
       expect(result.bundledCode.has("caller-job")).toBe(true);
       const callerCode = result.bundledCode.get("caller-job")!;

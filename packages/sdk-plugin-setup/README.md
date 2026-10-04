@@ -1,6 +1,6 @@
 # @tailor-platform/sdk-plugin-setup
 
-Tailor CLI plugin that provides the `tailor setup` commands: generate GitHub Actions deploy workflows (branch, tag, preview, action, coordinate), a dependency-update config, and audit or delete what it generated.
+Tailor CLI plugin that provides the `tailor setup` commands: generate GitHub Actions deploy workflows (branch, tag, preview, action, coordinate), a dependency-update config, and audit, regenerate, or delete what it generated.
 
 > [!NOTE]
 > This package is a **CLI plugin**: it ships an external `tailor-setup` executable that the Tailor CLI dispatches to when you run `tailor setup`.
@@ -26,6 +26,9 @@ tailor setup ci tag --name my-app-prod --branch main --environment production
 
 # Audit generated workflows for drift
 tailor setup check
+
+# Regenerate every workflow after an SDK upgrade
+tailor setup update
 ```
 
 ## Commands
@@ -37,12 +40,14 @@ tailor setup check
 | `setup ci preview`    | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                    |
 | `setup ci action`     | Generate a per-app composite action for use with `setup ci coordinate` (monorepo multi-app deploys). |
 | `setup ci coordinate` | Generate a coordinator workflow that orchestrates multiple `--action`-generated composite actions.   |
+| `setup ci env`        | Print the secrets and variables each GitHub Environment needs, as `gh` commands or Terraform.        |
 | `setup deps`          | Generate a dependency update config for Tailor dependency and workflow updates.                      |
 | `setup check`         | Audit generated workflows for drift against the current config/repo (read-only).                     |
+| `setup update`        | Regenerate every workflow/action in `.github/tailor.lock` with the flags it was generated with.      |
 | `setup delete`        | Delete managed workflow/action file(s) and their `.github/tailor.lock` entries.                      |
 
 Run `tailor setup ci <command> --help` for CI generator options, or
-`tailor setup <command> --help` for `deps`, `check`, and `delete` options.
+`tailor setup <command> --help` for `deps`, `check`, `update`, and `delete` options.
 
 ## Further reading
 

@@ -1,5 +1,25 @@
 # @tailor-platform/sdk-codemod
 
+## 0.9.0
+
+### Minor Changes
+
+- [#2463](https://github.com/tailor-platform/sdk/pull/2463) [`f708521`](https://github.com/tailor-platform/sdk/commit/f708521ecc5c6e77fa5731d5256bbd483b49dc66) Thanks [@toiroakr](https://github.com/toiroakr)! - `defineConfig()` accepts `buildOptions`, which groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `inlineSourcemap`, `logLevel`, and `allowedRuntimeGlobals`. The top-level `inlineSourcemap` and `logLevel` still work but are deprecated and will be removed in v3; `tailor upgrade` moves them into `buildOptions` with the `v3/define-config-build-options` codemod. Setting the same option both at the top level and in `buildOptions` fails config validation instead of silently using one of them.
+  
+  ```ts
+  export default defineConfig({
+    name: "my-app",
+    buildOptions: {
+      inlineSourcemap: false,
+      logLevel: "WARN",
+    },
+  });
+  ```
+
+### Patch Changes
+
+- [#2465](https://github.com/tailor-platform/sdk/pull/2465) [`d8222e4`](https://github.com/tailor-platform/sdk/commit/d8222e40ab8f9668d19707bcc76fc7b134a08c26) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.19.0
+
 ## 0.8.14
 
 ### Patch Changes
