@@ -85,6 +85,17 @@ describe("workspace delete command", () => {
     expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId });
   });
 
+  test("fails without deleting when the entered name does not match", async () => {
+    const client = stubClient();
+    vi.mocked(prompt.text).mockResolvedValue("other-space");
+
+    const result = await runCommand(deleteCommand, ["--workspace-id", workspaceId]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "WORKSPACE_DELETION_CANCELLED" });
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
   test("reports not found when the workspace lookup returns NotFound", async () => {
     const client = stubClient();
     client.getWorkspace.mockRejectedValue(new ConnectError("missing", Code.NotFound));

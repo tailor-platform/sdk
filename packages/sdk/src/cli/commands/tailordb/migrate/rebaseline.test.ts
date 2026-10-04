@@ -421,12 +421,13 @@ describe("tailordb migration rebaseline", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
-  test("does not change local or remote state when confirmation is declined", async () => {
+  test("fails without changing local or remote state when confirmation is declined", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
     const result = await runCommand(rebaselineCommand, []);
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "REBASELINE_CANCELLED" });
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
   });

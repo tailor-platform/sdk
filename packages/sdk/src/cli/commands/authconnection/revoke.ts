@@ -33,8 +33,12 @@ export const revokeAuthConnectionCommand = defineAppCommand({
       });
 
       if (confirmation !== args.name) {
-        logger.info("Auth connection revocation cancelled.");
-        return;
+        throw CLIError({
+          code: "AUTH_CONNECTION_REVOCATION_CANCELLED",
+          message: "Auth connection revocation cancelled: the entered name did not match.",
+          suggestion:
+            "Run the command again and enter the name exactly as shown, or pass --yes to skip the confirmation.",
+        });
       }
     }
 
