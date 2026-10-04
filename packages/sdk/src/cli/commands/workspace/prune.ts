@@ -510,9 +510,10 @@ export const pruneCommand = defineAppCommand({
         default: false,
       });
       if (!confirmed) {
-        logger.info("Prune cancelled. No workspaces were deleted.");
-        if (logger.jsonMode) logger.out(result);
-        return;
+        throw CLIError({
+          code: "PRUNE_CANCELLED",
+          message: "Prune cancelled. No workspaces were deleted.",
+        });
       }
     }
 

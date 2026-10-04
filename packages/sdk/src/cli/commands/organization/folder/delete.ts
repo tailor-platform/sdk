@@ -79,8 +79,10 @@ export const deleteCommand = defineAppCommand({
         message: `Are you sure you want to delete folder "${folderName}"?`,
       });
       if (!confirmed) {
-        logger.info("Folder deletion cancelled.");
-        return;
+        throw CLIError({
+          code: "FOLDER_DELETION_CANCELLED",
+          message: "Folder deletion cancelled.",
+        });
       }
     }
 

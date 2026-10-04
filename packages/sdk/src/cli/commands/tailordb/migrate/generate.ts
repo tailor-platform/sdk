@@ -162,8 +162,10 @@ async function handleInitOption(
     });
 
     if (!confirmation) {
-      logger.info("Operation cancelled.");
-      process.exit(0);
+      throw CLIError({
+        code: "MIGRATION_GENERATE_CANCELLED",
+        message: "Migration generation cancelled. No migration files were deleted.",
+      });
     }
     logger.newline();
   }
@@ -524,7 +526,9 @@ export async function generate(options: GenerateOptions): Promise<void> {
     });
   }
 
+  const declinedNamespaces: string[] = [];
   for (const {
+    namespace,
     migrationsDir,
     currentSnapshot,
     previousSnapshot,
@@ -535,7 +539,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
       // First migration - generate initial schema snapshot
       await generateInitialSnapshot(currentSnapshot, migrationsDir);
     } else {
-      await generateDiffFromSnapshot(
+      const declined = await generateDiffFromSnapshot(
         previousSnapshot,
         assertDefined(diff, "Migration diff was not resolved during preflight"),
         migrationsDir,
@@ -543,7 +547,15 @@ export async function generate(options: GenerateOptions): Promise<void> {
         currentSnapshot,
         expandPlans ?? [],
       );
+      if (declined) declinedNamespaces.push(namespace);
     }
+  }
+  if (declinedNamespaces.length > 0) {
+    throw CLIError({
+      code: "MIGRATION_GENERATE_CANCELLED",
+      message: `Migration generation cancelled for ${declinedNamespaces.join(", ")}.`,
+      context: { namespaces: declinedNamespaces },
+    });
   }
 }
 
@@ -1162,7 +1174,7 @@ async function resolveRenames(
  * @param {GenerateOptions} options - Generate options
  * @param currentSnapshot - Schema the user now declares
  * @param expandPlans - Field changes confirmed for a migration pair
- * @returns {Promise<void>} Promise that resolves when diff is generated
+ * @returns {Promise<boolean>} Whether the user declined to generate the migration
  */
 async function generateDiffFromSnapshot(
   previousSnapshot: NormalizedSchemaSnapshot,
@@ -1171,10 +1183,10 @@ async function generateDiffFromSnapshot(
   options: GenerateOptions,
   currentSnapshot: NormalizedSchemaSnapshot,
   expandPlans: readonly ExpandContractPlan[] = [],
-): Promise<void> {
+): Promise<boolean> {
   if (!hasChanges(diff)) {
     logger.info("No schema differences detected.");
-    return;
+    return false;
   }
 
   // Display diff
@@ -1248,8 +1260,8 @@ async function generateDiffFromSnapshot(
       });
 
       if (!confirmation) {
-        logger.info("Migration generation cancelled.");
-        return;
+        logger.info(`Skipped the migration for namespace "${diff.namespace}".`);
+        return true;
       }
       logger.newline();
     }
@@ -1270,7 +1282,7 @@ async function generateDiffFromSnapshot(
       migrationsDir,
       description: options.name,
     });
-    return;
+    return false;
   }
 
   // Get next migration number
@@ -1310,6 +1322,7 @@ async function generateDiffFromSnapshot(
       configPath: options.configPath,
     });
   }
+  return false;
 }
 
 /** Inputs for {@link generateExpandContractMigrations}. */

@@ -95,8 +95,12 @@ export const deleteCommand = defineAppCommand({
         message: `Enter the workspace name to confirm deletion (${displayName}):`,
       });
       if (confirmation !== workspaceName && confirmation !== displayName) {
-        logger.info("Workspace deletion cancelled.");
-        return;
+        throw CLIError({
+          code: "WORKSPACE_DELETION_CANCELLED",
+          message: "Workspace deletion cancelled: the entered name did not match.",
+          suggestion:
+            "Run the command again and enter the name exactly as shown, or pass --yes to skip the confirmation.",
+        });
       }
     }
 

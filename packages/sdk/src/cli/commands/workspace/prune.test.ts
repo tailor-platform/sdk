@@ -461,15 +461,15 @@ describe("workspace prune command", () => {
     expect(client.deleteWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  test("deletes nothing when the confirmation is declined", async () => {
+  test("fails without deleting anything when the confirmation is declined", async () => {
     const client = stubClient([workspace("e2e-ws-1")]);
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
     const result = await runCommand(pruneCommand, ["--name", "e2e-ws-.*", "--older-than", "24h"]);
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "PRUNE_CANCELLED" });
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("cancelled"));
   });
 
   test("aborts before deleting anything when more candidates match than --limit allows", async () => {

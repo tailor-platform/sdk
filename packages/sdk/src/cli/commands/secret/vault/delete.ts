@@ -33,8 +33,12 @@ export const deleteCommand = defineAppCommand({
         message: `Enter the vault name to confirm deletion ("${args.name}"):`,
       });
       if (confirmation !== args.name) {
-        logger.info("Vault deletion cancelled.");
-        return;
+        throw CLIError({
+          code: "VAULT_DELETION_CANCELLED",
+          message: "Vault deletion cancelled: the entered name did not match.",
+          suggestion:
+            "Run the command again and enter the name exactly as shown, or pass --yes to skip the confirmation.",
+        });
       }
     }
 

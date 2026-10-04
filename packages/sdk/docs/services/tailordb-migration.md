@@ -240,7 +240,7 @@ This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skele
 
 The command requires a clean state: if the namespace has schema changes that are not yet in migration files, generate the schema migration first. With multiple namespaces, pass `--namespace` to name the target. `--data-only` cannot be combined with `--init`, `--rename`, `--drop`, or `--expand-contract`.
 
-A data-only migration runs in **every** workspace the history is applied to, including freshly created ones. Write the script so it is safe against tables with no matching rows (a set-based `UPDATE` with a `WHERE` clause is naturally a no-op on an empty table). For a fix that should run in a single environment only, or that is too large for one transaction, run it outside the migration history instead.
+A data-only migration runs in **every** workspace the history is applied to, including freshly created ones. Write the script so it is safe against tables with no matching rows (a set-based `UPDATE` with a `WHERE` clause is naturally a no-op on an empty table). For a fix that should run in a single environment only, or that is too large for one transaction, run it outside the migration history instead, for example as a one-off script scaffolded with [`tailor function script`](../cli/function.md#function-script) and executed against a single workspace with [`tailor function run`](../cli/function.md#function-run).
 
 ## Configuration
 

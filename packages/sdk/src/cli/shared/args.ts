@@ -1,11 +1,12 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
-import { arg } from "@politty/zod";
+import { arg, parseArgv } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
-import { JSON_OUTPUT_ENV_VAR, logger } from "./logger";
+import { withErrorDiagnostics } from "./error-diagnostics";
+import { JSON_OUTPUT_ENV_VAR, logger, type JsonModeSource } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -189,6 +190,104 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 /** Name and short alias of the `--json` flag. */
 const JSON_ARG_NAME = "json";
 const JSON_ARG_ALIAS = "j";
+const VERBOSE_ARG_NAME = "verbose";
+
+const GLOBAL_FLAG_PARSER_OPTIONS = {
+  aliasMap: new Map([[JSON_ARG_ALIAS, JSON_ARG_NAME]]),
+  booleanFlags: new Set([JSON_ARG_NAME, VERBOSE_ARG_NAME]),
+};
+
+let globalArgsWereApplied = false;
+
+/**
+ * Report whether the global arguments have been applied, which happens only
+ * after every argument of the command parsed and validated.
+ * @returns True once the `--json` effect has run
+ */
+export function globalArgsApplied(): boolean {
+  return globalArgsWereApplied;
+}
+
+/**
+ * Read the value tokens set for a global boolean flag, coerced the way the CLI
+ * coerces the flag and its environment variable.
+ * @param tokens - Tokens of the flag, each optionally carrying `=value`
+ * @param name - Flag name
+ * @returns `true`, `false`, a rejected value unchanged, or undefined when no token sets it
+ */
+function parseGlobalFlag(tokens: string[], name: string): unknown {
+  return parseArgv(tokens, GLOBAL_FLAG_PARSER_OPTIONS).options[name];
+}
+
+/**
+ * Read the value the command line gives a global boolean flag. Tokens after
+ * `--` are positional values, never flags.
+ * @param argv - Command-line arguments after the executable and script path
+ * @param name - Flag name
+ * @param alias - Short alias of the flag, if it has one
+ * @returns `true`, `false`, a rejected value unchanged, or undefined when argv does not set it
+ */
+function globalFlagValue(argv: readonly string[], name: string, alias?: string): unknown {
+  const separator = argv.indexOf("--");
+  const options = separator === -1 ? argv : argv.slice(0, separator);
+  return parseGlobalFlag(
+    options.filter((value) => {
+      const [token] = value.split("=", 1);
+      return token === `--${name}` || (alias !== undefined && token === `-${alias}`);
+    }),
+    name,
+  );
+}
+
+/**
+ * Report whether the command line turns `--json` on.
+ *
+ * A failure during argument parsing or validation ends the command before the
+ * `--json` effect sets the logger's mode, so the flag is read from argv instead.
+ * @param argv - Command-line arguments after the executable and script path
+ * @returns True when argv sets `--json` or `-j` to true
+ */
+export function jsonFlagRequested(argv: readonly string[]): boolean {
+  return globalFlagValue(argv, JSON_ARG_NAME, JSON_ARG_ALIAS) === true;
+}
+
+/**
+ * Report what requested JSON output, reading the command line and the environment
+ * the same way the `--json` effect would.
+ * @param argv - Command-line arguments after the executable and script path
+ * @returns What requested JSON output, or undefined when it is off
+ */
+export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource | undefined {
+  const flag = globalFlagValue(argv, JSON_ARG_NAME, JSON_ARG_ALIAS);
+  const env = process.env[JSON_OUTPUT_ENV_VAR];
+  const envEnabled =
+    env !== undefined && parseGlobalFlag([`--${JSON_ARG_NAME}=${env}`], JSON_ARG_NAME) === true;
+  if (flag === true) return envEnabled ? "both" : "flag";
+  if (flag === undefined && envEnabled) return "env";
+  return undefined;
+}
+
+/**
+ * Prepare a failure that ended the command before the global arguments were
+ * applied (see {@link globalArgsApplied}): apply `--verbose`, and when the
+ * command line or the environment asked for JSON output, turn it on and name a
+ * plain argument-parsing error `INVALID_ARGUMENTS`.
+ * @param error - Failure about to be rendered
+ * @param argv - Command-line arguments after the executable and script path
+ */
+export function resolveEarlyFailure(error: unknown, argv: readonly string[]): void {
+  if (globalFlagValue(argv, VERBOSE_ARG_NAME) === true) logger.verbose = true;
+  const source = requestedJsonModeSource(argv);
+  if (!source) return;
+  logger.setJsonMode(true, source);
+  if (
+    error instanceof Error &&
+    Object.getPrototypeOf(error) === Error.prototype &&
+    !Object.hasOwn(error, "code")
+  ) {
+    withErrorDiagnostics(error, { code: "INVALID_ARGUMENTS" });
+  }
+}
 
 interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
@@ -223,7 +322,7 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
         );
       },
     }),
-    verbose: arg(z.boolean().default(false), {
+    [VERBOSE_ARG_NAME]: arg(z.boolean().default(false), {
       ...(options.verboseAlias === undefined ? {} : { alias: options.verboseAlias }),
       description: "Enable verbose logging",
       effect: (value) => {
@@ -235,6 +334,7 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       description: "Output as JSON",
       env: JSON_OUTPUT_ENV_VAR,
       effect: (value, { args }) => {
+        globalArgsWereApplied = true;
         const source = args.$source?.(JSON_ARG_NAME);
         const envAlsoEnabled =
           source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;
