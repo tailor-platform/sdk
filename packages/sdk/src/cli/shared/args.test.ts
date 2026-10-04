@@ -6,16 +6,22 @@ import { describe, expect, aroundEach, test, vi } from "vitest";
 import { z } from "zod";
 import {
   createCommonArgs,
+  globalArgsApplied,
   loadEnvFiles,
   durationArg,
   parseDuration,
   positiveIntArg,
   recoveryContextArgs,
+  requestedJsonModeSource,
+  resolveEarlyFailure,
   resolveMachineUserInputSource,
   toPageDirection,
 } from "./args";
 import { defineAppCommand } from "./command";
+import { getErrorDiagnostics } from "./error-diagnostics";
+import { CLIError } from "./errors";
 import { logger } from "./logger";
+import { jsonMode } from "./test-helpers/json-mode";
 import { tempCwd } from "./test-helpers/temp-cwd";
 
 describe("loadEnvFiles", () => {
@@ -274,6 +280,85 @@ describe("resolveMachineUserInputSource", () => {
   });
 });
 
+describe("requestedJsonModeSource", () => {
+  aroundEach(async (runTest) => {
+    try {
+      await runTest();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  test.each([
+    { argv: [], env: undefined, expected: undefined },
+    { argv: ["workspace", "list", "--json"], env: undefined, expected: "flag" },
+    { argv: ["-j", "workspace", "list"], env: undefined, expected: "flag" },
+    { argv: ["workspace", "list", "--json=true"], env: undefined, expected: "flag" },
+    { argv: ["workspace", "list", "--json=false"], env: undefined, expected: undefined },
+    { argv: ["workspace", "list"], env: "1", expected: "env" },
+    { argv: ["workspace", "list", "--json"], env: "true", expected: "both" },
+    { argv: ["workspace", "list", "--json=false"], env: "1", expected: undefined },
+    { argv: ["workspace", "list"], env: "false", expected: undefined },
+    { argv: ["workspace", "list", "--json", "--json=false"], env: undefined, expected: undefined },
+    { argv: ["workspace", "list", "--json=yes"], env: undefined, expected: undefined },
+    { argv: ["workspace", "list"], env: "yes", expected: undefined },
+    { argv: ["function", "test-run", "--", "--json"], env: undefined, expected: undefined },
+    { argv: ["deploy", "--no-json", "--jsonish"], env: undefined, expected: undefined },
+  ])("returns $expected for $argv with TAILOR_JSON_OUTPUT=$env", ({ argv, env, expected }) => {
+    vi.stubEnv("TAILOR_JSON_OUTPUT", env);
+    expect(requestedJsonModeSource(argv)).toBe(expected);
+  });
+});
+
+describe("resolveEarlyFailure", () => {
+  function resolve(error: Error, argv: string[]) {
+    using _json = jsonMode(false);
+    resolveEarlyFailure(error, argv);
+    return { code: getErrorDiagnostics(error).code, jsonMode: logger.jsonMode };
+  }
+
+  test("names a plain argument error INVALID_ARGUMENTS under JSON output", () => {
+    expect(resolve(new Error("Unknown flags: bogus"), ["--json"])).toEqual({
+      code: "INVALID_ARGUMENTS",
+      jsonMode: true,
+    });
+  });
+
+  test("leaves an argument error unnamed without JSON output", () => {
+    expect(resolve(new Error("Unknown flags: bogus"), [])).toEqual({
+      code: undefined,
+      jsonMode: false,
+    });
+  });
+
+  test.each([
+    { name: "a system error", error: Object.assign(new Error("denied"), { code: "EACCES" }) },
+    { name: "a TypeError", error: new TypeError("boom") },
+    { name: "a CLIError", error: CLIError({ code: "PROFILE_NOT_FOUND", message: "missing" }) },
+  ])("does not name $name INVALID_ARGUMENTS", ({ error }) => {
+    expect(resolve(error, ["--json"]).code).toBeUndefined();
+  });
+
+  test.each([
+    { argv: ["--json", "--verbose"], verbose: true },
+    { argv: ["--verbose"], verbose: true },
+    { argv: ["--json", "--verbose=false"], verbose: false },
+    { argv: ["--json"], verbose: false },
+  ])("applies verbose output from $argv", ({ argv, verbose }) => {
+    vi.stubEnv("DEBUG", undefined);
+    vi.stubEnv("RUNNER_DEBUG", undefined);
+    const previous = logger.verbose;
+    logger.verbose = false;
+    try {
+      resolve(new Error("Unknown flags: bogus"), argv);
+      expect(logger.verbose).toBe(verbose);
+    } finally {
+      logger.verbose = previous;
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
 describe("createCommonArgs effects", () => {
   aroundEach(async (runTest) => {
     const previousJsonMode = logger.jsonMode;
@@ -325,6 +410,7 @@ describe("createCommonArgs effects", () => {
       globalArgs: z.object(createCommonArgs()),
     });
     expect(result.exitCode).toBe(0);
+    expect(globalArgsApplied()).toBe(true);
     expect(logger.jsonMode).toBe(true);
     expect(logger.verbose).toBe(true);
   });
