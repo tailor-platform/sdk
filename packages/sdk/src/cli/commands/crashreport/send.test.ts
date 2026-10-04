@@ -1,10 +1,18 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { runCommand } from "@politty/zod";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { sendCrashReport } from "#/cli/crashreport/sender";
 import { formatCrashReport } from "#/cli/crashreport/writer";
-import { parseCrashLogFile } from "./send";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { parseCrashLogFile, sendCommand } from "./send";
 import type { CrashReport } from "#/cli/crashreport/report";
+
+vi.mock("#/cli/crashreport/sender", () => ({
+  sendCrashReport: vi.fn(),
+}));
 
 function makeCrashReport(overrides?: Partial<CrashReport>): CrashReport {
   return {
@@ -48,6 +56,21 @@ describe("crashreport send command", () => {
     expect(content).toContain("TypeError");
     expect(content).toContain("Cannot read properties of undefined");
     expect(content).toContain("packages/sdk/src/cli/index.ts:10:5");
+  });
+
+  test("prints the submitted report id under JSON output", async () => {
+    const report = makeCrashReport();
+    const filePath = path.join(tmpDir, "test.crash.log");
+    fs.writeFileSync(filePath, formatCrashReport(report));
+    vi.mocked(sendCrashReport).mockResolvedValue(true);
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(sendCommand, ["--file", filePath]);
+
+    expect(result.success).toBe(true);
+    expect(sendCrashReport).toHaveBeenCalledWith(report, expect.any(String));
+    expect(JSON.parse(stdout.output)).toEqual({ changed: true, id: report.id, file: filePath });
   });
 
   test("formatCrashReport preserves multiline error messages", () => {

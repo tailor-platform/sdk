@@ -4,6 +4,7 @@ import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { nameArgs } from "./args";
@@ -39,5 +40,6 @@ export const createCommand = defineAppCommand({
     }
 
     logger.success(`Vault: ${args.name} created`);
+    printMutationResult({ changed: true, workspaceId, name: args.name });
   },
 });

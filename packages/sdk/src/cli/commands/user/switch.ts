@@ -10,6 +10,7 @@ import {
 } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 
 export const switchCommand = defineAppCommand({
   name: "switch",
@@ -56,6 +57,7 @@ export const switchCommand = defineAppCommand({
       });
     }
 
+    const previousUser = activeProfileEntry ? activeProfileEntry.user : config.current_user;
     if (activeProfileEntry) {
       activeProfileEntry.user = user;
     } else {
@@ -64,5 +66,10 @@ export const switchCommand = defineAppCommand({
     writePlatformConfig(config);
 
     logger.success(`Current user set to "${user}" successfully.`);
+    printMutationResult({
+      changed: previousUser !== user,
+      user,
+      profile: activeProfileName || null,
+    });
   },
 });

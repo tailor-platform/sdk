@@ -3,6 +3,7 @@ import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -40,6 +41,15 @@ async function loadOptions(options: UpdateUserOptions) {
  * @returns Promise that resolves when update completes
  */
 export async function updateUser(options: UpdateUserOptions): Promise<void> {
+  await updateUserInWorkspace(options);
+}
+
+/**
+ * Update a user's role in a workspace.
+ * @param options - Options identifying the user, role, and workspace
+ * @returns The workspace the user belongs to
+ */
+async function updateUserInWorkspace(options: UpdateUserOptions): Promise<string> {
   const { client, workspaceId, email, role } = await loadOptions(options);
 
   await client.updateWorkspacePlatformUser({
@@ -47,6 +57,7 @@ export async function updateUser(options: UpdateUserOptions): Promise<void> {
     email,
     role,
   });
+  return workspaceId;
 }
 
 export const updateCommand = defineAppCommand({
@@ -64,7 +75,7 @@ export const updateCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    await updateUser({
+    const workspaceId = await updateUserInWorkspace({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       email: args.email,
@@ -72,5 +83,6 @@ export const updateCommand = defineAppCommand({
     });
 
     logger.success(`User "${args.email}" updated to role "${args.role}".`);
+    printMutationResult({ changed: true, workspaceId, email: args.email, role: args.role });
   },
 });

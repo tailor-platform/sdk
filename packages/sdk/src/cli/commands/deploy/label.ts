@@ -642,18 +642,20 @@ export async function writeMetadataLabels(
  * after the label is durable.
  * @param client - Operator client instance
  * @param write - TRN, labels to set, and label keys to delete
+ * @returns Whether the labels changed
  */
 export async function writeMetadataLabelsDirect(
   client: MetadataLabelClient,
   write: MetadataLabelWrite,
-): Promise<void> {
-  if (!hasMetadataLabelChange(write)) return;
+): Promise<boolean> {
+  if (!hasMetadataLabelChange(write)) return false;
   const { trn } = write;
   const current = await getOrNull(() => client.getMetadata({ trn }));
   const currentLabels = current?.metadata?.labels ?? {};
   const merged = applyMetadataLabelWrite(currentLabels, write);
-  if (areSameLabels(currentLabels, merged)) return;
+  if (areSameLabels(currentLabels, merged)) return false;
   await client.setMetadata({ trn, labels: merged });
+  return true;
 }
 
 function areSameLabels(a: Record<string, string>, b: Record<string, string>): boolean {

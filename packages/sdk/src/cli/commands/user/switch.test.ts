@@ -3,6 +3,8 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { switchCommand } from "./switch";
 
@@ -65,6 +67,38 @@ describe("user switch", () => {
     expect(result.success).toBe(true);
     const config = await readPlatformConfig();
     expect(config.current_user).toBe("platform-user-sub");
+  });
+
+  test.each([
+    { name: "another user", currentUser: null, changed: true },
+    { name: "the current user", currentUser: "platform-user-sub", changed: false },
+  ])("prints whether switching to $name changed anything under JSON output", async (row) => {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "platform-user-sub": {
+          storage: "file",
+          access_token: "token",
+          refresh_token: "refresh",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+          email: "user@example.com",
+        },
+      },
+      profiles: {},
+      current_user: row.currentUser,
+    });
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(switchCommand, ["user@example.com"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: row.changed,
+      user: "platform-user-sub",
+      profile: null,
+    });
   });
 
   test("stores the bare user when switching to a TAILOR_PLATFORM_URL-scoped token", async () => {
