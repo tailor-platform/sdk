@@ -119,6 +119,6 @@ With `--json`, the result contains a `deployedHooks` entry for
 
 The same deploy result includes `workspaceId` and `applications`, including each
 config's Static Website URLs, AI Gateway URLs, and public OAuth client IDs. The
-application endpoint URL and domain are present only when the config deploys an
-application. Read these directly from `tailor deploy --json`; a separate `show`
-command is not required.
+application endpoint URL and domain are present when a Platform Application with
+the config's name exists. Read these directly from `tailor deploy --json`; a
+separate `show` command is not required.

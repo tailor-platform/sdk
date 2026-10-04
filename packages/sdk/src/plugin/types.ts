@@ -383,7 +383,7 @@ export interface DeployedApplication<
   id?: string;
   name: string;
   configPath: string;
-  /** Application endpoint URL, absent when the config deploys no application. */
+  /** Application endpoint URL, present when a matching Platform Application exists. */
   url?: string;
   domain?: string;
   aiGateways: { name: string; url: string }[];

@@ -15,10 +15,11 @@ Commands for managing Tailor Platform applications. These commands work with `ta
 **JSON result:**
 
 After a successful `tailor deploy --json`, stdout includes `status: "applied"`,
-`summary`, `workspaceId`, and `applications` in config order. Each application
-includes its `name`, `configPath`, endpoint `url`, `domain`, `aiGateways`, and
-`staticWebsites` keyed by site name. If Auth is configured, `auth` includes its
-`namespace` and `oauth2Clients` with each client's `name` and public `clientId`.
+`summary`, `workspaceId`, and `applications` in config order. Each entry includes
+the config's `name`, `configPath`, and, when configured, `id`, plus `aiGateways`
+and `staticWebsites` keyed by site name. Endpoint `url` and `domain` are included
+when a Platform Application with that name exists. If Auth is configured, `auth`
+includes its `namespace` and `oauth2Clients` with each client's `name` and public `clientId`.
 Client secrets are excluded. These fields are returned even when no deploy plugin
 is registered or no resources changed.
 
