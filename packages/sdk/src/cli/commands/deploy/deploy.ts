@@ -41,7 +41,11 @@ import {
   type MissingDependentApp,
 } from "./confirm";
 import { fetchMissingDependentApps } from "./dependency-records";
-import { loadDeployedApplications, runDeployedHooks } from "./deployed-hooks";
+import {
+  deployedHookLoadFailure,
+  loadDeployedApplications,
+  runDeployedHooks,
+} from "./deployed-hooks";
 import {
   buildDeploymentTargets,
   loadDeployConfigs,
@@ -1058,6 +1062,13 @@ async function deployInternal(
       logger.jsonMode && !internalContext?.suppressResultOutput
         ? await loadDeployedApplications({ client, workspaceId, targets }).catch(
             (error: unknown) => {
+              if (pendingDeployedHooks.length)
+                throw deployedHookLoadFailure(
+                  error,
+                  pendingDeployedHooks.map(
+                    ({ application, pluginId }) => `${pluginId} (app: ${application})`,
+                  ),
+                );
               throw CLIError({
                 code: "DEPLOY_RESULT_LOAD_FAILED",
                 message:

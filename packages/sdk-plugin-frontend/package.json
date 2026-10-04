@@ -9,6 +9,7 @@
     "directory": "packages/sdk-plugin-frontend"
   },
   "files": [
+    "CHANGELOG.md",
     "dist",
     "README.md"
   ],
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.19.0",
+    "eslint-plugin-zod": "4.14.2",
     "oxlint": "1.86.0",
     "oxlint-tsgolint": "7.0.2003",
     "tsdown": "0.23.0",

@@ -490,3 +490,16 @@ test("reports that resources were applied when loading the JSON result fails", a
   expect(mocks.apply).toHaveBeenCalledOnce();
   expect(logger.out).not.toHaveBeenCalledWith(expect.objectContaining({ status: "applied" }));
 });
+
+test("reports skipped hooks when loading their context in JSON mode fails", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  register(vi.fn());
+  mocks.getApplication.mockRejectedValueOnce(new Error("application lookup failed"));
+  await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOYED_HOOK_FAILED",
+    message: expect.stringMatching(
+      /loading the deployed information.*application lookup failed.*Hooks not run: hook \(app: app\)/s,
+    ),
+  });
+});

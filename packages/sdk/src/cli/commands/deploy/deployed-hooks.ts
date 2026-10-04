@@ -192,6 +192,14 @@ function deployedHookFailure(what: string, error: unknown, notRun: readonly stri
   });
 }
 
+export function deployedHookLoadFailure(error: unknown, notRun: readonly string[]) {
+  return deployedHookFailure(
+    "loading the deployed information for onDeployed hooks failed",
+    error,
+    notRun,
+  );
+}
+
 function isPlainObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
   return prototype === null || prototype === Object.prototype;
@@ -263,11 +271,7 @@ export async function runDeployedHooks(
   const applications =
     params.applications ??
     (await loadDeployedApplications(params).catch((error: unknown) => {
-      throw deployedHookFailure(
-        "loading the deployed information for onDeployed hooks failed",
-        error,
-        hooks.map(hookLabel),
-      );
+      throw deployedHookLoadFailure(error, hooks.map(hookLabel));
     }));
   const publishable = (application: DeployedApplication) => ({
     ...application,
