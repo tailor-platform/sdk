@@ -34,6 +34,7 @@ function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
     application: {
       id: `${name}-id`,
       name,
+      subgraphs: [{}],
       staticWebsiteServices: [{ name: `${name}-web` }],
       authService: { config: { name: "auth" } },
     },

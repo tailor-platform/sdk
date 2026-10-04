@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { beforeEach, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -420,6 +421,30 @@ test("includes deployed application and website URLs in JSON without registering
         configPath: "/repo/tailor.config.ts",
         url: "https://app",
         domain: "app",
+        aiGateways: [],
+        staticWebsites: { web: { name: "web", url: "https://web" } },
+      },
+    ],
+  });
+});
+
+test("includes a static website in JSON when the config has no application", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  mocks.getApplication.mockRejectedValueOnce(
+    new ConnectError("application not found", Code.NotFound),
+  );
+
+  await deploy({ yes: true, noValidate: true });
+
+  expect(logger.out).toHaveBeenLastCalledWith({
+    summary: expect.any(Object),
+    status: "applied",
+    workspaceId: "ws",
+    applications: [
+      {
+        name: "app",
+        configPath: "/repo/tailor.config.ts",
         aiGateways: [],
         staticWebsites: { web: { name: "web", url: "https://web" } },
       },

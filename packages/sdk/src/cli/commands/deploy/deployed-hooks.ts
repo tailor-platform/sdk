@@ -93,7 +93,9 @@ async function loadDeployedTarget(
     config: target.config,
   });
   const [response, sites, gateways, oauth2Clients] = await Promise.all([
-    client.getApplication({ workspaceId, applicationName: name }),
+    target.application.subgraphs.length
+      ? client.getApplication({ workspaceId, applicationName: name })
+      : getOrNull(() => client.getApplication({ workspaceId, applicationName: name })),
     Promise.all(
       target.application.staticWebsiteServices.map(async (site) => ({
         name: site.name,
@@ -114,17 +116,15 @@ async function loadDeployedTarget(
     ),
     namespace ? loadOAuth2Clients(namespace) : [],
   ]);
-  const application = assertDefined(
-    response.application,
-    `Application "${name}" not found after deploy`,
-  );
+  const application = target.application.subgraphs.length
+    ? assertDefined(response?.application, `Application "${name}" not found after deploy`)
+    : response?.application;
   return {
     application: {
       ...(target.application.id ? { id: target.application.id } : {}),
       name,
       configPath: target.config.path,
-      url: application.url,
-      domain: application.domain,
+      ...(application ? { url: application.url, domain: application.domain } : {}),
       aiGateways: gateways,
       staticWebsites: byName(sites),
       ...(namespace

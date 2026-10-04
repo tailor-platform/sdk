@@ -47,7 +47,7 @@ export const plugins = definePlugins(
     build: "pnpm run build",
     distDir: "dist",
     env: ({ site, application }) => ({
-      VITE_TAILOR_APP_URL: application.url,
+      ...(application.url ? { VITE_TAILOR_APP_URL: application.url } : {}),
       VITE_SITE_URL: site.url,
       VITE_OAUTH2_CLIENT_ID:
         application.auth?.oauth2Clients.find((client) => client.name === "web")?.clientId ?? "",
@@ -118,6 +118,7 @@ With `--json`, the result contains a `deployedHooks` entry for
 `site`, published `url`, and `skippedFiles`.
 
 The same deploy result includes `workspaceId` and `applications`, including each
-application's endpoint URL, Static Website URLs, AI Gateway URLs, and public OAuth
-client IDs. Read these directly from `tailor deploy --json`; a separate `show`
+config's Static Website URLs, AI Gateway URLs, and public OAuth client IDs. The
+application endpoint URL and domain are present only when the config deploys an
+application. Read these directly from `tailor deploy --json`; a separate `show`
 command is not required.
