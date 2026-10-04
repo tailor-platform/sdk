@@ -214,14 +214,25 @@ describe("tailordb migration sync", () => {
     });
   });
 
-  test("reports no change under JSON output when the remote already matches an empty snapshot", async () => {
+  test.each([
+    {
+      name: "the remote already matches",
+      labels: { "sdk-migration": "m0000", "sdk-name": "my-app" },
+      previousMigrationNumber: 0,
+      changed: false,
+    },
+    {
+      name: "only the label moves",
+      labels: { "sdk-name": "my-app" },
+      previousMigrationNumber: null,
+      changed: true,
+    },
+  ])("reports an empty snapshot sync under JSON output when $name", async (row) => {
     fs.rmSync(state.migrationsDir, { recursive: true, force: true });
     writeInitialSchema(state.migrationsDir, {});
     state.localTypes = {};
     state.listTailorDBTypes.mockResolvedValue({ tailordbTypes: [], nextPageToken: "" });
-    state.getMetadata.mockResolvedValue({
-      metadata: { labels: { "sdk-migration": "m0000", "sdk-name": "my-app" } },
-    });
+    state.getMetadata.mockResolvedValue({ metadata: { labels: row.labels } });
     using _json = jsonMode();
     using stdout = captureStdout();
 
@@ -229,16 +240,16 @@ describe("tailordb migration sync", () => {
 
     expect(result.success).toBe(true);
     expect(JSON.parse(stdout.output)).toEqual({
-      changed: false,
+      changed: row.changed,
       workspaceId: "12345678-1234-4abc-8def-123456789012",
       namespace: "tailordb",
-      previousMigrationNumber: 0,
+      previousMigrationNumber: row.previousMigrationNumber,
       migrationNumber: 0,
       historyId: null,
       tables: { created: [], updated: [], deleted: [] },
       gqlPermissions: { set: [], deleted: [] },
     });
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(state.setMetadata).toHaveBeenCalledTimes(row.changed ? 1 : 0);
   });
 
   test("sets the current migration history ID from a re-baselined snapshot", async () => {
