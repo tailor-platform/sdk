@@ -28,6 +28,20 @@ const MANAGED_TOP_LEVEL_KEYS: Record<Layout, readonly string[]> = {
 
 const EDITABLE_JOB_KEYS = ["runs-on", "timeout-minutes", "container", "env"];
 
+// Other managed jobs take `environment` from --environment, so it stays managed there.
+export const ENVIRONMENT_EDITABLE_JOBS: readonly string[] = [
+  "tailor-tag-guard",
+  "tailor-erd-preview-matrix",
+  "tailor-erd-preview",
+  "tailor-erd-preview-comment",
+];
+
+function editableJobKeys(jobId: string): readonly string[] {
+  return ENVIRONMENT_EDITABLE_JOBS.includes(jobId)
+    ? [...EDITABLE_JOB_KEYS, "environment"]
+    : EDITABLE_JOB_KEYS;
+}
+
 // Keyed by the `tailor-platform/actions/<name>` a managed step uses.
 const EDITABLE_WITH_KEYS: Record<string, readonly string[]> = {
   "drift-check": ["ignore", "fail-on-drift"],
@@ -341,7 +355,7 @@ function projectManaged(
           return [
             jobId,
             {
-              ...omit(job, [...EDITABLE_JOB_KEYS, "steps"]),
+              ...omit(job, [...editableJobKeys(jobId), "steps"]),
               steps: projectSteps(job["steps"], `${jobId}/`, managed, slots, retired),
             },
           ];
@@ -647,7 +661,7 @@ export function mergeUserContent(params: {
         if (userJobs.includes(pair) || !isMap(pair.value)) continue;
         const jobId = keyOf(pair) ?? "";
         const renderedJob = mapAt(renderedJobs, jobId);
-        if (renderedJob) carryFields(pair.value, renderedJob, EDITABLE_JOB_KEYS);
+        if (renderedJob) carryFields(pair.value, renderedJob, editableJobKeys(jobId));
         mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
       }
       carryLeadingComment(currentJobs, currentJobs.items[0], userJobs);
