@@ -9,6 +9,7 @@ import {
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { formatCommandHint } from "#/cli/shared/errors";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { type ExecutorListInfo, toExecutorListInfo } from "./transform";
@@ -57,12 +58,15 @@ export const listCommand = defineAppCommand({
   }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
-    const executors = await listExecutors({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      order: args.order,
-      limit: args.limit,
-    });
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      listExecutors({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        order: args.order,
+        limit,
+      }),
+    );
+    const executors = listed.items;
 
     if (executors.length === 0) {
       logger.info("No executors found.");
@@ -77,6 +81,7 @@ export const listCommand = defineAppCommand({
         disabled: (v) => (v ? styles.warning("true") : styles.dim("false")),
       },
     });
+    await reportTruncation(listed, args.limit);
 
     // Show hint if there are webhook executors (non-JSON mode only)
     if (!jsonOutput) {

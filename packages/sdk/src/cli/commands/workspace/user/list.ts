@@ -2,6 +2,7 @@ import { z } from "zod";
 import { orderArg, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
@@ -66,13 +67,17 @@ export const listCommand = defineAppCommand({
     ...paginationArgs(),
   }),
   run: async (args) => {
-    const users = await listUsers({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      order: args.order,
-      limit: args.limit,
-    });
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      listUsers({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        order: args.order,
+        limit,
+      }),
+    );
+    const users = listed.items;
 
     logger.out(users);
+    await reportTruncation(listed, args.limit);
   },
 });

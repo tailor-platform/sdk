@@ -20,6 +20,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
@@ -88,7 +89,7 @@ export interface AddMigrationScriptFilesResult {
   pgliteTestPath?: string;
   /** True when this run was asked for a PGlite test that migrate.pglite.test.ts did not already have. */
   pgliteTestRequested?: boolean;
-  /** True when a stale --no-script acknowledgment was cleared because migrate.ts already exists. */
+  /** True when this run removed a recorded --no-script acknowledgment. */
   clearedScriptSkip?: boolean;
 }
 
@@ -270,6 +271,7 @@ export async function addMigrationScriptFiles(
     result.pgliteSchemaPath = typeFiles.pgliteSchemaPath;
     result.pgliteSchemaError = typeFiles.pgliteSchemaError;
     clearMigrationScriptSkipped(diffPath);
+    if (diff.scriptSkipped) result.clearedScriptSkip = true;
   } else if (withTest && previousSnapshot) {
     // A script created before db.pglite.ts existed gets the schema its tests need.
     Object.assign(
@@ -368,8 +370,16 @@ async function script(options: ScriptOptions): Promise<void> {
     logger.success(
       `Recorded that migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)} intentionally has no migration script`,
     );
+    const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
     logger.info(`  Reason: ${scriptSkipped.reason}`);
-    logger.info(`  Diff file: ${getMigrationFilePath(migrationsDir, migrationNumber, "diff")}`);
+    logger.info(`  Diff file: ${diffPath}`);
+    printMutationResult({
+      changed: true,
+      namespace: targetNamespace,
+      migrationNumber,
+      scriptSkipped: { reason: scriptSkipped.reason, acknowledgedAt: scriptSkipped.acknowledgedAt },
+      diffPath,
+    });
     return;
   }
   if (options.reason !== undefined) {
@@ -388,8 +398,26 @@ async function script(options: ScriptOptions): Promise<void> {
     pgliteAvailable,
     temporal,
   });
+  printMutationResult({
+    changed: Boolean(
+      result.clearedScriptSkip ||
+      result.migratePath ||
+      result.pgliteSchemaPath ||
+      result.testPath ||
+      result.pgliteTestPath,
+    ),
+    namespace: targetNamespace,
+    migrationNumber,
+    migratePath: result.migratePath ?? null,
+    dbTypesPath: result.dbTypesPath ?? null,
+    pgliteSchemaPath: result.pgliteSchemaPath ?? null,
+    pgliteSchemaError: result.pgliteSchemaError ?? null,
+    testPath: result.testPath ?? null,
+    pgliteTestPath: result.pgliteTestPath ?? null,
+    clearedScriptSkip: result.clearedScriptSkip ?? false,
+  });
 
-  if (result.clearedScriptSkip) {
+  if (result.clearedScriptSkip && !result.migratePath) {
     logger.success(
       `Cleared the stale script skip record for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
     );

@@ -23,6 +23,7 @@ import {
 } from "#/cli/shared/context";
 import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { prompt } from "#/cli/shared/prompt";
 import { assertDefined } from "#/utils/assert";
 
@@ -34,6 +35,10 @@ type ProfileLoginOptions = {
   platformConfig?: PlatformClientConfig;
   updateCurrentUser?: boolean;
   loginMode?: "user" | "machine-user";
+};
+type LoggedInUser = {
+  user: string;
+  email: string | null;
 };
 type ProfileUserMismatch = {
   profile: string;
@@ -141,7 +146,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       });
     });
 
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<LoggedInUser>((resolve, reject) => {
     const handleCallback = async (
       req: http.IncomingMessage,
       res: http.ServerResponse,
@@ -195,7 +200,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
             message: "Successfully authenticated. Please close this window.",
           }),
         );
-        resolve();
+        resolve({ user: userInfo.sub, email: userInfo.email });
       } catch (error) {
         res.writeHead(401);
         res.end("Authentication failed");
@@ -237,7 +242,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
 
 async function loginAsMachineUser(
   args: { clientId: string; clientSecret?: string } & ProfileLoginOptions,
-) {
+): Promise<LoggedInUser> {
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
   const tokens = await fetchPlatformMachineUserToken(
     args.clientId,
@@ -262,6 +267,7 @@ async function loginAsMachineUser(
     pfConfig.current_user = args.clientId;
   }
   writePlatformConfig(pfConfig);
+  return { user: args.clientId, email: null };
 }
 
 export const loginCommand = defineAppCommand({
@@ -317,8 +323,9 @@ export const loginCommand = defineAppCommand({
         profileUser = profileEntry.user;
       }
       const updateCurrentUser = shouldUpdateCurrentUser(args.profile, platformConfig);
+      let loggedIn: LoggedInUser;
       if ("machine-user" in args) {
-        await loginAsMachineUser({
+        loggedIn = await loginAsMachineUser({
           clientId: args.clientId,
           clientSecret: args.clientSecret,
           profile: args.profile,
@@ -328,7 +335,7 @@ export const loginCommand = defineAppCommand({
           loginMode: "machine-user",
         });
       } else {
-        await startAuthServer({
+        loggedIn = await startAuthServer({
           profile: args.profile,
           profileUser,
           platformConfig,
@@ -337,6 +344,7 @@ export const loginCommand = defineAppCommand({
         });
       }
       logger.success("Successfully logged in to Tailor Platform.");
+      printMutationResult({ changed: true, ...loggedIn });
     } finally {
       await closeConnectionPool();
     }

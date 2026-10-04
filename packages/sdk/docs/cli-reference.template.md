@@ -24,8 +24,16 @@ For commands that return structured results, passing `--json` writes one parseab
 to stdout on success. Empty successful result sets are emitted as JSON values such as `[]`, not as
 human-readable text or empty stdout.
 
-Commands that only perform side effects and do not define a structured result may leave stdout empty
-even when `--json` is passed.
+Many commands that change state print a JSON object describing the outcome. Its `changed` field is
+`true` when the command did work and `false` when it did nothing, for example because the requested
+state was already in place. The other fields identify what the command acted on and report details of
+the outcome. Other state-changing commands print a result without `changed`, or do not report a
+result yet and leave stdout empty even when `--json` is passed.
+
+List commands return at most `--limit` items. When more exist, the list is followed by a notice on
+stderr, `More results exist beyond --limit N. Raise --limit to see more.`, so `--json` output stays a
+plain array of the listed items. Log listings such as `executor jobs`, `function logs`, and
+`workflow executions` default to `--limit 50`; pass `--limit 0` to list everything.
 
 Set `TAILOR_JSON_OUTPUT=true` (or `1`) to default every command to JSON without passing `--json`
 each time. This is intended for agents, scripts, and CI steps that parse CLI output. An explicit
