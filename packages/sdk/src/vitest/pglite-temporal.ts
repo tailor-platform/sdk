@@ -71,9 +71,10 @@ function hostTemporal(): typeof TemporalTypes | undefined {
 
 function serializeValue(value: unknown, temporal: typeof TemporalTypes): unknown {
   if (value instanceof temporal.PlainDate) return value.toString({ calendarName: "never" });
-  if (value instanceof temporal.Instant || value instanceof temporal.PlainTime) {
-    return value.toString();
+  if (value instanceof temporal.PlainTime) {
+    return `${String(value.hour).padStart(2, "0")}:${String(value.minute).padStart(2, "0")}`;
   }
+  if (value instanceof temporal.Instant) return value.toString();
   if (Array.isArray(value)) return value.map((element) => serializeValue(element, temporal));
   if (value !== null && typeof value === "object") {
     const proto = Object.getPrototypeOf(value);

@@ -168,7 +168,7 @@ describe("createKyselyPGlite Temporal support", () => {
     expect(queries[0]?.params).toEqual([
       "2026-03-14",
       "2026-03-14T09:30:00.123Z",
-      "09:30:15",
+      "09:30",
       ["2026-03-14"],
     ]);
   });
