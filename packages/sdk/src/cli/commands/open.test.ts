@@ -32,11 +32,7 @@ describe("open --json", () => {
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
     vi.mocked(open).mockResolvedValue({} as ChildProcess);
 
-    try {
-      await runTest();
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    await runTest();
   });
 
   test.each([

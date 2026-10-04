@@ -22,11 +22,7 @@ describe("authconnection open --json", () => {
     vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.tailor.tech");
     vi.mocked(open).mockResolvedValue({} as ChildProcess);
 
-    try {
-      await runTest();
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    await runTest();
   });
 
   test.each([

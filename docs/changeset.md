@@ -28,7 +28,13 @@ SDK users must modify their code or configuration to upgrade.
 - Changing the signature or behavior of an existing API in an incompatible way
 - Changing `tailor.config.ts` format in a way that requires migration
 - Raising the minimum Node.js version
-- Removing a CLI command or changing its default behavior
+- Removing a CLI command or changing its default behavior in a way that requires users to update
+  scripts, code, or configuration
+
+A CLI behavior change is not automatically breaking. A change that follows a breaking change in an
+external system is not an SDK breaking change when it preserves existing SDK invocations, scripts,
+code, and configuration. If that distinction cannot be established from the repository, confirm the
+expected compatibility with the user before choosing `major`.
 
 ### `minor` — New capabilities
 
