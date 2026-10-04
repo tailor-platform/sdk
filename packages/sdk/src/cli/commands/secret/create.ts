@@ -7,8 +7,9 @@ import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { secretValueArgs } from "./args";
+import { secretValueArgs, secretValueNotes } from "./args";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
+import { resolveSecretValue } from "./value";
 
 export const createSecretCommand = defineAppCommand({
   name: "create",
@@ -18,8 +19,10 @@ export const createSecretCommand = defineAppCommand({
     ...secretValueArgs,
     ...confirmationArgs,
   }),
+  notes: secretValueNotes("create"),
   run: async (args) => {
-    logger.registerSecret(args.value);
+    const value = await resolveSecretValue(args, process.stdin, "secret create");
+    logger.registerSecret(value);
     await assertWritable({ profile: args.profile });
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
@@ -43,7 +46,7 @@ export const createSecretCommand = defineAppCommand({
         workspaceId,
         secretmanagerVaultName: args["vault-name"],
         secretmanagerSecretName: args.name,
-        secretmanagerSecretValue: args.value,
+        secretmanagerSecretValue: value,
       });
     } catch (error) {
       if (error instanceof ConnectError) {
