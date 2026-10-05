@@ -408,6 +408,45 @@ describe("executeMigrationStepsAsWorkflow", () => {
     expect(result).toMatchObject({ success: true, completedSteps: ORDER });
   });
 
+  test("reports progress on every poll that finds the run active", async () => {
+    const { client, raw } = createStepsClient({
+      run: {
+        statuses: [
+          WorkflowExecution_Status.RUNNING,
+          WorkflowExecution_Status.RUNNING,
+          WorkflowExecution_Status.SUCCESS,
+        ],
+        jobs: [
+          { status: WorkflowJobExecution_Status.SUCCESS },
+          runnerJob(0, WorkflowJobExecution_Status.SUCCESS),
+        ],
+      },
+    });
+    raw.getWorkflowExecution.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
+    const onProgress = vi.fn();
+
+    await run(client, { onProgress });
+
+    expect(onProgress.mock.calls).toEqual([
+      [1, ORDER.length],
+      [1, ORDER.length],
+    ]);
+  });
+
+  test("treats a run that disappears while polling as possibly committed", async () => {
+    const { client, raw } = createStepsClient({
+      run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+    });
+    raw.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined } as never);
+
+    const result = await run(client);
+
+    expect(result).toMatchObject({ success: false, stepsMayHaveCommitted: true });
+    expect(result.error).toContain("Migration workflow execution 'exec-new' not found.");
+  });
+
   test("treats a step that succeeded without a recorded position as possibly committed", async () => {
     const { client, calls } = createStepsClient({
       run: {

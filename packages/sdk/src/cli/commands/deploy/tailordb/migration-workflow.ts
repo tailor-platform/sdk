@@ -336,8 +336,54 @@ export async function executeMigrationAsWorkflow(
   }
 }
 
+interface PollExecutionOptions {
+  /** Keep polling through transient errors instead of failing on the first one. */
+  retryTransientErrors: boolean;
+  /** Called with each polled execution that is still active. */
+  onActive?: (execution: WorkflowExecution) => void;
+}
+
 /**
  * Poll a migration workflow execution until it reaches a terminal state.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param executionId - Workflow execution id
+ * @param pollInterval - Poll interval in milliseconds
+ * @param options - Retry and progress options
+ * @returns The execution in its terminal state
+ */
+async function pollUntilTerminal(
+  client: OperatorClient,
+  workspaceId: string,
+  executionId: string,
+  pollInterval: number,
+  options: PollExecutionOptions,
+): Promise<WorkflowExecution> {
+  // loop exits when the workflow execution reaches a terminal status
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  while (true) {
+    let execution: WorkflowExecution | undefined;
+    try {
+      ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
+    } catch (error) {
+      if (!options.retryTransientErrors || !isRetryableWaitError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      continue;
+    }
+    if (!execution) {
+      throw CLIError({
+        code: "WORKFLOW_EXECUTION_NOT_FOUND",
+        message: `Migration workflow execution '${executionId}' not found.`,
+      });
+    }
+    if (!isExecutionActive(execution)) return execution;
+    options.onActive?.(execution);
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+}
+
+/**
+ * Wait for a migration workflow execution to finish and report its result.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param executionId - Workflow execution id
@@ -350,39 +396,21 @@ async function waitForMigrationWorkflow(
   executionId: string,
   pollInterval: number,
 ): Promise<LongRunningMigrationResult> {
-  // loop exits when the workflow execution reaches a terminal status
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  while (true) {
-    const { execution } = await client.getWorkflowExecution({
-      workspaceId,
-      executionId,
-    });
-    if (!execution) {
-      throw CLIError({
-        code: "WORKFLOW_EXECUTION_NOT_FOUND",
-        message: `Migration workflow execution '${executionId}' not found.`,
-      });
-    }
-
-    if (execution.status === WorkflowExecution_Status.SUCCESS) {
-      const { logs } = await collectJobOutcomes(client, workspaceId, execution);
-      return { success: true, logs };
-    }
-    if (execution.status === WorkflowExecution_Status.FAILED) {
-      const outcomes = await collectJobOutcomes(client, workspaceId, execution);
-      return {
-        success: false,
-        logs: outcomes.logs,
-        error: extractFailureMessage(outcomes),
-      };
-    }
-    if (execution.status === WorkflowExecution_Status.CANCELED) {
-      const { logs } = await collectJobOutcomes(client, workspaceId, execution);
-      return { success: false, logs, error: "Migration workflow execution was canceled." };
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval, {
+    retryTransientErrors: false,
+  });
+  const outcomes = await collectJobOutcomes(client, workspaceId, execution);
+  if (execution.status === WorkflowExecution_Status.SUCCESS) {
+    return { success: true, logs: outcomes.logs };
   }
+  if (execution.status === WorkflowExecution_Status.CANCELED) {
+    return {
+      success: false,
+      logs: outcomes.logs,
+      error: "Migration workflow execution was canceled.",
+    };
+  }
+  return { success: false, logs: outcomes.logs, error: extractFailureMessage(outcomes) };
 }
 
 /**
@@ -666,32 +694,15 @@ async function waitForSteps(
   );
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
   try {
-    // loop exits when the workflow execution reaches a terminal status
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    while (true) {
-      let execution: WorkflowExecution | undefined;
-      try {
-        ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
-      } catch (error) {
-        if (!isRetryableWaitError(error)) throw error;
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
-        continue;
-      }
-      if (!execution) {
-        throw CLIError({
-          code: "WORKFLOW_EXECUTION_NOT_FOUND",
-          message: `Migration workflow execution '${executionId}' not found.`,
-        });
-      }
-      if (!isExecutionActive(execution)) {
-        return await summarizeSteps(client, workspaceId, execution, runnerName, order);
-      }
-      options.onProgress?.(
-        classifySteps(execution, runnerName, order).completed.length,
-        order.length,
-      );
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
-    }
+    const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval, {
+      retryTransientErrors: true,
+      onActive: (active) =>
+        options.onProgress?.(
+          classifySteps(active, runnerName, order).completed.length,
+          order.length,
+        ),
+    });
+    return await summarizeSteps(client, workspaceId, execution, runnerName, order);
   } catch (error) {
     return {
       success: false,
