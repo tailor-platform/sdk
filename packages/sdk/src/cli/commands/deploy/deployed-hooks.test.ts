@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
-import { runDeployedHooks } from "./deployed-hooks";
+import { loadDeployedApplications, runDeployedHooks } from "./deployed-hooks";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { DeployedContext, Plugin } from "#/plugin/types";
 import type { BuiltDeploymentTarget } from "./deployment-target";
@@ -34,6 +34,7 @@ function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
     application: {
       id: `${name}-id`,
       name,
+      subgraphs: [{}],
       staticWebsiteServices: [{ name: `${name}-web` }],
       authService: { config: { name: "auth" } },
     },
@@ -571,4 +572,36 @@ describe("deployed hooks", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+});
+
+test("loads serializable deployed information for every application without hooks", async () => {
+  const { client, methods } = clientMock();
+  const applications = await loadDeployedApplications({
+    client,
+    workspaceId: "ws",
+    targets: [target([], "a"), target([], "b")],
+  });
+  expect(JSON.parse(JSON.stringify(applications))).toEqual([
+    {
+      id: "a-id",
+      name: "a",
+      configPath: "/repo/a/tailor.config.ts",
+      url: "https://app",
+      domain: "app.example",
+      aiGateways: [{ name: "ai", url: "https://ai" }],
+      staticWebsites: { "a-web": { name: "a-web", url: "https://a-web" } },
+      auth: { namespace: "auth", oauth2Clients: [{ name: "web", clientId: "public" }] },
+    },
+    {
+      id: "b-id",
+      name: "b",
+      configPath: "/repo/b/tailor.config.ts",
+      url: "https://app",
+      domain: "app.example",
+      aiGateways: [{ name: "ai", url: "https://ai" }],
+      staticWebsites: { "b-web": { name: "b-web", url: "https://b-web" } },
+      auth: { namespace: "auth", oauth2Clients: [{ name: "web", clientId: "public" }] },
+    },
+  ]);
+  expect(methods.listAuthOAuth2Clients).toHaveBeenCalledOnce();
 });

@@ -13,11 +13,15 @@ import type { DeployedApplication, DeployedOAuth2Client, Plugin } from "#/plugin
 import type { JsonValue } from "#/types/helpers";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
-interface RunDeployedHooksParams {
+interface LoadDeployedApplicationsParams {
   client: OperatorClient;
   workspaceId: string;
   targets: readonly BuiltDeploymentTarget[];
 }
+interface RunDeployedHooksParams extends LoadDeployedApplicationsParams {
+  applications?: readonly DeployedApplication[];
+}
+
 interface DeployedHookOutput {
   application: string;
   pluginId: string;
@@ -89,7 +93,9 @@ async function loadDeployedTarget(
     config: target.config,
   });
   const [response, sites, gateways, oauth2Clients] = await Promise.all([
-    client.getApplication({ workspaceId, applicationName: name }),
+    target.application.subgraphs.length
+      ? client.getApplication({ workspaceId, applicationName: name })
+      : getOrNull(() => client.getApplication({ workspaceId, applicationName: name })),
     Promise.all(
       target.application.staticWebsiteServices.map(async (site) => ({
         name: site.name,
@@ -110,17 +116,15 @@ async function loadDeployedTarget(
     ),
     namespace ? loadOAuth2Clients(namespace) : [],
   ]);
-  const application = assertDefined(
-    response.application,
-    `Application "${name}" not found after deploy`,
-  );
+  const application = target.application.subgraphs.length
+    ? assertDefined(response?.application, `Application "${name}" not found after deploy`)
+    : response?.application;
   return {
     application: {
       ...(target.application.id ? { id: target.application.id } : {}),
       name,
       configPath: target.config.path,
-      url: application.url,
-      domain: application.domain,
+      ...(application ? { url: application.url, domain: application.domain } : {}),
       aiGateways: gateways,
       staticWebsites: byName(sites),
       ...(namespace
@@ -133,6 +137,22 @@ async function loadDeployedTarget(
         : {}),
     },
   };
+}
+
+/**
+ * Load deployed URLs and public OAuth client IDs for each application in config order.
+ * @param params - Deployed targets and workspace client
+ * @returns Deployed application information without publish methods or client secrets
+ */
+export async function loadDeployedApplications(
+  params: LoadDeployedApplicationsParams,
+): Promise<DeployedApplication[]> {
+  const { client, workspaceId, targets } = params;
+  const loadOAuth2Clients = oauth2ClientLoader(client, workspaceId);
+  const loaded = await Promise.all(
+    targets.map((target) => loadDeployedTarget(client, workspaceId, target, loadOAuth2Clients)),
+  );
+  return loaded.map(({ application }) => application);
 }
 
 function ignoreMissingPath(error: unknown): undefined {
@@ -170,6 +190,14 @@ function deployedHookFailure(what: string, error: unknown, notRun: readonly stri
       "Fix the error and run `tailor deploy` again. Unchanged resources are not re-applied.",
     cause: error,
   });
+}
+
+export function deployedHookLoadFailure(error: unknown, notRun: readonly string[]) {
+  return deployedHookFailure(
+    "loading the deployed information for onDeployed hooks failed",
+    error,
+    notRun,
+  );
 }
 
 function isPlainObject(value: object): boolean {
@@ -240,17 +268,11 @@ export async function runDeployedHooks(
   );
   if (hooks.length === 0) return [];
 
-  const loadOAuth2Clients = oauth2ClientLoader(client, workspaceId);
-  const loaded = await Promise.all(
-    targets.map((target) => loadDeployedTarget(client, workspaceId, target, loadOAuth2Clients)),
-  ).catch((error: unknown) => {
-    throw deployedHookFailure(
-      "loading the deployed information for onDeployed hooks failed",
-      error,
-      hooks.map(hookLabel),
-    );
-  });
-  const applications = loaded.map(({ application }) => application);
+  const applications =
+    params.applications ??
+    (await loadDeployedApplications(params).catch((error: unknown) => {
+      throw deployedHookLoadFailure(error, hooks.map(hookLabel));
+    }));
   const publishable = (application: DeployedApplication) => ({
     ...application,
     staticWebsites: byName(

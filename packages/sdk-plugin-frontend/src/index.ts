@@ -1,6 +1,6 @@
 import * as path from "pathe";
-import type { Plugin } from "#/plugin/types";
 import type { FrontendDefinition } from "./types";
+import type { Plugin } from "@tailor-platform/sdk";
 
 export type { FrontendDefinition, FrontendEnvContext } from "./types";
 

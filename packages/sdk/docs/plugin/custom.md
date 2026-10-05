@@ -281,8 +281,10 @@ const deployedInfo: Plugin = {
   id: "@example/deployed-info",
   description: "Reports the deployed application URL",
   onDeployed(ctx) {
-    ctx.logger.success(`Application ready: ${ctx.application.url}`);
-    return { outputs: { url: ctx.application.url } };
+    const url = ctx.application.url;
+    if (!url) return;
+    ctx.logger.success(`Application ready: ${url}`);
+    return { outputs: { url } };
   },
 };
 
