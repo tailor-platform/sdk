@@ -2,6 +2,8 @@ import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { prompt } from "#/cli/shared/prompt";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { restoreCommand } from "./restore";
 
 vi.mock("#/cli/shared/client", () => ({
@@ -50,5 +52,19 @@ describe("workspace restore command", () => {
 
     expect(result.success).toBe(true);
     expect(client.restoreWorkspace).toHaveBeenCalledWith({ workspaceId });
+  });
+
+  test("prints the restored workspace under JSON output", async () => {
+    const client = { restoreWorkspace: vi.fn().mockResolvedValue({}) };
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
+    );
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(restoreCommand, ["--workspace-id", workspaceId, "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({ changed: true, workspaceId });
   });
 });

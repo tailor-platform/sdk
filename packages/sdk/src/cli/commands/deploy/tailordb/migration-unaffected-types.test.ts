@@ -305,6 +305,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       async (_client, _workspaceId, _namespace, number, historyId) => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
+        return true;
       },
     );
   });

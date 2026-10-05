@@ -282,6 +282,7 @@ describe("migration flow: namespaces without pending migrations", () => {
       async (_client, _workspaceId, _namespace, number, historyId) => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
+        return true;
       },
     );
   });

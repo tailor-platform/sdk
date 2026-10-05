@@ -404,6 +404,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       async (_client, _workspaceId, _namespace, number, historyId) => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
+        return true;
       },
     );
   });

@@ -2,7 +2,8 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
-import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
+import { resourceTrn } from "#/cli/commands/deploy/label";
+import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { fetchAll, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
@@ -10,6 +11,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { subscribesToEvents } from "#/cli/shared/publish-events";
@@ -37,12 +39,7 @@ import {
   protoGqlPermission,
   type GenerateAllManifestsOptions,
 } from "./snapshot-manifest";
-import {
-  handleOptionalToRequiredError,
-  MIGRATION_HISTORY_LABEL_KEY,
-  MIGRATION_LABEL_KEY,
-  sanitizeMigrationLabel,
-} from "./types";
+import { handleOptionalToRequiredError } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 interface SyncOptions {
@@ -215,6 +212,17 @@ async function assertMigrationsReproduceLocalTypes(
   });
 }
 
+type SyncResult = {
+  changed: boolean;
+  workspaceId: string;
+  namespace: string;
+  previousMigrationNumber: number | null;
+  migrationNumber: number;
+  historyId: string | null;
+  tables: { created: string[]; updated: string[]; deleted: string[] };
+  gqlPermissions: { set: string[]; deleted: string[] };
+};
+
 /**
  * Sync remote TailorDB schema to a specific migration snapshot.
  *
@@ -229,8 +237,9 @@ async function assertMigrationsReproduceLocalTypes(
  * revision and re-deploy, the operator can sync the remote back to a known
  * snapshot version directly.
  * @param options - Command options
+ * @returns What the sync sent to the remote, and whether it changed anything
  */
-async function sync(options: SyncOptions): Promise<void> {
+async function sync(options: SyncOptions): Promise<SyncResult> {
   logBetaWarning("tailordb migration");
 
   const targetVersion = parseMigrationNumberArg(options.number);
@@ -422,16 +431,14 @@ async function sync(options: SyncOptions): Promise<void> {
     ),
   );
 
-  await writeMetadataLabels(client, {
-    trn,
-    labels: {
-      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(targetVersion),
-      ...(snapshot.rebaseline?.historyId
-        ? { [MIGRATION_HISTORY_LABEL_KEY]: snapshot.rebaseline.historyId }
-        : {}),
-    },
-    remove: snapshot.rebaseline?.historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
-  });
+  const historyId = snapshot.rebaseline?.historyId;
+  const labelChanged = await updateMigrationLabel(
+    client,
+    workspaceId,
+    target.namespace,
+    targetVersion,
+    historyId,
+  );
 
   logger.success(
     `Synced namespace ${styles.bold(target.namespace)} to migration ${styles.bold(formatMigrationNumber(targetVersion))}.`,
@@ -445,6 +452,19 @@ async function sync(options: SyncOptions): Promise<void> {
       )}–${formatMigrationNumber(latest)} from the working tree.`,
     );
   }
+  return {
+    changed: totalOps > 0 || labelChanged,
+    workspaceId,
+    namespace: target.namespace,
+    previousMigrationNumber: current,
+    migrationNumber: targetVersion,
+    historyId: historyId ?? null,
+    tables: { created: creates, updated: updates, deleted: deletes },
+    gqlPermissions: {
+      set: desiredGqlPermissions.map(({ typeName }) => typeName),
+      deleted: gqlPermissionDeletes.map(({ typeName }) => typeName),
+    },
+  };
 }
 
 export const syncCommand = defineAppCommand({
@@ -465,7 +485,7 @@ export const syncCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    await sync({
+    const synced = await sync({
       configPath: args.config,
       number: args.number,
       namespace: args.namespace,
@@ -473,5 +493,6 @@ export const syncCommand = defineAppCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
+    printMutationResult(synced);
   },
 });

@@ -12,6 +12,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -31,6 +32,7 @@ import {
   createSnapshotFromLocalTypes,
   formatMigrationNumber,
   getLatestMigrationNumber,
+  getMigrationFilePath,
   loadSnapshot,
   MIGRATION_FILE_NAMES,
   MIGRATION_NUMBER_PATTERN,
@@ -114,7 +116,17 @@ async function activateBaseline(
   }
 }
 
-async function rebaseline(options: RebaselineOptions): Promise<void> {
+type RebaselineResult = {
+  changed: true;
+  workspaceId: string;
+  namespace: string;
+  historyId: string;
+  replacedHistoryId: string | null;
+  replacedLatestMigration: number;
+  schemaPath: string;
+};
+
+async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult> {
   logBetaWarning("tailordb migration");
 
   const loaded = await loadConfig(options.configPath);
@@ -345,6 +357,13 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   logger.success(
     `Re-baselined ${styles.bold(target.namespace)} and reset the connected workspace checkpoint to 0000.`,
   );
+  return {
+    changed: true,
+    workspaceId,
+    namespace: target.namespace,
+    ...rebaselineMarker,
+    schemaPath: getMigrationFilePath(target.migrationsDir, 0, "schema"),
+  };
 }
 
 export const rebaselineCommand = defineAppCommand({
@@ -361,12 +380,13 @@ export const rebaselineCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    await rebaseline({
+    const rebaselined = await rebaseline({
       configPath: args.config,
       namespace: args.namespace,
       yes: args.yes,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
+    printMutationResult(rebaselined);
   },
 });
