@@ -29,7 +29,7 @@ import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
 import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
 
 interface ResolverInfo {

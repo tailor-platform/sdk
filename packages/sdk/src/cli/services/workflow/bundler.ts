@@ -28,7 +28,7 @@ import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
 import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);

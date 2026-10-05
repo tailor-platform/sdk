@@ -1,5 +1,5 @@
 import type { AppConfig } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 type DateDefaultSource = Pick<AppConfig, "defaultDateRepresentation">;
 

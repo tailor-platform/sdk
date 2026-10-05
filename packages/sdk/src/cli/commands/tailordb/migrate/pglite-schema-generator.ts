@@ -16,7 +16,7 @@ import {
 } from "./pre-migration-schema";
 import { applyDiffToSnapshot, getMigrationFilePath } from "./snapshot";
 import { copySnapshotRecord } from "./snapshot-normalization";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { MigrationDiff } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot-types";

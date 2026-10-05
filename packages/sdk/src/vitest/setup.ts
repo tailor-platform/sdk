@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll } from "vitest";
 import { applyDateDefault } from "./date-representation";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 export { applyDateDefault };
 

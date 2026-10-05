@@ -44,7 +44,7 @@ import {
   generateMigrationScript,
   generateMigrationTestScript,
 } from "./template-generator";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { ScriptSkippedInfo } from "./diff-calculator";
 
 interface ScriptOptions {

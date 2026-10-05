@@ -30,7 +30,7 @@ import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { LogLevelInput } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
 import type { DetectedFunction } from "./detect";
 

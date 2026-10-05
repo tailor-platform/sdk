@@ -14,7 +14,7 @@ import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 export interface MigrationBundleResult {
   namespace: string;

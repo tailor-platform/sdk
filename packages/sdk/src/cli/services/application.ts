@@ -56,7 +56,7 @@ import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
 import type { IdP } from "#/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";

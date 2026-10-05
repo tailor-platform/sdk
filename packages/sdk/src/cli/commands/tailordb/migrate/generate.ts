@@ -92,7 +92,7 @@ import {
   generateDiffFiles,
   generateDataOnlyMigrationFiles,
 } from "./template-generator";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 export interface GenerateOptions {
   configPath?: string;

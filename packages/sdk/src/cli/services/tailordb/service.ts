@@ -24,7 +24,7 @@ import type {
 } from "#/parser/service/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
 import type { PluginAttachment } from "#/plugin/types";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,

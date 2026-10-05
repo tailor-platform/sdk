@@ -1,5 +1,5 @@
 import type { AppConfig } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 const DATE_DEFAULT_GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
 

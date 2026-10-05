@@ -8,7 +8,7 @@ import type {
   RawRelationConfig,
 } from "#/configure/services/tailordb/types";
 import type { OperatorFieldConfig, ScriptExprKind } from "#/parser/service/tailordb/types";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 type FieldScriptContext = {

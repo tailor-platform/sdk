@@ -14,9 +14,10 @@
  * sync.
  */
 import { makePrincipalExpr, tailorPrincipalMap } from "#/parser/service/tailordb/index";
-import { type EffectiveDateDefault, hasDateRepresentationFields } from "#/runtime/date";
+import { hasDateRepresentationFields } from "#/runtime/date";
 import type { ApplicationEnv } from "#/cli/shared/client";
 import type { BundledDateRepresentations } from "#/cli/shared/platform-bundle-plugin";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Trigger } from "#/types/executor.generated";
 import type { Resolver } from "#/types/resolver.generated";
 

@@ -1,4 +1,4 @@
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type * as rolldown from "rolldown";
 
 // Match the exact `process.env.__TAILOR_PLATFORM_BUNDLE` member-expression: the

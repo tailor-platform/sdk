@@ -1,4 +1,4 @@
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { PrecompiledScriptExprKey, PrecompiledScriptExprMap, ScriptExprKind } from "./types";
 
 const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey =

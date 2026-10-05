@@ -1,5 +1,6 @@
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
+import type { EffectiveDateDefault } from "./types";
 import type { Temporal } from "temporal-spec";
 
 /**
@@ -95,12 +96,6 @@ function describeReceivedValue(value: unknown): string {
 }
 
 type DateRepresentation = "date" | "temporal";
-
-/**
- * Representation applied to `t` date fields that omit `as`, after
- * `defaultDateRepresentation` has been resolved. `"legacy"` keeps string values.
- */
-export type EffectiveDateDefault = "legacy" | "temporal";
 
 type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
 

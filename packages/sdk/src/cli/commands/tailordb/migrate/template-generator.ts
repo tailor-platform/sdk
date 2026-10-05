@@ -21,7 +21,7 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import type { EffectiveDateDefault } from "#/runtime/date";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
   DiffChange,
