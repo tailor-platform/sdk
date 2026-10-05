@@ -21,7 +21,7 @@ declare module "@tailor-platform/sdk" {
   }
   interface SecretVaultNameRegistry {}
   interface DateRepresentationRegistry {
-    workflow: undefined;
+    "unset@workflow": true;
   }
 }
 

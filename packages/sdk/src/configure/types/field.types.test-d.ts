@@ -19,27 +19,35 @@ describe("DateDefaultOf", () => {
   });
 
   test("one configured app sets the default", () => {
-    expectTypeOf<DateDefaultOf<{ app: "temporal" }, undefined>>().toEqualTypeOf<"temporal">();
+    expectTypeOf<DateDefaultOf<{ "temporal@app": true }, undefined>>().toEqualTypeOf<"temporal">();
   });
 
   test("an app without a setting follows the built-in default", () => {
-    expectTypeOf<DateDefaultOf<{ app: undefined }, undefined>>().toEqualTypeOf<undefined>();
-    expectTypeOf<DateDefaultOf<{ app: undefined }, "temporal">>().toEqualTypeOf<"temporal">();
+    expectTypeOf<DateDefaultOf<{ "unset@app": true }, undefined>>().toEqualTypeOf<undefined>();
+    expectTypeOf<DateDefaultOf<{ "unset@app": true }, "temporal">>().toEqualTypeOf<"temporal">();
   });
 
   test("apps whose effective defaults differ produce a type-level error", () => {
-    expectTypeOf<DateDefaultOf<{ a: "temporal"; b: undefined }, undefined>>().toExtend<Conflict>();
+    expectTypeOf<
+      DateDefaultOf<{ "temporal@a": true; "unset@b": true }, undefined>
+    >().toExtend<Conflict>();
   });
 
   test("an unset app and a temporal app agree once the built-in default is temporal", () => {
     expectTypeOf<
-      DateDefaultOf<{ a: "temporal"; b: undefined }, "temporal">
+      DateDefaultOf<{ "temporal@a": true; "unset@b": true }, "temporal">
     >().toEqualTypeOf<"temporal">();
+  });
+
+  test("two apps that share a name but not a setting still conflict", () => {
+    expectTypeOf<
+      DateDefaultOf<{ "temporal@shop": true; "unset@shop": true }, undefined>
+    >().toExtend<Conflict>();
   });
 
   test("apps with the same setting do not conflict", () => {
     expectTypeOf<
-      DateDefaultOf<{ a: "temporal"; b: "temporal" }, undefined>
+      DateDefaultOf<{ "temporal@a": true; "temporal@b": true }, undefined>
     >().toEqualTypeOf<"temporal">();
   });
 });

@@ -68,7 +68,7 @@ const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.t
  * @param aiGatewayNames - Registered AI Gateway names (used to narrow `aigateway.get()` strings)
  * @param authNamespaceNames - Registered auth namespace names (used to narrow `authNamespace` strings)
  * @param secretVaultNames - Registered Secret Manager vault names mapped to their secret names (used to narrow `secretmanager.getSecret()`/`getSecrets()` strings)
- * @param dateRepresentation - The app's `defaultDateRepresentation`, keyed by app name (used to type `t.date()`/`t.datetime()`/`t.time()` fields that omit `as`)
+ * @param dateRepresentation - The app's `defaultDateRepresentation` and name, recorded as one registry key (used to type `t.date()`/`t.datetime()`/`t.time()` fields that omit `as`)
  * @returns Generated type definition source
  */
 export function generateTypeDefinition(
@@ -219,16 +219,15 @@ ${authNamespaceNameFields}
 ${secretVaultFields}
   }`;
 
-  // Generate DateRepresentationRegistry interface, keyed by app name so that
-  // several apps included in one TypeScript program can be compared. An unset
-  // app is recorded as `undefined` and follows the SDK's built-in default.
+  // Generate DateRepresentationRegistry interface. The key carries both the
+  // setting and the app name ("temporal@shop", "unset@shop") so that the
+  // merged interfaces of several apps in one TypeScript program expose every
+  // distinct setting as a distinct key, even for two apps that share a name;
+  // a plain `name: value` property would merge into whichever declaration
+  // TypeScript sees first once `skipLibCheck` hides the duplicate.
   const dateRepresentationBody = dateRepresentation
     ? `{
-    ${isValidIdentifier(dateRepresentation.appName) ? dateRepresentation.appName : JSON.stringify(dateRepresentation.appName)}: ${
-      dateRepresentation.defaultDateRepresentation
-        ? JSON.stringify(dateRepresentation.defaultDateRepresentation)
-        : "undefined"
-    };
+    ${JSON.stringify(`${dateRepresentation.defaultDateRepresentation ?? "unset"}@${dateRepresentation.appName}`)}: true;
   }`
     : "{}";
 

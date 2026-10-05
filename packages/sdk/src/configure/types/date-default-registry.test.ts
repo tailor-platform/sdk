@@ -17,8 +17,8 @@ afterAll(() => {
 type App = { name: string; defaultDateRepresentation?: "temporal" };
 
 function registryFile(app: App): string {
-  const value = app.defaultDateRepresentation ? `"${app.defaultDateRepresentation}"` : "undefined";
-  return `declare module "@tailor-platform/sdk" {\n  interface DateRepresentationRegistry {\n    ${app.name}: ${value};\n  }\n}\n\nexport {};\n`;
+  const key = `${app.defaultDateRepresentation ?? "unset"}@${app.name}`;
+  return `declare module "@tailor-platform/sdk" {\n  interface DateRepresentationRegistry {\n    ${JSON.stringify(key)}: true;\n  }\n}\n\nexport {};\n`;
 }
 
 const passthroughResolver = `
@@ -37,8 +37,8 @@ function diagnosticsFor(apps: App[], probe: string): string[] {
   const dir = mkdtempSync(join(tmpdir(), "tailor-date-default-registry-"));
   tempDirs.push(dir);
   const rootNames: string[] = [];
-  for (const app of apps) {
-    const appDir = join(dir, "apps", app.name);
+  for (const [index, app] of apps.entries()) {
+    const appDir = join(dir, "apps", `${index}-${app.name}`);
     mkdirSync(appDir, { recursive: true });
     const registry = join(appDir, "tailor.d.ts");
     writeFileSync(registry, registryFile(app));
@@ -115,5 +115,13 @@ describe("DateRepresentationRegistry through the public package entry", { timeou
     const resolverErrors = diagnostics.filter((d) => d.startsWith("passthrough.ts: TS2554"));
     expect(resolverErrors).toHaveLength(2);
     expect(resolverErrors[0]).toContain("Expected 2 arguments, but got 0");
+  });
+
+  test("two apps with the same name but different settings are still detected", () => {
+    const diagnostics = diagnosticsFor(
+      [{ name: "shop", defaultDateRepresentation: "temporal" }, { name: "shop" }],
+      "export {};",
+    );
+    expect(diagnostics.filter((d) => d.startsWith("passthrough.ts: TS2554"))).toHaveLength(2);
   });
 });

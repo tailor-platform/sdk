@@ -23,7 +23,7 @@ declare module "@tailor-platform/sdk" {
   }
   interface SecretVaultNameRegistry {}
   interface DateRepresentationRegistry {
-    "static-web-site": undefined;
+    "unset@static-web-site": true;
   }
 }
 

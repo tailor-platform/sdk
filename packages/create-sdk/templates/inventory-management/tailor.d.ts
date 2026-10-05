@@ -22,7 +22,7 @@ declare module "@tailor-platform/sdk" {
   }
   interface SecretVaultNameRegistry {}
   interface DateRepresentationRegistry {
-    "inventory-management": undefined;
+    "unset@inventory-management": true;
   }
 }
 

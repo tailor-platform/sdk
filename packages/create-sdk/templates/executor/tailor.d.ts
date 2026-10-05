@@ -23,7 +23,7 @@ declare module "@tailor-platform/sdk" {
   }
   interface SecretVaultNameRegistry {}
   interface DateRepresentationRegistry {
-    executor: undefined;
+    "unset@executor": true;
   }
 }
 

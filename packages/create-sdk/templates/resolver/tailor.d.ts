@@ -24,7 +24,7 @@ declare module "@tailor-platform/sdk" {
   }
   interface SecretVaultNameRegistry {}
   interface DateRepresentationRegistry {
-    resolver: undefined;
+    "unset@resolver": true;
   }
 }
 

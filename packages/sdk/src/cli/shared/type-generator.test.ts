@@ -579,29 +579,29 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     undefined,
   ] as const;
 
-  test("keys the app's setting by its name", () => {
+  test("keys the app's setting by value and name", () => {
     const result = generateTypeDefinition(...base, {
       appName: "example",
       defaultDateRepresentation: "temporal",
     });
     expect(result).toContain("interface DateRepresentationRegistry {");
-    expect(result).toContain('    example: "temporal";');
+    expect(result).toContain('    "temporal@example": true;');
   });
 
-  test("records an unset app as undefined so it follows the SDK default", () => {
+  test("records an unset app under the unset key so it follows the SDK default", () => {
     const result = generateTypeDefinition(...base, {
       appName: "example",
       defaultDateRepresentation: undefined,
     });
-    expect(result).toContain("    example: undefined;");
+    expect(result).toContain('    "unset@example": true;');
   });
 
-  test("quotes an app name that is not an identifier", () => {
+  test("keeps the app name verbatim inside the key", () => {
     const result = generateTypeDefinition(...base, {
       appName: "my-app",
       defaultDateRepresentation: "temporal",
     });
-    expect(result).toContain('    "my-app": "temporal";');
+    expect(result).toContain('    "temporal@my-app": true;');
   });
 
   test("emits an empty registry when the app is unknown", () => {
