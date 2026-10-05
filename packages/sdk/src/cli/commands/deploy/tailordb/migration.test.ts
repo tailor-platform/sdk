@@ -14,6 +14,7 @@ import {
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
 import {
   MIGRATION_HISTORY_LABEL_KEY,
+  MIGRATION_IN_PROGRESS_LABEL_KEY,
   MIGRATION_LABEL_KEY,
 } from "#/cli/commands/tailordb/migrate/types";
 import { CLIError } from "#/cli/shared/errors";
@@ -25,6 +26,7 @@ import {
   getMigrationMachineUser,
   groupMigrationsByNamespace,
   executeMigrations,
+  isMigrationPartiallyApplied,
   type MigrationContext,
 } from "./migration";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
@@ -777,27 +779,113 @@ describe("migration", () => {
       expect(setMetadataMock).not.toHaveBeenCalled();
     });
 
-    test("keeps the migration in progress when its in-progress record cannot be cleared", async () => {
+    interface MetadataFaults {
+      /** `getMetadata` calls (0-based) that fail. */
+      failGets?: number[];
+      /** `setMetadata` calls that fail before writing. */
+      failSets?: number[];
+      /** `setMetadata` calls that write, then fail as if the response was lost. */
+      loseSetResponses?: number[];
+    }
+
+    function createMetadataStore(faults: MetadataFaults) {
+      let labels: Record<string, string> = {};
+      let gets = 0;
+      let sets = 0;
+      const unavailable = () => new ConnectError("unavailable", Code.Unavailable);
       const client = {
-        getMetadata: vi
-          .fn()
-          .mockResolvedValueOnce({ metadata: { labels: {} } })
-          .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable)),
-        setMetadata: vi.fn(),
+        getMetadata: vi.fn(async () => {
+          if (faults.failGets?.includes(gets++)) throw unavailable();
+          return { metadata: { labels: { ...labels } } };
+        }),
+        setMetadata: vi.fn(async (request: { labels: Record<string, string> }) => {
+          const call = sets++;
+          if (faults.failSets?.includes(call)) throw unavailable();
+          labels = { ...request.labels };
+          if (faults.loseSetResponses?.includes(call)) throw unavailable();
+          return {};
+        }),
       } as unknown as OperatorClient;
+      return { client, labels: () => labels };
+    }
+
+    const failBeforeStart = async (options: { onBeforeStart?: () => Promise<void> }) => {
+      await options.onBeforeStart?.();
+      throw new Error("could not create the workflow");
+    };
+    const failWithoutCommit = async (options: { onBeforeStart?: () => Promise<void> }) => {
+      await options.onBeforeStart?.();
+      return {
+        success: false,
+        logs: "",
+        error: "boom",
+        completedSteps: [],
+        failedSteps: ["backfill"],
+        stepsMayHaveCommitted: false,
+      };
+    };
+
+    test.each([
+      { name: "the record write is lost", run: failBeforeStart, faults: { loseSetResponses: [0] } },
+      { name: "the record write fails", run: failBeforeStart, faults: { failSets: [0] } },
+      { name: "the record read fails", run: failBeforeStart, faults: { failGets: [0] } },
+      {
+        name: "the record clear fails",
+        run: failBeforeStart,
+        faults: { loseSetResponses: [0], failSets: [1] },
+      },
+      {
+        name: "the record clear is lost",
+        run: failBeforeStart,
+        faults: { loseSetResponses: [0, 1] },
+      },
+      {
+        name: "the record clear and its read-back fail",
+        run: failBeforeStart,
+        faults: { loseSetResponses: [0], failSets: [1], failGets: [2] },
+      },
+      {
+        name: "no step committed and the record clear is lost",
+        run: failWithoutCommit,
+        faults: { loseSetResponses: [1] },
+      },
+      {
+        name: "no step committed and the record clear fails",
+        run: failWithoutCommit,
+        faults: { failSets: [1] },
+      },
+    ])("keeps the pre-migration schema exactly when the record stays: $name", async (scenario) => {
+      const store = createMetadataStore(scenario.faults);
       const migration = createMockMigration({ scriptForm: stepsForm });
-      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
-        async (options: { onBeforeStart?: () => Promise<void> }) => {
-          await options.onBeforeStart?.();
-          throw new Error("could not create the workflow");
-        },
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(scenario.run);
+
+      const error = await executeMigrations({ ...createMockContext(), client: store.client }, [
+        migration,
+      ]).then(
+        () => undefined,
+        (rejection: unknown) => rejection,
       );
 
+      expect(error).toBeDefined();
+      expect(Object.hasOwn(store.labels(), MIGRATION_IN_PROGRESS_LABEL_KEY)).toBe(
+        isMigrationPartiallyApplied(error),
+      );
+    });
+
+    test("asks to check the record when it can be neither cleared nor read", async () => {
+      const store = createMetadataStore({ loseSetResponses: [0], failSets: [1], failGets: [2] });
+      const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(failBeforeStart);
+
       await expect(
-        executeMigrations({ ...createMockContext(), client }, [migration]),
+        executeMigrations({ ...createMockContext(), client: store.client }, [migration]),
       ).rejects.toMatchObject({
         code: "MIGRATION_PARTIALLY_APPLIED",
-        message: expect.stringContaining("could not create the workflow"),
+        message:
+          "Migration tailordb/0003 failed before any step completed: [unavailable] unavailable",
+        suggestion: expect.stringContaining(
+          "tailor tailordb migration sync 0002 --namespace tailordb",
+        ),
       });
     });
 

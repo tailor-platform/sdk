@@ -396,15 +396,39 @@ function partiallyAppliedError(
   });
 }
 
+function unreleasedRecordError(
+  migration: PendingMigration,
+  cause: unknown,
+  recordConfirmed: boolean,
+): Error {
+  const { namespace } = migration;
+  const number = formatMigrationNumber(migration.number);
+  const checkpoint = formatMigrationNumber(migration.number - 1);
+  const next = recordConfirmed
+    ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place and the next deploy runs every step again. Fix the failure and deploy again."
+    : `Whether it is still recorded as in progress could not be confirmed, so its pre-migration schema stays in place. ` +
+      `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, fix the failure and deploy again; ` +
+      `otherwise run 'tailor tailordb migration sync ${checkpoint} --namespace ${namespace}' to return the schema to migration ${checkpoint}, then deploy again.`;
+  return CLIError({
+    code: "MIGRATION_PARTIALLY_APPLIED",
+    message: `Migration ${namespace}/${number} failed before any step completed: ${
+      cause instanceof Error ? cause.message : String(cause)
+    }`,
+    suggestion: `${next} Until then, the tables of namespace '${namespace}' stay in maintenance mode, as during the migration.`,
+    context: { namespace, migrationNumber: migration.number, completedSteps: [], failedSteps: [] },
+    cause,
+  });
+}
+
 /**
  * Clear the in-progress record of a migration whose steps did not commit.
- * When the record cannot be cleared, the migration stays in progress so the
+ * When the record may remain, the migration stays in progress so the
  * Pre-phase schema matches what the record describes.
  * @param options - Execution options
  * @param migration - Migration whose run failed
  * @param cause - The run's failure
  * @param notify - Reports the record that could not be cleared
- * @returns The error to raise instead when the record could not be cleared
+ * @returns The error to raise instead when the record may remain
  */
 async function releaseMigrationInProgress(
   options: MigrationExecutionOptions,
@@ -416,12 +440,24 @@ async function releaseMigrationInProgress(
     await clearMigrationInProgress(options.client, options.workspaceId, migration.namespace);
     return undefined;
   } catch (error) {
+    let state: RemoteMigrationState;
+    try {
+      state = await fetchRemoteMigrationState(
+        options.client,
+        resourceTrn(options.workspaceId, "tailordb", migration.namespace),
+      );
+    } catch {
+      return unreleasedRecordError(migration, cause, false);
+    }
+    if (!state.inProgressInvalid && state.inProgress?.number !== migration.number) {
+      return undefined;
+    }
     notify(
       "warn",
       `Could not clear the in-progress record of migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
-        `${error instanceof Error ? error.message : String(error)}. The next deploy runs every step again.`,
+        `${error instanceof Error ? error.message : String(error)}.`,
     );
-    return partiallyAppliedError(migration, { completedSteps: [], failedSteps: [] }, cause);
+    return unreleasedRecordError(migration, cause, true);
   }
 }
 
@@ -462,7 +498,7 @@ async function executeStepsMigration(
     logger[level](message);
     sp.start();
   };
-  let recorded = inProgress !== undefined;
+  let mayBeRecorded = inProgress !== undefined;
   let started = inProgress !== undefined;
   let result: MigrationStepsWorkflowResult;
   try {
@@ -479,8 +515,8 @@ async function executeStepsMigration(
       inProgress,
       notify,
       onBeforeStart: async () => {
+        mayBeRecorded = true;
         await writeMigrationInProgress(client, workspaceId, migration.namespace, migration.number);
-        recorded = true;
       },
       onExecutionStarted: async (executionId) => {
         started = true;
@@ -501,7 +537,7 @@ async function executeStepsMigration(
     if (started || anotherRunActive) {
       throw partiallyAppliedError(migration, { completedSteps: [], failedSteps: [] }, error);
     }
-    const failure = recorded
+    const failure = mayBeRecorded
       ? await releaseMigrationInProgress(options, migration, error, notify)
       : undefined;
     throw failure ?? error;
