@@ -126,6 +126,20 @@ describe("addMigrationScriptFiles", () => {
     );
   });
 
+  test("raises a legacy migration to the current format version when recording the date default", async () => {
+    setupMigration({ version: 3 });
+
+    await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      dateDefault: "temporal",
+    });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(
+      SCHEMA_SNAPSHOT_VERSION,
+    );
+  });
+
   test("keeps a legacy migration's format version when db.ts uses Date types", async () => {
     setupMigration({ version: 3 });
 

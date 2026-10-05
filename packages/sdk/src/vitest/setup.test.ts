@@ -148,12 +148,21 @@ describe("date default from config", () => {
     );
   });
 
-  test("an unset or unknown value keeps the legacy representation", () => {
+  test("an absent setting keeps the legacy representation", () => {
     expect(dateDefaultFromConfig({ default: {} })).toBe("legacy");
-    expect(dateDefaultFromConfig({ default: { defaultDateRepresentation: "string" } })).toBe(
+    expect(dateDefaultFromConfig({ default: { defaultDateRepresentation: undefined } })).toBe(
       "legacy",
     );
     expect(dateDefaultFromConfig({})).toBe("legacy");
+  });
+
+  test("a value the config schema rejects fails instead of silently keeping strings", () => {
+    expect(() =>
+      dateDefaultFromConfig({ default: { defaultDateRepresentation: "string" } }),
+    ).toThrow(/defaultDateRepresentation.*"string"/);
+    expect(() => dateDefaultFromConfig({ default: { defaultDateRepresentation: true } })).toThrow(
+      /defaultDateRepresentation/,
+    );
   });
 
   test("loads the value through the module loader", async () => {

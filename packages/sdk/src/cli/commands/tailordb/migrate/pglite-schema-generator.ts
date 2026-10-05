@@ -173,9 +173,6 @@ async function recordRuntimeModes(
   let changed = false;
   if (temporal) {
     raw.temporal = true;
-    if (typeof raw.version !== "number" || raw.version < SCHEMA_SNAPSHOT_VERSION) {
-      raw.version = SCHEMA_SNAPSHOT_VERSION;
-    }
     changed = true;
   } else if (Object.hasOwn(raw, "temporal")) {
     delete raw.temporal;
@@ -187,6 +184,14 @@ async function recordRuntimeModes(
   } else if (Object.hasOwn(raw, "dateRepresentation")) {
     delete raw.dateRepresentation;
     changed = true;
+  }
+  // Either mode changes how the script runs, so an SDK that does not know the
+  // mode must refuse the file instead of running the script with other values.
+  if (
+    (temporal || dateDefault === "temporal") &&
+    (typeof raw.version !== "number" || raw.version < SCHEMA_SNAPSHOT_VERSION)
+  ) {
+    raw.version = SCHEMA_SNAPSHOT_VERSION;
   }
   if (!changed) return;
   await fs.writeFile(diffPath, JSON.stringify(raw, null, 2));

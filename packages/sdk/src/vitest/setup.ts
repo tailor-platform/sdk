@@ -19,6 +19,10 @@ function isTailorRuntime(): boolean {
 
 /**
  * Read `defaultDateRepresentation` from an imported `tailor.config.ts` module.
+ *
+ * Accepts exactly what the config schema accepts: absent, or `"temporal"`. Any
+ * other value is rejected rather than read as the legacy default, since the
+ * CLI rejects the same config and the test run would otherwise disagree with it.
  * @param configModule - The imported module namespace
  * @returns The representation `t` date fields without `as` follow
  */
@@ -31,7 +35,11 @@ export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefau
     appConfig && typeof appConfig === "object"
       ? (appConfig as { defaultDateRepresentation?: unknown }).defaultDateRepresentation
       : undefined;
-  return value === "temporal" ? "temporal" : "legacy";
+  if (value === undefined) return "legacy";
+  if (value === "temporal") return "temporal";
+  throw new Error(
+    `defaultDateRepresentation must be "temporal" or omitted, but tailor.config.ts sets ${JSON.stringify(value)}.`,
+  );
 }
 
 /**
@@ -44,14 +52,16 @@ export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefau
  * @returns The representation `t` date fields without `as` follow
  */
 export async function loadDateDefaultFromConfig(configPath: string): Promise<EffectiveDateDefault> {
+  let configModule: unknown;
   try {
-    return dateDefaultFromConfig(await import(pathToFileURL(configPath).href));
+    configModule = await import(pathToFileURL(configPath).href);
   } catch (error) {
     throw new Error(
       `tailor-runtime could not load ${configPath} to read defaultDateRepresentation. Fix the config, or drop the \`config\` option from tailorRuntime().`,
       { cause: error },
     );
   }
+  return dateDefaultFromConfig(configModule);
 }
 
 /**
