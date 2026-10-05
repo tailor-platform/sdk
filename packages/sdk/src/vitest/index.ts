@@ -89,6 +89,7 @@ export {
 } from "./mocks/tailordb-pglite";
 
 export { runWorkflowLocally, type RunWorkflowLocallyOptions } from "./workflow-local";
+export { applyDateRepresentation } from "./date-representation";
 export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";
 export {
   createKyselyPGlite,

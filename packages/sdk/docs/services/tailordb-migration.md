@@ -844,6 +844,8 @@ Stage the rows each query returns with `mock.enqueueResult(...)` or `mock.setQue
 
 These tests need no platform connection and no `tailor-runtime` environment — they run in a plain Vitest setup. Vitest's default `include` pattern already picks up `migrations/**/migrate.test.ts`; if your config narrows `include`, add the migrations directory. The test file is ignored by `tailor deploy` and never ships to the platform.
 
+A migration generated under [`defaultDateRepresentation: "temporal"`](../configuration.md#application-settings) records that in its `diff.json`, and deploy runs the script with Temporal values for `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as`. The scaffold calls `applyDateRepresentation("temporal")` from `@tailor-platform/sdk/vitest` so the test runs the script the same way, even after the setting changes in `tailor.config.ts`. Keep that call when editing the test.
+
 ### Executing migrate.ts against a local Postgres (PGlite)
 
 A statement-level test verifies what the script issues, not what it does to data (e.g., whether a `where` clause matches the rows you intended). To run `main` against real rows locally, back Kysely with [`@electric-sql/pglite`](https://pglite.dev/) — an in-memory PostgreSQL — via `createKyselyPGlite` from `@tailor-platform/sdk/vitest`:
@@ -899,7 +901,7 @@ describe("0005 add required email", () => {
 
 Pass nested field values as JavaScript objects or arrays of objects, without `JSON.stringify`.
 
-When the migration was generated with `kyselyTypePlugin({ temporal: true })`, its `db.ts` types date and datetime fields as `Temporal.PlainDate` and `Temporal.Instant`, and top-level time fields as `Temporal.PlainTime`; nested time fields remain strings. Deploy runs the script with those values. Create the instance with `createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })` so PGlite reads top-level temporal columns back the same way; the scaffold adds the option for such migrations. Run the test in the [`tailor-runtime` Vitest environment](../testing.md#temporal), which provides `Temporal`. A migration generated before `temporal` was enabled still runs with `Date` values on deploy, so its test leaves the option out.
+When the migration was generated with `kyselyTypePlugin({ temporal: true })`, its `db.ts` types date and datetime fields as `Temporal.PlainDate` and `Temporal.Instant`, and top-level time fields as `Temporal.PlainTime`; nested time fields remain strings. Deploy runs the script with those values. Create the instance with `createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })` so PGlite reads top-level temporal columns back the same way; the scaffold adds the option for such migrations. Run the test in the [`tailor-runtime` Vitest environment](../testing.md#temporal), which provides `Temporal`. A migration generated before `temporal` was enabled still runs with `Date` values on deploy, so its test leaves the option out. As in the Kysely mock scaffold, a migration recorded under `defaultDateRepresentation: "temporal"` also calls `applyDateRepresentation("temporal")` so `t` date fields parse the way they do on deploy.
 Generated migration types use `Record<string, unknown>` for each nested object so scripts can
 work with both old and new members during a migration; narrow member values before using them.
 

@@ -359,12 +359,23 @@ ${updates.join("\n\n")}
 `;
 }
 
+// Emitted into both test scaffolds of a migration whose diff.json records
+// dateRepresentation: "temporal", so the test runs the script with the values
+// deploy gives it even after tailor.config.ts changes.
+const DATE_REPRESENTATION_PIN = `
+// diff.json records that this migration was generated under
+// defaultDateRepresentation: "temporal", and deploy runs it that way.
+const restoreDateRepresentation = applyDateRepresentation("temporal");
+afterAll(restoreDateRepresentation);
+`;
+
 /**
  * Generate migration test file content
  * @param {MigrationDiff} diff - Migration diff
  * @returns {string} Migration test file content
  */
 export function generateMigrationTestScript(diff: MigrationDiff): string {
+  const temporalDefault = diff.dateRepresentation === "temporal";
   return `/**
  * Unit test for the ${diff.namespace} migration script.
  *
@@ -374,11 +385,11 @@ export function generateMigrationTestScript(diff: MigrationDiff): string {
  * statements.
  */
 
-import { createKyselyMock } from "@tailor-platform/sdk/vitest";
-import { describe, expect, test } from "vitest";
+import { ${temporalDefault ? "applyDateRepresentation, " : ""}createKyselyMock } from "@tailor-platform/sdk/vitest";
+import { ${temporalDefault ? "afterAll, " : ""}describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { main } from "./migrate";
-
+${temporalDefault ? DATE_REPRESENTATION_PIN : ""}
 describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
   test("issues the intended statements", async () => {
     const mock = createKyselyMock<Database>();
@@ -409,6 +420,7 @@ export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
   const schema = /^[A-Za-z_$][\w$]*$/.test(diff.namespace)
     ? `pgliteSchema.${diff.namespace}`
     : `pgliteSchema[${JSON.stringify(diff.namespace)}]`;
+  const temporalDefault = diff.dateRepresentation === "temporal";
   return `/**
  * PGlite test for the ${diff.namespace} migration script.
  *
@@ -425,12 +437,12 @@ export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
  */
 
 import { PGlite } from "@electric-sql/pglite";
-import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
+import { ${temporalDefault ? "applyDateRepresentation, " : ""}createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { pgliteSchema } from "./db.pglite";
 import { main } from "./migrate";
-
+${temporalDefault ? DATE_REPRESENTATION_PIN : ""}
 const pglite = new PGlite();
 const db = createKyselyPGlite<Unmigrated<Database>>(pglite${diff.temporal ? ", { temporal: true }" : ""});
 

@@ -8,10 +8,11 @@
  */
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll } from "vitest";
+import { applyDateDefault } from "./date-representation";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
 import type { EffectiveDateDefault } from "#/runtime/date";
 
-const DATE_DEFAULT_GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
+export { applyDateDefault };
 
 function isTailorRuntime(): boolean {
   return RUNTIME_FLAG_KEY in globalThis;
@@ -64,25 +65,6 @@ export async function loadDateDefaultFromConfig(configPath: string): Promise<Eff
     return "legacy";
   }
   return dateDefaultFromConfig(configModule);
-}
-
-/**
- * Expose the date default to `t` date fields in this worker, the way the
- * define plugin folds it into deployed bundles.
- * @param dateDefault - The representation `t` date fields without `as` follow
- * @returns A function that restores the previous value
- */
-export function applyDateDefault(dateDefault: EffectiveDateDefault): () => void {
-  const previous = process.env[DATE_DEFAULT_GATE];
-  if (dateDefault === "temporal") {
-    process.env[DATE_DEFAULT_GATE] = dateDefault;
-  } else {
-    delete process.env[DATE_DEFAULT_GATE];
-  }
-  return () => {
-    if (previous === undefined) delete process.env[DATE_DEFAULT_GATE];
-    else process.env[DATE_DEFAULT_GATE] = previous;
-  };
 }
 
 /**

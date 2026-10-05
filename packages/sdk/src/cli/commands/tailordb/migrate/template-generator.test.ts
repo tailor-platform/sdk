@@ -1724,6 +1724,23 @@ describe("template-generator", () => {
       expect(script).toContain("tailor-runtime");
     });
 
+    test("applies the recorded date representation before running a temporal-default migration", () => {
+      const script = generateMigrationPgliteTestScript(
+        createMockMigrationDiff({ dateRepresentation: "temporal" }),
+      );
+
+      expect(script).toContain(
+        'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+      );
+      expect(script).toContain('applyDateRepresentation("temporal")');
+    });
+
+    test("leaves the date representation alone for a migration without a recorded default", () => {
+      const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
+
+      expect(script).not.toContain("applyDateRepresentation");
+    });
+
     test("reads Date values from PGlite for a migration without a temporal record", () => {
       const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
 
@@ -1741,6 +1758,25 @@ describe("template-generator", () => {
   });
 
   describe("generateMigrationTestScript", () => {
+    test("applies the recorded date representation before running a temporal-default migration", () => {
+      const script = generateMigrationTestScript(
+        createMockMigrationDiff({ dateRepresentation: "temporal" }),
+      );
+
+      expect(script).toContain(
+        'import { applyDateRepresentation, createKyselyMock } from "@tailor-platform/sdk/vitest"',
+      );
+      expect(script).toContain('import { afterAll, describe, expect, test } from "vitest"');
+      expect(script).toContain('applyDateRepresentation("temporal")');
+    });
+
+    test("leaves the date representation alone for a migration without a recorded default", () => {
+      const script = generateMigrationTestScript(createMockMigrationDiff());
+
+      expect(script).not.toContain("applyDateRepresentation");
+      expect(script).toContain('import { describe, expect, test } from "vitest"');
+    });
+
     test("should generate a test scaffold wired to the mock and generated types", () => {
       const script = generateMigrationTestScript(createMockMigrationDiff());
 
