@@ -30,6 +30,7 @@ const EDITABLE_JOB_KEYS = ["runs-on", "timeout-minutes", "container", "env"];
 
 // Other managed jobs take `environment` from --environment, so it stays managed there.
 export const ENVIRONMENT_EDITABLE_JOBS: readonly string[] = [
+  "tailor-changes",
   "tailor-tag-guard",
   "tailor-erd-preview-matrix",
   "tailor-erd-preview",
