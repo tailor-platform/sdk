@@ -7,10 +7,9 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { generate, generateCommand } from "./generate";
+import { generateCommand } from "./generate";
 import { loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
-import type { MigrateGenerateResult } from "#/cli/lib";
 
 interface TestNamespace {
   namespace: string;
@@ -1192,31 +1191,6 @@ describe("tailordb migration generate JSON output", () => {
 
     expect(result.success).toBe(true);
     expect(JSON.parse(stdout.output)).toEqual({
-      changed: true,
-      clearedNamespaces: [],
-      migrations: [
-        {
-          namespace: "tailordb",
-          migrationNumber: 1,
-          schemaPath: null,
-          diffPath: migrationFile(entry, "0001", "diff.json"),
-          migratePath: null,
-          dbTypesPath: null,
-          pgliteSchemaPath: null,
-          pgliteSchemaError: null,
-        },
-      ],
-    });
-  });
-
-  test("returns the generated migration to programmatic callers", async () => {
-    const userWithoutName = parsedType("User");
-    delete userWithoutName.fields.name;
-    const entry = addNamespace(tmpDir, "tailordb", "User", userWithoutName);
-
-    const result: MigrateGenerateResult = await generate({ yes: true });
-
-    expect(result).toEqual({
       changed: true,
       clearedNamespaces: [],
       migrations: [

@@ -19,13 +19,6 @@ const removeUserOptionsSchema = z.object({
 
 export type RemoveUserOptions = z.input<typeof removeUserOptionsSchema>;
 
-export type RemoveUserResult = {
-  changed: boolean;
-  /** ID of the workspace the user was removed from */
-  workspaceId: string;
-  email: string;
-};
-
 async function loadOptions(options: RemoveUserOptions) {
   const validated = parseOptions(removeUserOptionsSchema, options);
 
@@ -44,16 +37,25 @@ async function loadOptions(options: RemoveUserOptions) {
 /**
  * Remove a user from a workspace.
  * @param options - User remove options
- * @returns The workspace the user was removed from and the user's email
+ * @returns Promise that resolves when removal completes
  */
-export async function removeUser(options: RemoveUserOptions): Promise<RemoveUserResult> {
+export async function removeUser(options: RemoveUserOptions): Promise<void> {
+  await removeUserFromWorkspace(options);
+}
+
+/**
+ * Remove a user from a workspace.
+ * @param options - Options identifying the user and workspace
+ * @returns ID of the workspace the user was removed from
+ */
+async function removeUserFromWorkspace(options: RemoveUserOptions): Promise<string> {
   const { client, workspaceId, email } = await loadOptions(options);
 
   await client.removeWorkspacePlatformUser({
     workspaceId,
     email,
   });
-  return { changed: true, workspaceId, email };
+  return workspaceId;
 }
 
 export const removeCommand = defineAppCommand({
@@ -82,13 +84,13 @@ export const removeCommand = defineAppCommand({
       }
     }
 
-    const removed = await removeUser({
+    const workspaceId = await removeUserFromWorkspace({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       email: args.email,
     });
 
     logger.success(`User "${args.email}" removed from workspace.`);
-    printMutationResult(removed);
+    printMutationResult({ changed: true, workspaceId, email: args.email });
   },
 });

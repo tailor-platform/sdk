@@ -199,13 +199,12 @@ type GeneratedMigration = {
   migratePath: string | null;
   dbTypesPath: string | null;
   pgliteSchemaPath: string | null;
-  /** Diagnostic message explaining why `db.pglite.ts` was skipped */
   pgliteSchemaError: string | null;
 };
 
-export type GenerateResult = {
+type GenerateResult = {
   changed: boolean;
-  /** Namespaces whose migration directory `init` deleted */
+  /** Namespaces whose migration directory --init deleted */
   clearedNamespaces: string[];
   migrations: GeneratedMigration[];
 };
@@ -235,9 +234,18 @@ function generatedMigration(namespace: string, files: WrittenMigrationFiles): Ge
 /**
  * Generate migration files for TailorDB schema changes
  * @param {GenerateOptions} options - Generation options
+ * @returns {Promise<void>} Promise that resolves when generation is complete
+ */
+export async function generate(options: GenerateOptions): Promise<void> {
+  await generateMigrations(options);
+}
+
+/**
+ * Generate migration files for TailorDB schema changes
+ * @param {GenerateOptions} options - Generation options
  * @returns {Promise<GenerateResult>} The migrations written and the directories cleared
  */
-export async function generate(options: GenerateOptions): Promise<GenerateResult> {
+async function generateMigrations(options: GenerateOptions): Promise<GenerateResult> {
   logBetaWarning("tailordb migration");
 
   // Load configuration
@@ -1619,7 +1627,7 @@ export const generateCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    const generated = await generate({
+    const generated = await generateMigrations({
       configPath: args.config,
       name: args.name,
       yes: args.yes,
