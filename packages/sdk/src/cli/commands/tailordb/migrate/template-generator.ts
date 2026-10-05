@@ -382,7 +382,14 @@ export function generateMigrationTestScript(diff: MigrationDiff): string {
  * The mock compiles queries to the same SQL as the deployed migration, so the
  * test verifies the exact statements migrate.ts issues. Stage the rows each
  * query returns, run main() inside a transaction, then assert the executed
- * statements.
+ * statements.${
+   temporalDefault
+     ? `
+ *
+ * Date fields declared with t that omit \`as\` carry Temporal values here, so run
+ * this file in the tailor-runtime Vitest environment, which provides Temporal.`
+     : ""
+ }
  */
 
 import { ${temporalDefault ? "applyDateRepresentation, " : ""}createKyselyMock } from "@tailor-platform/sdk/vitest";
@@ -427,10 +434,14 @@ export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
  * The generated db.pglite.ts creates the tables as they stand while migrate.ts
  * runs, on an in-memory Postgres. Stage the rows the script converts, run
  * main() inside a transaction, then assert the rows it leaves behind.${
-   diff.temporal
+   diff.temporal || temporalDefault
      ? `
  *
- * Date, datetime, and time columns are Temporal values here, so run this file
+ * ${
+   diff.temporal
+     ? "Date, datetime, and time columns are Temporal values here"
+     : "Date fields declared with t that omit `as` carry Temporal values here"
+ }, so run this file
  * in the tailor-runtime Vitest environment, which provides Temporal.`
      : ""
  }

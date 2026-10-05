@@ -1733,6 +1733,7 @@ describe("template-generator", () => {
         'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('applyDateRepresentation("temporal")');
+      expect(script).toContain("tailor-runtime");
     });
 
     test("leaves the date representation alone for a migration without a recorded default", () => {
@@ -1768,6 +1769,7 @@ describe("template-generator", () => {
       );
       expect(script).toContain('import { afterAll, describe, expect, test } from "vitest"');
       expect(script).toContain('applyDateRepresentation("temporal")');
+      expect(script).toContain("tailor-runtime");
     });
 
     test("leaves the date representation alone for a migration without a recorded default", () => {
@@ -1775,6 +1777,7 @@ describe("template-generator", () => {
 
       expect(script).not.toContain("applyDateRepresentation");
       expect(script).toContain('import { describe, expect, test } from "vitest"');
+      expect(script).not.toContain("tailor-runtime");
     });
 
     test("should generate a test scaffold wired to the mock and generated types", () => {

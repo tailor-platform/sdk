@@ -328,6 +328,21 @@ describe("addMigrationScriptFiles", () => {
     expect(content).toContain('import { main } from "./migrate"');
   });
 
+  test("pins the unit test scaffold to the date default recorded while adding the script", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      dateDefault: "temporal",
+    });
+
+    expect(fs.readFileSync(result.testPath!, "utf-8")).toContain(
+      'applyDateRepresentation("temporal")',
+    );
+  });
+
   test("adds only the test when migrate.ts already exists and withTest is set", async () => {
     setupMigration();
     writeMigrateFile(testDir, 1);

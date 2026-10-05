@@ -287,7 +287,8 @@ export async function addMigrationScriptFiles(
   }
 
   if (writeUnitTest) {
-    await fsPromises.writeFile(testPath, generateMigrationTestScript(diff));
+    // Re-read: writeMigrationTypeFiles may have just recorded the runtime modes.
+    await fsPromises.writeFile(testPath, generateMigrationTestScript(loadDiff(diffPath)));
     result.testPath = testPath;
   }
   result.pgliteTestRequested = pgliteTestRequested;
