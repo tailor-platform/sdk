@@ -2,7 +2,13 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
-import { extractVaultStore, loadSecretsFromConfig } from "./setup";
+import {
+  applyDateDefault,
+  dateDefaultFromConfig,
+  extractVaultStore,
+  loadDateDefaultFromConfig,
+  loadSecretsFromConfig,
+} from "./setup";
 
 describe("extractVaultStore", () => {
   test("unwraps a defineSecretManager() shape via the .vaults field", () => {
@@ -123,5 +129,66 @@ describe("loadSecretsFromConfig", () => {
     );
     const store = await loadSecretsFromConfig(path);
     expect(store).toEqual({ aws: { K: "ts-v" } });
+  });
+});
+
+describe("date default from config", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
+  let tmpDir: string;
+
+  aroundAll(async (runSuite) => {
+    tmpDir = mkdtempSync(join(tmpdir(), "tailor-runtime-date-default-"));
+    await runSuite();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("reads defaultDateRepresentation from the default export", () => {
+    expect(dateDefaultFromConfig({ default: { defaultDateRepresentation: "temporal" } })).toBe(
+      "temporal",
+    );
+  });
+
+  test("an unset or unknown value keeps the legacy representation", () => {
+    expect(dateDefaultFromConfig({ default: {} })).toBe("legacy");
+    expect(dateDefaultFromConfig({ default: { defaultDateRepresentation: "string" } })).toBe(
+      "legacy",
+    );
+    expect(dateDefaultFromConfig({})).toBe("legacy");
+  });
+
+  test("loads the value through the module loader", async () => {
+    const path = join(tmpDir, "temporal.ts");
+    writeFileSync(
+      path,
+      `export default { defaultDateRepresentation: "temporal" as const };`,
+      "utf8",
+    );
+    expect(await loadDateDefaultFromConfig(path)).toBe("temporal");
+  });
+
+  test("fails loudly when the config cannot be loaded instead of silently keeping strings", async () => {
+    const path = join(tmpDir, "does-not-exist.ts");
+    await expect(loadDateDefaultFromConfig(path)).rejects.toThrow(
+      /does-not-exist\.ts.*defaultDateRepresentation/s,
+    );
+  });
+
+  test("applyDateDefault sets the bundle gate for temporal, clears it for legacy, and restores", () => {
+    const previous = process.env[GATE];
+    try {
+      process.env[GATE] = "stale";
+      const restore = applyDateDefault("temporal");
+      expect(process.env[GATE]).toBe("temporal");
+      restore();
+      expect(process.env[GATE]).toBe("stale");
+
+      const restoreLegacy = applyDateDefault("legacy");
+      expect(process.env[GATE]).toBeUndefined();
+      restoreLegacy();
+      expect(process.env[GATE]).toBe("stale");
+    } finally {
+      if (previous === undefined) delete process.env[GATE];
+      else process.env[GATE] = previous;
+    }
   });
 });

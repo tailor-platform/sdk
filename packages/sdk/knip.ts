@@ -12,6 +12,7 @@ export default {
     "src/cli/ts-hook.d.mts",
     "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
+    "src/vitest/integration/fixtures/tailor.config.ts",
   ],
   ignoreIssues: {
     "src/runtime/{aigateway,authconnection,context,file,iconv,idp,secretmanager,workflow}.ts": [

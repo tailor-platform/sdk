@@ -16,5 +16,7 @@ export default defineConfig({
     setupFiles: [resolve(here, "../setup.ts")],
     include: ["./**/*.test.ts"],
     root: here,
+    // What `tailorRuntime({ config })` sets per project; the plugin is not used here.
+    env: { __TAILOR_RUNTIME_CONFIG: resolve(here, "fixtures/tailor.config.ts") },
   },
 });
