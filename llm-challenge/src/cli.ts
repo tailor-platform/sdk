@@ -3,14 +3,23 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
+import { gradeCommand } from "./grade";
 import { discoverProblems, selectProblems } from "./problems";
-import { createRunReport, reportPath, writeReport } from "./report";
-import { getCodexRuntimeConfig, preflightCodexRunner, runCodexInPodman } from "./runner";
+import { createRunReport, reportPath, resolveExistingReportPath, writeReport } from "./report";
 import { packSdk } from "./sdk-pack";
-import { pathExists, tailText } from "./utils";
+import { createSolverRuntime } from "./solver";
+import { createRunId, runWithConcurrency, tailText } from "./utils";
 import { writeVerificationSummary } from "./verification";
 import { prepareWorkspace, profileForProblem, pruneWorkspaceDeps } from "./workspace";
-import type { ChallengeReport, ChallengeRunReport, Problem } from "./types";
+import type {
+  ChallengeReport,
+  ChallengeRunReport,
+  Problem,
+  RunOptions,
+  SolverAgent,
+  SolverFailureKind,
+  StoredChallengeReport,
+} from "./types";
 
 type RunTask = {
   problem: Problem;
@@ -19,8 +28,12 @@ type RunTask = {
 };
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
-  const options = parseRunCommand(argv);
   const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  if (argv[0] === "grade") {
+    await gradeCommand(argv.slice(1), packageRoot);
+    return;
+  }
+  const options = parseRunCommand(argv);
   const repoRoot = path.resolve(packageRoot, "..");
   const allProblems = await discoverProblems(packageRoot);
   const selectedProblems = selectProblems(allProblems, options.group, options.problemFilters);
@@ -37,6 +50,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   if (problems.length === 0) {
     throw new Error("No problems selected");
   }
+  const solverSettings =
+    rerunPlan === undefined ? options : inheritSolverSettings(options, rerunPlan.sourceReport);
 
   const runId = createRunId();
   const outputDir = path.resolve(packageRoot, options.output ?? path.join("results", runId));
@@ -46,14 +61,14 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const sharedPnpmStoreRoot = path.resolve(packageRoot, ".cache", "pnpm-store");
   await fs.mkdir(sharedPnpmStoreRoot, { recursive: true });
 
-  const runtime = getCodexRuntimeConfig();
-  console.log(`Preflight ${runtime.image}`);
+  const runtime = await createSolverRuntime(solverSettings.agent, packageRoot);
+  console.log(`Preflight ${solverSettings.agent} ${runtime.image}`);
   const preflight = options.preflight
-    ? await preflightCodexRunner(runtime)
+    ? await runtime.preflight(solverSettings.model)
     : { skipped: true as const };
   if (!preflight.skipped && preflight.exitCode !== 0) {
     throw new Error(
-      `Codex runner preflight failed with exit=${preflight.exitCode ?? "unknown"}${
+      `${solverSettings.agent} runner preflight failed with exit=${preflight.exitCode ?? "unknown"}${
         preflight.stderr ? `\n${preflight.stderr.trim()}` : ""
       }`,
     );
@@ -61,7 +76,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   console.log(
     preflight.skipped
       ? "Preflight skipped"
-      : `Preflight ok${preflight.codexVersion ? ` (${preflight.codexVersion})` : ""}`,
+      : `Preflight ok${preflight.agentVersion ? ` (${preflight.agentVersion})` : ""}`,
   );
 
   const needsNoDocs = problems.some(
@@ -77,19 +92,20 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     console.log(`SDK ${packedSdk.sdkRef.slice(0, 12)} packaged`);
 
     const report: ChallengeReport = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       runId,
       timestamp: new Date().toISOString(),
+      agent: solverSettings.agent,
       sdkRef: packedSdk.sdkRef,
       sdkVersion: packedSdk.sdkVersion,
       requestedProfile: options.profile,
-      model: options.model,
-      effort: options.effort,
+      model: solverSettings.model,
+      effort: solverSettings.effort,
       runsPerProblem: rerunPlan?.sourceReport.runsPerProblem ?? options.runs,
       runner: {
         image: runtime.image,
-        codexPackage: runtime.codexPackage,
-        codexVersion: preflight.skipped ? undefined : preflight.codexVersion,
+        agentPackage: runtime.agentPackage,
+        agentVersion: preflight.skipped ? undefined : preflight.agentVersion,
         preflight: {
           skipped: preflight.skipped,
           exitCode: preflight.skipped ? undefined : (preflight.exitCode ?? undefined),
@@ -143,26 +159,28 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         sdkTarballPath,
       });
       try {
-        const result = await runCodexInPodman({
+        const result = await runtime.run({
+          containerName: containerName(runId, task),
           worktreePath: paths.worktreePath,
           promptPath: paths.promptPath,
           solverStdoutPath: paths.solverStdoutPath,
           solverStderrPath: paths.solverStderrPath,
           tracePath: paths.tracePath,
-          model: options.model,
-          effort: options.effort,
+          model: solverSettings.model,
+          effort: solverSettings.effort,
           maxSeconds: options.maxSeconds,
           sharedPnpmStorePath,
-          runtime,
         });
         const failureKind = await classifySolverFailure({
+          agent: solverSettings.agent,
+          requestedModel: solverSettings.model,
           timedOut: result.timedOut,
           solverExitCode: result.exitCode,
           tracePath: paths.tracePath,
           solverStdoutPath: paths.solverStdoutPath,
           solverStderrPath: paths.solverStderrPath,
         });
-        await writeArtifactSummary({
+        const artifactSummary = await writeArtifactSummary({
           problem: task.problem,
           runIndex: task.runIndex,
           worktreePath: paths.worktreePath,
@@ -170,6 +188,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
           solverStdoutPath: paths.solverStdoutPath,
           solverStderrPath: paths.solverStderrPath,
           artifactSummaryPath: paths.artifactSummaryPath,
+          agent: solverSettings.agent,
           solverExitCode: result.exitCode,
           timedOut: result.timedOut,
           failureKind,
@@ -193,11 +212,17 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
           durationMs: result.durationMs,
           timedOut: result.timedOut,
           failureKind,
+          agentResult: artifactSummary.agentResult,
           replaces: task.replaces,
         });
         report.runs.push(runReport);
         await persistReport();
-        printRun(task, reportPath(packageRoot, paths.artifactDir), result);
+        printRun(task, reportPath(packageRoot, paths.artifactDir), result, failureKind);
+        if (STOP_RUN_FAILURE_KINDS.has(failureKind)) {
+          throw new Error(
+            `Stopping after a ${failureKind} failure in ${task.problem.group}/${task.problem.id} run ${task.runIndex}; rerun the remaining problems once it is resolved`,
+          );
+        }
       } finally {
         // Always reclaim the per-problem node_modules/.pnpm-store so a failure or
         // interrupt mid-run doesn't leave hundreds of MB per worktree behind.
@@ -221,13 +246,57 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   }
 }
 
+const STOP_RUN_FAILURE_KINDS = new Set<SolverFailureKind>(["usage-limit", "auth"]);
+const RERUN_FAILURE_KINDS = new Set<SolverFailureKind>([
+  "timeout",
+  "usage-limit",
+  "auth",
+  "model-mismatch",
+  "runner-startup",
+  "unknown",
+]);
+
+function inheritSolverSettings(
+  options: RunOptions,
+  sourceReport: StoredChallengeReport,
+): { agent: SolverAgent; model: string; effort: string } {
+  const source = {
+    agent: sourceReport.agent ?? "codex",
+    model: sourceReport.model,
+    effort: sourceReport.effort,
+  };
+  const conflicts = [
+    options.agentExplicit && options.agent !== source.agent
+      ? `--agent ${options.agent}`
+      : undefined,
+    options.modelExplicit && options.model !== source.model
+      ? `--model ${options.model}`
+      : undefined,
+    options.effortExplicit && options.effort !== source.effort
+      ? `--effort ${options.effort}`
+      : undefined,
+  ].filter((conflict) => conflict !== undefined);
+  if (conflicts.length > 0) {
+    throw new Error(
+      `--rerun-nonzero-from reruns with the source report's ${source.agent}/${source.model}/${source.effort}; remove ${conflicts.join(", ")}`,
+    );
+  }
+  return source;
+}
+
+function containerName(runId: string, task: RunTask): string {
+  return `llm-challenge-${runId}-${task.problem.group}-${task.problem.id}-${task.runIndex}`
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9_.-]+/g, "-");
+}
+
 async function createRerunPlan(options: {
   packageRoot: string;
   reportFilePath: string;
   allProblems: Problem[];
   selectedProblems: Problem[];
 }): Promise<{
-  sourceReport: ChallengeReport;
+  sourceReport: StoredChallengeReport;
   problems: Problem[];
   tasks: RunTask[];
   reportRerunOf: NonNullable<ChallengeReport["rerunOf"]>;
@@ -236,7 +305,9 @@ async function createRerunPlan(options: {
     options.packageRoot,
     options.reportFilePath,
   );
-  const sourceReport = JSON.parse(await fs.readFile(sourceReportPath, "utf8")) as ChallengeReport;
+  const sourceReport = JSON.parse(
+    await fs.readFile(sourceReportPath, "utf8"),
+  ) as StoredChallengeReport;
   const selectedKeys = new Set(
     options.selectedProblems.map((problem) => `${problem.group}/${problem.id}`),
   );
@@ -244,7 +315,12 @@ async function createRerunPlan(options: {
     options.allProblems.map((problem) => [`${problem.group}/${problem.id}`, problem]),
   );
   const failedRuns = sourceReport.runs
-    .filter((run) => run.timedOut || run.solverExitCode !== 0)
+    .filter(
+      (run) =>
+        run.timedOut ||
+        run.solverExitCode !== 0 ||
+        (run.failureKind !== undefined && RERUN_FAILURE_KINDS.has(run.failureKind)),
+    )
     .filter((run) => selectedKeys.has(`${run.group}/${run.problemId}`));
 
   if (failedRuns.length === 0) {
@@ -291,21 +367,6 @@ async function createRerunPlan(options: {
   };
 }
 
-async function resolveExistingReportPath(
-  packageRoot: string,
-  reportFilePath: string,
-): Promise<string> {
-  const candidates = path.isAbsolute(reportFilePath)
-    ? [reportFilePath]
-    : [path.resolve(packageRoot, reportFilePath), path.resolve(packageRoot, "..", reportFilePath)];
-  for (const candidate of candidates) {
-    if (await pathExists(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error(`Report not found: ${reportFilePath}`);
-}
-
 function uniqueProblems(problems: Problem[]): Problem[] {
   const seen = new Set<string>();
   const unique: Problem[] = [];
@@ -331,39 +392,6 @@ function trimReportText(value: string | undefined): string | undefined {
   return tailText(trimmed);
 }
 
-function createRunId(): string {
-  const timestamp = new Date().toISOString().replaceAll(/[-:.]/g, "").slice(0, 15);
-  const random = Math.random().toString(36).slice(2, 8);
-  return `${timestamp}-${random}`;
-}
-
-async function runWithConcurrency<T>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<void>,
-): Promise<void> {
-  let nextIndex = 0;
-  let firstError: unknown;
-  async function loop(): Promise<void> {
-    while (nextIndex < items.length) {
-      if (firstError !== undefined) {
-        return;
-      }
-      const item = items[nextIndex];
-      nextIndex += 1;
-      try {
-        await worker(item);
-      } catch (error) {
-        firstError ??= error;
-      }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => loop()));
-  if (firstError !== undefined) {
-    throw firstError instanceof Error ? firstError : new Error(String(firstError));
-  }
-}
-
 function requiredNoDocsTarball(value: string | undefined): string {
   if (value === undefined) {
     throw new Error("no-docs SDK package was not created");
@@ -379,9 +407,12 @@ function printRun(
   task: RunTask,
   artifactDir: string,
   result: { exitCode?: number; timedOut: boolean },
+  failureKind: SolverFailureKind,
 ): void {
   const problemName = `${task.problem.group}/${task.problem.id}`;
-  const solver = result.timedOut ? "timeout" : `exit=${result.exitCode ?? "unknown"}`;
+  const solver = result.timedOut
+    ? "timeout"
+    : `exit=${result.exitCode ?? "unknown"}${failureKind === "none" ? "" : ` (${failureKind})`}`;
   console.log(
     `${problemName.padEnd(36)} ${String(task.runIndex).padEnd(5)} ${artifactDir.padEnd(58)} ${solver}`,
   );

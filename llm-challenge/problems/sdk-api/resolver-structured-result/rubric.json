@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "resolver-defined-and-wired",
+      "claim": "A resolver is default-exported with `createResolver(...)` and matched by a `resolver` namespace `files` glob in defineConfig."
+    },
+    {
+      "id": "nested-output-schema",
+      "claim": "The resolver's `output` is a `t.object(...)` containing a summary `t.object(...)` field and a list of item rows declared as `t.object({ ... }, { array: true })`."
+    },
+    {
+      "id": "explicit-field-types",
+      "claim": "Every summary and item-row field is declared with a concrete scalar or enum `t` builder (for example `t.string()`, `t.int()`, `t.enum([...])`), so generated types expose each field name."
+    },
+    {
+      "id": "body-matches-schema",
+      "claim": "The body returns a value matching the declared output shape (summary fields and row fields line up with the schema)."
+    }
+  ]
+}

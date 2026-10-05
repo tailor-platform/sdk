@@ -1,8 +1,9 @@
 import { promises as fs } from "node:fs";
+import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace";
 import { runCommand } from "./process";
 import { isObject, tailText } from "./utils";
 import { listWorkspaceFiles } from "./workspace-files";
-import type { Problem, SolverFailureKind } from "./types";
+import type { AgentResultSummary, Problem, SolverAgent, SolverFailureKind } from "./types";
 
 export type ArtifactSummary = {
   schemaVersion: 1;
@@ -27,6 +28,7 @@ export type ArtifactSummary = {
     outputTail?: string;
   }>;
   errors: string[];
+  agentResult?: AgentResultSummary;
 };
 
 export async function writeArtifactSummary(options: {
@@ -37,12 +39,17 @@ export async function writeArtifactSummary(options: {
   solverStdoutPath: string;
   solverStderrPath: string;
   artifactSummaryPath: string;
+  agent: SolverAgent;
   solverExitCode?: number;
   timedOut?: boolean;
   failureKind: SolverFailureKind;
-}): Promise<void> {
+}): Promise<ArtifactSummary> {
   const traceEvents = await readTraceEvents(options.tracePath);
-  const terminalCommands = extractTerminalCommands(traceEvents);
+  const claudeTrace = options.agent === "claude" ? summarizeClaudeTrace(traceEvents) : undefined;
+  const terminalCommands: CommandEvent[] =
+    claudeTrace === undefined
+      ? extractTerminalCommands(traceEvents)
+      : claudeTrace.commands.map((command) => ({ ...command, terminal: true }));
   const commands = terminalCommands.map((command) => ({
     command: command.command,
     exitCode: command.exitCode,
@@ -56,7 +63,12 @@ export async function writeArtifactSummary(options: {
       status: command.status,
       outputTail: command.output === undefined ? undefined : tailText(command.output),
     }));
-  const errors = extractErrors(traceEvents);
+  const errors =
+    claudeTrace === undefined
+      ? extractErrors(traceEvents)
+      : claudeTrace.result?.errorText === undefined
+        ? []
+        : [claudeTrace.result.errorText];
   const summary: ArtifactSummary = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
@@ -71,11 +83,28 @@ export async function writeArtifactSummary(options: {
     commands,
     failedCommands,
     errors,
+    agentResult:
+      claudeTrace === undefined
+        ? undefined
+        : {
+            toolCalls: claudeTrace.toolCalls,
+            servedModels: claudeTrace.servedModels,
+            subtype: claudeTrace.result?.subtype,
+            isError: claudeTrace.result?.isError,
+            numTurns: claudeTrace.result?.numTurns,
+            durationMs: claudeTrace.result?.durationMs,
+            totalCostUsd: claudeTrace.result?.totalCostUsd,
+            apiErrorStatus: claudeTrace.result?.apiErrorStatus,
+            usage: claudeTrace.result?.usage,
+          },
   };
   await fs.writeFile(options.artifactSummaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+  return summary;
 }
 
 export async function classifySolverFailure(options: {
+  agent: SolverAgent;
+  requestedModel: string;
   timedOut: boolean;
   solverExitCode?: number;
   tracePath: string;
@@ -84,6 +113,13 @@ export async function classifySolverFailure(options: {
 }): Promise<SolverFailureKind> {
   if (options.timedOut) {
     return "timeout";
+  }
+  if (options.agent === "claude") {
+    return classifyClaudeRun(
+      summarizeClaudeTrace(await readTraceEvents(options.tracePath)),
+      options.requestedModel,
+      options.solverExitCode,
+    );
   }
   if (options.solverExitCode === 0) {
     return "none";
@@ -108,6 +144,30 @@ export async function classifySolverFailure(options: {
     return "solver-nonzero";
   }
   return "unknown";
+}
+
+function classifyClaudeRun(
+  trace: ReturnType<typeof summarizeClaudeTrace>,
+  requestedModel: string,
+  solverExitCode: number | undefined,
+): SolverFailureKind {
+  if (findServedModelMismatches(requestedModel, trace.servedModels).length > 0) {
+    return "model-mismatch";
+  }
+  if (solverExitCode === 0 && trace.result?.isError !== true) {
+    return "none";
+  }
+  const apiErrorStatus = trace.result?.apiErrorStatus;
+  if (trace.rateLimitRejected || apiErrorStatus === 429) {
+    return "usage-limit";
+  }
+  if (apiErrorStatus === 401 || apiErrorStatus === 403) {
+    return "auth";
+  }
+  if (trace.result === undefined) {
+    return "runner-startup";
+  }
+  return "solver-nonzero";
 }
 
 async function readGitStatus(worktreePath: string): Promise<string[]> {

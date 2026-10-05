@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "three-named-jobs",
+      "claim": "Validate-order, reserve-inventory, and send-confirmation jobs are each created with `createWorkflowJob({ name, body })` using literal names and inline bodies, and each is exported by name."
+    },
+    {
+      "id": "ordering-via-start",
+      "claim": "Job ordering is expressed with `.start()` calls inside job bodies so that reserve inventory runs after validation and the confirmation runs after the reservation (for example a main job that starts them in sequence, passing earlier results forward)."
+    },
+    {
+      "id": "workflow-default-export",
+      "claim": "A `createWorkflow({ name, mainJob })` is the file's default export and its `mainJob` is the job that begins the chain."
+    },
+    {
+      "id": "workflow-files-wired",
+      "claim": "defineConfig's `workflow.files` globs match the workflow file."
+    }
+  ]
+}

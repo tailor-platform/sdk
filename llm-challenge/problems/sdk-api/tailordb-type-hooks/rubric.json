@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "ticket-table",
+      "claim": "A support ticket table is defined with `db.table(...)`, exported by name, and matched by a `db` namespace `files` glob in defineConfig."
+    },
+    {
+      "id": "status-normalized-on-create",
+      "claim": "A create hook normalizes the status value for new tickets: a field-level `.hooks({ create })` on the status field or a table-level `.hooks({ create })` returning a normalized `status`."
+    },
+    {
+      "id": "priority-validated",
+      "claim": "Invalid priority values are rejected with `.validate(...)` (field-level on priority or table-level via `issues`), or priority is a `db.enum([...])` that the platform enforces."
+    },
+    {
+      "id": "behavior-attached-to-ticket",
+      "claim": "The hook and validation are attached directly to the ticket table definition so a reviewer sees them where the record is defined."
+    }
+  ]
+}

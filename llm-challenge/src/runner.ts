@@ -70,6 +70,7 @@ export async function preflightCodexRunner(
 }
 
 export async function runCodexInPodman(options: {
+  containerName: string;
   worktreePath: string;
   promptPath: string;
   solverStdoutPath: string;
@@ -83,22 +84,45 @@ export async function runCodexInPodman(options: {
 }): Promise<SolverResult> {
   const runtime = options.runtime ?? getCodexRuntimeConfig();
   await fs.access(runtime.authFile);
-  await Promise.all([
-    fs.writeFile(options.solverStdoutPath, ""),
-    fs.writeFile(options.solverStderrPath, ""),
-    fs.writeFile(options.tracePath, ""),
-  ]);
-
   const codexArgs = buildCodexExecArgs({
     model: options.model,
     effort: options.effort,
   });
-  const script = buildCodexBootstrapScript(codexArgs, runtime.codexPackage);
-  const prompt = await fs.readFile(options.promptPath, "utf8");
-  const podmanArgs = [
+  return await runSolverContainer({
+    podmanArgs: buildSolverPodmanArgs({
+      containerName: options.containerName,
+      image: runtime.image,
+      worktreePath: options.worktreePath,
+      sharedPnpmStorePath: options.sharedPnpmStorePath,
+      mounts: [`${runtime.authFile}:/tmp/codex-auth.json:ro,Z`],
+      envNames: [],
+      script: buildCodexBootstrapScript(codexArgs, runtime.codexPackage),
+    }),
+    containerName: options.containerName,
+    prompt: await fs.readFile(options.promptPath, "utf8"),
+    solverStdoutPath: options.solverStdoutPath,
+    solverStderrPath: options.solverStderrPath,
+    tracePath: options.tracePath,
+    maxSeconds: options.maxSeconds,
+  });
+}
+
+export function buildSolverPodmanArgs(options: {
+  containerName: string;
+  image: string;
+  worktreePath: string;
+  sharedPnpmStorePath?: string;
+  mounts: string[];
+  envNames: string[];
+  script: string;
+}): string[] {
+  return [
     "run",
     "--rm",
     "-i",
+    "--init",
+    "--name",
+    options.containerName,
     "--entrypoint",
     "/bin/bash",
     "-v",
@@ -111,18 +135,36 @@ export async function runCodexInPodman(options: {
           "-e",
           `${PNPM_STORE_ENV}=${CONTAINER_PNPM_STORE}`,
         ]),
-    "-v",
-    `${runtime.authFile}:/tmp/codex-auth.json:ro,Z`,
+    ...options.mounts.flatMap((mount) => ["-v", mount]),
+    ...options.envNames.flatMap((name) => ["--env", name]),
     "-w",
     "/workspace",
-    runtime.image,
+    options.image,
     "-lc",
-    script,
+    options.script,
   ];
+}
+
+export async function runSolverContainer(options: {
+  podmanArgs: string[];
+  containerName: string;
+  prompt: string;
+  solverStdoutPath: string;
+  solverStderrPath: string;
+  tracePath: string;
+  maxSeconds: number;
+  env?: Record<string, string>;
+}): Promise<SolverResult> {
+  await Promise.all([
+    fs.writeFile(options.solverStdoutPath, ""),
+    fs.writeFile(options.solverStderrPath, ""),
+    fs.writeFile(options.tracePath, ""),
+  ]);
 
   const startedAt = Date.now();
-  return await new Promise((resolve, reject) => {
-    const child = spawn("podman", podmanArgs, {
+  const result = await new Promise<SolverResult>((resolve, reject) => {
+    const child = spawn("podman", options.podmanArgs, {
+      env: options.env === undefined ? undefined : { ...process.env, ...options.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
     const stdout = createWriteStream(options.solverStdoutPath, { flags: "a" });
@@ -169,8 +211,14 @@ export async function runCodexInPodman(options: {
         reject,
       );
     });
-    child.stdin.end(prompt);
+    child.stdin.end(options.prompt);
   });
+  if (result.timedOut) {
+    await runCommand("podman", ["rm", "-f", options.containerName], {
+      rejectOnNonZero: false,
+    }).catch(() => undefined);
+  }
+  return result;
 }
 
 export function buildCodexExecArgs(options: { model: string; effort: string }): string[] {
@@ -227,7 +275,7 @@ export function buildCodexPreflightScript(codexPackage: string): string {
   ].join("\n");
 }
 
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 

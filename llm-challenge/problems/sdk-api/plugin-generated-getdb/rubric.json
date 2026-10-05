@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "local-plugin-registered",
+      "claim": "A local plugin object (with `id` and `description`) is defined in the workspace and registered through `export const plugins = definePlugins(...)` in tailor.config.ts."
+    },
+    {
+      "id": "plugin-generates-db-helper",
+      "claim": "The plugin's generation-time hook (for example `onTailorDBReady`) returns a file whose content exports a function or value that gives a database handle for the project's TailorDB namespace (for example built with `createGetDB` from `@tailor-platform/sdk/kysely`)."
+    },
+    {
+      "id": "tailordb-namespace-defined",
+      "claim": "The project defines at least one TailorDB table in a `db` namespace configured in defineConfig, so the generated helper has a namespace to target."
+    },
+    {
+      "id": "helper-usage-site",
+      "claim": "Application code (for example a resolver, executor, or workflow job) imports the generated helper and calls it to obtain the database handle."
+    }
+  ]
+}

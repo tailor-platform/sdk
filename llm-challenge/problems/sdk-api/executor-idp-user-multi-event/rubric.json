@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "idp-defined",
+      "claim": "A `defineIdp(...)` instance is listed in defineConfig's `idp`, so IdP user events have a source."
+    },
+    {
+      "id": "single-executor-multi-event",
+      "claim": "One default-exported `createExecutor` uses `idpUserTrigger({ events: [...] })` whose `events` lists at least two IdP user events, including both \"created\" and \"updated\" (an optional `idp` must name a defined IdP)."
+    },
+    {
+      "id": "executor-files-wired",
+      "claim": "defineConfig's `executor.files` globs match the executor file."
+    },
+    {
+      "id": "handler-records-event",
+      "claim": "The executor uses a `function` operation whose body records a compact audit message (log or write) that includes the event (for example `args.event`) or the affected `userId`."
+    }
+  ]
+}

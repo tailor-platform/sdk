@@ -1,8 +1,10 @@
 export const PROBLEM_GROUPS = ["sdk-api", "cli"] as const;
 export const SDK_PROFILES = ["no-docs", "full"] as const;
+export const SOLVER_AGENTS = ["claude", "codex"] as const;
 
 export type ProblemGroup = (typeof PROBLEM_GROUPS)[number];
 export type SdkProfile = (typeof SDK_PROFILES)[number];
+export type SolverAgent = (typeof SOLVER_AGENTS)[number];
 export type RequestedGroup = ProblemGroup | "all";
 
 export type Problem = {
@@ -13,15 +15,20 @@ export type Problem = {
   promptPath: string;
   scaffoldPath: string;
   verifyPath?: string;
+  rubricPath?: string;
 };
 
 export type RunOptions = {
+  agent: SolverAgent;
+  agentExplicit: boolean;
   sdkRef: string;
   profile: SdkProfile;
   profileExplicit: boolean;
   group: RequestedGroup;
   model: string;
+  modelExplicit: boolean;
   effort: string;
+  effortExplicit: boolean;
   runs: number;
   concurrency: number;
   problemFilters: string[];
@@ -33,9 +40,10 @@ export type RunOptions = {
 };
 
 export type ChallengeReport = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   runId: string;
   timestamp: string;
+  agent: SolverAgent;
   sdkRef: string;
   sdkVersion?: string;
   requestedProfile: SdkProfile;
@@ -44,8 +52,8 @@ export type ChallengeReport = {
   runsPerProblem: number;
   runner?: {
     image: string;
-    codexPackage: string;
-    codexVersion?: string;
+    agentPackage: string;
+    agentVersion?: string;
     preflight: {
       skipped: boolean;
       exitCode?: number;
@@ -74,6 +82,12 @@ export type ChallengeReport = {
   runs: ChallengeRunReport[];
 };
 
+/** Reports written before the Claude solver have schemaVersion 1 and no `agent` (Codex only). */
+export type StoredChallengeReport = Omit<ChallengeReport, "schemaVersion" | "agent"> & {
+  schemaVersion: 1 | 2;
+  agent?: SolverAgent;
+};
+
 export type ChallengeRunReport = {
   problemId: string;
   group: ProblemGroup;
@@ -93,6 +107,7 @@ export type ChallengeRunReport = {
   durationMs?: number;
   timedOut?: boolean;
   failureKind?: SolverFailureKind;
+  agentResult?: AgentResultSummary;
   replaces?: {
     sourceReportPath: string;
     sourceRunId?: string;
@@ -106,6 +121,25 @@ export type SolverFailureKind =
   | "none"
   | "timeout"
   | "usage-limit"
+  | "auth"
+  | "model-mismatch"
   | "runner-startup"
   | "solver-nonzero"
   | "unknown";
+
+export type AgentResultSummary = {
+  toolCalls: number;
+  servedModels: string[];
+  subtype?: string;
+  isError?: boolean;
+  numTurns?: number;
+  durationMs?: number;
+  totalCostUsd?: number;
+  apiErrorStatus?: number | null;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadInputTokens?: number;
+    cacheCreationInputTokens?: number;
+  };
+};
