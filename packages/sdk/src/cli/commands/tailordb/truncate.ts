@@ -39,6 +39,7 @@ type TruncatedTable = {
 };
 
 type TruncateResult = {
+  changed: boolean;
   workspaceId: string;
   /** Namespaces whose tables were all truncated */
   namespaces: string[];
@@ -119,7 +120,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
   if (hasAll) {
     if (namespaces.length === 0) {
       logger.warn("No namespaces found in config file.");
-      return { workspaceId, namespaces: [], tables: [] };
+      return { changed: false, workspaceId, namespaces: [], tables: [] };
     }
 
     if (!options.yes) {
@@ -137,7 +138,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
       await truncateNamespace(workspaceId, namespace, client);
     }
     logger.success("Truncated all tables in all owned namespaces");
-    return { workspaceId, namespaces, tables: [] };
+    return { changed: true, workspaceId, namespaces, tables: [] };
   }
 
   // Handle --namespace flag
@@ -171,7 +172,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
     }
 
     await truncateNamespace(workspaceId, namespace, client);
-    return { workspaceId, namespaces: [namespace], tables: [] };
+    return { changed: true, workspaceId, namespaces: [namespace], tables: [] };
   }
 
   // Handle specific tables
@@ -223,7 +224,12 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
       truncatedTables.push({ namespace, name: tableName });
     }
   }
-  return { workspaceId, namespaces: [], tables: truncatedTables };
+  return {
+    changed: truncatedTables.length > 0,
+    workspaceId,
+    namespaces: [],
+    tables: truncatedTables,
+  };
 }
 
 export const truncateCommand = defineAppCommand({
@@ -257,9 +263,6 @@ export const truncateCommand = defineAppCommand({
       tables,
       yes: args.yes,
     });
-    printMutationResult({
-      changed: truncated.namespaces.length > 0 || truncated.tables.length > 0,
-      ...truncated,
-    });
+    printMutationResult(truncated);
   },
 });
