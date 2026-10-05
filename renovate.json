@@ -8,6 +8,7 @@
   ],
   "gitIgnoredAuthors": ["247949890+tailor-platform-pr-trigger[bot]@users.noreply.github.com"],
   "dependencyDashboardApproval": false,
+  "rebaseWhen": "behind-base-branch",
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
   "customManagers": [
