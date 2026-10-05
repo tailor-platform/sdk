@@ -1,13 +1,15 @@
 import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
-import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
+import { resourceTrn } from "#/cli/commands/deploy/label";
+import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -20,7 +22,6 @@ import {
   formatMigrationNumber,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import { MIGRATION_HISTORY_LABEL_KEY, MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
 
 interface SetOptions {
   configPath?: string;
@@ -31,11 +32,21 @@ interface SetOptions {
   profile?: string;
 }
 
+type CheckpointUpdate = {
+  changed: boolean;
+  workspaceId: string;
+  namespace: string;
+  previousMigrationNumber: number | null;
+  migrationNumber: number;
+  historyId: string | null;
+};
+
 /**
  * Set migration checkpoint for a TailorDB namespace
  * @param {SetOptions} options - Command options
+ * @returns {Promise<CheckpointUpdate>} The checkpoint before and after, and whether it changed
  */
-async function set(options: SetOptions): Promise<void> {
+async function set(options: SetOptions): Promise<CheckpointUpdate> {
   logBetaWarning("tailordb migration");
 
   // 1. Validate migration number format
@@ -113,18 +124,25 @@ async function set(options: SetOptions): Promise<void> {
   }
 
   // 9. Update migration label
-  await writeMetadataLabels(client, {
-    trn,
-    labels: {
-      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
-      ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
-    },
-    remove: historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
-  });
+  const changed = await updateMigrationLabel(
+    client,
+    workspaceId,
+    targetNamespace,
+    migrationNumber,
+    historyId,
+  );
 
   logger.success(
     `Migration checkpoint set to ${styles.bold(formatMigrationNumber(migrationNumber))} for namespace ${styles.bold(targetNamespace)}`,
   );
+  return {
+    changed,
+    workspaceId,
+    namespace: targetNamespace,
+    previousMigrationNumber: current,
+    migrationNumber,
+    historyId: historyId ?? null,
+  };
 }
 
 export const setCommand = defineAppCommand({
@@ -147,7 +165,7 @@ Metadata lookup failures (authentication, permission, or network errors) are rep
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    await set({
+    const checkpoint = await set({
       configPath: args.config,
       number: args.number,
       namespace: args.namespace,
@@ -155,5 +173,6 @@ Metadata lookup failures (authentication, permission, or network errors) are rep
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
+    printMutationResult(checkpoint);
   },
 });

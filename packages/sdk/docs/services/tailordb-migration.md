@@ -92,7 +92,7 @@ A typical change cycle:
      DB types: ./migrations/0001/db.ts
    ```
 
-   If `EDITOR` or `VISUAL` is set, `migrate.ts` opens automatically.
+   If `EDITOR` or `VISUAL` is set, `migrate.ts` opens automatically unless JSON output is enabled.
 
 3. **Edit `migrate.ts`** to populate data for the new required field:
 

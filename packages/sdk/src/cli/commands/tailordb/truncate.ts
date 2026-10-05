@@ -7,6 +7,7 @@ import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -31,6 +32,20 @@ interface TruncateSingleTypeOptions {
   namespaceName: string;
   tableName: string;
 }
+
+type TruncatedTable = {
+  namespace: string;
+  name: string;
+};
+
+type TruncateResult = {
+  changed: boolean;
+  workspaceId: string;
+  /** Namespaces whose tables were all truncated */
+  namespaces: string[];
+  /** Tables truncated by name */
+  tables: TruncatedTable[];
+};
 
 async function truncateSingleType(
   options: TruncateSingleTypeOptions,
@@ -64,10 +79,10 @@ async function truncateNamespace(
  * @returns Promise that resolves when truncation completes
  */
 export async function truncate(options?: TruncateOptions): Promise<void> {
-  return await $truncate({ ...options, yes: true });
+  await $truncate({ ...options, yes: true });
 }
 
-async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
+async function $truncate(options: InternalTruncateOptions = {}): Promise<TruncateResult> {
   // Load and validate options
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
@@ -105,7 +120,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
   if (hasAll) {
     if (namespaces.length === 0) {
       logger.warn("No namespaces found in config file.");
-      return;
+      return { changed: false, workspaceId, namespaces: [], tables: [] };
     }
 
     if (!options.yes) {
@@ -123,7 +138,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
       await truncateNamespace(workspaceId, namespace, client);
     }
     logger.success("Truncated all tables in all owned namespaces");
-    return;
+    return { changed: true, workspaceId, namespaces, tables: [] };
   }
 
   // Handle --namespace flag
@@ -157,10 +172,11 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
     }
 
     await truncateNamespace(workspaceId, namespace, client);
-    return;
+    return { changed: true, workspaceId, namespaces: [namespace], tables: [] };
   }
 
   // Handle specific tables
+  const truncatedTables: TruncatedTable[] = [];
   if (hasTables) {
     const tableNames = assertDefined(options.tables, "tables option missing");
 
@@ -205,8 +221,15 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
         },
         client,
       );
+      truncatedTables.push({ namespace, name: tableName });
     }
   }
+  return {
+    changed: truncatedTables.length > 0,
+    workspaceId,
+    namespaces: [],
+    tables: truncatedTables,
+  };
 }
 
 export const truncateCommand = defineAppCommand({
@@ -231,7 +254,7 @@ export const truncateCommand = defineAppCommand({
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const tables = args.tables && args.tables.length > 0 ? args.tables : undefined;
-    await $truncate({
+    const truncated = await $truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
@@ -240,5 +263,6 @@ export const truncateCommand = defineAppCommand({
       tables,
       yes: args.yes,
     });
+    printMutationResult(truncated);
   },
 });

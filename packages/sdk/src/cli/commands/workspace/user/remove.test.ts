@@ -2,6 +2,8 @@ import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { removeCommand } from "./remove";
 
 vi.mock("#/cli/shared/operator-context", () => ({
@@ -46,6 +48,25 @@ describe("workspace user remove command", () => {
 
     expect(result.success).toBe(true);
     expect(client.removeWorkspacePlatformUser).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      email: "user@example.com",
+    });
+  });
+
+  test("prints the removed user under JSON output", async () => {
+    const client = { removeWorkspacePlatformUser: vi.fn().mockResolvedValue({}) };
+    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
+      client,
+      workspaceId: "workspace-1",
+    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(removeCommand, ["--email", "user@example.com", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
       workspaceId: "workspace-1",
       email: "user@example.com",
     });

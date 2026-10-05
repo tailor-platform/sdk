@@ -1,5 +1,6 @@
 import { runCommand } from "@politty/zod";
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { truncate, truncateCommand, type TruncateOptions } from "./truncate";
 
 // Mock dependencies
@@ -40,6 +41,8 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
+    out: vi.fn(),
+    jsonMode: false,
   },
   styles: {
     dim: vi.fn((s: string) => s),
@@ -275,6 +278,63 @@ describe("truncate command", () => {
       await expect(truncate({ tables: ["NonExistentType"] })).rejects.toThrow(
         "The following tables were not found in any namespace: NonExistentType",
       );
+    });
+  });
+
+  describe("JSON output", () => {
+    test.each<[string, string[], object]>([
+      ["every owned namespace", ["--all"], { namespaces: ["tailordb", "anotherdb"], tables: [] }],
+      ["one namespace", ["--namespace", "tailordb"], { namespaces: ["tailordb"], tables: [] }],
+      [
+        "named tables",
+        ["User", "Order"],
+        {
+          namespaces: [],
+          tables: [
+            { namespace: "tailordb", name: "User" },
+            { namespace: "tailordb", name: "Order" },
+          ],
+        },
+      ],
+    ])("prints what was truncated for %s", async (_, argv, truncated) => {
+      const { initOperatorClient } = await import("#/cli/shared/client");
+      const { logger } = await import("#/cli/shared/logger");
+      vi.mocked(initOperatorClient).mockResolvedValue({
+        truncateTailorDBType: vi.fn(),
+        truncateTailorDBTypes: vi.fn(),
+        listTailorDBTypes: vi.fn().mockResolvedValue({
+          tailordbTypes: [{ name: "User" }, { name: "Order" }],
+        }),
+      } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+      using _json = jsonMode();
+
+      const result = await runCommand(truncateCommand, [...argv, "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(logger.out).toHaveBeenCalledWith({
+        changed: true,
+        workspaceId: "mock-workspace-id",
+        ...truncated,
+      });
+    });
+
+    test("reports no change when no owned namespace exists", async () => {
+      const { loadConfig } = await import("#/cli/shared/config-loader");
+      const { logger } = await import("#/cli/shared/logger");
+      vi.mocked(loadConfig).mockResolvedValueOnce({
+        config: { db: { "shared-db": { external: true } } },
+      } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+      using _json = jsonMode();
+
+      const result = await runCommand(truncateCommand, ["--all", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(logger.out).toHaveBeenCalledWith({
+        changed: false,
+        workspaceId: "mock-workspace-id",
+        namespaces: [],
+        tables: [],
+      });
     });
   });
 });

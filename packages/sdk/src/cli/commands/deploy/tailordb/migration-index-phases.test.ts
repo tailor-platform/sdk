@@ -264,6 +264,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
       async (_client, _workspaceId, _namespace, number, historyId) => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
+        return true;
       },
     );
     await runTest();

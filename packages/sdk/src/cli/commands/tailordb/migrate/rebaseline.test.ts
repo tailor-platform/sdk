@@ -7,6 +7,8 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
 import { prompt } from "#/cli/shared/prompt";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { rebaselineCommand } from "./rebaseline";
 import {
@@ -226,6 +228,28 @@ describe("tailordb migration rebaseline", () => {
         },
       }),
     );
+  });
+
+  test("prints the new baseline under JSON output", async () => {
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(true);
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const baseline = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
+      rebaseline: { historyId: string };
+    };
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      workspaceId: "12345678-1234-4abc-8def-123456789012",
+      namespace: "tailordb",
+      historyId: baseline.rebaseline.historyId,
+      replacedHistoryId: null,
+      replacedLatestMigration: 1,
+      schemaPath,
+    });
   });
 
   test("records the previous generation when re-baselining an existing rebaseline history", async () => {

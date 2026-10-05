@@ -19,6 +19,7 @@ import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
@@ -136,18 +137,18 @@ export function getUnsupportedMigrationHintLines(): string[] {
  * Handle --init option: delete existing migrations directories
  * @param {NamespaceWithMigrations[]} namespaces - Namespaces with migrations
  * @param {boolean} skipConfirmation - Whether to skip confirmation prompt
- * @returns {Promise<void>}
+ * @returns {Promise<string[]>} Namespaces whose migration directory was deleted
  */
 async function handleInitOption(
   namespaces: NamespaceWithMigrations[],
   skipConfirmation?: boolean,
-): Promise<void> {
+): Promise<string[]> {
   // Find directories that exist
   const existingDirs = namespaces.filter(({ migrationsDir }) => fs.existsSync(migrationsDir));
 
   if (existingDirs.length === 0) {
     logger.info("No existing migration directories found.");
-    return;
+    return [];
   }
 
   // Show warning
@@ -188,6 +189,48 @@ async function handleInitOption(
   logger.newline();
   logger.info("Migration directories cleared. Generating initial snapshot...");
   logger.newline();
+  return existingDirs.map(({ namespace }) => namespace);
+}
+
+/** A migration this run wrote; paths are null for files it did not write. */
+type GeneratedMigration = {
+  namespace: string;
+  migrationNumber: number;
+  schemaPath: string | null;
+  diffPath: string | null;
+  migratePath: string | null;
+  dbTypesPath: string | null;
+  pgliteSchemaPath: string | null;
+  pgliteSchemaError: string | null;
+};
+
+type GenerateResult = {
+  changed: boolean;
+  /** Namespaces whose migration directory --init deleted */
+  clearedNamespaces: string[];
+  migrations: GeneratedMigration[];
+};
+
+type WrittenMigrationFiles = {
+  migrationNumber: number;
+  diffFilePath: string;
+  migrateFilePath?: string;
+  dbTypesFilePath?: string;
+  pgliteSchemaFilePath?: string;
+  pgliteSchemaError?: string;
+};
+
+function generatedMigration(namespace: string, files: WrittenMigrationFiles): GeneratedMigration {
+  return {
+    namespace,
+    migrationNumber: files.migrationNumber,
+    schemaPath: null,
+    diffPath: files.diffFilePath,
+    migratePath: files.migrateFilePath ?? null,
+    dbTypesPath: files.dbTypesFilePath ?? null,
+    pgliteSchemaPath: files.pgliteSchemaFilePath ?? null,
+    pgliteSchemaError: files.pgliteSchemaError ?? null,
+  };
 }
 
 /**
@@ -196,6 +239,15 @@ async function handleInitOption(
  * @returns {Promise<void>} Promise that resolves when generation is complete
  */
 export async function generate(options: GenerateOptions): Promise<void> {
+  await generateMigrations(options);
+}
+
+/**
+ * Generate migration files for TailorDB schema changes
+ * @param {GenerateOptions} options - Generation options
+ * @returns {Promise<GenerateResult>} The migrations written and the directories cleared
+ */
+async function generateMigrations(options: GenerateOptions): Promise<GenerateResult> {
   logBetaWarning("tailordb migration");
 
   // Load configuration
@@ -215,7 +267,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     logger.info(
       'Add "migration: { directory: \\"./migrations\\" }" to your db config to enable migrations.',
     );
-    return;
+    return { changed: false, clearedNamespaces: [], migrations: [] };
   }
 
   // Parse --rename/--drop flags before any destructive step so a malformed
@@ -339,9 +391,9 @@ export async function generate(options: GenerateOptions): Promise<void> {
       : namespacesWithMigrations.filter(({ namespace }) => namespace === dataOnlyTargetNamespace);
 
   // Handle --init option: delete existing migrations directory
-  if (options.init) {
-    await handleInitOption(namespacesWithMigrations, options.yes);
-  }
+  const clearedNamespaces = options.init
+    ? await handleInitOption(namespacesWithMigrations, options.yes)
+    : [];
 
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
@@ -387,14 +439,14 @@ export async function generate(options: GenerateOptions): Promise<void> {
   }
 
   if (dataOnlyTargetNamespace !== undefined) {
-    await generateDataOnlyMigration(
+    const migration = await generateDataOnlyMigration(
       generations,
       dataOnlyTargetNamespace,
       options,
       temporal,
       dateDefault,
     );
-    return;
+    return { changed: true, clearedNamespaces, migrations: [migration] };
   }
 
   // A flag applies to a namespace only when that namespace actually removed
@@ -539,6 +591,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   }
 
   const declinedNamespaces: string[] = [];
+  const migrations: GeneratedMigration[] = [];
   for (const {
     namespace,
     migrationsDir,
@@ -549,9 +602,9 @@ export async function generate(options: GenerateOptions): Promise<void> {
   } of generations) {
     if (!previousSnapshot) {
       // First migration - generate initial schema snapshot
-      await generateInitialSnapshot(currentSnapshot, migrationsDir);
+      migrations.push(await generateInitialSnapshot(namespace, currentSnapshot, migrationsDir));
     } else {
-      const declined = await generateDiffFromSnapshot(
+      const generated = await generateDiffFromSnapshot(
         previousSnapshot,
         assertDefined(diff, "Migration diff was not resolved during preflight"),
         migrationsDir,
@@ -561,7 +614,8 @@ export async function generate(options: GenerateOptions): Promise<void> {
         temporal,
         dateDefault,
       );
-      if (declined) declinedNamespaces.push(namespace);
+      if (generated.declined) declinedNamespaces.push(namespace);
+      migrations.push(...generated.migrations.map((files) => generatedMigration(namespace, files)));
     }
   }
   if (declinedNamespaces.length > 0) {
@@ -571,6 +625,11 @@ export async function generate(options: GenerateOptions): Promise<void> {
       context: { namespaces: declinedNamespaces },
     });
   }
+  return {
+    changed: clearedNamespaces.length > 0 || migrations.length > 0,
+    clearedNamespaces,
+    migrations,
+  };
 }
 
 /**
@@ -581,7 +640,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
  * @param {GenerateOptions} options - Generate options
  * @param {boolean} temporal - Whether date/datetime/time fields resolve to their Temporal column types
  * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
- * @returns {Promise<void>} Promise that resolves when the migration is written
+ * @returns {Promise<GeneratedMigration>} The migration written
  */
 async function generateDataOnlyMigration(
   generations: readonly NamespaceGeneration[],
@@ -589,7 +648,7 @@ async function generateDataOnlyMigration(
   options: GenerateOptions,
   temporal: boolean,
   dateDefault: EffectiveDateDefault,
-): Promise<void> {
+): Promise<GeneratedMigration> {
   const generation = generations.find((g) => g.namespace === namespace);
   if (!generation) {
     throw CLIError({
@@ -643,6 +702,7 @@ async function generateDataOnlyMigration(
   );
 
   await openMigrationScriptInEditor(result.migrateFilePath);
+  return generatedMigration(namespace, result);
 }
 
 /**
@@ -669,7 +729,8 @@ function logPgliteSchemaResult(result: {
  */
 async function openMigrationScriptInEditor(migrateFilePath: string): Promise<void> {
   const editor = getConfiguredEditorCommand();
-  if (!editor) {
+  // The editor shares stdout, which carries the JSON result under --json.
+  if (!editor || logger.jsonMode) {
     return;
   }
 
@@ -748,14 +809,16 @@ async function resolveExpandContractPlans(
 
 /**
  * Generate the initial schema snapshot
+ * @param {string} namespace - Namespace the snapshot belongs to
  * @param {SchemaSnapshot} snapshot - Schema snapshot to save
  * @param {string} migrationsDir - Migrations directory path
- * @returns {Promise<void>} Promise that resolves when snapshot is generated
+ * @returns {Promise<GeneratedMigration>} The baseline migration written
  */
 async function generateInitialSnapshot(
+  namespace: string,
   snapshot: SchemaSnapshot,
   migrationsDir: string,
-): Promise<void> {
+): Promise<GeneratedMigration> {
   const result = await generateSchemaFile(snapshot, migrationsDir, INITIAL_SCHEMA_NUMBER);
 
   logger.success(`Generated initial schema snapshot`);
@@ -763,6 +826,16 @@ async function generateInitialSnapshot(
   logger.info(`  Tables: ${Object.keys(snapshot.tables).length}`);
 
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
+  return {
+    namespace,
+    migrationNumber: result.migrationNumber,
+    schemaPath: result.filePath,
+    diffPath: null,
+    migratePath: null,
+    dbTypesPath: null,
+    pgliteSchemaPath: null,
+    pgliteSchemaError: null,
+  };
 }
 
 /** A parsed field-form `--rename` flag together with its raw value. */
@@ -1186,6 +1259,11 @@ async function resolveRenames(
   };
 }
 
+type DiffGeneration = {
+  declined: boolean;
+  migrations: WrittenMigrationFiles[];
+};
+
 /**
  * Generate migration files from a diff resolved during preflight
  * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
@@ -1197,7 +1275,7 @@ async function resolveRenames(
  * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
  * column types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
- * @returns {Promise<boolean>} Whether the user declined to generate the migration
+ * @returns {Promise<DiffGeneration>} Whether the user declined, and the files written otherwise
  */
 async function generateDiffFromSnapshot(
   previousSnapshot: NormalizedSchemaSnapshot,
@@ -1208,10 +1286,10 @@ async function generateDiffFromSnapshot(
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
   dateDefault: EffectiveDateDefault = "legacy",
-): Promise<boolean> {
+): Promise<DiffGeneration> {
   if (!hasChanges(diff)) {
     logger.info("No schema differences detected.");
-    return false;
+    return { declined: false, migrations: [] };
   }
 
   // Display diff
@@ -1286,7 +1364,7 @@ async function generateDiffFromSnapshot(
 
       if (!confirmation) {
         logger.info(`Skipped the migration for namespace "${diff.namespace}".`);
-        return true;
+        return { declined: true, migrations: [] };
       }
       logger.newline();
     }
@@ -1299,7 +1377,7 @@ async function generateDiffFromSnapshot(
   }
 
   if (expandPlans.length > 0) {
-    await generateExpandContractMigrations({
+    const pair = await generateExpandContractMigrations({
       previousSnapshot,
       currentSnapshot,
       resolvedDiff: diff,
@@ -1309,7 +1387,7 @@ async function generateDiffFromSnapshot(
       temporal,
       dateDefault,
     });
-    return false;
+    return { declined: false, migrations: pair };
   }
 
   // Get next migration number
@@ -1352,7 +1430,7 @@ async function generateDiffFromSnapshot(
       configPath: options.configPath,
     });
   }
-  return false;
+  return { declined: false, migrations: [result] };
 }
 
 /** Inputs for {@link generateExpandContractMigrations}. */
@@ -1377,11 +1455,11 @@ interface GenerateExpandContractOptions {
  * Write the two migrations that carry a field type change: one that converts
  * values into a temporary field, and one that renames it back.
  * @param input - Snapshots, confirmed plans, and output location
- * @returns {Promise<void>} Promise that resolves when both migrations are written
+ * @returns {Promise<WrittenMigrationFiles[]>} The conversion and rename migrations written
  */
 async function generateExpandContractMigrations(
   input: GenerateExpandContractOptions,
-): Promise<void> {
+): Promise<WrittenMigrationFiles[]> {
   const {
     previousSnapshot,
     currentSnapshot,
@@ -1478,6 +1556,7 @@ async function generateExpandContractMigrations(
     { mode: "plain" },
   );
   logger.info("Both migrations are applied by 'tailor deploy'.", { mode: "plain" });
+  return [expand, contract];
 }
 
 interface AcknowledgeWarningsOptions {
@@ -1565,7 +1644,7 @@ export const generateCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    await generate({
+    const generated = await generateMigrations({
       configPath: args.config,
       name: args.name,
       yes: args.yes,
@@ -1576,5 +1655,6 @@ export const generateCommand = defineAppCommand({
       drops: args.drop,
       expandContracts: args["expand-contract"],
     });
+    printMutationResult(generated);
   },
 });

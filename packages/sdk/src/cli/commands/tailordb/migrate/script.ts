@@ -486,7 +486,8 @@ async function script(options: ScriptOptions): Promise<void> {
   if (!fileToOpen) return;
 
   const editor = getConfiguredEditorCommand();
-  if (!editor) return;
+  // The editor shares stdout, which carries the JSON result under --json.
+  if (!editor || logger.jsonMode) return;
 
   logger.newline();
   logger.info(`Opening ${path.basename(fileToOpen)} in ${editor}...`);

@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { deleteCommand } from "./delete";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -29,6 +30,8 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => ({
   logger: {
     success: vi.fn(),
     info: vi.fn(),
+    out: vi.fn(),
+    jsonMode: false,
   },
 }));
 
@@ -123,5 +126,20 @@ describe("organization folder delete", () => {
 
     expect(result.error).toBe(failure);
     expect(client.deleteOrganizationFolder).not.toHaveBeenCalled();
+  });
+
+  test("prints the deleted folder under JSON output", async () => {
+    mockClient({});
+    using _json = jsonMode();
+
+    const result = await runCommand(deleteCommand, argv);
+
+    expect(result.error).toBeUndefined();
+    expect(logger.out).toHaveBeenCalledWith({
+      changed: true,
+      organizationId: ORGANIZATION_ID,
+      folderId: FOLDER_ID,
+      name: "docs",
+    });
   });
 });
