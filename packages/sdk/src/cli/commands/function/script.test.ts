@@ -198,6 +198,25 @@ describe("function script", () => {
     expect(fs.existsSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME))).toBe(true);
   });
 
+  test("generates Temporal remote types when kyselyTypePlugin is configured with temporal", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir), {
+      plugins: [
+        { ...kyselyPluginStub, pluginConfig: { ...kyselyPluginStub.pluginConfig, temporal: true } },
+      ],
+    });
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
+
+    await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
+
+    const dbTypes = fs.readFileSync(
+      path.join(tmp.dir, "scripts", SCRIPT_DB_TYPES_FILE_NAME),
+      "utf-8",
+    );
+    expect(dbTypes).toContain("export const getDB = createGetDB<Namespace>({ temporal: true });");
+  });
+
   test("refuses to add remote types to an existing kyselyTypePlugin script", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");

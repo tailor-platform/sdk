@@ -1,7 +1,9 @@
 import {
   createGetDB,
   type Generated,
-  type Timestamp,
+  type TemporalDate,
+  type TemporalInstant,
+  type TemporalTime,
   type ObjectColumnType,
   type Serial,
   type NamespaceDB,
@@ -19,8 +21,8 @@ export interface Namespace {
       id: Generated<string>;
       action: string;
       detail: string;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     Customer: {
@@ -34,8 +36,8 @@ export interface Namespace {
       city: string | null;
       fullAddress: string;
       state: string;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     Invoice: {
@@ -45,8 +47,8 @@ export interface Namespace {
       amount: number | null;
       sequentialId: Serial<number>;
       status: "draft" | "sent" | "paid" | "cancelled" | null;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     NestedProfile: {
@@ -59,13 +61,13 @@ export interface Namespace {
         phone?: string | null;
       }>;
       metadata: ObjectColumnType<{
-        created: Timestamp;
-        lastUpdated?: Timestamp | null;
+        created: TemporalInstant;
+        lastUpdated?: TemporalInstant | null;
         version: number;
       }>;
       archived: boolean | null;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     ProductBundle: {
@@ -77,8 +79,8 @@ export interface Namespace {
         qty: number;
         unitPrice: number;
       }[];
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     PurchaseOrder: {
@@ -93,8 +95,8 @@ export interface Namespace {
         size: number;
         type: "text" | "image";
       }[];
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     SalesOrder: {
@@ -105,9 +107,9 @@ export interface Namespace {
       discount: number | null;
       status: string | null;
       cancelReason: string | null;
-      canceledAt: Timestamp | null;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      canceledAt: TemporalInstant | null;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     SalesOrderCreated: {
@@ -135,8 +137,16 @@ export interface Namespace {
       country: string;
       state: "Alabama" | "Alaska";
       city: string;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
+    }
+
+    TemporalCheck: {
+      id: Generated<string>;
+      eventDate: TemporalDate;
+      eventDatetime: TemporalInstant;
+      eventTime: TemporalTime;
+      checkedAt: TemporalInstant;
     }
 
     User: {
@@ -146,37 +156,37 @@ export interface Namespace {
       status: string | null;
       department: string | null;
       role: "MANAGER" | "STAFF";
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     UserLog: {
       id: Generated<string>;
       userID: string;
       message: string;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
 
     UserSetting: {
       id: Generated<string>;
       language: "jp" | "en";
       userID: string;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
   },
   "analyticsdb": {
     Event: {
       id: Generated<string>;
       name: "CLICK" | "VIEW" | "PURCHASE";
-      createdAt: Generated<Timestamp>;
-      updatedAt: Generated<Timestamp>;
+      createdAt: Generated<TemporalInstant>;
+      updatedAt: Generated<TemporalInstant>;
     }
   }
 }
 
-export const getDB = createGetDB<Namespace>();
+export const getDB = createGetDB<Namespace>({ temporal: true });
 
 export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
 

@@ -34,6 +34,9 @@ export interface MigrationBundleResult {
  * @param {number} migrationNumber - Migration number
  * @param {Record<string, string | number | boolean>} env - Environment variables to inject into the migration context
  * @param {string} [baseDir] - Directory to resolve the bundler's tsconfig against; defaults to the migration script's directory
+ * @param {boolean} [temporal] - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`; matches
+ * the `tailordb.Client` this script runs against to the Temporal column types its `db.ts` was generated with.
+ * Defaults to `false`.
  * @returns {Promise<MigrationBundleResult>} Bundled migration result
  */
 export async function bundleMigrationScript(
@@ -42,6 +45,7 @@ export async function bundleMigrationScript(
   migrationNumber: number,
   env: Record<string, string | number | boolean> = {},
   baseDir?: string,
+  temporal = false,
 ): Promise<MigrationBundleResult> {
   // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
@@ -59,7 +63,7 @@ export async function bundleMigrationScript(
     import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
 
     function getDB(namespace) {
-      const client = new tailordb.Client({ namespace });
+      const client = new tailordb.Client({ namespace, temporal: ${JSON.stringify(temporal)} });
       return new Kysely({
         dialect: new TailordbDialect(client),
       });

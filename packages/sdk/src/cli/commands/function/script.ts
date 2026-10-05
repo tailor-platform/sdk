@@ -196,7 +196,10 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
           });
         }
       }
-      const dbTypesContent = generateScriptDbTypes(snapshot);
+      const dbTypesContent = generateScriptDbTypes(
+        snapshot,
+        resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
+      );
       assertGeneratedTypeScript(dbTypesPath, dbTypesContent);
       fs.mkdirSync(scriptDir, { recursive: true });
       fs.writeFileSync(dbTypesPath, dbTypesContent);

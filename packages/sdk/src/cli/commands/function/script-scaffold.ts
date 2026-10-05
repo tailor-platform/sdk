@@ -55,13 +55,14 @@ const GENERATED_DB_TYPES_HEADER = [
 /**
  * Generate the script-scoped `db.ts` contents from a schema snapshot.
  * @param snapshot - Schema snapshot of the target namespace
+ * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`
  * @returns Generated `db.ts` file contents
  */
-export function generateScriptDbTypes(snapshot: SchemaSnapshot): string {
+export function generateScriptDbTypes(snapshot: SchemaSnapshot, temporal = false): string {
   const types = Object.values(snapshot.tables).map((table) =>
-    processKyselyFields(table.name, table.fields),
+    processKyselyFields(table.name, table.fields, temporal),
   );
-  const body = generateUnifiedKyselyTypes([{ namespace: snapshot.namespace, types }]);
+  const body = generateUnifiedKyselyTypes([{ namespace: snapshot.namespace, types }], temporal);
   return `${GENERATED_DB_TYPES_HEADER}\n\n${body}`;
 }
 

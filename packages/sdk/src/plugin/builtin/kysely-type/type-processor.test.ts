@@ -12,8 +12,8 @@ function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   return types[type.name]!;
 }
 
-async function getTypeDef(type: TailorAnyDBType) {
-  const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
+async function getTypeDef(type: TailorAnyDBType, temporal = false) {
+  const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)), temporal);
   return result.typeDef;
 }
 
@@ -113,6 +113,87 @@ describe("Kysely TypeProcessor", () => {
 
       expect(typeDef).toContain("eventDates: ArrayColumnType<Timestamp>;");
       expect(typeDef).toContain("optionalDates: ArrayColumnType<Timestamp> | null;");
+    });
+  });
+
+  describe("temporal option", () => {
+    test("maps date/datetime/time to their Temporal column types", async () => {
+      const typeDef = await getTypeDef(
+        db.table("Event", {
+          startDate: db.date(),
+          endDate: db.datetime(),
+          startTime: db.time(),
+        }),
+        true,
+      );
+
+      expect(typeDef).toContain("startDate: TemporalDate;");
+      expect(typeDef).toContain("endDate: TemporalInstant;");
+      expect(typeDef).toContain("startTime: TemporalTime;");
+    });
+
+    test("leaves date/datetime/time as Timestamp/string when false (the default)", async () => {
+      const typeDef = await getTypeDef(
+        db.table("Event", {
+          startDate: db.date(),
+          endDate: db.datetime(),
+          startTime: db.time(),
+        }),
+      );
+
+      expect(typeDef).toContain("startDate: Timestamp;");
+      expect(typeDef).toContain("endDate: Timestamp;");
+      expect(typeDef).toContain("startTime: string;");
+    });
+
+    test("uses ArrayColumnType for Temporal array fields", async () => {
+      const typeDef = await getTypeDef(
+        db.table("Event", {
+          eventDates: db.datetime({ array: true }),
+          optionalTimes: db.time({ array: true, optional: true }),
+        }),
+        true,
+      );
+
+      expect(typeDef).toContain("eventDates: ArrayColumnType<TemporalInstant>;");
+      expect(typeDef).toContain("optionalTimes: ArrayColumnType<TemporalTime> | null;");
+    });
+
+    test("keeps a nested time field as a string", async () => {
+      const typeDef = await getTypeDef(
+        db.table("Profile", {
+          schedule: db.object({ startTime: db.time() }),
+        }),
+        true,
+      );
+
+      expect(typeDef).toContain("schedule: {");
+      expect(typeDef).toContain("startTime: string;");
+    });
+
+    test("tracks the Temporal utility types actually used", async () => {
+      const result = await processKyselyType(
+        parseTailorDBType(
+          toSchemaOutput(
+            db.table("Event", {
+              startDate: db.date(),
+              endDate: db.datetime(),
+              startTime: db.time(),
+            }),
+          ),
+        ),
+        true,
+      );
+
+      expect(result.usedUtilityTypes).toEqual({
+        Timestamp: false,
+        TemporalDate: true,
+        TemporalInstant: true,
+        TemporalTime: true,
+        Serial: false,
+        ObjectColumnType: false,
+        ArrayColumnType: false,
+      });
     });
   });
 
@@ -326,6 +407,9 @@ describe("Kysely TypeProcessor", () => {
         type: db.table("User", { name: db.string(), age: db.int() }),
         expected: {
           Timestamp: false,
+          TemporalDate: false,
+          TemporalInstant: false,
+          TemporalTime: false,
           Serial: false,
           ObjectColumnType: false,
           ArrayColumnType: false,
@@ -336,6 +420,9 @@ describe("Kysely TypeProcessor", () => {
         type: db.table("User", { name: db.string(), ...db.fields.timestamps() }),
         expected: {
           Timestamp: true,
+          TemporalDate: false,
+          TemporalInstant: false,
+          TemporalTime: false,
           Serial: false,
           ObjectColumnType: false,
           ArrayColumnType: false,
@@ -346,6 +433,9 @@ describe("Kysely TypeProcessor", () => {
         type: db.table("Invoice", { invoiceNumber: db.string().serial({ start: 1000 }) }),
         expected: {
           Timestamp: false,
+          TemporalDate: false,
+          TemporalInstant: false,
+          TemporalTime: false,
           Serial: true,
           ObjectColumnType: false,
           ArrayColumnType: false,
@@ -359,6 +449,9 @@ describe("Kysely TypeProcessor", () => {
         }),
         expected: {
           Timestamp: true,
+          TemporalDate: false,
+          TemporalInstant: false,
+          TemporalTime: false,
           Serial: true,
           ObjectColumnType: false,
           ArrayColumnType: false,
@@ -371,6 +464,9 @@ describe("Kysely TypeProcessor", () => {
         }),
         expected: {
           Timestamp: false,
+          TemporalDate: false,
+          TemporalInstant: false,
+          TemporalTime: false,
           Serial: false,
           ObjectColumnType: true,
           ArrayColumnType: false,
@@ -381,6 +477,9 @@ describe("Kysely TypeProcessor", () => {
         type: db.table("Event", { eventDates: db.datetime({ array: true }) }),
         expected: {
           Timestamp: true,
+          TemporalDate: false,
+          TemporalInstant: false,
+          TemporalTime: false,
           Serial: false,
           ObjectColumnType: false,
           ArrayColumnType: true,
@@ -391,7 +490,15 @@ describe("Kysely TypeProcessor", () => {
         type: db.table("Profile", {
           metadata: db.object({ created: db.datetime() }, { array: true }),
         }),
-        expected: { Timestamp: true, Serial: false, ObjectColumnType: true, ArrayColumnType: true },
+        expected: {
+          Timestamp: true,
+          TemporalDate: false,
+          TemporalInstant: false,
+          TemporalTime: false,
+          Serial: false,
+          ObjectColumnType: true,
+          ArrayColumnType: true,
+        },
       },
       {
         name: "enum values naming the wrappers",
@@ -403,6 +510,9 @@ describe("Kysely TypeProcessor", () => {
         }),
         expected: {
           Timestamp: false,
+          TemporalDate: false,
+          TemporalInstant: false,
+          TemporalTime: false,
           Serial: false,
           ObjectColumnType: false,
           ArrayColumnType: false,

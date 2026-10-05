@@ -18,6 +18,7 @@ import {
 } from "./snapshot";
 import {
   generateSchemaFile,
+  generateDataOnlyMigrationFiles,
   generateDiffFiles,
   generateMigrationPgliteTestScript,
   generateMigrationTestScript,
@@ -151,6 +152,27 @@ describe("template-generator", () => {
     });
   });
 
+  describe("generateDataOnlyMigrationFiles", () => {
+    test("records temporal: true in diff.json when db.ts is generated with Temporal types", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot: createTestSnapshot({
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { name: { type: "string", required: true } },
+          },
+        }),
+        temporal: true,
+      });
+
+      const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
+      expect(parsed.temporal).toBe(true);
+    });
+  });
+
   describe("generateDiffFiles", () => {
     const previousSnapshot = createTestSnapshot({
       User: {
@@ -185,6 +207,71 @@ describe("template-generator", () => {
       const parsed = JSON.parse(content);
       expect(parsed.changes).toHaveLength(1);
       expect(parsed.changes[0].kind).toBe("field_added");
+    });
+
+    const breakingDiff = () =>
+      createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_added",
+            tableName: "User",
+            fieldName: "email",
+            after: { type: "string", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { tableName: "User", fieldName: "email", reason: "Required field added" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+    test("records temporal: true in diff.json when db.ts is generated with Temporal types", async () => {
+      const result = await generateDiffFiles(
+        breakingDiff(),
+        tempDir,
+        1,
+        previousSnapshot,
+        undefined,
+        [],
+        true,
+      );
+
+      const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
+      expect(parsed.temporal).toBe(true);
+    });
+
+    test("leaves temporal out of diff.json when db.ts is generated with Date types", async () => {
+      const result = await generateDiffFiles(breakingDiff(), tempDir, 1, previousSnapshot);
+
+      const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
+      expect(parsed).not.toHaveProperty("temporal");
+    });
+
+    test("leaves temporal out of diff.json when no db.ts is generated", async () => {
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_added",
+            tableName: "User",
+            fieldName: "email",
+            after: { type: "string", required: false },
+          },
+        ],
+      });
+
+      const result = await generateDiffFiles(
+        diff,
+        tempDir,
+        1,
+        previousSnapshot,
+        undefined,
+        [],
+        true,
+      );
+
+      const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
+      expect(parsed).not.toHaveProperty("temporal");
     });
 
     test("should generate diff file with migration script and db types for breaking changes", async () => {
@@ -1586,6 +1673,22 @@ describe("template-generator", () => {
         "await expect(db.transaction().execute((trx) => main(trx))).resolves.toBeUndefined()",
       );
       expect(script).toContain('describe("tailordb migration (PGlite)"');
+    });
+
+    test("reads Temporal values from PGlite for a migration recorded as temporal", () => {
+      const script = generateMigrationPgliteTestScript(createMockMigrationDiff({ temporal: true }));
+
+      expect(script).toContain(
+        "const db = createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true });",
+      );
+      expect(script).toContain("tailor-runtime");
+    });
+
+    test("reads Date values from PGlite for a migration without a temporal record", () => {
+      const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
+
+      expect(script).toContain("const db = createKyselyPGlite<Unmigrated<Database>>(pglite);");
+      expect(script).not.toContain("tailor-runtime");
     });
 
     test("quotes a namespace that is not an identifier", () => {

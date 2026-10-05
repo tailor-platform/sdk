@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vit
 import { loadConfig } from "#/cli/shared/config-loader";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
   addMigrationScriptFiles,
   clearMigrationScriptSkipped,
@@ -93,6 +94,32 @@ describe("addMigrationScriptFiles", () => {
     expect(fs.existsSync(migrationFile(MIGRATE_TEST_FILE_NAME))).toBe(false);
   });
 
+  test("records temporal: true in diff.json when db.ts is generated with Temporal types", async () => {
+    setupMigration();
+
+    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, temporal: true });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).temporal).toBe(true);
+  });
+
+  test("raises a legacy migration to the current format version when recording temporal", async () => {
+    setupMigration({ version: 3 });
+
+    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, temporal: true });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(
+      SCHEMA_SNAPSHOT_VERSION,
+    );
+  });
+
+  test("keeps a legacy migration's format version when db.ts uses Date types", async () => {
+    setupMigration({ version: 3 });
+
+    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(3);
+  });
+
   test("creates db.pglite.ts next to db.ts", async () => {
     setupMigration();
 
@@ -120,6 +147,22 @@ describe("addMigrationScriptFiles", () => {
     expect(content).toContain('import { pgliteSchema } from "./db.pglite"');
     expect(content).toContain("pglite.exec(pgliteSchema.tailordb)");
     expect(content).toContain("createKyselyPGlite<Unmigrated<Database>>(pglite)");
+  });
+
+  test("scaffolds a Temporal PGlite test when db.ts is generated with Temporal types", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      pgliteAvailable: true,
+      temporal: true,
+    });
+
+    expect(fs.readFileSync(result.pgliteTestPath!, "utf-8")).toContain(
+      "createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })",
+    );
   });
 
   test("skips the PGlite test scaffold when PGlite is not installed", async () => {

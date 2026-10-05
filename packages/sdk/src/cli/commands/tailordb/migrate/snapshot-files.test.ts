@@ -1065,7 +1065,7 @@ describe("snapshot", () => {
       expect(() => loadSnapshot(filePath)).toThrow(
         expect.objectContaining({
           code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
-          details: expect.stringMatching(/supports migration file format versions 1-6/),
+          details: expect.stringMatching(/supports migration file format versions 1-7/),
           suggestion: expect.stringMatching(
             /re-baseline with an SDK that still supports this migration history, then upgrade/i,
           ),
@@ -1074,16 +1074,16 @@ describe("snapshot", () => {
     });
 
     test("rejects snapshot formats newer than the supported window", () => {
-      const version = 7;
+      const version = 8;
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
       expect(() => loadSnapshot(filePath)).toThrow(
         expect.objectContaining({
           code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
-          details: expect.stringMatching(/supports migration file format versions 1-6/),
+          details: expect.stringMatching(/supports migration file format versions 1-7/),
           suggestion: expect.stringMatching(
-            /upgrade to an SDK that supports migration file format version 7/i,
+            /upgrade to an SDK that supports migration file format version 8/i,
           ),
         }),
       );
@@ -1399,7 +1399,7 @@ describe("snapshot", () => {
       expect(() => loadDiff(filePath)).toThrow(
         expect.objectContaining({
           code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
-          details: expect.stringMatching(/supports migration file format versions 1-6/),
+          details: expect.stringMatching(/supports migration file format versions 1-7/),
           suggestion: expect.stringMatching(
             /re-baseline with an SDK that still supports this migration history, then upgrade/i,
           ),
@@ -1408,16 +1408,16 @@ describe("snapshot", () => {
     });
 
     test("rejects diff formats newer than the supported window", () => {
-      const version = 7;
+      const version = 8;
       const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
       expect(() => loadDiff(filePath)).toThrow(
         expect.objectContaining({
           code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
-          details: expect.stringMatching(/supports migration file format versions 1-6/),
+          details: expect.stringMatching(/supports migration file format versions 1-7/),
           suggestion: expect.stringMatching(
-            /upgrade to an SDK that supports migration file format version 7/i,
+            /upgrade to an SDK that supports migration file format version 8/i,
           ),
         }),
       );
@@ -1485,8 +1485,8 @@ describe("snapshot", () => {
       expect(fs.existsSync(filePath)).toBe(true);
 
       const loaded = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      expect(SCHEMA_SNAPSHOT_VERSION).toBe(6);
-      expect(loaded.version).toBe(6);
+      expect(SCHEMA_SNAPSHOT_VERSION).toBe(7);
+      expect(loaded.version).toBe(7);
     });
   });
 
