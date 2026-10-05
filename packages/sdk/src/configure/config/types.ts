@@ -209,4 +209,14 @@ export interface AppConfig<
   logLevel?: LogLevelInput;
   /** Options for how resolvers, executors, workflow jobs, and other functions are bundled. */
   buildOptions?: BuildOptions;
+  /**
+   * Value representation of `t.date()`, `t.datetime()`, and `t.time()` fields
+   * that omit `as`. `"temporal"` gives them `Temporal.PlainDate`,
+   * `Temporal.Instant`, and `Temporal.PlainTime` values in every bundled
+   * function and in the `tailor-runtime` Vitest environment. A field's own
+   * `as` takes precedence. Run `tailor generate` after changing it so
+   * `tailor.d.ts` updates the field types.
+   * @example defaultDateRepresentation: "temporal"
+   */
+  defaultDateRepresentation?: "temporal";
 }

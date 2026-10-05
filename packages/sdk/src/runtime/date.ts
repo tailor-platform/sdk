@@ -97,27 +97,46 @@ function describeReceivedValue(value: unknown): string {
 type DateRepresentation = "date" | "temporal";
 
 /**
+ * Representation applied to `t` date fields that omit `as`, after
+ * `defaultDateRepresentation` has been resolved. `"legacy"` keeps string values.
+ */
+export type EffectiveDateDefault = "legacy" | "temporal";
+
+type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
+
+// Read per call rather than at module load: the Vitest setup file sets the gate
+// after the runtime modules are evaluated. Bundles fold it to a literal.
+function bundledDateDefault(): EffectiveDateDefault {
+  return (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT ===
+    "temporal"
+    ? "temporal"
+    : "legacy";
+}
+
+/**
  * Get the Date or Temporal representation a field converts its values to.
  * @param type - Field type
  * @param as - The field's `as` option
+ * @param defaultRepresentation - Representation for fields whose `as` is `"default"`; read from the bundle when omitted
  * @returns The representation, or undefined when values stay strings
  * @internal
  */
 export function dateRepresentationOf(
   type: TailorFieldType,
   as: FieldMetadata["as"],
+  defaultRepresentation: EffectiveDateDefault = bundledDateDefault(),
 ): DateRepresentation | undefined {
-  return (type === "date" || type === "datetime" || type === "time") &&
-    (as === "date" || as === "temporal")
-    ? as
-    : undefined;
+  if (type !== "date" && type !== "datetime" && type !== "time") return undefined;
+  const resolved = as === "default" ? defaultRepresentation : as;
+  return resolved === "date" || resolved === "temporal" ? resolved : undefined;
 }
 
 function isDateRepresentationField(
   field: DateRepresentationField,
   representation?: DateRepresentation,
+  defaultRepresentation?: EffectiveDateDefault,
 ): boolean {
-  const as = dateRepresentationOf(field.type, field.metadata.as);
+  const as = dateRepresentationOf(field.type, field.metadata.as, defaultRepresentation);
   return as !== undefined && (representation === undefined || as === representation);
 }
 
@@ -165,8 +184,6 @@ function serializeAsTemporal(type: TailorFieldType, value: unknown, path: string
   }
 }
 
-type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
-
 const dateSerializers: Record<DateRepresentation, DateSerializer | undefined> = {
   date: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE
     ? undefined
@@ -212,16 +229,20 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
  * Check whether a field or any of its nested fields uses a Date or Temporal representation.
  * @param field - Field to inspect
  * @param representation - Only match fields using this representation
+ * @param defaultRepresentation - Representation for fields whose `as` is `"default"`; read from the bundle when omitted
  * @returns Whether serializeDateFields would convert any value of the field
  * @internal
  */
 export function hasDateRepresentationFields(
   field: DateRepresentationField,
   representation?: DateRepresentation,
+  defaultRepresentation?: EffectiveDateDefault,
 ): boolean {
   return (
-    isDateRepresentationField(field, representation) ||
-    Object.values(field.fields).some((child) => hasDateRepresentationFields(child, representation))
+    isDateRepresentationField(field, representation, defaultRepresentation) ||
+    Object.values(field.fields).some((child) =>
+      hasDateRepresentationFields(child, representation, defaultRepresentation),
+    )
   );
 }
 

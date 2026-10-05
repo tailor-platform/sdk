@@ -24,6 +24,7 @@ import { buildOptionsOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
+import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
@@ -668,6 +669,7 @@ export async function loadApplication(
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
+  const dateDefault = effectiveDateDefault(config);
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -690,6 +692,7 @@ export async function loadApplication(
       bundleLogLevel,
       tsconfigCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);

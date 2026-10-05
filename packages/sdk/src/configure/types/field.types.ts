@@ -3,6 +3,7 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
+import type { IsUnion, TypeLevelError } from "#/types/helpers";
 import type { Temporal } from "temporal-spec";
 
 export interface EnumValue {
@@ -39,7 +40,8 @@ export type TailorToTs = {
 } & Record<TailorFieldType, unknown>;
 
 export interface FieldMetadata {
-  as?: "string" | "date" | "temporal";
+  /** Date value representation. `"default"` follows the configured `defaultDateRepresentation`. */
+  as?: "string" | "date" | "temporal" | "default";
   description?: string;
   required?: boolean;
 
@@ -64,50 +66,118 @@ export type FieldOptions = {
   array?: boolean;
 };
 
+/**
+ * Registry of each application's `defaultDateRepresentation`, keyed by app
+ * name. `tailor generate` writes it into `tailor.d.ts`:
+ * `declare module "@tailor-platform/sdk" { interface DateRepresentationRegistry { shop: "temporal" } }`.
+ * An app without the setting is recorded as `undefined`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface DateRepresentationRegistry {}
+
+/** Representation the SDK applies when no app configures one. */
+type BuiltinDateDefault = undefined;
+
+export type DateDefaultConflictMessage =
+  "defaultDateRepresentation differs between the tailor.config.ts files included in this TypeScript program; use the same value in each, or give each application its own tsconfig.json";
+
+// Distributes over the union of registry values so that every unset app is
+// read as the built-in default before the values are compared.
+type NormalizeDateDefault<Value, Builtin> = Value extends undefined ? Builtin : Value;
+
+/**
+ * Resolve the default date representation declared by a registry: the single
+ * value every included app agrees on, or a type-level error when they differ.
+ */
+export type DateDefaultOf<Registry, Builtin = BuiltinDateDefault> = [
+  Registry[keyof Registry],
+] extends [never]
+  ? Builtin
+  : IsUnion<NormalizeDateDefault<Registry[keyof Registry], Builtin>> extends true
+    ? TypeLevelError<DateDefaultConflictMessage>
+    : NormalizeDateDefault<Registry[keyof Registry], Builtin>;
+
+type DefaultDateRepresentation = DateDefaultOf<DateRepresentationRegistry>;
+
+export type HasDateDefaultConflict =
+  DefaultDateRepresentation extends TypeLevelError<string> ? true : false;
+
+/** Explicit `as` values a date field accepts. */
+export type DateRepresentationOption = "string" | "date" | "temporal";
+
+type ResolveDateRepresentation<As, Default> = As extends DateRepresentationOption ? As : Default;
+
 /** Options for a date field. */
 export type DateFieldOptions = FieldOptions & {
   /**
    * Use a Date at midnight UTC, or a Temporal.PlainDate, instead of a
-   * YYYY-MM-DD string. Defaults to string.
+   * YYYY-MM-DD string. Defaults to `defaultDateRepresentation`, or string.
    */
-  as?: "string" | "date" | "temporal";
+  as?: DateRepresentationOption;
 };
 
-export type DateFieldValue<As> = As extends "date"
+type DateValueOf<R> = R extends "date"
   ? Date
-  : As extends "temporal"
+  : R extends "temporal"
     ? Temporal.PlainDate
-    : string;
+    : R extends TypeLevelError<string>
+      ? R
+      : string;
+
+/** Value type of a date field under an explicit `Default` representation. */
+export type DateFieldValueFor<As, Default> = DateValueOf<ResolveDateRepresentation<As, Default>>;
+
+export type DateFieldValue<As> = DateFieldValueFor<As, DefaultDateRepresentation>;
 
 /** Options for a datetime field. */
 export type DateTimeFieldOptions = FieldOptions & {
-  /** Choose string, Date, or Temporal.Instant values. Defaults to string input and string | Date output. */
-  as?: "string" | "date" | "temporal";
+  /**
+   * Choose string, Date, or Temporal.Instant values. Defaults to
+   * `defaultDateRepresentation`, or string input and string | Date output.
+   */
+  as?: DateRepresentationOption;
 };
 
-export type DateTimeFieldValue<As> = As extends "date"
+type DateTimeValueOf<R> = R extends "date"
   ? Date
-  : As extends "temporal"
+  : R extends "temporal"
     ? Temporal.Instant
-    : As extends "string"
+    : R extends "string"
       ? string
-      : string | Date;
+      : R extends TypeLevelError<string>
+        ? R
+        : string | Date;
+
+/** Value type of a datetime field under an explicit `Default` representation. */
+export type DateTimeFieldValueFor<As, Default> = DateTimeValueOf<
+  ResolveDateRepresentation<As, Default>
+>;
+
+export type DateTimeFieldValue<As> = DateTimeFieldValueFor<As, DefaultDateRepresentation>;
 
 /** Options for a time field. */
 export type TimeFieldOptions = FieldOptions & {
   /**
    * Choose HH:mm strings, Date values on 1970-01-01 UTC, or Temporal.PlainTime values.
-   * Defaults to string. Date output uses UTC hours/minutes and ignores the date.
-   * Seconds and fractional seconds are truncated in both representations.
+   * Defaults to `defaultDateRepresentation`, or string. Date output uses UTC
+   * hours/minutes and ignores the date. Seconds and fractional seconds are
+   * truncated in both representations.
    */
-  as?: "string" | "date" | "temporal";
+  as?: DateRepresentationOption;
 };
 
-export type TimeFieldValue<As> = As extends "date"
+type TimeValueOf<R> = R extends "date"
   ? Date
-  : As extends "temporal"
+  : R extends "temporal"
     ? Temporal.PlainTime
-    : string;
+    : R extends TypeLevelError<string>
+      ? R
+      : string;
+
+/** Value type of a time field under an explicit `Default` representation. */
+export type TimeFieldValueFor<As, Default> = TimeValueOf<ResolveDateRepresentation<As, Default>>;
+
+export type TimeFieldValue<As> = TimeFieldValueFor<As, DefaultDateRepresentation>;
 
 // Return Output type based on FieldOptions.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;

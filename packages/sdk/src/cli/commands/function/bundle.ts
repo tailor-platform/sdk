@@ -17,10 +17,7 @@ import {
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
-import {
-  createPlatformBundleDefinePlugin,
-  platformBundleDefinePlugin,
-} from "#/cli/shared/platform-bundle-plugin";
+import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import {
   buildResolverResultSerialization,
@@ -33,6 +30,7 @@ import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { LogLevelInput } from "#/configure/config/types";
+import type { EffectiveDateDefault } from "#/runtime/date";
 import type { Resolver } from "#/types/resolver.generated";
 import type { DetectedFunction } from "./detect";
 
@@ -67,6 +65,8 @@ interface BundleForRunOptions {
   workspaceId: string;
   /** For resolvers: the `defaultPermission` of the namespace owning the file */
   defaultPermission?: Resolver["permission"];
+  /** Representation applied to `t` date fields that omit `as` */
+  dateDefault?: EffectiveDateDefault;
 }
 
 interface BundleForRunResult {
@@ -82,7 +82,15 @@ interface BundleForRunResult {
  * @returns Bundled code and script name
  */
 export async function bundleForRun(options: BundleForRunOptions): Promise<BundleForRunResult> {
-  const { detected, sourceFile, baseDir, env = {}, machineUser, workspaceId } = options;
+  const {
+    detected,
+    sourceFile,
+    baseDir,
+    env = {},
+    machineUser,
+    workspaceId,
+    dateDefault = "legacy",
+  } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
 
@@ -100,6 +108,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     machineUser,
     workspaceId,
     defaultPermission: options.defaultPermission,
+    dateDefault,
   });
   fs.writeFileSync(entryPath, entryContent);
 
@@ -110,9 +119,12 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     plugins: [
       createGeneratedEntryResolverPlugin(entryPath, baseDir),
       createTsconfigPathsPlugin(),
-      detected.type === "resolver"
-        ? createPlatformBundleDefinePlugin(resolverDateRepresentations(detected.fields))
-        : platformBundleDefinePlugin,
+      createPlatformBundleDefinePlugin(
+        detected.type === "resolver"
+          ? resolverDateRepresentations(detected.fields, dateDefault)
+          : { date: true, temporal: true },
+        dateDefault,
+      ),
     ],
     input: entryPath,
     write: false,
@@ -154,6 +166,8 @@ type GenerateEntryOptions = {
   workspaceId: string;
   /** For resolvers: the `defaultPermission` of the namespace owning the file */
   defaultPermission?: Resolver["permission"];
+  /** Representation applied to `t` date fields that omit `as` */
+  dateDefault: EffectiveDateDefault;
 };
 
 /**
@@ -162,7 +176,8 @@ type GenerateEntryOptions = {
  * @returns Entry file content string
  */
 function generateEntry(options: GenerateEntryOptions): string {
-  const { detected, sourceFile, env, machineUser, workspaceId, defaultPermission } = options;
+  const { detected, sourceFile, env, machineUser, workspaceId, defaultPermission, dateDefault } =
+    options;
   const absoluteSourcePath = path.resolve(sourceFile);
 
   switch (detected.type) {
@@ -190,6 +205,7 @@ function generateEntry(options: GenerateEntryOptions): string {
       });
       const { importStatement, resultExpr } = buildResolverResultSerialization(
         detected.fields?.output,
+        dateDefault,
       );
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";

@@ -45,3 +45,26 @@ describe("createPlatformBundleDefinePlugin", () => {
     );
   });
 });
+
+describe("createPlatformBundleDefinePlugin date default", () => {
+  const code = "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT);";
+
+  test("folds the date default gate to undefined when the bundle keeps the legacy default", () => {
+    expect(run(code)).toBe("read(undefined);");
+    expect(
+      run(code, createPlatformBundleDefinePlugin({ date: true, temporal: true }, "legacy")),
+    ).toBe("read(undefined);");
+  });
+
+  test("folds the date default gate to the configured representation literal", () => {
+    expect(
+      run(code, createPlatformBundleDefinePlugin({ date: true, temporal: true }, "temporal")),
+    ).toBe('read("temporal");');
+  });
+
+  test("the bare gate fold does not eat the date default gate", () => {
+    const both =
+      "a(process.env.__TAILOR_PLATFORM_BUNDLE, globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT);";
+    expect(run(both)).toBe("a(true, undefined);");
+  });
+});

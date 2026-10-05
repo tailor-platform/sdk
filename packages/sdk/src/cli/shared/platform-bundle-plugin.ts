@@ -1,3 +1,4 @@
+import type { EffectiveDateDefault } from "#/runtime/date";
 import type * as rolldown from "rolldown";
 
 // Match the exact `process.env.__TAILOR_PLATFORM_BUNDLE` member-expression: the
@@ -25,6 +26,9 @@ const WITHOUT_DATE_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE\b/g;
 const WITHOUT_TEMPORAL_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL\b/g;
+// Read at call time by `dateRepresentationOf`; folded to the configured literal here.
+const DATE_DEFAULT_GATE =
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT\b/g;
 
 /**
  * Date representations whose conversion code a bundle keeps.
@@ -37,11 +41,14 @@ export type BundledDateRepresentations = {
 /**
  * Create the platform bundle define plugin.
  * @param dateRepresentations - Date representations whose conversion code the bundle keeps
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`
  * @returns Rolldown plugin folding the platform bundle gates
  */
 export function createPlatformBundleDefinePlugin(
   dateRepresentations: BundledDateRepresentations = { date: true, temporal: true },
+  dateDefault: EffectiveDateDefault = "legacy",
 ): rolldown.Plugin {
+  const dateDefaultLiteral = dateDefault === "legacy" ? "undefined" : JSON.stringify(dateDefault);
   return {
     name: "tailor-platform-bundle-define",
     transform(code) {
@@ -50,7 +57,8 @@ export function createPlatformBundleDefinePlugin(
         code: code
           .replace(GATE, "true")
           .replace(WITHOUT_DATE_GATE, String(!dateRepresentations.date))
-          .replace(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal)),
+          .replace(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal))
+          .replace(DATE_DEFAULT_GATE, dateDefaultLiteral),
       };
     },
     resolveId(source) {

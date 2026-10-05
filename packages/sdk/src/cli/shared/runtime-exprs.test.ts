@@ -6,6 +6,7 @@ import {
   buildResolverResultSerialization,
   buildResolverValidatedInputExpr,
   buildResolverPermissionGuardExpr,
+  resolverDateRepresentations,
 } from "./runtime-exprs";
 import type { TailorField } from "#/types/field.generated";
 
@@ -518,5 +519,44 @@ describe("buildResolverResultSerialization", () => {
     expect(buildResolverResultSerialization(undefined).importStatement).toContain(
       "serializeDateFields",
     );
+  });
+});
+
+describe("date default in resolver bundles", () => {
+  const field = (
+    type: TailorField["type"],
+    metadata: TailorField["metadata"] = {},
+    fields: TailorField["fields"] = {},
+  ): TailorField => ({ type, metadata, fields });
+
+  test("fields following a temporal default need the Temporal converter and output serialization", () => {
+    const resolver = { input: { day: field("date", { as: "default" }) }, output: field("string") };
+    expect(resolverDateRepresentations(resolver, "temporal")).toEqual({
+      date: false,
+      temporal: true,
+    });
+    expect(
+      buildResolverResultSerialization(field("date", { as: "default" }), "temporal").resultExpr,
+    ).toBe("serializeDateFields(_internalResolver.output, result)");
+  });
+
+  test("fields following the legacy default need no converter", () => {
+    const resolver = {
+      input: { day: field("date", { as: "default" }) },
+      output: field("date", { as: "default" }),
+    };
+    expect(resolverDateRepresentations(resolver, "legacy")).toEqual({
+      date: false,
+      temporal: false,
+    });
+    expect(buildResolverResultSerialization(resolver.output, "legacy").resultExpr).toBe("result");
+  });
+
+  test('an explicit `as: "string"` is left alone under a temporal default', () => {
+    const resolver = { input: {}, output: field("datetime", { as: "string" }) };
+    expect(resolverDateRepresentations(resolver, "temporal")).toEqual({
+      date: false,
+      temporal: false,
+    });
   });
 });

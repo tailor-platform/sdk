@@ -20,6 +20,9 @@ declare module "@tailor-platform/sdk" {
     "main-auth": true;
   }
   interface SecretVaultNameRegistry {}
+  interface DateRepresentationRegistry {
+    workflow: undefined;
+  }
 }
 
 export {};
