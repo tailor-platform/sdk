@@ -552,11 +552,22 @@ describe("date default in resolver bundles", () => {
     expect(buildResolverResultSerialization(resolver.output, "legacy").resultExpr).toBe("result");
   });
 
-  test('an explicit `as: "string"` is left alone under a temporal default', () => {
-    const resolver = { input: {}, output: field("datetime", { as: "string" }) };
+  test("a temporal default keeps the Temporal converter for fields parsed inside the body", () => {
+    const resolver = { input: { name: field("string") }, output: field("string") };
     expect(resolverDateRepresentations(resolver, "temporal")).toEqual({
       date: false,
-      temporal: false,
+      temporal: true,
     });
+    expect(buildResolverResultSerialization(resolver.output, "temporal").resultExpr).toBe("result");
+  });
+
+  test('an explicit `as: "string"` output is not serialized under a temporal default', () => {
+    const output = field("datetime", { as: "string" });
+    expect(buildResolverResultSerialization(output, "temporal").resultExpr).toBe("result");
+  });
+
+  test("a temporal default still leaves the Date converter out", () => {
+    const resolver = { input: {}, output: field("date", { as: "default" }) };
+    expect(resolverDateRepresentations(resolver, "temporal").date).toBe(false);
   });
 });

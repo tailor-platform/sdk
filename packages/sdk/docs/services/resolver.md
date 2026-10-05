@@ -141,7 +141,7 @@ GraphQL still accepts and returns `YYYY-MM-DD` strings. The SDK converts input t
 
 This option also works in nested objects and with `array: true` or `optional: true`. Input must be a valid calendar date, and output must be a valid `Date` with a 4-digit UTC year (0000-9999). Both deployed resolvers and `tailor function run` perform these conversions.
 
-A resolver bundle only includes the conversion code for the representations (`as: "date"` or `as: "temporal"`) its `input` and `output` use. To parse other values with such fields inside `body`, for example an external API response, use `parseDateFields` instead of `.parse()`. It takes the same arguments and returns the same result as `.parse()`. Calling `.parse()` on a field whose representation the bundle leaves out throws an error that points to `parseDateFields`.
+A resolver bundle only includes the conversion code for the representations (`as: "date"` or `as: "temporal"`) its `input` and `output` use; with [`defaultDateRepresentation: "temporal"`](../configuration.md#application-settings), the Temporal conversion is always included. To parse other values with such fields inside `body`, for example an external API response, use `parseDateFields` instead of `.parse()`. It takes the same arguments and returns the same result as `.parse()`. Calling `.parse()` on a field whose representation the bundle leaves out throws an error that points to `parseDateFields`.
 
 ```typescript
 import { parseDateFields } from "@tailor-platform/sdk/runtime";

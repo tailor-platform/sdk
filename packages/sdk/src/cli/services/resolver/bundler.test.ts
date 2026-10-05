@@ -700,6 +700,43 @@ describe("bundleResolvers date default", () => {
     expect(result.get("today")).not.toContain("__serializeDateFields");
   });
 
+  const gateResolver =
+    `export default {\n` +
+    `  operation: "query",\n` +
+    `  name: "gates",\n` +
+    `  body: async () => [globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE, globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL],\n` +
+    `  output: { type: "string", metadata: {}, fields: {} },\n` +
+    `};\n`;
+
+  test("a temporal default keeps the Temporal converter when no declared field needs it", async () => {
+    using tmp = tempCwd("sdk-bundler-date-default-gates-");
+    writeSdkDependency(tmp.dir);
+    fs.writeFileSync(path.join(tmp.dir, "resolver.ts"), gateResolver);
+
+    const result = await bundleResolvers({
+      namespace: "dates",
+      config: { files: ["./resolver.ts"] },
+      baseDir: tmp.dir,
+      dateDefault: "temporal",
+    });
+
+    expect(result.get("gates")).toMatch(/\[\s*(?:true|!0)\s*,\s*(?:false|!1)\s*\]/);
+  });
+
+  test("the legacy default leaves both converters out when no declared field needs them", async () => {
+    using tmp = tempCwd("sdk-bundler-date-legacy-gates-");
+    writeSdkDependency(tmp.dir);
+    fs.writeFileSync(path.join(tmp.dir, "resolver.ts"), gateResolver);
+
+    const result = await bundleResolvers({
+      namespace: "dates",
+      config: { files: ["./resolver.ts"] },
+      baseDir: tmp.dir,
+    });
+
+    expect(result.get("gates")).toMatch(/\[\s*(?:true|!0)\s*,\s*(?:true|!0)\s*\]/);
+  });
+
   test("rebuilds a cached resolver when the date default changes", async () => {
     using tmp = tempCwd("sdk-bundler-date-default-cache-");
     writeSdkDependency(tmp.dir);
