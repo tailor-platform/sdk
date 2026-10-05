@@ -28,6 +28,8 @@ import { executeScript } from "#/cli/shared/script-executor";
 import { chunkSeedData, type SeedData } from "#/cli/shared/seed-chunker";
 import { loadSeedContext, type SeedContext } from "#/cli/shared/seed-context";
 import { loadApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import { bundleMigrationScript } from "./bundler";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
@@ -875,6 +877,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         0,
         state.loaded.config.env ?? {},
         path.dirname(state.loaded.config.path),
+        resolvePluginConfig(state.loaded.plugins, KyselyGeneratorID)?.temporal ?? false,
       );
       const execution = await executeScript({
         client: state.client,

@@ -3,6 +3,8 @@ import * as net from "node:net";
 import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { authorizeAuthConnectionCommand } from "./authorize";
 import type * as ClientModule from "#/cli/shared/client";
 
@@ -83,7 +85,7 @@ describe("authconnection authorize", () => {
     expect(error?.cause).toBe(fetchError);
   });
 
-  test("registers the returned authorization code before exchanging it", async () => {
+  test("registers the returned authorization code before exchanging it and prints the result", async () => {
     listAuthConnectionsMock.mockResolvedValue({
       connections: [
         {
@@ -106,6 +108,8 @@ describe("authconnection authorize", () => {
       exchangeAuthConnectionAuthorizationCode: exchangeMock,
     });
     using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
+    using _json = jsonMode();
+    using stdout = captureStdout();
     openMock.mockImplementation(async (authorizeUrl: string) => {
       const state = new URL(authorizeUrl).searchParams.get("state");
       // Uses node:http directly (not the globally stubbed `fetch`, which is reserved
@@ -137,6 +141,11 @@ describe("authconnection authorize", () => {
       connectionName: "my-connection",
       authorizationCode: "test-authorization-code",
       redirectUri: "http://localhost:8080/callback",
+    });
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      workspaceId: "workspace-id",
+      name: "my-connection",
     });
   });
 

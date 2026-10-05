@@ -1,4 +1,5 @@
 import { createWorkflowJob } from "@tailor-platform/sdk";
+import { Temporal } from "@tailor-platform/sdk/runtime";
 import { getDB } from "../../generated/tailordb";
 
 // This job should NOT be bundled as it's not used by any workflow
@@ -11,7 +12,7 @@ export const archiveData = createWorkflowJob({
     const oldOrders = await db
       .selectFrom("SalesOrder")
       .selectAll()
-      .where("createdAt", "<", new Date(input.beforeDate))
+      .where("createdAt", "<", Temporal.Instant.from(input.beforeDate))
       .execute();
 
     console.log(`Archiving ${oldOrders.length} old orders`);

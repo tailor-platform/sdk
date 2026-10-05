@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { Temporal } from "@tailor-platform/sdk/runtime";
 import { mockTailordbWithPGlite } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import userRecordLog from "../executors/userRecordLog";
@@ -44,6 +45,6 @@ describe("userRecordLog executor (PGlite)", () => {
       userID: id,
       message: "User created: Alice (alice@tailor.tech)",
     });
-    expect(logs[0]?.createdAt).toBeInstanceOf(Date);
+    expect(logs[0]?.createdAt).toBeInstanceOf(Temporal.Instant);
   });
 });

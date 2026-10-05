@@ -3,6 +3,7 @@ import { orderArg, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { humanizeRelativeTime } from "#/cli/shared/format";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
@@ -68,12 +69,15 @@ export const listCommand = defineAppCommand({
   }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
-    const apps = await listApps({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      order: args.order,
-      limit: args.limit,
-    });
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      listApps({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        order: args.order,
+        limit,
+      }),
+    );
+    const apps = listed.items;
 
     const formattedApps = jsonOutput
       ? apps
@@ -83,5 +87,6 @@ export const listCommand = defineAppCommand({
         }));
 
     logger.out(formattedApps);
+    await reportTruncation(listed, args.limit);
   },
 });

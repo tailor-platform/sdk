@@ -352,8 +352,7 @@ async function sync(options: SyncOptions): Promise<void> {
       default: false,
     });
     if (!confirmation) {
-      logger.info("Operation cancelled.");
-      return;
+      throw CLIError({ code: "MIGRATION_SYNC_CANCELLED", message: "Migration sync cancelled." });
     }
     logger.newline();
   }

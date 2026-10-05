@@ -26,6 +26,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -168,7 +169,7 @@ async function execRemove(
     plans.secretManager.vaultChangeSet.deletes.length === 0 &&
     plans.secretManager.secretChangeSet.deletes.length === 0
   ) {
-    return { leftBehind };
+    return { removed: false, leftBehind };
   }
 
   // Confirm deletion
@@ -194,7 +195,7 @@ async function execRemove(
   await applyFunctionRegistry(client, workspaceId, plans.functionRegistry, "delete");
   await applySecretManager(client, plans.secretManager, "delete");
 
-  return { leftBehind };
+  return { removed: true, leftBehind };
 }
 
 /**
@@ -225,7 +226,7 @@ export const removeCommand = defineAppCommand({
     logger.info(`Planning removal of resources managed by "${application.name}"...`);
     logger.newline();
 
-    const { leftBehind } = await execRemove(client, workspaceId, application, config, async () => {
+    const removal = await execRemove(client, workspaceId, application, config, async () => {
       if (!args.yes) {
         const confirmed = await prompt.confirm({
           message: "Are you sure you want to remove all resources?",
@@ -245,7 +246,13 @@ export const removeCommand = defineAppCommand({
       }
     });
 
-    if (leftBehind) {
+    printMutationResult({
+      changed: removal.removed,
+      workspaceId,
+      application: application.name,
+      complete: !removal.leftBehind,
+    });
+    if (removal.leftBehind) {
       logger.warn(ml`
         Resources tagged with "${application.name}" were left in place: they carry an application id this config does not match.
         Record that id for this config (in .github/tailor.lock, or the config's 'id'), or run deploy to take them over first, then remove again.

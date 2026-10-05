@@ -18,6 +18,11 @@ import {
   type QueryResult,
   type TransactionSettings,
 } from "kysely";
+import {
+  deserializeTemporalRows,
+  serializeTemporalParams,
+  type PGliteField,
+} from "./pglite-temporal";
 
 /** Result of a {@link PGliteClient.query} call. */
 export interface PGliteQueryResult {
@@ -29,6 +34,8 @@ export interface PGliteQueryResult {
   command?: string;
   /** Row count reported alongside the command tag. */
   rowCount?: number;
+  /** Name and Postgres type OID of each returned column. */
+  fields?: PGliteField[];
 }
 
 /**
@@ -45,15 +52,22 @@ export interface PGliteClient {
 
 class PGliteConnection implements DatabaseConnection {
   readonly #client: PGliteClient;
+  readonly #temporal: boolean;
 
-  constructor(client: PGliteClient) {
+  constructor(client: PGliteClient, temporal: boolean) {
     this.#client = client;
+    this.#temporal = temporal;
   }
 
   async executeQuery<R>(compiledQuery: CompiledQuery): Promise<QueryResult<R>> {
-    const result = await this.#client.query(compiledQuery.sql, [...compiledQuery.parameters]);
+    const result = await this.#client.query(
+      compiledQuery.sql,
+      serializeTemporalParams(compiledQuery.parameters),
+    );
     return {
-      rows: result.rows as R[],
+      rows: (this.#temporal
+        ? deserializeTemporalRows(result.rows, result.fields)
+        : result.rows) as R[],
       numAffectedRows: BigInt(result.affectedRows ?? 0),
     };
   }
@@ -65,15 +79,17 @@ class PGliteConnection implements DatabaseConnection {
 
 class PGliteDriver implements Driver {
   readonly #client: PGliteClient;
+  readonly #temporal: boolean;
 
-  constructor(client: PGliteClient) {
+  constructor(client: PGliteClient, temporal: boolean) {
     this.#client = client;
+    this.#temporal = temporal;
   }
 
   async init(): Promise<void> {}
 
   async acquireConnection(): Promise<DatabaseConnection> {
-    return new PGliteConnection(this.#client);
+    return new PGliteConnection(this.#client, this.#temporal);
   }
 
   async beginTransaction(
@@ -132,6 +148,16 @@ export type Unmigrated<DB> = {
   [T in keyof DB]: { [C in keyof DB[T]]: UnmigratedColumn<DB[T][C]> };
 };
 
+/** Options for {@link createKyselyPGlite}. */
+export interface CreateKyselyPGliteOptions {
+  /**
+   * Read date/datetime/time columns back as `Temporal.PlainDate`/`Temporal.Instant`/
+   * `Temporal.PlainTime`, as a migration whose `db.ts` uses Temporal column types sees
+   * them on the platform. Defaults to `false`.
+   */
+  temporal?: boolean;
+}
+
 /**
  * Create a Kysely instance backed by a PGlite in-memory Postgres, for
  * executing a migration script's queries against real data in tests.
@@ -143,6 +169,7 @@ export type Unmigrated<DB> = {
  * statement passing here can still be rejected by the platform; keep a
  * statement-level test (see `createKyselyMock`) alongside.
  * @param client - A `PGlite` instance from `@electric-sql/pglite`
+ * @param options - Adapter options
  * @returns A Kysely instance that executes queries on the client and closes it on `destroy()`
  * @example
  * ```typescript
@@ -157,10 +184,14 @@ export type Unmigrated<DB> = {
  * await db.transaction().execute((trx) => main(trx));
  * ```
  */
-export function createKyselyPGlite<DB = Record<string, never>>(client: PGliteClient): Kysely<DB> {
+export function createKyselyPGlite<DB = Record<string, never>>(
+  client: PGliteClient,
+  options: CreateKyselyPGliteOptions = {},
+): Kysely<DB> {
+  const temporal = options.temporal ?? false;
   const dialect: Dialect = {
     createAdapter: () => new PostgresAdapter(),
-    createDriver: () => new PGliteDriver(client),
+    createDriver: () => new PGliteDriver(client, temporal),
     createIntrospector: (db) => new PostgresIntrospector(db),
     createQueryCompiler: () => new PostgresQueryCompiler(),
   };

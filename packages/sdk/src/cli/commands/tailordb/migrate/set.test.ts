@@ -351,12 +351,13 @@ describe("tailordb migration set", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
-  test("makes no changes when the confirmation prompt is declined", async () => {
+  test("fails without changes when the confirmation prompt is declined", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
     const result = await runCommand(setCommand, ["1"]);
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_SET_CANCELLED" });
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 

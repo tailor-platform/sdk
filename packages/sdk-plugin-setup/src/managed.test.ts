@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { parseDocument } from "yaml";
 import {
+  ENVIRONMENT_EDITABLE_JOBS,
   ManagedMergeError,
   computeManagedHash,
   computeManagedParts,
@@ -160,6 +161,30 @@ describe.each(variants)("%s template", (_name, layout, render) => {
     expect(new Set(emitted).size).toBe(emitted.length);
     expect(new Set(render.generatedIds).size).toBe(render.generatedIds.length);
     expect(emitted.toSorted()).toEqual(render.generatedIds.toSorted());
+  });
+});
+
+describe("ENVIRONMENT_EDITABLE_JOBS", () => {
+  const jobsOf = (environment: boolean): Set<string> =>
+    new Set(
+      variants
+        .filter(([, layout]) => layout === "workflow")
+        .flatMap(([, , { content }]) =>
+          Object.entries(
+            (parseDocument(content).toJS() as { jobs: Record<string, Record<string, unknown>> })
+              .jobs,
+          ),
+        )
+        .filter(([, job]) => Object.hasOwn(job, "environment") === environment)
+        .map(([jobId]) => jobId),
+    );
+
+  test("lists every managed job some template writes without an environment", () => {
+    expect(new Set(ENVIRONMENT_EDITABLE_JOBS)).toEqual(jobsOf(false));
+  });
+
+  test("lists no managed job that any template writes with an environment", () => {
+    expect(ENVIRONMENT_EDITABLE_JOBS.filter((jobId) => jobsOf(true).has(jobId))).toEqual([]);
   });
 });
 
@@ -812,5 +837,70 @@ describe("mergeUserContent", () => {
       "      - id: slack-prereq\n        run: echo mine\n$1",
     );
     expect(merge(edited, render).content).toBe(edited);
+  });
+});
+
+describe("environment on a managed job", () => {
+  test("keeps a user environment on the changes detection job across regeneration", () => {
+    const render = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/api" });
+    const edited = render.content.replace(
+      /( {2}tailor-changes:\n)/,
+      "$1    environment: registry\n",
+    );
+    expect(edited).not.toBe(render.content);
+    expect(computeManagedHash(edited, "workflow", render.generatedIds)).toBe(
+      computeManagedHash(render.content, "workflow", render.generatedIds),
+    );
+    expect(
+      mergeUserContent({
+        current: edited,
+        rendered: render.content,
+        layout: "workflow",
+        previousIds: render.generatedIds,
+        renderedIds: render.generatedIds,
+        force: false,
+      }).content,
+    ).toBe(edited);
+  });
+
+  const tag = renderTagWorkflow({
+    workspaceName: "my-app",
+    tagPattern: "v*",
+    branch: "main",
+    environment: "my-app",
+    packageManager: "npm",
+  });
+  const tagHashOf = (content: string): string =>
+    computeManagedHash(content, "workflow", tag.generatedIds);
+  const withGuardEnvironment = (content: string): string =>
+    content.replace(/( {2}tailor-tag-guard:\n {4}runs-on: .*\n)/, "$1    environment: registry\n");
+
+  test("is ignored on a job the template writes without one", () => {
+    const edited = withGuardEnvironment(tag.content);
+    expect(edited).not.toBe(tag.content);
+    expect(tagHashOf(edited)).toBe(tagHashOf(tag.content));
+  });
+
+  test("is not ignored on a job whose environment the template writes", () => {
+    const edited = tag.content.replace(
+      /( {2}tailor-plan:\n(?: {4}.*\n)*? {4})environment: my-app/,
+      "$1environment: other",
+    );
+    expect(edited).not.toBe(tag.content);
+    expect(tagHashOf(edited)).not.toBe(tagHashOf(tag.content));
+  });
+
+  test("is kept across regeneration on a job the template writes without one", () => {
+    const edited = withGuardEnvironment(tag.content);
+    expect(edited).not.toBe(tag.content);
+    const { content } = mergeUserContent({
+      current: edited,
+      rendered: tag.content,
+      layout: "workflow",
+      previousIds: tag.generatedIds,
+      renderedIds: tag.generatedIds,
+      force: false,
+    });
+    expect(content).toBe(edited);
   });
 });

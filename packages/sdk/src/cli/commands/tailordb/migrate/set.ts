@@ -6,6 +6,7 @@ import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -118,8 +119,10 @@ async function set(options: SetOptions): Promise<void> {
     });
 
     if (!confirmation) {
-      logger.info("Operation cancelled.");
-      return;
+      throw CLIError({
+        code: "MIGRATION_SET_CANCELLED",
+        message: "Migration checkpoint update cancelled.",
+      });
     }
     logger.newline();
   }

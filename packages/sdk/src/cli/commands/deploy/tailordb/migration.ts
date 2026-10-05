@@ -253,6 +253,7 @@ async function executeSingleMigration(
     migration.number,
     env,
     configDir,
+    migration.diff.temporal ?? false,
   );
 
   const result = await executeMigrationAsWorkflow({
@@ -453,6 +454,7 @@ async function executeStepsMigration(
     runnerJobFunctionName: migrationStepRunnerName(
       migrationWorkflowResourceName(migration.namespace, migration.number),
     ),
+    temporal: migration.diff.temporal ?? false,
   });
 
   const notify = (level: "info" | "warn", message: string) => {

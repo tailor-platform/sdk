@@ -1,6 +1,8 @@
 import { runCommand } from "@politty/zod";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { assertWritable } from "#/cli/shared/readonly-guard";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { deleteCommand } from "./delete";
 import { createPatOperatorClient } from "./user";
 
@@ -21,5 +23,14 @@ describe("user pat delete", () => {
     expect(result.success).toBe(true);
     expect(assertWritable).toHaveBeenCalledWith({ profile: "readonly" });
     expect(createPatOperatorClient).toHaveBeenCalledWith("readonly");
+  });
+
+  test("prints the deleted token's name under JSON output", async () => {
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    await runCommand(deleteCommand, ["token-name"]);
+
+    expect(JSON.parse(stdout.output)).toEqual({ changed: true, name: "token-name" });
   });
 });

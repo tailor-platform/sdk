@@ -13,6 +13,7 @@ import {
 } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 
 export const logoutCommand = defineAppCommand({
   name: "logout",
@@ -37,6 +38,7 @@ export const logoutCommand = defineAppCommand({
     const lookupOptions = profile ? { allowLegacyUserKey: true } : undefined;
     if (!currentUser) {
       logger.info("You are not logged in.");
+      printMutationResult({ changed: false, user: null, revoked: false });
       return;
     }
     const hasDefaultUserToken = () =>
@@ -61,13 +63,16 @@ export const logoutCommand = defineAppCommand({
     }
     if (!storedTokens && !tokenLoadFailed) {
       logger.info("You are not logged in.");
-      if (shouldClearCurrentUser()) {
+      const clearsCurrentUser = shouldClearCurrentUser();
+      if (clearsCurrentUser) {
         pfConfig.current_user = null;
       }
       writePlatformConfig(pfConfig);
+      printMutationResult({ changed: clearsCurrentUser, user: currentUser, revoked: false });
       return;
     }
 
+    let revoked = false;
     if (storedTokens) {
       try {
         const client = initOAuth2Client(platformConfig);
@@ -80,6 +85,7 @@ export const logoutCommand = defineAppCommand({
           },
           tokenTypeHint,
         );
+        revoked = true;
       } catch (error) {
         logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
       }
@@ -91,5 +97,6 @@ export const logoutCommand = defineAppCommand({
     }
     writePlatformConfig(pfConfig);
     logger.success("Successfully logged out from Tailor Platform.");
+    printMutationResult({ changed: true, user: currentUser, revoked });
   },
 });

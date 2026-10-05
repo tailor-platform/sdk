@@ -113,6 +113,14 @@ CREATE TABLE IF NOT EXISTS "Supplier" (
   "updatedAt" timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS "TemporalCheck" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "eventDate" date NOT NULL,
+  "eventDatetime" timestamptz NOT NULL,
+  "eventTime" time NOT NULL,
+  "checkedAt" timestamptz NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "User" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "name" text NOT NULL,

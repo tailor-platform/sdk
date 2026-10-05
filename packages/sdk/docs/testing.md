@@ -211,7 +211,7 @@ What the script cannot reproduce:
 
 - Hooks, validations, and permissions do not run. A required field whose value only its own field-level create hook supplies is created nullable, so inserts that omit it succeed; give it a `.default()` if the test reads it back. A field filled by a table-level hook stays `NOT NULL`, as its Kysely type still requires it on insert.
 - Serial formats are reproduced for a single `%d`, `%x`, or `%X` specifier with an optional zero-padded width; an octal `%o` format fails generation with an error naming the field.
-- A datetime inside a nested object reads back as a string from `jsonb`, not a `Date`.
+- A date or datetime inside a nested object reads back as a string from `jsonb`, not a `Date`, or a `Temporal.PlainDate` or `Temporal.Instant` under `kyselyTypePlugin({ temporal: true })`, although the platform returns those types.
 - On a persistent PGlite (`dataDir`), tables created by an earlier run are kept as they were; drop them or start from an empty directory after changing a table definition.
 
 To hand-write DDL instead — for a table not in the schema, or to add a constraint — run your own statements after the script, or without it.
@@ -219,6 +219,7 @@ To hand-write DDL instead — for a table not in the schema, or to add a constra
 - The PGlite instance is yours: the mock never closes it, so close it in `afterAll`. Reuse one instance across a suite — creating one per test is slow.
 - Pass the same instance under several namespaces to drive them against one shared database. Two namespaces with a same-named table cannot share one instance, because the second script leaves the first table as it is.
 - Seed through `getDB` itself. When a column type rejects a value that only the test must stage, use `createKyselyPGlite<Unmigrated<...>>(pglite)` instead — see [Testing Migrations Locally](./services/tailordb-migration.md#testing-migrations-locally). This only affects test setup; it cannot supply a `.serial()` value for an insert issued by the code under test.
+- With `kyselyTypePlugin({ temporal: true })`, the generated `getDB` reads top-level date, datetime, and time columns back from PGlite as `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime`, as it does on the platform. Values inside nested objects stay strings in PGlite (see above); on the platform, nested date/datetime fields are Temporal values while nested time fields remain strings.
 - Transactions on a shared instance are serialized: while one is open, queries from other `getDB` instances wait. Do not use `test.concurrent` with a shared instance, and do not query the same instance through a second `getDB` from inside a transaction — that waits on itself.
 - PGlite runs full PostgreSQL while TailorDB supports a subset of it, and TailorDB hooks, validations, and permissions do not run here — a test passing on PGlite can still behave differently on the platform. Keep [`mockTailordb`](#tailordb-mock) or [`createKyselyMock`](#kysely-layer-mock-createkyselymock) tests for query shape and error paths, and E2E tests for platform behavior.
 

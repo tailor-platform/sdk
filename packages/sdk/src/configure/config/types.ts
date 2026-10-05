@@ -197,14 +197,14 @@ export interface AppConfig<
   /**
    * Enable inline sourcemaps in bundled functions for better error stack traces.
    * @default true
-   * @deprecated since NEXT_RELEASE — use `buildOptions.inlineSourcemap` instead. codemod: v3/define-config-build-options
+   * @deprecated since 2.24.0 — use `buildOptions.inlineSourcemap` instead. codemod: v3/define-config-build-options
    */
   inlineSourcemap?: boolean;
   /**
    * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
    * calls remain in bundled functions.
    * @default "DEBUG"
-   * @deprecated since NEXT_RELEASE — use `buildOptions.logLevel` instead. codemod: v3/define-config-build-options
+   * @deprecated since 2.24.0 — use `buildOptions.logLevel` instead. codemod: v3/define-config-build-options
    */
   logLevel?: LogLevelInput;
   /** Options for how resolvers, executors, workflow jobs, and other functions are bundled. */

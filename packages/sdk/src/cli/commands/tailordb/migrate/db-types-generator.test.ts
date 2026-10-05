@@ -82,9 +82,10 @@ describe("db-types-generator", () => {
     snapshot: SchemaSnapshot,
     migrationNumber = 1,
     diff?: MigrationDiff,
+    temporal = false,
   ): Promise<{ filePath: string; content: string }> {
     createMigrationDir(testDir, migrationNumber);
-    const filePath = await writeDbTypesFile(snapshot, testDir, migrationNumber, diff);
+    const filePath = await writeDbTypesFile(snapshot, testDir, migrationNumber, diff, [], temporal);
     const content = fs.readFileSync(filePath, "utf-8");
     return { filePath, content };
   }
@@ -129,6 +130,40 @@ describe("db-types-generator", () => {
     fields: Record<string, Partial<SnapshotFieldConfig>>;
     expectedContains: string[];
   };
+
+  test("omits the ColumnType import when no column needs it", async () => {
+    const snapshot = createMockSnapshot(
+      { User: { fields: { name: { type: "string", required: true } } } },
+      "tailordb",
+    );
+
+    const { content } = await generateContent(snapshot);
+
+    expect(content).not.toContain("type ColumnType");
+  });
+
+  test("imports ColumnType when a column is typed with it", async () => {
+    const snapshot = createMockSnapshot(
+      { User: { fields: { name: { type: "string", required: true } } } },
+      "tailordb",
+    );
+    const diff = createMockMigrationDiff({
+      changes: [
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "name",
+          before: { type: "string", required: false },
+          after: { type: "string", required: true },
+        },
+      ],
+    });
+
+    const { content } = await generateContent(snapshot, 1, diff);
+
+    expect(content).toContain("ColumnType<");
+    expect(content).toContain("type ColumnType");
+  });
 
   describe("writeDbTypesFile with basic field types", () => {
     test.each<BasicFieldTypesCase>([
@@ -183,7 +218,7 @@ describe("db-types-generator", () => {
           endTime: { type: "datetime", required: false },
         },
         expectedContains: [
-          "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
+          'type Timestamp } from "@tailor-platform/sdk/kysely";',
           "eventDate: Timestamp;",
           "startTime: Timestamp;",
           "endTime: Timestamp | null;",
@@ -211,6 +246,117 @@ describe("db-types-generator", () => {
       for (const expected of expectedContains) {
         expect(content).toContain(expected);
       }
+    });
+  });
+
+  describe("writeDbTypesFile with temporal option", () => {
+    test("maps date/datetime/time to their Temporal column types and imports them", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            eventDate: { type: "date", required: true },
+            startTime: { type: "datetime", required: true },
+            checkIn: { type: "time", required: false },
+          },
+        },
+      });
+
+      const { content } = await generateContent(snapshot, 1, undefined, true);
+
+      expect(content).toContain(
+        'type TemporalDate, type TemporalInstant, type TemporalTime } from "@tailor-platform/sdk/kysely";',
+      );
+      expect(content).toContain("eventDate: TemporalDate;");
+      expect(content).toContain("startTime: TemporalInstant;");
+      expect(content).toContain("checkIn: TemporalTime | null;");
+      expect(content).not.toContain("Timestamp");
+    });
+
+    test("leaves date/datetime/time mapped to Timestamp/string when temporal is not set", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            eventDate: { type: "date", required: true },
+            checkIn: { type: "time", required: false },
+          },
+        },
+      });
+
+      const { content } = await generateContent(snapshot);
+
+      expect(content).toContain("eventDate: Timestamp;");
+      expect(content).toContain("checkIn: string | null;");
+      expect(content).not.toContain("Temporal");
+    });
+
+    test("imports the Temporal namespace for a cleared date field carried through expand-contract", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            eventDate: { type: "date", required: false },
+          },
+        },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(
+        snapshot,
+        testDir,
+        1,
+        undefined,
+        [
+          {
+            tableName: "Event",
+            fieldName: "eventDate",
+            tempFieldName: "eventDateTmp",
+            before: { type: "date", required: false },
+            after: { type: "string", required: false },
+          },
+        ],
+        true,
+      );
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        'type Generated, type Temporal } from "@tailor-platform/sdk/kysely";',
+      );
+      expect(content).not.toContain("temporal-spec");
+      expect(content).toContain(
+        "eventDate: ColumnType<Temporal.PlainDate | null, Temporal.PlainDate | string | null, Temporal.PlainDate | string | null>;",
+      );
+    });
+
+    test("imports the Temporal namespace for a field changing from optional to required", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            eventDate: { type: "date", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Event",
+            fieldName: "eventDate",
+            before: { type: "date", required: false },
+            after: { type: "date", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff, true);
+
+      expect(content).toContain(
+        'type Generated, type Temporal } from "@tailor-platform/sdk/kysely";',
+      );
+      expect(content).not.toContain("temporal-spec");
+      expect(content).toContain(
+        "eventDate: ColumnType<Temporal.PlainDate | null, Temporal.PlainDate | string, Temporal.PlainDate | string>;",
+      );
     });
   });
 
@@ -559,9 +705,7 @@ export async function rejectedWrites(trx: Transaction): Promise<void> {
       const { content } = await generateContent(snapshot);
 
       expect(content).toContain("id: Generated<string>;");
-      expect(content).toContain(
-        "type Generated<T> = T extends ColumnType<infer S, infer I, infer U>",
-      );
+      expect(content).toContain('type Generated } from "@tailor-platform/sdk/kysely";');
     });
   });
 

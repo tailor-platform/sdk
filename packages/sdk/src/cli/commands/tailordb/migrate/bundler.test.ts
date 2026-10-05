@@ -176,6 +176,20 @@ export async function main(trx: Transaction): Promise<void> {
       // The wrapper always defines and forwards an env binding
       expect(result.bundledCode).toContain("env");
     });
+
+    test("passes temporal: false to tailordb.Client by default", async () => {
+      const scriptPath = writeMigration("  // Migration");
+      const result = await bundleMigrationScript(scriptPath, "tailordb", 9);
+
+      expect(result.bundledCode).toContain("temporal: false");
+    });
+
+    test("passes temporal: true to tailordb.Client when requested", async () => {
+      const scriptPath = writeMigration("  // Migration");
+      const result = await bundleMigrationScript(scriptPath, "tailordb", 10, {}, undefined, true);
+
+      expect(result.bundledCode).toContain("temporal: true");
+    });
   });
 });
 
@@ -201,6 +215,7 @@ describe("bundleMigrationSteps", () => {
   interface RuntimeRecord {
     sql: string[];
     jobs: { name: string; args: unknown }[];
+    clientOptions: unknown[];
   }
 
   type BundledMain = (input: unknown) => Promise<unknown>;
@@ -208,10 +223,12 @@ describe("bundleMigrationSteps", () => {
   /**
    * Bundle a steps script and import it with stand-ins for the platform globals.
    * @param stepsSource - Source of the `steps` object literal
+   * @param temporal - Temporal mode to bundle the steps with
    * @returns The bundle's `main` and what it did against the stand-ins
    */
   async function loadStepsBundle(
     stepsSource: string,
+    temporal?: boolean,
   ): Promise<{ main: BundledMain; record: RuntimeRecord }> {
     const scriptPath = path.join(testDir, "migrate.ts");
     fs.writeFileSync(
@@ -227,12 +244,16 @@ describe("bundleMigrationSteps", () => {
       env: { STAGE: "test" },
       order: ["first", "second"],
       runnerJobFunctionName: "runner-job",
+      temporal,
     });
 
-    const record: RuntimeRecord = { sql: [], jobs: [] };
+    const record: RuntimeRecord = { sql: [], jobs: [], clientOptions: [] };
     const globals = globalThis as Record<string, unknown>;
     globals.tailordb = {
       Client: class {
+        constructor(options: unknown) {
+          record.clientOptions.push(options);
+        }
         async connect() {}
         async end() {}
         async queryObject(sql: string) {
@@ -292,6 +313,22 @@ describe("bundleMigrationSteps", () => {
     expect((globalThis as Record<string, unknown>).__migrationEvents).toEqual([["second", "test"]]);
     expect(record.sql).toEqual(["begin", 'select * from "User"', "commit"]);
     expect(record.jobs).toEqual([]);
+  });
+
+  test("connects in Date mode by default", async () => {
+    const { main, record } = await loadStepsBundle(STEPS);
+
+    await main({ step: "second" });
+
+    expect(record.clientOptions).toEqual([{ namespace: "main-db", temporal: false }]);
+  });
+
+  test("connects in Temporal mode when requested", async () => {
+    const { main, record } = await loadStepsBundle(STEPS, true);
+
+    await main({ step: "second" });
+
+    expect(record.clientOptions).toEqual([{ namespace: "main-db", temporal: true }]);
   });
 
   test("rolls back the step's transaction when it throws", async () => {

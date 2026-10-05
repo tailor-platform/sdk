@@ -348,4 +348,118 @@ export interface Plugin<
   onExecutorReady?(
     context: ExecutorReadyContext<PluginConfig>,
   ): GeneratorResult | Promise<GeneratorResult>;
+
+  /** Runs after a successful deploy, including deploys with no resource changes. */
+  onDeployed?(
+    context: DeployedContext<PluginConfig>,
+  ): void | DeployedHookResult | Promise<void | DeployedHookResult>;
+}
+
+export interface PublishStaticWebsiteResult {
+  url: string;
+  skippedFiles: string[];
+}
+
+export interface DeployedStaticWebsite {
+  name: string;
+  url: string;
+}
+
+/** A static website declared in the config that registers the plugin, which the plugin can publish to. */
+export interface PublishableStaticWebsite extends DeployedStaticWebsite {
+  /** Uploads the directory at the absolute path `dir` and publishes it to this website. */
+  publish(dir: string): Promise<PublishStaticWebsiteResult>;
+}
+
+export interface DeployedOAuth2Client {
+  name: string;
+  clientId: string;
+}
+
+export interface DeployedApplication<
+  StaticWebsite extends DeployedStaticWebsite = DeployedStaticWebsite,
+> {
+  /** SDK-managed application ID from defineConfig(); undefined when the config has none. */
+  id?: string;
+  name: string;
+  configPath: string;
+  /** Application endpoint URL, present when a matching Platform Application exists. */
+  url?: string;
+  domain?: string;
+  aiGateways: { name: string; url: string }[];
+  /** Static websites declared in this application's config, keyed by name. */
+  staticWebsites: Readonly<Partial<Record<string, StaticWebsite>>>;
+  auth?: { namespace: string; oauth2Clients: DeployedOAuth2Client[] };
+}
+
+export interface PluginLogger {
+  info(message: string): void;
+  warn(message: string): void;
+  success(message: string): void;
+}
+
+export interface PluginExecOptions {
+  /** Directory to run the command in. */
+  workingDir: string;
+  /** Environment variables added to the environment `tailor` runs with. */
+  env?: Record<string, string>;
+  /**
+   * Where the command's output goes. `"stream"` (default) writes both stdout and stderr to stderr
+   * so `--json` results on stdout stay parseable, `"capture"` returns them, and `"ignore"` discards them.
+   */
+  output?: "stream" | "capture" | "ignore";
+}
+
+export interface PluginExecResult {
+  /** Captured stdout. Empty unless `output` is `"capture"`. */
+  stdout: string;
+  /** Captured stderr. Empty unless `output` is `"capture"`. */
+  stderr: string;
+}
+
+/** Values available after all applications in this deploy run have been applied. */
+export interface DeployedContext<PluginConfig = unknown> {
+  workspaceId: string;
+  /** Application whose config registers this plugin. Only its static websites can be published. */
+  application: DeployedApplication<PublishableStaticWebsite>;
+  /** Every application in this deploy run, including the registering one. */
+  applications: readonly DeployedApplication[];
+  /** Absolute path of the config registering this plugin. */
+  configPath: string;
+  pluginConfig: PluginConfig;
+  logger: PluginLogger;
+  /**
+   * Run a shell command on the machine running `tailor deploy`. Rejects when the command exits with a non-zero code.
+   * @param command - Shell command, such as `pnpm build`
+   * @param options - Working directory, added environment variables, and output handling
+   * @returns Captured output when `options.output` is `"capture"`
+   */
+  exec(command: string, options: PluginExecOptions): Promise<PluginExecResult>;
+}
+
+// Symbol keys only: string keys such as `toJSON?: never` would also reject interfaces with a data field of that name.
+type OutputObject = object & {
+  [Symbol.iterator]?: never;
+  [Symbol.toStringTag]?: never;
+  [Symbol.hasInstance]?: never;
+  [Symbol.toPrimitive]?: never;
+  [Symbol.match]?: never;
+};
+
+/**
+ * A value a plugin hook can return in `outputs`. Interface-typed objects are accepted;
+ * a `Date` or class instance nested inside one is rejected when the deploy runs.
+ */
+export type PluginOutputValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly PluginOutputValue[]
+  | { [key: string]: PluginOutputValue }
+  | OutputObject;
+
+export interface DeployedHookResult {
+  /** Values included in deploy's JSON result. Interface-typed values are accepted, but a `Date` or class instance nested inside one fails the deploy instead of the type check. */
+  outputs?: Record<string, PluginOutputValue>;
 }

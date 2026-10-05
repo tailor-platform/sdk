@@ -115,8 +115,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
         default: false,
       });
       if (!confirmation) {
-        logger.info("Truncate cancelled.");
-        return;
+        throw CLIError({ code: "TRUNCATE_CANCELLED", message: "Truncate cancelled." });
       }
     }
 
@@ -153,8 +152,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
         default: false,
       });
       if (!confirmation) {
-        logger.info("Truncate cancelled.");
-        return;
+        throw CLIError({ code: "TRUNCATE_CANCELLED", message: "Truncate cancelled." });
       }
     }
 
@@ -189,8 +187,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
         default: false,
       });
       if (!confirmation) {
-        logger.info("Truncate cancelled.");
-        return;
+        throw CLIError({ code: "TRUNCATE_CANCELLED", message: "Truncate cancelled." });
       }
     }
 

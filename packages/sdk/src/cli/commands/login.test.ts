@@ -9,6 +9,8 @@ import {
 } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { isCLIError } from "#/cli/shared/errors";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
 
@@ -337,6 +339,58 @@ describe("login --profile", () => {
         Object.defineProperty(process, "platform", platformDescriptor);
       }
     }
+  });
+
+  test("prints the machine user under JSON output", async () => {
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "machine-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(loginCommand, [
+      "--machine-user",
+      "--client-id",
+      "machine-client",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      user: "machine-client",
+      email: null,
+    });
+  });
+
+  test("prints the browser user under JSON output", async () => {
+    getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
+    getTokenFromCodeRedirectMock.mockResolvedValue({
+      accessToken: "browser-token",
+      refreshToken: "browser-refresh-token",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    vi.mocked(fetchUserInfo).mockResolvedValue({
+      sub: "browser-sub",
+      email: "browser@example.com",
+    });
+    openMock.mockImplementation(async () => {
+      await fetch("http://localhost:8085/callback?code=browser-code&state=browser-state");
+    });
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(loginCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      user: "browser-sub",
+      email: "browser@example.com",
+    });
   });
 
   test("keeps current user when machine-user login targets a non-default platform profile", async () => {

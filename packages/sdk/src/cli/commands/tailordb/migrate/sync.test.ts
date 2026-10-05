@@ -437,12 +437,23 @@ describe("tailordb migration sync", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
-  test("makes no changes when the confirmation prompt is declined", async () => {
-    vi.mocked(prompt.confirm).mockResolvedValue(false);
+  test("applies the snapshot when the confirmation prompt is accepted", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
 
     const result = await runCommand(syncCommand, ["1"]);
 
     expect(result.success).toBe(true);
+    expect(prompt.confirm).toHaveBeenCalledWith(expect.objectContaining({ default: false }));
+    expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
+  });
+
+  test("fails without changes when the confirmation prompt is declined", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    const result = await runCommand(syncCommand, ["1"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_SYNC_CANCELLED" });
     expect(state.createTailorDBType).not.toHaveBeenCalled();
     expect(state.updateTailorDBType).not.toHaveBeenCalled();
     expect(state.deleteTailorDBType).not.toHaveBeenCalled();

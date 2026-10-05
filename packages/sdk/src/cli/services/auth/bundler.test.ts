@@ -60,6 +60,30 @@ export default {
     expect(code).toContain("ENVIRONMENT");
   });
 
+  test("bundles a before-login hook from a config that registers frontendPlugin", async () => {
+    const frontendModule = path.resolve(
+      import.meta.dirname,
+      "../../../../../sdk-plugin-frontend/src/index.ts",
+    );
+    const configFile = writeConfig(`
+import { frontendPlugin } from ${JSON.stringify(frontendModule)};
+const handler = async ({ claims }) => ({ claims });
+export const plugins = [frontendPlugin({ site: "web", distDir: "dist" })];
+export default {
+  auth: { hooks: { beforeLogin: { handler } } },
+};
+`);
+
+    const bundled = await bundleAuthHooks({
+      configPath: configFile,
+      authName: "my-auth",
+      handlerAccessPath: "auth.hooks.beforeLogin.handler",
+      baseDir: path.dirname(configFile),
+    });
+
+    expect(bundled.get("auth-hook--my-auth--before-login")).toBeDefined();
+  });
+
   test("injects an empty env object when none is provided", async () => {
     const configFile = writeConfig();
 

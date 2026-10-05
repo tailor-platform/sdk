@@ -6,6 +6,7 @@ import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import type { MachineUser } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -19,6 +20,7 @@ export interface ListMachineUsersOptions {
 }
 
 export interface MachineUserInfo {
+  id: string;
   name: string;
   clientId: string;
   clientSecret: string;
@@ -35,6 +37,7 @@ export interface MachineUserInfo {
 function machineUserInfo(user: MachineUser): MachineUserInfo {
   logger.registerSecret(user.clientSecret);
   return {
+    id: user.id,
     name: user.name,
     clientId: user.clientId,
     clientSecret: user.clientSecret,
@@ -100,15 +103,19 @@ export const listCommand = defineAppCommand({
   }),
   run: async (args) => {
     // Execute machineuser list logic
-    const machineUsers = await listMachineUsers({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      configPath: args.config,
-      order: args.order,
-      limit: args.limit,
-    });
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      listMachineUsers({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        configPath: args.config,
+        order: args.order,
+        limit,
+      }),
+    );
+    const machineUsers = listed.items;
 
     // Show machine users info
     logger.out(machineUsers, { display: { createdAt: null, updatedAt: null } });
+    await reportTruncation(listed, args.limit);
   },
 });

@@ -92,10 +92,12 @@ export { runWorkflowLocally, type RunWorkflowLocallyOptions } from "./workflow-l
 export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";
 export {
   createKyselyPGlite,
+  type CreateKyselyPGliteOptions,
   type PGliteClient,
   type PGliteQueryResult,
   type Unmigrated,
 } from "./pglite-kysely";
+export type { PGliteField } from "./pglite-temporal";
 export {
   MigrationStepError,
   runMigrationSteps,

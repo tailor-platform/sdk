@@ -84,6 +84,15 @@ describe("generateScriptDbTypes", () => {
     expect(content).toContain("id: Generated<string>;");
   });
 
+  test("emits Temporal column types and a Temporal getDB when temporal is enabled", () => {
+    const content = generateScriptDbTypes(makeSnapshot(), true);
+
+    expect(content).toContain("export const getDB = createGetDB<Namespace>({ temporal: true });");
+    expect(content).toContain("shippedAt: TemporalInstant | null;");
+    expect(content).toContain("createdAt: Generated<TemporalInstant>;");
+    expect(content).not.toContain("Timestamp");
+  });
+
   test("does not classify a hand-written db.ts as generated", () => {
     expect(
       isGeneratedScriptDbTypes('export const getDB = () => { throw new Error("stub"); };'),

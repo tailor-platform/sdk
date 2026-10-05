@@ -1,0 +1,28 @@
+{
+  "version": 7,
+  "namespace": "tailordb",
+  "createdAt": "2026-10-01T01:46:57.846Z",
+  "changes": [
+    {
+      "kind": "field_added",
+      "tableName": "TemporalCheck",
+      "fieldName": "checkedAt",
+      "after": {
+        "type": "datetime",
+        "required": true
+      }
+    }
+  ],
+  "hasBreakingChanges": true,
+  "breakingChanges": [
+    {
+      "tableName": "TemporalCheck",
+      "fieldName": "checkedAt",
+      "reason": "Required field added"
+    }
+  ],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": true,
+  "temporal": true
+}

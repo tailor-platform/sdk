@@ -7,6 +7,7 @@ import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { connectionNameArgs } from "./args";
@@ -250,5 +251,6 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
     });
 
     logger.success(`Auth connection "${args.name}" authorized successfully.`);
+    printMutationResult({ changed: true, workspaceId, name: args.name });
   },
 });

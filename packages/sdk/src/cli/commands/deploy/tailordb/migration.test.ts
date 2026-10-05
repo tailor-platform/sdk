@@ -71,9 +71,12 @@ vi.mock("#/cli/shared/spinner", () => ({
 // Mock the bundler and the workflow executor so executeMigrations can run
 // without touching the network or building real bundles.
 const bundleMigrationScriptMock = vi.fn();
+const bundleMigrationStepsMock = vi.fn(async (_options: { temporal?: boolean }) => ({
+  bundledCode: "// bundled steps",
+}));
 vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
-  bundleMigrationSteps: async () => ({ bundledCode: "// bundled steps" }),
+  bundleMigrationSteps: (options: { temporal?: boolean }) => bundleMigrationStepsMock(options),
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
 const executeMigrationStepsAsWorkflowMock = vi.fn();
@@ -720,7 +723,7 @@ describe("migration", () => {
   describe("executeMigrations", () => {
     const workspaceId = "test-workspace";
 
-    function createMockContext(): MigrationContext {
+    function createMockContext(overrides: Partial<MigrationContext> = {}): MigrationContext {
       return {
         client: {} as unknown as OperatorClient,
         workspaceId,
@@ -731,6 +734,7 @@ describe("migration", () => {
         configDir: "/project",
         appName: "test-app",
         appId: "test-app-id",
+        ...overrides,
       };
     }
 
@@ -916,6 +920,50 @@ describe("migration", () => {
       expect(executeMigrationAsWorkflowMock.mock.calls[0]![0]).toMatchObject({
         migrationNumber: 1,
       });
+    });
+
+    test("runs each migration script with the temporal mode recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ temporal: true }),
+        }),
+        createMockMigration({ number: 2, hasScript: true }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(bundleMigrationScriptMock.mock.calls.map((call) => call[5])).toEqual([true, false]);
+    });
+
+    test("runs each steps script with the temporal mode recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          scriptForm: stepsForm,
+          diff: createMockMigrationDiff({ temporal: true }),
+        }),
+        createMockMigration({ number: 2, scriptForm: stepsForm }),
+      ];
+      const completed = {
+        success: true,
+        logs: "",
+        completedSteps: ["backfill"],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      };
+      bundleMigrationStepsMock.mockClear();
+      executeMigrationStepsAsWorkflowMock
+        .mockResolvedValueOnce(completed)
+        .mockResolvedValueOnce(completed);
+
+      await executeMigrations(stepsContext(vi.fn()), migrations);
+
+      expect(bundleMigrationStepsMock.mock.calls.map(([options]) => options.temporal)).toEqual([
+        true,
+        false,
+      ]);
     });
 
     test("executes only the subset with hasScript=true when mixed with breaking changes", async () => {

@@ -14,6 +14,7 @@ import type {
   TailorDBSelectable,
   TailorDBUpdateable,
 } from "./index";
+import type { Temporal } from "temporal-spec";
 
 // Sanity check: verify typecheck catches errors
 describe("typecheck sanity", () => {
@@ -326,6 +327,52 @@ describe("column mapping", () => {
     const fields = { createdAt: db.datetime().default("now") };
 
     expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{ createdAt: Date }>();
+  });
+});
+
+describe("temporal option", () => {
+  test("maps date/datetime/time to their Temporal column types when true", () => {
+    const fields = { day: db.date(), when: db.datetime(), at: db.time() };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, true>>().toEqualTypeOf<{
+      day: Temporal.PlainDate;
+      when: Temporal.Instant;
+      at: Temporal.PlainTime;
+    }>();
+    expectTypeOf<TailorDBInsertable<typeof fields, true>>().toEqualTypeOf<{
+      day: Temporal.PlainDate | string;
+      when: Temporal.Instant | string;
+      at: Temporal.PlainTime | string;
+    }>();
+  });
+
+  test("defaults to false, keeping today's Date/string mapping", () => {
+    const fields = { day: db.date(), when: db.datetime(), at: db.time() };
+
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<
+      TailorDBSelectable<typeof fields, false>
+    >();
+    expectTypeOf<TailorDBSelectable<typeof fields>["day"]>().toEqualTypeOf<Date>();
+    expectTypeOf<TailorDBSelectable<typeof fields>["at"]>().toEqualTypeOf<string>();
+  });
+
+  test("keeps a time field nested inside an object as a string", () => {
+    const fields = {
+      schedule: db.object({ startTime: db.time(), day: db.date() }),
+    };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, true>["schedule"]>().toEqualTypeOf<{
+      startTime: string;
+      day: Temporal.PlainDate;
+    }>();
+  });
+
+  test("wraps arrays of Temporal columns in ArrayColumnType", () => {
+    const fields = { eventTimes: db.time({ array: true }) };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, true>>().toEqualTypeOf<{
+      eventTimes: Temporal.PlainTime[];
+    }>();
   });
 });
 

@@ -26,7 +26,13 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(9);
+    expect(pipelineResolvers.length).toBe(10);
+
+    const temporalRoundTrip = pipelineResolvers.find((e) => e.name === "temporalRoundTrip");
+    expect(temporalRoundTrip).toMatchObject({
+      name: "temporalRoundTrip",
+      operationType: "mutation",
+    });
 
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
@@ -179,6 +185,37 @@ describe("controlplane", async () => {
 
 describe("dataplane", () => {
   const graphQLClient = createGraphQLClient(inject("url"), inject("token"));
+
+  test("round-trips Temporal TailorDB fields", async () => {
+    const mutation = gql`
+      mutation {
+        temporalRoundTrip {
+          id
+          eventDateIsTemporal
+          eventDatetimeIsTemporal
+          eventTimeIsTemporal
+          eventDateString
+          eventDatetimeString
+          eventTimeString
+        }
+      }
+    `;
+
+    const result = await graphQLClient.rawRequest(mutation);
+
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({
+      temporalRoundTrip: {
+        id: expect.any(String),
+        eventDateIsTemporal: true,
+        eventDatetimeIsTemporal: true,
+        eventTimeIsTemporal: true,
+        eventDateString: "2026-03-14",
+        eventDatetimeString: "2026-03-14T09:30:00Z",
+        eventTimeString: "09:30:00",
+      },
+    });
+  });
 
   describe("stepChain", async () => {
     test("prepare data", async () => {

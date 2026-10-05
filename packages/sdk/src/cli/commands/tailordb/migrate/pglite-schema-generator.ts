@@ -7,6 +7,7 @@
 import * as fs from "node:fs/promises";
 import { generatePgliteSchemaModule, type DDLTableConfig } from "#/utils/tailordb-ddl";
 import { writeDbTypesFile } from "./db-types-generator";
+import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import { getMigrationFilePath } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
@@ -82,6 +83,12 @@ export interface WriteMigrationTypeFilesOptions {
   migrationNumber: number;
   /** Field changes carried through temporary fields */
   expandPlans?: readonly ExpandContractPlan[];
+  /**
+   * Whether date/datetime/time fields in `db.ts` resolve to their Temporal column
+   * types instead of their `Date`/`string` defaults. Should match whatever
+   * `kyselyTypePlugin` was configured with. Defaults to `false`.
+   */
+  temporal?: boolean;
 }
 
 /** Outcome of writing `db.pglite.ts`: the path, or why it was skipped. */
@@ -127,22 +134,47 @@ export async function tryWritePgliteSchemaFile(
   }
 }
 
+async function recordTemporalMode(diffPath: string, temporal: boolean): Promise<void> {
+  const raw = JSON.parse(await fs.readFile(diffPath, "utf-8")) as Record<string, unknown>;
+  if (temporal) {
+    raw.temporal = true;
+    if (typeof raw.version !== "number" || raw.version < SCHEMA_SNAPSHOT_VERSION) {
+      raw.version = SCHEMA_SNAPSHOT_VERSION;
+    }
+  } else if (Object.hasOwn(raw, "temporal")) {
+    delete raw.temporal;
+  } else {
+    return;
+  }
+  await fs.writeFile(diffPath, JSON.stringify(raw, null, 2));
+}
+
 /**
- * Write `db.ts` and `db.pglite.ts` for a migration.
+ * Write `db.ts` and `db.pglite.ts` for a migration, and record in its `diff.json`
+ * whether `db.ts` uses Temporal column types so the script later runs in that mode.
  * @param options - Snapshot, diff, and destination
  * @returns Paths of the written files
  */
 export async function writeMigrationTypeFiles(
   options: WriteMigrationTypeFilesOptions,
 ): Promise<WriteMigrationTypeFilesResult> {
-  const { previousSnapshot, diff, migrationsDir, migrationNumber, expandPlans = [] } = options;
+  const {
+    previousSnapshot,
+    diff,
+    migrationsDir,
+    migrationNumber,
+    expandPlans = [],
+    temporal = false,
+  } = options;
   const dbTypesPath = await writeDbTypesFile(
     previousSnapshot,
     migrationsDir,
     migrationNumber,
     diff,
     expandPlans,
+    temporal,
   );
+  await recordTemporalMode(getMigrationFilePath(migrationsDir, migrationNumber, "diff"), temporal);
   return {
     dbTypesPath,
     ...(await tryWritePgliteSchemaFile(previousSnapshot, diff, migrationsDir, migrationNumber)),

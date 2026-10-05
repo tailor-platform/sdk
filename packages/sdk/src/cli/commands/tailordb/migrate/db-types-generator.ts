@@ -145,12 +145,15 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
  * @param {SchemaSnapshot} snapshot - Schema snapshot to generate types from
  * @param {MigrationDiff} [diff] - Optional migration diff for breaking change info
  * @param expandPlans - Field changes carried through temporary fields
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @returns {string} Generated db.ts file contents
  */
 function generateDbTypesFromSnapshot(
   snapshot: SchemaSnapshot,
   diff?: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
+  temporal = false,
 ): string {
   // Extract breaking change field information
   const breakingChangeFields = diff
@@ -184,37 +187,51 @@ function generateDbTypesFromSnapshot(
   }
 
   // Track which utility types are used
-  const usedUtilityTypes = new Set<"Timestamp" | "Serial">();
+  const usedUtilityTypes = new Set<
+    "Timestamp" | "Serial" | "TemporalDate" | "TemporalInstant" | "TemporalTime"
+  >();
+  let usedColumnType = false;
   let usedArrayColumnType = false;
+  let usesTemporalNamespace = false;
 
   // Generate type definitions
   const typeDefinitions: string[] = [];
   for (const type of tables) {
-    const result = generateTableType(type, breakingChangeFields);
-    if (result.usedTimestamp) usedUtilityTypes.add("Timestamp");
+    const result = generateTableType(type, breakingChangeFields, temporal);
+    for (const usedType of result.usedUtilityTypes) usedUtilityTypes.add(usedType);
+    usedColumnType = usedColumnType || result.usedColumnType;
     usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
+    usesTemporalNamespace = usesTemporalNamespace || result.usesTemporalNamespace;
     typeDefinitions.push(result.typeDef);
   }
 
-  // Build imports
-  // ColumnType is always needed for Generated and Timestamp utility types
-  const imports: string[] = ["type ColumnType", "type Transaction as KyselyTransaction"];
+  // Build imports. Timestamp/Generated/Serial/Temporal* come from
+  // @tailor-platform/sdk/kysely (not redeclared here) so this file always reflects
+  // whatever those utility types currently mean, the same as ColumnType/Transaction do.
+  const imports: string[] = ["type Transaction as KyselyTransaction", "type Generated"];
+  if (usedColumnType) {
+    imports.unshift("type ColumnType");
+  }
   if (usedArrayColumnType) {
     imports.push("type ArrayColumnType");
   }
-
-  // Build utility type declarations
-  const utilityTypeDeclarations: string[] = [];
   if (usedUtilityTypes.has("Timestamp")) {
-    utilityTypeDeclarations.push(
-      "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
-    );
+    imports.push("type Timestamp");
   }
-  utilityTypeDeclarations.push(
-    "type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>;",
-  );
   if (usedUtilityTypes.has("Serial")) {
-    utilityTypeDeclarations.push("type Serial<T = string | number> = ColumnType<T, never, never>;");
+    imports.push("type Serial");
+  }
+  if (usedUtilityTypes.has("TemporalDate")) {
+    imports.push("type TemporalDate");
+  }
+  if (usedUtilityTypes.has("TemporalInstant")) {
+    imports.push("type TemporalInstant");
+  }
+  if (usedUtilityTypes.has("TemporalTime")) {
+    imports.push("type TemporalTime");
+  }
+  if (usesTemporalNamespace) {
+    imports.push("type Temporal");
   }
 
   // Build output
@@ -228,8 +245,6 @@ function generateDbTypesFromSnapshot(
     "",
     `import { ${imports.join(", ")} } from "@tailor-platform/sdk/kysely";`,
     'import type { Env } from "@tailor-platform/sdk";',
-    "",
-    ...utilityTypeDeclarations,
     "",
     "export interface Database {",
     ...typeDefinitions,
@@ -293,21 +308,26 @@ function generateEmptyDbTypes(namespace: string): string {
  * Generate table type definition from a snapshot type
  * @param {TailorDBSnapshotType} type - Table snapshot
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
- * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean; usedArrayColumnType: boolean }} Generated type and utility type usage
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @returns {{ typeDef: string; usedUtilityTypes: ReadonlySet<UsedUtilityType>; usedColumnType: boolean; usedArrayColumnType: boolean; usesTemporalNamespace: boolean }} Generated type and utility type usage
  */
 function generateTableType(
   type: TailorDBSnapshotType,
   breakingChangeFields: BreakingChangeFieldInfo,
+  temporal = false,
 ): {
   typeDef: string;
-  usedTimestamp: boolean;
+  usedUtilityTypes: ReadonlySet<UsedUtilityType>;
   usedColumnType: boolean;
   usedArrayColumnType: boolean;
+  usesTemporalNamespace: boolean;
 } {
   const fieldLines: string[] = [];
-  let usedTimestamp = false;
+  const usedUtilityTypes = new Set<UsedUtilityType>();
   let usedColumnType = false;
   let usedArrayColumnType = false;
+  let usesTemporalNamespace = false;
 
   // Add id field first
   fieldLines.push("    id: Generated<string>;");
@@ -331,26 +351,34 @@ function generateTableType(
 
     const isOptionalToRequired = optionalToRequiredFields.has(fieldName);
     const enumValueChange = enumValueChangesForType.get(fieldName);
-    const result = generateFieldType(fieldConfig, isOptionalToRequired, enumValueChange);
+    const result = generateFieldType(fieldConfig, isOptionalToRequired, enumValueChange, temporal);
     // A conversion script clears its source field, and Kysely reads the third
     // ColumnType slot for updates.
     const clearable = clearedFieldsForType.has(fieldName);
-    const emitted = clearable ? generateClearableFieldType(fieldConfig) : result;
-    fieldLines.push(`    ${fieldName}: ${emitted.type};`);
-    usedTimestamp = usedTimestamp || emitted.usedTimestamp;
+    const clearableResult = clearable
+      ? generateClearableFieldType(fieldConfig, temporal)
+      : undefined;
+    fieldLines.push(`    ${fieldName}: ${(clearableResult ?? result).type};`);
+    if (!clearable && result.usedUtilityType) usedUtilityTypes.add(result.usedUtilityType);
     usedColumnType = usedColumnType || result.usedColumnType || clearable;
     usedArrayColumnType = usedArrayColumnType || (!clearable && result.usedArrayColumnType);
+    usesTemporalNamespace =
+      usesTemporalNamespace ||
+      (clearable
+        ? (clearableResult?.usesTemporalNamespace ?? false)
+        : result.usesTemporalNamespace);
   }
 
   // Add newly added required fields with ColumnType (same as optional→required)
   // These fields are added as nullable in pre-migration, then become required in post-migration
   for (const [fieldName, fieldConfig] of addedRequiredFields) {
     // Treat as optional→required change (isOptionalToRequired: true)
-    const result = generateFieldType(fieldConfig, true, undefined);
+    const result = generateFieldType(fieldConfig, true, undefined, temporal);
     fieldLines.push(`    ${fieldName}: ${result.type};`);
-    usedTimestamp = usedTimestamp || result.usedTimestamp;
+    if (result.usedUtilityType) usedUtilityTypes.add(result.usedUtilityType);
     usedColumnType = usedColumnType || result.usedColumnType;
     usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
+    usesTemporalNamespace = usesTemporalNamespace || result.usesTemporalNamespace;
   }
 
   // Add rename target fields, which do not exist in the pre-migration snapshot.
@@ -358,39 +386,42 @@ function generateTableType(
   // (same shape as optional→required); an optional target is plainly nullable.
   const renamedFieldsForType = breakingChangeFields.renamedFields.get(type.name) || new Map();
   for (const [fieldName, fieldConfig] of renamedFieldsForType) {
-    const result = generateFieldType(fieldConfig, fieldConfig.required, undefined);
+    const result = generateFieldType(fieldConfig, fieldConfig.required, undefined, temporal);
     fieldLines.push(`    ${fieldName}: ${result.type};`);
-    usedTimestamp = usedTimestamp || result.usedTimestamp;
+    if (result.usedUtilityType) usedUtilityTypes.add(result.usedUtilityType);
     usedColumnType = usedColumnType || result.usedColumnType;
     usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
+    usesTemporalNamespace = usesTemporalNamespace || result.usesTemporalNamespace;
   }
 
   const typeDef = `  ${type.name}: {\n${fieldLines.join("\n")}\n  }`;
 
-  return { typeDef, usedTimestamp, usedColumnType, usedArrayColumnType };
+  return { typeDef, usedUtilityTypes, usedColumnType, usedArrayColumnType, usesTemporalNamespace };
 }
+
+/** A utility type reported as used, so the generated file's imports cover it. */
+type UsedUtilityType = "Timestamp" | "Serial" | "TemporalDate" | "TemporalInstant" | "TemporalTime";
 
 function mapToTsType(
   fieldType: string,
   allowedValues?: SnapshotFieldConfig["allowedValues"],
+  temporal = false,
 ): {
   type: string;
-  usedTimestamp: boolean;
+  usedUtilityType?: UsedUtilityType;
 } {
   if (fieldType === "nested") {
-    return { type: "Record<string, unknown>", usedTimestamp: false };
+    return { type: "Record<string, unknown>" };
   }
   if (fieldType === "enum" && allowedValues && allowedValues.length > 0) {
-    return {
-      type: `(${formatEnumUnion(allowedValues.map((v) => v.value))})`,
-      usedTimestamp: false,
-    };
+    return { type: `(${formatEnumUnion(allowedValues.map((v) => v.value))})` };
   }
   if (fieldType === "enum") {
-    return { type: "string", usedTimestamp: false };
+    return { type: "string" };
   }
-  const type = mapFieldTypeToColumnType(fieldType);
-  return { type, usedTimestamp: type === "Timestamp" };
+  const type = mapFieldTypeToColumnType(fieldType, temporal);
+  const usedUtilityType = COLUMN_TYPE_ALIASES.has(type) ? (type as UsedUtilityType) : undefined;
+  return { type, usedUtilityType };
 }
 
 function formatEnumUnion(values: string[]): string {
@@ -429,48 +460,68 @@ function generateEnumChangeColumnType(
   return `ColumnType<${selectType}, ${writeType}, ${writeType}>`;
 }
 
+/** Column types whose alias expansion spells the `Temporal` namespace out literally. */
+const TEMPORAL_COLUMN_TYPES = new Set(["TemporalDate", "TemporalInstant", "TemporalTime"]);
+
 /**
  * Column type for a field the migration script both reads and clears.
  *
  * Kysely takes the select, insert, and update types from the three slots in
  * turn, so the update slot has to accept the null the script writes.
  * @param config - Field configuration in the pre-migration snapshot
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column types
  * @returns {string} Generated column type
  */
-function generateClearableFieldType(config: SnapshotFieldConfig): {
+function generateClearableFieldType(
+  config: SnapshotFieldConfig,
+  temporal = false,
+): {
   type: string;
-  usedTimestamp: boolean;
+  usesTemporalNamespace: boolean;
 } {
-  const { type } = mapToTsType(config.type, config.allowedValues);
+  const { type } = mapToTsType(config.type, config.allowedValues, temporal);
   // A ColumnType cannot nest, so an alias contributes its own select and write
-  // types to the slots rather than the alias itself.
+  // types to the slots rather than the alias itself. That inlines the
+  // `Temporal.PlainDate`-style expansion as literal text, so this file needs its
+  // own `Temporal` import wherever the alias itself would otherwise have carried it.
+  const usesTemporalNamespace = TEMPORAL_COLUMN_TYPES.has(type);
   const alias = COLUMN_TYPE_ALIASES.get(type);
   if (alias) {
     const select = config.array ? `${alias.select}[]` : alias.select;
     const write = config.array ? `(${alias.write})[]` : alias.write;
     return {
       type: `ColumnType<${select} | null, ${write} | null, ${write} | null>`,
-      usedTimestamp: false,
+      usesTemporalNamespace,
     };
   }
   const base = config.array ? `${type}[]` : type;
   return {
     type: `ColumnType<${base} | null, ${base} | null, ${base} | null>`,
-    usedTimestamp: false,
+    usesTemporalNamespace,
   };
 }
 
-function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {
-  if (config.type !== "date" && config.type !== "datetime") return null;
+function generateOptionalToRequiredDateColumnType(
+  config: SnapshotFieldConfig,
+  temporal = false,
+): { type: string; usesTemporalNamespace: boolean } | null {
+  if (config.type !== "date" && config.type !== "datetime" && config.type !== "time") return null;
 
   // The select slot has to stay nullable for existing rows, so the alias cannot
   // fill the property on its own and its expansion spells out the slots instead.
-  const alias = COLUMN_TYPE_ALIASES.get(mapFieldTypeToColumnType(config.type));
+  // That inlines the `Temporal.PlainDate`-style expansion as literal text, so
+  // this file needs its own `Temporal` import wherever the alias itself would
+  // otherwise have carried it.
+  const columnType = mapFieldTypeToColumnType(config.type, temporal);
+  const alias = COLUMN_TYPE_ALIASES.get(columnType);
   if (!alias) return null;
   const select = config.array ? `${alias.select}[]` : alias.select;
   const write = config.array ? `(${alias.write})[]` : alias.write;
 
-  return `ColumnType<${select} | null, ${write}, ${write}>`;
+  return {
+    type: `ColumnType<${select} | null, ${write}, ${write}>`,
+    usesTemporalNamespace: TEMPORAL_COLUMN_TYPES.has(columnType),
+  };
 }
 
 /**
@@ -478,49 +529,53 @@ function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): 
  * @param {SnapshotFieldConfig} config - Field configuration
  * @param {boolean} isOptionalToRequired - Whether this field is changing from optional to required
  * @param {EnumValueChange} [enumValueChange] - Enum value change info if applicable
- * @returns {{ type: string; usedTimestamp: boolean; usedColumnType: boolean; usedArrayColumnType: boolean }} Generated type string and utility type usage
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @returns {{ type: string; usedUtilityType?: UsedUtilityType; usedColumnType: boolean; usedArrayColumnType: boolean; usesTemporalNamespace: boolean }} Generated type string and utility type usage
  */
 function generateFieldType(
   config: SnapshotFieldConfig,
   isOptionalToRequired: boolean,
   enumValueChange?: EnumValueChange,
+  temporal = false,
 ): {
   type: string;
-  usedTimestamp: boolean;
+  usedUtilityType?: UsedUtilityType;
   usedColumnType: boolean;
   usedArrayColumnType: boolean;
+  usesTemporalNamespace: boolean;
 } {
   // Handle enum value changes specially
   if (enumValueChange) {
     return {
       type: generateEnumChangeColumnType(enumValueChange, config),
-      usedTimestamp: false,
       usedColumnType: true,
       usedArrayColumnType: false,
+      usesTemporalNamespace: false,
     };
   }
 
   // Get base type
   let baseType: string;
-  let usedTimestamp = false;
+  let usedUtilityType: UsedUtilityType | undefined;
 
   if (config.type === "enum") {
     const enumValues = config.allowedValues?.map((v) => v.value) ?? [];
     baseType = enumValues.length > 0 ? formatEnumUnion(enumValues) : "string";
   } else {
-    const mapped = mapToTsType(config.type);
+    const mapped = mapToTsType(config.type, undefined, temporal);
     baseType = mapped.type;
-    usedTimestamp = mapped.usedTimestamp;
+    usedUtilityType = mapped.usedUtilityType;
   }
 
   if (isOptionalToRequired) {
-    const dateColumnType = generateOptionalToRequiredDateColumnType(config);
+    const dateColumnType = generateOptionalToRequiredDateColumnType(config, temporal);
     if (dateColumnType) {
       return {
-        type: dateColumnType,
-        usedTimestamp: false,
+        type: dateColumnType.type,
         usedColumnType: true,
         usedArrayColumnType: false,
+        usesTemporalNamespace: dateColumnType.usesTemporalNamespace,
       };
     }
   }
@@ -534,9 +589,10 @@ function generateFieldType(
       const arrayType = `ArrayColumnType<${baseType}>`;
       return {
         type: config.required ? arrayType : `${arrayType} | null`,
-        usedTimestamp,
+        usedUtilityType,
         usedColumnType: false,
         usedArrayColumnType: true,
+        usesTemporalNamespace: false,
       };
     }
     const needsParens =
@@ -551,9 +607,10 @@ function generateFieldType(
     // INSERT/UPDATE requires T (must provide a value)
     return {
       type: `ColumnType<${type} | null, ${type}, ${type}>`,
-      usedTimestamp,
+      usedUtilityType,
       usedColumnType: true,
       usedArrayColumnType: false,
+      usesTemporalNamespace: false,
     };
   }
 
@@ -561,7 +618,13 @@ function generateFieldType(
     type = `${type} | null`;
   }
 
-  return { type, usedTimestamp, usedColumnType: false, usedArrayColumnType: false };
+  return {
+    type,
+    usedUtilityType,
+    usedColumnType: false,
+    usedArrayColumnType: false,
+    usesTemporalNamespace: false,
+  };
 }
 
 /**
@@ -571,6 +634,8 @@ function generateFieldType(
  * @param {number} migrationNumber - Migration number
  * @param {MigrationDiff} [diff] - Optional migration diff for breaking change info
  * @param expandPlans - Field changes carried through temporary fields
+ * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
+ * types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @returns {Promise<string>} Path to the written file
  */
 export async function writeDbTypesFile(
@@ -579,8 +644,9 @@ export async function writeDbTypesFile(
   migrationNumber: number,
   diff?: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
+  temporal = false,
 ): Promise<string> {
-  const content = generateDbTypesFromSnapshot(snapshot, diff, expandPlans);
+  const content = generateDbTypesFromSnapshot(snapshot, diff, expandPlans, temporal);
   const filePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
   await fs.writeFile(filePath, content);
   return filePath;

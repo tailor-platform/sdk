@@ -5,6 +5,7 @@ import { parseCrashReportConfig } from "#/cli/crashreport/config";
 import { CRASH_LOG_EXTENSION } from "#/cli/crashreport/writer";
 import { type Order, paginationArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 
 export function orderAndLimitCrashReports(
@@ -51,7 +52,10 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    const files = orderAndLimitCrashReports(entries, { order: args.order, limit: args.limit });
+    const listed = await fetchWithinLimit(args.limit, async (limit) =>
+      orderAndLimitCrashReports(entries, { order: args.order, limit }),
+    );
+    const files = listed.items;
 
     if (files.length === 0) {
       logger.info("No crash reports found.");
@@ -63,6 +67,7 @@ export const listCommand = defineAppCommand({
 
     if (jsonOutput) {
       logger.out(formatCrashReportFiles(files, config.localDir));
+      await reportTruncation(listed, args.limit);
       return;
     }
 
@@ -70,5 +75,6 @@ export const listCommand = defineAppCommand({
     for (const file of files) {
       logger.log(`  ${file}`);
     }
+    await reportTruncation(listed, args.limit);
   },
 });

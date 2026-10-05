@@ -4,6 +4,7 @@ import { confirmationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
@@ -62,8 +63,12 @@ export const restoreCommand = defineAppCommand({
         message: `Are you sure you want to restore workspace "${workspaceId}"? (yes/no):`,
       });
       if (confirmation !== "yes") {
-        logger.info("Workspace restoration cancelled.");
-        return;
+        throw CLIError({
+          code: "WORKSPACE_RESTORATION_CANCELLED",
+          message: "Workspace restoration cancelled.",
+          suggestion:
+            'Run the command again and type "yes" to confirm, or pass --yes to skip the confirmation.',
+        });
       }
     }
 

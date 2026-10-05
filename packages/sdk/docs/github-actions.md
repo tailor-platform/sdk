@@ -199,6 +199,14 @@ Running a workflow setup subcommand creates or updates:
 The workflow file. The `name:` field is set to `Tailor (<workspace-name>)` so
 you can distinguish multiple workspaces in the Actions UI.
 
+Every checkout in the workflow sets `persist-credentials: false`, so the GitHub
+token is not left in `.git/config` while the job installs and runs your
+project's code. The tag guard step passes the job token only to its
+`git fetch`, and the plan step passes it to its `git fetch` and to the step that
+posts the plan comment on the pull request; neither writes it to `.git/config`.
+If installing your dependencies fetches git repositories
+that require authentication, configure the credentials in your own step.
+
 See [Customizing the generated workflow](#customizing-the-generated-workflow)
 for what you can edit.
 
@@ -218,7 +226,12 @@ them. Everything else is yours, and re-running `setup` keeps it:
   managed job with `needs: tailor-deploy`.
 - **Your own top-level keys**, such as a workflow-level `env:` or `defaults:`.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
-  `container`, and `env`.
+  `container`, and `env`. On a managed job generated without an
+  `environment:` (such as `tailor-tag-guard` or `tailor-erd-preview`), you can
+  also add one, for example so a step you added there can read that GitHub
+  Environment's secrets. The `environment:` of `tailor-plan`, `tailor-deploy`,
+  and the preview jobs comes from `--environment`, so change it with that
+  option instead.
 - **These inputs of managed steps:** `ignore` on `tailor-generate-check` and
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
@@ -479,9 +492,61 @@ For a monorepo where your SDK app lives in a subdirectory, pass `--dir`:
 tailor setup ci branch --name my-app --dir apps/backend
 ```
 
-The generated workflow adds a `paths` filter on `apps/backend/**` so the
-workflow only runs when that subdirectory changes. The `working-directory` for
-SDK commands is set accordingly.
+The `working-directory` for SDK commands is set accordingly, and the workflow
+only plans and deploys when that subdirectory changes. The workflow itself
+starts on every pull request and push: a `tailor-changes` job checks whether
+the change touches `apps/backend/**`, and the plan, deploy, and ERD preview jobs
+are skipped when it does not. A skipped job reports success, so you can make
+these checks required in branch protection; a workflow that a `paths` trigger
+filter never started would leave them pending instead. If the `tailor-changes` job
+itself fails (for example, on a GitHub API error), the plan, deploy, and ERD
+preview jobs fail too instead of being skipped, so a required check blocks
+merging and nothing is deployed. Re-run the failed jobs once the cause is gone.
+
+### Deploying several apps together
+
+To deploy several apps to the same workspace from one workflow, repeat `--dir`
+and pass `--name` for the workflow:
+
+```bash
+tailor setup ci branch --name erp --dir apps/erp/backend --dir apps/users/backend
+```
+
+`setup ci branch`, `setup ci tag`, and `setup ci preview` accept repeated
+`--dir`. The workflow plans and deploys every app's `tailor.config.ts` in one
+[multi-config deploy](./cli/application.md#deploy) from the repository root, so
+an app can reference resources of another app with `external: true`. Add
+`@tailor-platform/sdk` to the root `package.json` so the `tailor` CLI resolves
+there; setup stops until it is declared. The generate check runs for each app
+directory, as do seed validation and the migration drift check on branch and tag
+workflows, and a change under any app directory runs the workflow's jobs.
+
+With `--erd-preview`, each TailorDB namespace is previewed from the app that
+owns it. A namespace may be owned by only one app; the others reference it with
+`external: true`.
+
+With more than one app, the preview comment does not link an application URL.
+
+### Running on changes outside the app directories
+
+When the apps depend on code outside their directories, such as a frontend or
+shared packages, add those paths with `--paths` on `setup ci branch` or
+`setup ci preview`. Repeat it for each pattern:
+
+```bash
+tailor setup ci preview --name erp --region asia-northeast \
+  --dir apps/erp/backend --dir apps/users/backend \
+  --paths "apps/*/frontend/**" --paths "modules/**" --paths pnpm-lock.yaml
+```
+
+The patterns are checked after the app directories, in order, and the last
+pattern that matches a changed file decides whether it counts. `*` matches
+within one path segment, `**` matches any number of segments, and a pattern
+starting with `!` excludes matching paths, so it can also exclude files inside
+an app directory, for example `--paths '!apps/erp/backend/**/*.md'`. Other glob
+characters (`?`, `+`, `[ ]`, `{ }`, `( )`, and `\`) are not supported, and
+`setup ci` rejects a pattern that contains them. An app at the repository root already
+runs on every change, so `--paths` is not accepted with `--dir .`.
 
 ## Rollback
 

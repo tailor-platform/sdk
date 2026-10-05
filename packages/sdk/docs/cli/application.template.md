@@ -12,6 +12,29 @@ Commands for managing Tailor Platform applications. These commands work with `ta
 {{politty:command:init}}
 {{politty:command:generate}}
 {{politty:command:deploy}}
+**JSON result:**
+
+After a successful `tailor deploy --json`, stdout includes `status: "applied"`,
+`summary`, `workspaceId`, and `applications` in config order. Each entry includes
+the config's `name`, `configPath`, and, when configured, `id`, plus `aiGateways`
+and `staticWebsites` keyed by site name. Endpoint `url` and `domain` are included
+when a Platform Application with that name exists. If Auth is configured, `auth`
+includes its `namespace` and `oauth2Clients` with each client's `name` and public `clientId`.
+Client secrets are excluded. These fields are returned even when no deploy plugin
+is registered or no resources changed.
+
+Plugins that return outputs add entries under `deployedHooks`. For example, the
+frontend plugin provides upload results in `deployedHooks[].outputs.frontends`.
+
+```sh
+tailor deploy --json > deploy-result.json
+jq '.applications[] | {name, url, staticWebsites, auth}' deploy-result.json
+```
+
+Dry-run and build-only deployments do not return deployed application information.
+If resources were applied but loading the JSON result fails, the command reports
+`DEPLOY_RESULT_LOAD_FAILED`; fix the error and run `tailor deploy` again.
+
 **Workspace Selection:**
 
 After validating the configuration file, `deploy` resolves a workspace before bundling the

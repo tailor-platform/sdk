@@ -22,7 +22,7 @@ import type {
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 6 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 7 as const;
 
 /** Oldest migration file format this SDK can replay. */
 export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
@@ -327,6 +327,12 @@ export interface MigrationDiff {
   requiresMigrationScript: boolean;
   /** Explicit acknowledgment that this migration needs no script despite breaking changes or data-loss warnings */
   scriptSkipped?: ScriptSkippedInfo;
+  /**
+   * Whether this migration's `db.ts` was generated with Temporal column types, so its
+   * script runs against a `tailordb.Client` created with `{ temporal: true }`. Absent
+   * means `false`.
+   */
+  temporal?: boolean;
 }
 
 /**

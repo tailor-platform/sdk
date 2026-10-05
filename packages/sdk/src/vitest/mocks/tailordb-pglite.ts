@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { deserializeTemporalRows, serializeTemporalParams } from "../pglite-temporal";
 import { tailordbRoot, withDispose } from "./shared";
 import type { PGliteClient, PGliteQueryResult } from "../pglite-kysely";
 
@@ -57,13 +58,13 @@ const BEGIN_PATTERN = /^\s*(?:begin|start\s+transaction)\b/i;
 // release the lock.
 const END_PATTERN = /^\s*(?:commit\b|rollback\b(?!(?:\s+(?:work|transaction))?\s+to\b))/i;
 
-function toQueryObjectResult(result: PGliteQueryResult) {
+function toQueryObjectResult(result: PGliteQueryResult, temporal: boolean) {
   return {
     // getDB's Kysely dialect only membership-tests the tag against the DML
     // verbs, so any of the three works when an older PGlite omits it.
     command: result.command ?? (result.affectedRows ? "UPDATE" : "SELECT"),
     rowCount: result.rowCount ?? (result.affectedRows || result.rows.length),
-    rows: result.rows,
+    rows: temporal ? deserializeTemporalRows(result.rows, result.fields) : result.rows,
   };
 }
 
@@ -123,9 +124,10 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
   const defaultClient = function (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this: any,
-    config?: { namespace?: string },
+    config?: { namespace?: string; temporal?: boolean },
   ) {
     const namespace = config?.namespace;
+    const temporal = config?.temporal ?? false;
     const pglite =
       namespace !== undefined && Object.hasOwn(options.namespaces, namespace)
         ? options.namespaces[namespace]
@@ -144,7 +146,10 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
     const self = this as object;
     const run = async (query: string, params?: unknown[]) => {
       executedQueries.push({ namespace, query, params: params ?? [] });
-      return toQueryObjectResult(await pglite.query(query, params ?? []));
+      return toQueryObjectResult(
+        await pglite.query(query, serializeTemporalParams(params ?? [])),
+        temporal,
+      );
     };
 
     const throwEnded = (): never => {

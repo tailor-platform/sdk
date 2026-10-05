@@ -46,4 +46,10 @@ jobs:
           install: false
 
       - name: Audit lockfile for newly introduced vulnerabilities
-        uses: tailor-platform/actions/lockfile-audit@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        id: audit_regression
+        continue-on-error: true
+        uses: tailor-platform/actions/lockfile-audit@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+
+      - name: Require a clean full audit when the regression check fails
+        if: steps.audit_regression.outcome == 'failure'
+        run: pnpm audit --audit-level=moderate

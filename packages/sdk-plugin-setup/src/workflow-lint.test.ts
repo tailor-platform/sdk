@@ -1,12 +1,9 @@
 /**
- * Actionlint validation for generated GitHub Actions workflows.
+ * zizmor audit of generated GitHub Actions workflows and composite actions.
  *
- * Each rendered workflow is written to a temp directory and validated with
- * `actionlint`. The test suite is skipped when the `actionlint` binary is not
- * available on PATH (e.g. a machine without aqua installed), so it never
- * causes false negatives in environments that have not run `aqua i`.
- *
- * Locally: run `aqua i` first, then this suite will execute as normal tests.
+ * Each rendered file is written to a temp directory and audited with
+ * `zizmor --offline`. The audit suites are skipped when the `zizmor` binary is
+ * not on PATH (e.g. a machine that has not run `aqua i`).
  */
 
 import { spawnSync } from "node:child_process";
@@ -14,16 +11,18 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
 import {
+  renderActionWorkflow,
   renderBranchWorkflow,
   renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
+  renderTailorSetupAction,
   type PackageManager,
 } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
 
-function isActionlintAvailable(): boolean {
-  const result = spawnSync("actionlint", ["--version"], {
+function isZizmorAvailable(): boolean {
+  const result = spawnSync("zizmor", ["--version"], {
     encoding: "utf-8",
     timeout: 5000,
     killSignal: "SIGKILL",
@@ -31,12 +30,18 @@ function isActionlintAvailable(): boolean {
   return result.status === 0;
 }
 
-type LintResult = { ok: boolean; output: string };
+type AuditResult = { ok: boolean; output: string };
 
-function runActionlint(workflowPath: string): LintResult {
-  const result = spawnSync("actionlint", ["-color", workflowPath], {
-    encoding: "utf-8",
-  });
+function runZizmor(filePath: string): AuditResult {
+  const result = spawnSync(
+    "zizmor",
+    ["--offline", "--no-progress", "--format", "plain", filePath],
+    {
+      encoding: "utf-8",
+      timeout: 30000,
+      killSignal: "SIGKILL",
+    },
+  );
   const output = `${result.stdout}${result.stderr}`.trim();
   return { ok: result.status === 0, output };
 }
@@ -59,13 +64,20 @@ const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
 const ERD_SCHEMA_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema.yml");
 
-// Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
-const actionlintAvailable = isActionlintAvailable();
+const zizmorAvailable = isZizmorAvailable();
 
-function writeAndLint(name: string, content: string): LintResult {
+function writeAndAudit(name: string, content: string): AuditResult {
   const filePath = path.join(tmpDir, ".github", "workflows", `${name}.yml`);
   fs.writeFileSync(filePath, content, "utf-8");
-  return runActionlint(filePath);
+  return runZizmor(filePath);
+}
+
+function writeAndAuditAction(name: string, content: string): AuditResult {
+  const dir = path.join(tmpDir, ".github", "actions", name);
+  fs.mkdirSync(dir, { recursive: true });
+  const filePath = path.join(dir, "action.yml");
+  fs.writeFileSync(filePath, content, "utf-8");
+  return runZizmor(filePath);
 }
 
 describe("repository ERD schema workflow", () => {
@@ -181,91 +193,62 @@ describe("repository ERD schema workflow", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests (skipped when actionlint is not on PATH)
-// ---------------------------------------------------------------------------
+describe.skipIf(!zizmorAvailable)("zizmor audit of renderBranchWorkflow", () => {
+  const cases = [
+    ...ALL_PM.map((pm) => ({
+      name: `branch / ${pm} / minimal`,
+      fileName: `branch-${pm}`,
+      params: { packageManager: pm },
+    })),
+    {
+      name: "branch / pnpm / with workingDirectory",
+      fileName: "branch-pnpm-dir",
+      params: { packageManager: "pnpm" as const, workingDirectory: "apps/backend" },
+    },
+    {
+      name: "branch / pnpm / with explicit environment",
+      fileName: "branch-pnpm-env",
+      params: { packageManager: "pnpm" as const, environment: "production" },
+    },
+    {
+      name: "branch / pnpm / with ERD preview",
+      fileName: "branch-pnpm-erd-preview",
+      params: {
+        packageManager: "pnpm" as const,
+        erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
+      },
+    },
+    {
+      name: "branch / npm / with seed validation + workingDirectory + environment",
+      fileName: "branch-npm-dir-env",
+      params: {
+        branch: "develop",
+        packageManager: "npm" as const,
+        seedValidate: true,
+        workingDirectory: "apps/api",
+        environment: "staging",
+      },
+    },
+    {
+      name: "branch / pnpm / with restricted dispatch",
+      fileName: "branch-pnpm-restrict",
+      params: { packageManager: "pnpm" as const, restrictDispatch: true },
+    },
+  ];
 
-describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWorkflow", () => {
-  // All four package managers, no optional fields
-  for (const pm of ALL_PM) {
-    test(`branch / ${pm} / minimal`, () => {
-      const { content } = renderBranchWorkflow({
-        ...COMMON,
-        branch: "main",
-        packageManager: pm,
-        erdPreview: null,
-      });
-      const { ok, output } = writeAndLint(`branch-${pm}`, content);
-      expect(ok, `actionlint errors for branch/${pm}:\n${output}`).toBe(true);
-    });
-  }
-
-  // workingDirectory: present
-  test("branch / pnpm / with workingDirectory", () => {
+  test.each(cases)("$name has no zizmor findings", ({ fileName, params }) => {
     const { content } = renderBranchWorkflow({
       ...COMMON,
       branch: "main",
-      packageManager: "pnpm",
       erdPreview: null,
-      workingDirectory: "apps/backend",
+      ...params,
     });
-    const { ok, output } = writeAndLint("branch-pnpm-dir", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
-  });
-
-  // explicit environment
-  test("branch / pnpm / with explicit environment", () => {
-    const { content } = renderBranchWorkflow({
-      ...COMMON,
-      branch: "main",
-      packageManager: "pnpm",
-      erdPreview: null,
-      environment: "production",
-    });
-    const { ok, output } = writeAndLint("branch-pnpm-env", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
-  });
-
-  test("branch / pnpm / with ERD preview", () => {
-    const { content } = renderBranchWorkflow({
-      ...COMMON,
-      branch: "main",
-      packageManager: "pnpm",
-      erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
-    });
-    const { ok, output } = writeAndLint("branch-pnpm-erd-preview", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
-  });
-
-  // seed validation + workingDirectory + environment
-  test("branch / npm / with seed validation + workingDirectory + environment", () => {
-    const { content } = renderBranchWorkflow({
-      ...COMMON,
-      branch: "develop",
-      packageManager: "npm",
-      erdPreview: null,
-      seedValidate: true,
-      workingDirectory: "apps/api",
-      environment: "staging",
-    });
-    const { ok, output } = writeAndLint("branch-npm-dir-env", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
-  });
-
-  test("branch / pnpm / with restricted dispatch", () => {
-    const { content } = renderBranchWorkflow({
-      ...COMMON,
-      branch: "main",
-      packageManager: "pnpm",
-      erdPreview: null,
-      restrictDispatch: true,
-    });
-    const { ok, output } = writeAndLint("branch-pnpm-restrict", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    const { ok, output } = writeAndAudit(fileName, content);
+    expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
 });
 
-describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflow", () => {
+describe.skipIf(!zizmorAvailable)("zizmor audit of renderTagWorkflow", () => {
   const cases = [
     ...ALL_PM.map((pm) => ({
       name: `tag / ${pm} / no guard / minimal`,
@@ -311,94 +294,14 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflo
     },
   ];
 
-  test.each(cases)("$name", ({ fileName, params }) => {
+  test.each(cases)("$name has no zizmor findings", ({ fileName, params }) => {
     const { content } = renderTagWorkflow({ ...COMMON, ...params });
-    const { ok, output } = writeAndLint(fileName, content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    const { ok, output } = writeAndAudit(fileName, content);
+    expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
 });
 
-// Minimal composite action stub used by coordinate workflow tests.
-const COMPOSITE_ACTION_STUB = `\
-name: stub
-description: stub
-inputs:
-  workspace-id:
-    required: true
-  name:
-    required: true
-  working-directory:
-    required: false
-    default: "."
-  package-manager:
-    required: false
-    default: pnpm
-  platform-client-id:
-    required: true
-  platform-client-secret:
-    required: true
-  slack-token:
-    required: false
-  slack-channel-id:
-    required: false
-  user-mapping:
-    required: false
-outputs:
-  app-url:
-    description: stub
-    value: ""
-runs:
-  using: composite
-  steps:
-    - run: echo stub
-      shell: bash
-`;
-
-describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinateWorkflow", () => {
-  let cTmpDir: string;
-
-  aroundAll(async (runSuite) => {
-    using tmp = tempDir("coord-lint-");
-    cTmpDir = tmp.dir;
-    fs.mkdirSync(path.join(cTmpDir, ".github", "workflows"), { recursive: true });
-    fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-setup"), { recursive: true });
-    fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-api"), { recursive: true });
-    // Use an inline stub instead of renderTailorSetupAction output to avoid
-    // remote action references (tailor-platform/actions/setup@...) that would
-    // cause actionlint to perform network lookups and hang in offline CI.
-    fs.writeFileSync(
-      path.join(cTmpDir, ".github", "actions", "tailor-setup", "action.yml"),
-      "name: stub-setup\ndescription: stub\nruns:\n  using: composite\n  steps:\n    - run: echo stub\n      shell: bash\n",
-    );
-    fs.writeFileSync(
-      path.join(cTmpDir, ".github", "actions", "tailor-api", "action.yml"),
-      COMPOSITE_ACTION_STUB,
-    );
-    await runSuite();
-  });
-
-  function lintCoordinate(name: string, content: string): LintResult {
-    const wfPath = path.join(cTmpDir, ".github", "workflows", `${name}.yml`);
-    fs.writeFileSync(wfPath, content);
-    // Run from REPO_ROOT (the sdk repo root) rather than from cTmpDir so that
-    // the aqua proxy resolves actionlint from the project's aqua.yaml rather
-    // than from a temp dir that has no aqua config.  Local uses: references
-    // (./.github/actions/...) will not resolve from REPO_ROOT but we ignore
-    // those errors so actionlint still validates the workflow structure.
-    const result = spawnSync(
-      "actionlint",
-      ["-color", "-ignore", "action ./.github/actions/tailor-[^ ]+ is not found", wfPath],
-      {
-        encoding: "utf-8",
-        cwd: REPO_ROOT,
-        timeout: 15000,
-        killSignal: "SIGKILL",
-      },
-    );
-    const output = `${result.stdout}${result.stderr}`.trim();
-    return { ok: result.status === 0, output };
-  }
-
+describe.skipIf(!zizmorAvailable)("zizmor audit of renderCoordinateWorkflow", () => {
   const COORD_COMMON = {
     coordinatorName: "main",
     actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
@@ -406,41 +309,63 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinate
     packageManager: "pnpm" as PackageManager,
   };
 
-  test("coordinate / branch", () => {
+  test("coordinate / branch has no zizmor findings", () => {
     const { content } = renderCoordinateWorkflow({
       ...COORD_COMMON,
       kind: "branch",
       branch: "main",
     });
-    const { ok, output } = lintCoordinate("coord-branch", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    const { ok, output } = writeAndAudit("coord-branch", content);
+    expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
 
-  test("coordinate / tag", () => {
+  test("coordinate / tag has no zizmor findings", () => {
     const { content } = renderCoordinateWorkflow({
       ...COORD_COMMON,
       kind: "tag",
       branch: "main",
       tagPattern: "v*",
     });
-    const { ok, output } = lintCoordinate("coord-tag", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+    const { ok, output } = writeAndAudit("coord-tag", content);
+    expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
 
-  test.each(["branch", "tag"] as const)("coordinate / %s / restricted dispatch", (kind) => {
-    const { content } = renderCoordinateWorkflow({
-      ...COORD_COMMON,
-      kind,
-      branch: "main",
-      tagPattern: "v*",
-      restrictDispatch: true,
-    });
-    const { ok, output } = lintCoordinate(`coord-${kind}-restrict`, content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  test.each(["branch", "tag"] as const)(
+    "coordinate / %s / restricted dispatch has no zizmor findings",
+    (kind) => {
+      const { content } = renderCoordinateWorkflow({
+        ...COORD_COMMON,
+        kind,
+        branch: "main",
+        tagPattern: "v*",
+        restrictDispatch: true,
+      });
+      const { ok, output } = writeAndAudit(`coord-${kind}-restrict`, content);
+      expect(ok, `zizmor findings:\n${output}`).toBe(true);
+    },
+  );
+});
+
+describe.skipIf(!zizmorAvailable)("zizmor audit of the coordinate composite actions", () => {
+  test.each([false, true])(
+    "per-app action (static websites: %s) has no zizmor findings",
+    (hasStaticWebsites) => {
+      const { content } = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites });
+      const { ok, output } = writeAndAuditAction(`tailor-api-${hasStaticWebsites}`, content);
+      expect(ok, `zizmor findings:\n${output}`).toBe(true);
+    },
+  );
+
+  test.each(ALL_PM)("tailor-setup action / %s has no zizmor findings", (packageManager) => {
+    const { ok, output } = writeAndAuditAction(
+      `tailor-setup-${packageManager}`,
+      renderTailorSetupAction({ packageManager }),
+    );
+    expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
 });
 
-describe.skipIf(!actionlintAvailable)("actionlint validation of renderPreviewWorkflow", () => {
+describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewWorkflow", () => {
   const PREVIEW_COMMON = {
     ...COMMON,
     branch: "main",
@@ -448,24 +373,25 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderPreviewWor
     packageManager: "pnpm" as PackageManager,
   };
 
-  test("preview / pnpm / all PRs", () => {
-    const { content } = renderPreviewWorkflow({ ...PREVIEW_COMMON, requirePreviewLabel: false });
-    const { ok, output } = writeAndLint("preview-pnpm-all", content);
-    expect(ok, `actionlint errors for preview/pnpm/all-prs:\n${output}`).toBe(true);
-  });
-
-  test("preview / pnpm / label-triggered", () => {
-    const { content } = renderPreviewWorkflow({ ...PREVIEW_COMMON, requirePreviewLabel: true });
-    const { ok, output } = writeAndLint("preview-pnpm-label", content);
-    expect(ok, `actionlint errors for preview/pnpm/label-triggered:\n${output}`).toBe(true);
-  });
-
-  test("preview / pnpm / with workingDirectory", () => {
+  test.each([
+    { name: "preview / pnpm / all PRs", fileName: "preview-pnpm-all", params: {} },
+    {
+      name: "preview / pnpm / label-triggered",
+      fileName: "preview-pnpm-label",
+      params: { requirePreviewLabel: true },
+    },
+    {
+      name: "preview / pnpm / with workingDirectory",
+      fileName: "preview-pnpm-dir",
+      params: { workingDirectory: "apps/backend" },
+    },
+  ])("$name has no zizmor findings", ({ fileName, params }) => {
     const { content } = renderPreviewWorkflow({
       ...PREVIEW_COMMON,
-      workingDirectory: "apps/backend",
+      requirePreviewLabel: false,
+      ...params,
     });
-    const { ok, output } = writeAndLint("preview-pnpm-dir", content);
-    expect(ok, `actionlint errors for preview/pnpm/workingDirectory:\n${output}`).toBe(true);
+    const { ok, output } = writeAndAudit(fileName, content);
+    expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
 });

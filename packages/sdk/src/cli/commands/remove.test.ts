@@ -7,6 +7,7 @@ import { defineApplication } from "#/cli/services/application";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { removeCommand } from "./remove";
 
 const mocks = vi.hoisted(() => {
@@ -146,6 +147,8 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => ({
     warn: vi.fn(),
     log: vi.fn(),
     newline: vi.fn(),
+    out: vi.fn(),
+    jsonMode: false,
   },
   styles: {
     bold: (value: string) => value,
@@ -197,6 +200,48 @@ describe("remove command", () => {
       'Successfully removed all resources managed by "my-app".',
     );
   });
+  test("prints the removal under JSON output", async () => {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [{ name: "premium" }],
+        nextPageToken: "",
+      })),
+      getMetadata: vi.fn(async () => ({
+        metadata: { labels: { "sdk-name": "my-app" } },
+      })),
+      deleteWorkflowJobFunctionExecutionPolicy: vi.fn(),
+    } as never);
+    using _json = jsonMode();
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.out).toHaveBeenCalledWith({
+      changed: true,
+      workspaceId: "workspace-id",
+      application: "my-app",
+      complete: true,
+    });
+  });
+
+  test("reports no change under JSON output when nothing is left to remove", async () => {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+    } as never);
+    using _json = jsonMode();
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.out).toHaveBeenCalledWith({
+      changed: false,
+      workspaceId: "workspace-id",
+      application: "my-app",
+      complete: true,
+    });
+  });
+
   test("removes by the app id recorded in the governing lock", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "remove-lock-"));
     try {
@@ -261,5 +306,31 @@ describe("remove command", () => {
     expect(warned).toContain("my-app");
     expect(warned).toContain("does not match");
     expect(warned).toContain("deploy");
+  });
+
+  test("reports an incomplete removal under JSON output when resources were left behind", async () => {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+      getMetadata: vi.fn(async () => ({ metadata: { labels: {} } })),
+    } as never);
+    mocks.planExecutor.mockResolvedValueOnce({
+      changeSet: mocks.changeSet(),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set(["my-app"]),
+    });
+    using _json = jsonMode();
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.out).toHaveBeenCalledWith({
+      changed: false,
+      workspaceId: "workspace-id",
+      application: "my-app",
+      complete: false,
+    });
   });
 });
