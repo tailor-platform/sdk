@@ -45,9 +45,11 @@ export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefau
 /**
  * Load `defaultDateRepresentation` from a `tailor.config.ts` file.
  *
- * Unlike {@link loadSecretsFromConfig}, a config that cannot be loaded fails
- * the test run: `tailor.d.ts` already types the project's date fields from this
- * value, so silently keeping string values would hide a type/runtime mismatch.
+ * Like {@link loadSecretsFromConfig}, a config that cannot be imported does not
+ * stop the run: projects that already pass `config` for secrets keep working.
+ * The fallback is announced rather than silent, because `tailor.d.ts` types
+ * the project's date fields from the value this could not read. A config that
+ * loads but sets an invalid value still fails, as the CLI rejects it too.
  * @param configPath - Absolute path to tailor.config.ts
  * @returns The representation `t` date fields without `as` follow
  */
@@ -56,10 +58,10 @@ export async function loadDateDefaultFromConfig(configPath: string): Promise<Eff
   try {
     configModule = await import(pathToFileURL(configPath).href);
   } catch (error) {
-    throw new Error(
-      `tailor-runtime could not load ${configPath} to read defaultDateRepresentation. Fix the config, or drop the \`config\` option from tailorRuntime().`,
-      { cause: error },
+    console.warn(
+      `tailor-runtime could not load ${configPath} to read defaultDateRepresentation; t date fields use string values in this run. If the config sets "temporal", tests disagree with tailor.d.ts until the import error is fixed: ${error instanceof Error ? error.message : String(error)}`,
     );
+    return "legacy";
   }
   return dateDefaultFromConfig(configModule);
 }

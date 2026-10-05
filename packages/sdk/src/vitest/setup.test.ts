@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { aroundAll, describe, expect, test } from "vitest";
+import { aroundAll, describe, expect, test, vi } from "vitest";
 import {
   applyDateDefault,
   dateDefaultFromConfig,
@@ -175,11 +175,18 @@ describe("date default from config", () => {
     expect(await loadDateDefaultFromConfig(path)).toBe("temporal");
   });
 
-  test("fails loudly when the config cannot be loaded instead of silently keeping strings", async () => {
+  test("a config that cannot be loaded warns and keeps the legacy representation", async () => {
+    using warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const path = join(tmpDir, "does-not-exist.ts");
-    await expect(loadDateDefaultFromConfig(path)).rejects.toThrow(
-      /does-not-exist\.ts.*defaultDateRepresentation/s,
-    );
+    expect(await loadDateDefaultFromConfig(path)).toBe("legacy");
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[0]).toMatch(/does-not-exist\.ts.*string values.*tailor\.d\.ts/s);
+  });
+
+  test("a config that loads but sets an invalid value still fails the run", async () => {
+    const path = join(tmpDir, "invalid.config.ts");
+    writeFileSync(path, `export default { defaultDateRepresentation: "string" };\n`);
+    await expect(loadDateDefaultFromConfig(path)).rejects.toThrow(/must be "temporal" or omitted/);
   });
 
   test("applyDateDefault sets the bundle gate for temporal, clears it for legacy, and restores", () => {
