@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { t } from "../../configure/types/type";
+import { serializeDateFields } from "../../runtime/date";
 import { parseDateFields } from "../../runtime/field-parse";
 import { Temporal } from "../../runtime/temporal";
 import { parsedAtImport } from "./fixtures/parsed-at-import";
@@ -34,4 +35,14 @@ test("parseDateFields on a field without `as` follows the default too", () => {
 test('an explicit `as: "string"` still yields a string', () => {
   const result = t.date({ as: "string" }).parse({ value: "2026-10-05", data: {}, invoker: null });
   expect(valueOf(result)).toBe("2026-10-05");
+});
+
+test("serializeDateFields formats a Temporal value of a field without `as` back to a string", () => {
+  const output = t.object({ day: t.date(), at: t.datetime() });
+  expect(
+    serializeDateFields(output, {
+      day: Temporal.PlainDate.from("2026-10-05"),
+      at: Temporal.Instant.from("2026-10-05T01:02:03Z"),
+    }),
+  ).toEqual({ day: "2026-10-05", at: "2026-10-05T01:02:03Z" });
 });
