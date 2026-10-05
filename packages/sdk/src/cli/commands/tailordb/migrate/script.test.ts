@@ -102,6 +102,20 @@ describe("addMigrationScriptFiles", () => {
     expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).temporal).toBe(true);
   });
 
+  test("records the date default in diff.json when the script is added", async () => {
+    setupMigration();
+
+    await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      dateDefault: "temporal",
+    });
+
+    expect(
+      JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).dateRepresentation,
+    ).toBe("temporal");
+  });
+
   test("raises a legacy migration to the current format version when recording temporal", async () => {
     setupMigration({ version: 3 });
 

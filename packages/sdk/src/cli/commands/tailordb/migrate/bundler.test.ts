@@ -190,5 +190,22 @@ export async function main(trx: Transaction): Promise<void> {
 
       expect(result.bundledCode).toContain("temporal: true");
     });
+
+    test("folds the configured date default into the migration bundle", async () => {
+      const scriptPath = writeMigration(
+        '  await trx.updateTable("User").set({ stage: globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT }).execute();',
+      );
+      const result = await bundleMigrationScript(
+        scriptPath,
+        "tailordb",
+        11,
+        {},
+        undefined,
+        false,
+        "temporal",
+      );
+
+      expect(result.bundledCode).toMatch(/["'`]temporal["'`]/);
+    });
   });
 });

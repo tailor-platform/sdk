@@ -171,6 +171,25 @@ describe("template-generator", () => {
       const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
       expect(parsed.temporal).toBe(true);
     });
+
+    test("records the date default in diff.json so the script keeps running with it", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot: createTestSnapshot({
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { name: { type: "string", required: true } },
+          },
+        }),
+        dateDefault: "temporal",
+      });
+
+      const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
+      expect(parsed.dateRepresentation).toBe("temporal");
+    });
   });
 
   describe("generateDiffFiles", () => {
@@ -239,6 +258,27 @@ describe("template-generator", () => {
 
       const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
       expect(parsed.temporal).toBe(true);
+    });
+
+    test("records the date default in diff.json and leaves it out under the legacy default", async () => {
+      const pinned = await generateDiffFiles(
+        breakingDiff(),
+        tempDir,
+        1,
+        previousSnapshot,
+        undefined,
+        [],
+        false,
+        "temporal",
+      );
+      expect(JSON.parse(await fs.readFile(pinned.diffFilePath, "utf-8")).dateRepresentation).toBe(
+        "temporal",
+      );
+
+      const legacy = await generateDiffFiles(breakingDiff(), tempDir, 2, previousSnapshot);
+      expect(JSON.parse(await fs.readFile(legacy.diffFilePath, "utf-8"))).not.toHaveProperty(
+        "dateRepresentation",
+      );
     });
 
     test("leaves temporal out of diff.json when db.ts is generated with Date types", async () => {

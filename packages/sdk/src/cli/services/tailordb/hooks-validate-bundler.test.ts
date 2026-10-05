@@ -517,3 +517,29 @@ describe("buildMinimalEntryFromResolved", () => {
     expect(entry).toContain(`from "@tailor-platform/sdk"`);
   });
 });
+
+describe("precompileTailorDBTypeScripts date default", () => {
+  test("folds the configured date default into hook expressions", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-date-default-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(
+      sourceFile,
+      "const mode = globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT;\n",
+    );
+    const mode = "unused";
+    const createHook = ({ value }: { value: string }) => value + mode;
+    const type = {
+      name: "DatedType",
+      fields: { value: { type: "string", metadata: { hooks: { create: createHook } } } },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined, "temporal");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toMatch(/["'`]temporal["'`]/);
+  });
+});

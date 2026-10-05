@@ -4,7 +4,7 @@ import { resolve } from "pathe";
 import * as rolldown from "rolldown";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { findUndefinedReferences, TS_TYPE_FIELDS } from "#/cli/shared/free-variables";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { stringifyFunction } from "#/parser/service/tailordb/field";
@@ -16,6 +16,7 @@ import {
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import type { ScriptExprKind } from "#/parser/service/tailordb/types";
+import type { EffectiveDateDefault } from "#/runtime/date";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 type ScriptFunction = (...args: unknown[]) => unknown;
@@ -307,8 +308,18 @@ async function bundleScriptTarget(args: {
   tableName: string;
   targetIndex: number;
   tsconfig: string | undefined;
+  dateDefault: EffectiveDateDefault;
 }): Promise<string> {
-  const { fn, kind, sourceFilePath, sourceBindings, tableName, targetIndex, tsconfig } = args;
+  const {
+    fn,
+    kind,
+    sourceFilePath,
+    sourceBindings,
+    tableName,
+    targetIndex,
+    tsconfig,
+    dateDefault,
+  } = args;
   const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
   if ((kind === "typeValidate" || kind === "validate") && fn.constructor.name === "AsyncFunction") {
@@ -364,7 +375,7 @@ async function bundleScriptTarget(args: {
     plugins: [
       entry.plugin,
       createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFilePath }),
-      platformBundleDefinePlugin,
+      createPlatformBundleDefinePlugin(undefined, dateDefault),
     ],
     input: entry.input,
     write: false,
@@ -398,11 +409,13 @@ async function bundleScriptTarget(args: {
  * @param type - TailorDB table schema output.
  * @param sourceFilePath - Source file where the table is defined.
  * @param tsconfig - Resolved tsconfig path, or undefined if not found.
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`.
  */
 export async function precompileTailorDBTypeScripts(
   type: TailorDBTypeSchemaOutput,
   sourceFilePath: string,
   tsconfig: string | undefined,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<void> {
   const targets = collectScriptTargets(type);
   if (targets.length === 0) return;
@@ -420,6 +433,7 @@ export async function precompileTailorDBTypeScripts(
         tableName: type.name,
         targetIndex: index,
         tsconfig,
+        dateDefault,
       }),
     ),
   );

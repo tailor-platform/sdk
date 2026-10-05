@@ -226,6 +226,7 @@ async function executeSingleMigration(
     env,
     configDir,
     migration.diff.temporal ?? false,
+    migration.diff.dateRepresentation ?? "legacy",
   );
 
   const result = await executeMigrationAsWorkflow({

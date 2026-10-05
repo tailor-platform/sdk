@@ -333,6 +333,12 @@ export interface MigrationDiff {
    * means `false`.
    */
   temporal?: boolean;
+  /**
+   * The `defaultDateRepresentation` in effect when this migration's script was
+   * generated. The script keeps running with it, whatever the config says later.
+   * Absent means string values.
+   */
+  dateRepresentation?: "temporal";
 }
 
 /**

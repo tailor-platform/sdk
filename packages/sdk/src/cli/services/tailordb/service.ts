@@ -24,6 +24,7 @@ import type {
 } from "#/parser/service/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
 import type { PluginAttachment } from "#/plugin/types";
+import type { EffectiveDateDefault } from "#/runtime/date";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,
@@ -51,6 +52,8 @@ export interface CreateTailorDBServiceParams {
   pluginManager?: PluginManager;
   /** Directory the config's file patterns are resolved against */
   baseDir: string;
+  /** Representation applied to `t` date fields that omit `as` in hook and validator scripts */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /**
@@ -59,7 +62,7 @@ export interface CreateTailorDBServiceParams {
  * @returns A new TailorDBService instance
  */
 export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
-  const { namespace, config, pluginManager, baseDir } = params;
+  const { namespace, config, pluginManager, baseDir, dateDefault = "legacy" } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
   const createRawTypesByName = (): TailorDBTypesByName =>
     Object.create(null) as TailorDBTypesByName;
@@ -285,7 +288,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         logger.debug(
           `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        await precompileTailorDBTypeScripts(result.data, typeFile, tsconfig);
+        await precompileTailorDBTypeScripts(result.data, typeFile, tsconfig, dateDefault);
         loadedTypes[result.data.name] = result.data;
         registerRawType(typeFile, result.data.name, result.data, {
           filePath: typeFile,

@@ -21,6 +21,7 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
+import type { EffectiveDateDefault } from "#/runtime/date";
 import type {
   MigrationDiff,
   DiffChange,
@@ -117,6 +118,7 @@ export async function generateSchemaFile(
  * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
  * column types instead of their `Date`/`string` defaults. Should match whatever
  * `kyselyTypePlugin` was configured with. Defaults to `false`.
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
  * @returns {Promise<GenerateDiffResult>} Generated file info
  */
 export async function generateDiffFiles(
@@ -127,6 +129,7 @@ export async function generateDiffFiles(
   description?: string,
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<GenerateDiffResult> {
   // Create migration directory
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
@@ -174,6 +177,7 @@ export async function generateDiffFiles(
       migrationNumber,
       expandPlans,
       temporal,
+      dateDefault,
     });
     result.dbTypesFilePath = typeFiles.dbTypesPath;
     result.pgliteSchemaFilePath = typeFiles.pgliteSchemaPath;
@@ -198,6 +202,8 @@ interface GenerateDataOnlyFilesOptions {
    * was configured with. Defaults to `false`.
    */
   temporal?: boolean;
+  /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /** Files written for a data-only migration. */
@@ -221,7 +227,14 @@ interface GenerateDataOnlyFilesResult {
 export async function generateDataOnlyMigrationFiles(
   options: GenerateDataOnlyFilesOptions,
 ): Promise<GenerateDataOnlyFilesResult> {
-  const { migrationsDir, migrationNumber, snapshot, description, temporal = false } = options;
+  const {
+    migrationsDir,
+    migrationNumber,
+    snapshot,
+    description,
+    temporal = false,
+    dateDefault = "legacy",
+  } = options;
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
   await fs.mkdir(migrationDir, { recursive: true });
 
@@ -243,6 +256,7 @@ export async function generateDataOnlyMigrationFiles(
     migrationsDir,
     migrationNumber,
     temporal,
+    dateDefault,
   });
 
   return {

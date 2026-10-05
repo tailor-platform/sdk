@@ -16,6 +16,7 @@ import {
 } from "./pre-migration-schema";
 import { applyDiffToSnapshot, getMigrationFilePath } from "./snapshot";
 import { copySnapshotRecord } from "./snapshot-normalization";
+import type { EffectiveDateDefault } from "#/runtime/date";
 import type { MigrationDiff } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot-types";
@@ -114,6 +115,8 @@ export interface WriteMigrationTypeFilesOptions {
    * `kyselyTypePlugin` was configured with. Defaults to `false`.
    */
   temporal?: boolean;
+  /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /** Outcome of writing `db.pglite.ts`: the path, or why it was skipped. */
@@ -159,24 +162,40 @@ export async function tryWritePgliteSchemaFile(
   }
 }
 
-async function recordTemporalMode(diffPath: string, temporal: boolean): Promise<void> {
+// Pins the runtime modes the script was written against, so a later config
+// change does not alter a migration that a new workspace has yet to run.
+async function recordRuntimeModes(
+  diffPath: string,
+  temporal: boolean,
+  dateDefault: EffectiveDateDefault,
+): Promise<void> {
   const raw = JSON.parse(await fs.readFile(diffPath, "utf-8")) as Record<string, unknown>;
+  let changed = false;
   if (temporal) {
     raw.temporal = true;
     if (typeof raw.version !== "number" || raw.version < SCHEMA_SNAPSHOT_VERSION) {
       raw.version = SCHEMA_SNAPSHOT_VERSION;
     }
+    changed = true;
   } else if (Object.hasOwn(raw, "temporal")) {
     delete raw.temporal;
-  } else {
-    return;
+    changed = true;
   }
+  if (dateDefault === "temporal") {
+    raw.dateRepresentation = dateDefault;
+    changed = true;
+  } else if (Object.hasOwn(raw, "dateRepresentation")) {
+    delete raw.dateRepresentation;
+    changed = true;
+  }
+  if (!changed) return;
   await fs.writeFile(diffPath, JSON.stringify(raw, null, 2));
 }
 
 /**
  * Write `db.ts` and `db.pglite.ts` for a migration, and record in its `diff.json`
- * whether `db.ts` uses Temporal column types so the script later runs in that mode.
+ * whether `db.ts` uses Temporal column types and which date representation `t`
+ * fields default to, so the script later runs in those modes.
  * @param options - Snapshot, diff, and destination
  * @returns Paths of the written files
  */
@@ -190,6 +209,7 @@ export async function writeMigrationTypeFiles(
     migrationNumber,
     expandPlans = [],
     temporal = false,
+    dateDefault = "legacy",
   } = options;
   const dbTypesPath = await writeDbTypesFile(
     previousSnapshot,
@@ -199,7 +219,11 @@ export async function writeMigrationTypeFiles(
     expandPlans,
     temporal,
   );
-  await recordTemporalMode(getMigrationFilePath(migrationsDir, migrationNumber, "diff"), temporal);
+  await recordRuntimeModes(
+    getMigrationFilePath(migrationsDir, migrationNumber, "diff"),
+    temporal,
+    dateDefault,
+  );
   return {
     dbTypesPath,
     ...(await tryWritePgliteSchemaFile(previousSnapshot, diff, migrationsDir, migrationNumber)),

@@ -797,6 +797,24 @@ describe("migration", () => {
       expect(bundleMigrationScriptMock.mock.calls.map((call) => call[5])).toEqual([true, false]);
     });
 
+    test("runs each migration script with the date default recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ dateRepresentation: "temporal" }),
+        }),
+        createMockMigration({ number: 2, hasScript: true }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(bundleMigrationScriptMock.mock.calls.map((call) => call[6])).toEqual([
+        "temporal",
+        "legacy",
+      ]);
+    });
+
     test("executes only the subset with hasScript=true when mixed with breaking changes", async () => {
       const migrations = [
         createMockMigration({
