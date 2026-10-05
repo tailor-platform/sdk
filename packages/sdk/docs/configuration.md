@@ -77,6 +77,19 @@ This is a bundle-time setting. Changing `TAILOR_APP_LOG_LEVEL` affects newly bun
 
 Only `logger.*` calls made through the SDK's `logger` wrapper (from `@tailor-platform/sdk/runtime` or its `@tailor-platform/sdk/runtime/logger` subpath), or written as `globalThis.tailor.logger.*`, are covered. Other equivalent forms — such as the bare `tailor.logger.*` global or `self.tailor.logger.*` — are not affected by `logLevel`.
 
+**Date Representation** (`defaultDateRepresentation`): Sets the value representation of `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as`. With `"temporal"`, those fields carry `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime` values instead of strings, so a project that uses Temporal everywhere does not have to repeat `as: "temporal"` on every field. A field's own `as` still wins, including `as: "string"`. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  defaultDateRepresentation: "temporal",
+});
+```
+
+The default applies wherever the SDK parses or serializes `t` fields on your behalf: resolver input and output in deployed functions and in `tailor function run`, `.parse()` and `parseDateFields` inside any bundled function (resolvers, executors, workflow jobs, auth hooks, TailorDB hooks and validators, migration scripts), and the [`tailor-runtime` Vitest environment](./testing.md#loading-secrets-from-config) when `tailorRuntime({ config })` points at the config. It does not apply to `db.*` fields, or to `t` fields parsed outside those places, such as a plain Node.js script or a module that runs while `tailor.config.ts` itself is being loaded; there the fields keep string values. A migration script keeps the representation that was in effect when it was generated, recorded in its `diff.json`, so changing the setting later does not alter migrations a new workspace has yet to run.
+
+The setting is per `tailor.config.ts`, but the field types are declared through `tailor.d.ts`, which TypeScript merges across every file in a program. If one `tsconfig.json` includes the `tailor.d.ts` of several applications, they must agree on `defaultDateRepresentation`. When they differ, `t.date()`, `t.datetime()`, and `t.time()` called without `as` fail to type-check in that program until the configs are aligned or each application gets its own `tsconfig.json`.
+
 ### Service Configuration
 
 Specify glob patterns to load service files:

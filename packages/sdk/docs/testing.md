@@ -446,6 +446,8 @@ export default defineConfig({
 
 This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `mockSecretmanager({ secrets: ... })` in individual tests: a per-test overlay applies only within that test, and the config-loaded secrets remain available to every other test.
 
+The same `config` option applies the config's [`defaultDateRepresentation`](./configuration.md#application-settings) to tests: with `"temporal"`, `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as` parse to Temporal values in test files and in the modules they import, as they do in deployed functions. The value is read before each test file runs. A config that cannot be loaded fails the test run rather than silently falling back to string values, because `tailor.d.ts` already types the fields from that config. Tests that call `resolver.body()` directly bypass the SDK's input conversion and must pass values in the representation the body expects.
+
 ### Per-Project Configuration
 
 Apply the runtime environment only to unit tests while keeping other test projects (e.g. e2e) in the default Node.js environment:
