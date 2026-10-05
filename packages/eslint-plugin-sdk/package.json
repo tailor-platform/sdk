@@ -37,7 +37,7 @@
   },
   "devDependencies": {
     "@tailor-platform/shared": "workspace:^",
-    "@types/node": "24.19.0",
+    "@types/node": "24.19.1",
     "eslint": "10.11.0",
     "oxlint": "1.86.0",
     "tsdown": "0.23.0",
