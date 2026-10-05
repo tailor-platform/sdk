@@ -4,7 +4,8 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { removeCommand } from "./remove";
+import { removeCommand, removeUser } from "./remove";
+import type { RemoveUserResult } from "#/cli/lib";
 
 vi.mock("#/cli/shared/operator-context", () => ({
   loadOperatorWorkspaceContext: vi.fn(),
@@ -48,6 +49,22 @@ describe("workspace user remove command", () => {
 
     expect(result.success).toBe(true);
     expect(client.removeWorkspacePlatformUser).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      email: "user@example.com",
+    });
+  });
+
+  test("returns the removed user to programmatic callers", async () => {
+    const client = { removeWorkspacePlatformUser: vi.fn().mockResolvedValue({}) };
+    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
+      client,
+      workspaceId: "workspace-1",
+    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+
+    const result: RemoveUserResult = await removeUser({ email: "user@example.com" });
+
+    expect(result).toEqual({
+      changed: true,
       workspaceId: "workspace-1",
       email: "user@example.com",
     });

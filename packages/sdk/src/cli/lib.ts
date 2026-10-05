@@ -102,7 +102,11 @@ export type { WorkspaceInfo, WorkspaceDetails } from "./commands/workspace/trans
 export { listUsers, type ListUsersOptions } from "./commands/workspace/user/list";
 export { inviteUser, type InviteUserOptions } from "./commands/workspace/user/invite";
 export { updateUser, type UpdateUserOptions } from "./commands/workspace/user/update";
-export { removeUser, type RemoveUserOptions } from "./commands/workspace/user/remove";
+export {
+  removeUser,
+  type RemoveUserOptions,
+  type RemoveUserResult,
+} from "./commands/workspace/user/remove";
 export type { UserInfo } from "./commands/workspace/user/transform";
 export { listApps, type ListAppsOptions } from "./commands/workspace/app/list";
 export {
@@ -214,6 +218,7 @@ export { truncate, type TruncateOptions } from "./commands/tailordb/truncate";
 export {
   generate as migrateGenerate,
   type GenerateOptions as MigrateGenerateOptions,
+  type GenerateResult as MigrateGenerateResult,
 } from "./commands/tailordb/migrate/generate";
 export {
   createSnapshotFromLocalTypes,
