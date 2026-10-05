@@ -1,7 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { deploymentArgs } from "#/cli/shared/args";
-import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -152,7 +151,6 @@ export async function runMigrationTest(
 }
 
 async function migrationTest(options: MigrationTestOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
   const result = await runMigrationTest(options);
   if (options.json) {
     logger.out(result);

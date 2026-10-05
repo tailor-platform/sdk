@@ -3,7 +3,6 @@ import * as path from "pathe";
 import { z } from "zod";
 import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
-import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
@@ -36,8 +35,6 @@ interface SetOptions {
  * @param {SetOptions} options - Command options
  */
 async function set(options: SetOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
-
   // 1. Validate migration number format
   const migrationNumber = parseMigrationNumberArg(options.number);
 
