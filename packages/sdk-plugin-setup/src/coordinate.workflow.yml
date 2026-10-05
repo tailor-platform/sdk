@@ -39,7 +39,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@d4ac2604a2267eed2f121ed1830db5d6ea4ebecf # v2.4.0
+        uses: tailor-platform/actions/tag-guard@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           target-branch: __BRANCH__
           github-token: ${{ github.token }}

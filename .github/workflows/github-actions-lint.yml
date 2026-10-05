@@ -45,7 +45,7 @@ jobs:
         run: ghalint run-action
 
       - name: Run zizmor
-        uses: tailor-platform/actions/lint-github-actions@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/lint-github-actions@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           paths: |
             .github/workflows/
