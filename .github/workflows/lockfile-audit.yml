@@ -14,9 +14,11 @@ on:
     branches: [main]
     paths:
       - pnpm-lock.yaml
+      - .github/workflows/lockfile-audit.yml
   pull_request:
     paths:
       - pnpm-lock.yaml
+      - .github/workflows/lockfile-audit.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
