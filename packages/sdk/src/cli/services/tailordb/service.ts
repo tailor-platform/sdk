@@ -128,7 +128,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
     }
 
-    types = parseTypes(allTypes, namespace, typeSourceInfo);
+    types = parseTypes(allTypes, namespace, typeSourceInfo, dateDefault);
   };
 
   // Warn about object-format permission rules that omit `permit`. Those default

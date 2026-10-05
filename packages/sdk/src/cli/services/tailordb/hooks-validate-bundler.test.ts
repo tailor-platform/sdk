@@ -540,6 +540,38 @@ describe("precompileTailorDBTypeScripts date default", () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
 
-    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toMatch(/["'`]temporal["'`]/);
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create", "temporal")).toMatch(
+      /["'`]temporal["'`]/,
+    );
+  });
+
+  test("keeps one expression per date default when applications share a hook", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-date-default-shared-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(
+      sourceFile,
+      "const mode = globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT;\n",
+    );
+    const mode = "unused";
+    const createHook = ({ value }: { value: string }) => value + mode;
+    const type = {
+      name: "SharedType",
+      fields: { value: { type: "string", metadata: { hooks: { create: createHook } } } },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined, "legacy");
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined, "temporal");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create", "legacy")).not.toMatch(
+      /["'`]temporal["'`]/,
+    );
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create", "temporal")).toMatch(
+      /["'`]temporal["'`]/,
+    );
   });
 });
