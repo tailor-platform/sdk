@@ -27,6 +27,16 @@ function assertSafeLockPath(outputDir: string): void {
 
 export type TargetKind = "branch" | "tag" | "preview" | "action" | "coordinate";
 
+type LockApp = {
+  dir: string;
+  /** Whether this app's tailor-migration-drift-check step was generated (branch/tag only). */
+  migrationDriftCheck?: boolean;
+  /** Whether this app's tailor-seed-validate step was generated (branch/tag only). */
+  seedValidate?: boolean;
+  /** TailorDB namespaces this app owns, when ERD preview is enabled (branch only). */
+  erdNamespaces?: string[];
+};
+
 export type LockInputs = {
   branch: string | null;
   /** True when `branch` was auto-detected (no explicit branch flag). */
@@ -42,6 +52,13 @@ export type LockInputs = {
    * `tailor:preview`. False (default) means all PRs trigger a preview deploy.
    */
   requirePreviewLabel?: boolean;
+  /**
+   * For branch/tag/preview targets given several `--dir`: each app deployed in the one
+   * multi-config run, in order. `dir` is then ".".
+   */
+  apps?: LockApp[];
+  /** For branch/preview targets: `--paths` patterns added to the app directories' filter. */
+  paths?: string[];
   /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
   actionDirs?: string[];
   /** For `coordinate` kind: action names per deploy step, in deploy order. */

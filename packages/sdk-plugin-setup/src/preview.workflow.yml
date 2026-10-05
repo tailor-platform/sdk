@@ -7,13 +7,13 @@ on:
     # __PR_TYPES__
     # To deploy only for PRs that carry the `tailor:preview` label instead of all PRs,
     # re-run: tailor setup ci preview --require-preview-label
-    # __PATHS__
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
+  # __CHANGES_JOB__
   tailor-preview-deploy:
     # __DEPLOY_IF__
     runs-on: ubuntu-latest
@@ -30,28 +30,35 @@ jobs:
       workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
       app-url: ${{ steps.tailor-preview-deploy.outputs.app-url }}
     steps:
+      # __CHANGES_GUARD__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/setup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/install@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __GENERATE_CHECK_START__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/generate-check@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
+      # __GENERATE_CHECK_END__
+      # __PER_APP_GENERATE_CHECK__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/drift-check@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       - id: tailor-preview-deploy
-        uses: tailor-platform/actions/preview-deploy@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/preview-deploy@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        # __CONFIG_ENV__
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           region: "__REGION__"
@@ -64,7 +71,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - id: tailor-preview-comment
         if: always()
-        uses: tailor-platform/actions/preview-comment@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/preview-comment@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
           workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
@@ -83,16 +90,18 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/setup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/install@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-preview-cleanup
-        uses: tailor-platform/actions/preview-cleanup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/preview-cleanup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           package-manager: __PACKAGE_MANAGER__

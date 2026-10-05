@@ -3,11 +3,6 @@
 #
 # - ghalint: https://github.com/suzuki-shunsuke/ghalint
 # - zizmor: https://docs.zizmor.sh/
-#
-# actionlint is intentionally absent here: it does not parse `parallel:` steps
-# yet (rhysd/actionlint#693). zizmor covers the security audits actionlint
-# offers, so this job keeps its security coverage. The generated-workflow
-# templates below still run under actionlint, which they parse cleanly.
 name: GitHub Actions Lint
 
 on:
@@ -50,7 +45,7 @@ jobs:
         run: ghalint run-action
 
       - name: Run zizmor
-        uses: tailor-platform/actions/lint-github-actions@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        uses: tailor-platform/actions/lint-github-actions@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
         with:
           paths: |
             .github/workflows/
@@ -75,5 +70,5 @@ jobs:
       - name: Install deps
         uses: $/.github/actions/install-deps
 
-      - name: Run actionlint tests
+      - name: Run zizmor tests
         run: pnpm --filter @tailor-platform/sdk-plugin-setup exec vitest run src/workflow-lint.test.ts

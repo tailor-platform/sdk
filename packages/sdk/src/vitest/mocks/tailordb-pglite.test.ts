@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { createGetDB } from "#/kysely/index";
+import { Temporal } from "#/runtime/temporal";
 import { tailordbRoot } from "./shared";
 import { mockTailordbWithPGlite } from "./tailordb-pglite";
 import type { PGliteClient, PGliteQueryResult } from "../pglite-kysely";
@@ -439,5 +440,42 @@ describe("mockTailordbWithPGlite", () => {
     await txn.commit();
 
     expect(fake.queries.map((q) => q.query)).toEqual(["begin", "select 1", "commit"]);
+  });
+
+  test("passes Temporal parameters to PGlite as the strings Postgres accepts", async () => {
+    const fake = createFakePGlite();
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+
+    await createGetDB<{ main: { Event: { at: Temporal.Instant } } }>()("main")
+      .insertInto("Event")
+      .values({ at: Temporal.Instant.from("2026-03-14T09:30:00Z") })
+      .execute();
+
+    expect(fake.queries.at(-1)?.params).toEqual(["2026-03-14T09:30:00Z"]);
+  });
+
+  test("reads timestamptz columns back as Temporal.Instant for a temporal getDB", async () => {
+    const fake = createFakePGlite((query) =>
+      query.startsWith("select")
+        ? {
+            rows: [{ at: new Date("2026-03-14T09:30:00.123Z") }],
+            fields: [{ name: "at", dataTypeID: 1184 }],
+            command: "SELECT",
+            rowCount: 1,
+          }
+        : undefined,
+    );
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+    const temporalGetDB = createGetDB<{ main: { Event: { at: Temporal.Instant } } }>({
+      temporal: true,
+    });
+
+    const row = await temporalGetDB("main")
+      .selectFrom("Event")
+      .selectAll()
+      .executeTakeFirstOrThrow();
+
+    expect(row.at).toBeInstanceOf(Temporal.Instant);
+    expect(row.at.toString()).toBe("2026-03-14T09:30:00.123Z");
   });
 });

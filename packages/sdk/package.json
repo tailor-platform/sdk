@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "2.24.0",
+  "version": "2.25.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -71,11 +71,6 @@
       "types": "./dist/plugin/builtin/file-utils/index.d.mts",
       "import": "./dist/plugin/builtin/file-utils/index.mjs",
       "default": "./dist/plugin/builtin/file-utils/index.mjs"
-    },
-    "./plugin/frontend": {
-      "types": "./dist/plugin/builtin/frontend/index.d.mts",
-      "import": "./dist/plugin/builtin/frontend/index.mjs",
-      "default": "./dist/plugin/builtin/frontend/index.mjs"
     },
     "./plugin/seed": {
       "types": "./dist/plugin/builtin/seed/index.d.mts",
@@ -220,7 +215,7 @@
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.3",
-    "rolldown": "1.2.11",
+    "rolldown": "1.2.12",
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
     "std-env": "4.2.0",

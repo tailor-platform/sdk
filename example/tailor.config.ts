@@ -165,6 +165,7 @@ export const plugins = definePlugins(
   kyselyTypePlugin({
     distPath: "./generated/tailordb.ts",
     pgliteSchemaPath: "./generated/tailordb.pglite.ts",
+    temporal: true,
   }),
   enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
   fileUtilsPlugin({ distPath: "./generated/files.ts" }),

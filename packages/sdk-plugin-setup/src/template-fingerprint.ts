@@ -133,6 +133,48 @@ function renderAll(): RenderedTemplate[] {
       requirePreviewLabel: true,
     }),
   );
+  const apps = [
+    { dir: "apps/erp/backend", seedValidate: true, migrationDriftCheck: true },
+    { dir: "apps/users/backend" },
+  ];
+  const extraPaths = ["apps/*/frontend/**", "!apps/erp/backend/**/*.md"];
+  add(
+    "branch/paths",
+    renderBranchWorkflow({ ...full, branch: "main", erdPreview: null, extraPaths }),
+  );
+  add(
+    "branch/multi-dir",
+    renderBranchWorkflow({
+      ...COMMON,
+      packageManager: "pnpm",
+      branch: "main",
+      apps,
+      extraPaths,
+      erdPreview: { namespaces: ["main", "analytics"] },
+      restrictDispatch: true,
+    }),
+  );
+  add(
+    "tag/multi-dir",
+    renderTagWorkflow({
+      ...COMMON,
+      packageManager: "pnpm",
+      tagPattern: "v*",
+      branch: "main",
+      apps,
+    }),
+  );
+  add(
+    "preview/multi-dir",
+    renderPreviewWorkflow({
+      ...COMMON,
+      packageManager: "pnpm",
+      branch: "main",
+      region: "us-west",
+      apps,
+      extraPaths,
+    }),
+  );
   add("action/minimal", renderActionWorkflow({ workspaceName: "my-app" }));
   add(
     "action/full",

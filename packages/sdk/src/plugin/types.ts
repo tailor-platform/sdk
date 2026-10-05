@@ -383,9 +383,9 @@ export interface DeployedApplication<
   id?: string;
   name: string;
   configPath: string;
-  /** Application endpoint URL. */
-  url: string;
-  domain: string;
+  /** Application endpoint URL, present when a matching Platform Application exists. */
+  url?: string;
+  domain?: string;
   aiGateways: { name: string; url: string }[];
   /** Static websites declared in this application's config, keyed by name. */
   staticWebsites: Readonly<Partial<Record<string, StaticWebsite>>>;

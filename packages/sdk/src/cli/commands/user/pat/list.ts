@@ -3,6 +3,7 @@ import { paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/arg
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { humanizeRelativeTime } from "#/cli/shared/format";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
@@ -17,17 +18,20 @@ export const listCommand = defineAppCommand({
     const client = await createPatOperatorClient(args.profile);
 
     const pageDirection = toPageDirection(args.order);
-    const pats = await fetchPaged(
-      async (pageToken, pageSize) => {
-        const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
-          pageToken,
-          pageSize,
-          pageDirection,
-        });
-        return [personalAccessTokens, nextPageToken];
-      },
-      { limit: args.limit },
+    const listed = await fetchWithinLimit(args.limit, (limit) =>
+      fetchPaged(
+        async (pageToken, pageSize) => {
+          const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
+            pageToken,
+            pageSize,
+            pageDirection,
+          });
+          return [personalAccessTokens, nextPageToken];
+        },
+        { limit },
+      ),
     );
+    const pats = listed.items;
 
     if (pats.length === 0) {
       logger.info(ml`
@@ -46,5 +50,6 @@ export const listCommand = defineAppCommand({
         lastUsedAt: (value) => (value === null ? "never" : humanizeRelativeTime(value as Date)),
       },
     });
+    await reportTruncation(listed, args.limit);
   },
 });

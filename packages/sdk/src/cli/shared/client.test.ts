@@ -564,46 +564,10 @@ describe("getConsoleBaseUrl", () => {
     );
   });
 
-  test("does not redirect to console-next when TAILOR_CONSOLE_NEXT is unset", () => {
-    vi.stubEnv("TAILOR_CONSOLE_NEXT", undefined);
+  test("ignores a leftover TAILOR_CONSOLE_NEXT and keeps the console. host", () => {
+    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
 
     expect(getConsoleBaseUrl()).toBe("https://console.tailor.tech");
-  });
-
-  test("redirects the default Console URL to console-next when TAILOR_CONSOLE_NEXT is enabled", () => {
-    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
-
-    expect(getConsoleBaseUrl()).toBe("https://console-next.tailor.tech");
-  });
-
-  test("redirects an inferred Console URL to console-next when TAILOR_CONSOLE_NEXT is enabled", () => {
-    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
-
-    expect(getConsoleBaseUrl({ platformUrl: "https://api.dev.tailor.tech" })).toBe(
-      "https://console-next.dev.tailor.tech",
-    );
-  });
-
-  test("prefers an explicit TAILOR_PLATFORM_CONSOLE_URL over console-next when TAILOR_CONSOLE_NEXT is enabled", () => {
-    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
-    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
-
-    expect(getConsoleBaseUrl()).toBe("https://console.other.tailor.tech");
-  });
-
-  test("keeps the final console host with console-next paths when TAILOR_PLATFORM_CONSOLE_URL already points at it", () => {
-    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
-    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.tailor.tech");
-
-    expect(getConsoleBaseUrl()).toBe("https://console.tailor.tech");
-  });
-
-  test("prefers an explicit consoleUrl config over console-next when TAILOR_CONSOLE_NEXT is enabled", () => {
-    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
-
-    expect(getConsoleBaseUrl({ consoleUrl: "https://console.other.tailor.tech" })).toBe(
-      "https://console.other.tailor.tech",
-    );
   });
 });
 

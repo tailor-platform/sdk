@@ -841,6 +841,28 @@ describe("mergeUserContent", () => {
 });
 
 describe("environment on a managed job", () => {
+  test("keeps a user environment on the changes detection job across regeneration", () => {
+    const render = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/api" });
+    const edited = render.content.replace(
+      /( {2}tailor-changes:\n)/,
+      "$1    environment: registry\n",
+    );
+    expect(edited).not.toBe(render.content);
+    expect(computeManagedHash(edited, "workflow", render.generatedIds)).toBe(
+      computeManagedHash(render.content, "workflow", render.generatedIds),
+    );
+    expect(
+      mergeUserContent({
+        current: edited,
+        rendered: render.content,
+        layout: "workflow",
+        previousIds: render.generatedIds,
+        renderedIds: render.generatedIds,
+        force: false,
+      }).content,
+    ).toBe(edited);
+  });
+
   const tag = renderTagWorkflow({
     workspaceName: "my-app",
     tagPattern: "v*",

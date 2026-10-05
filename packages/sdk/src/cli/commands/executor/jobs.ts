@@ -33,6 +33,7 @@ import {
   isFunctionExecutionTerminalStatus,
   joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
+import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { spinner } from "#/cli/shared/spinner";
@@ -866,15 +867,19 @@ export const jobsCommand = defineAppCommand({
       if (args.wait) {
         logger.warn("--wait flag is ignored in list mode. Specify a job ID to wait.");
       }
-      const jobs = await listExecutorJobs({
-        executor: { name: args.executorName },
-        status: args.status,
-        order: args.order,
-        limit: args.limit,
-        workspaceId: args["workspace-id"],
-        profile: args.profile,
-      });
+      const listed = await fetchWithinLimit(args.limit, (limit) =>
+        listExecutorJobs({
+          executor: { name: args.executorName },
+          status: args.status,
+          order: args.order,
+          limit,
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+        }),
+      );
+      const jobs = listed.items;
       logger.out(jobs);
+      await reportTruncation(listed, args.limit);
     }
   },
 });

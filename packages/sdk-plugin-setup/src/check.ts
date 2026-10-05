@@ -72,7 +72,76 @@ export type TargetState = {
   hasSeeds?: boolean;
   /** Whether the current config has staticWebsites configured (action only). */
   hasStaticWebsites?: boolean;
+  /** Current state of each app of a multi-directory target, in the order the lock records them. */
+  apps?: AppState[];
 };
+
+/** Current config state for one app of a multi-directory target. */
+export type AppState = {
+  dir: string;
+  configExists: boolean;
+  hasMigrations?: boolean;
+  hasSeeds?: boolean;
+  /** Owned TailorDB namespaces, when the target previews ERDs. */
+  erdNamespaces?: string[];
+};
+
+function sameNamespaces(a: readonly string[], b: readonly string[]): boolean {
+  const sortedA = a.toSorted((x, y) => x.localeCompare(y));
+  const sortedB = b.toSorted((x, y) => x.localeCompare(y));
+  return (
+    sortedA.length === sortedB.length && sortedA.every((namespace, i) => namespace === sortedB[i])
+  );
+}
+
+function findAppDrift(id: string, target: LockTarget, apps: readonly AppState[]): DriftFinding[] {
+  const findings: DriftFinding[] = [];
+  const planKind = target.kind === "branch" || target.kind === "tag";
+  for (const app of apps) {
+    const recorded = target.inputs.apps?.find((entry) => entry.dir === app.dir);
+    if (!app.configExists) {
+      findings.push({
+        target: id,
+        rule: "config-dir",
+        message:
+          `tailor.config.ts not found under "${app.dir}". The app directory may have moved; ` +
+          "re-run setup with the correct --dir.",
+      });
+      continue;
+    }
+    if (planKind && recorded?.migrationDriftCheck === false && app.hasMigrations === true) {
+      findings.push({
+        target: id,
+        rule: "migration-drift",
+        message:
+          `TailorDB namespaces with migrations were added to the config under "${app.dir}". ` +
+          "Re-run setup so its tailor-migration-drift-check step is included in the plan job.",
+      });
+    }
+    if (
+      app.erdNamespaces !== undefined &&
+      !sameNamespaces(recorded?.erdNamespaces ?? [], app.erdNamespaces)
+    ) {
+      findings.push({
+        target: id,
+        rule: "erd-namespaces",
+        message:
+          `TailorDB namespaces owned by the config under "${app.dir}" changed. ` +
+          "Re-run setup so the ERD preview matrix is regenerated.",
+      });
+    }
+    if (planKind && recorded?.seedValidate === false && app.hasSeeds === true) {
+      findings.push({
+        target: id,
+        rule: "seed-validate",
+        message:
+          `Seed plugin detected in the config under "${app.dir}". ` +
+          "Re-run setup so its tailor-seed-validate step is included in the plan job.",
+      });
+    }
+  }
+  return findings;
+}
 
 /**
  * Compute drift findings for one target by comparing its recorded lock state
@@ -125,7 +194,9 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     });
   }
 
-  if (!state.configExists) {
+  if (state.apps) {
+    findings.push(...findAppDrift(id, target, state.apps));
+  } else if (!state.configExists) {
     findings.push({
       target: id,
       rule: "config-dir",
@@ -152,7 +223,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     });
   }
 
-  if (target.kind === "branch" && target.inputs.erdPreview && state.configExists) {
+  if (target.kind === "branch" && target.inputs.erdPreview && !state.apps && state.configExists) {
     const recorded = [...(target.inputs.erdNamespaces ?? [])].toSorted((a, b) =>
       a.localeCompare(b),
     );
@@ -339,12 +410,12 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
       content !== null && currentHash !== null && currentHash !== target.contentHash
         ? editedPartsOf(target, content)
         : undefined;
-    // Coordinator targets are config-less; skip the probe so config-dir drift is never emitted.
-    const configAbs =
-      target.kind === "coordinate"
-        ? null
-        : resolveWithinRoot(outputDir, path.join(target.inputs.dir, "tailor.config.ts"));
-    const configExists = target.kind === "coordinate" || (configAbs !== null && exists(configAbs));
+    // Coordinator targets have no config, and multi-directory targets are audited per app below.
+    const noRootConfig = target.kind === "coordinate" || target.inputs.apps !== undefined;
+    const configAbs = noRootConfig
+      ? null
+      : resolveWithinRoot(outputDir, path.join(target.inputs.dir, "tailor.config.ts"));
+    const configExists = noRootConfig || (configAbs !== null && exists(configAbs));
     const erdNamespaces =
       target.kind === "branch" && target.inputs.erdPreview && configAbs !== null && configExists
         ? await loadErdNamespaces(configAbs)
@@ -370,6 +441,35 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
       configExists
         ? await loadHasStaticWebsites(configAbs)
         : undefined;
+    const planKind = target.kind === "branch" || target.kind === "tag";
+    const apps =
+      target.inputs.apps === undefined
+        ? undefined
+        : await Promise.all(
+            target.inputs.apps.map(async (app): Promise<AppState> => {
+              const appConfig = resolveWithinRoot(
+                outputDir,
+                path.join(app.dir, "tailor.config.ts"),
+              );
+              const appConfigExists = appConfig !== null && exists(appConfig);
+              return {
+                dir: app.dir,
+                configExists: appConfigExists,
+                hasMigrations:
+                  planKind && appConfigExists && app.migrationDriftCheck !== undefined
+                    ? await loadHasMigrations(appConfig)
+                    : undefined,
+                hasSeeds:
+                  planKind && appConfigExists && app.seedValidate !== undefined
+                    ? await loadHasSeeds(appConfig)
+                    : undefined,
+                erdNamespaces:
+                  target.kind === "branch" && target.inputs.erdPreview && appConfigExists
+                    ? await loadErdNamespaces(appConfig)
+                    : undefined,
+              };
+            }),
+          );
     findings.push(
       ...findTargetDrift(target, {
         fileExists: content !== null,
@@ -383,6 +483,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
         hasMigrations,
         hasSeeds,
         hasStaticWebsites,
+        apps,
       }),
     );
   }

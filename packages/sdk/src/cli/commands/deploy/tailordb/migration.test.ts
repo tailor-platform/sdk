@@ -686,7 +686,7 @@ describe("migration", () => {
   describe("executeMigrations", () => {
     const workspaceId = "test-workspace";
 
-    function createMockContext(): MigrationContext {
+    function createMockContext(overrides: Partial<MigrationContext> = {}): MigrationContext {
       return {
         client: {} as unknown as OperatorClient,
         workspaceId,
@@ -697,6 +697,7 @@ describe("migration", () => {
         configDir: "/project",
         appName: "test-app",
         appId: "test-app-id",
+        ...overrides,
       };
     }
 
@@ -779,6 +780,21 @@ describe("migration", () => {
       expect(executeMigrationAsWorkflowMock.mock.calls[0]![0]).toMatchObject({
         migrationNumber: 1,
       });
+    });
+
+    test("runs each migration script with the temporal mode recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ temporal: true }),
+        }),
+        createMockMigration({ number: 2, hasScript: true }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(bundleMigrationScriptMock.mock.calls.map((call) => call[5])).toEqual([true, false]);
     });
 
     test("executes only the subset with hasScript=true when mixed with breaking changes", async () => {

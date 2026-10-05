@@ -225,6 +225,7 @@ async function executeSingleMigration(
     migration.number,
     env,
     configDir,
+    migration.diff.temporal ?? false,
   );
 
   const result = await executeMigrationAsWorkflow({

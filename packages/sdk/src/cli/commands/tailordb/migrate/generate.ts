@@ -20,6 +20,8 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
@@ -249,6 +251,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   // Load configuration
   const { config, plugins } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
+  const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
 
   // Get namespaces with migrations config
   const namespacesWithMigrations: NamespaceWithMigrations[] = getNamespacesWithMigrations(
@@ -437,6 +440,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       generations,
       dataOnlyTargetNamespace,
       options,
+      temporal,
     );
     return { changed: true, clearedNamespaces, migrations: [migration] };
   }
@@ -603,6 +607,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
         options,
         currentSnapshot,
         expandPlans ?? [],
+        temporal,
       );
       if (generated.declined) declinedNamespaces.push(namespace);
       migrations.push(...generated.migrations.map((files) => generatedMigration(namespace, files)));
@@ -628,12 +633,14 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
  * @param {readonly NamespaceGeneration[]} generations - Snapshots per namespace
  * @param {string} namespace - Target namespace
  * @param {GenerateOptions} options - Generate options
+ * @param {boolean} temporal - Whether date/datetime/time fields resolve to their Temporal column types
  * @returns {Promise<GeneratedMigration>} The migration written
  */
 async function generateDataOnlyMigration(
   generations: readonly NamespaceGeneration[],
   namespace: string,
   options: GenerateOptions,
+  temporal: boolean,
 ): Promise<GeneratedMigration> {
   const generation = generations.find((g) => g.namespace === namespace);
   if (!generation) {
@@ -670,6 +677,7 @@ async function generateDataOnlyMigration(
     migrationNumber,
     snapshot: previousSnapshot,
     description: options.name,
+    temporal,
   });
 
   logger.success(
@@ -1256,6 +1264,8 @@ type DiffGeneration = {
  * @param {GenerateOptions} options - Generate options
  * @param currentSnapshot - Schema the user now declares
  * @param expandPlans - Field changes confirmed for a migration pair
+ * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
+ * column types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @returns {Promise<DiffGeneration>} Whether the user declined, and the files written otherwise
  */
 async function generateDiffFromSnapshot(
@@ -1265,6 +1275,7 @@ async function generateDiffFromSnapshot(
   options: GenerateOptions,
   currentSnapshot: NormalizedSchemaSnapshot,
   expandPlans: readonly ExpandContractPlan[] = [],
+  temporal = false,
 ): Promise<DiffGeneration> {
   if (!hasChanges(diff)) {
     logger.info("No schema differences detected.");
@@ -1363,6 +1374,7 @@ async function generateDiffFromSnapshot(
       plans: expandPlans,
       migrationsDir,
       description: options.name,
+      temporal,
     });
     return { declined: false, migrations: pair };
   }
@@ -1377,6 +1389,8 @@ async function generateDiffFromSnapshot(
     migrationNumber,
     previousSnapshot,
     options.name,
+    [],
+    temporal,
   );
 
   logger.success(
@@ -1415,6 +1429,12 @@ interface GenerateExpandContractOptions {
   plans: readonly ExpandContractPlan[];
   migrationsDir: string;
   description?: string;
+  /**
+   * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
+   * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
+   * was configured with. Defaults to `false`.
+   */
+  temporal?: boolean;
 }
 
 /**
@@ -1426,8 +1446,15 @@ interface GenerateExpandContractOptions {
 async function generateExpandContractMigrations(
   input: GenerateExpandContractOptions,
 ): Promise<WrittenMigrationFiles[]> {
-  const { previousSnapshot, currentSnapshot, resolvedDiff, plans, migrationsDir, description } =
-    input;
+  const {
+    previousSnapshot,
+    currentSnapshot,
+    resolvedDiff,
+    plans,
+    migrationsDir,
+    description,
+    temporal = false,
+  } = input;
   const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
   // Comparing from the relaxed base records the removal with an optional
   // contract, which is what the deploy restores while the script clears it.
@@ -1479,6 +1506,7 @@ async function generateExpandContractMigrations(
     previousSnapshot,
     description,
     plans,
+    temporal,
   );
   const contract = await generateDiffFiles(
     contractDiff,
@@ -1486,6 +1514,8 @@ async function generateExpandContractMigrations(
     expandNumber + 1,
     intermediateSnapshot,
     description,
+    [],
+    temporal,
   );
 
   const fields = plans.map((plan) => `${plan.tableName}.${plan.fieldName}`).join(", ");
