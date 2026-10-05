@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as vm from "node:vm";
 import { logger } from "@tailor-platform/sdk/cli";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
@@ -102,8 +104,7 @@ describe("renderBranchWorkflow", () => {
   test("pins every `uses:` to a full commit SHA (no moving tags/branches)", () => {
     // Generated workflows are committed to user repos and must be reproducible
     // and pass zizmor/ghalint pinning checks: every action reference must be a
-    // 40-char commit SHA, never a tag like @v1. (actionlint does not enforce
-    // this, so it is asserted here.)
+    // 40-char commit SHA, never a tag like @v1.
     const assertShaPinned = (content: string): void => {
       const refs = [...content.matchAll(/uses:\s*(\S+?)@(\S+)/g)];
       expect(refs.length).toBeGreaterThan(0);
@@ -184,6 +185,21 @@ describe("renderBranchWorkflow", () => {
     expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
     expect(content).not.toContain("tailor-erd-preview");
     expect(generatedIds).not.toContain("tailor-erd-preview");
+  });
+
+  test("installs head dependencies in the ERD preview job, since the setup action does not", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const steps = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-erd-preview"]?.steps ?? [];
+    const ids = steps.map((step) => step.id);
+
+    expect(ids.indexOf("tailor-install")).toBe(ids.indexOf("tailor-setup") + 1);
+    expect(String(steps[ids.indexOf("tailor-install")]?.uses)).toMatch(
+      /^tailor-platform\/actions\/install@/,
+    );
+    expect(generatedIds).toContain("tailor-erd-preview/tailor-install");
   });
 
   test("adds ERD preview and comment jobs when enabled", () => {
@@ -356,10 +372,10 @@ describe("renderBranchWorkflow", () => {
     const buildStep = content.slice(start, end);
 
     expect(content).toContain(
-      "base-app-dir: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dir'] }}",
+      "base-app-dirs: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dirs'] }}",
     );
     expect(content).toContain(
-      "BASE_APP_DIR: ${{ needs.tailor-erd-preview-matrix.outputs['base-app-dir'] }}",
+      "BASE_APP_DIR: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs['base-app-dirs'])[matrix.namespace] }}",
     );
     expect(buildStep).toContain(
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
@@ -438,14 +454,14 @@ describe("renderBranchWorkflow", () => {
     expect(content).not.toContain("tailor generate");
   });
 
-  test("includes paths + working-directory only when dir != '.'", () => {
+  test("includes change detection + working-directory only when dir != '.'", () => {
     const plain = renderBranchWorkflow(branchBase).content;
-    expect(plain).not.toContain("paths:");
+    expect(plain).not.toContain("path-patterns:");
     expect(plain).not.toContain("working-directory:");
 
     const scoped = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/foo" }).content;
     expect(scoped).not.toMatch(NO_MARKER);
-    expect(scoped).toContain('paths: ["apps/foo/**"]');
+    expect(scoped).toContain("path-patterns: |\n            apps/foo/**\n");
     // Install, drift-check, and notify run at the repo root — no working-directory.
     // plan job: generate-check + plan; deploy job: deploy action.
     expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(3);
@@ -480,6 +496,415 @@ describe("renderBranchWorkflow", () => {
   test("preserves $ characters in values", () => {
     const { content } = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a$&b" });
     expect(content).toContain("working-directory: apps/a$&b");
+  });
+});
+
+describe("multi-directory branch workflow", () => {
+  const apps = [{ dir: "apps/erp/backend" }, { dir: "apps/users/backend" }];
+
+  test("plans all configs in one run from the repository root", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, apps });
+    const plan = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-plan"]?.steps.find(
+      (step) => step.id === "tailor-plan",
+    );
+
+    expect(plan?.env).toEqual({
+      TAILOR_PLATFORM_SDK_CONFIG_PATH:
+        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+    });
+    expect(plan?.with).not.toHaveProperty("working-directory");
+  });
+
+  test("deploys all configs in one run from the repository root", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, apps });
+    const apply = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-deploy"]?.steps.find(
+      (step) => step.id === "tailor-apply",
+    );
+
+    expect(apply?.env).toEqual({
+      TAILOR_PLATFORM_SDK_CONFIG_PATH:
+        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+    });
+    expect(apply?.with).not.toHaveProperty("working-directory");
+  });
+
+  test("checks generated files in each app directory with a step named after the directory", () => {
+    const { content, generatedIds } = renderBranchWorkflow({ ...branchBase, apps });
+    const checks = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-plan"]?.steps.filter(
+      (step) => String(step.id).startsWith("tailor-generate-check"),
+    );
+
+    expect(
+      checks?.map((step) => [step.id, (step.with as Record<string, string>)["working-directory"]]),
+    ).toEqual([
+      ["tailor-generate-check-apps-erp-backend", "apps/erp/backend"],
+      ["tailor-generate-check-apps-users-backend", "apps/users/backend"],
+    ]);
+    expect(generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-plan/tailor-generate-check-apps-erp-backend",
+        "tailor-plan/tailor-generate-check-apps-users-backend",
+      ]),
+    );
+    expect(generatedIds).not.toContain("tailor-plan/tailor-generate-check");
+  });
+
+  test("validates seeds and checks migration drift only in the app directories that use them", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      apps: [
+        { dir: "apps/erp/backend", seedValidate: true },
+        { dir: "apps/users/backend", migrationDriftCheck: true },
+      ],
+    });
+    const steps = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-plan"]?.steps ?? [];
+    const workingDirOf = (id: string) =>
+      (steps.find((step) => step.id === id)?.["working-directory"] ??
+        (steps.find((step) => step.id === id)?.with as Record<string, string> | undefined)?.[
+          "working-directory"
+        ]) as string | undefined;
+
+    expect(workingDirOf("tailor-seed-validate-apps-erp-backend")).toBe("apps/erp/backend");
+    expect(workingDirOf("tailor-migration-drift-check-apps-users-backend")).toBe(
+      "apps/users/backend",
+    );
+    expect(generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-plan/tailor-seed-validate-apps-erp-backend",
+        "tailor-plan/tailor-migration-drift-check-apps-users-backend",
+      ]),
+    );
+    expect(
+      generatedIds.filter((id) => /seed-validate|migration-drift-check/.test(id)),
+    ).toHaveLength(2);
+  });
+});
+
+describe("ERD preview matrix", () => {
+  const workDir = path.join(
+    "/tmp",
+    `erd-matrix-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+
+  aroundEach(async (runTest) => {
+    fs.mkdirSync(workDir, { recursive: true });
+    await runTest();
+    fs.rmSync(workDir, { recursive: true, force: true });
+  });
+
+  const writeLockAt = (dir: string, inputs: Record<string, unknown>): void => {
+    fs.mkdirSync(path.join(workDir, dir, ".github"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, dir, ".github/tailor.lock"),
+      JSON.stringify({
+        version: LOCK_VERSION,
+        targets: [
+          { kind: "branch", workspaceName: "erp", inputs: { erdPreview: true, ...inputs } },
+        ],
+      }),
+    );
+  };
+
+  const runMatrix = (): Record<string, string> => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      workspaceName: "erp",
+      erdPreview: { namespaces: ["erp"] },
+    });
+    const step = (parseYAML(content) as GeneratedWorkflow).jobs[
+      "tailor-erd-preview-matrix"
+    ]?.steps.find((candidate) => candidate.id === "tailor-erd-preview-matrix");
+    const outputFile = path.join(workDir, "github-output");
+    fs.writeFileSync(outputFile, "");
+    execFileSync("bash", ["-c", String(step?.run)], {
+      cwd: workDir,
+      env: {
+        ...process.env,
+        ...(step?.env as Record<string, string>),
+        GITHUB_OUTPUT: outputFile,
+      },
+    });
+    return Object.fromEntries(
+      fs
+        .readFileSync(outputFile, "utf-8")
+        .trim()
+        .split("\n")
+        .map((entry) => [entry.slice(0, entry.indexOf("=")), entry.slice(entry.indexOf("=") + 1)]),
+    );
+  };
+
+  test("maps each namespace to the app directory that owns it on each side", () => {
+    writeLockAt(".", {
+      dir: ".",
+      erdNamespaces: ["erp", "users"],
+      apps: [
+        { dir: "apps/erp/backend", erdNamespaces: ["erp"] },
+        { dir: "apps/users/backend", erdNamespaces: ["users"] },
+      ],
+    });
+    writeLockAt(".tailor-erd-base", { dir: "apps/erp/backend", erdNamespaces: ["erp"] });
+
+    const outputs = runMatrix();
+
+    expect(JSON.parse(outputs.namespaces ?? "")).toEqual(["erp", "users"]);
+    expect(JSON.parse(outputs["app-dirs"] ?? "")).toEqual({
+      erp: "apps/erp/backend",
+      users: "apps/users/backend",
+    });
+    expect(JSON.parse(outputs["base-app-dirs"] ?? "")).toEqual({
+      erp: "apps/erp/backend",
+      users: "apps/erp/backend",
+    });
+  });
+
+  test("exports the base side from the head owner when the base branch has no setup target yet", () => {
+    writeLockAt(".", {
+      dir: ".",
+      erdNamespaces: ["erp", "users"],
+      apps: [
+        { dir: "apps/erp/backend", erdNamespaces: ["erp"] },
+        { dir: "apps/users/backend", erdNamespaces: ["users"] },
+      ],
+    });
+
+    const outputs = runMatrix();
+
+    expect(JSON.parse(outputs["base-app-dirs"] ?? "")).toEqual({
+      erp: "apps/erp/backend",
+      users: "apps/users/backend",
+    });
+  });
+
+  test("maps every namespace of a single-directory target to that directory", () => {
+    writeLockAt(".", { dir: "apps/backend", erdNamespaces: ["main", "audit"] });
+    writeLockAt(".tailor-erd-base", { dir: "backend", erdNamespaces: ["main"] });
+
+    const outputs = runMatrix();
+
+    expect(JSON.parse(outputs["app-dirs"] ?? "")).toEqual({
+      audit: "apps/backend",
+      main: "apps/backend",
+    });
+    expect(JSON.parse(outputs["base-app-dirs"] ?? "")).toEqual({
+      audit: "backend",
+      main: "backend",
+    });
+  });
+});
+
+describe("change detection", () => {
+  type Job = { needs?: string | string[]; if?: string; steps?: Array<Record<string, unknown>> };
+  type Workflow = { on: Record<string, { paths?: string[] } | null>; jobs: Record<string, Job> };
+  const previewBase = {
+    workspaceName: "my-app",
+    branch: "main",
+    environment: "my-app",
+    packageManager: "pnpm",
+    region: "us-west",
+  } as const;
+  const patternsOf = (workflow: Workflow) =>
+    String(
+      (workflow.jobs["tailor-changes"]?.steps?.[0]?.with as Record<string, string> | undefined)?.[
+        "path-patterns"
+      ],
+    )
+      .trim()
+      .split("\n");
+  const gated = (job: Job | undefined) =>
+    [job?.needs].flat().includes("tailor-changes") &&
+    String(job?.if).includes("needs.tailor-changes.outputs.relevant == 'true'");
+
+  // Evaluates the generated `if:` for a pull request run, mapping the GitHub
+  // expression syntax used by the templates onto JavaScript.
+  const runsOnPullRequest = (
+    job: Job | undefined,
+    changes: { result: "success" | "failure" | "cancelled"; relevant: string },
+  ): boolean => {
+    const expression = String(job?.if)
+      .replaceAll("needs.tailor-changes.", "changes.")
+      .replaceAll("inputs['dry-run']", "false");
+    return Boolean(
+      vm.runInNewContext(expression, {
+        cancelled: () => changes.result === "cancelled",
+        changes: { result: changes.result, outputs: { relevant: changes.relevant } },
+        github: {
+          event_name: "pull_request",
+          event: {
+            action: "opened",
+            pull_request: { draft: false, head: { repo: { fork: false } }, labels: [] },
+          },
+        },
+      }),
+    );
+  };
+
+  test("fails every gated job when change detection fails, so a required check blocks merging", () => {
+    const branch = renderBranchWorkflow({
+      ...branchBase,
+      workingDirectory: "apps/a",
+      erdPreview: { namespaces: ["main"] },
+    });
+    const preview = renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/a" });
+    const branchJobs = (parseYAML(branch.content) as Workflow).jobs;
+    const previewJobs = (parseYAML(preview.content) as Workflow).jobs;
+    const failed = { result: "failure", relevant: "" } as const;
+
+    expect(runsOnPullRequest(branchJobs["tailor-plan"], failed)).toBe(true);
+    expect(runsOnPullRequest(previewJobs["tailor-preview-deploy"], failed)).toBe(true);
+    for (const job of [
+      branchJobs["tailor-plan"],
+      branchJobs["tailor-deploy"],
+      branchJobs["tailor-erd-preview-matrix"],
+      previewJobs["tailor-preview-deploy"],
+    ]) {
+      expect(job?.steps?.[0]).toMatchObject({
+        id: "tailor-changes-guard",
+        if: "needs.tailor-changes.result != 'success'",
+        run: expect.stringContaining("exit 1"),
+      });
+    }
+    expect(branch.generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-plan/tailor-changes-guard",
+        "tailor-deploy/tailor-changes-guard",
+        "tailor-erd-preview-matrix/tailor-changes-guard",
+      ]),
+    );
+    expect(preview.generatedIds).toContain("tailor-preview-deploy/tailor-changes-guard");
+  });
+
+  test("skips the plan only when change detection succeeded and found nothing relevant", () => {
+    const { jobs } = parseYAML(
+      renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+
+    expect(runsOnPullRequest(jobs["tailor-plan"], { result: "success", relevant: "false" })).toBe(
+      false,
+    );
+    expect(runsOnPullRequest(jobs["tailor-plan"], { result: "success", relevant: "true" })).toBe(
+      true,
+    );
+    expect(runsOnPullRequest(jobs["tailor-plan"], { result: "cancelled", relevant: "" })).toBe(
+      false,
+    );
+  });
+
+  test("starts the workflow on every change so its checks can be required", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({ ...branchBase, apps: [{ dir: "apps/a" }, { dir: "apps/b" }] }).content,
+    ) as Workflow;
+
+    expect(workflow.on.pull_request?.paths).toBeUndefined();
+    expect(workflow.on.push?.paths).toBeUndefined();
+  });
+
+  test("detects changes under every app directory and the additional paths, in order", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({
+        ...branchBase,
+        apps: [{ dir: "apps/a" }, { dir: "apps/b" }],
+        extraPaths: ["modules/**", "!apps/a/**/*.md"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      "apps/b/**",
+      "modules/**",
+      "!apps/a/**/*.md",
+    ]);
+  });
+
+  test("skips the plan, deploy, and ERD preview jobs of a branch workflow when nothing relevant changed", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      workingDirectory: "apps/a",
+      erdPreview: { namespaces: ["main"] },
+    });
+    const { jobs } = parseYAML(content) as Workflow;
+
+    expect(gated(jobs["tailor-plan"])).toBe(true);
+    expect(gated(jobs["tailor-deploy"])).toBe(true);
+    expect(gated(jobs["tailor-erd-preview-matrix"])).toBe(true);
+    expect(generatedIds).toEqual(
+      expect.arrayContaining(["tailor-changes", "tailor-changes/tailor-changes"]),
+    );
+  });
+
+  test("skips the preview deploy when nothing relevant changed, but always cleans up", () => {
+    const { jobs } = parseYAML(
+      renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+
+    expect(gated(jobs["tailor-preview-deploy"])).toBe(true);
+    expect(jobs["tailor-preview-cleanup"]?.needs).toBeUndefined();
+  });
+
+  test("generates no change detection for an app at the repository root", () => {
+    const { content, generatedIds } = renderBranchWorkflow(branchBase);
+    const { jobs } = parseYAML(content) as Workflow;
+
+    expect(jobs["tailor-changes"]).toBeUndefined();
+    expect(jobs["tailor-plan"]?.needs).toBeUndefined();
+    expect(jobs["tailor-plan"]?.steps?.[0]?.id).toBe("tailor-checkout");
+    expect(generatedIds).not.toContain("tailor-changes");
+  });
+});
+
+describe("multi-directory tag workflow", () => {
+  test("plans and deploys all configs in one run, checking each app directory", () => {
+    const { content, generatedIds } = renderTagWorkflow({
+      ...tagBase,
+      apps: [{ dir: "apps/erp/backend", migrationDriftCheck: true }, { dir: "apps/users/backend" }],
+    });
+    const workflow = parseYAML(content) as GeneratedWorkflow;
+    const configEnv = (job: string, id: string) =>
+      workflow.jobs[job]?.steps.find((step) => step.id === id)?.env;
+
+    expect(configEnv("tailor-plan", "tailor-plan")).toEqual({
+      TAILOR_PLATFORM_SDK_CONFIG_PATH:
+        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+    });
+    expect(configEnv("tailor-deploy", "tailor-apply")).toEqual(
+      configEnv("tailor-plan", "tailor-plan"),
+    );
+    expect(generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-plan/tailor-generate-check-apps-erp-backend",
+        "tailor-plan/tailor-generate-check-apps-users-backend",
+        "tailor-plan/tailor-migration-drift-check-apps-erp-backend",
+      ]),
+    );
+    expect(generatedIds).not.toContain("tailor-plan/tailor-generate-check");
+  });
+});
+
+describe("multi-directory preview workflow", () => {
+  test("deploys all configs to the per-PR workspace in one run, checking each app directory", () => {
+    const { content, generatedIds } = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+      apps: [{ dir: "apps/erp/backend" }, { dir: "apps/users/backend" }],
+    });
+    const deploy = (parseYAML(content) as GeneratedWorkflow).jobs[
+      "tailor-preview-deploy"
+    ]?.steps.find((step) => step.id === "tailor-preview-deploy");
+
+    expect(deploy?.env).toEqual({
+      TAILOR_PLATFORM_SDK_CONFIG_PATH:
+        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+    });
+    expect(deploy?.with).not.toHaveProperty("working-directory");
+    expect(generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-preview-deploy/tailor-generate-check-apps-erp-backend",
+        "tailor-preview-deploy/tailor-generate-check-apps-users-backend",
+      ]),
+    );
+    expect(generatedIds).not.toContain("tailor-preview-deploy/tailor-generate-check");
   });
 });
 
@@ -1266,7 +1691,7 @@ export default defineConfig({
     });
     await setupTarget(opts);
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
-    expect(wf).toContain('paths: ["apps/backend/**"]');
+    expect(wf).toContain("path-patterns: |\n            apps/backend/**\n");
     expect(wf).not.toContain("apps/backend//");
     expect(wf).not.toContain('["./apps');
   });
@@ -1471,6 +1896,275 @@ export default defineConfig({
     expect(wf).toContain("tailor-seed-validate");
     const lock = readLock(testDir);
     expect(lock?.targets[0]).toMatchObject({ inputs: { seedValidate: true } });
+  });
+
+  describe("--paths", () => {
+    const writeApp = (dir: string): void => {
+      fs.mkdirSync(path.join(testDir, dir), { recursive: true });
+      fs.writeFileSync(
+        path.join(testDir, dir, "tailor.config.ts"),
+        `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "app" });\n`,
+      );
+    };
+
+    test("extends the workflow's change detection and is recorded in the lock", async () => {
+      writeApp("apps/erp/backend");
+
+      await setupTarget(
+        baseOptions({
+          workspaceName: "erp",
+          dir: "apps/erp/backend",
+          extraPaths: ["apps/erp/frontend/**", "pnpm-lock.yaml"],
+          loadHasMigrations: async () => false,
+          loadHasSeeds: async () => false,
+        }),
+      );
+
+      const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-erp.yml"), "utf-8");
+      expect(wf).toContain(
+        "path-patterns: |\n            apps/erp/backend/**\n            apps/erp/frontend/**\n            pnpm-lock.yaml\n",
+      );
+      expect(readLock(testDir)?.targets[0]?.inputs.paths).toEqual([
+        "apps/erp/frontend/**",
+        "pnpm-lock.yaml",
+      ]);
+    });
+
+    test("is rejected for an app at the repository root, whose workflow already runs on every change", async () => {
+      await expect(
+        setupTarget(baseOptions({ workspaceName: "erp", dir: ".", extraPaths: ["modules/**"] })),
+      ).rejects.toThrow(/--paths has no effect when --dir is the repository root/);
+    });
+
+    test("accepts literal path characters such as the @ of a scoped package", async () => {
+      writeApp("apps/erp/backend");
+
+      await setupTarget(
+        baseOptions({
+          workspaceName: "erp",
+          dir: "apps/erp/backend",
+          extraPaths: ["packages/@scope/**"],
+          loadHasMigrations: async () => false,
+          loadHasSeeds: async () => false,
+        }),
+      );
+
+      expect(readLock(testDir)?.targets[0]?.inputs.paths).toEqual(["packages/@scope/**"]);
+    });
+
+    test.each([
+      ["a workflow expression", "${{ github.token }}"],
+      ["a line break", "modules/**\nsha-head: x"],
+      ["surrounding whitespace", " modules/** "],
+      ["a C1 control character (NEL)", "modules/**\u0085sha-head: x"],
+      ["a Unicode line separator", "modules/**\u2028sha-head: x"],
+      ["a Unicode paragraph separator", "modules/**\u2029sha-head: x"],
+    ])("rejects a pattern containing %s", async (_label, pattern) => {
+      writeApp("apps/erp/backend");
+
+      await expect(
+        setupTarget(
+          baseOptions({ workspaceName: "erp", dir: "apps/erp/backend", extraPaths: [pattern] }),
+        ),
+      ).rejects.toThrow(/Invalid --paths/);
+    });
+
+    test.each([
+      "apps/[id]/**",
+      "apps/?/**",
+      "apps/{a,b}/**",
+      "apps/a+/**",
+      "apps/(group)/**",
+      "apps\\a/**",
+    ])(
+      "rejects %s, whose glob characters the change detection does not support",
+      async (pattern) => {
+        writeApp("apps/erp/backend");
+
+        await expect(
+          setupTarget(
+            baseOptions({ workspaceName: "erp", dir: "apps/erp/backend", extraPaths: [pattern] }),
+          ),
+        ).rejects.toThrow(/Invalid --paths .*only `\*`, `\*\*`, and a leading `!`/);
+      },
+    );
+  });
+
+  describe("multiple --dir", () => {
+    const dirs = ["apps/erp/backend", "apps/users/backend"];
+    const writeApp = (dir: string): void => {
+      fs.writeFileSync(
+        path.join(testDir, "package.json"),
+        JSON.stringify({ private: true, devDependencies: { "@tailor-platform/sdk": "1.0.0" } }),
+      );
+      fs.mkdirSync(path.join(testDir, dir), { recursive: true });
+      fs.writeFileSync(
+        path.join(testDir, dir, "tailor.config.ts"),
+        `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "${path.basename(path.dirname(dir))}" });\n`,
+      );
+    };
+
+    test("deploys every app from one workflow and records each app directory in the lock", async () => {
+      dirs.forEach(writeApp);
+
+      await setupTarget(
+        baseOptions({
+          workspaceName: "erp",
+          dir: dirs,
+          loadHasMigrations: async (configPath) => configPath.includes("/users/"),
+          loadHasSeeds: async () => false,
+        }),
+      );
+
+      const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-erp.yml"), "utf-8");
+      expect(wf).toContain(
+        "TAILOR_PLATFORM_SDK_CONFIG_PATH: apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      );
+      expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({
+        dir: ".",
+        apps: [
+          { dir: "apps/erp/backend", migrationDriftCheck: false, seedValidate: false },
+          { dir: "apps/users/backend", migrationDriftCheck: true, seedValidate: false },
+        ],
+      });
+    });
+
+    test("requires @tailor-platform/sdk in the root package.json, because the multi-config run starts from the repository root", async () => {
+      dirs.forEach(writeApp);
+      fs.writeFileSync(
+        path.join(testDir, "package.json"),
+        JSON.stringify({ name: "repo", private: true, devDependencies: { oxfmt: "1.0.0" } }),
+      );
+
+      await expect(setupTarget(baseOptions({ workspaceName: "erp", dir: dirs }))).rejects.toThrow(
+        /Add @tailor-platform\/sdk to the dependencies of package\.json/,
+      );
+    });
+
+    test("requires --name, because no single config names a workflow that deploys several apps", async () => {
+      dirs.forEach(writeApp);
+
+      await expect(
+        setupTarget(baseOptions({ workspaceName: undefined, dir: dirs })),
+      ).rejects.toThrow(/--name is required when --dir is given more than once/);
+    });
+
+    test("previews the ERD of every namespace owned by each app, recording the owner in the lock", async () => {
+      dirs.forEach(writeApp);
+
+      await setupTarget(
+        baseOptions({
+          workspaceName: "erp",
+          dir: dirs,
+          erdPreview: true,
+          loadErdNamespaces: async (configPath) =>
+            configPath.includes("/erp/") ? ["erp"] : ["users", "audit"],
+          loadHasMigrations: async () => false,
+          loadHasSeeds: async () => false,
+        }),
+      );
+
+      const inputs = readLock(testDir)?.targets[0]?.inputs;
+      expect(inputs?.erdNamespaces).toEqual(["erp", "users", "audit"]);
+      expect(inputs?.apps?.map((app) => [app.dir, app.erdNamespaces])).toEqual([
+        ["apps/erp/backend", ["erp"]],
+        ["apps/users/backend", ["users", "audit"]],
+      ]);
+    });
+
+    test("rejects --erd-preview when two apps own the same TailorDB namespace", async () => {
+      dirs.forEach(writeApp);
+
+      await expect(
+        setupTarget(
+          baseOptions({
+            workspaceName: "erp",
+            dir: dirs,
+            erdPreview: true,
+            loadErdNamespaces: async () => ["shared"],
+          }),
+        ),
+      ).rejects.toThrow(
+        /TailorDB namespace "shared" is owned by both "apps\/erp\/backend" and "apps\/users\/backend"/,
+      );
+    });
+
+    test("resolves . and .. segments, so an app named twice through them is rejected", async () => {
+      dirs.forEach(writeApp);
+
+      await expect(
+        setupTarget(
+          baseOptions({
+            workspaceName: "erp",
+            dir: ["apps/erp/backend", "apps/users/../erp/./backend"],
+          }),
+        ),
+      ).rejects.toThrow(/"apps\/erp\/backend" and "apps\/erp\/backend" map to the same step id/);
+    });
+
+    test("rejects two --dir values that reach the same config through a symbolic link", async () => {
+      writeApp("apps/erp/backend");
+      fs.symlinkSync(path.join(testDir, "apps/erp"), path.join(testDir, "apps/alias"));
+
+      await expect(
+        setupTarget(
+          baseOptions({ workspaceName: "erp", dir: ["apps/erp/backend", "apps/alias/backend"] }),
+        ),
+      ).rejects.toThrow(/"apps\/erp\/backend" and "apps\/alias\/backend" are the same app/);
+    });
+
+    test("rejects directories whose generated step ids would collide", async () => {
+      ["apps/a-b", "apps/a/b"].forEach(writeApp);
+
+      await expect(
+        setupTarget(baseOptions({ workspaceName: "erp", dir: ["apps/a-b", "apps/a/b"] })),
+      ).rejects.toThrow(/"apps\/a-b" and "apps\/a\/b" map to the same step id suffix/);
+    });
+
+    test("keeps a user step anchored after the single-directory generate check when a second --dir is added", async () => {
+      dirs.forEach(writeApp);
+      const noPlugins = { loadHasMigrations: async () => false, loadHasSeeds: async () => false };
+      await setupTarget(
+        baseOptions({ workspaceName: "erp", dir: "apps/erp/backend", ...noPlugins }),
+      );
+      const wf = path.join(testDir, ".github/workflows/tailor-erp.yml");
+      fs.writeFileSync(
+        wf,
+        fs
+          .readFileSync(wf, "utf-8")
+          .replace(
+            "          working-directory: apps/erp/backend\n      - id: tailor-drift-check",
+            "          working-directory: apps/erp/backend\n      - name: Build frontend\n        run: echo build\n      - id: tailor-drift-check",
+          ),
+      );
+
+      await setupTarget(baseOptions({ workspaceName: "erp", dir: dirs, ...noPlugins }));
+
+      const steps = (parseYAML(fs.readFileSync(wf, "utf-8")) as GeneratedWorkflow).jobs[
+        "tailor-plan"
+      ]?.steps.map((step) => step.id ?? step.name);
+      expect(steps).toContain("Build frontend");
+      expect(steps).toContain("tailor-generate-check-apps-users-backend");
+      expect(steps).not.toContain("tailor-generate-check");
+    });
+
+    test("records the app id of every config in the lock", async () => {
+      dirs.forEach(writeApp);
+
+      await setupTarget(
+        baseOptions({
+          workspaceName: "erp",
+          dir: dirs,
+          loadHasMigrations: async () => false,
+          loadHasSeeds: async () => false,
+        }),
+      );
+
+      expect(Object.keys(readLock(testDir)?.appIds ?? {})).toEqual([
+        "apps/erp/backend/tailor.config.ts",
+        "apps/users/backend/tailor.config.ts",
+      ]);
+    });
   });
 
   test("action: preserves user-edited tailor-build-site run body on rerun without --force", async () => {

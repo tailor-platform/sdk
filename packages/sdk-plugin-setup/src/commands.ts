@@ -148,9 +148,14 @@ const branchCommand = defineAppCommand({
       description:
         "Deploy on manual dispatch only from the target branch; dry runs stay unrestricted",
     }),
-    dir: arg(z.string().min(1).default("."), {
+    paths: arg(z.array(z.string().min(1)).default([]), {
+      description:
+        "Extra path pattern (repeatable) whose changes also run the generated jobs, besides the app directories. Supports `*`, `**`, and a leading `!` to exclude",
+    }),
+    dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
-      description: "App directory (for monorepo setups)",
+      description:
+        "App directory (for monorepo setups). Repeat to deploy several apps together in one multi-config run; --name is then required",
     }),
     force: arg(z.boolean().default(false), {
       description:
@@ -167,6 +172,7 @@ const branchCommand = defineAppCommand({
       erdPreview: args["erd-preview"],
       restrictDispatch: args["restrict-dispatch"],
       dir: args.dir,
+      extraPaths: args.paths,
       force: args.force,
       outputDir: process.cwd(),
     });
@@ -195,9 +201,10 @@ const tagCommand = defineAppCommand({
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
     }),
-    dir: arg(z.string().min(1).default("."), {
+    dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
-      description: "App directory (for monorepo setups)",
+      description:
+        "App directory (for monorepo setups). Repeat to deploy several apps together in one multi-config run; --name is then required",
     }),
     force: arg(z.boolean().default(false), {
       description:
@@ -241,9 +248,14 @@ const previewCommand = defineAppCommand({
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the preview jobs (defaults to the workspace name)",
     }),
-    dir: arg(z.string().min(1).default("."), {
+    paths: arg(z.array(z.string().min(1)).default([]), {
+      description:
+        "Extra path pattern (repeatable) whose changes also run the generated jobs, besides the app directories. Supports `*`, `**`, and a leading `!` to exclude",
+    }),
+    dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
-      description: "App directory (for monorepo setups)",
+      description:
+        "App directory (for monorepo setups). Repeat to deploy several apps together in one multi-config run; --name is then required",
     }),
     force: arg(z.boolean().default(false), {
       description:
@@ -260,6 +272,7 @@ const previewCommand = defineAppCommand({
       requirePreviewLabel: args["require-preview-label"],
       environment: args.environment,
       dir: args.dir,
+      extraPaths: args.paths,
       force: args.force,
       outputDir: process.cwd(),
     });
