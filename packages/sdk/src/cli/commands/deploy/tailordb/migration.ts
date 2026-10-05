@@ -283,7 +283,7 @@ async function executeSingleMigration(
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number to set
  * @param historyId - Optional migration history ID to set atomically with the checkpoint
- * @returns {Promise<void>}
+ * @returns Whether the labels changed
  */
 export async function updateMigrationLabel(
   client: OperatorClient,
@@ -291,10 +291,10 @@ export async function updateMigrationLabel(
   namespace: string,
   migrationNumber: number,
   historyId?: string,
-): Promise<void> {
+): Promise<boolean> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
-  await writeMetadataLabelsDirect(client, {
+  return writeMetadataLabelsDirect(client, {
     trn,
     labels: {
       [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),

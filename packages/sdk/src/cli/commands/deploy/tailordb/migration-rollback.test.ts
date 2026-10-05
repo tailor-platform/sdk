@@ -482,6 +482,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       async (_client, _workspaceId, _namespace, number, historyId) => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
+        return true;
       },
     );
     await runTest();
@@ -992,6 +993,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
         order.push("checkpoint");
+        return true;
       },
     );
     vi.mocked(client.deleteTailorDBType).mockImplementation(async () => {

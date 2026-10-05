@@ -303,6 +303,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
       async (_client, _workspaceId, _namespace, number, historyId) => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
+        return true;
       },
     );
     await runTest();

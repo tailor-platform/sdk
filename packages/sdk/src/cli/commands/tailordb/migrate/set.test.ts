@@ -7,6 +7,8 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { setCommand } from "./set";
 import { snapshotType, writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
@@ -83,6 +85,27 @@ describe("tailordb migration set", () => {
     state.getMetadata.mockReset();
     state.setMetadata.mockReset();
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test.each([
+    { name: "moves the checkpoint", number: "1", changed: true },
+    { name: "finds the checkpoint already in place", number: "2", changed: false },
+  ])("prints the checkpoint under JSON output when it $name", async (row) => {
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(setCommand, [row.number, "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: row.changed,
+      workspaceId: "12345678-1234-4abc-8def-123456789012",
+      namespace: "tailordb",
+      previousMigrationNumber: 2,
+      migrationNumber: Number(row.number),
+      historyId: null,
+    });
+    expect(state.setMetadata).toHaveBeenCalledTimes(row.changed ? 1 : 0);
   });
 
   test("sets the checkpoint label preserving other labels", async () => {

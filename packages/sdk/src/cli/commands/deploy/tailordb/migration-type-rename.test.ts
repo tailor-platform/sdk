@@ -358,6 +358,7 @@ describe("applyTailorDB: type rename migration flow", () => {
       async (_client, _workspaceId, _namespace, number, historyId) => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
+        return true;
       },
     );
     await runTest();
@@ -382,6 +383,7 @@ describe("applyTailorDB: type rename migration flow", () => {
         remoteCheckpoint.number = number;
         remoteCheckpoint.historyId = historyId ?? null;
         order.push("checkpoint");
+        return true;
       },
     );
     vi.mocked(client.deleteTailorDBGQLPermission).mockImplementation(async (req: unknown) => {
