@@ -55,5 +55,6 @@ export function protoEnumLookup<E extends number, V>(
   value: E,
   fallback: V,
 ): V {
-  return (map as Readonly<Partial<Record<number, V>>>)[value] ?? fallback;
+  const entries = map as Readonly<Partial<Record<number, V>>>;
+  return Object.hasOwn(entries, value) ? (entries[value] as V) : fallback;
 }
