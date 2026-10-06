@@ -45,6 +45,8 @@ interface MockClientOptions {
   startFailure?: { error: Error; afterCreating: boolean };
   /** Executions of the migration's workflow name that exist before this run starts. */
   priorExecutionIds?: string[];
+  /** Errors the execution listing rejects with, in order, once the start has failed. */
+  listFailuresAfterStart?: Error[];
 }
 
 function createMockClient(options: MockClientOptions = {}) {
@@ -52,6 +54,8 @@ function createMockClient(options: MockClientOptions = {}) {
   const calls: string[] = [];
   let statusIndex = 0;
   let executionCreated = false;
+  let startAttempted = false;
+  const pendingListFailures = [...(options.listFailuresAfterStart ?? [])];
 
   const record = <T>(name: string, value: T) => {
     calls.push(name);
@@ -78,11 +82,14 @@ function createMockClient(options: MockClientOptions = {}) {
       const failure = options.startFailure;
       if (!failure) return record("startWorkflow", { executionId: "exec-1" });
       calls.push("startWorkflow");
+      startAttempted = true;
       executionCreated = failure.afterCreating;
       return Promise.reject(failure.error);
     }),
     listWorkflowExecutions: vi.fn(() => {
       calls.push("listWorkflowExecutions");
+      const failure = startAttempted ? pendingListFailures.shift() : undefined;
+      if (failure) return Promise.reject(failure);
       return Promise.resolve({
         executions: [
           ...(options.priorExecutionIds ?? []).map((id) => ({ id })),
@@ -298,6 +305,47 @@ describe("executeMigrationAsWorkflow", () => {
       );
     },
   );
+
+  test("looks for the execution again when the lookup fails with a transient error", async () => {
+    const { client, raw } = createMockClient({
+      startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: true },
+      listFailuresAfterStart: [
+        new ConnectError("busy", Code.Unavailable),
+        new ConnectError("busy", Code.ResourceExhausted),
+      ],
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(true);
+    // Once before the start, then three lookups after it.
+    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(4);
+  });
+
+  test("gives up on the lookup after five transient failures", async () => {
+    const lookupError = new ConnectError("busy", Code.Unavailable);
+    const { client, raw, calls } = createMockClient({
+      startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: true },
+      listFailuresAfterStart: Array.from({ length: 5 }, () => lookupError),
+    });
+
+    await expect(run(client)).rejects.toBe(lookupError);
+
+    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(6);
+    expect(calls).toContain("deleteWorkflow");
+  });
+
+  test("does not retry the lookup when it fails with an error that is not transient", async () => {
+    const lookupError = new ConnectError("denied", Code.PermissionDenied);
+    const { client, raw } = createMockClient({
+      startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: true },
+      listFailuresAfterStart: [lookupError],
+    });
+
+    await expect(run(client)).rejects.toBe(lookupError);
+
+    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(2);
+  });
 
   test("tears down and rethrows when a start with a lost response created no execution", async () => {
     const error = new ConnectError("lost", Code.Unavailable);
