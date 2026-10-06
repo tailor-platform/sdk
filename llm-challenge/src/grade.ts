@@ -7,7 +7,7 @@ import {
   preflightClaudeRunner,
   resolveClaudeOAuthToken,
 } from "./claude-runner";
-import { summarizeClaudeTrace } from "./claude-trace";
+import { isSameClaudeModel, summarizeClaudeTrace } from "./claude-trace";
 import {
   JUDGE_PROMPT_VERSION,
   buildJudgeOutputSchema,
@@ -362,13 +362,21 @@ export async function loadGradeSources(
   );
 }
 
+export function findSelfJudgedSources<Source extends Pick<GradeSource, "report">>(
+  sources: Source[],
+  judgeModel: string,
+): Source[] {
+  return sources.filter(
+    (source) =>
+      (source.report.agent ?? "codex") === "claude" &&
+      isSameClaudeModel(source.report.model, judgeModel),
+  );
+}
+
 export async function gradeCommand(argv: string[], packageRoot: string): Promise<void> {
   const options = parseGradeArgs(argv);
   const sources = await loadGradeSources(packageRoot, options.reports);
-  const selfJudged = sources.filter(
-    (source) =>
-      (source.report.agent ?? "codex") === "claude" && source.report.model === options.judgeModel,
-  );
+  const selfJudged = findSelfJudgedSources(sources, options.judgeModel);
   if (selfJudged.length > 0 && !options.allowSelfJudge) {
     throw new Error(
       `${options.judgeModel} would grade its own runs (${selfJudged.map((source) => source.relativePath).join(", ")}); pass another --judge-model for every report in the comparison, or --allow-self-judge`,

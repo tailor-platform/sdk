@@ -6,6 +6,7 @@ import { aroundEach, describe, expect, test } from "vitest";
 import {
   buildCommandEvidence,
   decideRunGrade,
+  findSelfJudgedSources,
   gradeRunLocation,
   loadGradeSources,
   parseGradeArgs,
@@ -641,6 +642,26 @@ describe("grade summary", () => {
       ["bbb", ["results/after/report.json"], 1],
     ]);
     expect(variants[0]).toMatchObject({ ...settings, profile: "no-docs" });
+  });
+});
+
+describe("self-judge check", () => {
+  test("flags Claude reports whose solver is the judge model in any spelling", () => {
+    const source = (relativePath: string, agent: "claude" | "codex", model: string) => ({
+      relativePath,
+      report: { agent, model } as StoredChallengeReport,
+    });
+
+    expect(
+      findSelfJudgedSources(
+        [
+          source("a.json", "claude", "claude-opus-5-5[1m]"),
+          source("b.json", "claude", "claude-sonnet-5-5"),
+          source("c.json", "codex", "claude-opus-5-5"),
+        ],
+        "claude-opus-5-5",
+      ).map((item) => item.relativePath),
+    ).toEqual(["a.json"]);
   });
 });
 

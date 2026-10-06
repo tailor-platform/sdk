@@ -132,7 +132,7 @@ export function summarizeClaudeTrace(events: unknown[]): ClaudeTraceSummary {
   return summary;
 }
 
-const DATED_SNAPSHOT_SUFFIX = /^-\d{8}$/;
+const DATED_SNAPSHOT_SUFFIX = /-\d{8}$/;
 const MODEL_VARIANT_SUFFIX = /\[[^\]]*\]$/;
 
 export function findServedModelMismatches(
@@ -142,12 +142,15 @@ export function findServedModelMismatches(
   if (!requestedModel.startsWith("claude-")) {
     return [];
   }
-  const baseModel = requestedModel.replace(MODEL_VARIANT_SUFFIX, "");
-  return servedModels.filter(
-    (served) =>
-      served !== baseModel &&
-      !(served.startsWith(baseModel) && DATED_SNAPSHOT_SUFFIX.test(served.slice(baseModel.length))),
-  );
+  return servedModels.filter((served) => !isSameClaudeModel(requestedModel, served));
+}
+
+export function isSameClaudeModel(left: string, right: string): boolean {
+  return baseClaudeModel(left) === baseClaudeModel(right);
+}
+
+function baseClaudeModel(model: string): string {
+  return model.replace(MODEL_VARIANT_SUFFIX, "").replace(DATED_SNAPSHOT_SUFFIX, "");
 }
 
 function readResult(event: Record<string, unknown>): ClaudeResultSummary {

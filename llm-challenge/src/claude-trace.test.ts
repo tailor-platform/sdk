@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace";
+import { findServedModelMismatches, isSameClaudeModel, summarizeClaudeTrace } from "./claude-trace";
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -142,5 +142,14 @@ describe("served model check", () => {
 
   test("skips the check for aliases", () => {
     expect(findServedModelMismatches("opus", ["claude-opus-5-5"])).toEqual([]);
+  });
+});
+
+describe("same model check", () => {
+  test("treats context-window suffixes and dated snapshots as the same model", () => {
+    expect(isSameClaudeModel("claude-opus-5-5[1m]", "claude-opus-5-5")).toBe(true);
+    expect(isSameClaudeModel("claude-opus-5-5", "claude-opus-5-5-20260901")).toBe(true);
+    expect(isSameClaudeModel("claude-opus-5", "claude-opus-5-5")).toBe(false);
+    expect(isSameClaudeModel("claude-fable-5-1", "claude-opus-5-5")).toBe(false);
   });
 });

@@ -707,6 +707,8 @@ describe("claude artifact summary", () => {
       classify([{ type: "result", subtype: "success", is_error: true, api_error_status: 529 }], 1),
     ).resolves.toBe("api-error");
     await expect(classify([], 1)).resolves.toBe("runner-startup");
+    await expect(classify([], 0)).resolves.toBe("unknown");
+    await expect(classify(fixture.slice(0, 3), 0)).resolves.toBe("unknown");
     await expect(
       classify(
         [

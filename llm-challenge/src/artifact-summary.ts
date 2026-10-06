@@ -154,7 +154,7 @@ function classifyClaudeRun(
   if (findServedModelMismatches(requestedModel, trace.servedModels).length > 0) {
     return "model-mismatch";
   }
-  if (solverExitCode === 0 && trace.result?.isError !== true) {
+  if (solverExitCode === 0 && trace.result !== undefined && trace.result.isError !== true) {
     return "none";
   }
   const apiErrorStatus = trace.result?.apiErrorStatus;
@@ -168,7 +168,7 @@ function classifyClaudeRun(
     return "api-error";
   }
   if (trace.result === undefined) {
-    return "runner-startup";
+    return solverExitCode === 0 ? "unknown" : "runner-startup";
   }
   return "solver-nonzero";
 }
