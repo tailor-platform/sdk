@@ -310,7 +310,7 @@ When the SDK deploys application code or runs detected service code with `functi
 | Executor callbacks        | `body: ({ env }) => ...`, `url: ({ env }) => String(env.bar)`, `variables: ({ env }) => ({ enabled: env.baz })`, or similar callback args |
 | Workflow job body         | `body: (input, { env }) => ...`                                                                                                           |
 | Auth before-login hook    | `handler: async ({ env }) => ...`                                                                                                         |
-| TailorDB migration script | `main(trx, { env }: MigrationContext)`                                                                                                    |
+| TailorDB migration script | `main(trx, { env }: MigrationContext)`, or each step's `run(trx, { env })`                                                                |
 | `function run`            | Same `env` argument shape as the detected resolver, executor, or workflow job                                                             |
 
 ```typescript

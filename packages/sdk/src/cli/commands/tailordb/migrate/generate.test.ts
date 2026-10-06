@@ -359,15 +359,10 @@ describe("tailordb migration generate with an unsupported field type change", ()
     ]);
   });
 
-  test("scaffolds the conversion script as steps with --steps", async () => {
+  test("scaffolds the conversion script as steps by default", async () => {
     const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
 
-    const result = await runCommand(generateCommand, [
-      "--yes",
-      "--expand-contract",
-      "User.name",
-      "--steps",
-    ]);
+    const result = await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
 
     expect(result.success).toBe(true);
     const scriptPath = path.join(ns.migrationsDir, "0001", "migrate.ts");
@@ -693,14 +688,13 @@ describe("tailordb migration generate nested member rename preflight", () => {
     expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
   });
 
-  test("scaffolds the copy script as steps with --steps", async () => {
+  test("scaffolds the copy script as steps by default", async () => {
     const entry = addNestedNamespace("tailordb", "zipCode");
 
     const result = await runCommand(generateCommand, [
       "--yes",
       "--rename",
       "User.address.zip:zipCode",
-      "--steps",
     ]);
 
     expect(result.success).toBe(true);
@@ -953,17 +947,29 @@ describe("tailordb migration generate --data-only", () => {
     expect(diff.changes).toEqual([]);
     expect(diff.requiresMigrationScript).toBe(true);
     const script = fs.readFileSync(path.join(entry.migrationsDir, "0001", "migrate.ts"), "utf8");
-    expect(script).toContain("export async function main(trx: Transaction)");
+    expect(script).toContain("export const steps = {");
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.ts"))).toBe(true);
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.pglite.ts"))).toBe(true);
     const replayed = reconstructSnapshotFromMigrations(entry.migrationsDir);
     expect(replayed?.tables.User?.fields.name?.type).toBe("string");
   });
 
-  test("creates the script as steps with --steps", async () => {
+  test("creates the script as a main script with --main", async () => {
     const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 
-    const result = await runCommand(generateCommand, ["--data-only", "--yes", "--steps"]);
+    const result = await runCommand(generateCommand, ["--data-only", "--yes", "--main"]);
+
+    expect(result.success).toBe(true);
+    const scriptPath = path.join(entry.migrationsDir, "0001", "migrate.ts");
+    expect(analyzeMigrationScriptSource(fs.readFileSync(scriptPath, "utf8"), scriptPath)).toEqual({
+      kind: "main",
+    });
+  });
+
+  test("creates the script as steps by default", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
 
     expect(result.success).toBe(true);
     const scriptPath = path.join(entry.migrationsDir, "0001", "migrate.ts");

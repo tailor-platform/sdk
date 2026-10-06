@@ -111,8 +111,8 @@ export interface GenerateOptions {
   drops?: string[];
   /** `--expand-contract Table.field` values approving a field type conversion. */
   expandContracts?: string[];
-  /** Create generated migration scripts as multi-step scripts (`steps`) instead of `main`. */
-  steps?: boolean;
+  /** Create generated migration scripts as single-transaction `main` scripts instead of `steps`. */
+  main?: boolean;
 }
 
 /**
@@ -681,7 +681,7 @@ async function generateDataOnlyMigration(
     snapshot: previousSnapshot,
     description: options.name,
     temporal,
-    scriptKind: options.steps ? "steps" : "main",
+    scriptKind: options.main ? "main" : "steps",
   });
 
   logger.success(
@@ -1379,7 +1379,7 @@ async function generateDiffFromSnapshot(
       migrationsDir,
       description: options.name,
       temporal,
-      scriptKind: options.steps ? "steps" : "main",
+      scriptKind: options.main ? "main" : "steps",
     });
     return { declined: false, migrations: pair };
   }
@@ -1396,7 +1396,7 @@ async function generateDiffFromSnapshot(
     options.name,
     [],
     temporal,
-    options.steps ? "steps" : "main",
+    options.main ? "main" : "steps",
   );
 
   logger.success(
@@ -1636,9 +1636,9 @@ export const generateCommand = defineAppCommand({
       description:
         'Convert a field type, or a single value into an array, through a temporary field (format: "Table.field"; repeatable). Generates two migrations.',
     }),
-    steps: arg(z.boolean().default(false), {
+    main: arg(z.boolean().default(false), {
       description:
-        "Create the migration script as a multi-step script that exports `steps` instead of `main`. Applies when the migration needs a script; add one later with `migration script --steps`.",
+        "Create the migration script as a single-transaction script that exports `main` instead of `steps`. Applies when the migration needs a script; add one later with `migration script`.",
     }),
   }),
   run: async (args) => {
@@ -1652,7 +1652,7 @@ export const generateCommand = defineAppCommand({
       renames: args.rename,
       drops: args.drop,
       expandContracts: args["expand-contract"],
-      steps: args.steps,
+      main: args.main,
     });
     printMutationResult(generated);
   },

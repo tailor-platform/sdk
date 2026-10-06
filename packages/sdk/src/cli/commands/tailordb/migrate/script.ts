@@ -53,7 +53,7 @@ interface ScriptOptions {
   noScript?: boolean;
   reason?: string;
   withTest?: boolean;
-  steps?: boolean;
+  main?: boolean;
 }
 
 export interface MarkScriptSkippedOptions {
@@ -66,8 +66,8 @@ export interface AddMigrationScriptFilesOptions {
   migrationsDir: string;
   migrationNumber: number;
   withTest?: boolean;
-  /** Create migrate.ts as a multi-step script (`steps`) instead of `main`. Rejected when migrate.ts already exists. */
-  steps?: boolean;
+  /** Create migrate.ts as a single-transaction `main` script instead of `steps`. Rejected when migrate.ts already exists. */
+  main?: boolean;
   /** Whether the project has `@electric-sql/pglite` installed; gates the PGlite test scaffold. */
   pgliteAvailable?: boolean;
   /**
@@ -188,7 +188,7 @@ export async function addMigrationScriptFiles(
     migrationsDir,
     migrationNumber,
     withTest = false,
-    steps = false,
+    main = false,
     pgliteAvailable = false,
     temporal = false,
   } = options;
@@ -207,11 +207,11 @@ export async function addMigrationScriptFiles(
   const migrateExists = fs.existsSync(migratePath);
   const result: AddMigrationScriptFilesResult = {};
 
-  if (migrateExists && steps) {
+  if (migrateExists && main) {
     throw CLIError({
       code: "MIGRATION_SCRIPT_OPTIONS_CONFLICT",
-      message: `--steps cannot be used because migrate.ts already exists at ${migratePath}.`,
-      suggestion: "--steps chooses the form of a new migrate.ts; edit the existing file instead.",
+      message: `--main cannot be used because migrate.ts already exists at ${migratePath}.`,
+      suggestion: "--main chooses the form of a new migrate.ts; edit the existing file instead.",
     });
   }
 
@@ -272,9 +272,9 @@ export async function addMigrationScriptFiles(
 
   const scriptKind = migrateExists
     ? analyzeMigrationScript(migratePath).kind
-    : steps
-      ? "steps"
-      : "main";
+    : main
+      ? "main"
+      : "steps";
 
   if (!migrateExists && previousSnapshot) {
     await fsPromises.writeFile(migratePath, generateMigrationScript(diff, [], scriptKind));
@@ -373,10 +373,10 @@ async function script(options: ScriptOptions): Promise<void> {
         command: "tailordb migration script",
       });
     }
-    if (options.steps) {
+    if (options.main) {
       throw CLIError({
         code: "MIGRATION_SCRIPT_OPTIONS_CONFLICT",
-        message: "--steps cannot be used together with --no-script.",
+        message: "--main cannot be used together with --no-script.",
         command: "tailordb migration script",
       });
     }
@@ -421,7 +421,7 @@ async function script(options: ScriptOptions): Promise<void> {
     migrationsDir,
     migrationNumber,
     withTest: options.withTest,
-    steps: options.steps,
+    main: options.main,
     pgliteAvailable,
     temporal,
   });
@@ -573,9 +573,9 @@ export const scriptCommand = defineAppCommand({
     "with-test": arg(z.boolean().optional(), {
       description: "Also add the migrate.test.ts and migrate.pglite.test.ts scaffolds",
     }),
-    steps: arg(z.boolean().optional(), {
+    main: arg(z.boolean().optional(), {
       description:
-        "Create migrate.ts as a multi-step script that exports `steps` instead of `main`",
+        "Create migrate.ts as a single-transaction script that exports `main` instead of `steps`",
     }),
   }),
   run: async (args) => {
@@ -586,7 +586,7 @@ export const scriptCommand = defineAppCommand({
       noScript: args["no-script"],
       reason: args.reason,
       withTest: args["with-test"],
-      steps: args.steps,
+      main: args.main,
     });
   },
 });

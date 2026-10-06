@@ -97,15 +97,19 @@ A typical change cycle:
 3. **Edit `migrate.ts`** to populate data for the new required field:
 
    ```typescript
-   import type { Transaction } from "./db";
+   import type { MigrationSteps, Transaction } from "./db";
 
-   export async function main(trx: Transaction): Promise<void> {
+   async function populateUserEmail(trx: Transaction): Promise<void> {
      await trx
        .updateTable("User")
        .set({ email: "default@example.com" })
        .where("email", "is", null)
        .execute();
    }
+
+   export const steps = {
+     populateUserEmail: { run: populateUserEmail },
+   } satisfies MigrationSteps;
    ```
 
 4. **Apply.**
@@ -236,7 +240,7 @@ Sometimes existing data must be transformed without any schema change — fixing
 tailor tailordb migration generate --data-only --name "normalize legacy phone numbers"
 ```
 
-This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skeleton, and `db.ts` typed against the current schema. Edit `migrate.ts` to implement the transformation (pass `--steps` to scaffold it as a [steps script](#splitting-a-migration-into-steps)); the next `tailor deploy` runs it like any other migration script — in a single transaction, advancing the migration checkpoint (see [Performance and Large Tables](#performance-and-large-tables) for batching patterns). Because the entry is part of the migration history, the fix is versioned, ordered relative to schema changes, and applied once per workspace.
+This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skeleton (a single `migrate` step; pass `--main` for a [`main` script](#migration-script-anatomy) instead), and `db.ts` typed against the current schema. Edit `migrate.ts` to implement the transformation; the next `tailor deploy` runs it like any other migration script — in a single transaction, advancing the migration checkpoint (see [Performance and Large Tables](#performance-and-large-tables) for batching patterns). Because the entry is part of the migration history, the fix is versioned, ordered relative to schema changes, and applied once per workspace.
 
 The command requires a clean state: if the namespace has schema changes that are not yet in migration files, generate the schema migration first. With multiple namespaces, pass `--namespace` to name the target. `--data-only` cannot be combined with `--init`, `--rename`, `--drop`, or `--expand-contract`.
 
@@ -293,6 +297,8 @@ The SDK used for this transition must read the old history and write a baseline 
 There is no migration-file conversion command. Keeping applied files unchanged preserves the record of what ran, while `migration rebaseline` provides the escape hatch when the supported replay window changes.
 
 ## Migration Script Anatomy
+
+`migration generate` and `migration script` scaffold `migrate.ts` as `steps`, with one step for each schema change that needs a data migration (see [Splitting a migration into steps](#splitting-a-migration-into-steps)). The examples in this section use `main`, the single-transaction form that `--main` scaffolds. A `steps` script receives the same transaction and `MigrationContext` in each step's `run`.
 
 ```typescript
 import type { Transaction } from "./db";
@@ -401,7 +407,7 @@ export const steps = {
 ```
 
 - A script exports either `main` or `steps`. If it exports both, `main` runs as before and `steps` is ignored with a warning from `tailor deploy` and `tailor tailordb migration validate`.
-- Generated scripts export `main`. To scaffold one that exports `steps`, pass `--steps` to `tailor tailordb migration generate` (when the migration needs a script, including with `--data-only`) or to `tailor tailordb migration script <N>`. Each schema change that needs a data migration gets its own step, named for what it does: `populate<Table><Field>` for an added required field (for example `populateUserEmail`), `rename<Table><Field>` for a renamed field, `copy<Old>To<New>` for a renamed table, `update<Table><Field>` for a changed field, `resolve<Table><Index>` for a unique index, and `convert<Table><Field>` for a field type conversion. A name that cannot be a step name becomes `change<N>`, where N is the change's position in the migration. A step lists in `dependsOn` every earlier step that touches the same field, so changes to different fields do not wait for each other, and steps run in the order a `main` script would have run the same statements. The copy of a renamed table's rows skips itself when the new table already has rows, so running it again does not insert them twice. A `--data-only` migration, and a migration with no data statements to scaffold, get a single `migrate` step; split it into several steps where the work divides. `--steps` is rejected when `migrate.ts` already exists.
+- Generated scripts export `steps`. Pass `--main` to `tailor tailordb migration generate` (when the migration needs a script, including with `--data-only`) or to `tailor tailordb migration script <N>` to scaffold a single-transaction `main` script instead. Each schema change that needs a data migration gets its own step, named for what it does: `populate<Table><Field>` for an added required field (for example `populateUserEmail`), `rename<Table><Field>` for a renamed field, `copy<Old>To<New>` for a renamed table, `update<Table><Field>` for a changed field, `resolve<Table><Index>` for a unique index, and `convert<Table><Field>` for a field type conversion. A name that cannot be a step name becomes `change<N>`, where N is the change's position in the migration. A step lists in `dependsOn` every earlier step that touches the same field, so changes to different fields do not wait for each other, and steps run in the order a `main` script would have run the same statements. The copy of a renamed table's rows skips itself when the new table already has rows, so running it again does not insert them twice. A `--data-only` migration, and a migration with no data statements to scaffold, get a single `migrate` step; split it into several steps where the work divides. `--main` is rejected when `migrate.ts` already exists.
 - Each step is an object with a `run` function — it receives its own transaction and the same `MigrationContext` as `main` — and an optional `dependsOn` list naming the steps that must complete before it starts.
 - Steps with no dependency between them have no guaranteed order. Declaration order is not execution order, and a future SDK version may run independent steps concurrently, so declare `dependsOn` for every ordering your steps rely on.
 - Declare `steps` directly as `export const steps = { ... }`, with each step written inside it as an object literal with a literal name and `dependsOn` list. Step names start with a letter and contain only letters, digits, and underscores, up to 64 characters. `tailor tailordb migration validate` and `tailor deploy` reject unknown dependencies and cycles before anything is changed.
@@ -483,9 +489,9 @@ A `float` field that is already unique cannot convert to `decimal` in place, bec
 For example, changing `User.age` from `integer` to `float` generates a `migrate.ts` that scans non-null values in batches of 100:
 
 ```typescript
-import type { Transaction } from "./db";
+import type { MigrationSteps, Transaction } from "./db";
 
-export async function main(trx: Transaction): Promise<void> {
+async function updateUserAge(trx: Transaction): Promise<void> {
   // Normalize User.age from integer to float while the previous type is still active
   {
     let lastId: string | undefined;
@@ -519,6 +525,10 @@ export async function main(trx: Transaction): Promise<void> {
     }
   }
 }
+
+export const steps = {
+  updateUserAge: { run: updateUserAge },
+} satisfies MigrationSteps;
 ```
 
 The generated `never` annotation intentionally causes a TypeScript error until you review the normalization. If the existing values are already suitable for the target type, remove the annotation and review marker to accept the identity transformation; it does not write any rows. If values need application-specific normalization, replace the expression and remove the annotation and marker while keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.

@@ -286,13 +286,14 @@ describe("addMigrationScriptFiles", () => {
     );
   });
 
-  test("creates migrate.test.ts alongside the script with withTest", async () => {
+  test("creates migrate.test.ts alongside a main script with withTest", async () => {
     setupMigration();
 
     const result = await addMigrationScriptFiles({
       migrationsDir: testDir,
       migrationNumber: 1,
       withTest: true,
+      main: true,
     });
 
     expect(result.migratePath).toBe(migrationFile(MIGRATE_FILE_NAME));
@@ -301,14 +302,10 @@ describe("addMigrationScriptFiles", () => {
     expect(content).toContain('import { main } from "./migrate"');
   });
 
-  test("creates migrate.ts as steps with steps", async () => {
+  test("creates migrate.ts as steps by default", async () => {
     setupMigration();
 
-    const result = await addMigrationScriptFiles({
-      migrationsDir: testDir,
-      migrationNumber: 1,
-      steps: true,
-    });
+    const result = await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
 
     expect(analyzeMigrationScript(result.migratePath!)).toEqual({
       kind: "steps",
@@ -316,13 +313,24 @@ describe("addMigrationScriptFiles", () => {
     });
   });
 
-  test("scaffolds the test against steps when the script is created as steps", async () => {
+  test("creates migrate.ts as a main script with main", async () => {
     setupMigration();
 
     const result = await addMigrationScriptFiles({
       migrationsDir: testDir,
       migrationNumber: 1,
-      steps: true,
+      main: true,
+    });
+
+    expect(analyzeMigrationScript(result.migratePath!)).toEqual({ kind: "main" });
+  });
+
+  test("scaffolds the test against steps by default", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
       withTest: true,
     });
 
@@ -351,7 +359,7 @@ describe("addMigrationScriptFiles", () => {
     );
   });
 
-  test("rejects steps when migrate.ts already exists", async () => {
+  test("rejects main when migrate.ts already exists", async () => {
     setupMigration();
     writeMigrateFile(testDir, 1);
     fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
@@ -360,7 +368,7 @@ describe("addMigrationScriptFiles", () => {
       addMigrationScriptFiles({
         migrationsDir: testDir,
         migrationNumber: 1,
-        steps: true,
+        main: true,
         withTest: true,
       }),
     ).rejects.toMatchObject({ code: "MIGRATION_SCRIPT_OPTIONS_CONFLICT" });
@@ -753,17 +761,27 @@ describe("script command results", () => {
     });
   });
 
-  test("creates migrate.ts as steps with --steps", async () => {
+  test("creates migrate.ts as steps by default", async () => {
     writeInitialSchema(testDir, { User: snapshotType("User") });
     writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
 
-    const result = await runCommand(scriptCommand, ["0001", "--steps"]);
+    const result = await runCommand(scriptCommand, ["0001"]);
 
     expect(result.success).toBe(true);
     expect(analyzeMigrationScript(migrationFile(MIGRATE_FILE_NAME)).kind).toBe("steps");
   });
 
-  test("rejects --steps together with --no-script", async () => {
+  test("creates migrate.ts as a main script with --main", async () => {
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+
+    const result = await runCommand(scriptCommand, ["0001", "--main"]);
+
+    expect(result.success).toBe(true);
+    expect(analyzeMigrationScript(migrationFile(MIGRATE_FILE_NAME)).kind).toBe("main");
+  });
+
+  test("rejects --main together with --no-script", async () => {
     writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
 
     const result = await runCommand(scriptCommand, [
@@ -771,11 +789,11 @@ describe("script command results", () => {
       "--no-script",
       "--reason",
       "no data",
-      "--steps",
+      "--main",
     ]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/--steps cannot be used together with --no-script/);
+    expect(String(result.error)).toMatch(/--main cannot be used together with --no-script/);
   });
 
   test("reports the recorded script skip that creating the script removed", async () => {
