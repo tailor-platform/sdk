@@ -300,47 +300,137 @@ describe("template-generator", () => {
       expect(script).not.toContain("dependsOn:");
     });
 
-    test("runs the steps for added required fields after the rest of the migration", () => {
+    const renamedField = (tableName: string, previousFieldName: string, fieldName: string) =>
+      ({
+        kind: "field_renamed",
+        tableName,
+        fieldName,
+        previousFieldName,
+        before: { type: "string", required: false },
+        after: { type: "string", required: false },
+      }) as const;
+    const renamedTable = (previousTableName: string, tableName: string) =>
+      ({
+        kind: "table_renamed",
+        tableName,
+        previousTableName,
+        before: {
+          name: previousTableName,
+          pluralForm: `${previousTableName}s`,
+          fields: { email: { type: "string", required: false } },
+        },
+        after: {
+          name: tableName,
+          pluralForm: `${tableName}s`,
+          fields: { email: { type: "string", required: false } },
+        },
+      }) as const;
+
+    test("gives each change its own step, with no ordering between independent changes", () => {
       const script = generateMigrationScript(
-        stepsDiff(
-          {
-            kind: "field_renamed",
-            tableName: "User",
-            fieldName: "displayName",
-            previousFieldName: "fullName",
-            before: { type: "string", required: false },
-            after: { type: "string", required: false },
-          },
-          addedRequired("User", "email"),
-        ),
+        stepsDiff(renamedField("User", "fullName", "displayName"), addedRequired("User", "email")),
         [],
         "steps",
       );
 
-      expect(order(script)).toEqual(["migrate", "populateUserEmail"]);
-      expect(script).toContain('dependsOn: ["migrate"]');
+      expect(order(script)).toEqual(["renameUserDisplayName", "populateUserEmail"]);
+      expect(script).not.toContain("dependsOn:");
     });
 
-    test("keeps an added required field in the migrate step when its name cannot name a step", () => {
-      const longName = "a".repeat(70);
+    test("orders the changes on a renamed table after the copy of its rows", () => {
       const script = generateMigrationScript(
-        stepsDiff(addedRequired("User", longName)),
+        stepsDiff(renamedTable("User", "Person"), addedRequired("Person", "phone")),
         [],
         "steps",
       );
 
-      expect(order(script)).toEqual(["migrate"]);
+      expect(order(script)).toEqual(["copyUserToPerson", "populatePersonPhone"]);
+      expect(script).toContain('populatePersonPhone: { dependsOn: ["copyUserToPerson"]');
+    });
+
+    test("skips the copy of a renamed table's rows when an earlier run already copied them", () => {
+      const diff = stepsDiff(renamedTable("User", "Person"));
+      const stepsScript = generateMigrationScript(diff, [], "steps");
+
+      expect(stepsScript).toContain('trx.selectFrom("Person").select("id").limit(1)');
+      expect(stepsScript).toContain("if (copied.length > 0) return;");
+      expect(generateMigrationScript(diff)).not.toContain("copied");
+    });
+
+    test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("User", "name"), {
+          kind: "index_added",
+          tableName: "User",
+          indexName: "name_org",
+          after: { fields: ["name", "org"], unique: true },
+        }),
+        [],
+        "steps",
+      );
+
+      expect(order(script)).toEqual(["populateUserName", "resolveUserName_org"]);
+      expect(script).toContain('resolveUserName_org: { dependsOn: ["populateUserName"]');
+    });
+
+    test("keeps the statements for one field's change together, in the order main runs them", () => {
+      const script = generateMigrationScript(
+        stepsDiff({
+          kind: "field_modified",
+          tableName: "Item",
+          fieldName: "price",
+          before: { type: "decimal", scale: 2, required: true },
+          after: { type: "decimal", scale: 4, required: true, unique: true },
+        }),
+        [],
+        "steps",
+      );
+
+      expect(order(script)).toEqual(["updateItemPrice"]);
+      expect(script.indexOf("Re-save existing Item rows")).toBeGreaterThan(-1);
+      expect(script.indexOf("Re-save existing Item rows")).toBeLessThan(
+        script.indexOf("Ensure price values are unique"),
+      );
+    });
+
+    test("converts through a temporary field in its own step", () => {
+      const script = generateMigrationScript(
+        stepsDiff(),
+        [
+          {
+            tableName: "User",
+            fieldName: "name",
+            tempFieldName: "nameMigrate",
+            before: { type: "integer", required: true },
+            after: { type: "string", required: true },
+          },
+        ],
+        "steps",
+      );
+
+      expect(order(script)).toEqual(["convertUserName"]);
+    });
+
+    test("names a step change<N> when its descriptive name cannot be a step name", () => {
+      const longName = "a".repeat(70);
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("User", "email"), addedRequired("User", longName)),
+        [],
+        "steps",
+      );
+
+      expect(order(script)).toEqual(["populateUserEmail", "change2"]);
       expect(script).toContain(longName);
     });
 
-    test("keeps the later of two added required fields with the same step name in the migrate step", () => {
+    test("names the later of two steps with the same name change<N>", () => {
       const script = generateMigrationScript(
         stepsDiff(addedRequired("A", "bC"), addedRequired("AB", "c")),
         [],
         "steps",
       );
 
-      expect(order(script)).toEqual(["migrate", "populateABC"]);
+      expect(order(script)).toEqual(["populateABC", "change2"]);
       expect(script).toContain('.updateTable("AB")');
     });
 
@@ -425,6 +515,38 @@ describe("template-generator", () => {
       const mainDiagnostics = getTypeScriptDiagnostics(main.migrateFilePath!);
       expect(mainDiagnostics).not.toEqual([]);
       expect(getTypeScriptDiagnostics(steps.migrateFilePath!)).toEqual(mainDiagnostics);
+    }, 30_000);
+
+    test("typechecks the steps for a table rename and a field rename like the main script", async () => {
+      const userSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            email: { type: "string", required: false },
+            fullName: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = stepsDiff(
+        renamedTable("User", "Person"),
+        renamedField("Person", "fullName", "displayName"),
+      );
+      const main = await generateDiffFiles(diff, tempDir, 1, userSnapshot);
+      const steps = await generateDiffFiles(
+        diff,
+        tempDir,
+        2,
+        userSnapshot,
+        undefined,
+        [],
+        false,
+        "steps",
+      );
+
+      expect(getTypeScriptDiagnostics(steps.migrateFilePath!)).toEqual(
+        getTypeScriptDiagnostics(main.migrateFilePath!),
+      );
     }, 30_000);
 
     test("leaves only the placeholders the main script has for the same change", async () => {

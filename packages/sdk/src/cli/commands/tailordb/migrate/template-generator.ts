@@ -312,28 +312,177 @@ function scriptTransactionNotes(scriptKind: MigrationScriptForm["kind"]): string
  * See "Splitting a migration into steps" in the TailorDB migration docs.`;
 }
 
-/** A step that fills one added required field and does not depend on other changes. */
-interface PopulateStep {
+/** A step of a generated `steps` script: one schema change and the earlier steps it must follow. */
+interface ScriptStep {
   name: string;
   body: string;
+  dependsOn: readonly string[];
 }
+
+/** A field a step reads or writes; `ALL_FIELDS` stands for every field of the table. */
+interface FieldTouch {
+  table: string;
+  field: string;
+}
+
+const ALL_FIELDS = "*";
+
+const NO_DATA_MIGRATION_BODY = `  // No data migration needed for this schema change
+  // Add custom data transformations if required`;
 
 const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 
 /**
- * Build the step that fills an added required field. Each such field is
- * independent of every other change, and the new column is dropped with the
- * Pre-phase schema if the migration is rolled back, so it can commit on its own.
- * @param change - Diff change to build a step for
- * @param usedNames - Step names already taken, updated with the new name
- * @returns The step, or undefined when the change is not an added required field or no valid, unused step name exists
+ * Name the step for a change and list the fields it reads or writes. Two steps
+ * that touch the same field must run in the order `main` runs them; steps that
+ * touch different fields do not depend on each other.
+ * @param change - Diff change to describe
+ * @returns Preferred step name and the fields the change touches
  */
-function populateStepFor(change: DiffChange, usedNames: Set<string>): PopulateStep | undefined {
-  if (change.kind !== "field_added" || !change.after.required) return undefined;
-  const name = `populate${capitalize(change.tableName)}${capitalize(change.fieldName)}`;
-  if (!isMigrationStepName(name) || usedNames.has(name)) return undefined;
-  usedNames.add(name);
-  return { name, body: generateChangeScripts(change).join("\n\n") };
+function describeChange(change: DiffChange): { preferredName: string; touches: FieldTouch[] } {
+  const table = capitalize(change.tableName);
+  switch (change.kind) {
+    case "field_added":
+      return {
+        preferredName: `populate${table}${capitalize(change.fieldName)}`,
+        touches: [{ table: change.tableName, field: change.fieldName }],
+      };
+    case "field_renamed":
+      return {
+        preferredName: `rename${table}${capitalize(change.fieldName)}`,
+        touches: [
+          { table: change.tableName, field: change.previousFieldName },
+          { table: change.tableName, field: change.fieldName },
+        ],
+      };
+    case "table_renamed":
+      return {
+        preferredName: `copy${capitalize(change.previousTableName)}To${table}`,
+        touches: [
+          { table: change.previousTableName, field: ALL_FIELDS },
+          { table: change.tableName, field: ALL_FIELDS },
+        ],
+      };
+    case "field_modified":
+    case "field_type_modified":
+      return {
+        preferredName: `update${table}${capitalize(change.fieldName)}`,
+        touches: [{ table: change.tableName, field: change.fieldName }],
+      };
+    case "index_added":
+    case "index_modified":
+      return {
+        preferredName: `resolve${table}${capitalize(change.indexName)}`,
+        touches: change.after.fields.map((field) => ({ table: change.tableName, field })),
+      };
+    default:
+      return { preferredName: "", touches: [{ table: change.tableName, field: ALL_FIELDS }] };
+  }
+}
+
+const touchesOverlap = (a: readonly FieldTouch[], b: readonly FieldTouch[]): boolean =>
+  a.some((x) =>
+    b.some(
+      (y) =>
+        x.table === y.table &&
+        (x.field === ALL_FIELDS || y.field === ALL_FIELDS || x.field === y.field),
+    ),
+  );
+
+/**
+ * The statements of one change, in the order `main` runs them.
+ * @param change - Diff change to generate statements for
+ * @param typeRenameTargets - Confirmed type renames (old name → new name)
+ * @returns Statements, or an empty array when the change needs no data migration
+ */
+function generateChangeStatements(
+  change: DiffChange,
+  typeRenameTargets: ReadonlyMap<string, string>,
+): string[] {
+  const decimalScaleScript = generateDecimalScaleChangeScript(change);
+  const statements = generateChangeScripts(change, decimalScaleScript !== null, typeRenameTargets);
+  if (decimalScaleScript) {
+    statements.push(decimalScaleScript);
+
+    const uniqueConstraintScript = generateUniqueConstraintScript(change);
+    if (uniqueConstraintScript) {
+      statements.push(uniqueConstraintScript);
+    }
+  }
+  return statements;
+}
+
+/**
+ * Split a migration into one step per change that needs a data migration. A
+ * step depends on every earlier step that touches the same field, so the
+ * order `main` runs the changes in stays the order the steps run in. A step
+ * can also be skipped on a re-run, because each one commits on its own.
+ * @param diff - Migration diff
+ * @param expandPlans - Field changes carried through temporary fields
+ * @param typeRenameTargets - Confirmed type renames (old name → new name)
+ * @returns Steps in the order `main` runs the changes
+ */
+function buildScriptSteps(
+  diff: MigrationDiff,
+  expandPlans: readonly ExpandContractPlan[],
+  typeRenameTargets: ReadonlyMap<string, string>,
+): ScriptStep[] {
+  interface Draft {
+    preferredName: string;
+    fallbackName: string;
+    body: string;
+    touches: readonly FieldTouch[];
+  }
+  const drafts: Draft[] = expandPlans.map((plan, index) => ({
+    preferredName: `convert${capitalize(plan.tableName)}${capitalize(plan.fieldName)}`,
+    fallbackName: `expand${index + 1}`,
+    body: generateExpandConversionScript(plan),
+    touches: [
+      { table: plan.tableName, field: plan.fieldName },
+      { table: plan.tableName, field: plan.tempFieldName },
+    ],
+  }));
+  diff.changes.forEach((change, index) => {
+    const statements = generateChangeStatements(change, typeRenameTargets);
+    if (statements.length === 0) return;
+    const { preferredName, touches } = describeChange(change);
+    drafts.push({
+      preferredName,
+      fallbackName: `change${index + 1}`,
+      body: [
+        ...(change.kind === "table_renamed" ? [copyOnceGuard(change)] : []),
+        ...statements,
+      ].join("\n\n"),
+      touches,
+    });
+  });
+
+  const usedNames = new Set<string>();
+  const earlier: { name: string; touches: readonly FieldTouch[] }[] = [];
+  return drafts.map((draft) => {
+    const name =
+      isMigrationStepName(draft.preferredName) && !usedNames.has(draft.preferredName)
+        ? draft.preferredName
+        : draft.fallbackName;
+    usedNames.add(name);
+    const dependsOn = earlier
+      .filter((step) => touchesOverlap(step.touches, draft.touches))
+      .map((step) => step.name);
+    earlier.push({ name, touches: draft.touches });
+    return { name, body: draft.body, dependsOn };
+  });
+}
+
+/**
+ * Guard that keeps a re-run of the copy of a renamed table's rows from
+ * inserting them twice. The new table is empty until the copy commits.
+ * @param change - Table rename to guard the copy of
+ * @returns Statements to place before the copy
+ */
+function copyOnceGuard(change: TableRenamedChange): string {
+  return `  // Skip when an earlier run already copied the rows: ${change.tableName} is empty until then.
+  const copied = await trx.selectFrom("${change.tableName}").select("id").limit(1).execute();
+  if (copied.length > 0) return;`;
 }
 
 /**
@@ -341,24 +490,17 @@ function populateStepFor(change: DiffChange, usedNames: Set<string>): PopulateSt
  * @param scriptKind - Whether to export `main` or `steps`
  * @param body - Statements of the migration, indented for a `main` function body
  * @param helpers - Helper declarations placed between the import and the entry point
- * @param populateSteps - Steps that fill added required fields, used by the `steps` form
+ * @param steps - Steps of the `steps` form; a single `migrate` step holds `body` when there are none
  * @returns Script source after the header comment
  */
 function renderScript(
   scriptKind: MigrationScriptForm["kind"],
   body: string,
   helpers: string,
-  populateSteps: readonly PopulateStep[] = [],
+  steps: readonly ScriptStep[] = [],
 ): string {
   if (scriptKind === "steps") {
-    const migrateStep = body.trim() === "" ? [] : [{ name: "migrate", body, dependsOn: [] }];
-    const units = [
-      ...migrateStep,
-      ...populateSteps.map((step) => ({
-        ...step,
-        dependsOn: migrateStep.length > 0 ? ["migrate"] : [],
-      })),
-    ];
+    const units = steps.length > 0 ? steps : [{ name: "migrate", body, dependsOn: [] }];
     const functions = units
       .map(
         (unit) => `async function ${unit.name}(trx: Transaction): Promise<void> {
@@ -402,41 +544,22 @@ export function generateMigrationScript(
   expandPlans: readonly ExpandContractPlan[] = [],
   scriptKind: MigrationScriptForm["kind"] = "main",
 ): string {
-  const updates: string[] = [];
   const typeRenameTargets = new Map(
     diff.changes
       .filter((change): change is TableRenamedChange => change.kind === "table_renamed")
       .map((change) => [change.previousTableName, change.tableName]),
   );
 
-  for (const plan of expandPlans) {
-    updates.push(generateExpandConversionScript(plan));
-  }
-
-  const populateSteps: PopulateStep[] = [];
-  const populateNames = new Set<string>();
-  for (const change of diff.changes) {
-    const populateStep =
-      scriptKind === "steps" ? populateStepFor(change, populateNames) : undefined;
-    if (populateStep) {
-      populateSteps.push(populateStep);
-      continue;
-    }
-    const decimalScaleScript = generateDecimalScaleChangeScript(change);
-    updates.push(...generateChangeScripts(change, decimalScaleScript !== null, typeRenameTargets));
-    if (decimalScaleScript) {
-      updates.push(decimalScaleScript);
-
-      const uniqueConstraintScript = generateUniqueConstraintScript(change);
-      if (uniqueConstraintScript) {
-        updates.push(uniqueConstraintScript);
-      }
-    }
-  }
-
-  if (updates.length === 0 && populateSteps.length === 0) {
-    updates.push(`  // No data migration needed for this schema change
-  // Add custom data transformations if required`);
+  let body = NO_DATA_MIGRATION_BODY;
+  let steps: ScriptStep[] = [];
+  if (scriptKind === "steps") {
+    steps = buildScriptSteps(diff, expandPlans, typeRenameTargets);
+  } else {
+    const updates = [
+      ...expandPlans.map((plan) => generateExpandConversionScript(plan)),
+      ...diff.changes.flatMap((change) => generateChangeStatements(change, typeRenameTargets)),
+    ];
+    if (updates.length > 0) body = updates.join("\n\n");
   }
 
   const helpers = diff.changes.some(
@@ -457,7 +580,7 @@ export function generateMigrationScript(
 ${scriptTransactionNotes(scriptKind)}
  */
 
-${renderScript(scriptKind, updates.join("\n\n"), helpers, populateSteps)}`;
+${renderScript(scriptKind, body, helpers, steps)}`;
 }
 
 /**
