@@ -22,4 +22,4 @@ export const steps = {
 } satisfies MigrationSteps;
 ```
 
-When a step fails after other steps completed, `tailor deploy` keeps the migration in progress instead of rolling it back: the next deploy resumes it from the steps that have not completed, and `tailordb migration status` reports it. Steps must be safe to run again. `runMigrationSteps` in `@tailor-platform/sdk/vitest` runs `steps` in tests the same way. Scripts that export `main` behave as before; a script that exports both runs `main` and warns that `steps` is ignored.
+When a step fails after other steps completed, `tailor deploy` keeps the migration in progress instead of rolling it back: the next deploy resumes it from the steps that have not completed, and `tailordb migration status` reports it. A script with a single step runs like a `main` script, in one transaction, and is rolled back on any failure. Steps must be safe to run again. `runMigrationSteps` in `@tailor-platform/sdk/vitest` runs `steps` in tests the same way. Scripts that export `main` behave as before; a script that exports both runs `main` and warns that `steps` is ignored.

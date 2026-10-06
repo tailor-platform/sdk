@@ -296,7 +296,8 @@ ${renderScript(scriptKind, "  // TODO: Implement the data transformation for thi
  */
 function scriptTransactionNotes(scriptKind: MigrationScriptForm["kind"]): string {
   if (scriptKind === "steps") {
-    return ` * Each step runs in its own transaction and commits on its own. A deploy that
+    return ` * A script with one step runs like \`main\`, in one transaction. Once it has several
+ * steps, each runs in its own transaction and commits on its own, and a deploy that
  * fails after a step committed resumes from the steps that have not completed, so
  * write every step to be safe to run again. Split \`migrate\` into several steps
  * where the work divides, and order them with \`dependsOn\`.

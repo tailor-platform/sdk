@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import ml from "#/utils/multiline";
-import { analyzeMigrationScriptSource } from "./script-form";
+import { analyzeMigrationScriptSource, usesStepRunner } from "./script-form";
 
 const analyze = (source: string) => analyzeMigrationScriptSource(source, "0003/migrate.ts");
 
@@ -173,5 +173,38 @@ describe("analyzeMigrationScriptSource", () => {
 
   test("reports syntax errors with the script path", () => {
     expect(() => analyze("export const steps = {")).toThrow("Failed to parse 0003/migrate.ts");
+  });
+});
+
+describe("usesStepRunner", () => {
+  test.each([
+    { name: "no script", form: null, resumed: false, expected: false },
+    { name: "a main script", form: { kind: "main" as const }, resumed: false, expected: false },
+    {
+      name: "a main script that an earlier deploy left in progress",
+      form: { kind: "main" as const },
+      resumed: true,
+      expected: false,
+    },
+    {
+      name: "several steps",
+      form: { kind: "steps" as const, order: ["a", "b"] },
+      resumed: false,
+      expected: true,
+    },
+    {
+      name: "a single step",
+      form: { kind: "steps" as const, order: ["a"] },
+      resumed: false,
+      expected: false,
+    },
+    {
+      name: "a single step that an earlier deploy left in progress",
+      form: { kind: "steps" as const, order: ["a"] },
+      resumed: true,
+      expected: true,
+    },
+  ])("is $expected for $name", ({ form, resumed, expected }) => {
+    expect(usesStepRunner(form, resumed)).toBe(expected);
   });
 });

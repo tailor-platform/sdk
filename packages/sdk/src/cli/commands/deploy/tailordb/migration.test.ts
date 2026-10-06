@@ -76,9 +76,13 @@ const bundleMigrationScriptMock = vi.fn();
 const bundleMigrationStepsMock = vi.fn(async (_options: { temporal?: boolean }) => ({
   bundledCode: "// bundled steps",
 }));
+const bundleSingleStepMigrationMock = vi.fn(async (_options: unknown) => ({
+  bundledCode: "// bundled single step",
+}));
 vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
   bundleMigrationSteps: (options: { temporal?: boolean }) => bundleMigrationStepsMock(options),
+  bundleSingleStepMigration: (options: unknown) => bundleSingleStepMigrationMock(options),
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
 const executeMigrationStepsAsWorkflowMock = vi.fn();
@@ -754,7 +758,7 @@ describe("migration", () => {
       await runTest();
     });
 
-    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill"] };
+    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill", "recompute"] };
 
     function stepsContext(setMetadataMock: ReturnType<typeof vi.fn>): MigrationContext {
       return {
@@ -953,7 +957,7 @@ describe("migration", () => {
 
     test("keeps the remediation of a failure that is not a step's own", async () => {
       const migration = createMockMigration({
-        scriptForm: { kind: "steps", order: ["backfill"] },
+        scriptForm: { kind: "steps", order: ["backfill", "recompute"] },
       });
       executeMigrationStepsAsWorkflowMock.mockRejectedValueOnce(
         CLIError({
@@ -984,6 +988,45 @@ describe("migration", () => {
         appName: "test-app",
         appId: "test-app-id",
       });
+    });
+
+    test("runs a script with a single step like a main script", async () => {
+      const migration = createMockMigration({
+        number: 1,
+        hasScript: true,
+        scriptForm: { kind: "steps", order: ["backfill"] },
+      });
+
+      await executeMigrations(createMockContext(), [migration]);
+
+      expect(bundleSingleStepMigrationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "tailordb", migrationNumber: 1, step: "backfill" }),
+      );
+      expect(executeMigrationAsWorkflowMock).toHaveBeenCalledWith(
+        expect.objectContaining({ code: "// bundled single step" }),
+      );
+      expect(executeMigrationStepsAsWorkflowMock).not.toHaveBeenCalled();
+    });
+
+    test("keeps running a single-step script through the step runner when an earlier deploy left it in progress", async () => {
+      const migration = createMockMigration({
+        number: 1,
+        hasScript: true,
+        scriptForm: { kind: "steps", order: ["backfill"] },
+      });
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: true,
+        logs: "",
+        executionId: "exec-1",
+        completedSteps: ["backfill"],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      });
+
+      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+
+      expect(executeMigrationStepsAsWorkflowMock).toHaveBeenCalledTimes(1);
+      expect(executeMigrationAsWorkflowMock).not.toHaveBeenCalled();
     });
 
     test("surfaces a failed workflow migration as a migration failure", async () => {

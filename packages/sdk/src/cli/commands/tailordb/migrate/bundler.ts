@@ -132,6 +132,68 @@ export async function bundleMigrationScript(
   };
 }
 
+export interface BundleSingleStepMigrationOptions {
+  /** Path to the migration script exporting `steps`. */
+  sourceFile: string;
+  namespace: string;
+  migrationNumber: number;
+  /** Environment variables to inject into the step's context. */
+  env: Record<string, string | number | boolean>;
+  /** The only step of the script. */
+  step: string;
+  /** Directory to resolve the bundler's tsconfig against; defaults to the script's directory. */
+  baseDir?: string;
+  /** Whether the script's `db.ts` uses Temporal column types. Defaults to `false`. */
+  temporal?: boolean;
+}
+
+/**
+ * Bundle a migration script whose `steps` holds a single step so that it runs
+ * like a `main` script: the entry's `main` runs the step in one transaction,
+ * without starting a runner job.
+ * @param options - Bundle options
+ * @returns Bundled migration result
+ */
+export async function bundleSingleStepMigration(
+  options: BundleSingleStepMigrationOptions,
+): Promise<MigrationBundleResult> {
+  const { sourceFile, namespace, migrationNumber, env, step, temporal = false } = options;
+  const outputDir = path.resolve(getDistDir(), "migrations");
+  fs.mkdirSync(outputDir, { recursive: true });
+  const entryPath = path.join(
+    outputDir,
+    `migration_${namespace}_${migrationNumber}.single-step.entry.js`,
+  );
+  const absoluteSourcePath = path.resolve(sourceFile).replace(/\\/g, "/");
+
+  const entryContent = ml /* js */ `
+    import { steps as _migrationSteps } from ${JSON.stringify(absoluteSourcePath)};
+    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
+
+    function getDB(namespace) {
+      const client = new tailordb.Client({ namespace, temporal: ${JSON.stringify(temporal)} });
+      return new Kysely({
+        dialect: new TailordbDialect(client),
+      });
+    }
+
+    export async function main(input) {
+      const env = ${JSON.stringify(env)};
+      const db = getDB(${JSON.stringify(namespace)});
+      await db.transaction().execute(async (trx) => {
+        await _migrationSteps[${JSON.stringify(step)}].run(trx, { env });
+      });
+      return { success: true };
+    }
+  `;
+  const bundledCode = await buildEntry(
+    entryPath,
+    entryContent,
+    options.baseDir ?? path.dirname(absoluteSourcePath),
+  );
+  return { namespace, migrationNumber, bundledCode };
+}
+
 export interface BundleMigrationStepsOptions {
   /** Path to the migration script exporting `steps`. */
   sourceFile: string;

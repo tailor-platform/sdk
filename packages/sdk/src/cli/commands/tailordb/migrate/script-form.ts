@@ -29,6 +29,18 @@ export type MigrationScriptForm =
 
 const STEP_KEYS = new Set(["run", "dependsOn"]);
 
+/**
+ * Whether a migration runs each step as its own job. A script with a single
+ * step runs like `main`, because there is nothing to resume between steps,
+ * unless an earlier deploy left it in progress and its record must be honored.
+ * @param form - How the migration script runs, or null without a script
+ * @param resumed - Whether an earlier deploy left this migration in progress
+ * @returns True when the migration runs through the step runner
+ */
+export function usesStepRunner(form: MigrationScriptForm | null, resumed: boolean): boolean {
+  return form?.kind === "steps" && (form.order.length > 1 || resumed);
+}
+
 function invalidScript(filePath: string, problem: string): Error {
   return CLIError({
     code: "MIGRATION_SCRIPT_INVALID",
