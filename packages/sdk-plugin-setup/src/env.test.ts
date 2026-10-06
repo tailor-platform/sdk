@@ -121,10 +121,12 @@ describe("how to get each value", () => {
     }
   });
 
-  test("says that without the admin role machine users can be neither viewed nor created", () => {
+  test("says that without the required permission machine users can be neither viewed nor created", () => {
     const [clientId] = targetRequirements("branch");
 
+    expect(clientId?.howTo).toContain("without the required permission");
     expect(clientId?.howTo).toContain("cannot view or create machine users");
+    expect(clientId?.howTo).not.toContain("admin role");
   });
 });
 
