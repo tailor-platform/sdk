@@ -29,6 +29,7 @@ import {
   getMigrationScriptPath,
 } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
+import type { DiffChange } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
@@ -259,14 +260,88 @@ describe("template-generator", () => {
       requiresMigrationScript: true,
     });
 
-    test("generates a script that deploy reads as a single step", () => {
+    const addedRequired = (tableName: string, fieldName: string) =>
+      ({
+        kind: "field_added",
+        tableName,
+        fieldName,
+        after: { type: "string", required: true },
+      }) as const;
+    const stepsDiff = (...changes: DiffChange[]) =>
+      createMockMigrationDiff({
+        changes,
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+    const order = (script: string) => {
+      const form = analyzeMigrationScriptSource(script, "migrate.ts");
+      return form.kind === "steps" ? form.order : [];
+    };
+
+    test("generates a script that deploy reads as a step for the added required field", () => {
       const script = generateMigrationScript(breakingDiff, [], "steps");
 
       expect(analyzeMigrationScriptSource(script, "migrate.ts")).toEqual({
         kind: "steps",
-        order: ["migrate"],
+        order: ["populateUserEmail"],
       });
       expect(script).not.toContain("export async function main");
+    });
+
+    test("splits added required fields into one step each", () => {
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("User", "email"), addedRequired("User", "phone")),
+        [],
+        "steps",
+      );
+
+      expect(order(script)).toEqual(["populateUserEmail", "populateUserPhone"]);
+      expect(script).toContain("async function populateUserPhone(trx: Transaction)");
+      expect(script).not.toContain("dependsOn:");
+    });
+
+    test("runs the steps for added required fields after the rest of the migration", () => {
+      const script = generateMigrationScript(
+        stepsDiff(
+          {
+            kind: "field_renamed",
+            tableName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+          addedRequired("User", "email"),
+        ),
+        [],
+        "steps",
+      );
+
+      expect(order(script)).toEqual(["migrate", "populateUserEmail"]);
+      expect(script).toContain('dependsOn: ["migrate"]');
+    });
+
+    test("keeps an added required field in the migrate step when its name cannot name a step", () => {
+      const longName = "a".repeat(70);
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("User", longName)),
+        [],
+        "steps",
+      );
+
+      expect(order(script)).toEqual(["migrate"]);
+      expect(script).toContain(longName);
+    });
+
+    test("keeps the later of two added required fields with the same step name in the migrate step", () => {
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("A", "bC"), addedRequired("AB", "c")),
+        [],
+        "steps",
+      );
+
+      expect(order(script)).toEqual(["migrate", "populateABC"]);
+      expect(script).toContain('.updateTable("AB")');
     });
 
     test("keeps the statements the main script scaffolds, indented as they are, in the step's function", () => {
@@ -279,7 +354,7 @@ describe("template-generator", () => {
 
       expect(body.trim()).not.toBe("");
       expect(stepsScript).toContain(body);
-      expect(stepsScript).toContain("run: migrate");
+      expect(stepsScript).toContain("run: populateUserEmail");
     });
 
     test("scaffolds a data-only migration as a single step", async () => {
@@ -332,6 +407,25 @@ describe("template-generator", () => {
       },
       60_000,
     );
+
+    test("typechecks the steps for several added required fields like the main script", async () => {
+      const diff = stepsDiff(addedRequired("User", "email"), addedRequired("User", "phone"));
+      const main = await generateDiffFiles(diff, tempDir, 1, snapshot);
+      const steps = await generateDiffFiles(
+        diff,
+        tempDir,
+        2,
+        snapshot,
+        undefined,
+        [],
+        false,
+        "steps",
+      );
+
+      const mainDiagnostics = getTypeScriptDiagnostics(main.migrateFilePath!);
+      expect(mainDiagnostics).not.toEqual([]);
+      expect(getTypeScriptDiagnostics(steps.migrateFilePath!)).toEqual(mainDiagnostics);
+    }, 30_000);
 
     test("leaves only the placeholders the main script has for the same change", async () => {
       const main = await generateDiffFiles(breakingDiff, tempDir, 1, snapshot);

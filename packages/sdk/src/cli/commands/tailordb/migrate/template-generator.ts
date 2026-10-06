@@ -11,6 +11,7 @@
 
 import * as fs from "node:fs/promises";
 import { CLIError } from "#/cli/shared/errors";
+import { isMigrationStepName } from "#/utils/migration-steps";
 import { formatFieldShape, isSingleValueToArrayChange } from "./field-type-change";
 import { writeMigrationTypeFiles } from "./pglite-schema-generator";
 import { isBreakingForeignKeyRetarget } from "./rename-detection";
@@ -299,7 +300,7 @@ function scriptTransactionNotes(scriptKind: MigrationScriptForm["kind"]): string
     return ` * A script with one step runs like \`main\`, in one transaction. Once it has several
  * steps, each runs in its own transaction and commits on its own, and a deploy that
  * fails after a step committed resumes from the steps that have not completed, so
- * write every step to be safe to run again. Split \`migrate\` into several steps
+ * write every step to be safe to run again. Split a step into several steps
  * where the work divides, and order them with \`dependsOn\`.
  * See "Splitting a migration into steps" in the TailorDB migration docs.`;
   }
@@ -311,27 +312,73 @@ function scriptTransactionNotes(scriptKind: MigrationScriptForm["kind"]): string
  * See "Splitting a migration into steps" in the TailorDB migration docs.`;
 }
 
+/** A step that fills one added required field and does not depend on other changes. */
+interface PopulateStep {
+  name: string;
+  body: string;
+}
+
+const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
+
+/**
+ * Build the step that fills an added required field. Each such field is
+ * independent of every other change, and the new column is dropped with the
+ * Pre-phase schema if the migration is rolled back, so it can commit on its own.
+ * @param change - Diff change to build a step for
+ * @param usedNames - Step names already taken, updated with the new name
+ * @returns The step, or undefined when the change is not an added required field or no valid, unused step name exists
+ */
+function populateStepFor(change: DiffChange, usedNames: Set<string>): PopulateStep | undefined {
+  if (change.kind !== "field_added" || !change.after.required) return undefined;
+  const name = `populate${capitalize(change.tableName)}${capitalize(change.fieldName)}`;
+  if (!isMigrationStepName(name) || usedNames.has(name)) return undefined;
+  usedNames.add(name);
+  return { name, body: generateChangeScripts(change).join("\n\n") };
+}
+
 /**
  * Render the imports and the exported entry point of a migration script
  * @param scriptKind - Whether to export `main` or `steps`
  * @param body - Statements of the migration, indented for a `main` function body
  * @param helpers - Helper declarations placed between the import and the entry point
+ * @param populateSteps - Steps that fill added required fields, used by the `steps` form
  * @returns Script source after the header comment
  */
 function renderScript(
   scriptKind: MigrationScriptForm["kind"],
   body: string,
   helpers: string,
+  populateSteps: readonly PopulateStep[] = [],
 ): string {
   if (scriptKind === "steps") {
+    const migrateStep = body.trim() === "" ? [] : [{ name: "migrate", body, dependsOn: [] }];
+    const units = [
+      ...migrateStep,
+      ...populateSteps.map((step) => ({
+        ...step,
+        dependsOn: migrateStep.length > 0 ? ["migrate"] : [],
+      })),
+    ];
+    const functions = units
+      .map(
+        (unit) => `async function ${unit.name}(trx: Transaction): Promise<void> {
+${unit.body}
+}`,
+      )
+      .join("\n\n");
+    const entries = units
+      .map((unit) => {
+        const dependsOn =
+          unit.dependsOn.length > 0 ? `dependsOn: ${JSON.stringify(unit.dependsOn)}, ` : "";
+        return `  ${unit.name}: { ${dependsOn}run: ${unit.name} },`;
+      })
+      .join("\n");
     return `import type { MigrationSteps, Transaction } from "./db";
 ${helpers}
-async function migrate(trx: Transaction): Promise<void> {
-${body}
-}
+${functions}
 
 export const steps = {
-  migrate: { run: migrate },
+${entries}
 } satisfies MigrationSteps;
 `;
   }
@@ -366,7 +413,15 @@ export function generateMigrationScript(
     updates.push(generateExpandConversionScript(plan));
   }
 
+  const populateSteps: PopulateStep[] = [];
+  const populateNames = new Set<string>();
   for (const change of diff.changes) {
+    const populateStep =
+      scriptKind === "steps" ? populateStepFor(change, populateNames) : undefined;
+    if (populateStep) {
+      populateSteps.push(populateStep);
+      continue;
+    }
     const decimalScaleScript = generateDecimalScaleChangeScript(change);
     updates.push(...generateChangeScripts(change, decimalScaleScript !== null, typeRenameTargets));
     if (decimalScaleScript) {
@@ -379,7 +434,7 @@ export function generateMigrationScript(
     }
   }
 
-  if (updates.length === 0) {
+  if (updates.length === 0 && populateSteps.length === 0) {
     updates.push(`  // No data migration needed for this schema change
   // Add custom data transformations if required`);
   }
@@ -402,7 +457,7 @@ export function generateMigrationScript(
 ${scriptTransactionNotes(scriptKind)}
  */
 
-${renderScript(scriptKind, updates.join("\n\n"), helpers)}`;
+${renderScript(scriptKind, updates.join("\n\n"), helpers, populateSteps)}`;
 }
 
 /**
