@@ -872,6 +872,34 @@ describe("migration", () => {
       );
     });
 
+    test("keeps the record when it cannot confirm whether the run started", async () => {
+      const store = createMetadataStore({});
+      const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
+      const lost = new ConnectError("lost", Code.Unavailable);
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: { onBeforeStart?: () => Promise<void> }) => {
+          await options.onBeforeStart?.();
+          throw CLIError({
+            code: "MIGRATION_START_UNCONFIRMED",
+            message:
+              "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
+            suggestion: "Deploy again.",
+            cause: lost,
+          });
+        },
+      );
+
+      await expect(
+        executeMigrations({ ...createMockContext(), client: store.client }, [migration]),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        message: "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
+        suggestion:
+          "Deploy again. Until the migration completes, the tables of namespace 'tailordb' stay in maintenance mode, as during the migration.",
+      });
+      expect(store.labels()).toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
+    });
+
     test("asks to check the record when it can be neither cleared nor read", async () => {
       const store = createMetadataStore({ loseSetResponses: [0], failSets: [1], failGets: [2] });
       const migration = createMockMigration({ number: 3, scriptForm: stepsForm });

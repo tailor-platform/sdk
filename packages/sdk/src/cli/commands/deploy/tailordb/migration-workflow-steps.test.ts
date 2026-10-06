@@ -64,6 +64,8 @@ interface StepsClientOptions {
   /** Status sequence and jobs of the execution this run starts or resumes. */
   run?: { statuses: WorkflowExecution_Status[]; jobs?: JobSpec[] };
   pollFailure?: Error;
+  /** Makes starting the run fail, after the platform created its execution or before. */
+  startFailure?: { error: Error; afterCreating: boolean };
 }
 
 function runnerJob(callIndex: number, status: WorkflowJobExecution_Status, logs: string[] = []) {
@@ -134,7 +136,10 @@ function createStepsClient(options: StepsClientOptions = {}) {
     }),
     startWorkflow: vi.fn(async () => {
       calls.push("startWorkflow");
+      const failure = options.startFailure;
+      if (failure && !failure.afterCreating) throw failure.error;
       startRun("exec-new");
+      if (failure) throw failure.error;
       return { executionId: "exec-new" };
     }),
     resumeWorkflowExecution: vi.fn(async ({ executionId }: { executionId: string }) => {
@@ -322,6 +327,53 @@ describe("executeMigrationStepsAsWorkflow", () => {
       stepsMayHaveCommitted: false,
       completedSteps: [],
     });
+    expect(calls.slice(calls.indexOf("startWorkflow"))).toEqual(
+      expect.arrayContaining([
+        "deleteWorkflow",
+        `deleteWorkflowJobFunction ${NAME}`,
+        `deleteWorkflowJobFunction ${RUNNER}`,
+        "deleteFunctionRegistry",
+      ]),
+    );
+  });
+
+  test.each([
+    { name: "Unavailable", error: new ConnectError("lost", Code.Unavailable) },
+    { name: "DeadlineExceeded", error: new ConnectError("lost", Code.DeadlineExceeded) },
+    { name: "Internal", error: new ConnectError("lost", Code.Internal) },
+    { name: "FailedPrecondition", error: new ConnectError("lost", Code.FailedPrecondition) },
+    { name: "a dropped connection", error: new TypeError("fetch failed") },
+  ])(
+    "keeps the run when starting it fails with $name after the execution was created",
+    async ({ error }) => {
+      const onExecutionStarted = vi.fn(async () => {});
+      const { client, calls } = createStepsClient({
+        startFailure: { error, afterCreating: true },
+      });
+
+      await expect(run(client, { onExecutionStarted })).rejects.toMatchObject({
+        code: "MIGRATION_START_UNCONFIRMED",
+        message: expect.stringContaining("tailordb/0003"),
+        cause: error,
+      });
+      expect(
+        calls.slice(calls.indexOf("startWorkflow")).filter((call) => call.startsWith("delete")),
+      ).toEqual([]);
+      expect(onExecutionStarted).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(
+    [Code.InvalidArgument, Code.NotFound, Code.PermissionDenied, Code.Unauthenticated].map(
+      (code) => ({ code, codeName: Code[code] }),
+    ),
+  )("tears the run down when the platform refuses to start it with $codeName", async ({ code }) => {
+    const error = new ConnectError("refused", code);
+    const { client, calls } = createStepsClient({
+      startFailure: { error, afterCreating: false },
+    });
+
+    await expect(run(client)).rejects.toBe(error);
     expect(calls.slice(calls.indexOf("startWorkflow"))).toEqual(
       expect.arrayContaining([
         "deleteWorkflow",

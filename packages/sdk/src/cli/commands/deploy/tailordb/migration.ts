@@ -420,6 +420,23 @@ function unreleasedRecordError(
   });
 }
 
+function unconfirmedStartError(migration: PendingMigration, cause: CLIError): Error {
+  return CLIError({
+    code: "MIGRATION_PARTIALLY_APPLIED",
+    message: cause.message,
+    suggestion:
+      `${cause.suggestion ? `${cause.suggestion} ` : ""}` +
+      `Until the migration completes, the tables of namespace '${migration.namespace}' stay in maintenance mode, as during the migration.`,
+    context: {
+      namespace: migration.namespace,
+      migrationNumber: migration.number,
+      completedSteps: [],
+      failedSteps: [],
+    },
+    cause,
+  });
+}
+
 /**
  * Clear the in-progress record of a migration whose steps did not commit.
  * When the record may remain, the migration stays in progress so the
@@ -533,6 +550,9 @@ async function executeStepsMigration(
       },
     });
   } catch (error) {
+    if (isCLIError(error) && error.code === "MIGRATION_START_UNCONFIRMED") {
+      throw unconfirmedStartError(migration, error);
+    }
     const anotherRunActive = isCLIError(error) && error.code === "MIGRATION_EXECUTION_ACTIVE";
     if (started || anotherRunActive) {
       throw partiallyAppliedError(migration, { completedSteps: [], failedSteps: [] }, error);

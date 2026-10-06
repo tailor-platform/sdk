@@ -15,6 +15,7 @@
  */
 
 import * as crypto from "node:crypto";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import {
   WorkflowExecution_Status,
@@ -506,6 +507,18 @@ function isExecutionActive(execution: WorkflowExecution): boolean {
   return !TERMINAL_EXECUTION_STATUSES.has(execution.status);
 }
 
+/** Codes the platform returns for a start before it creates the execution. */
+const START_REFUSED_CODES: ReadonlySet<Code> = new Set([
+  Code.InvalidArgument,
+  Code.NotFound,
+  Code.PermissionDenied,
+  Code.Unauthenticated,
+]);
+
+function isStartRefused(error: unknown): boolean {
+  return error instanceof ConnectError && START_REFUSED_CODES.has(error.code);
+}
+
 /**
  * Name of the job function that runs one step of a multi-step migration.
  * @param name - Shared resource name of the migration
@@ -786,10 +799,10 @@ export async function executeMigrationStepsAsWorkflow(
   await reclaimLeftovers(client, workspaceId, name, jobFunctionNames);
 
   const created: CreatedMigrationWorkflow = {};
-  let executionId: string;
+  let workflowId: string;
   try {
     await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
-    const workflowId = await createMigrationWorkflow(
+    workflowId = await createMigrationWorkflow(
       {
         client,
         workspaceId,
@@ -801,13 +814,31 @@ export async function executeMigrationStepsAsWorkflow(
       },
       created,
     );
+  } catch (error) {
+    await teardown(client, workspaceId, name, created.workflowId, jobFunctionNames);
+    throw error;
+  }
+
+  let executionId: string;
+  try {
     ({ executionId } = await client.startWorkflow({
       workspaceId,
       workflowId,
       authInvoker: invoker,
     }));
   } catch (error) {
-    await teardown(client, workspaceId, name, created.workflowId, jobFunctionNames);
+    if (!isStartRefused(error)) {
+      throw CLIError({
+        code: "MIGRATION_START_UNCONFIRMED",
+        message: `Could not confirm whether migration ${migrationLabel} started: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        suggestion:
+          "Deploy again; the next deploy checks whether the migration started and continues from what it finds.",
+        cause: error,
+      });
+    }
+    await teardown(client, workspaceId, name, workflowId, jobFunctionNames);
     throw error;
   }
 
