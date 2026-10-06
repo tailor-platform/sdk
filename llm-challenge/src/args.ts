@@ -8,7 +8,7 @@ import {
   type SolverAgent,
 } from "./types";
 
-export const AGENT_DEFAULTS: Record<SolverAgent, { model: string; effort: string }> = {
+const AGENT_DEFAULTS: Record<SolverAgent, { model: string; effort: string }> = {
   claude: { model: "claude-opus-5-5", effort: "xhigh" },
   codex: { model: "gpt-5.5", effort: "xhigh" },
 };

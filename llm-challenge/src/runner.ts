@@ -28,6 +28,7 @@ export type CodexPreflightResult = {
 export const DEFAULT_CODEX_IMAGE =
   "ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304";
 export const DEFAULT_CODEX_NPM_PACKAGE = "@openai/codex@0.133.0";
+export const CONTAINER_WORKSPACE_DIR = "/workspace";
 export const CONTAINER_PNPM_STORE = "/pnpm-store";
 export const PNPM_STORE_ENV = "PNPM_CONFIG_STORE_DIR";
 
@@ -127,7 +128,7 @@ export function buildAgentContainerArgs(options: {
     "--entrypoint",
     "/bin/bash",
     "-v",
-    `${options.worktreePath}:/workspace:${options.worktreeAccess ?? "rw"},Z`,
+    `${options.worktreePath}:${CONTAINER_WORKSPACE_DIR}:${options.worktreeAccess ?? "rw"},Z`,
     ...(options.sharedPnpmStorePath === undefined
       ? []
       : [
@@ -139,7 +140,7 @@ export function buildAgentContainerArgs(options: {
     ...options.mounts.flatMap((mount) => ["-v", mount]),
     ...options.envNames.flatMap((name) => ["--env", name]),
     "-w",
-    "/workspace",
+    CONTAINER_WORKSPACE_DIR,
     options.image,
     "-lc",
     options.script,

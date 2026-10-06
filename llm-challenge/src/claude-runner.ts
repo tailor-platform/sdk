@@ -15,7 +15,7 @@ import { listWorkspaceFiles } from "./workspace-files";
 
 export const DEFAULT_CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code@2.1.285";
 export const CLAUDE_OAUTH_TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN";
-export const CONTAINER_CLAUDE_PREFIX = "/opt/claude-code";
+const CONTAINER_CLAUDE_PREFIX = "/opt/claude-code";
 const CONTAINER_CLAUDE_BIN = `${CONTAINER_CLAUDE_PREFIX}/bin/claude`;
 const SOLVER_DISALLOWED_TOOLS = [
   "WebSearch",

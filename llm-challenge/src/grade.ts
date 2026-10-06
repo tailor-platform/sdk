@@ -9,6 +9,7 @@ import {
 } from "./claude-runner";
 import { isSameClaudeModel, summarizeClaudeTrace } from "./claude-trace";
 import {
+  COMMANDS_EVIDENCE_FILE,
   JUDGE_PROMPT_VERSION,
   buildJudgeOutputSchema,
   buildJudgePrompt,
@@ -584,7 +585,7 @@ async function gradeRun(options: {
     await fs.mkdir(evidenceDir, { recursive: true });
     const workspace = await prepareJudgeWorkspace(artifactPaths.worktreePath, workspaceDir);
     await fs.writeFile(
-      path.join(evidenceDir, "commands.json"),
+      path.join(evidenceDir, COMMANDS_EVIDENCE_FILE),
       `${JSON.stringify(
         await buildCommandEvidence({ agent: options.agent, tracePath: artifactPaths.tracePath }),
         null,

@@ -540,7 +540,7 @@ describe("artifact summary", () => {
     expect(summary.errors).toEqual(["solver error"]);
   });
 
-  test("classifies timeout, successful, usage-limit, and runner-startup failures", async () => {
+  test("classifies Codex timeout, success, usage-limit, auth, solver, and runner-startup outcomes", async () => {
     const dir = await makeTempDir();
     const tracePath = path.join(dir, "trace.jsonl");
     const solverStdoutPath = path.join(dir, "solver.stdout.log");
