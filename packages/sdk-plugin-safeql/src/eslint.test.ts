@@ -186,3 +186,23 @@ describe("column types of enum fields", { timeout: 60_000 }, () => {
     ]);
   });
 });
+
+describe("tailorSafeqlConfig files", () => {
+  const ddl = generateSchemaDDL(tables);
+
+  test("checks every .ts file by default", () => {
+    expect(tailorSafeqlConfig({ ddl })[0]?.files).toEqual(["**/*.ts"]);
+  });
+
+  test("checks only the given files", () => {
+    const [config] = tailorSafeqlConfig({ ddl, files: ["src/resolver/*.ts"] });
+    expect(config?.files).toEqual(["src/resolver/*.ts"]);
+  });
+
+  test.each(["**/node_modules/**", "**/dist/**", "**/*.d.ts", "**/eslint.config.*"])(
+    "never checks files matching %s, which are not part of a project's source",
+    (pattern) => {
+      expect(tailorSafeqlConfig({ ddl })[0]?.ignores).toContain(pattern);
+    },
+  );
+});

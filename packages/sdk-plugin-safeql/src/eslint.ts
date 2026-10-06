@@ -3,6 +3,8 @@ import tsParser from "@typescript-eslint/parser";
 import tailorPglite from "./pglite-connection";
 import type { ESLint, Linter } from "eslint";
 
+const IGNORED_FILES = ["**/node_modules/**", "**/dist/**", "**/*.d.ts", "**/eslint.config.*"];
+
 /** Options for {@link tailorSafeqlConfig}. */
 export interface TailorSafeqlConfigOptions {
   /** The `CREATE TABLE` script SafeQL checks statements against. */
@@ -22,6 +24,7 @@ export function tailorSafeqlConfig(options: TailorSafeqlConfigOptions): Linter.C
   return [
     {
       files: options.files ?? ["**/*.ts"],
+      ignores: IGNORED_FILES,
       languageOptions: { parser: tsParser, parserOptions: { projectService: true } },
       plugins: { "@ts-safeql": { rules: rules as unknown as ESLint.Plugin["rules"] } },
       rules: {
