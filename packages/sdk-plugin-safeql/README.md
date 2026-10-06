@@ -13,6 +13,15 @@ Check the raw SQL you write against your TailorDB tables, and get the type of ea
 pnpm add -D @tailor-platform/sdk-plugin-safeql eslint @electric-sql/pglite
 ```
 
+If ESLint stops with `Cannot find module 'typescript'` under pnpm's global virtual store (`enableGlobalVirtualStore`), SafeQL cannot see your TypeScript. Declare the dependency it forgot in `pnpm-workspace.yaml`:
+
+```yaml
+packageExtensions:
+  "@ts-safeql/eslint-plugin":
+    peerDependencies:
+      typescript: "*"
+```
+
 ## Setup
 
 Register the plugin in `tailor.config.ts`:
@@ -54,7 +63,7 @@ Run `tailor generate` again whenever your tables change, as you do for the other
 | `distPath`         | `./generated/safeql/eslint.ts` | Where to write the generated config.                                                       |
 | `eslintConfigPath` | `./eslint.config.ts`           | Where to create an `eslint.config.ts` when no ESLint config file exists next to it.        |
 
-Every file in `files` must be part of your `tsconfig.json`, because the check reads type information.
+Every file in `files` must be part of your `tsconfig.json`, because the check reads type information. A file outside it is reported as `Parsing error: ... was not found by the project service`; list only the files your `tsconfig.json` includes. Declaration files (`*.d.ts`), `eslint.config.*`, `node_modules`, and `dist` are never checked.
 
 ## Writing SQL
 
