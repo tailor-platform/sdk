@@ -32,7 +32,7 @@ Recommended defaults:
 - `effort`: implementation default for the agent (`xhigh`).
 - `output`: implementation default - output directory under `llm-challenge/results/`.
 - `max-seconds`: implementation default - per-run timeout.
-- `rerun-nonzero-from`: empty - rerun non-zero, timed-out, and infrastructure-failed runs from a prior report with that report's agent, model, and effort.
+- `rerun-nonzero-from`: empty - rerun non-zero, timed-out, and infrastructure-failed runs, plus runs that never started, from a prior report with that report's agent, model, and effort.
 - `preflight`: enabled - checks the Podman runner; for Claude Code it also checks the pinned CLI version and makes one model call.
 - `prune-workspace-deps`: enabled - removes per-workspace dependency/cache directories after each run. Pass `--no-prune-workspace-deps` to retain them for debugging.
 
@@ -42,7 +42,7 @@ After confirmation, build the command from the confirmed values:
 pnpm -C llm-challenge challenge run [options]
 ```
 
-A run stops scheduling new tasks after a `usage-limit` or `auth` failure. Rerun the remaining problems with `--rerun-nonzero-from` once the cause is resolved.
+A run stops scheduling new tasks after a `usage-limit` or `auth` failure. Once the cause is resolved, `--rerun-nonzero-from <report.json>` reruns the failed run and the runs that never started.
 
 ## Grading Runs
 
@@ -59,11 +59,11 @@ pnpm -C llm-challenge challenge grade --report results/<run-id>/report.json [--r
 
 The judge runs Claude Code in the same pinned container with only `Read`, `Glob`, and `Grep`, on a copy of the workspace without agent configuration (`.claude/`, `CLAUDE.md`, `.mcp.json`), symlinks, or dependency caches, plus `/evidence/commands.json` with the solver's command history. It returns one verdict per hidden rubric claim; a `satisfied` verdict counts only when one of its quoted excerpts exists in the cited file.
 
-A run passes when the solver finished normally, no common check (package.json, tailor.config.ts, TypeScript) is `unsatisfied`, and every rubric claim counts as satisfied. Problem `verify.json` outcomes are recorded but do not gate the pass. Runs with infrastructure failures (`timeout`, `usage-limit`, `auth`, `model-mismatch`, `runner-startup`, `unknown`) are `excluded`; verifier or judge failures are `error`; neither counts toward pass rates.
+A run passes when the solver finished normally, no common check (package.json, tailor.config.ts, TypeScript) is `unsatisfied`, and every rubric claim counts as satisfied. Problem `verify.json` outcomes are recorded but do not gate the pass. Runs with infrastructure failures (`timeout`, `usage-limit`, `auth`, `model-mismatch`, `runner-startup`, `unknown`) are `excluded`; common-check verifier errors and judge failures are `error`; neither counts toward pass rates.
 
-Outputs: `summary.json` (judge model and CLI version, prompt version, rubric hashes, source reports, per-problem and overall results), `grades.jsonl` (one row per run), and `runs/<group>/<id>/run-<n>/` with the judge prompt, trace, workspace copy, and `grade.json`.
+Outputs: `summary.json` (judge model and CLI version, prompt version, rubric hashes, source reports, per-problem and overall results, and `variants` with the same results per solver configuration: agent, model, effort, profile, and SDK ref, so a rerun report joins its source), `grades.jsonl` (one row per run, with its source report), and `runs/<run-id>/<group>/<id>/run-<n>/` with the judge prompt, trace, workspace copy, and `grade.json`.
 
-Report the overall pass rate with its 95% confidence interval (a cluster bootstrap over problems and runs), the per-problem passes, and the excluded and error counts. Read failing claims' reasons and evidence before explaining a result, and spot-check a few graded runs yourself before trusting a new rubric.
+Report the overall pass rate with its 95% confidence interval (a cluster bootstrap over problems and runs), or each variant's when the grade compares configurations, the per-problem passes, and the excluded and error counts. Read failing claims' reasons and evidence before explaining a result, and spot-check a few graded runs yourself before trusting a new rubric.
 
 ## A/B Testing SDK/API Affordances
 

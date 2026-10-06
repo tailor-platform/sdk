@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
+import { createRerunPlan, inheritSolverSettings } from "./cli";
 import { discoverProblems, selectProblems } from "./problems";
 import { runCommand } from "./process";
 import { applyNoDocsProfile, stripJsDocBlocks } from "./profile";
@@ -21,7 +22,7 @@ import {
 } from "./runner";
 import { writeVerificationSummary } from "./verification";
 import { prepareWorkspace, profileForProblem, pruneWorkspaceDeps } from "./workspace";
-import type { Problem } from "./types";
+import type { Problem, StoredChallengeReport } from "./types";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixturesDir = path.join(packageRoot, "src", "fixtures");
@@ -119,6 +120,99 @@ describe("argument parsing", () => {
     );
     expect(() => parseRunArgs(["--problems=, ,"])).toThrow(
       "--problems must contain at least one problem",
+    );
+  });
+});
+
+describe("rerun plan", () => {
+  async function writeSourceReport(report: Partial<StoredChallengeReport>): Promise<string> {
+    const reportFilePath = path.join(await makeTempDir(), "report.json");
+    await fs.writeFile(reportFilePath, JSON.stringify({ runId: "source", ...report }));
+    return reportFilePath;
+  }
+
+  test("reruns failed runs and runs that never started before a stop", async () => {
+    const problems = await discoverProblems(packageRoot);
+    const [problem] = problems;
+    const run = (runIndex: number, solverExitCode: number, failureKind: string) => ({
+      problemId: problem.id,
+      group: problem.group,
+      runIndex,
+      artifactDir: `results/source/run-${runIndex}`,
+      solverExitCode,
+      failureKind,
+    });
+    const reportFilePath = await writeSourceReport({
+      runsPerProblem: 3,
+      problems: [problem],
+      runs: [run(0, 0, "none"), run(1, 1, "usage-limit")] as StoredChallengeReport["runs"],
+    });
+
+    const plan = await createRerunPlan({
+      packageRoot,
+      reportFilePath,
+      allProblems: problems,
+      selectedProblems: [problem],
+    });
+
+    expect(plan.tasks.map((task) => [task.runIndex, task.replaces?.artifactDir])).toEqual([
+      [1, "results/source/run-1"],
+      [2, undefined],
+    ]);
+    expect(plan.reportRerunOf.runs.map((rerun) => rerun.runIndex)).toEqual([1, 2]);
+  });
+
+  test("resumes a stopped rerun against the runs it was replacing", async () => {
+    const problems = await discoverProblems(packageRoot);
+    const [problem] = problems;
+    const original = (runIndex: number) => ({
+      problemId: problem.id,
+      group: problem.group,
+      runIndex,
+      artifactDir: `results/original/run-${runIndex}`,
+      solverExitCode: 1,
+    });
+    const reportFilePath = await writeSourceReport({
+      runsPerProblem: 3,
+      problems: [problem],
+      rerunOf: {
+        sourceReportPath: "results/original/report.json",
+        runs: [original(1), original(2)],
+      },
+      runs: [
+        {
+          problemId: problem.id,
+          group: problem.group,
+          runIndex: 1,
+          artifactDir: "results/source/run-1",
+          solverExitCode: 0,
+          failureKind: "none",
+        },
+      ] as StoredChallengeReport["runs"],
+    });
+
+    const plan = await createRerunPlan({
+      packageRoot,
+      reportFilePath,
+      allProblems: problems,
+      selectedProblems: [problem],
+    });
+
+    expect(plan.tasks.map((task) => [task.runIndex, task.replaces?.artifactDir])).toEqual([
+      [2, "results/original/run-2"],
+    ]);
+  });
+
+  test("inherits the source solver settings and rejects conflicting overrides", () => {
+    const source = { model: "gpt-5.5", effort: "xhigh" } as StoredChallengeReport;
+
+    expect(inheritSolverSettings(parseRunArgs([]), source)).toEqual({
+      agent: "codex",
+      model: "gpt-5.5",
+      effort: "xhigh",
+    });
+    expect(() => inheritSolverSettings(parseRunArgs(["--agent", "claude"]), source)).toThrow(
+      "remove --agent claude",
     );
   });
 });
@@ -553,6 +647,19 @@ describe("claude artifact summary", () => {
       classify(
         [
           { type: "rate_limit_event", rate_limit_info: { status: "rejected" } },
+          { type: "result", subtype: "success", is_error: true, api_error_status: 429 },
+        ],
+        1,
+      ),
+    ).resolves.toBe("usage-limit");
+    await expect(
+      classify(
+        [
+          {
+            type: "assistant",
+            parent_tool_use_id: null,
+            message: { model: "<synthetic>", content: [{ type: "text", text: "API Error" }] },
+          },
           { type: "result", subtype: "success", is_error: true, api_error_status: 429 },
         ],
         1,

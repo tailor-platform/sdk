@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { parsePositiveInteger } from "./args";
+import { parsePositiveInteger, rejectInlineValue, splitOption } from "./args";
+import { extractTerminalCommands } from "./artifact-summary";
 import {
   getClaudeRuntimeConfig,
   preflightClaudeRunner,
@@ -18,7 +19,7 @@ import {
   type JudgeEvaluation,
 } from "./judge";
 import { discoverProblems } from "./problems";
-import { reportPath, resolveExistingReportPath } from "./report";
+import { artifactPathsIn, reportPath, resolveExistingReportPath } from "./report";
 import { loadRubric, type Rubric } from "./rubric";
 import { INFRASTRUCTURE_FAILURE_KINDS } from "./types";
 import {
@@ -31,8 +32,8 @@ import {
 } from "./utils";
 import type {
   ChallengeRunReport,
-  Problem,
   ProblemGroup,
+  SdkProfile,
   SolverAgent,
   SolverFailureKind,
   StoredChallengeReport,
@@ -58,6 +59,7 @@ export type RunGradeMetrics = {
 };
 
 export type RunGrade = {
+  report: string;
   problemId: string;
   group: ProblemGroup;
   runIndex: number;
@@ -91,6 +93,17 @@ export type GradeSummary = {
   };
 };
 
+export type GradeVariant = {
+  agent: SolverAgent;
+  model: string;
+  effort: string;
+  profile: SdkProfile;
+  sdkRef: string;
+  reports: string[];
+} & GradeSummary;
+
+type GradeSource = { path: string; relativePath: string; report: StoredChallengeReport };
+
 type VerificationCheck = { scope: "common" | "problem"; outcome: string };
 
 type CommandEvidence = {
@@ -119,19 +132,21 @@ export function parseGradeArgs(argv: string[]): GradeOptions {
   };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    const equalsIndex = token.indexOf("=");
-    const name = equalsIndex === -1 ? token : token.slice(0, equalsIndex);
-    const inlineValue = equalsIndex === -1 ? undefined : token.slice(equalsIndex + 1);
-    if (name === "--no-preflight" || name === "--allow-self-judge") {
-      if (inlineValue !== undefined) {
-        throw new Error(`${name} does not accept a value`);
-      }
-      if (name === "--no-preflight") {
+    const [name, inlineValue] = splitOption(token);
+    if (!name.startsWith("--")) {
+      throw new Error(`Unexpected argument: ${token}`);
+    }
+    switch (name) {
+      case "--no-preflight":
+        rejectInlineValue(name, inlineValue);
         options.preflight = false;
-      } else {
+        continue;
+      case "--allow-self-judge":
+        rejectInlineValue(name, inlineValue);
         options.allowSelfJudge = true;
-      }
-      continue;
+        continue;
+      default:
+        break;
     }
     const value = inlineValue ?? argv[index + 1];
     if (inlineValue === undefined) {
@@ -180,7 +195,7 @@ export function decideRunGrade(options: {
   if (INFRASTRUCTURE_FAILURE_KINDS.has(failureKind)) {
     return { status: "excluded", reason: `solver ${failureKind}` };
   }
-  if (options.checks.some((check) => check.outcome === "error")) {
+  if (hasBlockingVerificationError(options.checks)) {
     return { status: "error", reason: "verification error" };
   }
   if (options.judge === undefined) {
@@ -198,6 +213,10 @@ export function decideRunGrade(options: {
   const claimRate = options.judge.claims.length === 0 ? 0 : satisfied / options.judge.claims.length;
   const pass = failureKind === "none" && commonChecks === 1 && claimRate === 1 ? 1 : 0;
   return { status: "ok", metrics: { pass, claimRate, commonChecks } };
+}
+
+function hasBlockingVerificationError(checks: VerificationCheck[]): boolean {
+  return checks.some((check) => check.scope === "common" && check.outcome === "error");
 }
 
 export function summarizeGrades(
@@ -227,7 +246,9 @@ export function summarizeGrades(
         passRate: scored.length === 0 ? undefined : passes / scored.length,
         claimRate:
           scored.length === 0 ? undefined : mean(scored.map((metrics) => metrics.claimRate)),
-        passValues: scored.map((metrics) => metrics.pass as number),
+        passValues: scored
+          .map((metrics) => metrics.pass as number)
+          .toSorted((left, right) => left - right),
       };
     });
   const scoredProblems = problems.filter((problem) => problem.scoredRuns > 0);
@@ -250,39 +271,111 @@ export function summarizeGrades(
   };
 }
 
+export function summarizeVariants(
+  sources: Array<Pick<GradeSource, "relativePath" | "report">>,
+  grades: RunGrade[],
+): GradeVariant[] {
+  const variants = new Map<string, Omit<GradeVariant, keyof GradeSummary>>();
+  for (const { relativePath, report } of sources) {
+    const settings = {
+      agent: report.agent ?? "codex",
+      model: report.model,
+      effort: report.effort,
+      profile: report.requestedProfile,
+      sdkRef: report.sdkRef,
+    };
+    const key = JSON.stringify(Object.values(settings));
+    const variant = variants.get(key);
+    if (variant === undefined) {
+      variants.set(key, { ...settings, reports: [relativePath] });
+    } else {
+      variant.reports.push(relativePath);
+    }
+  }
+  return [...variants.values()].map((variant) => ({
+    ...variant,
+    ...summarizeGrades(grades.filter((grade) => variant.reports.includes(grade.report))),
+  }));
+}
+
+export function selectGradedRuns<Source extends { report: StoredChallengeReport }>(
+  sources: Source[],
+): Array<{ source: Source; run: ChallengeRunReport }> {
+  const replaced = new Set(
+    sources.flatMap((source) =>
+      source.report.runs.flatMap((run) =>
+        run.replaces?.artifactDir && run.replaces.artifactDir !== run.artifactDir
+          ? [run.replaces.artifactDir]
+          : [],
+      ),
+    ),
+  );
+  return sources.flatMap((source) =>
+    source.report.runs
+      .filter((run) => !replaced.has(run.artifactDir))
+      .map((run) => ({ source, run })),
+  );
+}
+
+export function gradeRunLocation(options: {
+  outputDir: string;
+  gradeId: string;
+  reportRunId: string;
+  run: Pick<ChallengeRunReport, "group" | "problemId" | "runIndex">;
+}): { dir: string; containerName: string } {
+  const { run } = options;
+  return {
+    dir: path.join(
+      options.outputDir,
+      "runs",
+      options.reportRunId,
+      run.group,
+      run.problemId,
+      `run-${run.runIndex}`,
+    ),
+    containerName: toContainerName(
+      "grade",
+      options.gradeId,
+      options.reportRunId,
+      run.group,
+      run.problemId,
+      run.runIndex,
+    ),
+  };
+}
+
+export async function loadGradeSources(
+  packageRoot: string,
+  reportFiles: string[],
+): Promise<GradeSource[]> {
+  const resolvedPaths = await Promise.all(
+    reportFiles.map(async (reportFile) =>
+      path.resolve(await resolveExistingReportPath(packageRoot, reportFile)),
+    ),
+  );
+  return await Promise.all(
+    [...new Set(resolvedPaths)].map(async (resolved) => ({
+      path: resolved,
+      relativePath: reportPath(packageRoot, resolved),
+      report: JSON.parse(await fs.readFile(resolved, "utf8")) as StoredChallengeReport,
+    })),
+  );
+}
+
 export async function gradeCommand(argv: string[], packageRoot: string): Promise<void> {
   const options = parseGradeArgs(argv);
-  const sources = await Promise.all(
-    options.reports.map(async (reportFile) => {
-      const resolved = await resolveExistingReportPath(packageRoot, reportFile);
-      return {
-        path: resolved,
-        report: JSON.parse(await fs.readFile(resolved, "utf8")) as StoredChallengeReport,
-      };
-    }),
-  );
+  const sources = await loadGradeSources(packageRoot, options.reports);
   const selfJudged = sources.filter(
     (source) =>
       (source.report.agent ?? "codex") === "claude" && source.report.model === options.judgeModel,
   );
   if (selfJudged.length > 0 && !options.allowSelfJudge) {
     throw new Error(
-      `${options.judgeModel} would grade its own runs (${selfJudged.map((source) => reportPath(packageRoot, source.path)).join(", ")}); pass another --judge-model for every report in the comparison, or --allow-self-judge`,
+      `${options.judgeModel} would grade its own runs (${selfJudged.map((source) => source.relativePath).join(", ")}); pass another --judge-model for every report in the comparison, or --allow-self-judge`,
     );
   }
 
-  const replaced = new Set(
-    sources.flatMap((source) =>
-      source.report.runs.flatMap((run) =>
-        run.replaces?.artifactDir ? [run.replaces.artifactDir] : [],
-      ),
-    ),
-  );
-  const runs = sources.flatMap((source) =>
-    source.report.runs
-      .filter((run) => !replaced.has(run.artifactDir))
-      .map((run) => ({ source, run })),
-  );
+  const runs = selectGradedRuns(sources);
   const problems = new Map(
     (await discoverProblems(packageRoot)).map((problem) => [
       `${problem.group}/${problem.id}`,
@@ -331,11 +424,12 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
     const key = `${run.group}/${run.problemId}`;
     const grade = await gradeRun({
       agent: source.report.agent ?? "codex",
+      report: source.relativePath,
+      reportRunId: source.report.runId,
       packageRoot,
       gradeId,
       outputDir,
       run,
-      problem: problems.get(key),
       rubric: rubrics.get(key),
       options,
       runtime,
@@ -353,6 +447,7 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
   });
 
   const summary = summarizeGrades(grades);
+  const variants = summarizeVariants(sources, grades);
   await fs.writeFile(
     path.join(outputDir, "summary.json"),
     `${JSON.stringify(
@@ -373,7 +468,7 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
           ),
         ),
         reports: sources.map((source) => ({
-          path: reportPath(packageRoot, source.path),
+          path: source.relativePath,
           runId: source.report.runId,
           agent: source.report.agent ?? "codex",
           model: source.report.model,
@@ -381,26 +476,38 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
           sdkRef: source.report.sdkRef,
           profile: source.report.requestedProfile,
         })),
+        variants,
         ...summary,
       },
       null,
       2,
     )}\n`,
   );
-  const [low, high] = summary.overall.ci95;
-  console.log(
-    `Pass rate ${(summary.overall.passRate * 100).toFixed(1)}% (95% CI ${(low * 100).toFixed(1)}-${(high * 100).toFixed(1)}%) over ${summary.overall.problems} problems, ${summary.overall.scoredRuns} scored runs; excluded=${summary.overall.excludedRuns} error=${summary.overall.errorRuns}`,
-  );
+  if (variants.length > 1) {
+    for (const variant of variants) {
+      console.log(
+        `${variant.agent}/${variant.model}/${variant.effort} ${variant.profile} ${variant.sdkRef.slice(0, 12)}: pass rate ${formatPassRate(variant)}`,
+      );
+    }
+  }
+  console.log(`Pass rate ${formatPassRate(summary)}`);
   console.log(`Grades ${reportPath(packageRoot, outputDir)}`);
+}
+
+function formatPassRate(summary: GradeSummary): string {
+  const { passRate, ci95, problems, scoredRuns, excludedRuns, errorRuns } = summary.overall;
+  const [low, high] = ci95;
+  return `${(passRate * 100).toFixed(1)}% (95% CI ${(low * 100).toFixed(1)}-${(high * 100).toFixed(1)}%) over ${problems} problems, ${scoredRuns} scored runs; excluded=${excludedRuns} error=${errorRuns}`;
 }
 
 async function gradeRun(options: {
   agent: SolverAgent;
+  report: string;
+  reportRunId: string;
   packageRoot: string;
   gradeId: string;
   outputDir: string;
   run: ChallengeRunReport;
-  problem?: Problem;
   rubric?: { rubric: Rubric; hash: string } | Error;
   options: GradeOptions;
   runtime: ReturnType<typeof getClaudeRuntimeConfig>;
@@ -408,6 +515,7 @@ async function gradeRun(options: {
 }): Promise<RunGrade> {
   const { run } = options;
   const base: RunGrade = {
+    report: options.report,
     problemId: run.problemId,
     group: run.group,
     runIndex: run.runIndex,
@@ -432,87 +540,92 @@ async function gradeRun(options: {
   if (options.rubric === undefined || options.rubric instanceof Error) {
     return { ...base, reason: options.rubric?.message ?? "rubric missing" };
   }
-  const artifactDir = path.resolve(options.packageRoot, run.artifactDir);
-  const checks = await readVerificationChecks(path.join(artifactDir, "verification-summary.json"));
+  const artifactPaths = artifactPathsIn(path.resolve(options.packageRoot, run.artifactDir));
+  const checks = await readVerificationChecks(artifactPaths.verificationSummaryPath);
   if (checks === undefined) {
     return { ...base, reason: "verification summary missing" };
   }
+  if (hasBlockingVerificationError(checks)) {
+    return {
+      ...base,
+      ...decideRunGrade({ failureKind: run.failureKind, checks, judge: undefined }),
+    };
+  }
 
-  const gradeDir = path.join(
-    options.outputDir,
-    "runs",
-    run.group,
-    run.problemId,
-    `run-${run.runIndex}`,
-  );
-  const workspaceDir = path.join(gradeDir, "workspace");
-  const evidenceDir = path.join(gradeDir, "evidence");
-  await fs.mkdir(evidenceDir, { recursive: true });
-  const workspace = await prepareJudgeWorkspace(path.join(artifactDir, "work"), workspaceDir);
-  await fs.writeFile(
-    path.join(evidenceDir, "commands.json"),
-    `${JSON.stringify(
-      await buildCommandEvidence({
-        agent: options.agent,
-        tracePath: path.join(artifactDir, "trace.jsonl"),
-        artifactSummaryPath: path.join(artifactDir, "artifact-summary.json"),
-      }),
-      null,
-      2,
-    )}\n`,
-  );
-  const claims = options.rubric.rubric.claims;
-  const prompt = buildJudgePrompt({
-    taskPrompt: await fs.readFile(path.join(artifactDir, "prompt.md"), "utf8"),
-    claims,
-    workspace,
-  });
-  await fs.writeFile(path.join(gradeDir, "judge-prompt.md"), prompt);
-  const tracePath = path.join(gradeDir, "judge.trace.jsonl");
-  const result = await runJudgeInPodman({
-    containerName:
-      `llm-challenge-grade-${options.gradeId}-${run.group}-${run.problemId}-${run.runIndex}`
-        .toLowerCase()
-        .replaceAll(/[^a-z0-9_.-]+/g, "-"),
-    workspaceDir,
-    evidenceDir,
-    prompt,
-    model: options.options.judgeModel,
-    effort: options.options.judgeEffort,
-    schema: buildJudgeOutputSchema(claims.map((claim) => claim.id)),
-    runtime: options.runtime,
-    token: options.token,
-    stdoutPath: path.join(gradeDir, "judge.stdout.log"),
-    stderrPath: path.join(gradeDir, "judge.stderr.log"),
-    tracePath,
-    maxSeconds: options.options.maxSeconds,
-  });
-  const judge: JudgeEvaluation = result.timedOut
-    ? { status: "error", error: "judge timed out" }
-    : await evaluateJudgeOutput({
-        events: await readJsonLines(tracePath),
-        claims,
-        judgeModel: options.options.judgeModel,
-        workspaceDir,
-        evidenceDir,
-      });
-  const decided = decideRunGrade({ failureKind: run.failureKind, checks, judge });
-  const grade: RunGrade = {
-    ...base,
-    ...decided,
-    claims: judge.status === "ok" ? judge.claims : undefined,
-    judge:
-      judge.status === "ok"
-        ? {
-            costUsd: judge.costUsd,
-            numTurns: judge.numTurns,
-            durationMs: judge.durationMs,
-            servedModels: judge.servedModels,
-          }
-        : undefined,
-  };
-  await fs.writeFile(path.join(gradeDir, "grade.json"), `${JSON.stringify(grade, null, 2)}\n`);
-  return grade;
+  try {
+    const location = gradeRunLocation({
+      outputDir: options.outputDir,
+      gradeId: options.gradeId,
+      reportRunId: options.reportRunId,
+      run,
+    });
+    const workspaceDir = path.join(location.dir, "workspace");
+    const evidenceDir = path.join(location.dir, "evidence");
+    await fs.mkdir(evidenceDir, { recursive: true });
+    const workspace = await prepareJudgeWorkspace(artifactPaths.worktreePath, workspaceDir);
+    await fs.writeFile(
+      path.join(evidenceDir, "commands.json"),
+      `${JSON.stringify(
+        await buildCommandEvidence({ agent: options.agent, tracePath: artifactPaths.tracePath }),
+        null,
+        2,
+      )}\n`,
+    );
+    const claims = options.rubric.rubric.claims;
+    const prompt = buildJudgePrompt({
+      taskPrompt: await fs.readFile(artifactPaths.promptPath, "utf8"),
+      claims,
+      workspace,
+    });
+    await fs.writeFile(path.join(location.dir, "judge-prompt.md"), prompt);
+    const tracePath = path.join(location.dir, "judge.trace.jsonl");
+    const result = await runJudgeInPodman({
+      containerName: location.containerName,
+      workspaceDir,
+      evidenceDir,
+      prompt,
+      model: options.options.judgeModel,
+      effort: options.options.judgeEffort,
+      schema: buildJudgeOutputSchema(claims.map((claim) => claim.id)),
+      runtime: options.runtime,
+      token: options.token,
+      stdoutPath: path.join(location.dir, "judge.stdout.log"),
+      stderrPath: path.join(location.dir, "judge.stderr.log"),
+      tracePath,
+      maxSeconds: options.options.maxSeconds,
+    });
+    const judge: JudgeEvaluation = result.timedOut
+      ? { status: "error", error: "judge timed out" }
+      : await evaluateJudgeOutput({
+          events: await readJsonLines(tracePath),
+          claims,
+          judgeModel: options.options.judgeModel,
+          workspaceDir,
+          evidenceDir,
+        });
+    const decided = decideRunGrade({ failureKind: run.failureKind, checks, judge });
+    const grade: RunGrade = {
+      ...base,
+      ...decided,
+      claims: judge.status === "ok" ? judge.claims : undefined,
+      judge:
+        judge.status === "ok"
+          ? {
+              costUsd: judge.costUsd,
+              numTurns: judge.numTurns,
+              durationMs: judge.durationMs,
+              servedModels: judge.servedModels,
+            }
+          : undefined,
+    };
+    await fs.writeFile(
+      path.join(location.dir, "grade.json"),
+      `${JSON.stringify(grade, null, 2)}\n`,
+    );
+    return grade;
+  } catch (error) {
+    return { ...base, reason: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 async function readVerificationChecks(filePath: string): Promise<VerificationCheck[] | undefined> {
@@ -536,49 +649,20 @@ async function readVerificationChecks(filePath: string): Promise<VerificationChe
 export async function buildCommandEvidence(options: {
   agent: SolverAgent;
   tracePath: string;
-  artifactSummaryPath: string;
 }): Promise<CommandEvidence[]> {
-  if (options.agent === "claude") {
-    return summarizeClaudeTrace(await readJsonLines(options.tracePath)).commands.map((command) => ({
-      command: command.command,
-      exitCode: command.exitCode,
-      status: command.status,
-      ...(command.output === undefined
-        ? {}
-        : { outputTail: tailText(command.output, COMMAND_OUTPUT_TAIL) }),
-    }));
-  }
-  try {
-    const parsed = JSON.parse(await fs.readFile(options.artifactSummaryPath, "utf8")) as unknown;
-    if (!isObject(parsed) || !Array.isArray(parsed.commands)) {
-      return [];
-    }
-    const failedOutput = new Map(
-      (Array.isArray(parsed.failedCommands) ? parsed.failedCommands : [])
-        .filter(isObject)
-        .flatMap((command) =>
-          typeof command.command === "string" && typeof command.outputTail === "string"
-            ? [[command.command, command.outputTail] as const]
-            : [],
-        ),
-    );
-    return parsed.commands.filter(isObject).flatMap((command) =>
-      typeof command.command === "string"
-        ? [
-            {
-              command: command.command,
-              exitCode: typeof command.exitCode === "number" ? command.exitCode : undefined,
-              status: typeof command.status === "string" ? command.status : undefined,
-              ...(failedOutput.has(command.command)
-                ? { outputTail: failedOutput.get(command.command) }
-                : {}),
-            },
-          ]
-        : [],
-    );
-  } catch {
-    return [];
-  }
+  const events = await readJsonLines(options.tracePath);
+  const commands: Array<{ command: string; exitCode?: number; status?: string; output?: string }> =
+    options.agent === "claude"
+      ? summarizeClaudeTrace(events).commands
+      : extractTerminalCommands(events);
+  return commands.map((command) => ({
+    command: command.command,
+    exitCode: command.exitCode,
+    status: command.status,
+    ...(command.output === undefined
+      ? {}
+      : { outputTail: tailText(command.output, COMMAND_OUTPUT_TAIL) }),
+  }));
 }
 
 function clusterBootstrapInterval(

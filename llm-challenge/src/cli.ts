@@ -221,7 +221,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         printRun(task, reportPath(packageRoot, paths.artifactDir), result, failureKind);
         if (STOP_RUN_FAILURE_KINDS.has(failureKind)) {
           throw new Error(
-            `Stopping after a ${failureKind} failure in ${task.problem.group}/${task.problem.id} run ${task.runIndex}; rerun the remaining problems once it is resolved`,
+            `Stopping after a ${failureKind} failure in ${task.problem.group}/${task.problem.id} run ${task.runIndex}; once it is resolved, rerun it and the runs that did not start with --rerun-nonzero-from ${reportPath(packageRoot, reportFilePath)}`,
           );
         }
       } finally {
@@ -249,7 +249,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 
 const STOP_RUN_FAILURE_KINDS = new Set<SolverFailureKind>(["usage-limit", "auth"]);
 
-function inheritSolverSettings(
+export function inheritSolverSettings(
   options: RunOptions,
   sourceReport: StoredChallengeReport,
 ): { agent: SolverAgent; model: string; effort: string } {
@@ -277,7 +277,7 @@ function inheritSolverSettings(
   return source;
 }
 
-async function createRerunPlan(options: {
+export async function createRerunPlan(options: {
   packageRoot: string;
   reportFilePath: string;
   allProblems: Problem[];
@@ -301,17 +301,30 @@ async function createRerunPlan(options: {
   const problemByKey = new Map(
     options.allProblems.map((problem) => [`${problem.group}/${problem.id}`, problem]),
   );
-  const failedRuns = sourceReport.runs
-    .filter(
+  const runKey = (run: { group: string; problemId: string; runIndex: number }) =>
+    `${run.group}/${run.problemId}#${run.runIndex}`;
+  const recordedKeys = new Set(sourceReport.runs.map(runKey));
+  const plannedRuns: NonNullable<ChallengeReport["rerunOf"]>["runs"] =
+    sourceReport.rerunOf?.runs ??
+    sourceReport.problems.flatMap((problem) =>
+      Array.from({ length: sourceReport.runsPerProblem }, (_, runIndex) => ({
+        problemId: problem.id,
+        group: problem.group,
+        runIndex,
+      })),
+    );
+  const failedRuns = [
+    ...sourceReport.runs.filter(
       (run) =>
         run.timedOut ||
         run.solverExitCode !== 0 ||
         (run.failureKind !== undefined && INFRASTRUCTURE_FAILURE_KINDS.has(run.failureKind)),
-    )
-    .filter((run) => selectedKeys.has(`${run.group}/${run.problemId}`));
+    ),
+    ...plannedRuns.filter((run) => !recordedKeys.has(runKey(run))),
+  ].filter((run) => selectedKeys.has(`${run.group}/${run.problemId}`));
 
   if (failedRuns.length === 0) {
-    throw new Error(`No nonzero or timed-out runs found in ${options.reportFilePath}`);
+    throw new Error(`No nonzero, timed-out, or unstarted runs found in ${options.reportFilePath}`);
   }
 
   const sourceReportRelativePath = reportPath(options.packageRoot, sourceReportPath);

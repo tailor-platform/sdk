@@ -36,18 +36,21 @@ pnpm -C llm-challenge challenge run \
 
 Use `--no-preflight` only after one successful preflight in the same environment. Give each variant a unique output directory.
 
-After both variants finish, grade them together so they share one judge and rubric version:
+After both variants finish, grade them together so they share one judge and rubric version. The judge model must differ from the solver model:
 
 ```bash
 pnpm -C llm-challenge challenge grade \
   --report results/ab-<problem>-baseline-<stamp>/report.json \
   --report results/ab-<problem>-after-<stamp>/report.json \
+  --judge-model <model other than the solver's> \
   --output results/ab-<problem>-grades-<stamp>
 ```
 
+`summary.json` reports each variant under `variants`, keyed by SDK ref.
+
 ## Record Progress
 
-After each run completes, append one JSON object to the temp file:
+After the combined grade finishes, append one JSON object per run to the temp file:
 
 ```json
 {
@@ -72,12 +75,12 @@ Definitions:
 - `steps`: the agent's tool-call count. For Claude Code, use `agentResult.toolCalls` from `report.json`. For Codex, count `trace.jsonl` records where `type === "item.completed"`. Command count is narrower and should not replace steps unless the user asks for commands specifically.
 - `usageLimitCount`: count runs whose `failureKind` is `usage-limit` (grades mark them `excluded`).
 
-Append a `variant-summary` after each variant and a `final-all-summary` after all variants. Summaries should include `runCount`, valid run count, usage-limit count, success count, average duration, and average steps.
+Then append a `variant-summary` per variant and a `final-all-summary`. Summaries should include `runCount`, valid run count, usage-limit count, success count, average duration, and average steps.
 
 ## Handle Interrupted Or Limited Runs
 
 - A run stops on its own after a `usage-limit` or `auth` failure. Append an `aborted` event with the reason and leave all already-written run rows intact.
-- When limits clear, resume into new output directories with a new output stamp. In final comparison, prefer the resumed complete summaries and exclude earlier usage-limit rows from averages.
+- When limits clear, resume each stopped variant with `--rerun-nonzero-from <its report.json>` and the same `--sdk-ref` and `--profile` into a new output directory, then pass every report of both variants to one `challenge grade`. Runs that a rerun replaced have no `grades.jsonl` row; leave them out of averages.
 - Do not hide invalid runs. Keep them in the JSONL with `usageLimitCount` so the user can audit why they were excluded.
 
 ## Analyze Artifacts
@@ -97,4 +100,4 @@ Problem | Baseline success, avg duration, avg steps | After success, avg duratio
 
 Use deltas for success count, duration seconds, and steps.
 
-Include A/B-specific context needed to interpret the table: baseline/after refs, the judge model, each variant's pass-rate confidence interval from the grade summary, the `steps` counting rule, excluded and error runs, and partial adoption of the tested API. Call a difference an improvement or regression only when the intervals do not overlap; otherwise report it as inconclusive at this run count.
+Include A/B-specific context needed to interpret the table: baseline/after refs, the judge model, each variant's pass-rate confidence interval from `variants` in the grade summary, the `steps` counting rule, excluded and error runs, and partial adoption of the tested API. Call a difference an improvement or regression only when the intervals do not overlap; otherwise report it as inconclusive at this run count.

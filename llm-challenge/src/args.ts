@@ -155,7 +155,7 @@ export function parseRunArgs(argv: string[]): RunOptions {
   return options;
 }
 
-function splitOption(token: string): [string, string | undefined] {
+export function splitOption(token: string): [string, string | undefined] {
   const equalsIndex = token.indexOf("=");
   if (equalsIndex === -1) {
     return [token, undefined];
@@ -192,7 +192,7 @@ export function parsePositiveInteger(name: string, value: string): number {
   return parsed;
 }
 
-function rejectInlineValue(name: string, inlineValue: string | undefined): void {
+export function rejectInlineValue(name: string, inlineValue: string | undefined): void {
   if (inlineValue !== undefined) {
     throw new Error(`${name} does not accept a value`);
   }

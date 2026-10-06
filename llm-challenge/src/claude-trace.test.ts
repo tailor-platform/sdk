@@ -90,6 +90,23 @@ describe("claude trace summary", () => {
     expect(summary.result).toMatchObject({ isError: true, apiErrorStatus: 429 });
   });
 
+  test("does not count synthetic API-error messages as served models", () => {
+    const summary = summarizeClaudeTrace([
+      {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: { model: "claude-opus-5-5", content: [] },
+      },
+      {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: { model: "<synthetic>", content: [{ type: "text", text: "API Error: 429" }] },
+      },
+    ]);
+
+    expect(summary.servedModels).toEqual(["claude-opus-5-5"]);
+  });
+
   test("ignores malformed events", () => {
     const summary = summarizeClaudeTrace([null, "text", { type: "assistant" }, { type: "user" }]);
 
@@ -113,6 +130,13 @@ describe("served model check", () => {
     ).toEqual(["claude-sonnet-5-5"]);
     expect(findServedModelMismatches("claude-opus-5", ["claude-opus-5-5"])).toEqual([
       "claude-opus-5-5",
+    ]);
+  });
+
+  test("accepts the base id when a context-window suffix is requested", () => {
+    expect(findServedModelMismatches("claude-opus-5-5[1m]", ["claude-opus-5-5"])).toEqual([]);
+    expect(findServedModelMismatches("claude-opus-5-5[1m]", ["claude-sonnet-5-5"])).toEqual([
+      "claude-sonnet-5-5",
     ]);
   });
 

@@ -6,8 +6,12 @@ import { aroundEach, describe, expect, test } from "vitest";
 import {
   buildCommandEvidence,
   decideRunGrade,
+  gradeRunLocation,
+  loadGradeSources,
   parseGradeArgs,
+  selectGradedRuns,
   summarizeGrades,
+  summarizeVariants,
   type RunGrade,
 } from "./grade";
 import {
@@ -18,6 +22,7 @@ import {
 } from "./judge";
 import { discoverProblems } from "./problems";
 import { loadRubric, parseRubric } from "./rubric";
+import type { ChallengeRunReport, StoredChallengeReport } from "./types";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tempDirs: string[] = [];
@@ -159,7 +164,12 @@ describe("judge command", () => {
 });
 
 describe("judge output", () => {
-  async function evaluate(structuredOutput: unknown, servedModel = "claude-opus-5-5") {
+  async function evaluate(
+    structuredOutput: unknown,
+    servedModel = "claude-opus-5-5",
+    extraFiles: Record<string, string> = {},
+    commands: unknown[] = [{ command: "tailor generate" }],
+  ) {
     const dir = await makeTempDir();
     const workspaceDir = path.join(dir, "workspace");
     const evidenceDir = path.join(dir, "evidence");
@@ -169,9 +179,12 @@ describe("judge output", () => {
       path.join(workspaceDir, "workflows/approval.ts"),
       "const result = await approval.wait({\n  orderId,\n});\n",
     );
+    for (const [relativePath, contents] of Object.entries(extraFiles)) {
+      await fs.writeFile(path.join(workspaceDir, relativePath), contents);
+    }
     await fs.writeFile(
       path.join(evidenceDir, "commands.json"),
-      '[{"command":"tailor generate"}]\n',
+      `${JSON.stringify(commands, null, 2)}\n`,
     );
     await fs.writeFile(path.join(dir, "outside.ts"), "approval.resolve(id)\n");
     return await evaluateJudgeOutput({
@@ -276,6 +289,68 @@ describe("judge output", () => {
     });
   });
 
+  test("accepts evidence from workspace files whose names start with two dots", async () => {
+    const evaluation = await evaluate(
+      {
+        claims: [
+          {
+            id: "uses-wait",
+            verdict: "satisfied",
+            reason: "documented",
+            evidence: [{ path: "..env.example", quote: "APPROVAL_TIMEOUT=60" }],
+          },
+          { id: "has-resolver", verdict: "unclear", reason: "", evidence: [] },
+        ],
+      },
+      "claude-opus-5-5",
+      { "..env.example": "APPROVAL_TIMEOUT=60\n" },
+    );
+
+    expect(evaluation).toMatchObject({
+      status: "ok",
+      claims: [{ id: "uses-wait", counted: "satisfied" }, { id: "has-resolver" }],
+    });
+  });
+
+  test("matches command evidence quoted without JSON escaping", async () => {
+    const evaluation = await evaluate(
+      {
+        claims: [
+          {
+            id: "uses-wait",
+            verdict: "satisfied",
+            reason: "ran the local CLI",
+            evidence: [
+              { path: "/evidence/commands.json", quote: 'pnpm exec tailor generate --name "init"' },
+            ],
+          },
+          {
+            id: "has-resolver",
+            verdict: "satisfied",
+            reason: "generated output",
+            evidence: [
+              { path: "/evidence/commands.json", quote: "Generated files:\n  tailor.d.ts" },
+            ],
+          },
+        ],
+      },
+      "claude-opus-5-5",
+      {},
+      [
+        {
+          command: 'pnpm exec tailor generate --name "init"',
+          exitCode: 0,
+          outputTail: "Generated files:\n  tailor.d.ts",
+        },
+      ],
+    );
+
+    expect(evaluation).toMatchObject({
+      status: "ok",
+      claims: [{ counted: "satisfied" }, { counted: "satisfied" }],
+    });
+  });
+
   test("rejects output served by a different model", async () => {
     await expect(evaluate({ claims: [] }, "claude-sonnet-5-5")).resolves.toMatchObject({
       status: "error",
@@ -293,13 +368,7 @@ describe("command evidence", () => {
       tracePath,
     );
 
-    await expect(
-      buildCommandEvidence({
-        agent: "claude",
-        tracePath,
-        artifactSummaryPath: path.join(dir, "missing.json"),
-      }),
-    ).resolves.toEqual([
+    await expect(buildCommandEvidence({ agent: "claude", tracePath })).resolves.toEqual([
       {
         command: 'sh -c "echo out; echo err >&2; exit 3"',
         exitCode: 3,
@@ -310,29 +379,33 @@ describe("command evidence", () => {
     ]);
   });
 
-  test("falls back to the artifact summary for Codex runs", async () => {
+  test("reads Codex commands and each command's own output from the trace", async () => {
     const dir = await makeTempDir();
-    const artifactSummaryPath = path.join(dir, "artifact-summary.json");
+    const tracePath = path.join(dir, "trace.jsonl");
+    const completed = (command: string, exitCode: number, output: string) => ({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        command,
+        exit_code: exitCode,
+        status: exitCode === 0 ? "completed" : "failed",
+        aggregated_output: output,
+      },
+    });
     await fs.writeFile(
-      artifactSummaryPath,
-      JSON.stringify({
-        commands: [
-          { command: "pnpm build", exitCode: 1, status: "failed" },
-          { command: "pnpm test", exitCode: 0, status: "completed" },
-        ],
-        failedCommands: [{ command: "pnpm build", exitCode: 1, outputTail: "boom" }],
-      }),
+      tracePath,
+      [
+        { type: "item.started", item: { type: "command_execution", command: "pnpm build" } },
+        completed("pnpm build", 1, "boom"),
+        completed("pnpm build", 0, "built"),
+      ]
+        .map((event) => JSON.stringify(event))
+        .join("\n"),
     );
 
-    await expect(
-      buildCommandEvidence({
-        agent: "codex",
-        tracePath: path.join(dir, "trace.jsonl"),
-        artifactSummaryPath,
-      }),
-    ).resolves.toEqual([
+    await expect(buildCommandEvidence({ agent: "codex", tracePath })).resolves.toEqual([
       { command: "pnpm build", exitCode: 1, status: "failed", outputTail: "boom" },
-      { command: "pnpm test", exitCode: 0, status: "completed" },
+      { command: "pnpm build", exitCode: 0, status: "completed", outputTail: "built" },
     ]);
   });
 });
@@ -409,11 +482,87 @@ describe("run grade", () => {
       }),
     ).toMatchObject({ status: "error", reason: "judge timed out" });
   });
+
+  test("does not let a problem check error block the grade", () => {
+    expect(
+      decideRunGrade({
+        failureKind: "none",
+        checks: [
+          { scope: "common", outcome: "satisfied" },
+          { scope: "problem", outcome: "error" },
+        ],
+        judge: { status: "ok", claims: okClaims },
+      }),
+    ).toMatchObject({ status: "ok", metrics: { pass: 1 } });
+  });
+});
+
+describe("graded runs", () => {
+  function runReport(artifactDir: string, replaces?: string): ChallengeRunReport {
+    return {
+      problemId: "workflow-wait-point",
+      group: "sdk-api",
+      profile: "no-docs",
+      runIndex: 0,
+      artifactDir,
+      promptPath: `${artifactDir}/prompt.md`,
+      solverStdoutPath: `${artifactDir}/solver.stdout.log`,
+      solverStderrPath: `${artifactDir}/solver.stderr.log`,
+      tracePath: `${artifactDir}/trace.jsonl`,
+      worktreePath: `${artifactDir}/work`,
+      replaces:
+        replaces === undefined ? undefined : { sourceReportPath: "x", artifactDir: replaces },
+    };
+  }
+
+  test("drops runs a rerun replaced, but keeps a rerun written over its own source", () => {
+    const sources = [
+      { runs: [runReport("results/src/run-0"), runReport("results/src/run-1")] },
+      { runs: [runReport("results/rerun/run-1", "results/src/run-1")] },
+      { runs: [runReport("results/same/run-0", "results/same/run-0")] },
+    ].map((report) => ({ report: report as StoredChallengeReport }));
+
+    expect(selectGradedRuns(sources).map(({ run }) => run.artifactDir)).toEqual([
+      "results/src/run-0",
+      "results/rerun/run-1",
+      "results/same/run-0",
+    ]);
+  });
+
+  test("loads a report named twice only once", async () => {
+    const dir = await makeTempDir();
+    await fs.writeFile(path.join(dir, "report.json"), JSON.stringify({ runId: "a", runs: [] }));
+
+    const sources = await loadGradeSources(packageRoot, [
+      path.join(dir, "report.json"),
+      `${dir}/./report.json`,
+    ]);
+
+    expect(sources.map((source) => source.report.runId)).toEqual(["a"]);
+  });
+
+  test("keeps runs from different reports in separate grade folders and containers", () => {
+    const run = { group: "sdk-api" as const, problemId: "workflow-wait-point", runIndex: 0 };
+    const baseline = gradeRunLocation({ outputDir: "/out", gradeId: "g", reportRunId: "a", run });
+    const after = gradeRunLocation({ outputDir: "/out", gradeId: "g", reportRunId: "b", run });
+
+    expect(baseline.dir).toBe(
+      path.join("/out", "runs", "a", "sdk-api", "workflow-wait-point", "run-0"),
+    );
+    expect(after.dir).not.toBe(baseline.dir);
+    expect(after.containerName).not.toBe(baseline.containerName);
+  });
 });
 
 describe("grade summary", () => {
-  function grade(problemId: string, pass: 0 | 1, status: RunGrade["status"] = "ok"): RunGrade {
+  function grade(
+    problemId: string,
+    pass: 0 | 1,
+    status: RunGrade["status"] = "ok",
+    report = "results/x/report.json",
+  ): RunGrade {
     return {
+      report,
       problemId,
       group: "sdk-api",
       runIndex: 0,
@@ -452,6 +601,47 @@ describe("grade summary", () => {
     expect(first.overall.ci95[0]).toBeLessThanOrEqual(first.overall.passRate);
     expect(first.overall.ci95[1]).toBeGreaterThanOrEqual(first.overall.passRate);
   });
+
+  test("does not depend on the order runs finished in", () => {
+    const grades = [
+      grade("a", 1),
+      grade("a", 0),
+      grade("a", 0),
+      grade("a", 1),
+      grade("b", 0),
+      grade("b", 1),
+      grade("b", 1),
+    ];
+
+    expect(summarizeGrades(grades.toReversed()).overall.ci95).toEqual(
+      summarizeGrades(grades).overall.ci95,
+    );
+  });
+
+  test("summarizes each solver configuration separately, merging its reruns", () => {
+    const settings = { agent: "claude", model: "claude-fable-5-1", effort: "xhigh" } as const;
+    const sources = [
+      { relativePath: "results/base/report.json", sdkRef: "aaa" },
+      { relativePath: "results/base-rerun/report.json", sdkRef: "aaa" },
+      { relativePath: "results/after/report.json", sdkRef: "bbb" },
+    ].map(({ relativePath, sdkRef }) => ({
+      relativePath,
+      report: { ...settings, sdkRef, requestedProfile: "no-docs" } as StoredChallengeReport,
+    }));
+    const variants = summarizeVariants(sources, [
+      grade("a", 1, "ok", "results/base/report.json"),
+      grade("a", 0, "ok", "results/base-rerun/report.json"),
+      grade("a", 0, "ok", "results/after/report.json"),
+    ]);
+
+    expect(
+      variants.map((variant) => [variant.sdkRef, variant.reports, variant.overall.scoredRuns]),
+    ).toEqual([
+      ["aaa", ["results/base/report.json", "results/base-rerun/report.json"], 2],
+      ["bbb", ["results/after/report.json"], 1],
+    ]);
+    expect(variants[0]).toMatchObject({ ...settings, profile: "no-docs" });
+  });
 });
 
 describe("grade arguments", () => {
@@ -481,5 +671,8 @@ describe("grade arguments", () => {
       allowSelfJudge: true,
     });
     expect(() => parseGradeArgs([])).toThrow("--report is required");
+    expect(() => parseGradeArgs(["results/a/report.json"])).toThrow(
+      "Unexpected argument: results/a/report.json",
+    );
   });
 });

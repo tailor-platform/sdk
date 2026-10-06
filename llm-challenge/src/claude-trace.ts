@@ -1,5 +1,7 @@
 import { isObject } from "./utils";
 
+const SYNTHETIC_MODEL = "<synthetic>";
+
 export type TraceCommand = {
   command: string;
   exitCode?: number;
@@ -71,7 +73,11 @@ export function summarizeClaudeTrace(events: unknown[]): ClaudeTraceSummary {
     const message = isObject(event.message) ? event.message : undefined;
     const content = Array.isArray(message?.content) ? message.content : [];
     if (event.type === "assistant") {
-      if (event.parent_tool_use_id === null && typeof message?.model === "string") {
+      if (
+        event.parent_tool_use_id === null &&
+        typeof message?.model === "string" &&
+        message.model !== SYNTHETIC_MODEL
+      ) {
         servedModels.add(message.model);
       }
       for (const block of content) {
@@ -127,6 +133,7 @@ export function summarizeClaudeTrace(events: unknown[]): ClaudeTraceSummary {
 }
 
 const DATED_SNAPSHOT_SUFFIX = /^-\d{8}$/;
+const MODEL_VARIANT_SUFFIX = /\[[^\]]*\]$/;
 
 export function findServedModelMismatches(
   requestedModel: string,
@@ -135,13 +142,11 @@ export function findServedModelMismatches(
   if (!requestedModel.startsWith("claude-")) {
     return [];
   }
+  const baseModel = requestedModel.replace(MODEL_VARIANT_SUFFIX, "");
   return servedModels.filter(
     (served) =>
-      served !== requestedModel &&
-      !(
-        served.startsWith(requestedModel) &&
-        DATED_SNAPSHOT_SUFFIX.test(served.slice(requestedModel.length))
-      ),
+      served !== baseModel &&
+      !(served.startsWith(baseModel) && DATED_SNAPSHOT_SUFFIX.test(served.slice(baseModel.length))),
   );
 }
 

@@ -21,7 +21,10 @@ export function buildRunArtifactPaths(
   problem: Pick<Problem, "group" | "id">,
   runIndex: number,
 ): RunArtifactPaths {
-  const artifactDir = path.join(outputDir, problem.group, problem.id, `run-${runIndex}`);
+  return artifactPathsIn(path.join(outputDir, problem.group, problem.id, `run-${runIndex}`));
+}
+
+export function artifactPathsIn(artifactDir: string): RunArtifactPaths {
   return {
     artifactDir,
     promptPath: path.join(artifactDir, "prompt.md"),

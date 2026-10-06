@@ -181,7 +181,7 @@ async function readGitStatus(worktreePath: string): Promise<string[]> {
   }
 }
 
-function extractTerminalCommands(events: unknown[]): CommandEvent[] {
+export function extractTerminalCommands(events: unknown[]): CommandEvent[] {
   return events.flatMap((event) => {
     const commandEvent = getCommandEvent(event);
     return commandEvent !== undefined && commandEvent.terminal ? [commandEvent] : [];

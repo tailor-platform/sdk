@@ -356,7 +356,11 @@ async function quoteFound(
     : [workspaceDir, evidencePath.replace(/^\/workspace\//, "")];
   const absolutePath = path.resolve(baseDir, relativePath);
   const relativeToBase = path.relative(baseDir, absolutePath);
-  if (relativeToBase.startsWith("..") || path.isAbsolute(relativeToBase)) {
+  if (
+    relativeToBase === ".." ||
+    relativeToBase.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativeToBase)
+  ) {
     return false;
   }
   try {
@@ -364,10 +368,33 @@ async function quoteFound(
     if (!stat.isFile() || stat.size > JUDGE_FILE_BYTES_LIMIT) {
       return false;
     }
-    return normalizeWhitespace(await fs.readFile(absolutePath, "utf8")).includes(normalizedQuote);
+    const contents = await fs.readFile(absolutePath, "utf8");
+    const candidates = baseDir === evidenceDir ? [contents, ...jsonStrings(contents)] : [contents];
+    return candidates.some((text) => normalizeWhitespace(text).includes(normalizedQuote));
   } catch {
     return false;
   }
+}
+
+function jsonStrings(contents: string): string[] {
+  let value: unknown;
+  try {
+    value = JSON.parse(contents) as unknown;
+  } catch {
+    return [];
+  }
+  const strings: string[] = [];
+  const visit = (node: unknown): void => {
+    if (typeof node === "string") {
+      strings.push(node);
+      return;
+    }
+    for (const child of Array.isArray(node) ? node : isObject(node) ? Object.values(node) : []) {
+      visit(child);
+    }
+  };
+  visit(value);
+  return strings;
 }
 
 function normalizeWhitespace(value: string): string {
