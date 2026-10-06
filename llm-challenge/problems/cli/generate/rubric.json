@@ -11,7 +11,7 @@
     },
     {
       "id": "task-list-project",
-      "claim": "tailor.config.ts defines a task list application with at least one TailorDB table for tasks matched by a `db` namespace glob."
+      "claim": "tailor.config.ts defines a task list application: its name or its services and tables refer to tasks."
     },
     {
       "id": "generated-artifacts-present",

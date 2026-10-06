@@ -10,8 +10,8 @@
       "claim": "Required values are plain required fields (no `optional: true`), and only genuinely optional values, if any, use `{ optional: true }`."
     },
     {
-      "id": "unique-email",
-      "claim": "The contact email is a string field marked `.unique()`; the stable identifier is either the built-in `id` or a field marked `.unique()`."
+      "id": "unique-identifier",
+      "claim": "At least one value that identifies a customer (the stable identifier or the contact email) is a field marked `.unique()`, or the stable identifier is the built-in `id`."
     },
     {
       "id": "tier-enum",

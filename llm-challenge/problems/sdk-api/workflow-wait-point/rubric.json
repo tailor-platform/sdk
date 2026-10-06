@@ -11,11 +11,7 @@
     },
     {
       "id": "continues-after-approval",
-      "claim": "After `.wait()` returns, the workflow continues to a final notification job (started with `.start()` after the wait, or the notification step runs only once the wait resolves) and uses the approval result."
-    },
-    {
-      "id": "resolution-path",
-      "claim": "Code exists that resumes the pause by calling the wait point's `.resolve(executionId, callback)` from a resolver or executor."
+      "claim": "After `.wait()` returns, the workflow continues to a final notification job: the notification is started with `.start()` after the wait, or otherwise runs only once the wait resolves."
     },
     {
       "id": "workflow-default-export",

@@ -11,7 +11,7 @@
     },
     {
       "id": "explicit-field-types",
-      "claim": "Every summary and item-row field is declared with a concrete scalar or enum `t` builder (for example `t.string()`, `t.int()`, `t.enum([...])`), so generated types expose each field name."
+      "claim": "Every summary and item-row field is declared with a concrete `t` builder (a scalar, `t.enum([...])`, or a nested `t.object(...)`), so generated types expose each field name."
     },
     {
       "id": "body-matches-schema",
