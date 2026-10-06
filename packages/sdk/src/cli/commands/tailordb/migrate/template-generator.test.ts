@@ -363,7 +363,7 @@ describe("template-generator", () => {
       expect(script).toContain('resolveUserName_org: { dependsOn: ["populateUserName"]');
     });
 
-    test("keeps the statements for one field's change together, in the order main runs them", () => {
+    test("keeps the statements for one field's change together, in the order they run", () => {
       const script = generateMigrationScript(
         stepsDiff({
           kind: "field_modified",

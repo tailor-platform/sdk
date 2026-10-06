@@ -310,7 +310,7 @@ const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name
 
 /**
  * Name the step for a change and list the fields it reads or writes. Two steps
- * that touch the same field must run in the order `main` runs them; steps that
+ * that touch the same field must run in the order the changes are listed; steps that
  * touch different fields do not depend on each other.
  * @param change - Diff change to describe
  * @returns Preferred step name and the fields the change touches
@@ -366,7 +366,7 @@ const touchesOverlap = (a: readonly FieldTouch[], b: readonly FieldTouch[]): boo
   );
 
 /**
- * The statements of one change, in the order `main` runs them.
+ * The statements of one change, in the order they must run.
  * @param change - Diff change to generate statements for
  * @param typeRenameTargets - Confirmed type renames (old name → new name)
  * @returns Statements, or an empty array when the change needs no data migration
@@ -391,12 +391,12 @@ function generateChangeStatements(
 /**
  * Split a migration into one step per change that needs a data migration. A
  * step depends on every earlier step that touches the same field, so the
- * order `main` runs the changes in stays the order the steps run in. A step
+ * order the changes are listed in stays the order the steps run in. A step
  * can also be skipped on a re-run, because each one commits on its own.
  * @param diff - Migration diff
  * @param expandPlans - Field changes carried through temporary fields
  * @param typeRenameTargets - Confirmed type renames (old name → new name)
- * @returns Steps in the order `main` runs the changes
+ * @returns Steps in the order of the changes
  */
 function buildScriptSteps(
   diff: MigrationDiff,
