@@ -954,16 +954,13 @@ describe("tailordb migration generate --data-only", () => {
     expect(replayed?.tables.User?.fields.name?.type).toBe("string");
   });
 
-  test("creates the script as a main script with --main", async () => {
+  test("has no flag to choose the form of the script", async () => {
     const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 
     const result = await runCommand(generateCommand, ["--data-only", "--yes", "--main"]);
 
-    expect(result.success).toBe(true);
-    const scriptPath = path.join(entry.migrationsDir, "0001", "migrate.ts");
-    expect(analyzeMigrationScriptSource(fs.readFileSync(scriptPath, "utf8"), scriptPath)).toEqual({
-      kind: "main",
-    });
+    expect(result.success).toBe(false);
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 
   test("creates the script as steps by default", async () => {

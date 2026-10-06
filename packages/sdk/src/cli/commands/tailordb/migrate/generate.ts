@@ -72,7 +72,6 @@ import {
   type TypeRenameSpec,
 } from "./rename-detection";
 import { markMigrationScriptSkipped, resolveTargetNamespace } from "./script";
-import { type MigrationScriptForm } from "./script-form";
 import {
   buildExpandDiff,
   buildIntermediateSnapshot,
@@ -111,8 +110,6 @@ export interface GenerateOptions {
   drops?: string[];
   /** `--expand-contract Table.field` values approving a field type conversion. */
   expandContracts?: string[];
-  /** Create generated migration scripts as single-transaction `main` scripts instead of `steps`. */
-  main?: boolean;
 }
 
 /**
@@ -681,7 +678,6 @@ async function generateDataOnlyMigration(
     snapshot: previousSnapshot,
     description: options.name,
     temporal,
-    scriptKind: options.main ? "main" : "steps",
   });
 
   logger.success(
@@ -1379,7 +1375,6 @@ async function generateDiffFromSnapshot(
       migrationsDir,
       description: options.name,
       temporal,
-      scriptKind: options.main ? "main" : "steps",
     });
     return { declined: false, migrations: pair };
   }
@@ -1396,7 +1391,6 @@ async function generateDiffFromSnapshot(
     options.name,
     [],
     temporal,
-    options.main ? "main" : "steps",
   );
 
   logger.success(
@@ -1441,8 +1435,6 @@ interface GenerateExpandContractOptions {
    * was configured with. Defaults to `false`.
    */
   temporal?: boolean;
-  /** Whether the migration scripts export `main` or `steps`. Defaults to `main`. */
-  scriptKind?: MigrationScriptForm["kind"];
 }
 
 /**
@@ -1462,7 +1454,6 @@ async function generateExpandContractMigrations(
     migrationsDir,
     description,
     temporal = false,
-    scriptKind = "main",
   } = input;
   const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
   // Comparing from the relaxed base records the removal with an optional
@@ -1516,7 +1507,6 @@ async function generateExpandContractMigrations(
     description,
     plans,
     temporal,
-    scriptKind,
   );
   const contract = await generateDiffFiles(
     contractDiff,
@@ -1526,7 +1516,6 @@ async function generateExpandContractMigrations(
     description,
     [],
     temporal,
-    scriptKind,
   );
 
   const fields = plans.map((plan) => `${plan.tableName}.${plan.fieldName}`).join(", ");
@@ -1636,10 +1625,6 @@ export const generateCommand = defineAppCommand({
       description:
         'Convert a field type, or a single value into an array, through a temporary field (format: "Table.field"; repeatable). Generates two migrations.',
     }),
-    main: arg(z.boolean().default(false), {
-      description:
-        "Create the migration script as a single-transaction script that exports `main` instead of `steps`. Applies when the migration needs a script; add one later with `migration script`.",
-    }),
   }),
   run: async (args) => {
     const generated = await generateMigrations({
@@ -1652,7 +1637,6 @@ export const generateCommand = defineAppCommand({
       renames: args.rename,
       drops: args.drop,
       expandContracts: args["expand-contract"],
-      main: args.main,
     });
     printMutationResult(generated);
   },

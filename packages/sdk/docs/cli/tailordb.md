@@ -130,7 +130,6 @@ tailor tailordb migration generate [options]
 | `--rename <RENAME>`                   | -     | Record a field, table, or nested member rename instead of remove + add (format: "Table.oldField:newField", "OldTable:NewTable", or "Table.field.oldMember:newMember"; repeatable). Renames require a migration script that copies the data. | No       | -                    | -                    |
 | `--drop <DROP>`                       | -     | Confirm that a removed field, table, or nested member is a genuine removal, not a rename (format: "Table.field", "Table", or "Table.field.member"; repeatable). Required in non-interactive runs for a removal with rename candidates.      | No       | -                    | -                    |
 | `--expand-contract <EXPAND_CONTRACT>` | -     | Convert a field type, or a single value into an array, through a temporary field (format: "Table.field"; repeatable). Generates two migrations.                                                                                             | No       | -                    | -                    |
-| `--main`                              | -     | Create the migration script as a single-transaction script that exports `main` instead of `steps`. Applies when the migration needs a script; add one later with `migration script`.                                                        | No       | `false`              | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -185,7 +184,6 @@ tailor tailordb migration script [options] <number>
 | `--no-script`             | -     | Record that this migration intentionally runs without a migration script (requires --reason) | No       | -                    | -                    |
 | `--reason <REASON>`       | -     | Reason why no migration script is needed (used with --no-script)                             | No       | -                    | -                    |
 | `--with-test`             | -     | Also add the migrate.test.ts and migrate.pglite.test.ts scaffolds                            | No       | -                    | -                    |
-| `--main`                  | -     | Create migrate.ts as a single-transaction script that exports `main` instead of `steps`      | No       | -                    | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

@@ -225,15 +225,14 @@ describe("template-generator", () => {
             })
           ).migrateFilePath,
       },
-    ])("points $name to steps and scopes the rollback to main", async ({ generate }) => {
+    ])("scaffolds $name as steps and explains when it runs like main", async ({ generate }) => {
       const migrateFilePath = await generate();
       expect(migrateFilePath).toBeDefined();
       const script = await fs.readFile(migrateFilePath!, "utf-8");
 
-      expect(script).toContain("export async function main");
-      expect(script).toContain("`main` runs in one transaction");
-      expect(script).not.toContain("all changes will be rolled back");
-      expect(script).toContain("export `steps` instead of `main`");
+      expect(script).toContain("export const steps = {");
+      expect(script).not.toContain("export async function main");
+      expect(script).toContain("A script with one step runs like `main`");
       expect(script).toContain('"Splitting a migration into steps"');
     });
   });
@@ -279,7 +278,7 @@ describe("template-generator", () => {
     };
 
     test("generates a script that deploy reads as a step for the added required field", () => {
-      const script = generateMigrationScript(breakingDiff, [], "steps");
+      const script = generateMigrationScript(breakingDiff);
 
       expect(analyzeMigrationScriptSource(script, "migrate.ts")).toEqual({
         kind: "steps",
@@ -291,8 +290,6 @@ describe("template-generator", () => {
     test("splits added required fields into one step each", () => {
       const script = generateMigrationScript(
         stepsDiff(addedRequired("User", "email"), addedRequired("User", "phone")),
-        [],
-        "steps",
       );
 
       expect(order(script)).toEqual(["populateUserEmail", "populateUserPhone"]);
@@ -329,8 +326,6 @@ describe("template-generator", () => {
     test("gives each change its own step, with no ordering between independent changes", () => {
       const script = generateMigrationScript(
         stepsDiff(renamedField("User", "fullName", "displayName"), addedRequired("User", "email")),
-        [],
-        "steps",
       );
 
       expect(order(script)).toEqual(["renameUserDisplayName", "populateUserEmail"]);
@@ -340,8 +335,6 @@ describe("template-generator", () => {
     test("orders the changes on a renamed table after the copy of its rows", () => {
       const script = generateMigrationScript(
         stepsDiff(renamedTable("User", "Person"), addedRequired("Person", "phone")),
-        [],
-        "steps",
       );
 
       expect(order(script)).toEqual(["copyUserToPerson", "populatePersonPhone"]);
@@ -350,11 +343,10 @@ describe("template-generator", () => {
 
     test("skips the copy of a renamed table's rows when an earlier run already copied them", () => {
       const diff = stepsDiff(renamedTable("User", "Person"));
-      const stepsScript = generateMigrationScript(diff, [], "steps");
+      const stepsScript = generateMigrationScript(diff);
 
       expect(stepsScript).toContain('trx.selectFrom("Person").select("id").limit(1)');
       expect(stepsScript).toContain("if (copied.length > 0) return;");
-      expect(generateMigrationScript(diff)).not.toContain("copied");
     });
 
     test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
@@ -365,8 +357,6 @@ describe("template-generator", () => {
           indexName: "name_org",
           after: { fields: ["name", "org"], unique: true },
         }),
-        [],
-        "steps",
       );
 
       expect(order(script)).toEqual(["populateUserName", "resolveUserName_org"]);
@@ -382,8 +372,6 @@ describe("template-generator", () => {
           before: { type: "decimal", scale: 2, required: true },
           after: { type: "decimal", scale: 4, required: true, unique: true },
         }),
-        [],
-        "steps",
       );
 
       expect(order(script)).toEqual(["updateItemPrice"]);
@@ -394,19 +382,15 @@ describe("template-generator", () => {
     });
 
     test("converts through a temporary field in its own step", () => {
-      const script = generateMigrationScript(
-        stepsDiff(),
-        [
-          {
-            tableName: "User",
-            fieldName: "name",
-            tempFieldName: "nameMigrate",
-            before: { type: "integer", required: true },
-            after: { type: "string", required: true },
-          },
-        ],
-        "steps",
-      );
+      const script = generateMigrationScript(stepsDiff(), [
+        {
+          tableName: "User",
+          fieldName: "name",
+          tempFieldName: "nameMigrate",
+          before: { type: "integer", required: true },
+          after: { type: "string", required: true },
+        },
+      ]);
 
       expect(order(script)).toEqual(["convertUserName"]);
     });
@@ -415,8 +399,6 @@ describe("template-generator", () => {
       const longName = "a".repeat(70);
       const script = generateMigrationScript(
         stepsDiff(addedRequired("User", "email"), addedRequired("User", longName)),
-        [],
-        "steps",
       );
 
       expect(order(script)).toEqual(["populateUserEmail", "change2"]);
@@ -426,25 +408,24 @@ describe("template-generator", () => {
     test("names the later of two steps with the same name change<N>", () => {
       const script = generateMigrationScript(
         stepsDiff(addedRequired("A", "bC"), addedRequired("AB", "c")),
-        [],
-        "steps",
       );
 
       expect(order(script)).toEqual(["populateABC", "change2"]);
       expect(script).toContain('.updateTable("AB")');
     });
 
-    test("keeps the statements the main script scaffolds, indented as they are, in the step's function", () => {
-      const mainScript = generateMigrationScript(breakingDiff);
-      const body = mainScript.slice(
-        mainScript.indexOf("{\n", mainScript.indexOf("export async function main")) + 2,
-        mainScript.lastIndexOf("\n}"),
-      );
-      const stepsScript = generateMigrationScript(breakingDiff, [], "steps");
+    test("declares the statements of a change as a plain function and points the step at it", () => {
+      const script = generateMigrationScript(breakingDiff);
 
-      expect(body.trim()).not.toBe("");
-      expect(stepsScript).toContain(body);
-      expect(stepsScript).toContain("run: populateUserEmail");
+      expect(script).toContain(
+        [
+          "async function populateUserEmail(trx: Transaction): Promise<void> {",
+          "  // Populate email for existing User records",
+          "  await trx",
+          '    .updateTable("User")',
+        ].join("\n"),
+      );
+      expect(script).toContain("populateUserEmail: { run: populateUserEmail },");
     });
 
     test("scaffolds a data-only migration as a single step", async () => {
@@ -453,7 +434,6 @@ describe("template-generator", () => {
         migrationsDir: tempDir,
         migrationNumber: 1,
         snapshot,
-        scriptKind: "steps",
       });
       const script = await fs.readFile(result.migrateFilePath, "utf-8");
 
@@ -469,7 +449,6 @@ describe("template-generator", () => {
         migrationsDir: tempDir,
         migrationNumber: 1,
         snapshot,
-        scriptKind: "steps",
       });
 
       expect(getTypeScriptDiagnostics(result.migrateFilePath)).toEqual([]);
@@ -489,7 +468,7 @@ describe("template-generator", () => {
     ])(
       "typechecks the $name test scaffold against a steps script",
       async ({ fileName, generate }) => {
-        await generateDiffFiles(breakingDiff, tempDir, 1, snapshot, undefined, [], false, "steps");
+        await generateDiffFiles(breakingDiff, tempDir, 1, snapshot);
         const testPath = path.join(tempDir, "0001", fileName);
         await fs.writeFile(testPath, generate(breakingDiff, "steps"));
 
@@ -498,73 +477,38 @@ describe("template-generator", () => {
       60_000,
     );
 
-    test("typechecks the steps for several added required fields like the main script", async () => {
-      const diff = stepsDiff(addedRequired("User", "email"), addedRequired("User", "phone"));
-      const main = await generateDiffFiles(diff, tempDir, 1, snapshot);
-      const steps = await generateDiffFiles(
-        diff,
-        tempDir,
-        2,
-        snapshot,
-        undefined,
-        [],
-        false,
-        "steps",
-      );
+    const placeholderErrorCodes = async (
+      diff: ReturnType<typeof stepsDiff>,
+      previous: typeof snapshot,
+      migrationNumber: number,
+    ) => {
+      const result = await generateDiffFiles(diff, tempDir, migrationNumber, previous);
+      return getTypeScriptDiagnostics(result.migrateFilePath!).map(({ code }) => code);
+    };
 
-      const mainDiagnostics = getTypeScriptDiagnostics(main.migrateFilePath!);
-      expect(mainDiagnostics).not.toEqual([]);
-      expect(getTypeScriptDiagnostics(steps.migrateFilePath!)).toEqual(mainDiagnostics);
+    test("leaves only the placeholder of each added required field to fill in", async () => {
+      await expect(placeholderErrorCodes(breakingDiff, snapshot, 1)).resolves.toEqual([2322]);
+      await expect(
+        placeholderErrorCodes(
+          stepsDiff(addedRequired("User", "email"), addedRequired("User", "phone")),
+          snapshot,
+          2,
+        ),
+      ).resolves.toEqual([2322, 2322]);
     }, 30_000);
 
-    test("typechecks the steps for a table rename and a field rename like the main script", async () => {
+    test("typechecks the copy of a renamed table's rows with its guard", async () => {
       const userSnapshot = createTestSnapshot({
         User: {
           name: "User",
           pluralForm: "Users",
-          fields: {
-            email: { type: "string", required: false },
-            fullName: { type: "string", required: false },
-          },
+          fields: { email: { type: "string", required: false } },
         },
       });
-      const diff = stepsDiff(
-        renamedTable("User", "Person"),
-        renamedField("Person", "fullName", "displayName"),
-      );
-      const main = await generateDiffFiles(diff, tempDir, 1, userSnapshot);
-      const steps = await generateDiffFiles(
-        diff,
-        tempDir,
-        2,
-        userSnapshot,
-        undefined,
-        [],
-        false,
-        "steps",
-      );
 
-      expect(getTypeScriptDiagnostics(steps.migrateFilePath!)).toEqual(
-        getTypeScriptDiagnostics(main.migrateFilePath!),
-      );
-    }, 30_000);
-
-    test("leaves only the placeholders the main script has for the same change", async () => {
-      const main = await generateDiffFiles(breakingDiff, tempDir, 1, snapshot);
-      const steps = await generateDiffFiles(
-        breakingDiff,
-        tempDir,
-        2,
-        snapshot,
-        undefined,
-        [],
-        false,
-        "steps",
-      );
-
-      const mainDiagnostics = getTypeScriptDiagnostics(main.migrateFilePath!);
-      expect(mainDiagnostics).not.toEqual([]);
-      expect(getTypeScriptDiagnostics(steps.migrateFilePath!)).toEqual(mainDiagnostics);
+      await expect(
+        placeholderErrorCodes(stepsDiff(renamedTable("User", "Person")), userSnapshot, 1),
+      ).resolves.toEqual([]);
     }, 30_000);
   });
 
@@ -692,7 +636,7 @@ describe("template-generator", () => {
       expect(result.dbTypesFilePath).toBe(path.join(tempDir, "0001", DB_TYPES_FILE_NAME));
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
-      expect(scriptContent).toContain("export async function main");
+      expect(scriptContent).toContain("export const steps = {");
       expect(scriptContent).toContain("Transaction");
       expect(scriptContent).toContain("email");
 
@@ -724,7 +668,7 @@ describe("template-generator", () => {
       });
       await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
       const testPath = path.join(tempDir, "0001", MIGRATE_PGLITE_TEST_FILE_NAME);
-      await fs.writeFile(testPath, generateMigrationPgliteTestScript(diff));
+      await fs.writeFile(testPath, generateMigrationPgliteTestScript(diff, "steps"));
 
       // The scaffold pulls in the vitest and PGlite typings, which takes seconds on CI.
       expect(getTypeScriptDiagnostics(testPath)).toEqual([]);

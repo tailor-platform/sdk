@@ -119,7 +119,6 @@ export async function generateSchemaFile(
  * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
  * column types instead of their `Date`/`string` defaults. Should match whatever
  * `kyselyTypePlugin` was configured with. Defaults to `false`.
- * @param scriptKind - Whether a generated migration script exports `main` or `steps`
  * @returns {Promise<GenerateDiffResult>} Generated file info
  */
 export async function generateDiffFiles(
@@ -130,7 +129,6 @@ export async function generateDiffFiles(
   description?: string,
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
-  scriptKind: MigrationScriptForm["kind"] = "main",
 ): Promise<GenerateDiffResult> {
   // Create migration directory
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
@@ -164,7 +162,7 @@ export async function generateDiffFiles(
   };
 
   if (writeScript) {
-    const scriptContent = generateMigrationScript(diffWithDescription, expandPlans, scriptKind);
+    const scriptContent = generateMigrationScript(diffWithDescription, expandPlans);
     await fs.writeFile(migrateFilePath, scriptContent);
     result.migrateFilePath = migrateFilePath;
 
@@ -202,8 +200,6 @@ interface GenerateDataOnlyFilesOptions {
    * was configured with. Defaults to `false`.
    */
   temporal?: boolean;
-  /** Whether the script skeleton exports `main` or `steps`. Defaults to `main`. */
-  scriptKind?: MigrationScriptForm["kind"];
 }
 
 /** Files written for a data-only migration. */
@@ -227,14 +223,7 @@ interface GenerateDataOnlyFilesResult {
 export async function generateDataOnlyMigrationFiles(
   options: GenerateDataOnlyFilesOptions,
 ): Promise<GenerateDataOnlyFilesResult> {
-  const {
-    migrationsDir,
-    migrationNumber,
-    snapshot,
-    description,
-    temporal = false,
-    scriptKind = "main",
-  } = options;
+  const { migrationsDir, migrationNumber, snapshot, description, temporal = false } = options;
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
   await fs.mkdir(migrationDir, { recursive: true });
 
@@ -249,7 +238,7 @@ export async function generateDataOnlyMigrationFiles(
 
   const diff = description ? { ...options.diff, description } : options.diff;
   await fs.writeFile(diffFilePath, JSON.stringify(diff, null, 2));
-  await fs.writeFile(migrateFilePath, generateDataOnlyMigrationScript(diff.namespace, scriptKind));
+  await fs.writeFile(migrateFilePath, generateDataOnlyMigrationScript(diff.namespace));
   const typeFiles = await writeMigrationTypeFiles({
     previousSnapshot: snapshot,
     diff,
@@ -271,44 +260,31 @@ export async function generateDataOnlyMigrationFiles(
 /**
  * Generate the script skeleton for a data-only migration
  * @param {string} namespace - TailorDB namespace the migration belongs to
- * @param scriptKind - Whether the skeleton exports `main` or `steps`
  * @returns {string} Migration script content
  */
-function generateDataOnlyMigrationScript(
-  namespace: string,
-  scriptKind: MigrationScriptForm["kind"],
-): string {
+function generateDataOnlyMigrationScript(namespace: string): string {
   return `/**
  * Data-only migration script for ${namespace}
  *
  * This migration carries no schema change; it exists to run this script.
  * Edit this file to implement the data transformation.
  *
-${scriptTransactionNotes(scriptKind)}
+${scriptNotes()}
  */
 
-${renderScript(scriptKind, "  // TODO: Implement the data transformation for this migration", "")}`;
+${renderScript("  // TODO: Implement the data transformation for this migration", "")}`;
 }
 
 /**
- * Header lines describing how the script's transactions behave
- * @param scriptKind - Whether the script exports `main` or `steps`
+ * Header lines describing how the steps of the script run
  * @returns Comment lines, each starting with ` *`
  */
-function scriptTransactionNotes(scriptKind: MigrationScriptForm["kind"]): string {
-  if (scriptKind === "steps") {
-    return ` * A script with one step runs like \`main\`, in one transaction. Once it has several
+function scriptNotes(): string {
+  return ` * A script with one step runs like \`main\`, in one transaction. Once it has several
  * steps, each runs in its own transaction and commits on its own, and a deploy that
  * fails after a step committed resumes from the steps that have not completed, so
  * write every step to be safe to run again. Split a step into several steps
  * where the work divides, and order them with \`dependsOn\`.
- * See "Splitting a migration into steps" in the TailorDB migration docs.`;
-  }
-  return ` * \`main\` runs in one transaction managed by the deploy command.
- * If any operation fails, all of its changes are rolled back.
- *
- * To commit a long data migration in parts,
- * export \`steps\` instead of \`main\`: each step runs in its own transaction.
  * See "Splitting a migration into steps" in the TailorDB migration docs.`;
 }
 
@@ -486,36 +462,29 @@ function copyOnceGuard(change: TableRenamedChange): string {
 }
 
 /**
- * Render the imports and the exported entry point of a migration script
- * @param scriptKind - Whether to export `main` or `steps`
- * @param body - Statements of the migration, indented for a `main` function body
- * @param helpers - Helper declarations placed between the import and the entry point
- * @param steps - Steps of the `steps` form; a single `migrate` step holds `body` when there are none
+ * Render the imports and the exported steps of a migration script
+ * @param body - Statements of the migration, held by a single `migrate` step when there are no steps
+ * @param helpers - Helper declarations placed between the import and the steps
+ * @param steps - Steps of the script, one per change that needs a data migration
  * @returns Script source after the header comment
  */
-function renderScript(
-  scriptKind: MigrationScriptForm["kind"],
-  body: string,
-  helpers: string,
-  steps: readonly ScriptStep[] = [],
-): string {
-  if (scriptKind === "steps") {
-    const units = steps.length > 0 ? steps : [{ name: "migrate", body, dependsOn: [] }];
-    const functions = units
-      .map(
-        (unit) => `async function ${unit.name}(trx: Transaction): Promise<void> {
+function renderScript(body: string, helpers: string, steps: readonly ScriptStep[] = []): string {
+  const units = steps.length > 0 ? steps : [{ name: "migrate", body, dependsOn: [] }];
+  const functions = units
+    .map(
+      (unit) => `async function ${unit.name}(trx: Transaction): Promise<void> {
 ${unit.body}
 }`,
-      )
-      .join("\n\n");
-    const entries = units
-      .map((unit) => {
-        const dependsOn =
-          unit.dependsOn.length > 0 ? `dependsOn: ${JSON.stringify(unit.dependsOn)}, ` : "";
-        return `  ${unit.name}: { ${dependsOn}run: ${unit.name} },`;
-      })
-      .join("\n");
-    return `import type { MigrationSteps, Transaction } from "./db";
+    )
+    .join("\n\n");
+  const entries = units
+    .map((unit) => {
+      const dependsOn =
+        unit.dependsOn.length > 0 ? `dependsOn: ${JSON.stringify(unit.dependsOn)}, ` : "";
+      return `  ${unit.name}: { ${dependsOn}run: ${unit.name} },`;
+    })
+    .join("\n");
+  return `import type { MigrationSteps, Transaction } from "./db";
 ${helpers}
 ${functions}
 
@@ -523,26 +492,17 @@ export const steps = {
 ${entries}
 } satisfies MigrationSteps;
 `;
-  }
-  return `import type { Transaction } from "./db";
-${helpers}
-export async function main(trx: Transaction): Promise<void> {
-${body}
-}
-`;
 }
 
 /**
  * Generate migration script content based on diff
  * @param {MigrationDiff} diff - Migration diff
  * @param expandPlans - Field changes carried through temporary fields
- * @param scriptKind - Whether the script exports `main` or `steps`
  * @returns {string} Migration script content
  */
 export function generateMigrationScript(
   diff: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
-  scriptKind: MigrationScriptForm["kind"] = "main",
 ): string {
   const typeRenameTargets = new Map(
     diff.changes
@@ -550,17 +510,7 @@ export function generateMigrationScript(
       .map((change) => [change.previousTableName, change.tableName]),
   );
 
-  let body = NO_DATA_MIGRATION_BODY;
-  let steps: ScriptStep[] = [];
-  if (scriptKind === "steps") {
-    steps = buildScriptSteps(diff, expandPlans, typeRenameTargets);
-  } else {
-    const updates = [
-      ...expandPlans.map((plan) => generateExpandConversionScript(plan)),
-      ...diff.changes.flatMap((change) => generateChangeStatements(change, typeRenameTargets)),
-    ];
-    if (updates.length > 0) body = updates.join("\n\n");
-  }
+  const steps = buildScriptSteps(diff, expandPlans, typeRenameTargets);
 
   const helpers = diff.changes.some(
     (change) => change.kind === "field_modified" && change.memberRenames?.length,
@@ -577,10 +527,10 @@ export function generateMigrationScript(
  * for warning-tier changes it is optional). Edit this file to implement
  * your data migration logic.
  *
-${scriptTransactionNotes(scriptKind)}
+${scriptNotes()}
  */
 
-${renderScript(scriptKind, body, helpers, steps)}`;
+${renderScript(NO_DATA_MIGRATION_BODY, helpers, steps)}`;
 }
 
 /**
