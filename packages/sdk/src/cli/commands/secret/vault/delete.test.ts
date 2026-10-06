@@ -34,7 +34,7 @@ describe("secret vault delete command", () => {
     } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
     vi.mocked(prompt.text).mockResolvedValue("other");
 
-    const result = await runCommand(deleteCommand, ["--name", "api-keys"]);
+    const result = await runCommand(deleteCommand, ["api-keys"]);
 
     expect(prompt.text).toHaveBeenCalledWith({
       message: 'Enter the vault name to confirm deletion ("api-keys"):',
@@ -52,7 +52,7 @@ describe("secret vault delete command", () => {
     } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
     vi.mocked(prompt.text).mockResolvedValue("api-keys");
 
-    const result = await runCommand(deleteCommand, ["--name", "api-keys"]);
+    const result = await runCommand(deleteCommand, ["api-keys"]);
 
     expect(result.success).toBe(true);
     expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
@@ -70,7 +70,7 @@ describe("secret vault delete command", () => {
     using _json = jsonMode();
     using stdout = captureStdout();
 
-    const result = await runCommand(deleteCommand, ["--name", "api-keys", "--yes"]);
+    const result = await runCommand(deleteCommand, ["api-keys", "--yes"]);
 
     expect(result.success).toBe(true);
     expect(JSON.parse(stdout.output)).toEqual({

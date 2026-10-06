@@ -24,7 +24,7 @@ describe("secret vault create", () => {
     using _logger = silenceLogger("success");
     using stdout = captureStdout();
 
-    const result = await runCommand(createCommand, ["--name", "api-keys"]);
+    const result = await runCommand(createCommand, ["api-keys"]);
 
     expect(result.success).toBe(true);
     expect(JSON.parse(stdout.output)).toEqual({
