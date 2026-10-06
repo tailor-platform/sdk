@@ -111,14 +111,20 @@ describe("how to get each value", () => {
     },
   );
 
-  test("points to an organization or folder admin for the machine user credentials, not to Tailor support", () => {
+  test("points to the Console and an organization or folder admin for the machine user credentials, not to Tailor support", () => {
     const [clientId, clientSecret] = targetRequirements("branch");
 
     for (const requirement of [clientId, clientSecret]) {
       expect(requirement?.howTo).toContain("organization or folder admin");
+      expect(requirement?.howTo).toContain("Tailor Console");
       expect(requirement?.howTo).not.toContain("support");
-      expect(requirement?.howTo).not.toContain("Console");
     }
+  });
+
+  test("says that without the admin role machine users can be neither viewed nor created", () => {
+    const [clientId] = targetRequirements("branch");
+
+    expect(clientId?.howTo).toContain("cannot view or create machine users");
   });
 });
 
