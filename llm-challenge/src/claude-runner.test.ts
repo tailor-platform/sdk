@@ -13,7 +13,9 @@ import {
   redactSecretInFiles,
   redactSecretInWorkspace,
   resolveClaudeOAuthToken,
+  runClaudeInPodman,
 } from "./claude-runner";
+import { runJudgeInPodman } from "./judge";
 import { buildAgentContainerArgs, runAgentContainer } from "./runner";
 
 const tempDirs: string[] = [];
@@ -62,26 +64,24 @@ describe("claude solver command", () => {
     );
   });
 
-  test("installs the pinned package into the mounted cache and never uses an image-provided claude", () => {
-    const script = buildClaudeBootstrapScript(
-      ["-p", "--model", "claude-opus-5-5"],
-      DEFAULT_CLAUDE_CODE_PACKAGE,
-    );
+  test("runs the preinstalled CLI from the runtime cache and never installs or uses an image-provided claude", () => {
+    const script = buildClaudeBootstrapScript(["-p", "--model", "claude-opus-5-5"]);
 
     expect(script).toContain("export IS_SANDBOX=1");
     expect(script).not.toContain("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB");
     expect(script).toContain("export DISABLE_AUTOUPDATER=1");
     expect(script).toContain("export HOME=/tmp/claude-home");
-    expect(script).toContain(
-      `npm install --global --prefix /opt/claude-code --no-fund --no-audit --no-update-notifier --loglevel error '${DEFAULT_CLAUDE_CODE_PACKAGE}'`,
-    );
+    expect(script).not.toContain("npm install");
     expect(script).toContain("exec /opt/claude-code/bin/claude '-p' '--model' 'claude-opus-5-5'");
     expect(script).not.toContain("command -v claude");
   });
 
-  test("checks the CLI version and a one-turn model call in preflight", () => {
+  test("installs the pinned package, checks the CLI version, and makes a one-turn model call in preflight", () => {
     const script = buildClaudePreflightScript(DEFAULT_CLAUDE_CODE_PACKAGE, "claude-opus-5-5");
 
+    expect(script).toContain(
+      `npm install --global --prefix /opt/claude-code --no-fund --no-audit --no-update-notifier --loglevel error '${DEFAULT_CLAUDE_CODE_PACKAGE}'`,
+    );
     expect(script).toContain("/opt/claude-code/bin/claude --version >&2");
     expect(script).toContain("'--model' 'claude-opus-5-5'");
     expect(script).toContain("'--output-format' 'stream-json'");
@@ -217,5 +217,95 @@ describe("solver container", () => {
     expect(result.timedOut).toBe(true);
     const calls = (await fs.readFile(callsPath, "utf8")).trim().split("\n");
     expect(calls).toContain("rm -f llm-challenge-timeout");
+  });
+});
+
+describe("claude runtime cache", () => {
+  async function setUp(options: { installed: boolean }) {
+    const dir = await makeTempDir();
+    const fakeBinPath = path.join(dir, "bin");
+    const argsPath = path.join(dir, "podman-args.json");
+    const installCacheDir = path.join(dir, "cache");
+    await fs.mkdir(fakeBinPath, { recursive: true });
+    await fs.mkdir(path.join(installCacheDir, "bin"), { recursive: true });
+    if (options.installed) {
+      await fs.writeFile(path.join(installCacheDir, "bin", "claude"), "");
+    }
+    await fs.mkdir(path.join(dir, "work"), { recursive: true });
+    await fs.writeFile(path.join(dir, "prompt.md"), "task");
+    const fakePodmanPath = path.join(fakeBinPath, "podman");
+    await fs.writeFile(
+      fakePodmanPath,
+      `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(argsPath)}, JSON.stringify(process.argv.slice(2)));\n`,
+    );
+    await fs.chmod(fakePodmanPath, 0o755);
+    vi.stubEnv("PATH", `${fakeBinPath}${path.delimiter}${process.env.PATH ?? ""}`);
+    const runtime = {
+      image: "example.invalid/image:test",
+      claudePackage: DEFAULT_CLAUDE_CODE_PACKAGE,
+      tokenFile: path.join(dir, "token"),
+      installCacheDir,
+    };
+    const logs = {
+      stdoutPath: path.join(dir, "stdout.log"),
+      stderrPath: path.join(dir, "stderr.log"),
+      tracePath: path.join(dir, "trace.jsonl"),
+    };
+    const readArgs = async () => JSON.parse(await fs.readFile(argsPath, "utf8")) as string[];
+    return { dir, runtime, logs, readArgs, installCacheDir };
+  }
+
+  test("mounts the runtime cache read-only into solver and judge containers", async () => {
+    const { dir, runtime, logs, readArgs, installCacheDir } = await setUp({ installed: true });
+
+    await runClaudeInPodman({
+      containerName: "llm-challenge-solver",
+      worktreePath: path.join(dir, "work"),
+      promptPath: path.join(dir, "prompt.md"),
+      solverStdoutPath: logs.stdoutPath,
+      solverStderrPath: logs.stderrPath,
+      tracePath: logs.tracePath,
+      model: "claude-opus-5-5",
+      effort: "xhigh",
+      maxSeconds: 30,
+      runtime,
+      token: "sk-test",
+    });
+    expect(await readArgs()).toContain(`${installCacheDir}:/opt/claude-code:ro,z`);
+
+    await runJudgeInPodman({
+      containerName: "llm-challenge-judge",
+      workspaceDir: path.join(dir, "work"),
+      evidenceDir: dir,
+      prompt: "grade",
+      model: "claude-fable-5-1",
+      effort: "high",
+      schema: {},
+      runtime,
+      token: "sk-test",
+      ...logs,
+      maxSeconds: 30,
+    });
+    expect(await readArgs()).toContain(`${installCacheDir}:/opt/claude-code:ro,z`);
+  });
+
+  test("refuses to start before preflight has installed the CLI", async () => {
+    const { dir, runtime, logs } = await setUp({ installed: false });
+
+    await expect(
+      runClaudeInPodman({
+        containerName: "llm-challenge-solver",
+        worktreePath: path.join(dir, "work"),
+        promptPath: path.join(dir, "prompt.md"),
+        solverStdoutPath: logs.stdoutPath,
+        solverStderrPath: logs.stderrPath,
+        tracePath: logs.tracePath,
+        model: "claude-opus-5-5",
+        effort: "xhigh",
+        maxSeconds: 30,
+        runtime,
+        token: "sk-test",
+      }),
+    ).rejects.toThrow("preflight");
   });
 });

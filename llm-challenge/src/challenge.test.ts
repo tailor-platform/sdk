@@ -585,6 +585,19 @@ describe("artifact summary", () => {
       }),
     ).resolves.toBe("usage-limit");
 
+    await fs.writeFile(solverStderrPath, "Error: unexpected status 401 Unauthorized\n");
+    await expect(
+      classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.5",
+        timedOut: false,
+        solverExitCode: 1,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      }),
+    ).resolves.toBe("auth");
+
     await fs.writeFile(solverStderrPath, "codex CLI is not installed\n");
     await expect(
       classifySolverFailure({

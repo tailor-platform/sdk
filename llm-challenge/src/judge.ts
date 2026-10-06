@@ -2,8 +2,9 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
   CLAUDE_OAUTH_TOKEN_ENV,
-  CONTAINER_CLAUDE_PREFIX,
+  assertClaudeInstalled,
   buildClaudeBootstrapScript,
+  claudeRuntimeMount,
   redactSecretInFiles,
   type ClaudeRuntimeConfig,
 } from "./claude-runner";
@@ -218,10 +219,9 @@ export async function runJudgeInPodman(options: {
   tracePath: string;
   maxSeconds: number;
 }): Promise<SolverResult> {
-  await fs.mkdir(options.runtime.installCacheDir, { recursive: true });
+  await assertClaudeInstalled(options.runtime);
   const script = buildClaudeBootstrapScript(
     buildClaudeJudgeArgs({ model: options.model, effort: options.effort, schema: options.schema }),
-    options.runtime.claudePackage,
   );
   const result = await runAgentContainer({
     podmanArgs: buildAgentContainerArgs({
@@ -231,7 +231,7 @@ export async function runJudgeInPodman(options: {
       worktreeAccess: "ro",
       mounts: [
         `${options.evidenceDir}:${CONTAINER_EVIDENCE_DIR}:ro,Z`,
-        `${options.runtime.installCacheDir}:${CONTAINER_CLAUDE_PREFIX}:rw,z`,
+        claudeRuntimeMount(options.runtime),
       ],
       envNames: [CLAUDE_OAUTH_TOKEN_ENV],
       script,

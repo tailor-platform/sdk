@@ -599,8 +599,9 @@ describe("grade summary", () => {
       ["c", 0, 0],
     ]);
     expect(first.overall.ci95).toEqual(second.overall.ci95);
-    expect(first.overall.ci95[0]).toBeLessThanOrEqual(first.overall.passRate);
-    expect(first.overall.ci95[1]).toBeGreaterThanOrEqual(first.overall.passRate);
+    const [low, high] = first.overall.ci95 ?? [Number.NaN, Number.NaN];
+    expect(low).toBeLessThanOrEqual(first.overall.passRate ?? Number.NaN);
+    expect(high).toBeGreaterThanOrEqual(first.overall.passRate ?? Number.NaN);
   });
 
   test("does not depend on the order runs finished in", () => {
@@ -658,10 +659,35 @@ describe("self-judge check", () => {
           source("a.json", "claude", "claude-opus-5-5[1m]"),
           source("b.json", "claude", "claude-sonnet-5-5"),
           source("c.json", "codex", "claude-opus-5-5"),
+          {
+            relativePath: "d.json",
+            report: {
+              agent: "claude",
+              model: "opus",
+              runs: [{ agentResult: { toolCalls: 1, servedModels: ["claude-opus-5-5-20260901"] } }],
+            } as StoredChallengeReport,
+          },
         ],
         "claude-opus-5-5",
       ).map((item) => item.relativePath),
-    ).toEqual(["a.json"]);
+    ).toEqual(["a.json", "d.json"]);
+  });
+});
+
+describe("empty grade summary", () => {
+  test("reports no pass rate when nothing was scored", () => {
+    const summary = summarizeGrades([
+      {
+        report: "r.json",
+        problemId: "a",
+        group: "sdk-api",
+        runIndex: 0,
+        artifactDir: "results/x/a",
+        status: "excluded",
+      },
+    ]);
+
+    expect(summary.overall).toMatchObject({ scoredRuns: 0, passRate: null, ci95: null });
   });
 });
 

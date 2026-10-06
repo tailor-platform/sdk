@@ -134,6 +134,13 @@ export async function classifySolverFailure(options: {
     return "usage-limit";
   }
   if (
+    /\b401\b|unauthorized|not logged in|please (?:re-?)?log ?in/i.test(
+      await readAvailableText([options.solverStderrPath]),
+    )
+  ) {
+    return "auth";
+  }
+  if (
     /cannot execute binary file|codex CLI is not installed|Cannot connect to Podman|unable to connect to Podman|auth\.json|npm is unavailable/i.test(
       text,
     )

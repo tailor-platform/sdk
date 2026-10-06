@@ -87,8 +87,8 @@ export type GradeSummary = {
     scoredRuns: number;
     excludedRuns: number;
     errorRuns: number;
-    passRate: number;
-    ci95: [number, number];
+    passRate: number | null;
+    ci95: [number, number] | null;
     claimRate: number;
   };
 };
@@ -252,7 +252,10 @@ export function summarizeGrades(
       };
     });
   const scoredProblems = problems.filter((problem) => problem.scoredRuns > 0);
-  const passRate = mean(scoredProblems.map((problem) => problem.passRate ?? 0));
+  const passRate =
+    scoredProblems.length === 0
+      ? null
+      : mean(scoredProblems.map((problem) => problem.passRate ?? 0));
   return {
     problems: problems.map(({ passValues: _passValues, ...problem }) => problem),
     overall: {
@@ -261,11 +264,14 @@ export function summarizeGrades(
       excludedRuns: grades.filter((grade) => grade.status === "excluded").length,
       errorRuns: grades.filter((grade) => grade.status === "error").length,
       passRate,
-      ci95: clusterBootstrapInterval(
-        scoredProblems.map((problem) => problem.passValues),
-        bootstrap.seed,
-        bootstrap.iterations,
-      ),
+      ci95:
+        scoredProblems.length === 0
+          ? null
+          : clusterBootstrapInterval(
+              scoredProblems.map((problem) => problem.passValues),
+              bootstrap.seed,
+              bootstrap.iterations,
+            ),
       claimRate: mean(scoredProblems.map((problem) => problem.claimRate ?? 0)),
     },
   };
@@ -369,7 +375,10 @@ export function findSelfJudgedSources<Source extends Pick<GradeSource, "report">
   return sources.filter(
     (source) =>
       (source.report.agent ?? "codex") === "claude" &&
-      isSameClaudeModel(source.report.model, judgeModel),
+      [
+        source.report.model,
+        ...(source.report.runs ?? []).flatMap((run) => run.agentResult?.servedModels ?? []),
+      ].some((model) => isSameClaudeModel(model, judgeModel)),
   );
 }
 
@@ -504,8 +513,11 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
 
 function formatPassRate(summary: GradeSummary): string {
   const { passRate, ci95, problems, scoredRuns, excludedRuns, errorRuns } = summary.overall;
-  const [low, high] = ci95;
-  return `${(passRate * 100).toFixed(1)}% (95% CI ${(low * 100).toFixed(1)}-${(high * 100).toFixed(1)}%) over ${problems} problems, ${scoredRuns} scored runs; excluded=${excludedRuns} error=${errorRuns}`;
+  const rate =
+    passRate === null || ci95 === null
+      ? "n/a"
+      : `${(passRate * 100).toFixed(1)}% (95% CI ${(ci95[0] * 100).toFixed(1)}-${(ci95[1] * 100).toFixed(1)}%)`;
+  return `${rate} over ${problems} problems, ${scoredRuns} scored runs; excluded=${excludedRuns} error=${errorRuns}`;
 }
 
 async function gradeRun(options: {

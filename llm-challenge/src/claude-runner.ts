@@ -112,9 +112,9 @@ export function buildClaudeSolverArgs(options: { model: string; effort: string }
   ];
 }
 
-export function buildClaudeBootstrapScript(claudeArgs: string[], claudePackage: string): string {
+export function buildClaudeBootstrapScript(claudeArgs: string[]): string {
   return [
-    ...claudeEnvironmentLines(claudePackage),
+    ...claudeEnvironmentLines(),
     `exec ${CONTAINER_CLAUDE_BIN} ${claudeArgs.map(shellQuote).join(" ")}`,
   ].join("\n");
 }
@@ -133,13 +133,16 @@ export function buildClaudePreflightScript(claudePackage: string, model: string)
     "--no-session-persistence",
   ];
   return [
-    ...claudeEnvironmentLines(claudePackage),
+    ...claudeEnvironmentLines(),
+    `if [ ! -x ${CONTAINER_CLAUDE_BIN} ]; then`,
+    `  npm install --global --prefix ${CONTAINER_CLAUDE_PREFIX} --no-fund --no-audit --no-update-notifier --loglevel error ${shellQuote(claudePackage)} >&2`,
+    "fi",
     `${CONTAINER_CLAUDE_BIN} --version >&2`,
     `printf 'Reply with exactly: ok' | exec ${CONTAINER_CLAUDE_BIN} ${probeArgs.map(shellQuote).join(" ")}`,
   ].join("\n");
 }
 
-function claudeEnvironmentLines(claudePackage: string): string[] {
+function claudeEnvironmentLines(): string[] {
   return [
     "set -eu",
     "export HOME=/tmp/claude-home",
@@ -147,10 +150,21 @@ function claudeEnvironmentLines(claudePackage: string): string[] {
     "export IS_SANDBOX=1",
     "export DISABLE_AUTOUPDATER=1",
     "export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
-    `if [ ! -x ${CONTAINER_CLAUDE_BIN} ]; then`,
-    `  npm install --global --prefix ${CONTAINER_CLAUDE_PREFIX} --no-fund --no-audit --no-update-notifier --loglevel error ${shellQuote(claudePackage)} >&2`,
-    "fi",
   ];
+}
+
+export function claudeRuntimeMount(runtime: ClaudeRuntimeConfig): string {
+  return `${runtime.installCacheDir}:${CONTAINER_CLAUDE_PREFIX}:ro,z`;
+}
+
+export async function assertClaudeInstalled(runtime: ClaudeRuntimeConfig): Promise<void> {
+  try {
+    await fs.access(path.join(runtime.installCacheDir, "bin", "claude"));
+  } catch {
+    throw new Error(
+      `Claude Code is not installed in ${runtime.installCacheDir}; run once without --no-preflight to install ${runtime.claudePackage}`,
+    );
+  }
 }
 
 export async function preflightClaudeRunner(options: {
@@ -220,18 +234,17 @@ export async function runClaudeInPodman(options: {
   runtime: ClaudeRuntimeConfig;
   token: string;
 }): Promise<SolverResult> {
-  await fs.mkdir(options.runtime.installCacheDir, { recursive: true });
+  await assertClaudeInstalled(options.runtime);
   const result = await runAgentContainer({
     podmanArgs: buildAgentContainerArgs({
       containerName: options.containerName,
       image: options.runtime.image,
       worktreePath: options.worktreePath,
       sharedPnpmStorePath: options.sharedPnpmStorePath,
-      mounts: [`${options.runtime.installCacheDir}:${CONTAINER_CLAUDE_PREFIX}:rw,z`],
+      mounts: [claudeRuntimeMount(options.runtime)],
       envNames: [CLAUDE_OAUTH_TOKEN_ENV],
       script: buildClaudeBootstrapScript(
         buildClaudeSolverArgs({ model: options.model, effort: options.effort }),
-        options.runtime.claudePackage,
       ),
     }),
     containerName: options.containerName,
