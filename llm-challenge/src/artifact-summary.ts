@@ -164,6 +164,9 @@ function classifyClaudeRun(
   if (apiErrorStatus === 401 || apiErrorStatus === 403) {
     return "auth";
   }
+  if (typeof apiErrorStatus === "number" && apiErrorStatus >= 500) {
+    return "api-error";
+  }
   if (trace.result === undefined) {
     return "runner-startup";
   }

@@ -162,6 +162,41 @@ describe("rerun plan", () => {
     expect(plan.reportRerunOf.runs.map((rerun) => rerun.runIndex)).toEqual([1, 2]);
   });
 
+  test("reruns only runs that were not scored", async () => {
+    const problems = await discoverProblems(packageRoot);
+    const [problem] = problems;
+    const run = (runIndex: number, solverExitCode: number, failureKind?: string) => ({
+      problemId: problem.id,
+      group: problem.group,
+      runIndex,
+      artifactDir: `results/source/run-${runIndex}`,
+      solverExitCode,
+      timedOut: failureKind === "timeout",
+      failureKind,
+    });
+    const reportFilePath = await writeSourceReport({
+      runsPerProblem: 6,
+      problems: [problem],
+      runs: [
+        run(0, 1, "solver-nonzero"),
+        run(1, 0, "solver-nonzero"),
+        run(2, 0, "model-mismatch"),
+        run(3, 1, "api-error"),
+        run(4, 1),
+        run(5, 143, "timeout"),
+      ] as StoredChallengeReport["runs"],
+    });
+
+    const plan = await createRerunPlan({
+      packageRoot,
+      reportFilePath,
+      allProblems: problems,
+      selectedProblems: [problem],
+    });
+
+    expect(plan.tasks.map((task) => task.runIndex)).toEqual([2, 3, 4, 5]);
+  });
+
   test("resumes a stopped rerun against the runs it was replacing", async () => {
     const problems = await discoverProblems(packageRoot);
     const [problem] = problems;
@@ -668,6 +703,9 @@ describe("claude artifact summary", () => {
     await expect(
       classify([{ type: "result", subtype: "success", is_error: true, api_error_status: 401 }], 1),
     ).resolves.toBe("auth");
+    await expect(
+      classify([{ type: "result", subtype: "success", is_error: true, api_error_status: 529 }], 1),
+    ).resolves.toBe("api-error");
     await expect(classify([], 1)).resolves.toBe("runner-startup");
     await expect(
       classify(

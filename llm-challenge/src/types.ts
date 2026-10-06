@@ -123,6 +123,7 @@ export type SolverFailureKind =
   | "usage-limit"
   | "auth"
   | "model-mismatch"
+  | "api-error"
   | "runner-startup"
   | "solver-nonzero"
   | "unknown";
@@ -132,6 +133,7 @@ export const INFRASTRUCTURE_FAILURE_KINDS: ReadonlySet<SolverFailureKind> = new 
   "usage-limit",
   "auth",
   "model-mismatch",
+  "api-error",
   "runner-startup",
   "unknown",
 ]);

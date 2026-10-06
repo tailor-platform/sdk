@@ -46,7 +46,7 @@ pnpm -C llm-challenge challenge grade \
   --output results/ab-<problem>-grades-<stamp>
 ```
 
-`summary.json` reports each variant under `variants`, keyed by SDK ref.
+`summary.json` lists each variant under `variants`, identified by its `sdkRef`.
 
 ## Record Progress
 
@@ -80,7 +80,7 @@ Then append a `variant-summary` per variant and a `final-all-summary`. Summaries
 ## Handle Interrupted Or Limited Runs
 
 - A run stops on its own after a `usage-limit` or `auth` failure. Append an `aborted` event with the reason and leave all already-written run rows intact.
-- When limits clear, resume each stopped variant with `--rerun-nonzero-from <its report.json>` and the same `--sdk-ref` and `--profile` into a new output directory, then pass every report of both variants to one `challenge grade`. Runs that a rerun replaced have no `grades.jsonl` row; leave them out of averages.
+- When limits clear, resume each stopped variant with `--rerun-nonzero-from <its report.json>` and the same `--sdk-ref`, `--profile`, and `--max-seconds` into a new output directory, then pass every report of both variants to one `challenge grade`. Runs that a rerun replaced have no `grades.jsonl` row; leave them out of averages.
 - Do not hide invalid runs. Keep them in the JSONL with `usageLimitCount` so the user can audit why they were excluded.
 
 ## Analyze Artifacts

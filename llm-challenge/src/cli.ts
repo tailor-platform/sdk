@@ -314,11 +314,10 @@ export async function createRerunPlan(options: {
       })),
     );
   const failedRuns = [
-    ...sourceReport.runs.filter(
-      (run) =>
-        run.timedOut ||
-        run.solverExitCode !== 0 ||
-        (run.failureKind !== undefined && INFRASTRUCTURE_FAILURE_KINDS.has(run.failureKind)),
+    ...sourceReport.runs.filter((run) =>
+      run.failureKind === undefined
+        ? run.timedOut || run.solverExitCode !== 0
+        : INFRASTRUCTURE_FAILURE_KINDS.has(run.failureKind),
     ),
     ...plannedRuns.filter((run) => !recordedKeys.has(runKey(run))),
   ].filter((run) => selectedKeys.has(`${run.group}/${run.problemId}`));
