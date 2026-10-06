@@ -24,6 +24,11 @@
       "types": "./dist/eslint.d.ts",
       "import": "./dist/eslint.js",
       "default": "./dist/eslint.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js",
+      "default": "./dist/plugin.js"
     }
   },
   "publishConfig": {
@@ -46,6 +51,7 @@
     "@typescript-eslint/parser": "8.71.0",
     "@typescript-eslint/utils": "8.71.0",
     "libpg-query": "18.1.5",
+    "pathe": "2.0.3",
     "postgres": "3.4.9"
   },
   "devDependencies": {
