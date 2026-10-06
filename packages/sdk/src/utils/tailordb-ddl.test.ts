@@ -1,3 +1,4 @@
+import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "vitest";
 import {
   generateSchemaDDL,
@@ -391,5 +392,175 @@ describe("generateSchemaDDL", () => {
 
   test("is empty for no tables", () => {
     expect(generateSchemaDDL([])).toBe("");
+  });
+});
+
+describe("enumTypes option", () => {
+  const roleField: DDLFieldConfig = {
+    type: "enum",
+    required: true,
+    allowedValues: [{ value: "ADMIN" }, { value: "MEMBER", description: "regular user" }],
+  };
+  const withEnumTypes = { enumTypes: true };
+  const account = (fields: Record<string, DDLFieldConfig>): DDLTableConfig => ({
+    name: "Account",
+    fields: { id: { type: "uuid", required: true }, ...fields },
+  });
+  const createdTypeNames = (statements: string[]) =>
+    statements.flatMap((s) => /CREATE TYPE ("(?:[^"]|"")+") AS ENUM/.exec(s)?.[1] ?? []);
+
+  test("leaves the default output unchanged when allowedValues are present", () => {
+    const without = generateTableDDL(account({ role: { type: "enum", required: true } }));
+    expect(generateTableDDL(account({ role: roleField }))).toEqual(without);
+    expect(generateTableDDL(account({ role: roleField }), { enumTypes: false })).toEqual(without);
+  });
+
+  test("creates the enum type before the table, wrapped to be idempotent", () => {
+    const [createType, createTable] = generateTableDDL(account({ role: roleField }), withEnumTypes);
+    expect(createType).toBe(
+      [
+        "DO $$ BEGIN",
+        `  CREATE TYPE "Account.role" AS ENUM ('ADMIN', 'MEMBER');`,
+        "EXCEPTION WHEN duplicate_object THEN NULL;",
+        "END $$",
+      ].join("\n"),
+    );
+    expect(createTable).toContain('"role" "Account.role" NOT NULL');
+  });
+
+  test("escapes single quotes in enum values", () => {
+    const [createType] = generateTableDDL(
+      account({ kind: { type: "enum", allowedValues: [{ value: "it's" }] } }),
+      withEnumTypes,
+    );
+    expect(createType).toContain(`AS ENUM ('it''s')`);
+  });
+
+  test("uses the enum type as the element type of array fields", () => {
+    const statements = generateTableDDL(
+      account({ roles: { ...roleField, array: true } }),
+      withEnumTypes,
+    );
+    expect(statements.at(-1)).toContain('"roles" "Account.roles"[]');
+  });
+
+  test("keeps a default value as a string literal accepted by the enum column", () => {
+    const statements = generateTableDDL(
+      account({ role: { ...roleField, default: "MEMBER" } }),
+      withEnumTypes,
+    );
+    expect(statements.at(-1)).toContain(`"role" "Account.role" NOT NULL DEFAULT 'MEMBER'`);
+  });
+
+  test("keeps UNIQUE on an enum column", () => {
+    const statements = generateTableDDL(
+      account({ role: { ...roleField, unique: true } }),
+      withEnumTypes,
+    );
+    expect(statements.at(-1)).toContain('"role" "Account.role" NOT NULL UNIQUE');
+  });
+
+  test("keeps an optional enum column nullable", () => {
+    const statements = generateTableDDL(
+      account({ role: { type: "enum", allowedValues: roleField.allowedValues } }),
+      withEnumTypes,
+    );
+    expect(statements.at(-1)).toContain('  "role" "Account.role"\n');
+  });
+
+  test("falls back to text for an enum field without allowedValues", () => {
+    const statements = generateTableDDL(account({ role: { type: "enum" } }), withEnumTypes);
+    expect(createdTypeNames(statements)).toEqual([]);
+    expect(statements.at(-1)).toContain('"role" text');
+  });
+
+  test("gives tables whose names collide under naive joining distinct types", () => {
+    const status: DDLFieldConfig = { type: "enum", allowedValues: [{ value: "A" }] };
+    const first = generateTableDDL({ name: "Order_Item", fields: { status } }, withEnumTypes);
+    const second = generateTableDDL(
+      { name: "Order", fields: { Item_Status: status } },
+      withEnumTypes,
+    );
+    expect(createdTypeNames(first)).toEqual(['"Order_Item.status"']);
+    expect(createdTypeNames(second)).toEqual(['"Order.Item_Status"']);
+  });
+
+  test("derives a deterministic, unique name within 63 bytes when the readable name is too long", () => {
+    const longTable = "T".repeat(60);
+    const build = (field: string) =>
+      generateTableDDL(
+        { name: longTable, fields: { [field]: { type: "enum", allowedValues: [{ value: "A" }] } } },
+        withEnumTypes,
+      );
+    const [a] = createdTypeNames(build("alpha"));
+    const [b] = createdTypeNames(build("beta"));
+    expect(a).not.toBe(b);
+    expect(createdTypeNames(build("alpha"))).toEqual([a]);
+    expect(new TextEncoder().encode(a!.slice(1, -1)).length).toBeLessThanOrEqual(63);
+    expect(build("alpha").at(-1)).toContain(`"alpha" ${a}`);
+  });
+
+  test("generateSchemaDDL terminates the wrapped type statement with a semicolon", () => {
+    const script = generateSchemaDDL([account({ role: roleField })], withEnumTypes);
+    expect(script.startsWith("DO $$ BEGIN")).toBe(true);
+    expect(script).toContain("END $$;\nCREATE TABLE");
+  });
+
+  describe("on PGlite", () => {
+    test("applying the script twice succeeds, accepts a declared value and rejects another", async () => {
+      const db = new PGlite();
+      try {
+        const script = generateSchemaDDL(
+          [
+            account({
+              role: { ...roleField, default: "MEMBER" },
+              tags: { ...roleField, array: true, required: false },
+            }),
+          ],
+          withEnumTypes,
+        );
+        await db.exec(script);
+        await db.exec(script);
+        await db.query(
+          `INSERT INTO "Account" ("role", "tags") VALUES ('ADMIN', ARRAY['MEMBER']::"Account.tags"[])`,
+        );
+        const { rows } = await db.query<{ role: string }>(
+          `INSERT INTO "Account" DEFAULT VALUES RETURNING "role"`,
+        );
+        expect(rows[0]!.role).toBe("MEMBER");
+        await expect(db.query(`INSERT INTO "Account" ("role") VALUES ('OWNER')`)).rejects.toThrow(
+          /invalid input value for enum "Account.role"/,
+        );
+      } finally {
+        await db.close();
+      }
+    });
+
+    test("accepts array defaults and a hashed type name on a long table name", async () => {
+      const db = new PGlite();
+      try {
+        const longTable = "T".repeat(60);
+        await db.exec(
+          generateSchemaDDL(
+            [
+              {
+                name: longTable,
+                fields: {
+                  tags: { ...roleField, array: true, default: ["ADMIN", "MEMBER"] },
+                  none: { ...roleField, array: true, default: [] },
+                },
+              },
+            ],
+            withEnumTypes,
+          ),
+        );
+        const { rows } = await db.query<{ tags: string; none: string }>(
+          `INSERT INTO "${longTable}" DEFAULT VALUES RETURNING "tags", "none"`,
+        );
+        expect(rows[0]).toEqual({ tags: "{ADMIN,MEMBER}", none: "{}" });
+      } finally {
+        await db.close();
+      }
+    });
   });
 });

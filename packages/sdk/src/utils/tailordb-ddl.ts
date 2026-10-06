@@ -13,6 +13,7 @@ export interface DDLFieldConfig {
   serial?: { start: number; maxValue?: number; format?: string };
   scale?: number;
   default?: unknown;
+  allowedValues?: { value: string; description?: string }[];
   optionalOnCreate?: boolean;
   hooks?: { create?: unknown; update?: unknown };
   fields?: Record<string, DDLFieldConfig>;
@@ -23,6 +24,12 @@ export interface DDLTableConfig {
   name: string;
   fields: Record<string, DDLFieldConfig>;
   indexes?: Record<string, { fields: string[]; unique?: boolean }>;
+}
+
+/** Options for {@link generateTableDDL} and {@link generateSchemaDDL}. */
+export interface GenerateDDLOptions {
+  /** Emit `enum` fields that declare `allowedValues` as PostgreSQL enum types instead of `text`. */
+  enumTypes?: boolean;
 }
 
 const MAX_IDENTIFIER_BYTES = 63;
@@ -79,7 +86,11 @@ function fnv1aHex(value: string): string {
   return hash.toString(16).padStart(8, "0");
 }
 
-function derivedIdentifier(tableName: string, memberName: string, kind: "seq" | "idx"): string {
+function derivedIdentifier(
+  tableName: string,
+  memberName: string,
+  kind: "seq" | "idx" | "enum",
+): string {
   const suffix = `_${fnv1aHex(JSON.stringify([tableName, memberName, kind]))}_${kind}`;
   let head = `${tableName}_${memberName}`;
   while (utf8.encode(head + suffix).length > MAX_IDENTIFIER_BYTES) head = head.slice(0, -1);
@@ -90,11 +101,19 @@ function stringLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-function columnType(field: DDLFieldConfig): string {
+function enumTypeName(tableName: string, fieldName: string): string {
+  const readable = `${tableName}.${fieldName}`;
+  return utf8.encode(readable).length <= MAX_IDENTIFIER_BYTES
+    ? identifier(readable)
+    : derivedIdentifier(tableName, fieldName, "enum");
+}
+
+function columnType(field: DDLFieldConfig, enumType?: string): string {
   const base =
-    field.type === "decimal"
+    enumType ??
+    (field.type === "decimal"
       ? `numeric(${DECIMAL_PRECISION}, ${field.scale ?? DEFAULT_DECIMAL_SCALE})`
-      : mapFieldTypeToPostgresType(field.type);
+      : mapFieldTypeToPostgresType(field.type));
   return field.array && field.type !== "nested" ? `${base}[]` : base;
 }
 
@@ -127,7 +146,7 @@ const CURRENT_TIME_EXPRESSIONS = new Map([
   ["time", "LOCALTIME"],
 ]);
 
-function defaultExpression(field: DDLFieldConfig, label: string): string {
+function defaultExpression(field: DDLFieldConfig, label: string, enumType?: string): string {
   const value = field.default;
   const currentTime = CURRENT_TIME_EXPRESSIONS.get(field.type);
   if (value === "now" && currentTime !== undefined) {
@@ -137,7 +156,7 @@ function defaultExpression(field: DDLFieldConfig, label: string): string {
     if (!Array.isArray(value)) {
       throw new Error(`Default of array field ${label} must be an array.`);
     }
-    const pgType = columnType(field);
+    const pgType = columnType(field, enumType);
     if (value.length === 0) return `'{}'::${pgType}`;
     return `ARRAY[${value.map((v) => scalarLiteral(v, field, label)).join(", ")}]::${pgType}`;
   }
@@ -210,10 +229,15 @@ function serialStringDefault(sequence: string, format: string | undefined, label
   return `(${parts.join(" || ")})`;
 }
 
-function columnDefinition(tableName: string, fieldName: string, field: DDLFieldConfig): string {
+function columnDefinition(
+  tableName: string,
+  fieldName: string,
+  field: DDLFieldConfig,
+  enumType?: string,
+): string {
   const column = identifier(fieldName);
   const label = `${identifier(tableName)}.${column}`;
-  const parts = [column, columnType(field)];
+  const parts = [column, columnType(field, enumType)];
 
   if (field.serial) {
     if (field.type === "integer") {
@@ -233,7 +257,7 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
   const filledOnCreate = field.hooks?.create !== undefined || field.optionalOnCreate === true;
   if (field.required && (hasDefault || !filledOnCreate)) parts.push("NOT NULL");
   if (field.unique) parts.push("UNIQUE");
-  if (hasDefault) parts.push(`DEFAULT ${defaultExpression(field, label)}`);
+  if (hasDefault) parts.push(`DEFAULT ${defaultExpression(field, label, enumType)}`);
   return parts.join(" ");
 }
 
@@ -247,12 +271,22 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
  * names end in `_idx` so they cannot take the `<table>_<column>_key` name
  * Postgres gives a UNIQUE column, which `IF NOT EXISTS` would otherwise
  * silently skip.
+ *
+ * With `enumTypes`, each `enum` field that declares `allowedValues` gets a
+ * PostgreSQL enum type named `"<table>.<field>"` (a hashed name when that
+ * exceeds 63 bytes), created before the table. An already existing type is
+ * left as is: its values are not altered.
  * @param table - Table name, fields, and indexes
+ * @param options - Set `enumTypes` to emit enum fields as PostgreSQL enum types
  * @returns Statements in execution order, without trailing semicolons
  * @throws If a field type, default, or serial format cannot be expressed
  */
-export function generateTableDDL(table: DDLTableConfig): string[] {
+export function generateTableDDL(
+  table: DDLTableConfig,
+  options: GenerateDDLOptions = {},
+): string[] {
   const tableIdentifier = identifier(table.name);
+  const enumTypeStatements: string[] = [];
   const sequences: string[] = [];
   const ownerships: string[] = [];
   const columns = [`  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid()`];
@@ -266,7 +300,20 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
         `ALTER SEQUENCE ${sequence} OWNED BY ${tableIdentifier}.${identifier(fieldName)}`,
       );
     }
-    columns.push(`  ${columnDefinition(table.name, fieldName, field)}`);
+    let enumType: string | undefined;
+    if (options.enumTypes && field.type === "enum" && field.allowedValues?.length) {
+      enumType = enumTypeName(table.name, fieldName);
+      const values = field.allowedValues.map(({ value }) => stringLiteral(value)).join(", ");
+      enumTypeStatements.push(
+        [
+          "DO $$ BEGIN",
+          `  CREATE TYPE ${enumType} AS ENUM (${values});`,
+          "EXCEPTION WHEN duplicate_object THEN NULL;",
+          "END $$",
+        ].join("\n"),
+      );
+    }
+    columns.push(`  ${columnDefinition(table.name, fieldName, field, enumType)}`);
   }
 
   const indexes = Object.entries(table.indexes ?? {})
@@ -277,6 +324,7 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
     );
 
   return [
+    ...enumTypeStatements,
     ...sequences,
     `CREATE TABLE IF NOT EXISTS ${tableIdentifier} (\n${columns.join(",\n")}\n)`,
     ...ownerships,
@@ -287,12 +335,16 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
 /**
  * A single SQL script creating every given table, for `pglite.exec()`.
  * @param tables - Tables in the order to create them
+ * @param options - Forwarded to {@link generateTableDDL}
  * @returns The script, empty when there are no tables
  */
-export function generateSchemaDDL(tables: readonly DDLTableConfig[]): string {
+export function generateSchemaDDL(
+  tables: readonly DDLTableConfig[],
+  options: GenerateDDLOptions = {},
+): string {
   return tables
     .map((table) =>
-      generateTableDDL(table)
+      generateTableDDL(table, options)
         .map((statement) => `${statement};`)
         .join("\n"),
     )
