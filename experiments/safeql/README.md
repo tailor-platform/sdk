@@ -24,14 +24,14 @@ pnpm test
 SafeQLは「SQLをDBに問い合わせて型を得る」方式ですが、サーバーのインストールや接続先DBは不要です。SafeQL 5.4.1の`plugins`設定には`createConnection`フックがあり、接続を自前で差し替えられます。このPoCでは次のようにしています。
 
 1. `schema.mjs`がSDKの`db.table()`でAccountとProjectを定義し、SDKのパーサーに通します。`ddl.mjs`がそのパース結果から`CREATE TYPE`/`CREATE TABLE`を生成します。配列・nestedフィールドは、暗黙に型を落とさず拒否します。
-2. `pglite-plugin.mjs`が`createConnection`で、プロセス内の組み込みPostgreSQL（PGlite）にDDLを流し込み、`pglite-socket`経由のpostgres.js接続をSafeQLに返します。ポートは自動採番です。
+2. `pglite-plugin.mjs`が`createConnection`で、プロセス内の組み込みPostgreSQL（PGlite）にDDLを流し込み、`pglite-socket`経由のpostgres.js接続をSafeQLに返します。ポートは自動採番です。`cacheKey`は呼び出しのたびにDDLファイルの内容から計算します（SafeQLはプラグインのインスタンスを`package`と`config`でキャッシュするため、`setup()`内で計算すると、同じパスに上書きしたDDLが反映されません）。
 3. SDKはすでに`@electric-sql/pglite`をoptional peer依存にしており、`mockTailordbWithPGlite`でも使っています（`packages/sdk/package.json`、`docs/testing.md`）。
 
 SafeQL標準の`migrationsDir`設定（DDLファイルから検証用DBを作る）は、DBの作成と削除のために実PostgreSQLサーバーへの接続が必要なので、サーバーなしでは使えません。このPoCでは試していません。
 
 ## 確認結果
 
-18/18のチェックが期待どおりでした。SafeQLはソースを変換せず、`sql<{...}>`の型注釈をautofixで挿入する方式です。fixtureの`sql`は`./sql`のスタブ（`fixtures/_sql.ts.txt`）で、`RowOf<typeof query>`でautofix後の行型を取り出します。
+19/19のチェックが期待どおりでした。SafeQLはソースを変換せず、`sql<{...}>`の型注釈をautofixで挿入する方式です。fixtureの`sql`は`./sql`のスタブ（`fixtures/_sql.ts.txt`）で、`RowOf<typeof query>`でautofix後の行型を取り出します。
 
 型の対応は、bigint→number、numeric→string、date→Dateとしています。SafeQLの既定のままだとbigintが`string`になるため、`overrides.types: { int8: "number" }`を1行指定しています。numeric・dateは既定で一致しました。
 
@@ -53,6 +53,7 @@ SafeQL標準の`migrationsDir`設定（DDLファイルから検証用DBを作る
 | `"ADMIN" \| "MEMBER"`型・`number`型の変数  | なし（正常） | lintエラーなし                                                                                                                                                                   |
 | LEFT JOIN結果のnullチェック漏れ            | tsc          | autofix後に`TS18047: 'row.title' is possibly 'null'`                                                                                                                             |
 | SDK側からemail列を除いて再生成             | SQL解析      | `Invalid Query: column "email" does not exist`                                                                                                                                   |
+| 同じパスにDDLを上書きして再lint            | SQL解析      | 上書き前は`Invalid Query`なし、上書き後は`Invalid Query: column "email" does not exist`                                                                                          |
 | nestedフィールド                           | DDL生成      | `PoC does not support Account.profile: arrays/nested fields`                                                                                                                     |
 | enumの名前衝突                             | なし（正常） | `Order_Item.status`は`'A'`、`Order.Item_Status`は`'B'`を推論                                                                                                                     |
 | CTE                                        | なし（正常） | PostgreSQLでは成功。TailorDB互換性を保証できないことを示す対照例                                                                                                                 |
@@ -145,4 +146,5 @@ SQLの検証をDDLだけで静的に行う点ではsqlcが近い選択肢です�
 - DBへの接続は組み込みPGliteのみで、TailorDBには接続していません。
 - `schema.mjs`と`run.mjs`は、SDKパッケージが公開していない内部モジュール（`packages/sdk/src/configure`・`parser/service/tailordb`）を相対パスで直接importしています。このディレクトリはルートの`pnpm-workspace.yaml`に含まれず、リポジトリ標準のCIからは実行されないため、内部ファイルが移動・変更されても気づかれずに壊れる可能性があります。
 - 配列とnestedフィールドは、DDL生成時に拒否します。
+- DDLの内容が変わるたびに新しいPGliteを作り、古い接続は閉じません。ESLintを起動し続けるエディタでは、DDLを再生成するたびに接続が1つ残ります。
 - 上の判断は、このPoCの小さなスキーマ（Account・Project）で確認した範囲です。

@@ -256,6 +256,24 @@ try {
     );
   });
 
+  const overwrittenDdlPath = join(temporaryDirectory, "overwritten.sql");
+  await writeFile(overwrittenDdlPath, ddl);
+  const overwriteEslint = createEslint(overwrittenDdlPath, false);
+  const beforeOverwrite = await lint(overwriteEslint, scalarsFile, removedColumnSource);
+  await writeFile(overwrittenDdlPath, ddlFromTables(changedTables));
+  const afterOverwrite = await lint(overwriteEslint, scalarsFile, removedColumnSource);
+  record(
+    "schema-overwritten-at-same-path",
+    { before: beforeOverwrite.messages, after: afterOverwrite.messages },
+    () => {
+      assert.ok(!beforeOverwrite.messages.some((message) => invalidQuery.test(message)));
+      assert.ok(
+        afterOverwrite.messages.some((message) => /column "email" does not exist/.test(message)),
+        afterOverwrite.messages.join("\n"),
+      );
+    },
+  );
+
   record("unsupported-nested-field", {}, () => {
     const nestedTables = {
       Account: { name: "Account", fields: { profile: { config: { type: "nested", fields: {} } } } },

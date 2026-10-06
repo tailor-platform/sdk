@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { definePlugin } from "@ts-safeql/plugin-utils";
@@ -6,11 +8,14 @@ import postgres from "postgres";
 
 export default definePlugin({
   name: "pglite-ddl",
-  package: new URL(import.meta.url).pathname,
+  package: fileURLToPath(import.meta.url),
   setup(config) {
     return {
       createConnection: {
-        cacheKey: config.ddlPath,
+        get cacheKey() {
+          const ddl = readFileSync(config.ddlPath, "utf8");
+          return `${config.ddlPath}:${createHash("sha256").update(ddl).digest("hex")}`;
+        },
         async handler() {
           const pg = await PGlite.create();
           await pg.exec(readFileSync(config.ddlPath, "utf8"));
