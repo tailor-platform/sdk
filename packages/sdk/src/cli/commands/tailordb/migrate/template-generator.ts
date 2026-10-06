@@ -324,18 +324,14 @@ function renderScript(
   helpers: string,
 ): string {
   if (scriptKind === "steps") {
-    const indented = body
-      .split("\n")
-      .map((line) => (line === "" ? line : `    ${line}`))
-      .join("\n");
-    return `import type { MigrationSteps } from "./db";
+    return `import type { MigrationSteps, Transaction } from "./db";
 ${helpers}
+async function migrate(trx: Transaction): Promise<void> {
+${body}
+}
+
 export const steps = {
-  migrate: {
-    run: async (trx) => {
-${indented}
-    },
-  },
+  migrate: { run: migrate },
 } satisfies MigrationSteps;
 `;
   }

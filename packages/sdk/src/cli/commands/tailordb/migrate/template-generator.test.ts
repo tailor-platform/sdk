@@ -269,7 +269,7 @@ describe("template-generator", () => {
       expect(script).not.toContain("export async function main");
     });
 
-    test("keeps the statements the main script scaffolds inside the step", () => {
+    test("keeps the statements the main script scaffolds, indented as they are, in the step's function", () => {
       const mainScript = generateMigrationScript(breakingDiff);
       const body = mainScript.slice(
         mainScript.indexOf("{\n", mainScript.indexOf("export async function main")) + 2,
@@ -278,9 +278,8 @@ describe("template-generator", () => {
       const stepsScript = generateMigrationScript(breakingDiff, [], "steps");
 
       expect(body.trim()).not.toBe("");
-      for (const line of body.split("\n").filter((line) => line.trim() !== "")) {
-        expect(stepsScript).toContain(`    ${line}`);
-      }
+      expect(stepsScript).toContain(body);
+      expect(stepsScript).toContain("run: migrate");
     });
 
     test("scaffolds a data-only migration as a single step", async () => {
