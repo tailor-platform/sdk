@@ -7,7 +7,7 @@ import {
 
 function templatesSource(released: number, changed: boolean, fingerprint: string): string {
   return [
-    'import actionTemplate from "./action.yml";',
+    'import branchTemplate from "./branch.workflow.yml";',
     "",
     `// Released template fingerprint: ${fingerprint}`,
     `const RELEASED_TEMPLATE_VERSION = ${String(released)};`,

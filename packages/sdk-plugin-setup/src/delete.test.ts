@@ -3,7 +3,7 @@ import { prompt } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { setupDelete } from "./delete";
-import { type CoordinateSetupOptions, setupCoordinate, setupTarget } from "./generate";
+import { setupTarget } from "./generate";
 import { readLock } from "./lock";
 
 vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
@@ -30,40 +30,6 @@ describe("setupDelete", () => {
     gitRunner: () => "origin/main",
     loadConfigName: async () => name,
     loadConfigId: async () => undefined,
-  });
-
-  const actionOpts = (name: string, dir = "."): Parameters<typeof setupTarget>[0] => ({
-    kind: "action",
-    workspaceName: name,
-    dir,
-    force: false,
-    outputDir: testDir,
-    gitRunner: () => "origin/main",
-    loadConfigName: async () => name,
-    loadConfigId: async () => undefined,
-    loadHasStaticWebsites: async () => false,
-  });
-
-  const writeAppConfig = (name: string, dir: string) => {
-    const absDir = path.join(testDir, dir);
-    fs.mkdirSync(absDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(absDir, "tailor.config.ts"),
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "${name}" });\n`,
-    );
-  };
-
-  const coordinateOpts = (
-    overrides: Partial<CoordinateSetupOptions> = {},
-  ): CoordinateSetupOptions => ({
-    coordinatorName: "main",
-    coordinateKind: "branch",
-    actions: ["api"],
-    branch: "main",
-    force: false,
-    outputDir: testDir,
-    gitRunner: () => "origin/main",
-    ...overrides,
   });
 
   aroundEach(async (runTest) => {
@@ -106,16 +72,6 @@ describe("setupDelete", () => {
     });
 
     expect(readLock(testDir)).toMatchObject({ targets: [], appIds });
-  });
-
-  test("keeps the appIds section when a coordinator is generated", async () => {
-    writeAppConfig("api", "apps/api");
-    await setupTarget(actionOpts("api", "apps/api"));
-    const appIds = readLock(testDir)?.appIds;
-    expect(appIds).toEqual({ "apps/api/tailor.config.ts": expect.any(String) });
-
-    await setupCoordinate(coordinateOpts());
-    expect(readLock(testDir)?.appIds).toEqual(appIds);
   });
 
   test("prompts for confirmation and fails without deleting when declined", async () => {
@@ -165,20 +121,6 @@ describe("setupDelete", () => {
     expect(readLock(testDir)?.targets).toHaveLength(0);
   });
 
-  test("removes the composite action's now-empty directory", async () => {
-    await setupTarget(actionOpts("api"));
-    const actionDir = path.join(testDir, ".github/actions/tailor-api");
-    expect(fs.existsSync(actionDir)).toBe(true);
-
-    await setupDelete({
-      files: [".github/actions/tailor-api/action.yml"],
-      yes: true,
-      outputDir: testDir,
-    });
-
-    expect(fs.existsSync(actionDir)).toBe(false);
-  });
-
   test("errors when the lock is missing", async () => {
     await expect(
       setupDelete({
@@ -204,91 +146,10 @@ describe("setupDelete", () => {
     expect(fs.existsSync(strayFile)).toBe(true);
   });
 
-  test("never deletes the user-owned tailor-setup action, even if named explicitly", async () => {
-    await setupTarget(actionOpts("api"));
-    await setupCoordinate(coordinateOpts());
-    const setupAction = path.join(testDir, ".github/actions/tailor-setup/action.yml");
-    expect(fs.existsSync(setupAction)).toBe(true);
-
-    await expect(
-      setupDelete({
-        files: [".github/actions/tailor-setup/action.yml"],
-        yes: true,
-        outputDir: testDir,
-      }),
-    ).rejects.toThrow(/not recorded in .github\/tailor\.lock/);
-    expect(fs.existsSync(setupAction)).toBe(true);
-  });
-
   test("rejects a path that escapes the repository root", async () => {
     await setupTarget(branchOpts("my-app"));
     await expect(
       setupDelete({ files: ["../outside.yml"], yes: true, outputDir: testDir }),
     ).rejects.toThrow(/inside the repository/);
   });
-
-  test("warns when deleting an action still referenced by a coordinator, but still deletes it", async () => {
-    await setupTarget(actionOpts("api"));
-    await setupCoordinate(coordinateOpts());
-    const warnSpy = vi.spyOn((await import("@tailor-platform/sdk/cli")).logger, "warn");
-
-    await setupDelete({
-      files: [".github/actions/tailor-api/action.yml"],
-      yes: true,
-      outputDir: testDir,
-    });
-
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Coordinator "main"'));
-    expect(fs.existsSync(path.join(testDir, ".github/actions/tailor-api/action.yml"))).toBe(false);
-    const lock = readLock(testDir);
-    expect(lock?.targets.some((t) => t.kind === "action")).toBe(false);
-    expect(lock?.targets.some((t) => t.kind === "coordinate")).toBe(true);
-    warnSpy.mockRestore();
-  });
-
-  test("warns with grouped action guidance when deleting one action from a coordinator group", async () => {
-    writeAppConfig("api", "apps/api");
-    writeAppConfig("worker", "apps/worker");
-    await setupTarget(actionOpts("api", "apps/api"));
-    await setupTarget(actionOpts("worker", "apps/worker"));
-    await setupCoordinate(coordinateOpts({ actions: ["api,worker"] }));
-    const warnSpy = vi.spyOn((await import("@tailor-platform/sdk/cli")).logger, "warn");
-
-    await setupDelete({
-      files: [".github/actions/tailor-api/action.yml"],
-      yes: true,
-      outputDir: testDir,
-    });
-
-    const warning = warnSpy.mock.calls.find(([message]) =>
-      message.includes('Coordinator "main"'),
-    )?.[0];
-    expect(warning).toContain("Remove `api` from the relevant `--action` value");
-    expect(warning).not.toContain("without --action api");
-    warnSpy.mockRestore();
-  });
-
-  test.each([
-    [
-      "action then coordinator",
-      [".github/actions/tailor-api/action.yml", ".github/workflows/tailor-coordinate-main.yml"],
-    ],
-    [
-      "coordinator then action",
-      [".github/workflows/tailor-coordinate-main.yml", ".github/actions/tailor-api/action.yml"],
-    ],
-  ])(
-    "does not warn when the coordinator is deleted together with the action (%s)",
-    async (_label, files) => {
-      await setupTarget(actionOpts("api"));
-      await setupCoordinate(coordinateOpts());
-      const warnSpy = vi.spyOn((await import("@tailor-platform/sdk/cli")).logger, "warn");
-
-      await setupDelete({ files, yes: true, outputDir: testDir });
-
-      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("Coordinator"));
-      expect(readLock(testDir)?.targets).toHaveLength(0);
-      warnSpy.mockRestore();
-    },
-  );
 });
