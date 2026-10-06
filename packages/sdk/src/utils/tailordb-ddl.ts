@@ -13,6 +13,7 @@ export interface DDLFieldConfig {
   serial?: { start: number; maxValue?: number; format?: string };
   scale?: number;
   default?: unknown;
+  allowedValues?: { value: string; description?: string }[];
   optionalOnCreate?: boolean;
   hooks?: { create?: unknown; update?: unknown };
   fields?: Record<string, DDLFieldConfig>;

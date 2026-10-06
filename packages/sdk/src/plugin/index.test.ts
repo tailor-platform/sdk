@@ -1,8 +1,16 @@
 import { describe, expect, test } from "vitest";
-import { generateSchemaDDL, toDDLTables, type DDLTableConfig } from "./index";
+import { generateSchemaDDL, toDDLTables, type DDLFieldConfig, type DDLTableConfig } from "./index";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 
 describe("plugin entry DDL helpers", () => {
+  test("DDLFieldConfig carries the allowed values of an enum field", () => {
+    const field: DDLFieldConfig = {
+      type: "enum",
+      allowedValues: [{ value: "ADMIN", description: "full access" }],
+    };
+    expect(field.allowedValues).toEqual([{ value: "ADMIN", description: "full access" }]);
+  });
+
   test("generateSchemaDDL renders a CREATE TABLE script for the given tables", () => {
     const tables: DDLTableConfig[] = [
       { name: "Account", fields: { email: { type: "string", required: true } } },
