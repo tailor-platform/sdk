@@ -219,7 +219,9 @@ export async function validateSeedData(
  *
  * The values are read from the schema files generated next to the data, and all
  * of them are read before anything is written: a file that predates the current
- * generator stops the run with nothing filled in anywhere.
+ * generator stops the run with nothing filled in anywhere. Likewise, a file that
+ * another tool changed after the fill read it is not overwritten: the call
+ * rejects with an error naming that file, and no file is written.
  * @param options - Fill options including path and fields
  * @returns Which files received which fields
  */
