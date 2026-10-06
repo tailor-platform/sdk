@@ -314,7 +314,7 @@ export const hook = (row) => {
     await expect(readFile(widgetPath, "utf-8")).resolves.toBe('{"name":"edited"}\n');
   });
 
-  test("keeps the permissions of a filled file", async () => {
+  test.skipIf(process.platform === "win32")("keeps the permissions of a filled file", async () => {
     const jsonlPath = await writeTable("Widget", ['{"name":"a"}']);
     await chmod(jsonlPath, 0o640);
 

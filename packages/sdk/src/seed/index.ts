@@ -10,7 +10,7 @@ import { readdir, stat } from "node:fs/promises";
 import { LinesDB, ErrorFormatter, fillFields, unwrap } from "@toiroakr/lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
-import { basename, dirname } from "pathe";
+import { basename, dirname, normalize } from "pathe";
 import { firstErrorLocation } from "./record-lines";
 import type { JsonlParseError, RowFiller, ValidationErrorDetail } from "@toiroakr/lines-db";
 
@@ -233,7 +233,7 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
   const { dataDir, tableName } = await resolveSeedDataTarget(resolvedPath);
   const tables = tableName ? [tableName] : await listSeedTables(dataDir);
 
-  const { filled, tablesWithoutSchema, unreadableLines, unproducedFields } = unwrap(
+  const result = unwrap(
     await fillFields({
       path: resolvedPath,
       fields,
@@ -248,6 +248,12 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
       },
     }),
   );
+  const { tablesWithoutSchema, unproducedFields } = result;
+  const filled = result.filled.map((entry) => ({ ...entry, file: normalize(entry.file) }));
+  const unreadableLines = result.unreadableLines.map((entry) => ({
+    ...entry,
+    file: normalize(entry.file),
+  }));
 
   const warnings = [
     ...tablesWithoutSchema.map(
