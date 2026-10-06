@@ -111,11 +111,13 @@ describe("how to get each value", () => {
     },
   );
 
-  test("asks the user to contact Tailor support for the machine user credentials", () => {
+  test("points to the Console for the machine user credentials, not to Tailor support", () => {
     const [clientId, clientSecret] = targetRequirements("branch");
 
-    expect(clientId?.howTo).toContain("https://docs.tailor.tech/administration/support");
-    expect(clientSecret?.howTo).toContain("https://docs.tailor.tech/administration/support");
+    for (const requirement of [clientId, clientSecret]) {
+      expect(requirement?.howTo).toContain("Tailor Console");
+      expect(requirement?.howTo).not.toContain("support");
+    }
   });
 });
 
