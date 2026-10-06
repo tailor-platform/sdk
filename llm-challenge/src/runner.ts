@@ -88,8 +88,8 @@ export async function runCodexInPodman(options: {
     model: options.model,
     effort: options.effort,
   });
-  return await runSolverContainer({
-    podmanArgs: buildSolverPodmanArgs({
+  return await runAgentContainer({
+    podmanArgs: buildAgentContainerArgs({
       containerName: options.containerName,
       image: runtime.image,
       worktreePath: options.worktreePath,
@@ -107,10 +107,11 @@ export async function runCodexInPodman(options: {
   });
 }
 
-export function buildSolverPodmanArgs(options: {
+export function buildAgentContainerArgs(options: {
   containerName: string;
   image: string;
   worktreePath: string;
+  worktreeAccess?: "rw" | "ro";
   sharedPnpmStorePath?: string;
   mounts: string[];
   envNames: string[];
@@ -126,7 +127,7 @@ export function buildSolverPodmanArgs(options: {
     "--entrypoint",
     "/bin/bash",
     "-v",
-    `${options.worktreePath}:/workspace:rw,Z`,
+    `${options.worktreePath}:/workspace:${options.worktreeAccess ?? "rw"},Z`,
     ...(options.sharedPnpmStorePath === undefined
       ? []
       : [
@@ -145,7 +146,7 @@ export function buildSolverPodmanArgs(options: {
   ];
 }
 
-export async function runSolverContainer(options: {
+export async function runAgentContainer(options: {
   podmanArgs: string[];
   containerName: string;
   prompt: string;

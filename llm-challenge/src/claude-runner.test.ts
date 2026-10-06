@@ -14,7 +14,7 @@ import {
   redactSecretInWorkspace,
   resolveClaudeOAuthToken,
 } from "./claude-runner";
-import { buildSolverPodmanArgs, runSolverContainer } from "./runner";
+import { buildAgentContainerArgs, runAgentContainer } from "./runner";
 
 const tempDirs: string[] = [];
 
@@ -157,7 +157,7 @@ describe("workspace redaction", () => {
 
 describe("solver container", () => {
   test("names the container and passes secrets by environment variable name only", () => {
-    const args = buildSolverPodmanArgs({
+    const args = buildAgentContainerArgs({
       containerName: "llm-challenge-run-1",
       image: "example.invalid/image:test",
       worktreePath: "/host/work",
@@ -176,6 +176,21 @@ describe("solver container", () => {
     expect(args.slice(-3)).toEqual(["example.invalid/image:test", "-lc", "exec true"]);
   });
 
+  test("mounts the workspace read-only when requested", () => {
+    const args = buildAgentContainerArgs({
+      containerName: "llm-challenge-grade-1",
+      image: "example.invalid/image:test",
+      worktreePath: "/host/judge-workspace",
+      worktreeAccess: "ro",
+      mounts: [],
+      envNames: [],
+      script: "exec true",
+    });
+
+    expect(args).toContain("/host/judge-workspace:/workspace:ro,Z");
+    expect(args).not.toContain("/host/judge-workspace:/workspace:rw,Z");
+  });
+
   test("removes the container when the solver times out", async () => {
     const dir = await makeTempDir();
     const fakeBinPath = path.join(dir, "bin");
@@ -189,7 +204,7 @@ describe("solver container", () => {
     await fs.chmod(fakePodmanPath, 0o755);
     vi.stubEnv("PATH", `${fakeBinPath}${path.delimiter}${process.env.PATH ?? ""}`);
 
-    const result = await runSolverContainer({
+    const result = await runAgentContainer({
       podmanArgs: ["run", "--name", "llm-challenge-timeout"],
       containerName: "llm-challenge-timeout",
       prompt: "task",

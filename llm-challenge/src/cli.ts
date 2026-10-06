@@ -8,7 +8,8 @@ import { discoverProblems, selectProblems } from "./problems";
 import { createRunReport, reportPath, resolveExistingReportPath, writeReport } from "./report";
 import { packSdk } from "./sdk-pack";
 import { createSolverRuntime } from "./solver";
-import { createRunId, runWithConcurrency, tailText } from "./utils";
+import { INFRASTRUCTURE_FAILURE_KINDS } from "./types";
+import { createRunId, runWithConcurrency, tailText, toContainerName } from "./utils";
 import { writeVerificationSummary } from "./verification";
 import { prepareWorkspace, profileForProblem, pruneWorkspaceDeps } from "./workspace";
 import type {
@@ -160,7 +161,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       });
       try {
         const result = await runtime.run({
-          containerName: containerName(runId, task),
+          containerName: toContainerName(runId, task.problem.group, task.problem.id, task.runIndex),
           worktreePath: paths.worktreePath,
           promptPath: paths.promptPath,
           solverStdoutPath: paths.solverStdoutPath,
@@ -247,14 +248,6 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 }
 
 const STOP_RUN_FAILURE_KINDS = new Set<SolverFailureKind>(["usage-limit", "auth"]);
-const RERUN_FAILURE_KINDS = new Set<SolverFailureKind>([
-  "timeout",
-  "usage-limit",
-  "auth",
-  "model-mismatch",
-  "runner-startup",
-  "unknown",
-]);
 
 function inheritSolverSettings(
   options: RunOptions,
@@ -282,12 +275,6 @@ function inheritSolverSettings(
     );
   }
   return source;
-}
-
-function containerName(runId: string, task: RunTask): string {
-  return `llm-challenge-${runId}-${task.problem.group}-${task.problem.id}-${task.runIndex}`
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9_.-]+/g, "-");
 }
 
 async function createRerunPlan(options: {
@@ -319,7 +306,7 @@ async function createRerunPlan(options: {
       (run) =>
         run.timedOut ||
         run.solverExitCode !== 0 ||
-        (run.failureKind !== undefined && RERUN_FAILURE_KINDS.has(run.failureKind)),
+        (run.failureKind !== undefined && INFRASTRUCTURE_FAILURE_KINDS.has(run.failureKind)),
     )
     .filter((run) => selectedKeys.has(`${run.group}/${run.problemId}`));
 

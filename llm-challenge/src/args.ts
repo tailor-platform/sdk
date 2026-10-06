@@ -184,7 +184,7 @@ function parseGroup(value: string): RequestedGroup {
   throw new Error(`Unknown group: ${value}`);
 }
 
-function parsePositiveInteger(name: string, value: string): number {
+export function parsePositiveInteger(name: string, value: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new Error(`${name} must be a positive integer`);

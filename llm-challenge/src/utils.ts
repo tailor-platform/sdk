@@ -54,3 +54,31 @@ export async function runWithConcurrency<T>(
     throw firstError instanceof Error ? firstError : new Error(String(firstError));
   }
 }
+
+export function parseJsonLines(text: string): unknown[] {
+  return text
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as unknown];
+      } catch {
+        return [];
+      }
+    });
+}
+
+export async function readJsonLines(filePath: string): Promise<unknown[]> {
+  try {
+    return parseJsonLines(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+export function toContainerName(...parts: Array<string | number>): string {
+  return ["llm-challenge", ...parts]
+    .join("-")
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9_.-]+/g, "-");
+}

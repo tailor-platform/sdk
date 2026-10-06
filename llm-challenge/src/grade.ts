@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { parsePositiveInteger } from "./args";
 import {
   getClaudeRuntimeConfig,
   preflightClaudeRunner,
@@ -19,7 +20,15 @@ import {
 import { discoverProblems } from "./problems";
 import { reportPath, resolveExistingReportPath } from "./report";
 import { loadRubric, type Rubric } from "./rubric";
-import { createRunId, isObject, runWithConcurrency, tailText } from "./utils";
+import { INFRASTRUCTURE_FAILURE_KINDS } from "./types";
+import {
+  createRunId,
+  isObject,
+  readJsonLines,
+  runWithConcurrency,
+  tailText,
+  toContainerName,
+} from "./utils";
 import type {
   ChallengeRunReport,
   Problem,
@@ -95,14 +104,6 @@ const COMMAND_OUTPUT_TAIL = 2_000;
 
 const DEFAULT_JUDGE_MODEL = "claude-opus-5-5";
 const DEFAULT_JUDGE_EFFORT = "high";
-const EXCLUDED_FAILURE_KINDS = new Set<SolverFailureKind>([
-  "timeout",
-  "usage-limit",
-  "auth",
-  "model-mismatch",
-  "runner-startup",
-  "unknown",
-]);
 const BOOTSTRAP_ITERATIONS = 5_000;
 const BOOTSTRAP_SEED = 20_260_930;
 
@@ -176,7 +177,7 @@ export function decideRunGrade(options: {
     | { status: "error"; error: string };
 }): Pick<RunGrade, "status" | "reason" | "metrics"> {
   const failureKind = options.failureKind ?? "unknown";
-  if (EXCLUDED_FAILURE_KINDS.has(failureKind)) {
+  if (INFRASTRUCTURE_FAILURE_KINDS.has(failureKind)) {
     return { status: "excluded", reason: `solver ${failureKind}` };
   }
   if (options.checks.some((check) => check.outcome === "error")) {
@@ -580,23 +581,6 @@ export async function buildCommandEvidence(options: {
   }
 }
 
-async function readJsonLines(filePath: string): Promise<unknown[]> {
-  try {
-    return (await fs.readFile(filePath, "utf8"))
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .flatMap((line) => {
-        try {
-          return [JSON.parse(line) as unknown];
-        } catch {
-          return [];
-        }
-      });
-  } catch {
-    return [];
-  }
-}
-
 function clusterBootstrapInterval(
   clusters: number[][],
   seed: number,
@@ -640,12 +624,4 @@ function mulberry32(seed: number): () => number {
 
 function mean(values: number[]): number {
   return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function parsePositiveInteger(name: string, value: string): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new Error(`${name} must be a positive integer`);
-  }
-  return parsed;
 }

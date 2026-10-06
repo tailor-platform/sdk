@@ -127,6 +127,15 @@ export type SolverFailureKind =
   | "solver-nonzero"
   | "unknown";
 
+export const INFRASTRUCTURE_FAILURE_KINDS: ReadonlySet<SolverFailureKind> = new Set([
+  "timeout",
+  "usage-limit",
+  "auth",
+  "model-mismatch",
+  "runner-startup",
+  "unknown",
+]);
+
 export type AgentResultSummary = {
   toolCalls: number;
   servedModels: string[];

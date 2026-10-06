@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace";
 import { runCommand } from "./process";
-import { isObject, tailText } from "./utils";
+import { isObject, readJsonLines, tailText } from "./utils";
 import { listWorkspaceFiles } from "./workspace-files";
 import type { AgentResultSummary, Problem, SolverAgent, SolverFailureKind } from "./types";
 
@@ -44,7 +44,7 @@ export async function writeArtifactSummary(options: {
   timedOut?: boolean;
   failureKind: SolverFailureKind;
 }): Promise<ArtifactSummary> {
-  const traceEvents = await readTraceEvents(options.tracePath);
+  const traceEvents = await readJsonLines(options.tracePath);
   const claudeTrace = options.agent === "claude" ? summarizeClaudeTrace(traceEvents) : undefined;
   const terminalCommands: CommandEvent[] =
     claudeTrace === undefined
@@ -116,7 +116,7 @@ export async function classifySolverFailure(options: {
   }
   if (options.agent === "claude") {
     return classifyClaudeRun(
-      summarizeClaudeTrace(await readTraceEvents(options.tracePath)),
+      summarizeClaudeTrace(await readJsonLines(options.tracePath)),
       options.requestedModel,
       options.solverExitCode,
     );
@@ -176,24 +176,6 @@ async function readGitStatus(worktreePath: string): Promise<string[]> {
       cwd: worktreePath,
     });
     return result.stdout.split(/\r?\n/).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-async function readTraceEvents(tracePath: string): Promise<unknown[]> {
-  try {
-    const text = await fs.readFile(tracePath, "utf8");
-    return text
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .flatMap((line) => {
-        try {
-          return [JSON.parse(line) as unknown];
-        } catch {
-          return [];
-        }
-      });
   } catch {
     return [];
   }

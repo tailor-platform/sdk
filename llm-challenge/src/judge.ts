@@ -8,7 +8,7 @@ import {
   type ClaudeRuntimeConfig,
 } from "./claude-runner";
 import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace";
-import { runSolverContainer, type SolverResult } from "./runner";
+import { buildAgentContainerArgs, runAgentContainer, type SolverResult } from "./runner";
 import { isObject, toPosix } from "./utils";
 import { isExcludedWorkspacePath } from "./workspace-files";
 import type { RubricClaim } from "./rubric";
@@ -223,30 +223,19 @@ export async function runJudgeInPodman(options: {
     buildClaudeJudgeArgs({ model: options.model, effort: options.effort, schema: options.schema }),
     options.runtime.claudePackage,
   );
-  const result = await runSolverContainer({
-    podmanArgs: [
-      "run",
-      "--rm",
-      "-i",
-      "--init",
-      "--name",
-      options.containerName,
-      "--entrypoint",
-      "/bin/bash",
-      "-v",
-      `${options.workspaceDir}:/workspace:ro,Z`,
-      "-v",
-      `${options.evidenceDir}:${CONTAINER_EVIDENCE_DIR}:ro,Z`,
-      "-v",
-      `${options.runtime.installCacheDir}:${CONTAINER_CLAUDE_PREFIX}:rw,z`,
-      "--env",
-      CLAUDE_OAUTH_TOKEN_ENV,
-      "-w",
-      "/workspace",
-      options.runtime.image,
-      "-lc",
+  const result = await runAgentContainer({
+    podmanArgs: buildAgentContainerArgs({
+      containerName: options.containerName,
+      image: options.runtime.image,
+      worktreePath: options.workspaceDir,
+      worktreeAccess: "ro",
+      mounts: [
+        `${options.evidenceDir}:${CONTAINER_EVIDENCE_DIR}:ro,Z`,
+        `${options.runtime.installCacheDir}:${CONTAINER_CLAUDE_PREFIX}:rw,z`,
+      ],
+      envNames: [CLAUDE_OAUTH_TOKEN_ENV],
       script,
-    ],
+    }),
     containerName: options.containerName,
     prompt: options.prompt,
     solverStdoutPath: options.stdoutPath,

@@ -5,12 +5,12 @@ import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace"
 import { runCommand } from "./process";
 import {
   DEFAULT_CODEX_IMAGE,
-  buildSolverPodmanArgs,
-  runSolverContainer,
+  buildAgentContainerArgs,
+  runAgentContainer,
   shellQuote,
   type SolverResult,
 } from "./runner";
-import { toPosix } from "./utils";
+import { parseJsonLines, toPosix } from "./utils";
 import { listWorkspaceFiles } from "./workspace-files";
 
 export const DEFAULT_CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code@2.1.285";
@@ -221,8 +221,8 @@ export async function runClaudeInPodman(options: {
   token: string;
 }): Promise<SolverResult> {
   await fs.mkdir(options.runtime.installCacheDir, { recursive: true });
-  const result = await runSolverContainer({
-    podmanArgs: buildSolverPodmanArgs({
+  const result = await runAgentContainer({
+    podmanArgs: buildAgentContainerArgs({
       containerName: options.containerName,
       image: options.runtime.image,
       worktreePath: options.worktreePath,
@@ -291,17 +291,4 @@ export async function redactSecretInFiles(filePaths: string[], secret: string): 
 
 function redactSecret(value: string, secret: string): string {
   return secret.length === 0 ? value : value.replaceAll(secret, REDACTED);
-}
-
-function parseJsonLines(text: string): unknown[] {
-  return text
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .flatMap((line) => {
-      try {
-        return [JSON.parse(line) as unknown];
-      } catch {
-        return [];
-      }
-    });
 }
