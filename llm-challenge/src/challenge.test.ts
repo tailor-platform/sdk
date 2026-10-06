@@ -585,6 +585,22 @@ describe("artifact summary", () => {
       }),
     ).resolves.toBe("usage-limit");
 
+    await fs.writeFile(
+      solverStderrPath,
+      "warning: processed 401 files\nerror: unauthorized edit\n",
+    );
+    await expect(
+      classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.5",
+        timedOut: false,
+        solverExitCode: 1,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      }),
+    ).resolves.toBe("solver-nonzero");
+
     await fs.writeFile(solverStderrPath, "Error: unexpected status 401 Unauthorized\n");
     await expect(
       classifySolverFailure({

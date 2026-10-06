@@ -107,6 +107,14 @@ describe("claude trace summary", () => {
     expect(summary.servedModels).toEqual(["claude-opus-5-5"]);
   });
 
+  test("records the served model of assistant events that omit parent_tool_use_id", () => {
+    const summary = summarizeClaudeTrace([
+      { type: "assistant", message: { model: "claude-sonnet-5-5", content: [] } },
+    ]);
+
+    expect(summary.servedModels).toEqual(["claude-sonnet-5-5"]);
+  });
+
   test("ignores malformed events", () => {
     const summary = summarizeClaudeTrace([null, "text", { type: "assistant" }, { type: "user" }]);
 

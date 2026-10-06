@@ -21,6 +21,7 @@ const AGENT_CONFIG_DIRS = new Set([".claude"]);
 const AGENT_CONFIG_FILES = new Set(["CLAUDE.md", "CLAUDE.local.md", ".mcp.json"]);
 const JUDGE_FILE_BYTES_LIMIT = 1024 * 1024;
 const JUDGE_TOTAL_BYTES_LIMIT = 20 * 1024 * 1024;
+const MIN_EVIDENCE_QUOTE_LENGTH = 12;
 
 export type JudgeVerdict = (typeof JUDGE_VERDICTS)[number];
 
@@ -346,14 +347,14 @@ async function quoteFound(
   workspaceDir: string,
   evidenceDir: string,
 ): Promise<boolean> {
-  const normalizedQuote = normalizeWhitespace(quote);
-  if (normalizedQuote.length === 0) {
+  const quotes = [...new Set([quote, unescapeJsonText(quote)].map(normalizeWhitespace))];
+  if (quotes.every((candidate) => candidate.length < MIN_EVIDENCE_QUOTE_LENGTH)) {
     return false;
   }
   const evidencePrefix = `${CONTAINER_EVIDENCE_DIR}/`;
   const [baseDir, relativePath] = evidencePath.startsWith(evidencePrefix)
     ? [evidenceDir, evidencePath.slice(evidencePrefix.length)]
-    : [workspaceDir, evidencePath.replace(/^\/workspace\//, "")];
+    : [workspaceDir, evidencePath.replace(/^\/?workspace\//, "")];
   const absolutePath = path.resolve(baseDir, relativePath);
   const relativeToBase = path.relative(baseDir, absolutePath);
   if (
@@ -370,7 +371,13 @@ async function quoteFound(
     }
     const contents = await fs.readFile(absolutePath, "utf8");
     const candidates = baseDir === evidenceDir ? [contents, ...jsonStrings(contents)] : [contents];
-    return candidates.some((text) => normalizeWhitespace(text).includes(normalizedQuote));
+    return candidates.some((text) => {
+      const normalizedText = normalizeWhitespace(text);
+      return quotes.some(
+        (candidate) =>
+          candidate.length >= MIN_EVIDENCE_QUOTE_LENGTH && normalizedText.includes(candidate),
+      );
+    });
   } catch {
     return false;
   }
@@ -395,6 +402,12 @@ function jsonStrings(contents: string): string[] {
   };
   visit(value);
   return strings;
+}
+
+function unescapeJsonText(value: string): string {
+  return value.replaceAll(/\\([nt"\\])/g, (_, escaped: string) =>
+    escaped === "n" ? "\n" : escaped === "t" ? "\t" : escaped,
+  );
 }
 
 function normalizeWhitespace(value: string): string {

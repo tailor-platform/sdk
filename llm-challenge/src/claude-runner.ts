@@ -49,6 +49,11 @@ export type ClaudePreflightResult = {
 
 export function getClaudeRuntimeConfig(packageRoot: string): ClaudeRuntimeConfig {
   const claudePackage = process.env.LLM_CHALLENGE_CLAUDE_NPM_PACKAGE ?? DEFAULT_CLAUDE_CODE_PACKAGE;
+  if (!/^\d+\.\d+\.\d+$/.test(parsePinnedVersion(claudePackage) ?? "")) {
+    throw new Error(
+      `LLM_CHALLENGE_CLAUDE_NPM_PACKAGE must pin an exact version such as ${DEFAULT_CLAUDE_CODE_PACKAGE}, got ${claudePackage}`,
+    );
+  }
   return {
     image: process.env.LLM_CHALLENGE_CLAUDE_IMAGE ?? DEFAULT_CODEX_IMAGE,
     claudePackage,
@@ -235,32 +240,34 @@ export async function runClaudeInPodman(options: {
   token: string;
 }): Promise<SolverResult> {
   await assertClaudeInstalled(options.runtime);
-  const result = await runAgentContainer({
-    podmanArgs: buildAgentContainerArgs({
+  try {
+    return await runAgentContainer({
+      podmanArgs: buildAgentContainerArgs({
+        containerName: options.containerName,
+        image: options.runtime.image,
+        worktreePath: options.worktreePath,
+        sharedPnpmStorePath: options.sharedPnpmStorePath,
+        mounts: [claudeRuntimeMount(options.runtime)],
+        envNames: [CLAUDE_OAUTH_TOKEN_ENV],
+        script: buildClaudeBootstrapScript(
+          buildClaudeSolverArgs({ model: options.model, effort: options.effort }),
+        ),
+      }),
       containerName: options.containerName,
-      image: options.runtime.image,
-      worktreePath: options.worktreePath,
-      sharedPnpmStorePath: options.sharedPnpmStorePath,
-      mounts: [claudeRuntimeMount(options.runtime)],
-      envNames: [CLAUDE_OAUTH_TOKEN_ENV],
-      script: buildClaudeBootstrapScript(
-        buildClaudeSolverArgs({ model: options.model, effort: options.effort }),
-      ),
-    }),
-    containerName: options.containerName,
-    prompt: await fs.readFile(options.promptPath, "utf8"),
-    solverStdoutPath: options.solverStdoutPath,
-    solverStderrPath: options.solverStderrPath,
-    tracePath: options.tracePath,
-    maxSeconds: options.maxSeconds,
-    env: { [CLAUDE_OAUTH_TOKEN_ENV]: options.token },
-  });
-  await redactSecretInFiles(
-    [options.solverStdoutPath, options.solverStderrPath, options.tracePath],
-    options.token,
-  );
-  await redactSecretInWorkspace(options.worktreePath, options.token);
-  return result;
+      prompt: await fs.readFile(options.promptPath, "utf8"),
+      solverStdoutPath: options.solverStdoutPath,
+      solverStderrPath: options.solverStderrPath,
+      tracePath: options.tracePath,
+      maxSeconds: options.maxSeconds,
+      env: { [CLAUDE_OAUTH_TOKEN_ENV]: options.token },
+    });
+  } finally {
+    await redactSecretInFiles(
+      [options.solverStdoutPath, options.solverStderrPath, options.tracePath],
+      options.token,
+    );
+    await redactSecretInWorkspace(options.worktreePath, options.token);
+  }
 }
 
 export async function redactSecretInWorkspace(

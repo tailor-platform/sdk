@@ -134,7 +134,7 @@ export async function classifySolverFailure(options: {
     return "usage-limit";
   }
   if (
-    /\b401\b|unauthorized|not logged in|please (?:re-?)?log ?in/i.test(
+    /\b401 unauthorized\b|not logged in|codex login/i.test(
       await readAvailableText([options.solverStderrPath]),
     )
   ) {

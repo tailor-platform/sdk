@@ -74,7 +74,7 @@ export function summarizeClaudeTrace(events: unknown[]): ClaudeTraceSummary {
     const content = Array.isArray(message?.content) ? message.content : [];
     if (event.type === "assistant") {
       if (
-        event.parent_tool_use_id === null &&
+        (event.parent_tool_use_id ?? null) === null &&
         typeof message?.model === "string" &&
         message.model !== SYNTHETIC_MODEL
       ) {

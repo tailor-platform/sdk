@@ -210,6 +210,67 @@ describe("judge output", () => {
     });
   }
 
+  test("needs evidence quotes long enough to identify the code", async () => {
+    const evaluation = await evaluate({
+      claims: [
+        {
+          id: "uses-wait",
+          verdict: "satisfied",
+          reason: "tiny quote",
+          evidence: [{ path: "workflows/approval.ts", quote: "wait" }],
+        },
+        {
+          id: "has-resolver",
+          verdict: "satisfied",
+          reason: "workspace-prefixed path",
+          evidence: [{ path: "workspace/workflows/approval.ts", quote: "await approval.wait({" }],
+        },
+      ],
+    });
+
+    expect(evaluation).toMatchObject({
+      status: "ok",
+      claims: [
+        { id: "uses-wait", counted: "unsatisfied" },
+        { id: "has-resolver", counted: "satisfied" },
+      ],
+    });
+  });
+
+  test("matches command-history quotes copied with JSON escapes", async () => {
+    const evaluation = await evaluate(
+      {
+        claims: [
+          {
+            id: "uses-wait",
+            verdict: "satisfied",
+            reason: "escaped output",
+            evidence: [
+              {
+                path: "/evidence/commands.json",
+                quote: 'Found 1 executor files\\nExecutor: "audit" loaded',
+              },
+            ],
+          },
+          { id: "has-resolver", verdict: "unsatisfied", reason: "", evidence: [] },
+        ],
+      },
+      "claude-opus-5-5",
+      {},
+      [
+        {
+          command: "tailor generate",
+          outputTail: 'Found 1 executor files\nExecutor: "audit" loaded',
+        },
+      ],
+    );
+
+    expect(evaluation).toMatchObject({
+      status: "ok",
+      claims: [{ id: "uses-wait", counted: "satisfied" }, { id: "has-resolver" }],
+    });
+  });
+
   test("accepts verdicts whose evidence quotes exist in the workspace", async () => {
     const evaluation = await evaluate({
       claims: [

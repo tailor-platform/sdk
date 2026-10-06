@@ -5,6 +5,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   CLAUDE_OAUTH_TOKEN_ENV,
   DEFAULT_CLAUDE_CODE_PACKAGE,
+  getClaudeRuntimeConfig,
   buildClaudeBootstrapScript,
   buildClaudePreflightScript,
   buildClaudeSolverArgs,
@@ -85,6 +86,15 @@ describe("claude solver command", () => {
     expect(script).toContain("/opt/claude-code/bin/claude --version >&2");
     expect(script).toContain("'--model' 'claude-opus-5-5'");
     expect(script).toContain("'--output-format' 'stream-json'");
+  });
+
+  test("requires an exact Claude Code version pin", () => {
+    vi.stubEnv("LLM_CHALLENGE_CLAUDE_NPM_PACKAGE", "@anthropic-ai/claude-code@latest");
+
+    expect(() => getClaudeRuntimeConfig("/root")).toThrow("exact version");
+
+    vi.stubEnv("LLM_CHALLENGE_CLAUDE_NPM_PACKAGE", "@anthropic-ai/claude-code@2.1.285");
+    expect(getClaudeRuntimeConfig("/root").claudePackage).toBe("@anthropic-ai/claude-code@2.1.285");
   });
 
   test("derives the pinned version and a per-version install cache", () => {
@@ -287,6 +297,31 @@ describe("claude runtime cache", () => {
       maxSeconds: 30,
     });
     expect(await readArgs()).toContain(`${installCacheDir}:/opt/claude-code:ro,z`);
+  });
+
+  test("redacts the workspace even when the container fails to start", async () => {
+    const { dir, runtime, logs } = await setUp({ installed: true });
+    await fs.writeFile(path.join(dir, "work", "leak.txt"), "sk-test\n");
+    vi.stubEnv("PATH", path.join(dir, "no-podman"));
+
+    await expect(
+      runClaudeInPodman({
+        containerName: "llm-challenge-solver",
+        worktreePath: path.join(dir, "work"),
+        promptPath: path.join(dir, "prompt.md"),
+        solverStdoutPath: logs.stdoutPath,
+        solverStderrPath: logs.stderrPath,
+        tracePath: logs.tracePath,
+        model: "claude-opus-5-5",
+        effort: "xhigh",
+        maxSeconds: 30,
+        runtime,
+        token: "sk-test",
+      }),
+    ).rejects.toThrow("ENOENT");
+    await expect(fs.readFile(path.join(dir, "work", "leak.txt"), "utf8")).resolves.toBe(
+      "[REDACTED]\n",
+    );
   });
 
   test("refuses to start before preflight has installed the CLI", async () => {
