@@ -41,12 +41,17 @@ interface MockClientOptions {
   failWith?: Error;
   /** Workflow left behind by an earlier interrupted run of the same migration. */
   leftoverWorkflowId?: string;
+  /** Makes starting the run fail, after the platform created its execution or before. */
+  startFailure?: { error: Error; afterCreating: boolean };
+  /** Executions of the migration's workflow name that exist before this run starts. */
+  priorExecutionIds?: string[];
 }
 
 function createMockClient(options: MockClientOptions = {}) {
   const statuses = options.statuses ?? [WorkflowExecution_Status.SUCCESS];
   const calls: string[] = [];
   let statusIndex = 0;
+  let executionCreated = false;
 
   const record = <T>(name: string, value: T) => {
     calls.push(name);
@@ -69,7 +74,22 @@ function createMockClient(options: MockClientOptions = {}) {
       record("createWorkflowJobFunction", { jobFunction: { version: 1n } }),
     ),
     createWorkflow: vi.fn(() => record("createWorkflow", { workflow: { id: "wf-1" } })),
-    startWorkflow: vi.fn(() => record("startWorkflow", { executionId: "exec-1" })),
+    startWorkflow: vi.fn(() => {
+      const failure = options.startFailure;
+      if (!failure) return record("startWorkflow", { executionId: "exec-1" });
+      calls.push("startWorkflow");
+      executionCreated = failure.afterCreating;
+      return Promise.reject(failure.error);
+    }),
+    listWorkflowExecutions: vi.fn(() => {
+      calls.push("listWorkflowExecutions");
+      return Promise.resolve({
+        executions: [
+          ...(options.priorExecutionIds ?? []).map((id) => ({ id })),
+          ...(executionCreated ? [{ id: "exec-1" }] : []),
+        ],
+      });
+    }),
     getWorkflowExecution: vi.fn(() => {
       calls.push("getWorkflowExecution");
       const status = statuses[Math.min(statusIndex, statuses.length - 1)]!;
@@ -141,6 +161,7 @@ describe("executeMigrationAsWorkflow", () => {
       "createFunctionRegistry",
       "createWorkflowJobFunction",
       "createWorkflow",
+      "listWorkflowExecutions",
       "startWorkflow",
       "getWorkflowExecution",
       "deleteWorkflow",
@@ -252,6 +273,71 @@ describe("executeMigrationAsWorkflow", () => {
     expect(calls).toContain("deleteWorkflowJobFunction");
     expect(calls).toContain("deleteFunctionRegistry");
   });
+
+  test.each([
+    { name: "Unavailable", error: new ConnectError("lost", Code.Unavailable) },
+    { name: "DeadlineExceeded", error: new ConnectError("lost", Code.DeadlineExceeded) },
+    { name: "Internal", error: new ConnectError("lost", Code.Internal) },
+    { name: "a dropped connection", error: new TypeError("fetch failed") },
+  ])(
+    "waits for the execution that a start with a lost response created ($name)",
+    async ({ error }) => {
+      const { client, raw, calls } = createMockClient({
+        startFailure: { error, afterCreating: true },
+      });
+
+      const result = await run(client);
+
+      expect(result.success).toBe(true);
+      expect(raw.getWorkflowExecution).toHaveBeenCalledWith(
+        expect.objectContaining({ executionId: "exec-1" }),
+      );
+      const afterStart = calls.slice(calls.indexOf("startWorkflow"));
+      expect(afterStart.indexOf("getWorkflowExecution")).toBeLessThan(
+        afterStart.findIndex((call) => call.startsWith("delete")),
+      );
+    },
+  );
+
+  test("tears down and rethrows when a start with a lost response created no execution", async () => {
+    const error = new ConnectError("lost", Code.Unavailable);
+    const { client, calls } = createMockClient({ startFailure: { error, afterCreating: false } });
+
+    await expect(run(client)).rejects.toBe(error);
+
+    expect(calls).toContain("deleteWorkflow");
+  });
+
+  test("does not take an execution that existed before the start for the one it started", async () => {
+    const error = new ConnectError("lost", Code.Unavailable);
+    const { client, raw } = createMockClient({
+      startFailure: { error, afterCreating: false },
+      priorExecutionIds: ["exec-old"],
+    });
+
+    await expect(run(client)).rejects.toBe(error);
+
+    expect(raw.getWorkflowExecution).not.toHaveBeenCalled();
+  });
+
+  test.each(
+    [Code.InvalidArgument, Code.NotFound, Code.PermissionDenied, Code.Unauthenticated].map(
+      (code) => ({ code, codeName: Code[code] }),
+    ),
+  )(
+    "does not look for an execution when the platform refuses the start with $codeName",
+    async ({ code }) => {
+      const error = new ConnectError("refused", code);
+      const { client, raw, calls } = createMockClient({
+        startFailure: { error, afterCreating: false },
+      });
+
+      await expect(run(client)).rejects.toBe(error);
+
+      expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(1);
+      expect(calls).toContain("deleteWorkflow");
+    },
+  );
 
   test("keeps the migration result when teardown fails", async () => {
     const { client } = createMockClient({ failOn: "deleteWorkflow" });

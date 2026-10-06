@@ -325,10 +325,12 @@ export async function executeMigrationAsWorkflow(
       created,
     );
 
-    const { executionId } = await client.startWorkflow({
+    const executionId = await startMigrationExecution({
+      client,
       workspaceId,
+      name,
       workflowId,
-      authInvoker: invoker,
+      invoker,
     });
 
     return await waitForMigrationWorkflow(client, workspaceId, executionId, pollInterval);
@@ -517,6 +519,47 @@ const START_REFUSED_CODES: ReadonlySet<Code> = new Set([
 
 function isStartRefused(error: unknown): boolean {
   return error instanceof ConnectError && START_REFUSED_CODES.has(error.code);
+}
+
+interface StartMigrationExecutionParams {
+  client: OperatorClient;
+  workspaceId: string;
+  name: string;
+  workflowId: string;
+  invoker: LongRunningMigrationOptions["invoker"];
+}
+
+/**
+ * Start the migration workflow. A start whose response is lost may still have
+ * created its execution, so the executions that did not exist before the start
+ * are checked before the failure is reported.
+ * @param params - Workflow to start and the executions to compare against
+ * @returns Id of the execution that runs the migration
+ */
+async function startMigrationExecution(params: StartMigrationExecutionParams): Promise<string> {
+  const { client, workspaceId, name, workflowId, invoker } = params;
+  const known = new Set(
+    (await listMigrationExecutions(client, workspaceId, name)).map((execution) => execution.id),
+  );
+  try {
+    const { executionId } = await client.startWorkflow({
+      workspaceId,
+      workflowId,
+      authInvoker: invoker,
+    });
+    return executionId;
+  } catch (error) {
+    if (isStartRefused(error)) throw error;
+    const started = (await listMigrationExecutions(client, workspaceId, name)).find(
+      (execution) => !known.has(execution.id),
+    );
+    if (!started) throw error;
+    logger.debug(
+      `Start of migration workflow '${name}' failed (${error instanceof Error ? error.message : String(error)}), ` +
+        `but execution '${started.id}' was created; waiting for it.`,
+    );
+    return started.id;
+  }
 }
 
 /**
