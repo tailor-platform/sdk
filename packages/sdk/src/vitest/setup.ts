@@ -1,6 +1,6 @@
 /**
- * Vitest setup file that seeds the SecretManager mock and the date default
- * from `tailor.config.ts`.
+ * Vitest setup file that seeds the SecretManager mock from `tailor.config.ts`
+ * and applies the date default the plugin read from it.
  *
  * This file is auto-injected by tailorRuntime() but only activates when
  * the tailor-runtime environment is active (detected via __tailorRuntimeActive,
@@ -10,61 +10,11 @@ import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll } from "vitest";
 import { applyDateDefault } from "./date-representation";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
-import type { EffectiveDateDefault } from "#/runtime/types";
 
 export { applyDateDefault };
 
 function isTailorRuntime(): boolean {
   return RUNTIME_FLAG_KEY in globalThis;
-}
-
-/**
- * Read `defaultDateRepresentation` from an imported `tailor.config.ts` module.
- *
- * Accepts exactly what the config schema accepts: absent, or `"temporal"`. Any
- * other value is rejected rather than read as the legacy default, since the
- * CLI rejects the same config and the test run would otherwise disagree with it.
- * @param configModule - The imported module namespace
- * @returns The representation `t` date fields without `as` follow
- */
-export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefault {
-  const appConfig =
-    configModule && typeof configModule === "object"
-      ? (configModule as { default?: unknown }).default
-      : undefined;
-  const value =
-    appConfig && typeof appConfig === "object"
-      ? (appConfig as { defaultDateRepresentation?: unknown }).defaultDateRepresentation
-      : undefined;
-  if (value === undefined) return "legacy";
-  if (value === "temporal") return "temporal";
-  throw new Error(
-    `defaultDateRepresentation must be "temporal" or omitted, but tailor.config.ts sets ${JSON.stringify(value)}.`,
-  );
-}
-
-/**
- * Load `defaultDateRepresentation` from a `tailor.config.ts` file.
- *
- * Like {@link loadSecretsFromConfig}, a config that cannot be imported does not
- * stop the run: projects that already pass `config` for secrets keep working.
- * The fallback is announced rather than silent, because `tailor.d.ts` types
- * the project's date fields from the value this could not read. A config that
- * loads but sets an invalid value still fails, as the CLI rejects it too.
- * @param configPath - Absolute path to tailor.config.ts
- * @returns The representation `t` date fields without `as` follow
- */
-export async function loadDateDefaultFromConfig(configPath: string): Promise<EffectiveDateDefault> {
-  let configModule: unknown;
-  try {
-    configModule = await import(pathToFileURL(configPath).href);
-  } catch (error) {
-    console.warn(
-      `tailor-runtime could not load ${configPath} to read defaultDateRepresentation; t date fields use string values in this run. If the config sets "temporal", tests disagree with tailor.d.ts until the import error is fixed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return "legacy";
-  }
-  return dateDefaultFromConfig(configModule);
 }
 
 /**
@@ -121,12 +71,16 @@ export async function loadSecretsFromConfig(
   }
 }
 
+// The plugin reads the config in the Vitest host and passes the result here.
 // Applied at the top level, before the test file and its imports evaluate, so a
 // field parsed at import time already follows the configured default.
-const configuredPath = isTailorRuntime() ? process.env.__TAILOR_RUNTIME_CONFIG : undefined;
-const restoreDateDefault = configuredPath
-  ? applyDateDefault(await loadDateDefaultFromConfig(configuredPath))
+const configuredDateDefault = isTailorRuntime()
+  ? process.env.__TAILOR_RUNTIME_DATE_DEFAULT
   : undefined;
+const restoreDateDefault =
+  configuredDateDefault === "temporal" || configuredDateDefault === "legacy"
+    ? applyDateDefault(configuredDateDefault)
+    : undefined;
 afterAll(() => restoreDateDefault?.());
 
 // Load secrets from tailor.config.ts if config path is provided via env var

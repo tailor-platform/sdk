@@ -2,6 +2,8 @@ import { createRequire } from "node:module";
 import { dirname, isAbsolute, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
+import { loadDateDefaultFromConfig } from "./date-default-loader";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Plugin } from "vitest/config";
 
 const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
@@ -320,13 +322,23 @@ const ENVIRONMENT_NAME = "tailor-runtime";
 // marks it plugin-private, so overwriting a pre-existing value is safe.
 const CONFIG_ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
 
+// Carries the `defaultDateRepresentation` the host read from that config, so
+// the worker applies it without importing the config under the tailor-runtime
+// restrictions. Empty reads as "no config", like CONFIG_ENV_VAR.
+const DATE_DEFAULT_ENV_VAR = "__TAILOR_RUNTIME_DATE_DEFAULT";
+
 // An empty value reads as "no config" in setup.ts and, unlike omitting the
 // key, overrides a stale value inherited from the root `test.env`.
 function setConfigEnv(
   target: Record<string, unknown> & { env?: Record<string, string> },
   configAbsPath: string,
+  dateDefault: EffectiveDateDefault | "",
 ): void {
-  target.env = { ...target.env, [CONFIG_ENV_VAR]: configAbsPath };
+  target.env = {
+    ...target.env,
+    [CONFIG_ENV_VAR]: configAbsPath,
+    [DATE_DEFAULT_ENV_VAR]: dateDefault,
+  };
 }
 
 /**
@@ -339,12 +351,28 @@ function setConfigEnv(
  * `tailor.config.ts`.
  * @param options - Optional configuration
  * @param options.config - Path to tailor.config.ts to load SecretManager values into mock
+ * @param loadDateDefault - Reads `defaultDateRepresentation` from a config path; replaced in tests
  * @returns Vite plugin
  */
-export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
+export function createEnvironmentPlugin(
+  options?: { config?: string },
+  loadDateDefault: (
+    configAbsPath: string,
+  ) => Promise<EffectiveDateDefault> = loadDateDefaultFromConfig,
+): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const environmentPath = resolve(currentDir, "environment.mjs");
   const setupPath = resolve(currentDir, "setup.mjs");
+  // Vitest re-runs the config hook per inline project; read each config once.
+  const dateDefaults = new Map<string, Promise<EffectiveDateDefault>>();
+  const dateDefaultOf = (configAbsPath: string): Promise<EffectiveDateDefault> => {
+    let loaded = dateDefaults.get(configAbsPath);
+    if (!loaded) {
+      loaded = loadDateDefault(configAbsPath);
+      dateDefaults.set(configAbsPath, loaded);
+    }
+    return loaded;
+  };
   // Vitest re-runs the config for inline projects that need their own Vite
   // server, so a rewritten absolute path still counts as tailor-runtime.
   const selectsTailorRuntime = (environment: unknown): boolean =>
@@ -353,7 +381,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
   return {
     name: "tailor-runtime-environment",
 
-    config(config) {
+    async config(config) {
       const testConfig = config.test as
         | (Record<string, unknown> & {
             projects?: (string | Record<string, unknown>)[];
@@ -399,7 +427,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
           if (!inheritsRootEnvironment && !selectsTailorRuntime(projectTest.environment)) {
             // Blank the key so a project on another environment cannot pick up
             // the root's value through Vitest's root-into-project env merge.
-            if (options?.config) setConfigEnv(projectTest, "");
+            if (options?.config) setConfigEnv(projectTest, "", "");
             continue;
           }
           projectTest.environment = environmentPath;
@@ -415,7 +443,8 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
               projectTest.root ??
               config.root ??
               process.cwd();
-            setConfigEnv(projectTest, resolve(projectRoot, options.config));
+            const projectConfigPath = resolve(projectRoot, options.config);
+            setConfigEnv(projectTest, projectConfigPath, await dateDefaultOf(projectConfigPath));
           }
         }
       }
@@ -429,9 +458,11 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
         // back to cwd). Vitest projects with a non-cwd `root` would otherwise
         // resolve a relative options.config against the wrong directory.
         const configRoot = (testConfig.root as string | undefined) ?? config.root ?? process.cwd();
+        const rootConfigPath = rootSelectsTailorRuntime ? resolve(configRoot, options.config) : "";
         setConfigEnv(
           testConfig,
-          rootSelectsTailorRuntime ? resolve(configRoot, options.config) : "",
+          rootConfigPath,
+          rootConfigPath ? await dateDefaultOf(rootConfigPath) : "",
         );
       }
 
