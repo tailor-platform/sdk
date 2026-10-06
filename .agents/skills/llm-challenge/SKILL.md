@@ -33,7 +33,7 @@ Recommended defaults:
 - `output`: implementation default - output directory under `llm-challenge/results/`.
 - `max-seconds`: implementation default - per-run timeout.
 - `rerun-nonzero-from`: empty - rerun the runs a prior report could not score (infrastructure failures, including timeouts, or non-zero exits in reports without a failure kind) plus runs that never started, with that report's agent, model, and effort. Scored failures are not rerun, so reruns cannot replace them in grades. It does not inherit `sdk-ref`, `profile`, or `max-seconds`; pass the source run's values again.
-- `preflight`: enabled - checks the Podman runner; for Claude Code it also checks the pinned CLI version and makes one model call.
+- `preflight`: enabled - checks the Podman runner; for Claude Code it also installs the pinned CLI into `llm-challenge/.cache/claude-code/` (the only step that writes there; solver and judge containers mount it read-only), checks its version, and makes one model call. `--no-preflight` requires that install to exist.
 - `prune-workspace-deps`: enabled - removes per-workspace dependency/cache directories after each run. Pass `--no-prune-workspace-deps` to retain them for debugging.
 
 After confirmation, build the command from the confirmed values:
