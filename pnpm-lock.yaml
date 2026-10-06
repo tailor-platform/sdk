@@ -926,6 +926,9 @@ importers:
 
   packages/sdk-plugin-safeql:
     devDependencies:
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../sdk
       '@types/node':
         specifier: 24.19.1
         version: 24.19.1
