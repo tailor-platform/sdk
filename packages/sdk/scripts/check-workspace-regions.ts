@@ -1,6 +1,6 @@
 /**
- * Fails when the regions the Platform offers for workspace creation differ from
- * KNOWN_WORKSPACE_REGIONS, the list `tailor workspace create --help` shows.
+ * Fails when the regions the Platform offers for workspace creation, in the order it returns
+ * them, differ from KNOWN_WORKSPACE_REGIONS, the list `tailor workspace create --help` shows.
  *
  * Usage: pnpm exec tsx scripts/check-workspace-regions.ts (needs `tailor login`)
  */
@@ -14,15 +14,12 @@ const platformConfig = await loadPlatformClientConfig({});
 const client = await initOperatorClient(accessToken, platformConfig);
 const { regions } = await client.listAvailableWorkspaceRegions({});
 
-const platform = regions.toSorted();
-const known = KNOWN_WORKSPACE_REGIONS.toSorted();
-
-if (platform.join(",") !== known.join(",")) {
+if (regions.join(",") !== KNOWN_WORKSPACE_REGIONS.join(",")) {
   console.error(
-    `Platform offers: ${platform.join(", ")}\n` +
-      `KNOWN_WORKSPACE_REGIONS: ${known.join(", ")}\n` +
+    `Platform offers: ${regions.join(", ")}\n` +
+      `KNOWN_WORKSPACE_REGIONS: ${KNOWN_WORKSPACE_REGIONS.join(", ")}\n` +
       "Update src/cli/commands/workspace/regions.ts, then run `pnpm run docs:update`.",
   );
   process.exit(1);
 }
-console.log(`Workspace regions match the Platform: ${platform.join(", ")}`);
+console.log(`Workspace regions match the Platform: ${regions.join(", ")}`);
