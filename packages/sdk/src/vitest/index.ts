@@ -98,3 +98,9 @@ export {
   type Unmigrated,
 } from "./pglite-kysely";
 export type { PGliteField } from "./pglite-temporal";
+export {
+  MigrationStepError,
+  runMigrationSteps,
+  type RunMigrationStepsOptions,
+  type RunnableMigrationStep,
+} from "./migration-steps";

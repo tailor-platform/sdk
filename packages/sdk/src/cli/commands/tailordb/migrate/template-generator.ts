@@ -267,8 +267,12 @@ function generateDataOnlyMigrationScript(namespace: string): string {
  * This migration carries no schema change; it exists to run this script.
  * Edit this file to implement the data transformation.
  *
- * The transaction is managed by the deploy command.
- * If any operation fails, all changes will be rolled back.
+ * \`main\` runs in one transaction managed by the deploy command.
+ * If any operation fails, all of its changes are rolled back.
+ *
+ * To commit a long data migration in parts,
+ * export \`steps\` instead of \`main\`: each step runs in its own transaction.
+ * See "Splitting a migration into steps" in the TailorDB migration docs.
  */
 
 import type { Transaction } from "./db";
@@ -333,8 +337,12 @@ export function generateMigrationScript(
  * for warning-tier changes it is optional). Edit this file to implement
  * your data migration logic.
  *
- * The transaction is managed by the deploy command.
- * If any operation fails, all changes will be rolled back.
+ * \`main\` runs in one transaction managed by the deploy command.
+ * If any operation fails, all of its changes are rolled back.
+ *
+ * To commit a long data migration in parts,
+ * export \`steps\` instead of \`main\`: each step runs in its own transaction.
+ * See "Splitting a migration into steps" in the TailorDB migration docs.
  */
 
 import type { Transaction } from "./db";

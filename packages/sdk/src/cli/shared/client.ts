@@ -432,8 +432,8 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
  *
  * Retries unary methods on `Unavailable`/`ResourceExhausted`, and
  * `Aborted`/`Internal` only for methods declared side-effect-free or idempotent,
- * up to 3 attempts. Workspace creation is excluded because it has no idempotency
- * key and a lost response is ambiguous.
+ * up to 3 attempts. Workspace creation and workflow starts are excluded because
+ * they have no idempotency key and a lost response is ambiguous.
  * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
@@ -482,7 +482,10 @@ export function retryInterceptor(): Interceptor {
           const { reportCrash } = await import("#/cli/crashreport/index");
           await reportCrash(error, "handledError");
         }
-        if (req.method.name !== "CreateWorkspace" && isRetirable(error, req.method.idempotency)) {
+        if (
+          !NON_RETRIED_METHODS.has(req.method.name) &&
+          isRetirable(error, req.method.idempotency)
+        ) {
           lastError = error;
           logger.debug(
             `retry: ${req.method.name} attempt ${i + 1} failed with ` +
@@ -637,6 +640,9 @@ const RETRY_BASE_DELAY_MS = 500;
 
 /** Maximum number of attempts, including the initial one, for a retried request. */
 const MAX_RETRY_ATTEMPTS = 3;
+
+/** Methods without an idempotency key, which a retry could apply twice. */
+const NON_RETRIED_METHODS: ReadonlySet<string> = new Set(["CreateWorkspace", "StartWorkflow"]);
 
 /**
  * Wait for an exponential backoff delay with jitter.

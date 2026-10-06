@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
@@ -485,6 +486,28 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.createFunctionRegistry).not.toHaveBeenCalled();
     expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
     expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("delete phase treats a function that is already gone as deleted", async () => {
+    const client = createMockClientWithSpies();
+    vi.mocked(client.deleteFunctionRegistry).mockRejectedValue(
+      new ConnectError("not found", Code.NotFound),
+    );
+
+    await expect(
+      applyFunctionRegistry(client, "test-workspace", createMockPlanResult(), "delete"),
+    ).resolves.toBeUndefined();
+  });
+
+  test("delete phase still reports other delete failures", async () => {
+    const client = createMockClientWithSpies();
+    vi.mocked(client.deleteFunctionRegistry).mockRejectedValue(
+      new ConnectError("denied", Code.PermissionDenied),
+    );
+
+    await expect(
+      applyFunctionRegistry(client, "test-workspace", createMockPlanResult(), "delete"),
+    ).rejects.toThrow("denied");
   });
 
   test("uploads functions concurrently in the create-update phase", async () => {

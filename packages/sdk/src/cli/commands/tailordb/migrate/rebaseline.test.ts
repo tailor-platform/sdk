@@ -302,6 +302,20 @@ describe("tailordb migration rebaseline", () => {
     );
   });
 
+  test("refuses to re-baseline while a migration is in progress", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const before = fs.readFileSync(schemaPath, "utf-8");
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/partially applied/);
+    expect(fs.readFileSync(schemaPath, "utf-8")).toBe(before);
+  });
+
   test("rejects ungenerated local schema changes before reading the remote", async () => {
     state.localTypes = { User: parsedType("User") };
 

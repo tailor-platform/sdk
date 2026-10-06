@@ -195,6 +195,19 @@ describe("tailordb migration sync", () => {
     );
   });
 
+  test("refuses to sync while a migration is in progress", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
+    });
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/partially applied/);
+    expect(state.createTailorDBType).not.toHaveBeenCalled();
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("prints the applied snapshot under JSON output", async () => {
     using _json = jsonMode();
     using stdout = captureStdout();

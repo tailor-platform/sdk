@@ -902,17 +902,29 @@ describe("retryInterceptor", () => {
     ]);
   });
 
-  test("does not retry workspace creation when the outcome is ambiguous", async () => {
-    const next = vi
-      .fn()
-      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
-      .mockResolvedValueOnce(okResponse);
+  test.each(
+    [OperatorService.method.createWorkspace, OperatorService.method.startWorkflow].flatMap(
+      (method) =>
+        [Code.Unavailable, Code.ResourceExhausted].map((code) => ({
+          method,
+          code,
+          codeName: Code[code],
+        })),
+    ),
+  )(
+    "does not retry $method.name when the outcome is ambiguous ($codeName)",
+    async ({ method, code }) => {
+      const next = vi
+        .fn()
+        .mockRejectedValueOnce(new ConnectError("ambiguous", code))
+        .mockResolvedValueOnce(okResponse);
 
-    await expect(
-      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createWorkspace))),
-    ).rejects.toThrow("unavailable");
-    expect(next).toHaveBeenCalledOnce();
-  });
+      await expect(settle(retryInterceptor()(next)(makeUnaryReq(method)))).rejects.toThrow(
+        "ambiguous",
+      );
+      expect(next).toHaveBeenCalledOnce();
+    },
+  );
 
   test("treats AlreadyExists after a retry as success for Create methods", async () => {
     // #1350: prior attempt landed server-side but came back Unavailable; the
