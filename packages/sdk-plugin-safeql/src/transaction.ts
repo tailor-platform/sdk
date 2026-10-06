@@ -42,13 +42,14 @@ export async function transaction<T>(
   if (open.has(client)) {
     throw new Error("A transaction is already open on this client; transactions cannot be nested.");
   }
-  open.add(client);
+  const handle: QueryExecutor = {
+    queryObject: (text, values) => client.queryObject(text, values),
+  };
+  open.add(client).add(handle);
   try {
     await client.queryObject(begin);
     try {
-      const result = await callback({
-        queryObject: (text, values) => client.queryObject(text, values),
-      });
+      const result = await callback(handle);
       await client.queryObject("COMMIT");
       return result;
     } catch (error) {
@@ -57,5 +58,6 @@ export async function transaction<T>(
     }
   } finally {
     open.delete(client);
+    open.delete(handle);
   }
 }

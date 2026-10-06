@@ -103,6 +103,16 @@ describe("transaction", () => {
     expect(texts()).toEqual(["BEGIN", "ROLLBACK"]);
   });
 
+  test("refuses to open a transaction on the handle passed to the callback", async () => {
+    const { client, texts } = recordingClient();
+    await expect(
+      transaction(client, async (tx) => {
+        await transaction(tx, async () => undefined);
+      }),
+    ).rejects.toThrow(/already open/);
+    expect(texts()).toEqual(["BEGIN", "ROLLBACK"]);
+  });
+
   test("allows a new transaction on the client once the previous one finished", async () => {
     const { client, texts } = recordingClient();
     await transaction(client, async () => undefined);
