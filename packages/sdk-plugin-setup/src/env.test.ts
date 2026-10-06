@@ -111,13 +111,13 @@ describe("how to get each value", () => {
     },
   );
 
-  test("points to the Console for the machine user credentials, not to Tailor support", () => {
+  test("points to an organization or folder admin for the machine user credentials, not to Tailor support", () => {
     const [clientId, clientSecret] = targetRequirements("branch");
 
     for (const requirement of [clientId, clientSecret]) {
-      expect(requirement?.howTo).toContain("Tailor Console");
       expect(requirement?.howTo).toContain("organization or folder admin");
       expect(requirement?.howTo).not.toContain("support");
+      expect(requirement?.howTo).not.toContain("Console");
     }
   });
 });
