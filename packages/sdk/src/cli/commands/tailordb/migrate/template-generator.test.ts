@@ -405,6 +405,30 @@ describe("template-generator", () => {
       expect(script).toContain(longName);
     });
 
+    test("does not name a step after the helper that renames nested members", () => {
+      const script = generateMigrationScript(
+        stepsDiff(renamedField("Nested", "old", "member"), {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: {
+            type: "nested",
+            required: false,
+            fields: { zip: { type: "string", required: false } },
+          },
+          after: {
+            type: "nested",
+            required: false,
+            fields: { zipCode: { type: "string", required: false } },
+          },
+          memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+        }),
+      );
+
+      expect(order(script)).toEqual(["change1", "updateUserAddress"]);
+      expect(script.match(/function renameNestedMember\(/g)).toHaveLength(1);
+    });
+
     test("names the later of two steps with the same name change<N>", () => {
       const script = generateMigrationScript(
         stepsDiff(addedRequired("A", "bC"), addedRequired("AB", "c")),

@@ -303,6 +303,9 @@ interface FieldTouch {
 
 const ALL_FIELDS = "*";
 
+/** Functions a generated script declares next to its steps, whose names a step function must not take. */
+const RESERVED_FUNCTION_NAMES = ["renameNestedMember"];
+
 const NO_DATA_MIGRATION_BODY = `  // No data migration needed for this schema change
   // Add custom data transformations if required`;
 
@@ -433,7 +436,7 @@ function buildScriptSteps(
     });
   });
 
-  const usedNames = new Set<string>();
+  const usedNames = new Set<string>(RESERVED_FUNCTION_NAMES);
   const earlier: { name: string; touches: readonly FieldTouch[] }[] = [];
   return drafts.map((draft) => {
     const name =
