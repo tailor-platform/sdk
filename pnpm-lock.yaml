@@ -313,8 +313,8 @@ importers:
         specifier: 1.8.1
         version: 1.8.1
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
+        specifier: 0.4.3
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
       execa:
         specifier: 10.0.1
         version: 10.0.1
@@ -669,8 +669,8 @@ importers:
         specifier: 0.152.0
         version: 0.152.0
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
+        specifier: 0.4.3
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
       '@secretlint/core':
         specifier: 13.0.6
         version: 13.0.6(supports-color@7.2.0)
@@ -841,8 +841,8 @@ importers:
         specifier: 0.45.3
         version: 0.45.3
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
+        specifier: 0.4.3
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -927,8 +927,8 @@ importers:
   packages/sdk-plugin-seed:
     dependencies:
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
+        specifier: 0.4.3
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
       pathe:
         specifier: 2.0.3
         version: 2.0.3
@@ -973,8 +973,8 @@ importers:
         specifier: 0.2.2
         version: 0.2.2
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
+        specifier: 0.4.3
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
       json5:
         specifier: 2.2.3
         version: 2.2.3
@@ -1025,8 +1025,8 @@ importers:
   packages/sdk-plugin-tailordb-erd:
     dependencies:
       '@politty/zod':
-        specifier: 0.3.0
-        version: 0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
+        specifier: 0.4.3
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -2534,8 +2534,8 @@ packages:
       '@inquirer/prompts':
         optional: true
 
-  '@politty/zod@0.3.0':
-    resolution: {integrity: sha512-v01p+p4RtBO1hcc2YC9eJ21tesfnkoTyKUp0VFNy+RalvVW2V9yKC5WkSmFdH/PoEcfHJsxkdk+/6mPzycoV6A==}
+  '@politty/zod@0.4.3':
+    resolution: {integrity: sha512-QVVsVWulsKgr8ichlqwZNjITqgQuZL6dQAm6tDnVuFd2xrzBPbLfA3nQHA++ibOyCtFq0UW6xxjxFGvEf5urHg==}
     engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
     hasBin: true
     peerDependencies:
@@ -5631,7 +5631,7 @@ snapshots:
       '@clack/prompts': 1.8.1
       '@inquirer/prompts': 8.7.2(@types/node@24.19.1)
 
-  '@politty/zod@0.3.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)':
+  '@politty/zod@0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.19.1))(zod@4.6.5)':
     dependencies:
       yaml: 2.9.1
       zod: 4.6.5
