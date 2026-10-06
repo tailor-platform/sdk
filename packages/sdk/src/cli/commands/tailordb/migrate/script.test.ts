@@ -14,6 +14,7 @@ import {
   markMigrationScriptSkipped,
   scriptCommand,
 } from "./script";
+import { analyzeMigrationScript } from "./script-form";
 import {
   formatMigrationNumber,
   loadDiff,
@@ -298,6 +299,71 @@ describe("addMigrationScriptFiles", () => {
     expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
     const content = fs.readFileSync(result.testPath!, "utf-8");
     expect(content).toContain('import { main } from "./migrate"');
+  });
+
+  test("creates migrate.ts as steps with steps", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      steps: true,
+    });
+
+    expect(analyzeMigrationScript(result.migratePath!)).toEqual({
+      kind: "steps",
+      order: ["migrate"],
+    });
+  });
+
+  test("scaffolds the test against steps when the script is created as steps", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      steps: true,
+      withTest: true,
+    });
+
+    const content = fs.readFileSync(result.testPath!, "utf-8");
+    expect(content).toContain('import { steps } from "./migrate"');
+    expect(content).toContain("runMigrationSteps(steps");
+  });
+
+  test("scaffolds the test against steps when the existing script exports steps", async () => {
+    setupMigration();
+    fs.mkdirSync(path.dirname(migrationFile(MIGRATE_FILE_NAME)), { recursive: true });
+    fs.writeFileSync(
+      migrationFile(MIGRATE_FILE_NAME),
+      "export const steps = { fill: { run: async () => {} } };",
+    );
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(fs.readFileSync(result.testPath!, "utf-8")).toContain(
+      'import { steps } from "./migrate"',
+    );
+  });
+
+  test("rejects steps when migrate.ts already exists", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+
+    await expect(
+      addMigrationScriptFiles({
+        migrationsDir: testDir,
+        migrationNumber: 1,
+        steps: true,
+        withTest: true,
+      }),
+    ).rejects.toMatchObject({ code: "MIGRATION_SCRIPT_OPTIONS_CONFLICT" });
   });
 
   test("adds only the test when migrate.ts already exists and withTest is set", async () => {
@@ -685,6 +751,31 @@ describe("script command results", () => {
       pgliteTestPath: null,
       clearedScriptSkip: false,
     });
+  });
+
+  test("creates migrate.ts as steps with --steps", async () => {
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+
+    const result = await runCommand(scriptCommand, ["0001", "--steps"]);
+
+    expect(result.success).toBe(true);
+    expect(analyzeMigrationScript(migrationFile(MIGRATE_FILE_NAME)).kind).toBe("steps");
+  });
+
+  test("rejects --steps together with --no-script", async () => {
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+
+    const result = await runCommand(scriptCommand, [
+      "0001",
+      "--no-script",
+      "--reason",
+      "no data",
+      "--steps",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/--steps cannot be used together with --no-script/);
   });
 
   test("reports the recorded script skip that creating the script removed", async () => {

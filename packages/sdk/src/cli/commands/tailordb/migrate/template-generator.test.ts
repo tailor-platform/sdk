@@ -4,11 +4,13 @@ import * as path from "pathe";
 import ts from "typescript";
 import { describe, expect, test, aroundEach } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
+import { analyzeMigrationScriptSource } from "./script-form";
 import {
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
   MIGRATE_PGLITE_TEST_FILE_NAME,
+  MIGRATE_TEST_FILE_NAME,
   DB_TYPES_FILE_NAME,
   DB_PGLITE_SCHEMA_FILE_NAME,
   compareSnapshots,
@@ -21,6 +23,7 @@ import {
   generateDataOnlyMigrationFiles,
   generateDiffFiles,
   generateMigrationPgliteTestScript,
+  generateMigrationScript,
   generateMigrationTestScript,
   migrationScriptExists,
   getMigrationScriptPath,
@@ -232,6 +235,122 @@ describe("template-generator", () => {
       expect(script).toContain("export `steps` instead of `main`");
       expect(script).toContain('"Splitting a migration into steps"');
     });
+  });
+
+  describe("steps script form", () => {
+    const snapshot = createTestSnapshot({
+      User: {
+        name: "User",
+        pluralForm: "Users",
+        fields: { name: { type: "string", required: true } },
+      },
+    });
+    const breakingDiff = createMockMigrationDiff({
+      changes: [
+        {
+          kind: "field_added",
+          tableName: "User",
+          fieldName: "email",
+          after: { type: "string", required: true },
+        },
+      ],
+      hasBreakingChanges: true,
+      breakingChanges: [{ tableName: "User", fieldName: "email", reason: "Required field added" }],
+      requiresMigrationScript: true,
+    });
+
+    test("generates a script that deploy reads as a single step", () => {
+      const script = generateMigrationScript(breakingDiff, [], "steps");
+
+      expect(analyzeMigrationScriptSource(script, "migrate.ts")).toEqual({
+        kind: "steps",
+        order: ["migrate"],
+      });
+      expect(script).not.toContain("export async function main");
+    });
+
+    test("keeps the statements the main script scaffolds inside the step", () => {
+      const mainScript = generateMigrationScript(breakingDiff);
+      const body = mainScript.slice(
+        mainScript.indexOf("{\n", mainScript.indexOf("export async function main")) + 2,
+        mainScript.lastIndexOf("\n}"),
+      );
+      const stepsScript = generateMigrationScript(breakingDiff, [], "steps");
+
+      expect(body.trim()).not.toBe("");
+      for (const line of body.split("\n").filter((line) => line.trim() !== "")) {
+        expect(stepsScript).toContain(`    ${line}`);
+      }
+    });
+
+    test("scaffolds a data-only migration as a single step", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot,
+        scriptKind: "steps",
+      });
+      const script = await fs.readFile(result.migrateFilePath, "utf-8");
+
+      expect(analyzeMigrationScriptSource(script, result.migrateFilePath)).toEqual({
+        kind: "steps",
+        order: ["migrate"],
+      });
+    });
+
+    test("typechecks a data-only step against the generated db.ts", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot,
+        scriptKind: "steps",
+      });
+
+      expect(getTypeScriptDiagnostics(result.migrateFilePath)).toEqual([]);
+    }, 30_000);
+
+    test.each([
+      {
+        name: "unit",
+        fileName: MIGRATE_TEST_FILE_NAME,
+        generate: generateMigrationTestScript,
+      },
+      {
+        name: "PGlite",
+        fileName: MIGRATE_PGLITE_TEST_FILE_NAME,
+        generate: generateMigrationPgliteTestScript,
+      },
+    ])(
+      "typechecks the $name test scaffold against a steps script",
+      async ({ fileName, generate }) => {
+        await generateDiffFiles(breakingDiff, tempDir, 1, snapshot, undefined, [], false, "steps");
+        const testPath = path.join(tempDir, "0001", fileName);
+        await fs.writeFile(testPath, generate(breakingDiff, "steps"));
+
+        expect(getTypeScriptDiagnostics(testPath)).toEqual([]);
+      },
+      60_000,
+    );
+
+    test("leaves only the placeholders the main script has for the same change", async () => {
+      const main = await generateDiffFiles(breakingDiff, tempDir, 1, snapshot);
+      const steps = await generateDiffFiles(
+        breakingDiff,
+        tempDir,
+        2,
+        snapshot,
+        undefined,
+        [],
+        false,
+        "steps",
+      );
+
+      const mainDiagnostics = getTypeScriptDiagnostics(main.migrateFilePath!);
+      expect(mainDiagnostics).not.toEqual([]);
+      expect(getTypeScriptDiagnostics(steps.migrateFilePath!)).toEqual(mainDiagnostics);
+    }, 30_000);
   });
 
   describe("generateDiffFiles", () => {

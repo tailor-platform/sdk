@@ -29,6 +29,7 @@ import type {
   TableRenamedChange,
 } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
+import type { MigrationScriptForm } from "./script-form";
 
 /** Marker left in generated migration scripts until their normalization logic is reviewed. */
 export const MIGRATION_REVIEW_REQUIRED_MARKER = "TODO(tailor-migration-review)";
@@ -117,6 +118,7 @@ export async function generateSchemaFile(
  * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
  * column types instead of their `Date`/`string` defaults. Should match whatever
  * `kyselyTypePlugin` was configured with. Defaults to `false`.
+ * @param scriptKind - Whether a generated migration script exports `main` or `steps`
  * @returns {Promise<GenerateDiffResult>} Generated file info
  */
 export async function generateDiffFiles(
@@ -127,6 +129,7 @@ export async function generateDiffFiles(
   description?: string,
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
+  scriptKind: MigrationScriptForm["kind"] = "main",
 ): Promise<GenerateDiffResult> {
   // Create migration directory
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
@@ -160,7 +163,7 @@ export async function generateDiffFiles(
   };
 
   if (writeScript) {
-    const scriptContent = generateMigrationScript(diffWithDescription, expandPlans);
+    const scriptContent = generateMigrationScript(diffWithDescription, expandPlans, scriptKind);
     await fs.writeFile(migrateFilePath, scriptContent);
     result.migrateFilePath = migrateFilePath;
 
@@ -198,6 +201,8 @@ interface GenerateDataOnlyFilesOptions {
    * was configured with. Defaults to `false`.
    */
   temporal?: boolean;
+  /** Whether the script skeleton exports `main` or `steps`. Defaults to `main`. */
+  scriptKind?: MigrationScriptForm["kind"];
 }
 
 /** Files written for a data-only migration. */
@@ -221,7 +226,14 @@ interface GenerateDataOnlyFilesResult {
 export async function generateDataOnlyMigrationFiles(
   options: GenerateDataOnlyFilesOptions,
 ): Promise<GenerateDataOnlyFilesResult> {
-  const { migrationsDir, migrationNumber, snapshot, description, temporal = false } = options;
+  const {
+    migrationsDir,
+    migrationNumber,
+    snapshot,
+    description,
+    temporal = false,
+    scriptKind = "main",
+  } = options;
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
   await fs.mkdir(migrationDir, { recursive: true });
 
@@ -236,7 +248,7 @@ export async function generateDataOnlyMigrationFiles(
 
   const diff = description ? { ...options.diff, description } : options.diff;
   await fs.writeFile(diffFilePath, JSON.stringify(diff, null, 2));
-  await fs.writeFile(migrateFilePath, generateDataOnlyMigrationScript(diff.namespace));
+  await fs.writeFile(migrateFilePath, generateDataOnlyMigrationScript(diff.namespace, scriptKind));
   const typeFiles = await writeMigrationTypeFiles({
     previousSnapshot: snapshot,
     diff,
@@ -258,27 +270,78 @@ export async function generateDataOnlyMigrationFiles(
 /**
  * Generate the script skeleton for a data-only migration
  * @param {string} namespace - TailorDB namespace the migration belongs to
+ * @param scriptKind - Whether the skeleton exports `main` or `steps`
  * @returns {string} Migration script content
  */
-function generateDataOnlyMigrationScript(namespace: string): string {
+function generateDataOnlyMigrationScript(
+  namespace: string,
+  scriptKind: MigrationScriptForm["kind"],
+): string {
   return `/**
  * Data-only migration script for ${namespace}
  *
  * This migration carries no schema change; it exists to run this script.
  * Edit this file to implement the data transformation.
  *
- * \`main\` runs in one transaction managed by the deploy command.
+${scriptTransactionNotes(scriptKind)}
+ */
+
+${renderScript(scriptKind, "  // TODO: Implement the data transformation for this migration", "")}`;
+}
+
+/**
+ * Header lines describing how the script's transactions behave
+ * @param scriptKind - Whether the script exports `main` or `steps`
+ * @returns Comment lines, each starting with ` *`
+ */
+function scriptTransactionNotes(scriptKind: MigrationScriptForm["kind"]): string {
+  if (scriptKind === "steps") {
+    return ` * Each step runs in its own transaction and commits on its own. A deploy that
+ * fails after a step committed resumes from the steps that have not completed, so
+ * write every step to be safe to run again. Split \`migrate\` into several steps
+ * where the work divides, and order them with \`dependsOn\`.
+ * See "Splitting a migration into steps" in the TailorDB migration docs.`;
+  }
+  return ` * \`main\` runs in one transaction managed by the deploy command.
  * If any operation fails, all of its changes are rolled back.
  *
  * To commit a long data migration in parts,
  * export \`steps\` instead of \`main\`: each step runs in its own transaction.
- * See "Splitting a migration into steps" in the TailorDB migration docs.
+ * See "Splitting a migration into steps" in the TailorDB migration docs.`;
+}
+
+/**
+ * Render the imports and the exported entry point of a migration script
+ * @param scriptKind - Whether to export `main` or `steps`
+ * @param body - Statements of the migration, indented for a `main` function body
+ * @param helpers - Helper declarations placed between the import and the entry point
+ * @returns Script source after the header comment
  */
-
-import type { Transaction } from "./db";
-
+function renderScript(
+  scriptKind: MigrationScriptForm["kind"],
+  body: string,
+  helpers: string,
+): string {
+  if (scriptKind === "steps") {
+    const indented = body
+      .split("\n")
+      .map((line) => (line === "" ? line : `    ${line}`))
+      .join("\n");
+    return `import type { MigrationSteps } from "./db";
+${helpers}
+export const steps = {
+  migrate: {
+    run: async (trx) => {
+${indented}
+    },
+  },
+} satisfies MigrationSteps;
+`;
+  }
+  return `import type { Transaction } from "./db";
+${helpers}
 export async function main(trx: Transaction): Promise<void> {
-  // TODO: Implement the data transformation for this migration
+${body}
 }
 `;
 }
@@ -287,11 +350,13 @@ export async function main(trx: Transaction): Promise<void> {
  * Generate migration script content based on diff
  * @param {MigrationDiff} diff - Migration diff
  * @param expandPlans - Field changes carried through temporary fields
+ * @param scriptKind - Whether the script exports `main` or `steps`
  * @returns {string} Migration script content
  */
 export function generateMigrationScript(
   diff: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
+  scriptKind: MigrationScriptForm["kind"] = "main",
 ): string {
   const updates: string[] = [];
   const typeRenameTargets = new Map(
@@ -337,41 +402,36 @@ export function generateMigrationScript(
  * for warning-tier changes it is optional). Edit this file to implement
  * your data migration logic.
  *
- * \`main\` runs in one transaction managed by the deploy command.
- * If any operation fails, all of its changes are rolled back.
- *
- * To commit a long data migration in parts,
- * export \`steps\` instead of \`main\`: each step runs in its own transaction.
- * See "Splitting a migration into steps" in the TailorDB migration docs.
+${scriptTransactionNotes(scriptKind)}
  */
 
-import type { Transaction } from "./db";
-${helpers}
-export async function main(trx: Transaction): Promise<void> {
-${updates.join("\n\n")}
-}
-`;
+${renderScript(scriptKind, updates.join("\n\n"), helpers)}`;
 }
 
 /**
  * Generate migration test file content
  * @param {MigrationDiff} diff - Migration diff
+ * @param scriptKind - Whether migrate.ts exports `main` or `steps`
  * @returns {string} Migration test file content
  */
-export function generateMigrationTestScript(diff: MigrationDiff): string {
+export function generateMigrationTestScript(
+  diff: MigrationDiff,
+  scriptKind: MigrationScriptForm["kind"] = "main",
+): string {
+  const isSteps = scriptKind === "steps";
   return `/**
  * Unit test for the ${diff.namespace} migration script.
  *
  * The mock compiles queries to the same SQL as the deployed migration, so the
  * test verifies the exact statements migrate.ts issues. Stage the rows each
- * query returns, run main() inside a transaction, then assert the executed
+ * query returns, run ${isSteps ? "the steps" : "main()"} inside a transaction, then assert the executed
  * statements.
  */
 
-import { createKyselyMock } from "@tailor-platform/sdk/vitest";
+import { createKyselyMock${isSteps ? ", runMigrationSteps" : ""} } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import type { Database } from "./db";
-import { main } from "./migrate";
+import { ${isSteps ? "steps" : "main"} } from "./migrate";
 
 describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
   test("issues the intended statements", async () => {
@@ -380,9 +440,15 @@ describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
     // Stage the rows each query returns, in execution order:
     // mock.enqueueResult([{ id: "record-1" }]);
 
-    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
+${
+  isSteps
+    ? `    // Pass env when your steps use it: runMigrationSteps(steps, { transaction, env: { ... } })
+    await runMigrationSteps(steps, { transaction: (run) => mock.withTx(run) });
+`
+    : `    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
     await mock.withTx((trx) => main(trx));
-
+`
+}
     // Replace with assertions on the statements the script must issue:
     // expect(mock.updates).toHaveLength(1);
     // expect(mock.updates[0]?.updateValues()).toEqual({ field: "value" });
@@ -397,9 +463,14 @@ describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
 /**
  * Generate the PGlite test file content
  * @param {MigrationDiff} diff - Migration diff
+ * @param scriptKind - Whether migrate.ts exports `main` or `steps`
  * @returns {string} PGlite test file content
  */
-export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
+export function generateMigrationPgliteTestScript(
+  diff: MigrationDiff,
+  scriptKind: MigrationScriptForm["kind"] = "main",
+): string {
+  const isSteps = scriptKind === "steps";
   const schema = /^[A-Za-z_$][\w$]*$/.test(diff.namespace)
     ? `pgliteSchema.${diff.namespace}`
     : `pgliteSchema[${JSON.stringify(diff.namespace)}]`;
@@ -408,7 +479,7 @@ export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
  *
  * The generated db.pglite.ts creates the tables as they stand while migrate.ts
  * runs, on an in-memory Postgres. Stage the rows the script converts, run
- * main() inside a transaction, then assert the rows it leaves behind.${
+ * ${isSteps ? "the steps" : "main()"} inside a transaction, then assert the rows it leaves behind.${
    diff.temporal
      ? `
  *
@@ -419,11 +490,11 @@ export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
  */
 
 import { PGlite } from "@electric-sql/pglite";
-import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
+import { createKyselyPGlite${isSteps ? ", runMigrationSteps" : ""}, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { pgliteSchema } from "./db.pglite";
-import { main } from "./migrate";
+import { ${isSteps ? "steps" : "main"} } from "./migrate";
 
 const pglite = new PGlite();
 const db = createKyselyPGlite<Unmigrated<Database>>(pglite${diff.temporal ? ", { temporal: true }" : ""});
@@ -442,9 +513,15 @@ describe(${JSON.stringify(`${diff.namespace} migration (PGlite)`)}, () => {
     // Stage the rows the script converts:
     // await db.insertInto("Table").values([{ field: "before" }]).execute();
 
-    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
+${
+  isSteps
+    ? `    // Pass env when your steps use it: runMigrationSteps(steps, { transaction, env: { ... } })
+    await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+`
+    : `    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
     await expect(db.transaction().execute((trx) => main(trx))).resolves.toBeUndefined();
-
+`
+}
     // Add assertions on the rows the script leaves behind:
     // expect(await db.selectFrom("Table").selectAll().execute()).toEqual([{ field: "after" }]);
   });

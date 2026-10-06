@@ -236,7 +236,7 @@ Sometimes existing data must be transformed without any schema change — fixing
 tailor tailordb migration generate --data-only --name "normalize legacy phone numbers"
 ```
 
-This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skeleton, and `db.ts` typed against the current schema. Edit `migrate.ts` to implement the transformation; the next `tailor deploy` runs it like any other migration script — in a single transaction, advancing the migration checkpoint (see [Performance and Large Tables](#performance-and-large-tables) for batching patterns). Because the entry is part of the migration history, the fix is versioned, ordered relative to schema changes, and applied once per workspace.
+This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skeleton, and `db.ts` typed against the current schema. Edit `migrate.ts` to implement the transformation (pass `--steps` to scaffold it as a [steps script](#splitting-a-migration-into-steps)); the next `tailor deploy` runs it like any other migration script — in a single transaction, advancing the migration checkpoint (see [Performance and Large Tables](#performance-and-large-tables) for batching patterns). Because the entry is part of the migration history, the fix is versioned, ordered relative to schema changes, and applied once per workspace.
 
 The command requires a clean state: if the namespace has schema changes that are not yet in migration files, generate the schema migration first. With multiple namespaces, pass `--namespace` to name the target. `--data-only` cannot be combined with `--init`, `--rename`, `--drop`, or `--expand-contract`.
 
@@ -268,15 +268,15 @@ export default defineConfig({
 
 ## Generated Files
 
-| File                          | When generated                                                                                                                            | Description                                                                                                              |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `0000/schema.json`            | First `migration generate`                                                                                                                | Full snapshot of all tables in the namespace.                                                                            |
-| `XXXX/diff.json`              | Every subsequent migration                                                                                                                | Field-level diff against the previous snapshot.                                                                          |
-| `XXXX/migrate.ts`             | Auto-generated for breaking changes and `--data-only` migrations; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`.                                           |
-| `XXXX/db.ts`                  | Generated once when `migrate.ts` is created                                                                                               | Kysely types reflecting the schema **before** this migration. Exports `Database`, `Transaction`, and `MigrationContext`. |
-| `XXXX/db.pglite.ts`           | Generated with `db.ts`                                                                                                                    | `CREATE TABLE` script of the same schema, for running `migrate.ts` on PGlite. Never deployed.                            |
-| `XXXX/migrate.test.ts`        | Added via `tailordb migration script --with-test`                                                                                         | Unit-test scaffold for `migrate.ts` (see [Testing Migrations Locally](#testing-migrations-locally)). Never deployed.     |
-| `XXXX/migrate.pglite.test.ts` | Added via `tailordb migration script --with-test` when `@electric-sql/pglite` is installed                                                | PGlite test scaffold for `migrate.ts`. Never deployed.                                                                   |
+| File                          | When generated                                                                                                                            | Description                                                                                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `0000/schema.json`            | First `migration generate`                                                                                                                | Full snapshot of all tables in the namespace.                                                                                          |
+| `XXXX/diff.json`              | Every subsequent migration                                                                                                                | Field-level diff against the previous snapshot.                                                                                        |
+| `XXXX/migrate.ts`             | Auto-generated for breaking changes and `--data-only` migrations; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`; a `steps` export runs each step in its own transaction. |
+| `XXXX/db.ts`                  | Generated once when `migrate.ts` is created                                                                                               | Kysely types reflecting the schema **before** this migration. Exports `Database`, `Transaction`, and `MigrationContext`.               |
+| `XXXX/db.pglite.ts`           | Generated with `db.ts`                                                                                                                    | `CREATE TABLE` script of the same schema, for running `migrate.ts` on PGlite. Never deployed.                                          |
+| `XXXX/migrate.test.ts`        | Added via `tailordb migration script --with-test`                                                                                         | Unit-test scaffold for `migrate.ts` (see [Testing Migrations Locally](#testing-migrations-locally)). Never deployed.                   |
+| `XXXX/migrate.pglite.test.ts` | Added via `tailordb migration script --with-test` when `@electric-sql/pglite` is installed                                                | PGlite test scaffold for `migrate.ts`. Never deployed.                                                                                 |
 
 `db.ts` reflects the pre-migration schema because the script runs after the pre-migration phase has temporarily relaxed breaking constraints (e.g., a new `required` field is added as `optional` first), so the data being read still matches the previous shape.
 
@@ -401,6 +401,7 @@ export const steps = {
 ```
 
 - A script exports either `main` or `steps`. If it exports both, `main` runs as before and `steps` is ignored with a warning from `tailor deploy` and `tailor tailordb migration validate`.
+- Generated scripts export `main`. To scaffold one that exports `steps`, pass `--steps` to `tailor tailordb migration generate` (when the migration needs a script, including with `--data-only`) or to `tailor tailordb migration script <N>`. The scaffold holds one step named `migrate` with the statements `main` would have contained; split it into several steps where the work divides. `--steps` is rejected when `migrate.ts` already exists.
 - Each step is an object with a `run` function — it receives its own transaction and the same `MigrationContext` as `main` — and an optional `dependsOn` list naming the steps that must complete before it starts.
 - Steps with no dependency between them have no guaranteed order. Declaration order is not execution order, and a future SDK version may run independent steps concurrently, so declare `dependsOn` for every ordering your steps rely on.
 - Declare `steps` directly as `export const steps = { ... }`, with each step written inside it as an object literal with a literal name and `dependsOn` list. Step names start with a letter and contain only letters, digits, and underscores, up to 64 characters. `tailor tailordb migration validate` and `tailor deploy` reject unknown dependencies and cycles before anything is changed.
@@ -987,6 +988,8 @@ test("backfills every table", async () => {
   // assert the rows
 });
 ```
+
+`tailor tailordb migration script <N> --with-test` writes both test scaffolds against `steps` when `migrate.ts` exports `steps`, calling `runMigrationSteps` instead of `main`.
 
 To test one step on its own, call its `run` with a transaction — and a `{ env }` context when the step takes one: `await db.transaction().execute((trx) => steps.backfillInvoice.run(trx))`. With `createKyselyMock`, pass `transaction: (run) => mock.withTx(run)`.
 

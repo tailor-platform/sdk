@@ -8,6 +8,7 @@ import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { generateCommand } from "./generate";
+import { analyzeMigrationScriptSource } from "./script-form";
 import { loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
@@ -358,6 +359,23 @@ describe("tailordb migration generate with an unsupported field type change", ()
     ]);
   });
 
+  test("scaffolds the conversion script as steps with --steps", async () => {
+    const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--expand-contract",
+      "User.name",
+      "--steps",
+    ]);
+
+    expect(result.success).toBe(true);
+    const scriptPath = path.join(ns.migrationsDir, "0001", "migrate.ts");
+    expect(
+      analyzeMigrationScriptSource(fs.readFileSync(scriptPath, "utf-8"), scriptPath).kind,
+    ).toBe("steps");
+  });
+
   test("converts a single value into an array through the same pair", async () => {
     const parsed = parsedType("User");
     const field = parsed.fields.name!;
@@ -675,6 +693,23 @@ describe("tailordb migration generate nested member rename preflight", () => {
     expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
   });
 
+  test("scaffolds the copy script as steps with --steps", async () => {
+    const entry = addNestedNamespace("tailordb", "zipCode");
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User.address.zip:zipCode",
+      "--steps",
+    ]);
+
+    expect(result.success).toBe(true);
+    const scriptPath = path.join(entry.migrationsDir, "0001", "migrate.ts");
+    const script = fs.readFileSync(scriptPath, "utf-8");
+    expect(analyzeMigrationScriptSource(script, scriptPath).kind).toBe("steps");
+    expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
+  });
+
   test("keeps the removal warning with --drop Table.field.member", async () => {
     const entry = addNestedNamespace("tailordb", "zipCode");
 
@@ -923,6 +958,19 @@ describe("tailordb migration generate --data-only", () => {
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.pglite.ts"))).toBe(true);
     const replayed = reconstructSnapshotFromMigrations(entry.migrationsDir);
     expect(replayed?.tables.User?.fields.name?.type).toBe("string");
+  });
+
+  test("creates the script as steps with --steps", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes", "--steps"]);
+
+    expect(result.success).toBe(true);
+    const scriptPath = path.join(entry.migrationsDir, "0001", "migrate.ts");
+    expect(analyzeMigrationScriptSource(fs.readFileSync(scriptPath, "utf8"), scriptPath)).toEqual({
+      kind: "steps",
+      order: ["migrate"],
+    });
   });
 
   test("records the --name description in the diff", async () => {
