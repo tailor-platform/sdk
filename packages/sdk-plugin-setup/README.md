@@ -33,16 +33,16 @@ tailor setup update
 
 ## Commands
 
-| Command            | Description                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------------- |
-| `setup ci branch`  | Generate a branch-target deploy workflow (push to branch triggers deploy).                      |
-| `setup ci tag`     | Generate a tag-target deploy workflow (tag push triggers deploy).                               |
-| `setup ci preview` | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).               |
-| `setup ci env`     | Print the secrets and variables each GitHub Environment needs, as `gh` commands or Terraform.   |
-| `setup deps`       | Generate a dependency update config for Tailor dependency and workflow updates.                 |
-| `setup check`      | Audit generated workflows for drift against the current config/repo (read-only).                |
-| `setup update`     | Regenerate every workflow/action in `.github/tailor.lock` with the flags it was generated with. |
-| `setup delete`     | Delete managed workflow/action file(s) and their `.github/tailor.lock` entries.                 |
+| Command            | Description                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `setup ci branch`  | Generate a branch-target deploy workflow (push to branch triggers deploy).                    |
+| `setup ci tag`     | Generate a tag-target deploy workflow (tag push triggers deploy).                             |
+| `setup ci preview` | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).             |
+| `setup ci env`     | Print the secrets and variables each GitHub Environment needs, as `gh` commands or Terraform. |
+| `setup deps`       | Generate a dependency update config for Tailor dependency and workflow updates.               |
+| `setup check`      | Audit generated workflows for drift against the current config/repo (read-only).              |
+| `setup update`     | Regenerate every workflow in `.github/tailor.lock` with the flags it was generated with.      |
+| `setup delete`     | Delete managed workflow file(s) and their `.github/tailor.lock` entries.                      |
 
 Run `tailor setup ci <command> --help` for CI generator options, or
 `tailor setup <command> --help` for `deps`, `check`, `update`, and `delete` options.
