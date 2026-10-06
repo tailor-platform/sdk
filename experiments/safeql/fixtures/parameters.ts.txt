@@ -1,0 +1,6 @@
+import { sql } from "./sql";
+
+export const query = sql`
+  SELECT "email" FROM "Account"
+  WHERE "age" > ${18} AND "role" = ${"ADMIN"} AND "active" = ${true}
+`;

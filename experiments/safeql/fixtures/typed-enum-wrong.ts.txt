@@ -1,0 +1,4 @@
+import { sql } from "./sql";
+export function find(role: string) {
+  return sql`SELECT "email" FROM "Account" WHERE "role" = ${role}`;
+}

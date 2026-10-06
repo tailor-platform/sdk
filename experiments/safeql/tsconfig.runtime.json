@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "#/*": ["../../packages/sdk/src/*.ts"]
+    }
+  }
+}

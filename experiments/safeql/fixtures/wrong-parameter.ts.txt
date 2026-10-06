@@ -1,0 +1,3 @@
+import { sql } from "./sql";
+const minimumAge = "eighteen";
+export const query = sql`SELECT "email" FROM "Account" WHERE "age" > ${minimumAge}`;
