@@ -388,7 +388,7 @@ const START_LOOKUP_ATTEMPTS = 3;
  * @param workspaceId - Workspace ID
  * @param name - Shared resource name
  * @param pollInterval - Wait between lookups in milliseconds
- * @returns The newest execution of the workflow, if one is listed
+ * @returns The newest execution of the workflow this run created, if one is listed
  */
 async function findStartedExecution(
   client: OperatorClient,
