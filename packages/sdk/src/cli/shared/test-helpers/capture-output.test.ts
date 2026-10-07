@@ -21,6 +21,22 @@ describe("captureStdoutStream", () => {
     expect(stdout.output).toBe('{"name":"日本語"}\n');
   });
 
+  test("joins a UTF-8 character split across two writes", () => {
+    using stdout = captureStdoutStream();
+    const bytes = new TextEncoder().encode("日");
+    process.stdout.write(bytes.slice(0, 1));
+    process.stdout.write(bytes.slice(1));
+    expect(stdout.output).toBe("日");
+  });
+
+  test("keeps an incomplete trailing sequence visible instead of dropping it", () => {
+    using stdout = captureStdoutStream();
+    process.stdout.write(Uint8Array.of(0xe2));
+    console.log("{}");
+    expect(stdout.output).not.toBe("{}\n");
+    expect(stdout.output).toContain("\uFFFD");
+  });
+
   test("stops capturing once disposed", () => {
     {
       using stdout = captureStdoutStream();

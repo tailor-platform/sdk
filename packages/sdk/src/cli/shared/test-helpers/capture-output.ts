@@ -52,21 +52,21 @@ export function captureStdout(): CapturedOutput {
  * @returns A `Disposable` exposing the captured stdout via `output`
  */
 export function captureStdoutStream(): CapturedOutput {
-  let output = "";
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
   const log = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
-    output += `${args.map(String).join(" ")}\n`;
+    chunks.push(encoder.encode(`${args.map(String).join(" ")}\n`));
   });
-  const decoder = new TextDecoder();
   const write = vi
     .spyOn(process.stdout, "write")
     .mockImplementation((chunk: string | Uint8Array) => {
-      output += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+      chunks.push(typeof chunk === "string" ? encoder.encode(chunk) : Uint8Array.from(chunk));
       return true;
     });
 
   return {
     get output() {
-      return output;
+      return Buffer.concat(chunks).toString("utf8");
     },
     [Symbol.dispose]() {
       log.mockRestore();
