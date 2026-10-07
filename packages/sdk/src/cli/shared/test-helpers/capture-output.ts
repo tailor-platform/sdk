@@ -36,18 +36,20 @@ export function captureStdout(): CapturedOutput {
 }
 
 /**
- * Captures everything that reaches stdout for the lifetime of the returned
- * disposable: `console.log` (one line per call) and `process.stdout.write`.
- * Restores both spies on dispose. Use with `using`:
+ * Captures what is written through `console.log` (one line per call) and
+ * `process.stdout.write` for the lifetime of the returned disposable, and
+ * restores both spies on dispose. Other console methods such as
+ * `console.info` and `console.debug` are not captured: Vitest handles them
+ * itself. Use with `using`:
  *
  * ```ts
  * test("...", async () => {
  *   using stdout = captureStdoutStream();
  *   // ...
- *   expect(stdout.output.trim().split("\n")).toHaveLength(1);
+ *   expect(stdout.output).toBe(`${JSON.stringify(result)}\n`);
  * });
  * ```
- * @returns A `Disposable` exposing everything written to stdout via `output`
+ * @returns A `Disposable` exposing the captured stdout via `output`
  */
 export function captureStdoutStream(): CapturedOutput {
   let output = "";
