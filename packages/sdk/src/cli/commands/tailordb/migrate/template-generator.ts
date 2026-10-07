@@ -293,6 +293,8 @@ interface ScriptStep {
   name: string;
   body: string;
   dependsOn: readonly string[];
+  /** The step rewrites values that already exist, which a rollback does not bring back. */
+  overwritesExistingValues?: boolean;
 }
 
 /** A field a step reads or writes; `ALL_FIELDS` stands for every field of the table. */
@@ -308,6 +310,10 @@ const RESERVED_FUNCTION_NAMES = ["renameNestedMember"];
 
 const NO_DATA_MIGRATION_BODY = `  // No data migration needed for this schema change
   // Add custom data transformations if required`;
+
+const OVERWRITE_NOTE = `// Overwrites existing values. Once this step commits it cannot be undone, and a
+// resumed deploy does not run it again, so check the values it writes before you deploy.
+`;
 
 const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 
@@ -356,6 +362,27 @@ function describeChange(change: DiffChange): { preferredName: string; touches: F
       };
     default:
       return { preferredName: "", touches: [{ table: change.tableName, field: ALL_FIELDS }] };
+  }
+}
+
+/**
+ * Whether the statements of a change rewrite values that already exist. Steps
+ * that only fill columns or tables the Pre-phase added, or only add members
+ * next to the old ones, leave the original values in place.
+ * @param change - Diff change the statements were generated for
+ * @param statementCount - Number of statements generated for the change
+ * @returns True when the step overwrites existing values
+ */
+function overwritesExistingValues(change: DiffChange, statementCount: number): boolean {
+  switch (change.kind) {
+    case "index_added":
+    case "index_modified":
+    case "field_type_modified":
+      return true;
+    case "field_modified":
+      return !(change.memberRenames?.length && statementCount === 1);
+    default:
+      return false;
   }
 }
 
@@ -411,11 +438,13 @@ function buildScriptSteps(
     fallbackName: string;
     body: string;
     touches: readonly FieldTouch[];
+    overwritesExistingValues: boolean;
   }
   const drafts: Draft[] = expandPlans.map((plan, index) => ({
     preferredName: `convert${capitalize(plan.tableName)}${capitalize(plan.fieldName)}`,
     fallbackName: `expand${index + 1}`,
     body: generateExpandConversionScript(plan),
+    overwritesExistingValues: true,
     touches: [
       { table: plan.tableName, field: plan.fieldName },
       { table: plan.tableName, field: plan.tempFieldName },
@@ -433,6 +462,7 @@ function buildScriptSteps(
         ...statements,
       ].join("\n\n"),
       touches,
+      overwritesExistingValues: overwritesExistingValues(change, statements.length),
     });
   });
 
@@ -448,7 +478,12 @@ function buildScriptSteps(
       .filter((step) => touchesOverlap(step.touches, draft.touches))
       .map((step) => step.name);
     earlier.push({ name, touches: draft.touches });
-    return { name, body: draft.body, dependsOn };
+    return {
+      name,
+      body: draft.body,
+      dependsOn,
+      overwritesExistingValues: draft.overwritesExistingValues,
+    };
   });
 }
 
@@ -472,10 +507,13 @@ function copyOnceGuard(change: TableRenamedChange): string {
  * @returns Script source after the header comment
  */
 function renderScript(body: string, helpers: string, steps: readonly ScriptStep[] = []): string {
-  const units = steps.length > 0 ? steps : [{ name: "migrate", body, dependsOn: [] }];
+  const units: readonly ScriptStep[] =
+    steps.length > 0 ? steps : [{ name: "migrate", body, dependsOn: [] }];
   const functions = units
     .map(
-      (unit) => `async function ${unit.name}(trx: Transaction): Promise<void> {
+      (
+        unit,
+      ) => `${unit.overwritesExistingValues ? OVERWRITE_NOTE : ""}async function ${unit.name}(trx: Transaction): Promise<void> {
 ${unit.body}
 }`,
     )

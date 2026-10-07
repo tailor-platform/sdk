@@ -395,6 +395,92 @@ describe("template-generator", () => {
       expect(order(script)).toEqual(["convertUserName"]);
     });
 
+    describe("note before a step that overwrites existing values", () => {
+      const NOTE = [
+        "// Overwrites existing values. Once this step commits it cannot be undone, and a",
+        "// resumed deploy does not run it again, so check the values it writes before you deploy.",
+      ].join("\n");
+      const noteBefore = (script: string, stepName: string) =>
+        script.includes(`${NOTE}\nasync function ${stepName}(`);
+
+      test("is written before the duplicate resolution of an index", () => {
+        const script = generateMigrationScript(
+          stepsDiff({
+            kind: "index_added",
+            tableName: "User",
+            indexName: "name_org",
+            after: { fields: ["name", "org"], unique: true },
+          }),
+        );
+
+        expect(noteBefore(script, "resolveUserName_org")).toBe(true);
+      });
+
+      test("is written before a field change that rewrites values", () => {
+        const script = generateMigrationScript(
+          stepsDiff({
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "email",
+            before: { type: "string", required: true },
+            after: { type: "string", required: true, unique: true },
+          }),
+        );
+
+        expect(noteBefore(script, "updateUserEmail")).toBe(true);
+      });
+
+      test("is written before the conversion through a temporary field", () => {
+        const script = generateMigrationScript(stepsDiff(), [
+          {
+            tableName: "User",
+            fieldName: "name",
+            tempFieldName: "nameMigrate",
+            before: { type: "integer", required: true },
+            after: { type: "string", required: true },
+          },
+        ]);
+
+        expect(noteBefore(script, "convertUserName")).toBe(true);
+      });
+
+      test("is not written before steps that only fill new columns or tables", () => {
+        const script = generateMigrationScript(
+          stepsDiff(
+            addedRequired("User", "phone"),
+            renamedField("User", "fullName", "displayName"),
+            renamedTable("Account", "Person"),
+          ),
+        );
+
+        expect(script).not.toContain("Overwrites existing values");
+      });
+
+      test("is not written before a field change that only adds nested members", () => {
+        const script = generateMigrationScript(
+          stepsDiff({
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false } },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: { zipCode: { type: "string", required: false } },
+            },
+            memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+          }),
+        );
+
+        expect(order(script)).toEqual(["updateUserAddress"]);
+        expect(script).not.toContain("Overwrites existing values");
+      });
+    });
+
     test("names a step change<N> when its descriptive name cannot be a step name", () => {
       const longName = "a".repeat(70);
       const script = generateMigrationScript(
