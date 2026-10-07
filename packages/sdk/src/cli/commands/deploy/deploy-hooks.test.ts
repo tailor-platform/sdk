@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { beforeEach, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
-import { captureStdoutStream } from "#/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdoutStream } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
@@ -506,7 +506,7 @@ test("reports skipped hooks when loading their context in JSON mode fails", asyn
 });
 
 function stdoutLines(output: string) {
-  return output.split("\n").filter((line) => line.trim() !== "");
+  return (output.endsWith("\n") ? output.slice(0, -1) : output).split("\n");
 }
 function expectOneJsonObject(output: string) {
   const lines = stdoutLines(output);
@@ -517,14 +517,14 @@ function expectOneJsonObject(output: string) {
   return value;
 }
 test("--json apply prints one JSON object on stdout", async () => {
-  using _logger = silenceLogger("info", "warn", "success", "log");
+  using _stderr = captureStderr();
   using _json = jsonMode();
   using stdout = captureStdoutStream();
   await deploy({ yes: true, noValidate: true });
   expect(expectOneJsonObject(stdout.output)).toMatchObject({ status: "applied" });
 });
 test("--json apply with a hook that logs through the provided logger keeps stdout to one JSON object", async () => {
-  using _logger = silenceLogger("info", "warn", "success", "log");
+  using _stderr = captureStderr();
   using _json = jsonMode();
   using stdout = captureStdoutStream();
   register(({ logger: hookLogger }) => {
@@ -537,7 +537,7 @@ test("--json apply with a hook that logs through the provided logger keeps stdou
   });
 });
 test("--json dry-run prints one JSON object on stdout", async () => {
-  using _logger = silenceLogger("info", "warn", "success", "log");
+  using _stderr = captureStderr();
   using _json = jsonMode();
   using stdout = captureStdoutStream();
   register(vi.fn());
