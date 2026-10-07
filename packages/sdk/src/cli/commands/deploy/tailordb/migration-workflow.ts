@@ -24,7 +24,7 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
 import { getOrNull, isNotFoundError } from "#/cli/shared/client";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
@@ -439,13 +439,28 @@ function outcomeUnknownError(
 ): Error {
   const { namespace, migrationNumber } = options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
+  const executionsHint = formatCommandHint({
+    command: "tailor",
+    args: ["workflow", "executions", "--workflow-name", name],
+  });
+  const syncHint = (checkpoint: number) =>
+    formatCommandHint({
+      command: "tailor",
+      args: [
+        "tailordb",
+        "migration",
+        "sync",
+        formatMigrationNumber(checkpoint),
+        "--namespace",
+        namespace,
+      ],
+    });
   return CLIError({
     code: "MIGRATION_OUTCOME_UNKNOWN",
     message,
     suggestion:
-      `Run 'tailor workflow executions --workflow-name ${name}' until its execution has finished or none is listed. ` +
-      `If the execution succeeded, run 'tailor tailordb migration sync ${formatMigrationNumber(migrationNumber)} --namespace ${namespace}'; ` +
-      `otherwise run 'tailor tailordb migration sync ${formatMigrationNumber(migrationNumber - 1)} --namespace ${namespace}'. ` +
+      `Run ${executionsHint} until its execution has finished or none is listed. ` +
+      `If the execution succeeded, run ${syncHint(migrationNumber)}; otherwise run ${syncHint(migrationNumber - 1)}. ` +
       `Then deploy again. Until then, the tables of namespace '${namespace}' stay in maintenance mode.`,
     context: {
       namespace,

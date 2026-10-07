@@ -365,7 +365,7 @@ describe("executeMigrationAsWorkflow", () => {
       code: "MIGRATION_OUTCOME_UNKNOWN",
       message: "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
       suggestion: expect.stringContaining(
-        "tailor workflow executions --workflow-name tailordb-migration--tailordb--0003",
+        "Run `tailor workflow executions --workflow-name tailordb-migration--tailordb--0003` until",
       ),
       cause: lost,
     });
@@ -379,7 +379,7 @@ describe("executeMigrationAsWorkflow", () => {
 
     await expect(run(client)).rejects.toMatchObject({
       suggestion: expect.stringMatching(
-        /succeeded, run 'tailor tailordb migration sync 0003 --namespace tailordb'.*otherwise run 'tailor tailordb migration sync 0002 --namespace tailordb'/,
+        /succeeded, run `tailor tailordb migration sync 0003 --namespace tailordb`; otherwise run `tailor tailordb migration sync 0002 --namespace tailordb`\./,
       ),
     });
   });
