@@ -461,6 +461,27 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     );
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function withInputs(planResult: any) {
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-ns",
+        config: {},
+        types: snapshotFixtures.reconstructSnapshotFromMigrations("/test/migrations", 1).tables,
+      },
+    ];
+    return planResult;
+  }
+
+  function lastGoodsReceiptSettings(client: OperatorClient) {
+    const writes = vi.mocked(client.updateTailorDBType).mock.calls.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (call) => (call[0] as any)?.tailordbType?.name === "GoodsReceipt",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (writes.at(-1)?.[0] as any)?.tailordbType?.schema?.settings;
+  }
+
   async function withOverriddenSnapshot(
     override: (migrationsDir: string, maxVersion?: number) => SchemaSnapshot | null,
     run: () => Promise<void>,
@@ -512,9 +533,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("keeps the Pre-phase schema when the migration's outcome is unknown", async () => {
+  test("keeps the Pre-phase schema and the restrictions when the migration's outcome is unknown", async () => {
     const client = createMockClient();
-    const planResult = createMockPlanResult();
+    const planResult = withInputs(createMockPlanResult());
 
     setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
@@ -531,6 +552,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(client.createTailorDBType).toHaveBeenCalledTimes(1);
     expect(deletedTableNames(client)).not.toContain("StockReservation");
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+    expect(lastGoodsReceiptSettings(client)?.disableGqlOperations).toEqual({
+      create: true,
+      update: true,
+      delete: true,
+      read: true,
+    });
   });
 
   test("deletes the new table's GQL permission before dropping the table on rollback", async () => {
@@ -1144,27 +1171,6 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           return state.number === 1 ? [] : [mkStepsMigration()];
         },
       );
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function withInputs(planResult: any) {
-      planResult.context.tailorDBInputs = [
-        {
-          namespace: "test-ns",
-          config: {},
-          types: snapshotFixtures.reconstructSnapshotFromMigrations("/test/migrations", 1).tables,
-        },
-      ];
-      return planResult;
-    }
-
-    function lastGoodsReceiptSettings(client: OperatorClient) {
-      const writes = vi.mocked(client.updateTailorDBType).mock.calls.filter(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (call) => (call[0] as any)?.tailordbType?.name === "GoodsReceipt",
-      );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (writes.at(-1)?.[0] as any)?.tailordbType?.schema?.settings;
     }
 
     aroundEach(async (runTest) => {

@@ -7,11 +7,12 @@
  * duration.
  *
  * The temporary function, job function, and workflow are removed once the
- * execution reaches a terminal state; a multi-step run keeps them until its
- * checkpoint is committed so a later deploy can resume it. Every resource is
- * labeled with the app's ownership immediately, so a run interrupted before
- * teardown stays attributable, and the next run of the same migration reclaims
- * the leftovers before recreating them.
+ * deploy sees the execution reach a terminal state; a multi-step run keeps them
+ * until its checkpoint is committed so a later deploy can resume it. Every
+ * resource is labeled with the app's ownership immediately, so a run
+ * interrupted before teardown stays attributable, and the next run of the same
+ * migration reclaims the leftovers before recreating them unless an execution
+ * of them is still running.
  */
 
 import * as crypto from "node:crypto";
@@ -322,6 +323,7 @@ export async function executeMigrationAsWorkflow(
     throw outcomeUnknownError(
       options,
       `Migration ${migrationLabel} has an execution that is still running (${active.id}).`,
+      { executionId: active.id },
     );
   }
   await reclaimLeftovers(client, workspaceId, name);
@@ -358,7 +360,7 @@ export async function executeMigrationAsWorkflow(
       throw outcomeUnknownError(
         options,
         `Could not confirm whether migration ${migrationLabel} started: ${formatWaitError(error)}`,
-        error,
+        { cause: error },
       );
     }
     executionId = started.id;
@@ -371,7 +373,7 @@ export async function executeMigrationAsWorkflow(
     throw outcomeUnknownError(
       options,
       `Lost track of migration ${migrationLabel} while it ran: ${formatWaitError(error)}`,
-      error,
+      { cause: error, executionId },
     );
   }
   await teardown(client, workspaceId, name, workflowId);
@@ -406,17 +408,24 @@ async function findStartedExecution(
   return undefined;
 }
 
+interface OutcomeUnknownDetails {
+  /** The failure that hid the outcome. */
+  cause?: unknown;
+  /** The execution whose outcome is unknown, when it is known. */
+  executionId?: string;
+}
+
 /**
  * Report a migration run whose outcome this deploy cannot know.
  * @param options - Execution options of the migration
  * @param message - What could not be confirmed
- * @param cause - The failure that hid the outcome
+ * @param details - The failure that hid the outcome and the execution concerned
  * @returns Error asking the user to settle the migration by hand
  */
 function outcomeUnknownError(
   options: LongRunningMigrationOptions,
   message: string,
-  cause?: unknown,
+  details: OutcomeUnknownDetails,
 ): Error {
   const { namespace, migrationNumber } = options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
@@ -428,8 +437,13 @@ function outcomeUnknownError(
       `If the execution succeeded, run 'tailor tailordb migration sync ${formatMigrationNumber(migrationNumber)} --namespace ${namespace}'; ` +
       `otherwise run 'tailor tailordb migration sync ${formatMigrationNumber(migrationNumber - 1)} --namespace ${namespace}'. ` +
       `Then deploy again. Until then, the tables of namespace '${namespace}' stay in maintenance mode.`,
-    context: { namespace, migrationNumber, workflowName: name },
-    cause,
+    context: {
+      namespace,
+      migrationNumber,
+      workflowName: name,
+      ...(details.executionId ? { executionId: details.executionId } : {}),
+    },
+    cause: details.cause,
   });
 }
 

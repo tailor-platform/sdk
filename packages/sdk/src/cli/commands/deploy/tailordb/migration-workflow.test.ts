@@ -134,6 +134,7 @@ function createMockClient(options: MockClientOptions = {}) {
 }
 
 function deletesAfter(calls: readonly string[], marker: string): string[] {
+  expect(calls).toContain(marker);
   return calls.slice(calls.indexOf(marker)).filter((call) => call.startsWith("delete"));
 }
 
@@ -240,6 +241,7 @@ describe("executeMigrationAsWorkflow", () => {
     await expect(run(client)).rejects.toMatchObject({
       code: "MIGRATION_OUTCOME_UNKNOWN",
       message: expect.stringContaining("tailordb/0003"),
+      context: expect.objectContaining({ executionId: "exec-1" }),
       cause: lost,
     });
     expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
@@ -391,6 +393,7 @@ describe("executeMigrationAsWorkflow", () => {
     await expect(run(client)).rejects.toMatchObject({
       code: "MIGRATION_OUTCOME_UNKNOWN",
       message: expect.stringContaining("exec-0"),
+      context: expect.objectContaining({ executionId: "exec-0" }),
     });
     expect(raw.deleteWorkflow).not.toHaveBeenCalled();
     expect(raw.createFunctionRegistry).not.toHaveBeenCalled();
