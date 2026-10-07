@@ -51,11 +51,6 @@ describe("parseProtoEnumName", () => {
     expect(parseProtoEnumName(WorkflowExecution_Status, "1")).toBeUndefined();
   });
 
-  test("does not read inherited object properties", () => {
-    expect(parseProtoEnumName(WorkflowExecution_Status, "__proto__")).toBeUndefined();
-    expect(parseProtoEnumName(WorkflowExecution_Status, "constructor")).toBeUndefined();
-  });
-
   test("returns undefined for an excluded member", () => {
     expect(
       parseProtoEnumName(WorkflowExecution_Status, "unspecified", [

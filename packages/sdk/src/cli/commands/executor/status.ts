@@ -60,6 +60,13 @@ export function classifyExecutorJobStatus(status: ExecutorJobStatus): ExecutorJo
 }
 
 /**
+ * Statuses accepted by the `--status` filter of `executor jobs`.
+ */
+export const EXECUTOR_JOB_STATUS_FILTER_NAMES = protoEnumNames(ExecutorJobStatus).filter(
+  (name) => name !== "UNSPECIFIED",
+);
+
+/**
  * Parse executor job status string to enum.
  * @param status - Status string to parse
  * @returns ExecutorJobStatus enum value
@@ -67,10 +74,9 @@ export function classifyExecutorJobStatus(status: ExecutorJobStatus): ExecutorJo
 export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
   const parsed = parseProtoEnumName(ExecutorJobStatus, status, [ExecutorJobStatus.UNSPECIFIED]);
   if (parsed === undefined) {
-    const validValues = protoEnumNames(ExecutorJobStatus).filter((name) => name !== "UNSPECIFIED");
     throw CLIError({
       code: "EXECUTOR_STATUS_INVALID",
-      message: `Invalid status: ${status}. Valid values: ${validValues.join(", ")}`,
+      message: `Invalid status: ${status}. Valid values: ${EXECUTOR_JOB_STATUS_FILTER_NAMES.join(", ")}`,
     });
   }
   return parsed;

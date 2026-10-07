@@ -30,6 +30,16 @@ const EXPECTED_CLASS = {
   CANCELED: "failure",
 } as const;
 
+const EXPECTED_JOB_SUSPENDED = {
+  UNSPECIFIED: false,
+  RUNNING: false,
+  SUSPEND: true,
+  SUCCESS: false,
+  FAILED: false,
+  WAITING: true,
+  CANCELED: false,
+} as const;
+
 describe("classifyWorkflowExecutionStatus", () => {
   test("covers every status the proto defines", () => {
     expect(Object.keys(EXPECTED_CLASS)).toEqual(protoEnumNames(WorkflowExecution_Status));
@@ -50,6 +60,23 @@ describe("classifyWorkflowExecutionStatus", () => {
     ]);
     expect(classifyWorkflowExecutionStatus(waiting).statusClass).toBe("suspended");
   });
+
+  test("covers every job status the proto defines", () => {
+    expect(Object.keys(EXPECTED_JOB_SUSPENDED)).toEqual(
+      protoEnumNames(WorkflowJobExecution_Status),
+    );
+  });
+
+  test.each(Object.entries(EXPECTED_JOB_SUSPENDED))(
+    "treats a job in %s as suspended: %s",
+    (name, suspended) => {
+      const jobStatus = WorkflowJobExecution_Status[name as keyof typeof EXPECTED_JOB_SUSPENDED];
+      const running = execution(WorkflowExecution_Status.RUNNING, [jobStatus]);
+      expect(classifyWorkflowExecutionStatus(running).statusClass).toBe(
+        suspended ? "suspended" : "transient",
+      );
+    },
+  );
 
   test("keeps a running execution transient while its jobs run", () => {
     const running = execution(WorkflowExecution_Status.RUNNING, [

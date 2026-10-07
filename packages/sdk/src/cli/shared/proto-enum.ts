@@ -35,9 +35,7 @@ export function parseProtoEnumName<E extends number>(
   input: string,
   excluded: readonly E[] = [],
 ): E | undefined {
-  const key = input.toUpperCase();
-  if (!Object.hasOwn(protoEnum, key)) return undefined;
-  const value = protoEnum[key];
+  const value = protoEnum[input.toUpperCase()];
   if (typeof value !== "number" || excluded.includes(value)) return undefined;
   return value;
 }

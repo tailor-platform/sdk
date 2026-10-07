@@ -16,6 +16,7 @@
 import * as crypto from "node:crypto";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
+import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
 import { isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
@@ -308,17 +309,20 @@ async function waitForMigrationWorkflow(
       const { logs } = await collectJobOutcomes(client, workspaceId, execution);
       return { success: true, logs };
     }
-    if (execution.status === WorkflowExecution_Status.FAILED) {
+    if (isWorkflowExecutionFailureStatus(execution.status)) {
       const outcomes = await collectJobOutcomes(client, workspaceId, execution);
+      if (execution.status === WorkflowExecution_Status.CANCELED) {
+        return {
+          success: false,
+          logs: outcomes.logs,
+          error: "Migration workflow execution was canceled.",
+        };
+      }
       return {
         success: false,
         logs: outcomes.logs,
         error: extractFailureMessage(outcomes),
       };
-    }
-    if (execution.status === WorkflowExecution_Status.CANCELED) {
-      const { logs } = await collectJobOutcomes(client, workspaceId, execution);
-      return { success: false, logs, error: "Migration workflow execution was canceled." };
     }
 
     await new Promise((resolve) => setTimeout(resolve, pollInterval));

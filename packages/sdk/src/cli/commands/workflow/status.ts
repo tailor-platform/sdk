@@ -31,15 +31,23 @@ function classifyStatus(status: WorkflowExecution_Status): WorkflowExecutionStat
   return protoEnumLookup(WORKFLOW_EXECUTION_STATUS_CLASS, status, "transient");
 }
 
+const WORKFLOW_JOB_EXECUTION_SUSPENDED = {
+  [WorkflowJobExecution_Status.UNSPECIFIED]: false,
+  [WorkflowJobExecution_Status.RUNNING]: false,
+  [WorkflowJobExecution_Status.SUSPEND]: true,
+  [WorkflowJobExecution_Status.SUCCESS]: false,
+  [WorkflowJobExecution_Status.FAILED]: false,
+  [WorkflowJobExecution_Status.WAITING]: true,
+  [WorkflowJobExecution_Status.CANCELED]: false,
+} satisfies Record<WorkflowJobExecution_Status, boolean>;
+
 /**
  * Check if workflow job execution status is suspended or waiting.
  * @param status - Workflow job execution status enum value
  * @returns True if status represents a wait point
  */
 function isWorkflowJobExecutionSuspendedStatus(status: WorkflowJobExecution_Status): boolean {
-  return (
-    status === WorkflowJobExecution_Status.SUSPEND || status === WorkflowJobExecution_Status.WAITING
-  );
+  return protoEnumLookup(WORKFLOW_JOB_EXECUTION_SUSPENDED, status, false);
 }
 
 /**
