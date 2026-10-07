@@ -171,6 +171,25 @@ describe("executeMigrationAsWorkflow", () => {
     expect(raw.getWorkflowExecution).toHaveBeenCalledTimes(3);
   });
 
+  test("fails when the execution disappears while polling", async () => {
+    const { client, raw, calls } = createMockClient();
+    raw.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined } as never);
+
+    await expect(run(client)).rejects.toMatchObject({ code: "WORKFLOW_EXECUTION_NOT_FOUND" });
+    expect(calls).toContain("deleteWorkflow");
+  });
+
+  test("stops polling on a transient error", async () => {
+    const { client, raw, calls } = createMockClient();
+    raw.getWorkflowExecution.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
+
+    await expect(run(client)).rejects.toThrow("unavailable");
+    expect(raw.getWorkflowExecution).toHaveBeenCalledTimes(1);
+    expect(calls).toContain("deleteWorkflow");
+  });
+
   test("reports failure with the logs of the failed execution", async () => {
     const { client } = createMockClient({
       statuses: [WorkflowExecution_Status.FAILED],

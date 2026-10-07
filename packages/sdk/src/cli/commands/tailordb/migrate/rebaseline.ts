@@ -20,7 +20,7 @@ import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { captureFileState, captureMigrationFileState } from "./file-state";
-import { fetchRemoteMigrationState } from "./remote-state";
+import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   formatRemoteVerificationResults,
   toTailorDBDeployInput,
@@ -232,6 +232,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
       client,
       resourceTrn(workspaceId, "tailordb", target.namespace),
     );
+    assertNoMigrationInProgress(remoteState, target.namespace);
     const remoteMigration = remoteState.number;
     if (remoteMigration !== latestMigration) {
       const actual = remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);

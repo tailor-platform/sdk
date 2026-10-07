@@ -54,7 +54,7 @@
     "@changesets/cli": "3.0.3",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.19.1",
-    "eslint-plugin-zod": "4.14.2",
+    "eslint-plugin-zod": "5.0.0",
     "knip": "6.39.0",
     "lefthook": "2.1.16",
     "madge": "8.0.0",
@@ -68,5 +68,5 @@
   "engines": {
     "node": ">= 22.18.0"
   },
-  "packageManager": "pnpm@12.8.1"
+  "packageManager": "pnpm@12.9.1"
 }

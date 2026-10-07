@@ -11,6 +11,7 @@ import {
   generateMigrationPgliteSchema,
   writePgliteSchemaFile,
 } from "./pglite-schema-generator";
+import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import {
   DB_PGLITE_SCHEMA_FILE_NAME,
   formatMigrationNumber,
@@ -71,6 +72,114 @@ function tableNamed(tables: ReturnType<typeof buildPreMigrationTables>, name: st
   if (!found) throw new Error(`table ${name} missing from ${tables.map((t) => t.name).join()}`);
   return found;
 }
+
+describe("buildPreMigrationSnapshot", () => {
+  test("keeps type attributes besides fields and indexes, with the relaxations applied", () => {
+    const withSettings = { ...user, settings: { aggregation: true, publishEvents: true } };
+    const result = buildPreMigrationSnapshot(
+      snapshot(withSettings),
+      diff([
+        {
+          kind: "field_added",
+          tableName: "User",
+          fieldName: "region",
+          after: snapshotField("string", { required: true }),
+        },
+      ]),
+    );
+
+    expect(result.namespace).toBe("tailordb");
+    expect(result.tables.User).toMatchObject({
+      pluralForm: "Users",
+      settings: { aggregation: true, publishEvents: true },
+    });
+    expect(result.tables.User!.fields.region).toMatchObject({ required: false });
+  });
+
+  test("retains a table the migration removes so the script can still read it", () => {
+    const legacy = table("Legacy", { note: snapshotField("string") });
+    const result = buildPreMigrationSnapshot(
+      snapshot(user, legacy),
+      diff([{ kind: "table_removed", tableName: "Legacy", before: legacy }]),
+    );
+
+    expect(Object.keys(result.tables)).toEqual(["User", "Legacy"]);
+    expect(result.tables.Legacy).toEqual(legacy);
+  });
+
+  test("keeps a table named __proto__", () => {
+    const legacy = table("__proto__", { note: snapshotField("string") });
+    const result = buildPreMigrationSnapshot(snapshot(user, legacy), diff([]));
+
+    expect(Object.keys(result.tables)).toEqual(["User", "__proto__"]);
+  });
+
+  test("keeps the previous table scripts while a field's type change is pending", () => {
+    const result = buildPreMigrationSnapshot(
+      snapshot({ ...user, typeHookExpr: { create: "before" } }),
+      diff([
+        {
+          kind: "field_type_modified",
+          tableName: "User",
+          fieldName: "score",
+          before: snapshotField("integer", { required: true }),
+          after: snapshotField("float", { required: true }),
+        },
+        {
+          kind: "table_scripts_modified",
+          tableName: "User",
+          before: { typeHookExpr: { create: "before" } },
+          after: { typeHookExpr: { create: "after" } },
+        },
+      ]),
+    );
+
+    expect(result.tables.User!.typeHookExpr).toEqual({ create: "before" });
+    expect(result.tables.User!.fields.score).toMatchObject({ type: "integer" });
+  });
+
+  test("keeps removed nested members and relaxes a renamed one, as the deploy's Pre-phase does", () => {
+    const before = snapshotField("nested", {
+      fields: {
+        zip: snapshotField("string", { required: true }),
+        geo: snapshotField("nested", {
+          fields: {
+            lat: snapshotField("float", { required: true }),
+            lng: snapshotField("float", { required: true }),
+          },
+        }),
+      },
+    });
+    const after = snapshotField("nested", {
+      fields: {
+        zipCode: snapshotField("string", { required: true }),
+        geo: snapshotField("nested", {
+          fields: { lat: snapshotField("float", { required: true }) },
+        }),
+      },
+    });
+    const result = buildPreMigrationSnapshot(
+      snapshot(table("Customer", { address: before })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Customer",
+          fieldName: "address",
+          before,
+          after,
+          memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+        },
+      ]),
+    );
+
+    const address = result.tables.Customer!.fields.address!;
+    expect(address.fields?.zipCode).toMatchObject({ required: false });
+    expect(address.fields?.zip).toMatchObject({ type: "string", required: true });
+    expect(Object.keys(address.fields?.geo?.fields ?? {})).toEqual(["lat", "lng"]);
+    expect(after.fields?.zipCode).toMatchObject({ required: true });
+    expect(Object.keys(after.fields?.geo?.fields ?? {})).toEqual(["lat"]);
+  });
+});
 
 describe("buildPreMigrationTables", () => {
   test("a data-only migration keeps the snapshot as it is", () => {

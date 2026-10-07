@@ -324,6 +324,7 @@ test("namespace-specific mock", async () => {
     disabled: false,
     mfaEnrolled: false,
     mfaFactorIds: [],
+    passwordUpdatedAt: null,
   });
 
   const client = new tailor.idp.Client({ namespace: "my-ns" });

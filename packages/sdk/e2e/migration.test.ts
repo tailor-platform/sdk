@@ -36,6 +36,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect, aroundAll } from "vitest";
 import { resourceTrn } from "../src/cli/commands/deploy/label";
+import { migrationWorkflowResourceName } from "../src/cli/commands/deploy/tailordb/migration-workflow";
 import {
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
@@ -48,7 +49,7 @@ import {
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
 } from "../src/cli/commands/tailordb/migrate/types";
-import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
+import { initOperatorClient, isNotFoundError, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import {
   resolveE2ERunId,
@@ -1213,6 +1214,142 @@ export async function main(trx: Transaction): Promise<void> {
         expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
       },
       GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
+    );
+  });
+
+  describe("Multi-step Migration Resume", () => {
+    async function namespaceLabels(): Promise<Record<string, string>> {
+      const { metadata } = await client.getMetadata({
+        trn: resourceTrn(workspaceId, "tailordb", tailordbName),
+      });
+      return metadata?.labels ?? {};
+    }
+
+    async function migrationWorkflowExists(migrationNumber: number): Promise<boolean> {
+      try {
+        await client.getWorkflowByName({
+          workspaceId,
+          workflowName: migrationWorkflowResourceName(tailordbName, migrationNumber),
+        });
+        return true;
+      } catch (error) {
+        if (isNotFoundError(error)) return false;
+        throw error;
+      }
+    }
+
+    /**
+     * Scenario 10: a step that fails after another step committed leaves the
+     * migration in progress, keeping its Pre-phase schema for the next deploy.
+     */
+    test(
+      "leaves a multi-step migration in progress when a later step fails",
+      async () => {
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.string({ optional: true }),
+  phone: db.string({ optional: true }),
+  loyaltyTier: db.string(),
+  sourceUuid: db.string(),
+  sourceEnum: db.string(),
+  sourceDecimal: db.string(),
+  sourceInteger: db.float(),
+  indexedUuid: db.string().index(),
+  indexedEnum: db.string().index(),
+  indexedDecimal: db.string().index(),
+  indexedInteger: db.float().index(),
+  verificationMarker: db.string(),
+  stepTier: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+
+export type user = typeof user;
+`);
+
+        const configPath = createConfig();
+        runGenerateCli(configPath, tempDir);
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(10);
+        expect(files[9]!.number).toBe(9);
+
+        overwriteMigrationScript(
+          9,
+          `import type { Transaction } from "./db";
+
+export const steps = {
+  backfill: {
+    run: async (trx: Transaction) => {
+      await trx.updateTable("User").set({ stepTier: "bronze" }).where("stepTier", "is", null).execute();
+    },
+  },
+  verify: {
+    dependsOn: ["backfill"],
+    run: async () => {
+      throw new Error("simulated step failure for resume e2e");
+    },
+  },
+};
+`,
+        );
+
+        const result = tryDeployCli(configPath, workspaceId, tempDir);
+
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("MIGRATION_PARTIALLY_APPLIED");
+        expect(result.output).toContain("simulated step failure for resume e2e");
+        expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
+        expect(await getTailorDBTypeFields(tailordbName, "User")).toContain("stepTier");
+        expect(await namespaceLabels()).toMatchObject({
+          "sdk-migration-in-progress": "m0009",
+          "sdk-migration-execution": expect.stringMatching(/^e[0-9a-f]{32}$/),
+        });
+        expect(await migrationWorkflowExists(9)).toBe(true);
+      },
+      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
+    );
+
+    /**
+     * Scenario 10b: the next deploy resumes the failed run with the fixed script;
+     * the completed step does not run again.
+     */
+    test(
+      "resumes from the failed step without re-running the completed one",
+      async () => {
+        overwriteMigrationScript(
+          9,
+          `import type { Transaction } from "./db";
+
+export const steps = {
+  backfill: {
+    run: async () => {
+      throw new Error("the completed backfill step must not run again");
+    },
+  },
+  verify: {
+    dependsOn: ["backfill"],
+    run: async (trx: Transaction) => {
+      const rows = await trx.selectFrom("User").select(["id", "stepTier"]).execute();
+      if (rows.length === 0 || rows.some((row) => row.stepTier !== "bronze")) {
+        throw new Error("backfill did not commit before the failed run");
+      }
+    },
+  },
+};
+`,
+        );
+
+        const configPath = createConfig();
+        runDeployCli(configPath, workspaceId, tempDir);
+
+        expect(await getMigrationCheckpoint(tailordbName)).toBe(9);
+        const labels = await namespaceLabels();
+        expect(labels).not.toHaveProperty("sdk-migration-in-progress");
+        expect(labels).not.toHaveProperty("sdk-migration-execution");
+        expect(await migrationWorkflowExists(9)).toBe(false);
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
     );
   });
 });
