@@ -318,7 +318,17 @@ export async function executeMigrationAsWorkflow(
   const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
-  const active = (await listMigrationExecutions(client, workspaceId, name)).find(isExecutionActive);
+  let earlierExecutions: WorkflowExecution[];
+  try {
+    earlierExecutions = await listMigrationExecutions(client, workspaceId, name);
+  } catch (error) {
+    throw outcomeUnknownError(
+      options,
+      `Could not check for an earlier run of migration ${migrationLabel}: ${formatWaitError(error)}`,
+      { cause: error },
+    );
+  }
+  const active = earlierExecutions.find(isExecutionActive);
   if (active) {
     throw outcomeUnknownError(
       options,

@@ -384,6 +384,23 @@ describe("executeMigrationAsWorkflow", () => {
     });
   });
 
+  test("refuses to replace a leftover workflow when its executions cannot be listed", async () => {
+    const { client, raw } = createMockClient({
+      leftoverWorkflowId: "stale-wf",
+      leftoverExecutions: [{ id: "exec-0", status: WorkflowExecution_Status.RUNNING }],
+    });
+    const lost = new ConnectError("lost", Code.Unavailable);
+    raw.listWorkflowExecutions.mockRejectedValueOnce(lost);
+
+    await expect(run(client)).rejects.toMatchObject({
+      code: "MIGRATION_OUTCOME_UNKNOWN",
+      message: expect.stringContaining("tailordb/0003"),
+      cause: lost,
+    });
+    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
+    expect(raw.createFunctionRegistry).not.toHaveBeenCalled();
+  });
+
   test("refuses to replace a leftover workflow whose execution is still running", async () => {
     const { client, raw } = createMockClient({
       leftoverWorkflowId: "stale-wf",
