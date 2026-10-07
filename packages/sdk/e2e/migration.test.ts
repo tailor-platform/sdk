@@ -490,6 +490,29 @@ export async function main(db: Kysely<any>): Promise<void> {
     fs.writeFileSync(migratePath, body);
   }
 
+  /**
+   * Regroup the steps of a generated migrate.ts into two steps, the second depending on the first.
+   * Every step is its own platform job, so a migration with many changes takes minutes to deploy;
+   * two steps still exercise the step runner.
+   * @param script - Generated migrate.ts source that exports `steps`
+   * @returns Source whose `steps` holds a `first` and a `second` step running the same functions in order
+   */
+  function groupStepsIntoTwo(script: string): string {
+    const stepsBlock = /export const steps = \{\n([\s\S]*?)\n\} satisfies MigrationSteps;/.exec(
+      script,
+    );
+    if (!stepsBlock) throw new Error("Generated migrate.ts does not export steps");
+    const names = [...stepsBlock[1]!.matchAll(/^ {2}(\w+): \{/gm)].map((match) => match[1]!);
+    if (names.length < 2) throw new Error(`Expected at least two steps, found ${names.length}`);
+    const half = Math.ceil(names.length / 2);
+    const run = (group: string[]) =>
+      `async (trx: Transaction) => {\n${group.map((name) => `    await ${name}(trx);`).join("\n")}\n  }`;
+    return script.replace(
+      stepsBlock[0],
+      `export const steps = {\n  first: { run: ${run(names.slice(0, half))} },\n  second: { dependsOn: ["first"], run: ${run(names.slice(half))} },\n} satisfies MigrationSteps;`,
+    );
+  }
+
   describe("Initial Setup", () => {
     /**
      * Scenario 1: Initial migration generation
@@ -1106,7 +1129,7 @@ export type user = typeof user;
         const editedScript = reviewedScript.replace(defaultNormalization, exercisedNormalization);
         expect(editedScript).not.toBe(reviewedScript);
         expect(editedScript).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
-        fs.writeFileSync(migratePath, editedScript);
+        fs.writeFileSync(migratePath, groupStepsIntoTwo(editedScript));
 
         runDeployCli(configPath, workspaceId, tempDir);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(7);
