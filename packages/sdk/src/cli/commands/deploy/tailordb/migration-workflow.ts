@@ -429,7 +429,7 @@ function outcomeUnknownError(
       `otherwise run 'tailor tailordb migration sync ${formatMigrationNumber(migrationNumber - 1)} --namespace ${namespace}'. ` +
       `Then deploy again. Until then, the tables of namespace '${namespace}' stay in maintenance mode.`,
     context: { namespace, migrationNumber, workflowName: name },
-    ...(cause === undefined ? {} : { cause }),
+    cause,
   });
 }
 
