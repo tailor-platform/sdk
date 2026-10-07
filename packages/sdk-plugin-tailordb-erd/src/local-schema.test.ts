@@ -67,6 +67,19 @@ describe("resolveErdSites", () => {
     );
   });
 
+  test.each([
+    { attach: true },
+    { attach: true, schemaFrom: "owner.ts" },
+    { attach: false, schemaFrom: "owner.ts" },
+  ] as const)("rejects non-owned ERD site namespaces: %j", (entry) => {
+    const loadedConfig: LoadedConfig = { ...config, db: { ...config.db, shared: entry } };
+    const plugins = [tailordbErdPlugin({ sites: { shared: "main-erd" } })] as Plugin[];
+    const { issues } = resolveErdSites(loadedConfig, plugins);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.message).toContain('namespace "shared" not found');
+    expect(issues[0]!.message).toContain("Available owned namespaces: main, admin");
+  });
+
   test("reports an issue when a site is not a defined static website", () => {
     const plugins = [tailordbErdPlugin({ sites: { main: "typo-erd" } })] as Plugin[];
     const issue = resolveErdSites(config, plugins).issues[0]!;

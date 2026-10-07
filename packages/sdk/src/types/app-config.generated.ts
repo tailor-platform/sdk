@@ -3,6 +3,103 @@
 export type LogLevelEnum = "DEBUG" | "INFO" | "WARN" | "ERROR" | "SILENT";
 export type LogLevelEnumInput = LogLevelEnum;
 
+export type TailorDBReferenceConfig =
+  | {
+      attach: true;
+      schemaFrom?: string | undefined;
+    }
+  | {
+      attach: false;
+      schemaFrom: string;
+    };
+export type TailorDBReferenceConfigInput = TailorDBReferenceConfig;
+
+export type AppConfigParsedInput = {
+  name: string;
+  id?: string | undefined;
+  env?:
+    | {
+        [x: string]:
+          | string
+          | number
+          | boolean
+          | {
+              value: string | number;
+              allowSecretReason: string;
+            };
+      }
+    | undefined;
+  cors?: string[] | undefined;
+  allowedIpAddresses?: string[] | undefined;
+  disableIntrospection?: boolean | undefined;
+  inlineSourcemap?: boolean | undefined;
+  logLevel?: string | undefined;
+  buildOptions?:
+    | {
+        inlineSourcemap?: boolean | undefined;
+        logLevel?: string | undefined;
+        allowedRuntimeGlobals?:
+          | {
+              [x: string]: true | string[];
+            }
+          | undefined;
+      }
+    | undefined;
+  metadata?:
+    | {
+        [x: string]: string;
+      }
+    | undefined;
+  db?:
+    | {
+        [x: string]:
+          | {
+              files: string[];
+              ignores?: string[] | undefined;
+              migration?:
+                | {
+                    directory: string;
+                    machineUser?: string | undefined | undefined;
+                  }
+                | undefined;
+              gqlOperations?:
+                | "query"
+                | {
+                    create?: boolean | undefined | undefined;
+                    update?: boolean | undefined | undefined;
+                    delete?: boolean | undefined | undefined;
+                    read?: boolean | undefined | undefined;
+                  }
+                | undefined;
+            }
+          | {
+              external: true;
+            }
+          | {
+              attach: true;
+              schemaFrom?: string | undefined;
+            }
+          | {
+              attach: false;
+              schemaFrom: string;
+            };
+      }
+    | undefined;
+  resolver?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  idp?: unknown[] | undefined;
+  auth?: unknown;
+  executor?: unknown;
+  workflow?: unknown;
+  httpAdapter?: unknown;
+  staticWebsites?: unknown;
+  aiGateways?: unknown;
+  secrets?: unknown;
+};
+
 export type AppConfigParsed = {
   name: string;
   id?: string | undefined;
@@ -39,9 +136,47 @@ export type AppConfigParsed = {
         [x: string]: string;
       }
     | undefined;
-  db?: unknown;
-  resolver?: unknown;
-  idp?: unknown;
+  db?:
+    | {
+        [x: string]:
+          | {
+              files: string[];
+              ignores?: string[] | undefined;
+              migration?:
+                | {
+                    directory: string;
+                    machineUser?: string | undefined | undefined;
+                  }
+                | undefined;
+              gqlOperations?:
+                | "query"
+                | {
+                    create?: boolean | undefined | undefined;
+                    update?: boolean | undefined | undefined;
+                    delete?: boolean | undefined | undefined;
+                    read?: boolean | undefined | undefined;
+                  }
+                | undefined;
+            }
+          | {
+              attach: true;
+            }
+          | {
+              attach: true;
+              schemaFrom?: string | undefined;
+            }
+          | {
+              attach: false;
+              schemaFrom: string;
+            };
+      }
+    | undefined;
+  resolver?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  idp?: unknown[] | undefined;
   auth?: unknown;
   executor?: unknown;
   workflow?: unknown;
@@ -50,4 +185,83 @@ export type AppConfigParsed = {
   aiGateways?: unknown;
   secrets?: unknown;
 };
-export type AppConfigParsedInput = AppConfigParsed;
+
+export type NormalizedDbEntry =
+  | {
+      owned: true;
+      inSubgraph: true;
+      schemaSource: {
+        kind: "files";
+        config: {
+          files: string[];
+          ignores?: string[] | undefined;
+          migration?:
+            | {
+                directory: string;
+                machineUser?: string | undefined | undefined;
+              }
+            | undefined;
+          gqlOperations?:
+            | "query"
+            | {
+                create?: boolean | undefined | undefined;
+                update?: boolean | undefined | undefined;
+                delete?: boolean | undefined | undefined;
+                read?: boolean | undefined | undefined;
+              }
+            | undefined;
+        };
+      };
+    }
+  | {
+      owned: false;
+      inSubgraph: boolean;
+      schemaSource?:
+        | {
+            kind: "config";
+            path: string;
+          }
+        | undefined;
+    };
+export type NormalizedDbEntryInput = NormalizedDbEntry;
+
+export type NormalizedDb = {
+  [x: string]:
+    | {
+        owned: true;
+        inSubgraph: true;
+        schemaSource: {
+          kind: "files";
+          config: {
+            files: string[];
+            ignores?: string[] | undefined;
+            migration?:
+              | {
+                  directory: string;
+                  machineUser?: string | undefined | undefined;
+                }
+              | undefined;
+            gqlOperations?:
+              | "query"
+              | {
+                  create?: boolean | undefined | undefined;
+                  update?: boolean | undefined | undefined;
+                  delete?: boolean | undefined | undefined;
+                  read?: boolean | undefined | undefined;
+                }
+              | undefined;
+          };
+        };
+      }
+    | {
+        owned: false;
+        inSubgraph: boolean;
+        schemaSource?:
+          | {
+              kind: "config";
+              path: string;
+            }
+          | undefined;
+      };
+};
+export type NormalizedDbInput = NormalizedDb;

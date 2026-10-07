@@ -365,6 +365,8 @@ createResolver({
 });
 ```
 
+To generate types for a namespace owned by another application in the same repository, add it to `defineConfig({ db })` with `attach: false` and `schemaFrom: "../owner/tailor.config.ts"`, then run `tailor generate`. You can then use `getDB("namespace")` with that namespace's table types. Use `attach: true` instead when the application also needs its GraphQL API. SQL access itself does not require attachment. See [TailorDB definitions from another application](../configuration.md#tailordb-definitions-from-another-application) for configuration and ownership rules.
+
 ## Query vs Mutation
 
 Use `operation: "query"` for read operations and `operation: "mutation"` for write operations:

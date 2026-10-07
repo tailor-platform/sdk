@@ -1874,6 +1874,50 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/external-to-attach",
+    name: "External service references → attach",
+    description:
+      "Replace `external: true` with `attach: true` in TailorDB and resolver namespaces, auth, and IdP entries of `defineConfig()`. The services remain owned by another application and attached to this application. The legacy option keeps working until v3.",
+    since: "1.0.0",
+    until: "3.0.0",
+    scriptPath: "v3/external-to-attach/scripts/transform.js",
+    filePatterns: ["**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"],
+    examples: [
+      {
+        before: [
+          "export default defineConfig({",
+          '  name: "my-app",',
+          "  db: { shared: { external: true } },",
+          "  resolver: { shared: { external: true } },",
+          '  auth: { name: "shared-auth", external: true },',
+          '  idp: [{ name: "shared-idp", external: true }],',
+          "});",
+        ].join("\n"),
+        after: [
+          "export default defineConfig({",
+          '  name: "my-app",',
+          "  db: { shared: { attach: true } },",
+          "  resolver: { shared: { attach: true } },",
+          '  auth: { name: "shared-auth", attach: true },',
+          '  idp: [{ name: "shared-idp", attach: true }],',
+          "});",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, replace `external: true` with `attach: true` in",
+      "`defineConfig()` from `@tailor-platform/sdk`: each db or resolver namespace,",
+      "the auth object, and each idp array entry. Preserve namespace names and",
+      "the name of auth and IdP services. Do not add files or schemaFrom; this",
+      "migration preserves attachment to services owned by another application.",
+      "For variables, spreads, and computed keys, trace the actual service reference",
+      "and update it without changing unrelated external properties or owned",
+      "defineAuth()/defineIdp() definitions. Check shared objects at all use sites.",
+      "Resolve conflicting attach/external or owned options by hand; do not keep",
+      "both options. Only TailorDB supports attach: false with schemaFrom.",
+    ].join("\n"),
+  },
+  {
     id: "v3/file-upload-encoding",
     name: "String file uploads → explicit encoding",
     description:

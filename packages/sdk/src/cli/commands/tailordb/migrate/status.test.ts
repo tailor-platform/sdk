@@ -62,6 +62,7 @@ describe("tailordb migration status --json", () => {
         path: path.join(tmpDir, "tailor.config.ts"),
         db: {
           tailordb: {
+            files: [],
             migration: {
               directory: state.migrationsDir,
             },
@@ -373,8 +374,8 @@ describe("tailordb migration status --json", () => {
       config: {
         path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
         db: {
-          tailordb: { migration: { directory: state.migrationsDir } },
-          analyticsdb: { migration: { directory: state.migrationsDir } },
+          tailordb: { files: [], migration: { directory: state.migrationsDir } },
+          analyticsdb: { files: [], migration: { directory: state.migrationsDir } },
         },
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);

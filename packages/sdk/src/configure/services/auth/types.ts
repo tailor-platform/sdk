@@ -340,7 +340,22 @@ export type DefinedAuth<Name extends string, Config> = Config & {
   name: Name;
 } & AuthDefinitionBrand;
 
-export type AuthExternalConfig = { name: string; external: true };
+type AuthNonOwnedOptions = {
+  [Key in Exclude<keyof AuthOwnConfig, "name" | "external" | "attach">]?: never;
+};
+
+export type AuthExternalConfig = AuthNonOwnedOptions & {
+  name: string;
+  /** @deprecated since NEXT_RELEASE — use `attach: true` instead. codemod: v3/external-to-attach */
+  external: true;
+  attach?: never;
+};
+
+export type AuthAttachedConfig = AuthNonOwnedOptions & {
+  name: string;
+  attach: true;
+  external?: never;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AuthServiceInputLoose = AuthServiceInput<any, any, any, string, any>;
@@ -351,6 +366,6 @@ export type AuthOwnConfig = DefinedAuth<
   // We want any concrete `defineAuth(...)` result to be assignable here, while the
   // strong typing remains on the `defineAuth` return type itself.
   AuthServiceInputLoose
->;
+> & { external?: never; attach?: never };
 
-export type AuthConfig = AuthOwnConfig | AuthExternalConfig;
+export type AuthConfig = AuthOwnConfig | AuthExternalConfig | AuthAttachedConfig;

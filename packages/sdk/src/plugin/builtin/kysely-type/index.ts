@@ -59,9 +59,10 @@ export function kyselyTypePlugin(
         throw new Error("distPath and pgliteSchemaPath must resolve to different files.");
       }
 
+      const namespaces = [...ctx.tailordb, ...(ctx.referencedTailordb ?? [])];
       const allNamespaceData: KyselyNamespaceMetadata[] = [];
 
-      for (const ns of ctx.tailordb) {
+      for (const ns of namespaces) {
         const typeMetadataList: KyselyTypeMetadata[] = [];
 
         for (const type of Object.values(ns.tables)) {
@@ -88,7 +89,7 @@ export function kyselyTypePlugin(
           files.push({
             path: ctx.pluginConfig.pgliteSchemaPath,
             content: generatePGliteSchemaModule(
-              ctx.tailordb.filter((ns) => Object.keys(ns.tables).length > 0),
+              namespaces.filter((ns) => Object.keys(ns.tables).length > 0),
             ),
           });
         }

@@ -74,6 +74,47 @@ describe("KyselyTypePlugin integration tests", () => {
     return plugin.onTailorDBReady!(createCtx(namespaces, temporal));
   }
 
+  test("generates types and PGlite schemas for owned and referenced tables with overlapping names", async () => {
+    const own = parseTailorDBType(toSchemaOutput(db.table("User", { email: db.string() })));
+    const shared = parseTailorDBType(toSchemaOutput(db.table("User", { plan: db.string() })));
+    const ctx = createCtx([{ namespace: "own", tables: { User: own } }]);
+    const referencedTailordb = createCtx([
+      { namespace: "shared", tables: { User: shared } },
+    ]).tailordb;
+    const options = { distPath: testDistPath, pgliteSchemaPath: "/test/schema.ts" };
+    const result = await kyselyTypePlugin(options).onTailorDBReady!({
+      ...ctx,
+      referencedTailordb,
+      pluginConfig: options,
+    });
+    const types = result.files.find((file) => file.path === options.distPath)!.content;
+    expect(types).toContain('"own"');
+    expect(types).toContain('"shared"');
+    expect(types).toContain("email: string");
+    expect(types).toContain("plan: string");
+    const schema = result.files.find((file) => file.path === options.pgliteSchemaPath)!.content;
+    expect(schema).toContain('"own"');
+    expect(schema).toContain('"shared"');
+    expect(schema).toContain("email");
+    expect(schema).toContain("plan");
+  });
+
+  test("generates referenced-only definitions", async () => {
+    const ctx = createCtx([]);
+    const referencedTailordb = createCtx([
+      {
+        namespace: "shared",
+        tables: { User: parseTailorDBType(toSchemaOutput(mockBasicType)) },
+      },
+    ]).tailordb;
+    const result = await kyselyTypePlugin(ctx.pluginConfig).onTailorDBReady!({
+      ...ctx,
+      referencedTailordb,
+    });
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]!.content).toContain('"shared"');
+  });
+
   describe("basic functionality tests", () => {
     test("processKyselyType correctly processes basic TailorDBType", async () => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(mockBasicType)));

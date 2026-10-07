@@ -35,6 +35,49 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
+  test("returns canonical attachments for every legacy service reference", async () => {
+    const configPath = writeConfig(`export default {
+      name: "app",
+      db: { shared: { external: true } },
+      resolver: { shared: { external: true } },
+      auth: { name: "shared-auth", external: true },
+      idp: [{ name: "shared-idp", external: true }],
+    };`);
+
+    const { config } = await loadConfig(configPath);
+
+    expect(config.db).toEqual({ shared: { attach: true } });
+    expect(config.resolver).toEqual({ shared: { attach: true } });
+    expect(config.auth).toEqual({ name: "shared-auth", attach: true });
+    expect(config.idp).toEqual([{ name: "shared-idp", attach: true }]);
+    expect(config.normalizedDb?.shared).toEqual({
+      owned: false,
+      inSubgraph: true,
+      schemaSource: undefined,
+    });
+  });
+
+  test("preserves db input options and exposes normalized namespace facts separately", async () => {
+    const configPath = writeConfig(`export default { name: "app", db: {
+      own: { files: [], gqlOperations: "query" },
+      shared: { attach: false, schemaFrom: "../owner/tailor.config.ts" },
+    } };`);
+    const { config } = await loadConfig(configPath);
+    expect(config.db?.own?.gqlOperations).toBe("query");
+    expect(config.normalizedDb?.shared).toEqual({
+      owned: false,
+      inSubgraph: false,
+      schemaSource: { kind: "config", path: "../owner/tailor.config.ts" },
+    });
+  });
+
+  test("rejects invalid db entries when loading a config file", async () => {
+    const configPath = writeConfig(
+      `export default { name: "app", db: { shared: { attach: false } } };`,
+    );
+    await expect(loadConfig(configPath)).rejects.toThrow(/db.shared/);
+  });
+
   test("preserves class plugin state when invoking generation hooks", async () => {
     const configPath = writeConfig(`
       export default { name: "test-app" };
@@ -63,13 +106,13 @@ describe("loadConfig", () => {
 
   test("collects plugins from the `plugins` export", async () => {
     const configPath = writeConfig(`
-      export default { name: "test-app", db: { marker: "preserved" } };
+      export default { name: "test-app", db: { marker: { files: ["tables/*.ts"] } } };
       export const plugins = [{ id: "first", description: "First plugin", custom: "kept" }];
     `);
 
     const { config, plugins } = await loadConfig(configPath);
 
-    expect(config.db).toEqual({ marker: "preserved" });
+    expect(config.db).toEqual({ marker: { files: ["tables/*.ts"] } });
     expect(plugins).toEqual([{ id: "first", description: "First plugin", custom: "kept" }]);
   });
 

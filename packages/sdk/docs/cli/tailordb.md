@@ -78,7 +78,7 @@ tailor tailordb truncate User Post --yes
   - `--namespace`: requires typing `truncate <namespace-name>`
   - Specific tables: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
-- Namespaces declared with `{ external: true }` are skipped by `--all` and rejected with a dedicated error when targeted by `--namespace`. Run truncate from the app that owns the namespace.
+- Namespaces owned elsewhere (`attach: true`, `attach: false` with `schemaFrom`, or legacy `external: true`) are skipped by `--all` and rejected with a dedicated error when targeted by `--namespace`. Run truncate from the app that owns the namespace.
 
 ### tailordb migration
 
