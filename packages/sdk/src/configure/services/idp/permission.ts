@@ -91,7 +91,7 @@ type IdPActionPermission<
  * @example
  * const permission: IdPPermission = {
  *   create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
- *   read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+ *   read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  *   update: [{ conditions: [[{ newIdpUser: "name" }, "=", { user: "id" }]], permit: true }],
  *   delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  *   sendPasswordResetEmail: [{ conditions: [], permit: true }],
