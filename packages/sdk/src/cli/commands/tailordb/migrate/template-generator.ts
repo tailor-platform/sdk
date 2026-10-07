@@ -977,8 +977,8 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
     .map(([name]) => name);
   const insertValues =
     selfRefColumns.length > 0
-      ? `rows.map((row) => ({ ...row, ${selfRefColumns.map((name) => `${name}: null`).join(", ")} }))`
-      : "rows";
+      ? `pending.map((row) => ({ ...row, ${selfRefColumns.map((name) => `${name}: null`).join(", ")} }))`
+      : "pending";
   const selfRefBackfill =
     selfRefColumns.length > 0
       ? `
@@ -1008,7 +1008,6 @@ ${selfRefColumns
       let query = trx
         .selectFrom("${previousTableName}")
         .select([${columnList}])
-        .where("id", "not in", trx.selectFrom("${tableName}").select("id"))
         .orderBy("id", "asc")
         .limit(100);
       if (lastId) {
@@ -1017,7 +1016,16 @@ ${selfRefColumns
       const rows = await query.execute();
       if (rows.length === 0) break;
 
-      await trx.insertInto("${tableName}").values(${insertValues}).execute();
+      const copied = await trx
+        .selectFrom("${tableName}")
+        .select("id")
+        .where("id", "in", rows.map((row) => row.id))
+        .execute();
+      const copiedIds = new Set(copied.map((row) => row.id));
+      const pending = rows.filter((row) => !copiedIds.has(row.id));
+      if (pending.length > 0) {
+        await trx.insertInto("${tableName}").values(${insertValues}).execute();
+      }
       lastId = rows[rows.length - 1]!.id;
     }
   }${selfRefBackfill}`;

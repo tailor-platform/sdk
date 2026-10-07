@@ -345,10 +345,10 @@ describe("template-generator", () => {
       const diff = stepsDiff(renamedTable("User", "Person"));
       const stepsScript = generateMigrationScript(diff);
 
-      expect(stepsScript).toContain(
-        '.where("id", "not in", trx.selectFrom("Person").select("id"))',
-      );
-      expect(stepsScript).not.toContain("copied.length");
+      expect(stepsScript).toContain('.selectFrom("Person")');
+      expect(stepsScript).toContain('.where("id", "in", rows.map((row) => row.id))');
+      expect(stepsScript).toContain("rows.filter((row) => !copiedIds.has(row.id))");
+      expect(stepsScript).not.toContain('"not in"');
     });
 
     test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
@@ -1165,7 +1165,7 @@ describe("template-generator", () => {
       expect(scriptContent).toContain('.select(["id", "email"])');
       expect(scriptContent).toContain('.orderBy("id", "asc")');
       expect(scriptContent).toContain(".limit(100)");
-      expect(scriptContent).toContain('trx.insertInto("Person").values(rows).execute()');
+      expect(scriptContent).toContain('trx.insertInto("Person").values(pending).execute()');
       expect(scriptContent).not.toContain("No data migration needed");
 
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
@@ -1223,7 +1223,9 @@ describe("template-generator", () => {
       const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
-      expect(scriptContent).toContain(".values(rows.map((row) => ({ ...row, parentId: null })))");
+      expect(scriptContent).toContain(
+        ".values(pending.map((row) => ({ ...row, parentId: null })))",
+      );
       expect(scriptContent).toContain("Backfill the self-referential column(s)");
       const insertPosition = scriptContent.indexOf('insertInto("Section")');
       const backfillPosition = scriptContent.indexOf("Backfill the self-referential column(s)");
