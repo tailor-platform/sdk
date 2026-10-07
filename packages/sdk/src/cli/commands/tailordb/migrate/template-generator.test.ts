@@ -341,12 +341,14 @@ describe("template-generator", () => {
       expect(script).toContain('populatePersonPhone: { dependsOn: ["copyUserToPerson"]');
     });
 
-    test("skips the copy of a renamed table's rows when an earlier run already copied them", () => {
+    test("copies only the rows of a renamed table whose ids the new table does not have yet", () => {
       const diff = stepsDiff(renamedTable("User", "Person"));
       const stepsScript = generateMigrationScript(diff);
 
-      expect(stepsScript).toContain('trx.selectFrom("Person").select("id").limit(1)');
-      expect(stepsScript).toContain("if (copied.length > 0) return;");
+      expect(stepsScript).toContain(
+        '.where("id", "not in", trx.selectFrom("Person").select("id"))',
+      );
+      expect(stepsScript).not.toContain("copied.length");
     });
 
     test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
@@ -397,8 +399,8 @@ describe("template-generator", () => {
 
     describe("note before a step that overwrites existing values", () => {
       const NOTE = [
-        "// Overwrites existing values. Once this step commits it cannot be undone, and a",
-        "// resumed deploy does not run it again, so check the values it writes before you deploy.",
+        "// Overwrites existing values. Once this step commits it cannot be undone,",
+        "// so check the values it writes before you deploy.",
       ].join("\n");
       const noteBefore = (script: string, stepName: string) =>
         script.includes(`${NOTE}\nasync function ${stepName}(`);
@@ -607,7 +609,7 @@ describe("template-generator", () => {
       ).resolves.toEqual([2322, 2322]);
     }, 30_000);
 
-    test("typechecks the copy of a renamed table's rows with its guard", async () => {
+    test("typechecks the copy of a renamed table's rows that skips ids already copied", async () => {
       const userSnapshot = createTestSnapshot({
         User: {
           name: "User",

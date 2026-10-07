@@ -311,8 +311,8 @@ const RESERVED_FUNCTION_NAMES = ["renameNestedMember"];
 const NO_DATA_MIGRATION_BODY = `  // No data migration needed for this schema change
   // Add custom data transformations if required`;
 
-const OVERWRITE_NOTE = `// Overwrites existing values. Once this step commits it cannot be undone, and a
-// resumed deploy does not run it again, so check the values it writes before you deploy.
+const OVERWRITE_NOTE = `// Overwrites existing values. Once this step commits it cannot be undone,
+// so check the values it writes before you deploy.
 `;
 
 const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
@@ -457,10 +457,7 @@ function buildScriptSteps(
     drafts.push({
       preferredName,
       fallbackName: `change${index + 1}`,
-      body: [
-        ...(change.kind === "table_renamed" ? [copyOnceGuard(change)] : []),
-        ...statements,
-      ].join("\n\n"),
+      body: [...statements].join("\n\n"),
       touches,
       overwritesExistingValues: overwritesExistingValues(change, statements.length),
     });
@@ -485,18 +482,6 @@ function buildScriptSteps(
       overwritesExistingValues: draft.overwritesExistingValues,
     };
   });
-}
-
-/**
- * Guard that keeps a re-run of the copy of a renamed table's rows from
- * inserting them twice. The new table is empty until the copy commits.
- * @param change - Table rename to guard the copy of
- * @returns Statements to place before the copy
- */
-function copyOnceGuard(change: TableRenamedChange): string {
-  return `  // Skip when an earlier run already copied the rows: ${change.tableName} is empty until then.
-  const copied = await trx.selectFrom("${change.tableName}").select("id").limit(1).execute();
-  if (copied.length > 0) return;`;
 }
 
 /**
@@ -590,7 +575,7 @@ export function generateMigrationTestScript(
  *
  * The mock compiles queries to the same SQL as the deployed migration, so the
  * test verifies the exact statements migrate.ts issues. Stage the rows each
- * query returns, run ${isSteps ? "the steps" : "main()"} inside a transaction, then assert the executed
+ * query returns, run ${isSteps ? "the steps, each in its own transaction," : "main() inside a transaction,"} then assert the executed
  * statements.
  */
 
@@ -645,7 +630,7 @@ export function generateMigrationPgliteTestScript(
  *
  * The generated db.pglite.ts creates the tables as they stand while migrate.ts
  * runs, on an in-memory Postgres. Stage the rows the script converts, run
- * ${isSteps ? "the steps" : "main()"} inside a transaction, then assert the rows it leaves behind.${
+ * ${isSteps ? "the steps, each in its own transaction," : "main() inside a transaction,"} then assert the rows it leaves behind.${
    diff.temporal
      ? `
  *
@@ -1016,13 +1001,14 @@ ${selfRefColumns
 
   return `  // Copy every ${previousTableName} row into ${tableName}, preserving ids so that
   // stored foreign key references remain valid. ${previousTableName} stays readable
-  // until the post-migration phase drops it.
+  // until the post-migration phase drops it. Rows already copied by an earlier run are skipped.
   {
     let lastId: string | undefined;
     while (true) {
       let query = trx
         .selectFrom("${previousTableName}")
         .select([${columnList}])
+        .where("id", "not in", trx.selectFrom("${tableName}").select("id"))
         .orderBy("id", "asc")
         .limit(100);
       if (lastId) {
