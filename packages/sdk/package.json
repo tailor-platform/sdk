@@ -218,7 +218,7 @@
     "rolldown": "1.2.12",
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
-    "std-env": "4.2.0",
+    "std-env": "4.3.0",
     "temporal-polyfill": "1.0.5",
     "temporal-spec": "1.0.1",
     "ts-cron-validator": "1.1.5",
