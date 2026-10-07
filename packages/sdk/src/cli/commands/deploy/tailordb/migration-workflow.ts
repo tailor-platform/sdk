@@ -26,7 +26,7 @@ import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
-import { isRetryableWaitError } from "#/cli/shared/wait-error";
+import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -314,27 +314,123 @@ export async function executeMigrationAsWorkflow(
   const { client, workspaceId, code, namespace, migrationNumber, invoker, appName, appId } =
     options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
+  const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
+  const active = (await listMigrationExecutions(client, workspaceId, name)).find(isExecutionActive);
+  if (active) {
+    throw outcomeUnknownError(
+      options,
+      `Migration ${migrationLabel} has an execution that is still running (${active.id}).`,
+    );
+  }
+  await reclaimLeftovers(client, workspaceId, name);
+
   const created: CreatedMigrationWorkflow = {};
+  let workflowId: string;
   try {
-    await reclaimLeftovers(client, workspaceId, name);
     await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
-    const workflowId = await createMigrationWorkflow(
+    workflowId = await createMigrationWorkflow(
       { client, workspaceId, name, jobFunctionNames: [name], appName, appId },
       created,
     );
+  } catch (error) {
+    await teardown(client, workspaceId, name, created.workflowId);
+    throw error;
+  }
 
-    const { executionId } = await client.startWorkflow({
+  let executionId: string;
+  try {
+    ({ executionId } = await client.startWorkflow({
       workspaceId,
       workflowId,
       authInvoker: invoker,
-    });
-
-    return await waitForMigrationWorkflow(client, workspaceId, executionId, pollInterval);
-  } finally {
-    await teardown(client, workspaceId, name, created.workflowId);
+    }));
+  } catch (error) {
+    if (isStartRefused(error)) {
+      await teardown(client, workspaceId, name, workflowId);
+      throw error;
+    }
+    const started = await findStartedExecution(client, workspaceId, name, pollInterval).catch(
+      () => undefined,
+    );
+    if (!started) {
+      throw outcomeUnknownError(
+        options,
+        `Could not confirm whether migration ${migrationLabel} started: ${formatWaitError(error)}`,
+        error,
+      );
+    }
+    executionId = started.id;
   }
+
+  let result: LongRunningMigrationResult;
+  try {
+    result = await waitForMigrationWorkflow(client, workspaceId, executionId, pollInterval);
+  } catch (error) {
+    throw outcomeUnknownError(
+      options,
+      `Lost track of migration ${migrationLabel} while it ran: ${formatWaitError(error)}`,
+      error,
+    );
+  }
+  await teardown(client, workspaceId, name, workflowId);
+  return result;
+}
+
+const START_LOOKUP_ATTEMPTS = 3;
+
+/**
+ * Look for the execution a start created although its response was lost.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param name - Shared resource name
+ * @param pollInterval - Wait between lookups in milliseconds
+ * @returns The newest execution of the workflow, if one is listed
+ */
+async function findStartedExecution(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+  pollInterval: number,
+): Promise<WorkflowExecution | undefined> {
+  for (let attempt = 0; attempt < START_LOOKUP_ATTEMPTS; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    try {
+      const [execution] = await listMigrationExecutions(client, workspaceId, name);
+      if (execution) return execution;
+    } catch (error) {
+      if (!isRetryableWaitError(error)) throw error;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Report a migration run whose outcome this deploy cannot know.
+ * @param options - Execution options of the migration
+ * @param message - What could not be confirmed
+ * @param cause - The failure that hid the outcome
+ * @returns Error asking the user to settle the migration by hand
+ */
+function outcomeUnknownError(
+  options: LongRunningMigrationOptions,
+  message: string,
+  cause?: unknown,
+): Error {
+  const { namespace, migrationNumber } = options;
+  const name = migrationWorkflowResourceName(namespace, migrationNumber);
+  return CLIError({
+    code: "MIGRATION_OUTCOME_UNKNOWN",
+    message,
+    suggestion:
+      `Run 'tailor workflow executions --workflow-name ${name}' until its execution has finished or none is listed. ` +
+      `If the execution succeeded, run 'tailor tailordb migration sync ${formatMigrationNumber(migrationNumber)} --namespace ${namespace}'; ` +
+      `otherwise run 'tailor tailordb migration sync ${formatMigrationNumber(migrationNumber - 1)} --namespace ${namespace}'. ` +
+      `Then deploy again. Until then, the tables of namespace '${namespace}' stay in maintenance mode.`,
+    context: { namespace, migrationNumber, workflowName: name },
+    ...(cause === undefined ? {} : { cause }),
+  });
 }
 
 interface PollExecutionOptions {

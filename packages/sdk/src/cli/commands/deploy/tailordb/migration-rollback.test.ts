@@ -512,6 +512,27 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
+  test("keeps the Pre-phase schema when the migration's outcome is unknown", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+      CLIError({
+        code: "MIGRATION_OUTCOME_UNKNOWN",
+        message: "Could not confirm whether migration test-ns/0001 started: [unavailable] lost",
+      }),
+    );
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
+      code: "MIGRATION_OUTCOME_UNKNOWN",
+    });
+
+    expect(client.createTailorDBType).toHaveBeenCalledTimes(1);
+    expect(deletedTableNames(client)).not.toContain("StockReservation");
+    expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
   test("deletes the new table's GQL permission before dropping the table on rollback", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();

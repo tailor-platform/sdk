@@ -23,6 +23,7 @@ import { resourceTrn, writeMetadataLabels } from "../label";
 import {
   clearMigrationInProgress,
   executeMigrations,
+  isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
   updateMigrationLabel,
   type MigrationContext,
@@ -597,8 +598,9 @@ export async function applyTailorDB(
               );
             }
           } catch (error) {
-            const shouldKeepMigrationInProgress = inProgress || isMigrationPartiallyApplied(error);
-            if (shouldKeepMigrationInProgress) {
+            const shouldKeepPreMigrationSchema =
+              inProgress || isMigrationPartiallyApplied(error) || isMigrationOutcomeUnknown(error);
+            if (shouldKeepPreMigrationSchema) {
               partialMigrations.set(migration.namespace, migration);
               throw error;
             }
