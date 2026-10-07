@@ -87,6 +87,12 @@ sql<{ email: string; role: "ADMIN" | "MEMBER" }>`...`;
 
 `execute` accepts anything with a `queryObject(text, values)` method, such as a `tailordb.Client`, and resolves to the rows.
 
+Compare a `uuid` column with a cast. A `string` variable is typed `text`, and PostgreSQL has no `uuid = text` operator, so the check reports `Invalid Query: operator does not exist: uuid = text`:
+
+```typescript
+sql`UPDATE "Invoice" SET "status" = ${status} WHERE "id" = ${id}::uuid`;
+```
+
 What the check reports:
 
 | Problem                                        | Message                                                  |
@@ -119,3 +125,45 @@ await transaction(client, async (tx) => {
 Pass `{ isolation: "serializable" }` or `{ readOnly: true }` as the third argument to choose the isolation level or start a read-only transaction.
 
 A client can have only one transaction open at a time, and transactions cannot be nested. Calling `transaction` on a client that already has one throws. The statements are ordinary `sql` statements, so the check works the same inside and outside a transaction.
+
+## Performance
+
+Measured on this repository's `example/` project: 14 TailorDB tables in one namespace and 106 TypeScript files in `tsconfig.json`, plus 50 files that each contain three typical statements (a filter, a `JOIN`, a `LEFT JOIN`, an `INSERT ... RETURNING`, an `UPDATE`, an aggregate). Apple M3 (8 cores, 16 GB), macOS 26.6, Node.js 24.13.0, ESLint 10.11.0, SafeQL 5.4.1, `@typescript-eslint/parser` 8.71.0, TypeScript 6.0.3, PGlite 0.5.8. Every cell is the range of 3 to 5 runs with the median in parentheses; timings on a laptop vary from run to run.
+
+### Whole `eslint` run
+
+Wall time in seconds. "Parser" is the TypeScript parser without type information; "Type information" adds `projectService`, which any type-aware lint rule needs; "SafeQL" is the generated config.
+
+| Files linted                      | Parser        | Type information | SafeQL         |
+| --------------------------------- | ------------- | ---------------- | -------------- |
+| 1 file with SQL                   | 0.3-1.5 (0.4) | 1.7-1.9 (1.7)    | 3.3-3.6 (3.4)  |
+| 50 files with SQL                 | 0.4 (0.4)     | 1.7-1.8 (1.7)    | 3.8-6.9 (4.2)  |
+| 106 project files, no SQL         | 0.6 (0.6)     | 1.9-3.0 (1.9)    | 2.3-3.6 (2.7)  |
+| 500 generated files, no SQL       | 0.7-1.6 (0.9) | 2.3-4.0 (3.8)    | 3.8-6.6 (5.0)  |
+| 106 project files and 50 with SQL | 0.6-1.6 (1.0) | 2.6-12.0 (4.8)   | 6.1-13.1 (7.5) |
+
+- Type information costs about 1.3 s at startup in this project and grows with the number of files in your `tsconfig.json`. Point `files` at the files that contain SQL to avoid paying for the rest.
+- SafeQL adds about 1.7 s the first time a file with SQL is checked: it starts an in-memory PostgreSQL, applies the schema, and analyzes the first statement. Linting files without SQL costs about 0.8 s more than type-aware linting alone.
+
+### Per file, after startup
+
+One process, files checked one after another:
+
+| Step                                | Type information | SafeQL           |
+| ----------------------------------- | ---------------- | ---------------- |
+| First file in the process           | 1.6-2.6 s (1.8)  | 3.1-6.0 s (3.5)  |
+| Each further file with 3 statements | 1-4 ms (2)       | 5-7 ms (6)       |
+| 50 such files in one call           | 60-123 ms (70)   | 156-213 ms (178) |
+
+SafeQL adds about 4 ms per file, or about 1.3 ms per statement.
+
+### Schema size
+
+Starting the in-memory PostgreSQL and applying the schema, 7 fresh processes each:
+
+| Schema                 | Start PostgreSQL | Apply schema  | Connect  | Total            |
+| ---------------------- | ---------------- | ------------- | -------- | ---------------- |
+| 2 tables               | 0.85-2.4 s (1.0) | 3-20 ms (4)   | 12-19 ms | 0.86-2.5 s (1.0) |
+| 14 tables (`example/`) | 0.93-2.3 s (1.3) | 16-37 ms (17) | 13-23 ms | 0.97-2.3 s (1.3) |
+
+The size of the schema adds about 13 ms; the start of the in-memory PostgreSQL dominates and varies more from run to run than it differs between the two schemas.
