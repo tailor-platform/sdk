@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { beforeEach, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { captureStdoutStream } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
@@ -502,4 +503,44 @@ test("reports skipped hooks when loading their context in JSON mode fails", asyn
       /loading the deployed information.*application lookup failed.*Hooks not run: hook \(app: app\)/s,
     ),
   });
+});
+
+function stdoutLines(output: string) {
+  return output.split("\n").filter((line) => line.trim() !== "");
+}
+function expectOneJsonObject(output: string) {
+  const lines = stdoutLines(output);
+  expect(lines).toHaveLength(1);
+  const value: unknown = JSON.parse(lines[0] ?? "");
+  expect(value).toEqual(expect.any(Object));
+  expect(Array.isArray(value)).toBe(false);
+  return value;
+}
+test("--json apply prints one JSON object on stdout", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "log");
+  using _json = jsonMode();
+  using stdout = captureStdoutStream();
+  await deploy({ yes: true, noValidate: true });
+  expect(expectOneJsonObject(stdout.output)).toMatchObject({ status: "applied" });
+});
+test("--json apply with a hook that logs through the provided logger keeps stdout to one JSON object", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "log");
+  using _json = jsonMode();
+  using stdout = captureStdoutStream();
+  register(({ logger: hookLogger }) => {
+    hookLogger.info("publishing");
+    return { outputs: { published: true } };
+  });
+  await deploy({ yes: true, noValidate: true });
+  expect(expectOneJsonObject(stdout.output)).toMatchObject({
+    deployedHooks: [{ pluginId: "hook", outputs: { published: true } }],
+  });
+});
+test("--json dry-run prints one JSON object on stdout", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "log");
+  using _json = jsonMode();
+  using stdout = captureStdoutStream();
+  register(vi.fn());
+  await deploy({ dryRun: true, noValidate: true });
+  expect(expectOneJsonObject(stdout.output)).toMatchObject({ summary: expect.any(Object) });
 });
