@@ -94,7 +94,7 @@ type IdPActionPermission<
  *   read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  *   update: [{ conditions: [[{ newIdpUser: "name" }, "=", { user: "id" }]], permit: true }],
  *   delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
- *   sendPasswordResetEmail: [{ conditions: [], permit: true }],
+ *   sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  *   unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  * };
  */

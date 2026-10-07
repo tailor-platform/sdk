@@ -1,5 +1,6 @@
 ---
 "@tailor-platform/sdk": patch
+"@tailor-platform/create-sdk": patch
 ---
 
-Change the `defineIdp` permission examples in the docs and JSDoc to restrict each operation to an administrator role, and warn that a `_loggedIn` policy lets every authenticated user read and change other users' login information
+Restrict the `defineIdp` permission examples in the docs, the `IdPPermission` JSDoc, the `example` project and the `static-web-site` template to an administrator role, and warn in the IdP docs that a `_loggedIn` policy lets every authenticated user read and change other users' login information and send password reset emails
