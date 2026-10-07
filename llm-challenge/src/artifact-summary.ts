@@ -89,6 +89,8 @@ export async function writeArtifactSummary(options: {
         : {
             toolCalls: claudeTrace.toolCalls,
             servedModels: claudeTrace.servedModels,
+            availableSkills: claudeTrace.skills,
+            skillInvocations: claudeTrace.skillInvocations,
             subtype: claudeTrace.result?.subtype,
             isError: claudeTrace.result?.isError,
             numTurns: claudeTrace.result?.numTurns,

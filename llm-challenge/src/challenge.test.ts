@@ -9,7 +9,7 @@ import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary"
 import { createRerunPlan, inheritSolverSettings } from "./cli";
 import { discoverProblems, selectProblems } from "./problems";
 import { runCommand } from "./process";
-import { applyNoDocsProfile, stripJsDocBlocks } from "./profile";
+import { applyNoDocsProfile, extractAgentSkills, stripJsDocBlocks } from "./profile";
 import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from "./report";
 import {
   CONTAINER_PNPM_STORE,
@@ -68,6 +68,23 @@ describe("argument parsing", () => {
       effortExplicit: false,
     });
     expect(() => parseRunArgs(["--agent", "gemini"])).toThrow("Unknown agent: gemini");
+  });
+
+  test("installs SDK agent skills only with the full profile", () => {
+    expect(parseRunArgs(["--install-skills", "--profile", "full"])).toMatchObject({
+      installSkills: true,
+      profile: "full",
+    });
+    expect(parseRunArgs(["--install-skills", "--group", "cli"])).toMatchObject({
+      installSkills: true,
+    });
+    expect(parseRunArgs([])).toMatchObject({ installSkills: false });
+    expect(() => parseRunArgs(["--install-skills"])).toThrow(
+      "--install-skills requires --profile full",
+    );
+    expect(() => parseRunArgs(["--install-skills=true", "--profile", "full"])).toThrow(
+      "--install-skills does not accept a value",
+    );
   });
 
   test("allows implicit profile with cli group", () => {
@@ -245,10 +262,20 @@ describe("rerun plan", () => {
       agent: "codex",
       model: "gpt-5.5",
       effort: "xhigh",
+      installSkills: false,
     });
     expect(() => inheritSolverSettings(parseRunArgs(["--agent", "claude"]), source)).toThrow(
       "remove --agent claude",
     );
+    expect(
+      inheritSolverSettings(parseRunArgs(["--profile", "full"]), {
+        ...source,
+        installSkills: true,
+      }),
+    ).toMatchObject({ installSkills: true });
+    expect(() =>
+      inheritSolverSettings(parseRunArgs(["--install-skills", "--profile", "full"]), source),
+    ).toThrow("remove --install-skills");
   });
 });
 
@@ -1416,6 +1443,36 @@ describe("verification summary", () => {
 });
 
 describe("workspace preparation", () => {
+  test("installs SDK agent skills where tailor skills add puts them", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const scaffoldPath = path.join(problemRoot, "scaffold");
+    const skillsSourceDir = path.join(dir, "agent-skills");
+    await fs.mkdir(scaffoldPath, { recursive: true });
+    await fs.mkdir(path.join(skillsSourceDir, "tailor", "references"), { recursive: true });
+    await fs.writeFile(path.join(problemRoot, "prompt.md"), "Do the task.\n");
+    await fs.writeFile(path.join(skillsSourceDir, "tailor", "SKILL.md"), "# Tailor\n");
+    await fs.writeFile(path.join(skillsSourceDir, "tailor", "references", "a.md"), "ref\n");
+    await fs.writeFile(path.join(dir, "sdk.tgz"), "tarball");
+
+    const paths = await prepareWorkspace({
+      outputDir: path.join(dir, "results/run"),
+      problem: makeProblem({ promptPath: path.join(problemRoot, "prompt.md"), scaffoldPath }),
+      runIndex: 0,
+      sdkTarballPath: path.join(dir, "sdk.tgz"),
+      skillsSourceDir,
+    });
+
+    for (const root of [".claude/skills", ".agents/skills"]) {
+      await expect(
+        fs.readFile(path.join(paths.worktreePath, root, "tailor", "SKILL.md"), "utf8"),
+      ).resolves.toBe("# Tailor\n");
+      await expect(
+        fs.readFile(path.join(paths.worktreePath, root, "tailor", "references", "a.md"), "utf8"),
+      ).resolves.toBe("ref\n");
+    }
+  });
+
   test("copies scaffold, prompt, and the selected SDK tarball", async () => {
     const dir = await makeTempDir();
     const problemRoot = path.join(dir, "problem");
@@ -1625,3 +1682,33 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     ...overrides,
   };
 }
+
+describe("agent skill extraction", () => {
+  test("extracts agent-skills from a packed SDK tarball", async () => {
+    const dir = await makeTempDir();
+    const packageDir = path.join(dir, "src", "package");
+    await fs.mkdir(path.join(packageDir, "agent-skills", "tailor"), { recursive: true });
+    await fs.writeFile(path.join(packageDir, "agent-skills", "tailor", "SKILL.md"), "# Tailor\n");
+    await fs.writeFile(path.join(packageDir, "package.json"), "{}\n");
+    const tarballPath = path.join(dir, "sdk.tgz");
+    await runCommand("tar", ["-czf", tarballPath, "-C", path.join(dir, "src"), "package"]);
+
+    const skillsDir = await extractAgentSkills(tarballPath, path.join(dir, "out"));
+
+    await expect(fs.readFile(path.join(skillsDir, "tailor", "SKILL.md"), "utf8")).resolves.toBe(
+      "# Tailor\n",
+    );
+  });
+
+  test("rejects a tarball without agent skills", async () => {
+    const dir = await makeTempDir();
+    await fs.mkdir(path.join(dir, "src", "package"), { recursive: true });
+    await fs.writeFile(path.join(dir, "src", "package", "package.json"), "{}\n");
+    const tarballPath = path.join(dir, "sdk.tgz");
+    await runCommand("tar", ["-czf", tarballPath, "-C", path.join(dir, "src"), "package"]);
+
+    await expect(extractAgentSkills(tarballPath, path.join(dir, "out"))).rejects.toThrow(
+      "has no agent-skills",
+    );
+  });
+});

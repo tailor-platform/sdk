@@ -33,6 +33,7 @@ const DEFAULTS: Omit<
   maxSeconds: 1800,
   preflight: true,
   pruneWorkspaceDeps: true,
+  installSkills: false,
 };
 
 export function parseRunCommand(argv: string[]): RunOptions {
@@ -72,6 +73,10 @@ export function parseRunArgs(argv: string[]): RunOptions {
       case "--no-prune-workspace-deps":
         rejectInlineValue(name, inlineValue);
         options.pruneWorkspaceDeps = false;
+        continue;
+      case "--install-skills":
+        rejectInlineValue(name, inlineValue);
+        options.installSkills = true;
         continue;
       default:
         break;
@@ -144,6 +149,9 @@ export function parseRunArgs(argv: string[]): RunOptions {
 
   if (options.group === "cli" && options.profileExplicit) {
     throw new Error("--profile cannot be used with --group cli");
+  }
+  if (options.installSkills && options.group !== "cli" && options.profile !== "full") {
+    throw new Error("--install-skills requires --profile full");
   }
 
   if (!options.modelExplicit) {

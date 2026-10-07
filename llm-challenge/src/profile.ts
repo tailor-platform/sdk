@@ -32,6 +32,22 @@ export async function createNoDocsTarball(
   });
 }
 
+export async function extractAgentSkills(tarballPath: string, destDir: string): Promise<string> {
+  await fs.rm(destDir, { recursive: true, force: true });
+  await fs.mkdir(destDir, { recursive: true });
+  await runCommand("tar", ["-xzf", tarballPath, "-C", destDir, "package/agent-skills"], {
+    env: TAR_ENV,
+    rejectOnNonZero: false,
+  });
+  const skillsDir = path.join(destDir, "package", "agent-skills");
+  try {
+    if ((await fs.stat(skillsDir)).isDirectory()) {
+      return skillsDir;
+    }
+  } catch {}
+  throw new Error(`${tarballPath} has no agent-skills directory`);
+}
+
 export async function applyNoDocsProfile(packageDir: string): Promise<void> {
   for (const entry of NO_DOCS_REMOVE_ENTRIES) {
     await fs.rm(path.join(packageDir, entry), { recursive: true, force: true });

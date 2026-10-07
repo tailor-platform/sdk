@@ -705,6 +705,30 @@ describe("grade summary", () => {
     ]);
     expect(variants[0]).toMatchObject({ ...settings, profile: "no-docs" });
   });
+
+  test("keeps runs with installed skills apart from runs without them", () => {
+    const report = (installSkills?: boolean) =>
+      ({
+        agent: "claude",
+        model: "claude-haiku-4-5",
+        effort: "high",
+        sdkRef: "aaa",
+        requestedProfile: "full",
+        ...(installSkills === undefined ? {} : { installSkills }),
+      }) as StoredChallengeReport;
+    const variants = summarizeVariants(
+      [
+        { relativePath: "results/plain/report.json", report: report() },
+        { relativePath: "results/skills/report.json", report: report(true) },
+      ],
+      [],
+    );
+
+    expect(variants.map((variant) => [variant.installSkills, variant.reports])).toEqual([
+      [false, ["results/plain/report.json"]],
+      [true, ["results/skills/report.json"]],
+    ]);
+  });
 });
 
 describe("self-judge check", () => {

@@ -99,6 +99,7 @@ export type GradeVariant = {
   model: string;
   effort: string;
   profile: SdkProfile;
+  installSkills: boolean;
   sdkRef: string;
   reports: string[];
 } & GradeSummary;
@@ -289,6 +290,7 @@ export function summarizeVariants(
       model: report.model,
       effort: report.effort,
       profile: report.requestedProfile,
+      installSkills: report.installSkills ?? false,
       sdkRef: report.sdkRef,
     };
     const key = JSON.stringify(Object.values(settings));

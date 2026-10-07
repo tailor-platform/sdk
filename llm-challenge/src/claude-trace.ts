@@ -30,6 +30,8 @@ export type ClaudeTraceSummary = {
   claudeCodeVersion?: string;
   requestedModel?: string;
   tools: string[];
+  skills: string[];
+  skillInvocations: string[];
   servedModels: string[];
   commands: TraceCommand[];
   toolCalls: number;
@@ -40,6 +42,8 @@ export type ClaudeTraceSummary = {
 export function summarizeClaudeTrace(events: unknown[]): ClaudeTraceSummary {
   const summary: ClaudeTraceSummary = {
     tools: [],
+    skills: [],
+    skillInvocations: [],
     servedModels: [],
     commands: [],
     toolCalls: 0,
@@ -55,9 +59,8 @@ export function summarizeClaudeTrace(events: unknown[]): ClaudeTraceSummary {
     if (event.type === "system" && event.subtype === "init") {
       summary.claudeCodeVersion = optionalString(event.claude_code_version);
       summary.requestedModel = optionalString(event.model);
-      summary.tools = Array.isArray(event.tools)
-        ? event.tools.filter((tool): tool is string => typeof tool === "string")
-        : [];
+      summary.tools = stringArray(event.tools);
+      summary.skills = stringArray(event.skills);
       continue;
     }
     if (event.type === "rate_limit_event") {
@@ -86,6 +89,9 @@ export function summarizeClaudeTrace(events: unknown[]): ClaudeTraceSummary {
         }
         summary.toolCalls += 1;
         const input = isObject(block.input) ? block.input : {};
+        if (block.name === "Skill" && typeof input.skill === "string") {
+          summary.skillInvocations.push(input.skill);
+        }
         if (
           block.name === "Bash" &&
           typeof input.command === "string" &&
@@ -189,6 +195,12 @@ function toolResultText(content: unknown): string {
       .join("");
   }
   return "";
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function optionalString(value: unknown): string | undefined {

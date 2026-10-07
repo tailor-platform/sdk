@@ -36,6 +36,7 @@ export type RunOptions = {
   maxSeconds: number;
   preflight: boolean;
   pruneWorkspaceDeps: boolean;
+  installSkills: boolean;
   rerunNonzeroFrom?: string;
 };
 
@@ -47,6 +48,7 @@ export type ChallengeReport = {
   sdkRef: string;
   sdkVersion?: string;
   requestedProfile: SdkProfile;
+  installSkills?: boolean;
   model: string;
   effort: string;
   runsPerProblem: number;
@@ -141,6 +143,8 @@ export const INFRASTRUCTURE_FAILURE_KINDS: ReadonlySet<SolverFailureKind> = new 
 export type AgentResultSummary = {
   toolCalls: number;
   servedModels: string[];
+  availableSkills?: string[];
+  skillInvocations?: string[];
   subtype?: string;
   isError?: boolean;
   numTurns?: number;

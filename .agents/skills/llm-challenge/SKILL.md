@@ -24,6 +24,7 @@ Recommended defaults:
 - `agent`: `claude` - solver: `claude` (Claude Code) or `codex`.
 - `group`: `all` - problem group to run: `sdk-api`, `cli`, or `all`.
 - `profile`: `no-docs` - SDK package profile for `sdk-api`; omit when `group=cli`.
+- `install-skills`: disabled - copy the SDK's agent skills into each workspace's `.claude/skills/` and `.agents/skills/`, as `tailor skills add` does, so the solver can load them; requires `profile: full` for `sdk-api`. Runs record the skills the solver saw and invoked (`agentResult.availableSkills`, `agentResult.skillInvocations`), and grades keep runs with and without skills in separate variants.
 - `runs`: `3` - independent runs per selected problem.
 - `concurrency`: same as `runs` - parallel task count.
 - `problem filters`: empty - optional `group/id`, bare id, or comma-separated list.

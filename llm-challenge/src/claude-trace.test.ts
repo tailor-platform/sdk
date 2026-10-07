@@ -115,6 +115,27 @@ describe("claude trace summary", () => {
     expect(summary.servedModels).toEqual(["claude-sonnet-5-5"]);
   });
 
+  test("records available skills and the skills the agent invoked", () => {
+    const summary = summarizeClaudeTrace([
+      { type: "system", subtype: "init", model: "claude-haiku-4-5", skills: ["debug", "tailor"] },
+      {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: {
+          model: "claude-haiku-4-5",
+          content: [
+            { type: "tool_use", id: "t1", name: "Skill", input: { skill: "tailor" } },
+            { type: "tool_use", id: "t2", name: "Skill", input: { skill: "debug" } },
+            { type: "tool_use", id: "t3", name: "Skill", input: { skill: "tailor" } },
+          ],
+        },
+      },
+    ]);
+
+    expect(summary.skills).toEqual(["debug", "tailor"]);
+    expect(summary.skillInvocations).toEqual(["tailor", "debug", "tailor"]);
+  });
+
   test("ignores malformed events", () => {
     const summary = summarizeClaudeTrace([null, "text", { type: "assistant" }, { type: "user" }]);
 

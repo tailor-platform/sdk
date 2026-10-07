@@ -5,6 +5,7 @@ import { parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { gradeCommand } from "./grade";
 import { discoverProblems, selectProblems } from "./problems";
+import { extractAgentSkills } from "./profile";
 import { createRunReport, reportPath, resolveExistingReportPath, writeReport } from "./report";
 import { packSdk } from "./sdk-pack";
 import { createSolverRuntime } from "./solver";
@@ -91,6 +92,12 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   });
   try {
     console.log(`SDK ${packedSdk.sdkRef.slice(0, 12)} packaged`);
+    const skillsSourceDir = solverSettings.installSkills
+      ? await extractAgentSkills(
+          packedSdk.fullTarballPath,
+          path.join(path.dirname(packedSdk.fullTarballPath), "agent-skills"),
+        )
+      : undefined;
 
     const report: ChallengeReport = {
       schemaVersion: 2,
@@ -100,6 +107,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       sdkRef: packedSdk.sdkRef,
       sdkVersion: packedSdk.sdkVersion,
       requestedProfile: options.profile,
+      installSkills: solverSettings.installSkills,
       model: solverSettings.model,
       effort: solverSettings.effort,
       runsPerProblem: rerunPlan?.sourceReport.runsPerProblem ?? options.runs,
@@ -158,6 +166,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         problem: task.problem,
         runIndex: task.runIndex,
         sdkTarballPath,
+        skillsSourceDir,
       });
       try {
         const result = await runtime.run({
@@ -252,11 +261,12 @@ const STOP_RUN_FAILURE_KINDS = new Set<SolverFailureKind>(["usage-limit", "auth"
 export function inheritSolverSettings(
   options: RunOptions,
   sourceReport: StoredChallengeReport,
-): { agent: SolverAgent; model: string; effort: string } {
+): { agent: SolverAgent; model: string; effort: string; installSkills: boolean } {
   const source = {
     agent: sourceReport.agent ?? "codex",
     model: sourceReport.model,
     effort: sourceReport.effort,
+    installSkills: sourceReport.installSkills ?? false,
   };
   const conflicts = [
     options.agentExplicit && options.agent !== source.agent
@@ -268,6 +278,7 @@ export function inheritSolverSettings(
     options.effortExplicit && options.effort !== source.effort
       ? `--effort ${options.effort}`
       : undefined,
+    options.installSkills && !source.installSkills ? "--install-skills" : undefined,
   ].filter((conflict) => conflict !== undefined);
   if (conflicts.length > 0) {
     throw new Error(
