@@ -161,6 +161,8 @@ defineIdp("my-idp", {
 - `passwordMinLength` - Minimum password length. Must be between 6 and 30. Default `6`.
 - `passwordMaxLength` - Maximum password length. Must be between 6 and 4096. Default `4096`.
 
+**Password expiration:** the IdP does not expire passwords on its own, but it records when each user's password was last set so you can enforce your own policy. The `User` records returned by `idp.Client` expose it as `passwordUpdatedAt` (an ISO 8601 string, or `null` for users without a password), for example to find expired passwords in a scheduled executor. To block sign-in with an expired password, read `claims.password_updated_at` in the Auth `beforeLogin` hook (see [Auth](./auth.md#password-age-claim)).
+
 **Email domains and social login:**
 
 - `allowedEmailDomains` - Restrict registration to these email domains. Each entry is a hostname (`example.com`), matched exactly and case-insensitively, so `example.com` does not cover `sub.example.com`. Up to 100 entries.
