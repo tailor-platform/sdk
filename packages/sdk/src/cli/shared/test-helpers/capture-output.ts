@@ -56,10 +56,13 @@ export function captureStdoutStream(): CapturedOutput {
   const log = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     output += `${args.map(String).join(" ")}\n`;
   });
-  const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
-    output += String(chunk);
-    return true;
-  });
+  const decoder = new TextDecoder();
+  const write = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation((chunk: string | Uint8Array) => {
+      output += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+      return true;
+    });
 
   return {
     get output() {
