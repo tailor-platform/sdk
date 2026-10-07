@@ -219,6 +219,19 @@ describe("executeMigrationAsWorkflow", () => {
     expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
   });
 
+  test("keeps polling through a transient error", async () => {
+    const { client, raw, calls } = createMockClient();
+    raw.getWorkflowExecution.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
+
+    const result = await run(client);
+
+    expect(result.success).toBe(true);
+    expect(raw.getWorkflowExecution).toHaveBeenCalledTimes(2);
+    expect(deletesAfter(calls, "startWorkflow")).toContain("deleteWorkflow");
+  });
+
   test("keeps the workflow when polling fails with an error that is not transient", async () => {
     const { client, raw, calls } = createMockClient();
     const lost = new ConnectError("lost", Code.Internal);

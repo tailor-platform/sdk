@@ -434,19 +434,18 @@ function outcomeUnknownError(
 }
 
 interface PollExecutionOptions {
-  /** Keep polling through transient errors instead of failing on the first one. */
-  retryTransientErrors: boolean;
   /** Called with each polled execution that is still active. */
   onActive?: (execution: WorkflowExecution) => void;
 }
 
 /**
- * Poll a migration workflow execution until it reaches a terminal state.
+ * Poll a migration workflow execution until it reaches a terminal state,
+ * polling through transient errors.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param executionId - Workflow execution id
  * @param pollInterval - Poll interval in milliseconds
- * @param options - Retry and progress options
+ * @param options - Progress options
  * @returns The execution in its terminal state
  */
 async function pollUntilTerminal(
@@ -454,7 +453,7 @@ async function pollUntilTerminal(
   workspaceId: string,
   executionId: string,
   pollInterval: number,
-  options: PollExecutionOptions,
+  options: PollExecutionOptions = {},
 ): Promise<WorkflowExecution> {
   // loop exits when the workflow execution reaches a terminal status
   // oxlint-disable-next-line typescript/no-unnecessary-condition
@@ -463,7 +462,7 @@ async function pollUntilTerminal(
     try {
       ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
     } catch (error) {
-      if (!options.retryTransientErrors || !isRetryableWaitError(error)) throw error;
+      if (!isRetryableWaitError(error)) throw error;
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
       continue;
     }
@@ -493,9 +492,7 @@ async function waitForMigrationWorkflow(
   executionId: string,
   pollInterval: number,
 ): Promise<LongRunningMigrationResult> {
-  const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval, {
-    retryTransientErrors: false,
-  });
+  const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval);
   const outcomes = await collectJobOutcomes(client, workspaceId, execution);
   if (execution.status === WorkflowExecution_Status.SUCCESS) {
     return { success: true, logs: outcomes.logs };
@@ -804,7 +801,6 @@ async function waitForSteps(
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
   try {
     const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval, {
-      retryTransientErrors: true,
       onActive: (active) =>
         options.onProgress?.(
           classifySteps(active, runnerName, order).completed.length,
