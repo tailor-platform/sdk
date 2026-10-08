@@ -1763,11 +1763,11 @@ describe("template-generator", () => {
 
       expect(script).toContain('import { PGlite } from "@electric-sql/pglite"');
       expect(script).toContain(
-        'import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+        'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('import type { Database } from "./db"');
       expect(script).toContain('import { pgliteSchema } from "./db.pglite"');
-      expect(script).toContain('import { main } from "./migrate"');
+      expect(script).toContain('const { main } = await import("./migrate");');
       expect(script).toContain("pglite.exec(pgliteSchema.tailordb)");
       expect(script).toContain("}, 60_000);");
       expect(script).toContain(
@@ -1807,10 +1807,11 @@ describe("template-generator", () => {
       expect(script).not.toContain("tailor-runtime");
     });
 
-    test("leaves the date representation alone for a migration without a recorded default", () => {
+    test("pins string values for a migration without a recorded default", () => {
       const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
 
-      expect(script).not.toContain("applyDateRepresentation");
+      expect(script).toContain('applyDateRepresentation("string")');
+      expect(script).not.toContain("tailor-runtime");
     });
 
     test("reads Date values from PGlite for a migration without a temporal record", () => {
@@ -1848,22 +1849,24 @@ describe("template-generator", () => {
       );
     });
 
-    test("leaves the date representation alone for a migration without a recorded default", () => {
+    test("pins string values for a migration without a recorded default", () => {
       const script = generateMigrationTestScript(createMockMigrationDiff());
 
-      expect(script).not.toContain("applyDateRepresentation");
-      expect(script).toContain('import { describe, expect, test } from "vitest"');
-      expect(script).toContain('import { main } from "./migrate";');
+      expect(script).toContain('applyDateRepresentation("string")');
+      expect(script).toContain("records no defaultDateRepresentation");
+      expect(script).toContain('const { main } = await import("./migrate");');
       expect(script).not.toContain("tailor-runtime");
     });
 
     test("should generate a test scaffold wired to the mock and generated types", () => {
       const script = generateMigrationTestScript(createMockMigrationDiff());
 
-      expect(script).toContain('import { createKyselyMock } from "@tailor-platform/sdk/vitest"');
-      expect(script).toContain('import { describe, expect, test } from "vitest"');
+      expect(script).toContain(
+        'import { applyDateRepresentation, createKyselyMock } from "@tailor-platform/sdk/vitest"',
+      );
+      expect(script).toContain('import { afterAll, describe, expect, test } from "vitest"');
       expect(script).toContain('import type { Database } from "./db"');
-      expect(script).toContain('import { main } from "./migrate"');
+      expect(script).toContain('const { main } = await import("./migrate");');
       expect(script).toContain("createKyselyMock<Database>()");
       expect(script).toContain("mock.withTx((trx) => main(trx))");
     });

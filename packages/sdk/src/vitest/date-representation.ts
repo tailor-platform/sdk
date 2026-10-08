@@ -1,4 +1,4 @@
-import type { AppConfig } from "#/configure/config/types";
+import type { DateRepresentationOption } from "#/configure/types/field.types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
 const DATE_DEFAULT_GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
@@ -25,14 +25,14 @@ export function applyDateDefault(dateDefault: EffectiveDateDefault): () => void 
 /**
  * Give `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as` the
  * given representation for the rest of this test worker, as if the code under
- * test were bundled under that `defaultDateRepresentation`. Generated migration
- * tests call it with the representation recorded in the migration's `diff.json`,
- * so a later change to `tailor.config.ts` does not alter what the test exercises.
- * @param representation - The `defaultDateRepresentation` value to apply
+ * test were bundled under that `defaultDateRepresentation`; `"string"` is the
+ * representation of a project that leaves the setting unset. Generated
+ * migration tests call it with the representation recorded in the migration's
+ * `diff.json`, so a later change to `tailor.config.ts` does not alter what the
+ * test exercises.
+ * @param representation - The representation to apply, as `as` names it
  * @returns A function that restores the previous representation
  */
-export function applyDateRepresentation(
-  representation: NonNullable<AppConfig["defaultDateRepresentation"]>,
-): () => void {
-  return applyDateDefault(representation);
+export function applyDateRepresentation(representation: DateRepresentationOption): () => void {
+  return applyDateDefault(representation === "string" ? "legacy" : representation);
 }

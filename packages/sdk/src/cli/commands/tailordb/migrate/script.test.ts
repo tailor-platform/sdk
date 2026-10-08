@@ -325,7 +325,7 @@ describe("addMigrationScriptFiles", () => {
     expect(result.migratePath).toBe(migrationFile(MIGRATE_FILE_NAME));
     expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
     const content = fs.readFileSync(result.testPath!, "utf-8");
-    expect(content).toContain('import { main } from "./migrate"');
+    expect(content).toContain('const { main } = await import("./migrate");');
   });
 
   test("pins the unit test scaffold to the date default recorded while adding the script", async () => {
