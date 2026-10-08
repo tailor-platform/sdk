@@ -102,10 +102,9 @@ type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> 
 // Read per call rather than at module load: the Vitest setup file sets the gate
 // after the runtime modules are evaluated. Bundles fold it to a literal.
 function bundledDateDefault(): EffectiveDateDefault {
-  return (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT ===
-    "temporal"
-    ? "temporal"
-    : "legacy";
+  const gate = (globalThis as MaybeProcessGlobal).process?.env
+    .__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT;
+  return gate === "temporal" || gate === "date" ? gate : "legacy";
 }
 
 /**

@@ -258,7 +258,13 @@ describe("AppConfigSchema defaultDateRepresentation", () => {
     ).toBe(true);
   });
 
-  test.each(["string", "date", true])("rejects %j", (value) => {
+  test('accepts "date"', () => {
+    expect(
+      AppConfigSchema.safeParse({ name: "my-app", defaultDateRepresentation: "date" }).success,
+    ).toBe(true);
+  });
+
+  test.each(["string", "legacy", true])("rejects %j", (value) => {
     const result = AppConfigSchema.safeParse({ name: "my-app", defaultDateRepresentation: value });
     expect(result.success).toBe(false);
     if (result.success) throw new Error("Expected AppConfigSchema parsing to fail");

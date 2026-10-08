@@ -7,8 +7,8 @@ import type { EffectiveDateDefault } from "#/runtime/types";
 /**
  * Read `defaultDateRepresentation` from an imported `tailor.config.ts` module.
  *
- * Accepts exactly what the config schema accepts: absent, or `"temporal"`. Any
- * other value is rejected rather than read as the legacy default, since the
+ * Accepts exactly what the config schema accepts: absent, `"temporal"`, or
+ * `"date"`. Any other value is rejected rather than read as the legacy default, since the
  * CLI rejects the same config and the test run would otherwise disagree with it.
  * @param configModule - The imported module namespace
  * @returns The representation `t` date fields without `as` follow
@@ -23,9 +23,9 @@ export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefau
       ? (appConfig as { defaultDateRepresentation?: unknown }).defaultDateRepresentation
       : undefined;
   if (value === undefined) return "legacy";
-  if (value === "temporal") return "temporal";
+  if (value === "temporal" || value === "date") return value;
   throw new Error(
-    `defaultDateRepresentation must be "temporal" or omitted, but tailor.config.ts sets ${JSON.stringify(value)}.`,
+    `defaultDateRepresentation must be "temporal", "date", or omitted, but tailor.config.ts sets ${JSON.stringify(value)}.`,
   );
 }
 

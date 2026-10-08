@@ -62,6 +62,9 @@ describe("createPlatformBundleDefinePlugin date default", () => {
     expect(
       run(code, createPlatformBundleDefinePlugin({ date: true, temporal: true }, "temporal")),
     ).toBe('read("temporal");');
+    expect(
+      run(code, createPlatformBundleDefinePlugin({ date: true, temporal: true }, "date")),
+    ).toBe('read("date");');
   });
 
   test("the bare gate fold does not eat the date default gate", () => {
@@ -88,6 +91,6 @@ describe("date default gate in the built runtime", () => {
 
     const folded = run(chunk!, createPlatformBundleDefinePlugin(undefined, "temporal"));
     expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT");
-    expect(folded).toMatch(/return "temporal"===`temporal`/);
+    expect(folded).toMatch(/="temporal";return \w+===`temporal`\|\|\w+===`date`\?\w+:`legacy`/);
   });
 });

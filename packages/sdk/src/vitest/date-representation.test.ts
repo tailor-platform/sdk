@@ -12,6 +12,11 @@ describe("applyDateRepresentation", () => {
       expect(process.env[GATE]).toBe("temporal");
       restore();
       expect(process.env[GATE]).toBeUndefined();
+
+      const restoreDate = applyDateRepresentation("date");
+      expect(process.env[GATE]).toBe("date");
+      restoreDate();
+      expect(process.env[GATE]).toBeUndefined();
     } finally {
       if (previous === undefined) delete process.env[GATE];
       else process.env[GATE] = previous;

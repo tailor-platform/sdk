@@ -153,7 +153,7 @@ async function recordRuntimeModes(
     delete raw.temporal;
     changed = true;
   }
-  if (dateDefault === "temporal") {
+  if (dateDefault !== "legacy") {
     raw.dateRepresentation = dateDefault;
     changed = true;
   } else if (Object.hasOwn(raw, "dateRepresentation")) {
@@ -163,7 +163,7 @@ async function recordRuntimeModes(
   // Either mode changes how the script runs, so an SDK that does not know the
   // mode must refuse the file instead of running the script with other values.
   if (
-    (temporal || dateDefault === "temporal") &&
+    (temporal || dateDefault !== "legacy") &&
     (typeof raw.version !== "number" || raw.version < SCHEMA_SNAPSHOT_VERSION)
   ) {
     raw.version = SCHEMA_SNAPSHOT_VERSION;

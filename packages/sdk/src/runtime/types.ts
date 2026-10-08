@@ -46,4 +46,4 @@ export type TailorEnv = keyof Env extends never ? Record<string, string | number
  * Representation applied to `t` date fields that omit `as`, after
  * `defaultDateRepresentation` has been resolved. `"legacy"` keeps string values.
  */
-export type EffectiveDateDefault = "legacy" | "temporal";
+export type EffectiveDateDefault = "legacy" | "temporal" | "date";

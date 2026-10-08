@@ -103,7 +103,9 @@ export const AppConfigSchema = z
     logLevel: logLevelSchema.optional(),
     buildOptions: buildOptionsSchema.optional(),
     defaultDateRepresentation: z
-      .literal("temporal", { message: `'defaultDateRepresentation' must be "temporal".` })
+      .enum(["temporal", "date"], {
+        message: `'defaultDateRepresentation' must be "temporal" or "date".`,
+      })
       .optional(),
     metadata: metadataSchema.optional(),
     db: z.unknown().optional(),

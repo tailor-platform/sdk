@@ -83,8 +83,8 @@ export type DateDefaultConflictMessage =
   "defaultDateRepresentation differs between the tailor.config.ts files included in this TypeScript program; use the same value in each, or give each application its own tsconfig.json";
 
 // Distributes over the union of recorded settings.
-type DateDefaultOfValue<Value> = Value extends "temporal"
-  ? "temporal"
+type DateDefaultOfValue<Value> = Value extends "temporal" | "date"
+  ? Value
   : Value extends "unset"
     ? undefined
     : never;

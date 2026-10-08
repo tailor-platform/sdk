@@ -11,10 +11,10 @@ const DATE_DEFAULT_GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
  */
 export function applyDateDefault(dateDefault: EffectiveDateDefault): () => void {
   const previous = process.env[DATE_DEFAULT_GATE];
-  if (dateDefault === "temporal") {
-    process.env[DATE_DEFAULT_GATE] = dateDefault;
-  } else {
+  if (dateDefault === "legacy") {
     delete process.env[DATE_DEFAULT_GATE];
+  } else {
+    process.env[DATE_DEFAULT_GATE] = dateDefault;
   }
   return () => {
     if (previous === undefined) delete process.env[DATE_DEFAULT_GATE];

@@ -1797,6 +1797,15 @@ describe("template-generator", () => {
       expect(script).toContain("tailor-runtime");
     });
 
+    test("pins a date-default migration without requiring the tailor-runtime environment", () => {
+      const script = generateMigrationPgliteTestScript(
+        createMockMigrationDiff({ dateRepresentation: "date" }),
+      );
+
+      expect(script).toContain('applyDateRepresentation("date")');
+      expect(script).not.toContain("tailor-runtime");
+    });
+
     test("leaves the date representation alone for a migration without a recorded default", () => {
       const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
 

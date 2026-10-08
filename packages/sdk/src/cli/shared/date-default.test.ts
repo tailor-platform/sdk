@@ -10,4 +10,8 @@ describe("effectiveDateDefault", () => {
   test('"temporal" is passed through as the effective default', () => {
     expect(effectiveDateDefault({ defaultDateRepresentation: "temporal" })).toBe("temporal");
   });
+
+  test('"date" is passed through as the effective default', () => {
+    expect(effectiveDateDefault({ defaultDateRepresentation: "date" })).toBe("date");
+  });
 });

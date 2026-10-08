@@ -332,8 +332,8 @@ export function buildResolverResultSerialization(
 export type ResolverFields = Pick<Resolver, "input" | "output"> | undefined;
 
 /**
- * Decide which date representations a resolver bundle has to convert. A temporal
- * default keeps the Temporal converter even when no declared field uses it, so a
+ * Decide which date representations a resolver bundle has to convert. A configured
+ * default keeps its converter even when no declared field uses it, so a
  * `t.date()` parsed inside `body` resolves the way the config promises.
  * @param resolver - The resolver's input and output fields, or undefined when unknown
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
@@ -346,7 +346,9 @@ export function resolverDateRepresentations(
   if (!resolver) return { date: true, temporal: true };
   const fields = [resolver.output, ...Object.values(resolver.input ?? {})];
   return {
-    date: fields.some((field) => hasDateRepresentationFields(field, "date", dateDefault)),
+    date:
+      dateDefault === "date" ||
+      fields.some((field) => hasDateRepresentationFields(field, "date", dateDefault)),
     temporal:
       dateDefault === "temporal" ||
       fields.some((field) => hasDateRepresentationFields(field, "temporal", dateDefault)),

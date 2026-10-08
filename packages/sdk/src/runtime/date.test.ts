@@ -407,6 +407,12 @@ describe("dateRepresentationOf", () => {
     expect(dateRepresentationOf("date", "default", "legacy")).toBeUndefined();
   });
 
+  test("a field following the default converts to Date under the date default", () => {
+    expect(dateRepresentationOf("date", "default", "date")).toBe("date");
+    expect(dateRepresentationOf("datetime", "default", "date")).toBe("date");
+    expect(dateRepresentationOf("time", "default", "date")).toBe("date");
+  });
+
   test("an explicit `as` wins over the effective default", () => {
     expect(dateRepresentationOf("date", "string", "temporal")).toBeUndefined();
     expect(dateRepresentationOf("date", "date", "temporal")).toBe("date");
@@ -425,6 +431,8 @@ describe("dateRepresentationOf", () => {
       expect(dateRepresentationOf("date", "default")).toBeUndefined();
       process.env[GATE] = "temporal";
       expect(dateRepresentationOf("date", "default")).toBe("temporal");
+      process.env[GATE] = "date";
+      expect(dateRepresentationOf("date", "default")).toBe("date");
     } finally {
       if (previous === undefined) delete process.env[GATE];
       else process.env[GATE] = previous;

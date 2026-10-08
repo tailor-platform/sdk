@@ -14,7 +14,7 @@ afterAll(() => {
   }
 });
 
-type App = { name: string; defaultDateRepresentation?: "temporal" };
+type App = { name: string; defaultDateRepresentation?: "temporal" | "date" };
 
 function registryFile(app: App): string {
   return `declare module "@tailor-platform/sdk" {\n  interface DateRepresentationRegistry {\n    ${JSON.stringify(app.name)}: ${JSON.stringify(app.defaultDateRepresentation ?? "unset")};\n  }\n}\n\nexport {};\n`;
@@ -82,6 +82,13 @@ declare const day: output<typeof field>;
 export const asTemporal: Temporal.PlainDate = day;
 `;
 
+const dateProbe = `
+import { t, type output } from "@tailor-platform/sdk";
+const field = t.date();
+declare const day: output<typeof field>;
+export const asDate: Date = day;
+`;
+
 const stringProbe = `
 import { t, type output } from "@tailor-platform/sdk";
 const field = t.date();
@@ -97,6 +104,12 @@ describe("DateRepresentationRegistry through the public package entry", { timeou
       temporalProbe,
     );
     expect(diagnostics).toEqual([]);
+  });
+
+  test("one app set to date types t.date() as Date", () => {
+    expect(
+      diagnosticsFor([{ name: "shop", defaultDateRepresentation: "date" }], dateProbe),
+    ).toEqual([]);
   });
 
   test("one unset app keeps t.date() as a string", () => {

@@ -78,7 +78,9 @@ const configuredDateDefault = isTailorRuntime()
   ? process.env.__TAILOR_RUNTIME_DATE_DEFAULT
   : undefined;
 const restoreDateDefault =
-  configuredDateDefault === "temporal" || configuredDateDefault === "legacy"
+  configuredDateDefault === "temporal" ||
+  configuredDateDefault === "date" ||
+  configuredDateDefault === "legacy"
     ? applyDateDefault(configuredDateDefault)
     : undefined;
 afterAll(() => restoreDateDefault?.());

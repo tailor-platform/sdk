@@ -20,6 +20,7 @@ describe("DateDefaultOf", () => {
 
   test("one configured app sets the default", () => {
     expectTypeOf<DateDefaultOf<{ app: "temporal" }, undefined>>().toEqualTypeOf<"temporal">();
+    expectTypeOf<DateDefaultOf<{ app: "date" }, undefined>>().toEqualTypeOf<"date">();
   });
 
   test("an app without a setting follows the built-in default", () => {
@@ -47,6 +48,7 @@ describe("DateDefaultOf", () => {
 describe("date field values under a default", () => {
   test("a field without `as` takes the default representation", () => {
     expectTypeOf<DateFieldValueFor<undefined, "temporal">>().toEqualTypeOf<Temporal.PlainDate>();
+    expectTypeOf<DateFieldValueFor<undefined, "date">>().toEqualTypeOf<Date>();
     expectTypeOf<DateTimeFieldValueFor<undefined, "temporal">>().toEqualTypeOf<Temporal.Instant>();
     expectTypeOf<TimeFieldValueFor<undefined, "temporal">>().toEqualTypeOf<Temporal.PlainTime>();
   });

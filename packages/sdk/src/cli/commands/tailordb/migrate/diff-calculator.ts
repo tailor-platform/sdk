@@ -338,7 +338,7 @@ export interface MigrationDiff {
    * generated. The script keeps running with it, whatever the config says later.
    * Absent means string values.
    */
-  dateRepresentation?: "temporal";
+  dateRepresentation?: "temporal" | "date";
 }
 
 /**

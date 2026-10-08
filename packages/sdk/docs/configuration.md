@@ -77,7 +77,7 @@ This is a bundle-time setting. Changing `TAILOR_APP_LOG_LEVEL` affects newly bun
 
 Only `logger.*` calls made through the SDK's `logger` wrapper (from `@tailor-platform/sdk/runtime` or its `@tailor-platform/sdk/runtime/logger` subpath), or written as `globalThis.tailor.logger.*`, are covered. Other equivalent forms — such as the bare `tailor.logger.*` global or `self.tailor.logger.*` — are not affected by `logLevel`.
 
-**Date Representation** (`defaultDateRepresentation`): Sets the value representation of `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as`. With `"temporal"`, those fields carry `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime` values instead of strings, so a project that uses Temporal everywhere does not have to repeat `as: "temporal"` on every field. A field's own `as` still wins, including `as: "string"`. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
+**Date Representation** (`defaultDateRepresentation`): Sets the value representation of `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as`. With `"temporal"`, those fields carry `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime` values instead of strings, so a project that uses Temporal everywhere does not have to repeat `as: "temporal"` on every field; with `"date"`, they carry `Date` values, as `as: "date"` gives them. A field's own `as` still wins, including `as: "string"`. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
 
 ```typescript
 export default defineConfig({

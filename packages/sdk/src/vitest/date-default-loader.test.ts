@@ -21,6 +21,10 @@ describe("dateDefaultFromConfig", () => {
     expect(dateDefaultFromConfig({})).toBe("legacy");
   });
 
+  test("reads a date default from the default export", () => {
+    expect(dateDefaultFromConfig({ default: { defaultDateRepresentation: "date" } })).toBe("date");
+  });
+
   test("a value the config schema rejects fails instead of silently keeping strings", () => {
     expect(() =>
       dateDefaultFromConfig({ default: { defaultDateRepresentation: "string" } }),
@@ -111,7 +115,7 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
     const configPath = fixture("invalid", {
       "tailor.config.ts": `export default { name: "app", defaultDateRepresentation: "string" };\n`,
     });
-    expect(run(configPath).error).toMatch(/must be "temporal" or omitted/);
+    expect(run(configPath).error).toMatch(/must be "temporal", "date", or omitted/);
   });
 
   test("a SyntaxError thrown while the config runs is an evaluation failure, not a parse failure", () => {

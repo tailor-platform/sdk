@@ -204,7 +204,7 @@ createResolver({
 
 All three field types support `array`, `optional`, nested objects, and input validators with the selected representation. Both deployed resolvers and `tailor function run` convert input and output. Executors using `resolverExecutedTrigger` receive date, datetime, and time results as strings.
 
-To use Temporal values without writing `as: "temporal"` on every field, set [`defaultDateRepresentation: "temporal"`](../configuration.md#application-settings) in `defineConfig()`. Fields that omit `as` then use `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime`, and `as: "string"` opts a single field back to strings. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
+To use Temporal values without writing `as: "temporal"` on every field, set [`defaultDateRepresentation: "temporal"`](../configuration.md#application-settings) in `defineConfig()`. Fields that omit `as` then use `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime`, and `as: "string"` opts a single field back to strings. `defaultDateRepresentation: "date"` does the same for `Date` values. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
 
 The SDK supplies Temporal types, so existing projects can use `as: "temporal"` without changing `compilerOptions.lib`. To construct values or name their types, import `Temporal` from the SDK:
 
