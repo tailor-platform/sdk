@@ -45,6 +45,11 @@ export type LockInputs = {
   environment: string;
   dir: string;
   packageManager: string;
+  /**
+   * False when `packageManager` was set with `--package-manager`. Entries written before
+   * the flag existed lack it and were detected.
+   */
+  packageManagerAutoDetected?: boolean;
   /** For `preview` kind: workspace region used when creating the preview workspace. */
   region?: string;
   /**

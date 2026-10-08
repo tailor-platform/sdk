@@ -140,6 +140,42 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
+  test.each([
+    ["branch", []],
+    ["tag", []],
+    ["preview", ["--region", "us-west"]],
+  ] as const)("ci %s passes --package-manager to setupTarget", async (subcommand, args) => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      subcommand,
+      ...args,
+      "--package-manager",
+      "pnpm",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(expect.objectContaining({ packageManager: "pnpm" }));
+  });
+
+  test("ci branch leaves the package manager to detection without --package-manager", async () => {
+    const result = await runCommand(setupCommand, ["ci", "branch"]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ packageManager: undefined }),
+    );
+  });
+
+  test("ci branch rejects an unsupported --package-manager", async () => {
+    const result = await runCommand(setupCommand, ["ci", "branch", "--package-manager", "cnpm"]);
+
+    expect(result.success).toBe(false);
+    const error = result.success ? "" : String(result.error);
+    expect(error).toContain("package-manager");
+    expect(error).not.toContain("Unknown flags");
+    expect(setupTarget).not.toHaveBeenCalled();
+  });
+
   test("ci env narrows the output with repeated --environment flags", async () => {
     const result = await runCommand(setupCommand, [
       "ci",

@@ -1,5 +1,3 @@
-import * as fs from "node:fs";
-import * as path from "pathe";
 import branchTemplate from "./branch.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
@@ -13,7 +11,18 @@ const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 export const TEMPLATE_VERSION =
   RELEASED_TEMPLATE_VERSION + (TEMPLATE_CHANGED_SINCE_RELEASE ? 1 : 0);
 
-export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
+export const PACKAGE_MANAGERS = ["pnpm", "yarn", "npm", "bun"] as const;
+
+export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
+
+/**
+ * Check whether a value names a supported package manager.
+ * @param value - Value to check
+ * @returns True when `value` is one of {@link PACKAGE_MANAGERS}
+ */
+export function isPackageManager(value: unknown): value is PackageManager {
+  return PACKAGE_MANAGERS.some((name) => name === value);
+}
 
 const TAILOR_CLI_COMMANDS: Record<PackageManager, string> = {
   pnpm: "pnpm exec tailor",
@@ -109,20 +118,6 @@ export type RenderResult = {
   content: string;
   generatedIds: string[];
 };
-
-/**
- * Detect the package manager used in a project directory by checking for lockfiles.
- * @param dir - Project directory to inspect
- * @returns Detected package manager, defaults to npm
- */
-export function detectPackageManager(dir: string): PackageManager {
-  if (fs.existsSync(path.join(dir, "pnpm-lock.yaml"))) return "pnpm";
-  if (fs.existsSync(path.join(dir, "yarn.lock"))) return "yarn";
-  if (fs.existsSync(path.join(dir, "bun.lockb")) || fs.existsSync(path.join(dir, "bun.lock")))
-    return "bun";
-  if (fs.existsSync(path.join(dir, "package-lock.json"))) return "npm";
-  return "npm";
-}
 
 // Keep or drop a `# __X_START__` ... `# __X_END__` block (marker lines removed
 // when kept, whole block removed when dropped).

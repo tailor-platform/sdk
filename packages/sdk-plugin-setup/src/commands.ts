@@ -11,6 +11,7 @@ import { setupDelete } from "./delete";
 import { setupEnv } from "./env";
 import { printTargetNextSteps, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
+import { PACKAGE_MANAGERS } from "./templates";
 import { setupUpdate } from "./update";
 
 const checkCommand = defineAppCommand({
@@ -41,6 +42,11 @@ const envCommand = defineAppCommand({
   },
 });
 
+const packageManagerArg = arg(z.enum(PACKAGE_MANAGERS).optional(), {
+  description:
+    "Package manager the workflow uses: pnpm, npm, yarn, or bun (defaults to the one the lockfile or package.json at the repository root names)",
+});
+
 const branchCommand = defineAppCommand({
   name: "branch",
   description: "Generate a branch-target deploy workflow (push to branch triggers deploy).",
@@ -55,6 +61,7 @@ const branchCommand = defineAppCommand({
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
     }),
+    "package-manager": packageManagerArg,
     "erd-preview": arg(z.boolean().default(false), {
       description: "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
     }),
@@ -83,6 +90,7 @@ const branchCommand = defineAppCommand({
       workspaceName: args.name,
       branch: args.target,
       environment: args.environment,
+      packageManager: args["package-manager"],
       erdPreview: args["erd-preview"],
       restrictDispatch: args["restrict-dispatch"],
       dir: args.dir,
@@ -115,6 +123,7 @@ const tagCommand = defineAppCommand({
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
     }),
+    "package-manager": packageManagerArg,
     dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
       description:
@@ -134,6 +143,7 @@ const tagCommand = defineAppCommand({
       branch: args.branch,
       restrictDispatch: args["restrict-dispatch"],
       environment: args.environment,
+      packageManager: args["package-manager"],
       dir: args.dir,
       force: args.force,
       outputDir: process.cwd(),
@@ -162,6 +172,7 @@ const previewCommand = defineAppCommand({
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the preview jobs (defaults to the workspace name)",
     }),
+    "package-manager": packageManagerArg,
     paths: arg(z.array(z.string().min(1)).default([]), {
       description:
         "Extra path pattern (repeatable) whose changes also run the generated jobs, besides the app directories. Supports `*`, `**`, and a leading `!` to exclude",
@@ -185,6 +196,7 @@ const previewCommand = defineAppCommand({
       region: args.region,
       requirePreviewLabel: args["require-preview-label"],
       environment: args.environment,
+      packageManager: args["package-manager"],
       dir: args.dir,
       extraPaths: args.paths,
       force: args.force,
