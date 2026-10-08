@@ -1076,6 +1076,10 @@ describe("workflow result job", () => {
     expect(failsOn(results)).toEqual(variants.map(() => fails));
   });
 
+  test("is not mentioned in a tag workflow, which has none", () => {
+    expect(renderTagWorkflow(tagBase).content).not.toMatch(/tailor-(preview-)?result/);
+  });
+
   test("checks the results even when the workflow run is cancelled", () => {
     for (const [, render, resultJob] of variants) {
       expect(jobsOf(render.content)[resultJob]?.steps?.[0]?.if).toMatch(/^always\(\) && /);

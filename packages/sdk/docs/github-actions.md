@@ -312,7 +312,9 @@ the jobs one by one.
 The job runs after every other SDK-managed job of the workflow, even when one
 fails or the run is cancelled. It fails when a job in its `needs` failed or was
 cancelled, and passes when they succeeded or were skipped, for example when the
-preview deploy is skipped for a fork pull request.
+preview deploy is skipped for a fork pull request. When a newer run cancels a
+job of an older one, such as the preview deploy of a commit you pushed over,
+the older run's check fails; the newer run reports its own.
 
 To make jobs of your own count, add them to its `needs`. A matrix job is listed
 once by its job id, however many combinations it expands to:
@@ -335,8 +337,10 @@ needs it.
 
 With `--require-preview-label`, the preview workflow does not start when a pull
 request is opened, so its check is not reported until the pull request is
-labeled or receives a new commit. Tag workflows have no such job: they run on
-tags, not on pull requests.
+labeled, reopened, or pushed to. A draft pull request skips the preview deploy,
+and marking it ready for review does not start the workflow, so the check that
+passed while it was a draft stays until the next push. Tag workflows have no
+such job: they run on tags, not on pull requests.
 
 ### `.github/tailor.lock`
 

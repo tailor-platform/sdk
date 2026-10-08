@@ -689,6 +689,7 @@ jobs:
 
   tailor-result:
     name: tailor-result (__WORKSPACE_NAME__)
+    # Add your own jobs to needs to count them toward this check; tailor setup keeps them.
     needs:
       # __RESULT_NEEDS__
     if: always()
