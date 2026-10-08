@@ -166,8 +166,7 @@ function checkPreviewNameLength(obj: { name: string; file: string; existing: boo
   const firstFailingPr = 10 ** Math.max(0, 63 - "-pr-".length - name.length);
   logger.warn(
     `${file}: preview name "${name}" is longer than ${String(PREVIEW_NAME_MAX_LENGTH)} ` +
-      `characters, so preview deploys fail from pull request #${String(firstFailingPr)}. ` +
-      "Generate a preview workflow under a shorter --name and remove this one with `tailor setup delete`.",
+      `characters, so preview deploys fail from pull request #${String(firstFailingPr)}.`,
   );
 }
 
