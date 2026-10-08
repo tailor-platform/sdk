@@ -67,6 +67,20 @@ export async function runMigrationTest(
       command: "tailordb migration test",
     });
   }
+  if (options.targetWorkspaceId) {
+    const flag = options.organizationId
+      ? "--organization-id"
+      : options.folderId
+        ? "--folder-id"
+        : "";
+    if (flag) {
+      throw CLIError({
+        code: "MIGRATION_TEST_OPTIONS_INVALID",
+        message: `${flag} applies only to automatically created workspaces; a designated target already exists.`,
+        command: "tailordb migration test",
+      });
+    }
+  }
   if (options.assertionNamespace && !options.assertionPath) {
     throw CLIError({
       code: "MIGRATION_TEST_OPTIONS_INVALID",
@@ -229,6 +243,16 @@ export const testCommand = defineAppCommand({
     keep: arg(z.boolean().default(false), {
       description: "Keep the automatically created workspace after the test",
     }),
+    "organization-id": arg(z.uuid().optional(), {
+      description:
+        "Organization to create the temporary workspace in, at its root unless --folder-id is given (default: the source workspace's organization and folder)",
+      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+    }),
+    "folder-id": arg(z.uuid().optional(), {
+      description:
+        "Folder to create the temporary workspace in (default: the source workspace's folder)",
+      env: "TAILOR_PLATFORM_FOLDER_ID",
+    }),
     assert: arg(z.string().optional(), {
       description: "Path to a TypeScript assertion script to run after migrations",
       completion: { type: "file", extensions: ["ts"] },
@@ -260,6 +284,8 @@ export const testCommand = defineAppCommand({
       targetWorkspaceId: args["target-workspace-id"],
       keep: args.keep,
       keepTtl: args["keep-ttl"],
+      organizationId: args["organization-id"],
+      folderId: args["folder-id"],
       assertionPath: args.assert,
       assertionNamespace: args["assert-namespace"],
       machineUser: args["machine-user"],
