@@ -486,7 +486,12 @@ export async function assertSourceBaselineFresh(
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
     assertNoMigrationInProgress(remoteState, namespace.namespace);
-    const migrationNumber = remoteState.number ?? 0;
+    const migrationNumber = await resolveSourceMigrationNumber(
+      state.client,
+      sourceWorkspaceId,
+      namespace,
+      remoteState,
+    );
     if (migrationNumber !== baseline.migrationNumber) {
       throw CLIError({
         code: "MIGRATION_TEST_SOURCE_CHANGED",

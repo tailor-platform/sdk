@@ -367,25 +367,41 @@ describe("migration test runtime", () => {
     );
   });
 
-  test("accepts a source baseline numbered 0 when the namespace has no migration label", async () => {
+  function unlabeledBaselineCase(metadata: unknown, remoteTypes: unknown[] = []) {
     vi.mocked(getNamespacesWithMigrations).mockReturnValue([
-      { namespace: "main", migrationsDir: "/project/migrations/main" },
+      {
+        namespace: "main",
+        migrationsDir: migrationsDirWithInitialSchema(emptySnapshot("main")),
+      },
     ]);
     vi.mocked(verifyRemoteSchema).mockResolvedValue([
       { namespace: "main", remoteMigrationNumber: 0, drifts: [], hasDrift: false },
     ]);
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
+    const client = Object.assign(remoteClient(remoteTypes), {
+      getMetadata: vi.fn().mockResolvedValue({ metadata }),
+    });
     const prepared = preparedMigrationTest({
       baselines: new Map([
         ["main", { migrationNumber: 0, snapshot: emptySnapshot("main"), historyId: null }],
       ]),
     });
+    return assertSourceBaselineFresh(runtimeState(client), prepared, "source");
+  }
 
+  test("accepts a source baseline numbered 0 while the unlabeled namespace still matches 0000", async () => {
+    await expect(unlabeledBaselineCase({ labels: {} })).resolves.toBeUndefined();
+  });
+
+  test("rejects a numbered 0 baseline whose unlabeled source schema changed after preparation", async () => {
     await expect(
-      assertSourceBaselineFresh(runtimeState(client), prepared, "source"),
-    ).resolves.toBeUndefined();
+      unlabeledBaselineCase({ labels: {} }, [{ name: "AuditLog", schema: { fields: {} } }]),
+    ).rejects.toThrow("differs from the initial migration snapshot");
+  });
+
+  test("rejects a numbered 0 baseline whose source metadata disappeared after preparation", async () => {
+    await expect(unlabeledBaselineCase(undefined)).rejects.toMatchObject({
+      code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
+    });
   });
 
   function unlabeledState(overrides: Partial<RemoteMigrationState> = {}): RemoteMigrationState {
