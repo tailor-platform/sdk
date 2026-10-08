@@ -219,15 +219,11 @@ ${authNamespaceNameFields}
 ${secretVaultFields}
   }`;
 
-  // Generate DateRepresentationRegistry interface. The key carries both the
-  // setting and the app name ("temporal@shop", "unset@shop") so that the
-  // merged interfaces of several apps in one TypeScript program expose every
-  // distinct setting as a distinct key, even for two apps that share a name;
-  // a plain `name: value` property would merge into whichever declaration
-  // TypeScript sees first once `skipLibCheck` hides the duplicate.
+  // Generate DateRepresentationRegistry interface: one entry per application,
+  // keyed by its name, recording the setting (or "unset").
   const dateRepresentationBody = dateRepresentation
     ? `{
-    ${JSON.stringify(`${dateRepresentation.defaultDateRepresentation ?? "unset"}@${dateRepresentation.appName}`)}: true;
+    ${JSON.stringify(dateRepresentation.appName)}: ${JSON.stringify(dateRepresentation.defaultDateRepresentation ?? "unset")};
   }`
     : "{}";
 

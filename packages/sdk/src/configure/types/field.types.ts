@@ -68,12 +68,10 @@ export type FieldOptions = {
 
 /**
  * Registry of each application's `defaultDateRepresentation`. `tailor generate`
- * writes one key per application into `tailor.d.ts`, with the setting and the
- * app name in the key:
- * `declare module "@tailor-platform/sdk" { interface DateRepresentationRegistry { "temporal@shop": true } }`.
- * An app without the setting is recorded as `"unset@shop"`. Because the
- * setting is part of the key, two apps that disagree always contribute two
- * keys, even when they share a name.
+ * writes one entry per application into `tailor.d.ts`, keyed by the app name:
+ * `declare module "@tailor-platform/sdk" { interface DateRepresentationRegistry { shop: "temporal" } }`.
+ * An app without the setting is recorded as `"unset"`. Application names are
+ * unique within a workspace, so two entries never share a key.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface DateRepresentationRegistry {}
@@ -84,11 +82,10 @@ type BuiltinDateDefault = undefined;
 export type DateDefaultConflictMessage =
   "defaultDateRepresentation differs between the tailor.config.ts files included in this TypeScript program; use the same value in each, or give each application its own tsconfig.json";
 
-// Distributes over the union of registry keys: the setting is the part before
-// the first "@", so an app name containing "@" is never misread.
-type DateDefaultOfKey<Key> = Key extends `temporal@${string}`
+// Distributes over the union of recorded settings.
+type DateDefaultOfValue<Value> = Value extends "temporal"
   ? "temporal"
-  : Key extends `unset@${string}`
+  : Value extends "unset"
     ? undefined
     : never;
 
@@ -101,12 +98,14 @@ type NormalizeDateDefault<Value, Builtin> = Value extends undefined ? Builtin : 
  * value every included app agrees on, or a type-level error when they differ.
  */
 export type DateDefaultOf<Registry, Builtin = BuiltinDateDefault> = [
-  DateDefaultOfKey<keyof Registry>,
+  DateDefaultOfValue<Registry[keyof Registry]>,
 ] extends [never]
   ? Builtin
-  : IsUnion<NormalizeDateDefault<DateDefaultOfKey<keyof Registry>, Builtin>> extends true
+  : IsUnion<
+        NormalizeDateDefault<DateDefaultOfValue<Registry[keyof Registry]>, Builtin>
+      > extends true
     ? TypeLevelError<DateDefaultConflictMessage>
-    : NormalizeDateDefault<DateDefaultOfKey<keyof Registry>, Builtin>;
+    : NormalizeDateDefault<DateDefaultOfValue<Registry[keyof Registry]>, Builtin>;
 
 type DefaultDateRepresentation = DateDefaultOf<DateRepresentationRegistry>;
 

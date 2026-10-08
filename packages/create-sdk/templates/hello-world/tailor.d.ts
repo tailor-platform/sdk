@@ -15,7 +15,7 @@ declare module "@tailor-platform/sdk" {
   interface AuthNamespaceNameRegistry {}
   interface SecretVaultNameRegistry {}
   interface DateRepresentationRegistry {
-    "unset@hello-world": true;
+    "hello-world": "unset";
   }
 }
 
