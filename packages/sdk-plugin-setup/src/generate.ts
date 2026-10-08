@@ -393,7 +393,7 @@ export function detectPackageManager(outputDir: string): PackageManager | undefi
     throw new Error(
       `package.json at the repository root declares ${fromField} in packageManager but ` +
         `${fromDevEngines} in devEngines.packageManager. Make them name the same package ` +
-        "manager, or pass --package-manager.",
+        "manager, or pass --package-manager to `tailor setup ci`.",
     );
   }
   const declared = fromField ?? fromDevEngines;
@@ -467,11 +467,11 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   if (packageManager === undefined) {
     throw new Error(
       "Could not detect the package manager: the repository root has no lockfile " +
-        `(${LOCKFILES.map(([file]) => file).join(", ")}), and its package.json declares none ` +
-        "in packageManager or devEngines.packageManager. Commit the lockfile at the repository " +
-        "root, where the generated workflow installs dependencies, or declare packageManager in " +
-        "package.json. To generate the workflow before the lockfile exists, pass " +
-        "--package-manager to `tailor setup ci`.",
+        `(${LOCKFILES.map(([file]) => file).join(", ")}), and its package.json declares no ` +
+        "supported one in packageManager or devEngines.packageManager. Commit the lockfile at " +
+        "the repository root, where the generated workflow installs dependencies, or declare " +
+        "packageManager in package.json. To generate the workflow before the lockfile exists, " +
+        "pass --package-manager to `tailor setup ci`.",
     );
   }
   // The env-scoped TAILOR_PLATFORM_WORKSPACE_ID variable is only readable by a

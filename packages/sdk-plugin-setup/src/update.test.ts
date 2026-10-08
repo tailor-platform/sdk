@@ -347,7 +347,15 @@ describe("setupUpdate", () => {
 
     await setupUpdate({ force: false, outputDir: testDir, ...loaders });
 
-    expect(readLock(testDir)?.targets.map((t) => t.inputs.packageManager)).toEqual(["yarn", "bun"]);
+    expect(
+      readLock(testDir)?.targets.map(({ inputs }) => [
+        inputs.packageManager,
+        inputs.packageManagerAutoDetected,
+      ]),
+    ).toEqual([
+      ["yarn", false],
+      ["bun", true],
+    ]);
     const front = fs.readFileSync(
       path.join(testDir, ".github/workflows/tailor-front.yml"),
       "utf-8",

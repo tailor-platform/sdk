@@ -724,9 +724,9 @@ Your own jobs, steps, and settings are kept (see
 [Customizing the generated workflow](#customizing-the-generated-workflow)). A
 branch that was detected from the repository default branch and a
 [package manager](#package-manager) that was detected from the repository root
-are detected again, and the parts that follow your config — the migration drift check, seed
-validation, and ERD preview namespaces — are derived
-from the current `tailor.config.ts`.
+are detected again, and the parts that follow your config — the migration drift
+check, seed validation, and ERD preview namespaces — are derived from the
+current `tailor.config.ts`.
 
 A target that cannot be regenerated, for example because you edited a managed
 part, does not stop the others: `update` regenerates the rest, then lists the
