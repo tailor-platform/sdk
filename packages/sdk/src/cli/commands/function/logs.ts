@@ -471,7 +471,7 @@ export async function downloadScriptForMapping(
 export const logsCommand = defineAppCommand({
   name: "logs",
   description: "List or get function execution logs.",
-  notes: `Each execution includes \`errorKind\`, which tells you where a failure came from: \`USER_RUNTIME\` (your code threw while running), \`USER_NON_RUNTIME\` (your code failed before it started running, such as a syntax error), \`PLATFORM\` (the Platform stopped it, such as on a timeout), \`NONE\` (no error), or \`UNSPECIFIED\` (not recorded). \`errorName\` and \`errorMessage\` hold the error's name and message, or \`null\` when none was recorded. The list table omits \`errorMessage\`; use \`--json\` or the execution details to read it.
+  notes: `Each execution includes \`errorKind\`, which tells you where a failure came from: \`USER_RUNTIME\` (your code threw while running), \`USER_NON_RUNTIME\` (your code failed before it started running, such as a syntax error), \`PLATFORM\` (the Platform stopped it, such as on a timeout), \`NONE\` (no error), or \`UNSPECIFIED\` (not recorded, or a kind this CLI version does not recognize). \`errorName\` and \`errorMessage\` hold the error's name and message, or \`null\` when none was recorded. The list table omits \`errorMessage\`; use \`--json\` or the execution details to read it.
 
 Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running. The \`logs\` string joins their messages with newlines.
 
