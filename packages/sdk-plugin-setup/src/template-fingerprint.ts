@@ -64,6 +64,26 @@ function renderAll(): RenderedTemplate[] {
     renderBranchWorkflow({ ...full, branch: "main", seedValidate: true, erdPreview: null }),
   );
   add(
+    "branch/migration-test",
+    renderBranchWorkflow({
+      ...full,
+      branch: "main",
+      migrationDriftCheck: true,
+      erdPreview: { namespaces: ["main"] },
+      migrationTest: { label: "tailor:migration-test", data: "clone" },
+    }),
+  );
+  add(
+    "branch/migration-test-dedicated-seed",
+    renderBranchWorkflow({
+      ...full,
+      branch: "main",
+      migrationDriftCheck: true,
+      erdPreview: null,
+      migrationTest: { label: "tailor:migration-test", data: "seed", environment: "prod-source" },
+    }),
+  );
+  add(
     "tag/full",
     renderTagWorkflow({
       ...full,
