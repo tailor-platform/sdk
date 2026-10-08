@@ -26,7 +26,12 @@ export const ENVIRONMENT_EDITABLE_JOBS: readonly string[] = [
   "tailor-erd-preview-matrix",
   "tailor-erd-preview",
   "tailor-erd-preview-comment",
+  "tailor-result",
+  "tailor-preview-result",
 ];
+
+// Users add their own jobs to the `needs` of these jobs; the `tailor-` entries stay managed.
+export const RESULT_JOBS: readonly string[] = ["tailor-result", "tailor-preview-result"];
 
 function editableJobKeys(jobId: string): readonly string[] {
   return ENVIRONMENT_EDITABLE_JOBS.includes(jobId)
@@ -108,6 +113,17 @@ function editableWithKeys(uses: unknown): readonly string[] | undefined {
 
 function omit(value: Plain, keys: readonly string[]): Plain {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+}
+
+function isUserNeed(need: unknown): boolean {
+  return typeof need === "string" && !need.startsWith(RESERVED_PREFIX);
+}
+
+function withoutUserNeeds(jobId: string, job: Plain): Plain {
+  if (!RESULT_JOBS.includes(jobId)) return job;
+  const needs = job["needs"];
+  const list = typeof needs === "string" ? [needs] : needs;
+  return Array.isArray(list) ? { ...job, needs: list.filter((need) => !isUserNeed(need)) } : job;
 }
 
 function canonicalJson(value: unknown, seen = new WeakSet<object>()): string {
@@ -268,7 +284,7 @@ function projectManaged(content: string, managedIds: readonly string[]): Plain {
         return [
           jobId,
           {
-            ...omit(job, [...editableJobKeys(jobId), "steps"]),
+            ...omit(withoutUserNeeds(jobId, job), [...editableJobKeys(jobId), "steps"]),
             steps: projectSteps(job["steps"], `${jobId}/`, managed),
           },
         ];
@@ -473,6 +489,20 @@ function mergeSteps(
   );
 }
 
+function carryUserNeeds(current: YAMLMap, rendered: YAMLMap): void {
+  const currentNeeds = findPair(current, "needs")?.value;
+  const renderedNeeds = findPair(rendered, "needs")?.value;
+  if (currentNeeds === undefined || !isSeq(renderedNeeds)) return;
+  const items = isSeq(currentNeeds) ? currentNeeds.items : [currentNeeds];
+  const needOf = (node: unknown): string | undefined => {
+    const value: unknown = isScalar(node) ? node.value : undefined;
+    return typeof value === "string" ? value : undefined;
+  };
+  const userNeeds = items.filter((node) => isUserNeed(needOf(node)));
+  if (isSeq(currentNeeds)) carryLeadingComment(currentNeeds, items[0], userNeeds);
+  placeAfterAnchors(items, renderedNeeds.items, (node) => userNeeds.includes(node), needOf);
+}
+
 function assertNeedsResolve(root: YAMLMap): void {
   const jobs = mapAt(root, "jobs");
   if (!jobs) return;
@@ -542,7 +572,10 @@ export function mergeUserContent(params: {
       if (userJobs.includes(pair) || !isMap(pair.value)) continue;
       const jobId = keyOf(pair) ?? "";
       const renderedJob = mapAt(renderedJobs, jobId);
-      if (renderedJob) carryFields(pair.value, renderedJob, editableJobKeys(jobId));
+      if (renderedJob) {
+        carryFields(pair.value, renderedJob, editableJobKeys(jobId));
+        if (RESULT_JOBS.includes(jobId)) carryUserNeeds(pair.value, renderedJob);
+      }
       mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
     }
     carryLeadingComment(currentJobs, currentJobs.items[0], userJobs);

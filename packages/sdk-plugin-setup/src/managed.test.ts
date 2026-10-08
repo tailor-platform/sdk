@@ -3,6 +3,7 @@ import { parseDocument } from "yaml";
 import {
   ENVIRONMENT_EDITABLE_JOBS,
   ManagedMergeError,
+  RESULT_JOBS,
   computeManagedHash,
   computeManagedParts,
   describeReservedId,
@@ -107,6 +108,19 @@ describe.each(variants)("%s template", (_name, render) => {
     expect(new Set(emitted).size).toBe(emitted.length);
     expect(new Set(render.generatedIds).size).toBe(render.generatedIds.length);
     expect(emitted.toSorted()).toEqual(render.generatedIds.toSorted());
+  });
+});
+
+describe("RESULT_JOBS", () => {
+  test("lists exactly the managed jobs that always run to report the workflow result", () => {
+    const resultJobs = variants.flatMap(([, { content }]) =>
+      Object.entries(
+        (parseDocument(content).toJS() as { jobs: Record<string, Record<string, unknown>> }).jobs,
+      )
+        .filter(([, job]) => job["if"] === "always()")
+        .map(([jobId]) => jobId),
+    );
+    expect(new Set(RESULT_JOBS)).toEqual(new Set(resultJobs));
   });
 });
 
@@ -650,5 +664,128 @@ describe("environment on a managed job", () => {
       force: false,
     });
     expect(content).toBe(edited);
+  });
+});
+
+describe("needs of the result job", () => {
+  const erd = renderBranchWorkflow({ ...branchBase, erdPreview: { namespaces: ["main"] } });
+  const E2E_JOB = "  e2e:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo e2e\n\n";
+  const withNeeds = (content: string, needs: string): string =>
+    content.replace(
+      /( {2}tailor-result:\n(?: {4}.*\n)*? {4})needs:\n(?: {6}- .*\n)+/,
+      `$1${needs}`,
+    );
+  const withUserJob = (content: string, needs: string): string => {
+    const edited = withNeeds(content, needs).replace(
+      "  tailor-result:\n",
+      `${E2E_JOB}  tailor-result:\n`,
+    );
+    expect(edited).not.toBe(content);
+    return edited;
+  };
+  const resultNeedsOf = (content: string): unknown =>
+    (parseDocument(content).toJS() as { jobs: Record<string, { needs?: unknown }> }).jobs[
+      "tailor-result"
+    ]?.needs;
+  const merge = (current: string, previous: RenderResult, next: RenderResult, force = false) =>
+    mergeUserContent({
+      current,
+      rendered: next.content,
+      previousIds: previous.generatedIds,
+      renderedIds: next.generatedIds,
+      force,
+    });
+
+  test.each([
+    ["a block sequence", "needs:\n      - tailor-plan\n      - e2e\n      - tailor-deploy\n"],
+    ["a flow sequence", "needs: [tailor-plan, tailor-deploy, e2e]\n"],
+  ])("ignores a user job added to %s", (_name, needs) => {
+    expect(hashOf(withUserJob(render.content, needs))).toBe(lockHash);
+  });
+
+  test.each([
+    ["a removed managed job", "needs:\n      - tailor-plan\n      - e2e\n"],
+    ["a scalar of only the user's job", "needs: e2e\n"],
+  ])("names the result job on %s", (_name, needs) => {
+    const edited = withUserJob(render.content, needs);
+    expect(
+      findEditedParts(
+        computeManagedParts(render.content, render.generatedIds),
+        computeManagedParts(edited, render.generatedIds),
+      ),
+    ).toEqual(["tailor-result"]);
+  });
+
+  test("keeps the user's jobs after the managed job they followed when managed jobs are added", () => {
+    const edited = withUserJob(
+      render.content,
+      "needs:\n      - tailor-plan\n      - e2e # end-to-end tests\n      - tailor-deploy\n",
+    );
+    const { content } = merge(edited, render, erd);
+    expect(resultNeedsOf(content)).toEqual([
+      "tailor-plan",
+      "e2e",
+      "tailor-erd-preview-matrix",
+      "tailor-erd-preview",
+      "tailor-erd-preview-comment",
+      "tailor-deploy",
+    ]);
+    expect(content).toContain("- e2e # end-to-end tests\n");
+    expect(computeManagedHash(content, erd.generatedIds)).toBe(
+      computeManagedHash(erd.content, erd.generatedIds),
+    );
+  });
+
+  test("drops the managed jobs the template no longer generates and keeps the user's", () => {
+    const edited = withUserJob(
+      erd.content,
+      "needs: [tailor-plan, tailor-erd-preview, tailor-deploy, e2e]\n",
+    );
+    expect(resultNeedsOf(merge(edited, erd, render).content)).toEqual([
+      "tailor-plan",
+      "tailor-deploy",
+      "e2e",
+    ]);
+  });
+
+  test("keeps a user job written as a scalar when --force resets the managed jobs", () => {
+    const edited = withUserJob(render.content, "needs: e2e\n");
+    expect(resultNeedsOf(merge(edited, render, render, true).content)).toEqual([
+      "e2e",
+      "tailor-plan",
+      "tailor-deploy",
+    ]);
+  });
+
+  test("keeps the user's jobs in the preview result job", () => {
+    const preview = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const edited = preview.content
+      .replace(
+        /( {2}tailor-preview-result:\n(?: {4}.*\n)*? {4}needs:\n(?: {6}- .*\n)+)/,
+        "$1      - e2e\n",
+      )
+      .replace("  tailor-preview-result:\n", `${E2E_JOB}  tailor-preview-result:\n`);
+    expect(edited).not.toBe(preview.content);
+    expect(computeManagedHash(edited, preview.generatedIds)).toBe(
+      computeManagedHash(preview.content, preview.generatedIds),
+    );
+    expect(merge(edited, preview, preview).content).toBe(edited);
+  });
+
+  test("leaves the needs of other managed jobs fully managed", () => {
+    const edited = erd.content.replace(
+      "    needs: tailor-erd-preview-matrix\n",
+      "    needs: [tailor-erd-preview-matrix, e2e]\n",
+    );
+    expect(edited).not.toBe(erd.content);
+    expect(computeManagedHash(edited, erd.generatedIds)).not.toBe(
+      computeManagedHash(erd.content, erd.generatedIds),
+    );
   });
 });

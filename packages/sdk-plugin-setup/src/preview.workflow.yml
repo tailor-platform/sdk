@@ -109,3 +109,18 @@ jobs:
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  tailor-preview-result:
+    name: tailor-preview-result (__WORKSPACE_NAME__)
+    needs:
+      # __RESULT_NEEDS__
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - id: tailor-preview-result
+        if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+        run: |
+          echo "::error::A job in needs failed or was cancelled."
+          exit 1
