@@ -143,7 +143,7 @@ export function validateWorkspaceName(name: string): void {
 
 // The preview action names each pull request's workspace `<name>-pr-<number>`,
 // which must fit in 63 characters; 50 leaves room for 9-digit PR numbers.
-const PREVIEW_NAME_MAX_LENGTH = 50;
+export const PREVIEW_NAME_MAX_LENGTH = 50;
 
 /**
  * Reject a new preview target whose per-PR workspace names would not fit, and

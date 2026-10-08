@@ -9,7 +9,7 @@ import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupEnv } from "./env";
-import { printTargetNextSteps, setupTarget } from "./generate";
+import { PREVIEW_NAME_MAX_LENGTH, printTargetNextSteps, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
 import { setupUpdate } from "./update";
 
@@ -148,7 +148,7 @@ const previewCommand = defineAppCommand({
   args: z.strictObject({
     name: arg(z.string().min(1).optional(), {
       alias: "n",
-      description: "Name (defaults to the config 'name'); at most 50 characters",
+      description: `Name (defaults to the config 'name'); at most ${String(PREVIEW_NAME_MAX_LENGTH)} characters`,
     }),
     branch: arg(z.string().min(1).optional(), {
       description: "Branch to filter PRs by (defaults to the detected default branch)",
