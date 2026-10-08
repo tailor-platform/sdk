@@ -63,14 +63,15 @@ async function importLikeCli(configPath: string): Promise<unknown> {
   }
 }
 
-// amaro reports a parse failure as a plain object with code "InvalidSyntax";
-// Node reports one in a .js config as a SyntaxError.
-function isSyntaxError(error: unknown): boolean {
+// amaro reports a parse failure of the TypeScript source as a plain object
+// with code "InvalidSyntax". A SyntaxError instance is not treated as one:
+// config code that runs JSON.parse on a malformed environment variable throws
+// the same class, and that is an evaluation failure, not a source problem.
+function isSourceParseError(error: unknown): boolean {
   return (
-    error instanceof SyntaxError ||
-    (typeof error === "object" &&
-      error !== null &&
-      (error as { code?: unknown }).code === "InvalidSyntax")
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "InvalidSyntax"
   );
 }
 
@@ -100,7 +101,7 @@ export async function loadDateDefaultFromConfig(configPath: string): Promise<Eff
   try {
     configModule = await serialize(() => importLikeCli(configPath));
   } catch (error) {
-    if (isSyntaxError(error)) {
+    if (isSourceParseError(error)) {
       throw new Error(`tailor-runtime could not parse ${configPath}: ${describeError(error)}`, {
         cause: error,
       });

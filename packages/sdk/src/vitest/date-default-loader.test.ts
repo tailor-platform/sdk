@@ -114,6 +114,15 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
     expect(run(configPath).error).toMatch(/must be "temporal" or omitted/);
   });
 
+  test("a SyntaxError thrown while the config runs is an evaluation failure, not a parse failure", () => {
+    const configPath = fixture("runtime-syntax-error", {
+      "tailor.config.ts": `const parsed = JSON.parse(process.env.TAILOR_TEST_UNSET_VARIABLE ?? "{not json");\nexport default { name: "app", ...parsed };\n`,
+    });
+    const outcome = run(configPath);
+    expect(outcome.value).toBe("legacy");
+    expect(outcome.warnings).toHaveLength(1);
+  });
+
   test("a config that throws while loading warns and keeps the legacy representation", () => {
     const configPath = fixture("throws", {
       "tailor.config.ts": `if (!process.env.TAILOR_TEST_UNSET_VARIABLE) throw new Error("missing env");\nexport default { name: "app", defaultDateRepresentation: "temporal" };\n`,
