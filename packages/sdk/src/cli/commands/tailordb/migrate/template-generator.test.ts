@@ -1795,6 +1795,7 @@ describe("template-generator", () => {
       );
       expect(script).toContain('applyDateRepresentation("temporal")');
       expect(script).toContain("tailor-runtime");
+      expect(script).toContain('const { main } = await import("./migrate");');
     });
 
     test("pins a date-default migration without requiring the tailor-runtime environment", () => {
@@ -1840,6 +1841,11 @@ describe("template-generator", () => {
       expect(script).toContain('import { afterAll, describe, expect, test } from "vitest"');
       expect(script).toContain('applyDateRepresentation("temporal")');
       expect(script).toContain("tailor-runtime");
+      expect(script).toContain('const { main } = await import("./migrate");');
+      expect(script).not.toContain('import { main } from "./migrate";');
+      expect(script.indexOf("applyDateRepresentation(")).toBeLessThan(
+        script.indexOf('await import("./migrate")'),
+      );
     });
 
     test("leaves the date representation alone for a migration without a recorded default", () => {
@@ -1847,6 +1853,7 @@ describe("template-generator", () => {
 
       expect(script).not.toContain("applyDateRepresentation");
       expect(script).toContain('import { describe, expect, test } from "vitest"');
+      expect(script).toContain('import { main } from "./migrate";');
       expect(script).not.toContain("tailor-runtime");
     });
 

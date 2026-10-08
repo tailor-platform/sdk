@@ -107,7 +107,7 @@ export async function loadDateDefaultFromConfig(configPath: string): Promise<Eff
       });
     }
     console.warn(
-      `tailor-runtime could not load ${configPath} to read defaultDateRepresentation; t date fields use string values in this run. If the config sets "temporal", tests disagree with tailor.d.ts until the error is fixed: ${describeError(error)}`,
+      `tailor-runtime could not load ${configPath} to read defaultDateRepresentation; t date fields use string values in this run. If the config sets "temporal" or "date", tests disagree with tailor.d.ts until the error is fixed: ${describeError(error)}`,
     );
     return "legacy";
   }

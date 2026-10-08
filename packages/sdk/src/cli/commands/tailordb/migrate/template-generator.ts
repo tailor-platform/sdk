@@ -370,12 +370,15 @@ ${updates.join("\n\n")}
 // Emitted into both test scaffolds of a migration whose diff.json records a
 // dateRepresentation, so the test runs the script with the values deploy gives
 // it even after tailor.config.ts changes.
+// The script is imported after the pin so that fields it parses at import time
+// already follow the recorded representation.
 function dateRepresentationPin(representation: "temporal" | "date"): string {
   return `
 // diff.json records that this migration was generated under
 // defaultDateRepresentation: ${JSON.stringify(representation)}, and deploy runs it that way.
 const restoreDateRepresentation = applyDateRepresentation(${JSON.stringify(representation)});
 afterAll(restoreDateRepresentation);
+const { main } = await import("./migrate");
 `;
 }
 
@@ -406,8 +409,7 @@ export function generateMigrationTestScript(diff: MigrationDiff): string {
 import { ${recordedDefault ? "applyDateRepresentation, " : ""}createKyselyMock } from "@tailor-platform/sdk/vitest";
 import { ${recordedDefault ? "afterAll, " : ""}describe, expect, test } from "vitest";
 import type { Database } from "./db";
-import { main } from "./migrate";
-${recordedDefault ? dateRepresentationPin(recordedDefault) : ""}
+${recordedDefault ? dateRepresentationPin(recordedDefault) : 'import { main } from "./migrate";\n'}
 describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
   test("issues the intended statements", async () => {
     const mock = createKyselyMock<Database>();
@@ -464,8 +466,7 @@ import { ${recordedDefault ? "applyDateRepresentation, " : ""}createKyselyPGlite
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { pgliteSchema } from "./db.pglite";
-import { main } from "./migrate";
-${recordedDefault ? dateRepresentationPin(recordedDefault) : ""}
+${recordedDefault ? dateRepresentationPin(recordedDefault) : 'import { main } from "./migrate";\n'}
 const pglite = new PGlite();
 const db = createKyselyPGlite<Unmigrated<Database>>(pglite${diff.temporal ? ", { temporal: true }" : ""});
 
