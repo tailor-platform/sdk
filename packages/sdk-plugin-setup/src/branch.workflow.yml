@@ -636,6 +636,7 @@ jobs:
     concurrency:
       group: tailor-migration-test-__WORKSPACE_NAME__-${{ github.event.pull_request.number }}
       cancel-in-progress: false
+      queue: max
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -659,6 +660,7 @@ jobs:
           __TAILOR_CLI__ login --machine-user
         # __WORKING_DIRECTORY__
       - id: tailor-migration-test
+        timeout-minutes: 50
         env:
           TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.__MIGRATION_TEST_SOURCE_VARIABLE__ }}
         run: |

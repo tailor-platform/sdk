@@ -248,10 +248,12 @@ export function validateEnvironment(environment: string): void {
 const MIGRATION_TEST_LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9 :._/-]*$/;
 const DEFAULT_MIGRATION_TEST_LABEL = "tailor:migration-test";
 
+const MIGRATION_TEST_LABEL_MAX_LENGTH = 50;
+
 function validateMigrationTestLabel(label: string): void {
-  if (!MIGRATION_TEST_LABEL_RE.test(label)) {
+  if (!MIGRATION_TEST_LABEL_RE.test(label) || label.length > MIGRATION_TEST_LABEL_MAX_LENGTH) {
     throw new Error(
-      `Invalid --migration-test-label "${label}". Only letters, numbers, spaces, ":", ".", "_", "/", and "-" are supported.`,
+      `Invalid --migration-test-label "${label}". Use at most ${String(MIGRATION_TEST_LABEL_MAX_LENGTH)} characters: letters, numbers, spaces, ":", ".", "_", "/", and "-".`,
     );
   }
 }

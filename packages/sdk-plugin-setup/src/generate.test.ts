@@ -990,7 +990,7 @@ type WorkflowJob = {
   environment?: string;
   "timeout-minutes"?: number;
   permissions?: Record<string, string>;
-  concurrency?: { group: string; "cancel-in-progress": boolean };
+  concurrency?: { group: string; "cancel-in-progress": boolean; queue?: string };
   steps: { id?: string; if?: string; env?: Record<string, string>; run?: string }[];
 };
 type Workflow = {
@@ -1128,12 +1128,24 @@ describe("renderBranchWorkflow migration test job", () => {
     expect(job.permissions).toEqual({ contents: "read", "pull-requests": "write" });
   });
 
+  test("bounds the migration test step below the job limit so the label is still removed", () => {
+    const { workflow } = render();
+    const job = workflow.jobs["tailor-migration-test"]!;
+    const run = job.steps.find((step) => step.id === "tailor-migration-test") as {
+      "timeout-minutes"?: number;
+    };
+
+    expect(run["timeout-minutes"]).toBe(50);
+    expect(run["timeout-minutes"]).toBeLessThan(job["timeout-minutes"]!);
+  });
+
   test("never cancels a running migration test for the same pull request", () => {
     const { workflow } = render();
 
     expect(workflow.jobs["tailor-migration-test"]?.concurrency).toEqual({
       group: "tailor-migration-test-my-app-${{ github.event.pull_request.number }}",
       "cancel-in-progress": false,
+      queue: "max",
     });
   });
 
@@ -2149,6 +2161,15 @@ export default defineConfig({
           }),
         ),
       ).rejects.toThrow(/require --migration-test/);
+    });
+
+    test("rejects a label longer than GitHub's 50 character limit", async () => {
+      await expect(setupTarget(enabled({ migrationTestLabel: "a".repeat(51) }))).rejects.toThrow(
+        /Invalid --migration-test-label.*50/,
+      );
+      await expect(
+        setupTarget(enabled({ migrationTestLabel: "a".repeat(50) })),
+      ).resolves.toBeDefined();
     });
 
     test.each(["has'quote", "bad\nlabel", ""])("rejects the unsafe label %j", async (label) => {
