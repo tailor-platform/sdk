@@ -997,16 +997,18 @@ describe("renderPreviewWorkflow", () => {
         String(workflow.concurrency?.group).replace(/\$\{\{(.*?)\}\}/g, (_match, expression) =>
           String(
             vm.runInNewContext(expression, {
+              format: (template: string, ...args: unknown[]) =>
+                template.replace(/\{(\d+)\}/g, (_m, index) => String(args[Number(index)])),
               github: { run_id: 9001, event: { action, pull_request: { number: 42, state } } },
             }),
           ),
         );
 
       expect(workflow.concurrency?.["cancel-in-progress"]).toBe(true);
-      expect(groupOn("synchronize", "open")).toBe("tailor-preview-my-app-42");
-      expect(groupOn("reopened", "open")).toBe("tailor-preview-my-app-42");
-      expect(groupOn("closed", "closed")).toBe("tailor-preview-my-app-42");
-      expect(groupOn("labeled", "closed")).toBe("tailor-preview-my-app-9001");
+      expect(groupOn("synchronize", "open")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("reopened", "open")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("closed", "closed")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("labeled", "closed")).toBe("tailor-preview-my-app-run-9001");
       for (const job of Object.values(workflow.jobs)) {
         expect(job).not.toHaveProperty("concurrency");
       }

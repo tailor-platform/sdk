@@ -213,9 +213,8 @@ for what you can edit.
 ### Customizing the generated workflow
 
 The SDK owns the jobs and steps whose `id` starts with `tailor-`, and the
-top-level keys it writes other than `concurrency:` (`name:`, `on:`, and
-`permissions:`). Do not edit or rename them. Everything else is yours, and
-re-running `setup` keeps it:
+top-level `name:`, `on:`, and `permissions:`. Do not edit or rename them.
+Everything else is yours, and re-running `setup` keeps it:
 
 - **Your own jobs and steps.** Add them anywhere, with an `id` (if any) that
   does not start with `tailor-`: the prefix is reserved for the SDK, even in a
@@ -272,8 +271,8 @@ the pull request is closed, cancels the run still in progress for it, including
 your jobs, so they do not keep running against a workspace that the new run
 may redeploy or delete. Events on a pull request that stays closed, such as a
 label added after merging, do not cancel anything. A job with `if: always()`
-still runs when its run is cancelled; use `if: ${{ !cancelled() }}` instead so
-it stops with the run.
+still runs when its run is cancelled, and the new run waits for it to finish;
+use `if: ${{ !cancelled() }}` instead so it stops with the run.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
 deployed workspace as the outputs `workspace-id` and `app-url` to a job with
