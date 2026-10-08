@@ -22,7 +22,7 @@ declare module "@tailor-platform/sdk" {
   }
   interface SecretVaultNameRegistry {}
   interface DateRepresentationRegistry {
-    "tailordb": "unset";
+    tailordb: "unset";
   }
 }
 
