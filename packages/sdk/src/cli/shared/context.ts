@@ -944,13 +944,13 @@ function userExtraFields(entry: PfUser | undefined) {
 }
 
 async function removeUserAlias(config: PfConfig, aliasKey: string, canonicalKey: string) {
-  if (aliasKey === canonicalKey) return;
   const entry = config.users[aliasKey];
+  if (aliasKey === canonicalKey || !entry) return;
   const canonicalEntry = config.users[canonicalKey];
   if (canonicalEntry) {
     config.users[canonicalKey] = { ...userExtraFields(entry), ...canonicalEntry };
   }
-  if (entry?.storage === "keyring") {
+  if (entry.storage === "keyring") {
     await deleteKeyringTokens(aliasKey);
   }
   delete config.users[aliasKey];
@@ -1075,7 +1075,7 @@ export async function removeLegacyUserAlias(
   if (legacyUser === canonicalUser) return;
   updateUserReferences(config, legacyUser, canonicalUser);
   const canonicalKey = platformUserKey(canonicalUser, platformConfig);
-  const legacyKeys = new Set([legacyUser, platformUserKey(legacyUser, platformConfig)]);
+  const legacyKeys = new Set([platformUserKey(legacyUser, platformConfig), legacyUser]);
   for (const legacyKey of legacyKeys) {
     await removeUserAlias(config, legacyKey, canonicalKey);
   }

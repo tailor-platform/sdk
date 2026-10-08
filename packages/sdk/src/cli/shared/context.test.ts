@@ -926,6 +926,52 @@ describe("loadAccessToken", () => {
         default_folder_id: "folder",
       });
     });
+
+    test("keeps the profile platform user's own keys over a default-platform user with the same email", async () => {
+      clientMocks.refreshToken.mockResolvedValueOnce({
+        accessToken: "refreshed-token",
+        refreshToken: "refreshed-refresh",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockResolvedValueOnce({
+        sub: "dev-user-sub",
+        email: "user@example.com",
+      });
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "user@example.com": {
+            access_token: validToken,
+            token_expires_at: futureDate,
+            storage: "file",
+            default_folder_id: "default-folder",
+          },
+          "https://api.dev.tailor.tech|user@example.com": {
+            access_token: "expired-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+            default_folder_id: "dev-folder",
+          },
+        },
+        profiles: {
+          dev: {
+            user: "user@example.com",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+
+      await loadAccessToken({ profile: "dev" });
+
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|dev-user-sub"]).toMatchObject({
+        default_folder_id: "dev-folder",
+      });
+    });
   });
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
