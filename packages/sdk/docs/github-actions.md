@@ -138,6 +138,11 @@ The generated workflow also lists `labeled` in its `pull_request` types. The
 plan and ERD preview jobs skip label events, so adding an unrelated label does
 not re-run them.
 
+With `--migration-test-data clone`, the job passes `--clone-timeout 30m`, which
+bounds only the wait for the data clone. If the clone takes longer, the command
+fails with the clone's operation ID in the error and removes its temporary
+workspace, while the clone itself keeps running on the platform.
+
 The job has a 60-minute time limit. If GitHub cancels the job at that limit, the
 command has no chance to clean up: delete the leftover temporary workspace with
 `tailor workspace delete`.

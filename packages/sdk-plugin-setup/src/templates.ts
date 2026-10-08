@@ -492,6 +492,9 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     out = out
       .replaceAll("__MIGRATION_TEST_LABEL__", () => migrationTest.label)
       .replaceAll("__MIGRATION_TEST_DATA__", () => migrationTest.data)
+      .replaceAll("__MIGRATION_TEST_CLONE_TIMEOUT__", () =>
+        migrationTest.data === "clone" ? "--clone-timeout 30m " : "",
+      )
       .replaceAll(
         "__MIGRATION_TEST_ENVIRONMENT__",
         () => migrationTest.environment ?? params.environment,

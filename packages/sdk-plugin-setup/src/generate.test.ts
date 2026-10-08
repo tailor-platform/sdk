@@ -1093,7 +1093,7 @@ describe("renderBranchWorkflow migration test job", () => {
       const run = job.steps.find((step) => step.id === "tailor-migration-test");
 
       expect(run?.run).toContain(
-        `pnpm exec tailor tailordb migration test --data ${data} --yes --json`,
+        `pnpm exec tailor tailordb migration test --data ${data} --yes ${data === "clone" ? "--clone-timeout 30m " : ""}--json`,
       );
       expect(job["timeout-minutes"]).toBe(60);
     },
