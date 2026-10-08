@@ -559,6 +559,48 @@ describe("mergeUserContent", () => {
     expect(content).toContain("# Authenticate the private registry.\n      - name: Registry auth");
   });
 
+  describe("an unmanaged top-level key the template writes", () => {
+    const preview = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const mergePreview = (current: string) =>
+      mergeUserContent({
+        current,
+        rendered: preview.content,
+        layout: "workflow",
+        previousIds: preview.generatedIds,
+        renderedIds: preview.generatedIds,
+        force: false,
+      });
+    const concurrency = /^concurrency:\n(?: {2}.*\n)+/m;
+
+    test("keeps the user's version instead of the template's", () => {
+      const edited = preview.content.replace(
+        concurrency,
+        "concurrency:\n  group: mine-${{ github.ref }}\n",
+      );
+      expect(edited).not.toBe(preview.content);
+
+      const { content } = mergePreview(edited);
+
+      expect(content).toBe(edited);
+      expect(computeManagedHash(content, "workflow", preview.generatedIds)).toBe(
+        computeManagedHash(preview.content, "workflow", preview.generatedIds),
+      );
+    });
+
+    test("adds the template's version when the file has none", () => {
+      const without = preview.content.replace(concurrency, "");
+      expect(without).not.toBe(preview.content);
+
+      expect(mergePreview(without).content).toBe(preview.content);
+    });
+  });
+
   test("puts a user step before every managed step at the start of the job", () => {
     const edited = render.content.replace(
       /( {2}tailor-deploy:[\s\S]*? {4}steps:\n)/,

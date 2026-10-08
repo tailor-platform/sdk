@@ -12,6 +12,10 @@ permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: tailor-preview-__WORKSPACE_NAME__-${{ (github.event.action == 'closed' || github.event.pull_request.state == 'open') && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   # __CHANGES_JOB__
   tailor-preview-deploy:
@@ -22,9 +26,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    concurrency:
-      group: tailor-preview-__WORKSPACE_NAME__-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
     outputs:
       workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
       workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}

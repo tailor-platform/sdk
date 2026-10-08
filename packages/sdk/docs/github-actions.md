@@ -213,9 +213,10 @@ for what you can edit.
 ### Customizing the generated workflow
 
 The SDK owns the jobs and steps whose `id` starts with `tailor-`, and the
-top-level keys it writes (`name:`, `on:`, and `permissions:` in a workflow; the
-metadata, inputs, and outputs of a composite action). Do not edit or rename
-them. Everything else is yours, and re-running `setup` keeps it:
+top-level keys it writes other than `concurrency:` (`name:`, `on:`, and
+`permissions:` in a workflow; the metadata, inputs, and outputs of a composite
+action). Do not edit or rename them. Everything else is yours, and re-running
+`setup` keeps it:
 
 - **Your own jobs and steps.** Add them anywhere, with an `id` (if any) that
   does not start with `tailor-`: the prefix is reserved for the SDK, even in a
@@ -225,6 +226,9 @@ them. Everything else is yours, and re-running `setup` keeps it:
   (such as `playwright install`) _after_ it. A job of your own can depend on a
   managed job with `needs: tailor-deploy`.
 - **Your own top-level keys**, such as a workflow-level `env:` or `defaults:`.
+- **The top-level `concurrency:` of a preview workflow.** The SDK writes a
+  default, and re-running `setup` keeps your edits to it. If you delete it,
+  re-running `setup` adds the default back.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
   `container`, and `env`. On a managed job generated without an
   `environment:` (such as `tailor-tag-guard` or `tailor-erd-preview`), you can
@@ -264,6 +268,14 @@ that only uses `app-url`, such as end-to-end tests, does not.
 The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
 request is closed, for draft and fork pull requests, and for unlabeled ones with
 `--require-preview-label`.
+
+Each new preview workflow run for a pull request, such as after a push or when
+the pull request is closed, cancels the run still in progress for it, including
+your jobs, so they do not keep running against a workspace that the new run
+redeploys or deletes. Events
+on an already-closed pull request, such as a label added after merging, do not
+cancel anything. A job with `if: always()` still runs when its run is cancelled;
+use `if: ${{ !cancelled() }}` instead so it stops with the run.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
 deployed workspace as the outputs `workspace-id` and `app-url` to a job with

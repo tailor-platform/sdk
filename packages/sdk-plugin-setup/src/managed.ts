@@ -212,7 +212,7 @@ function projectSteps(
 
 /**
  * Hash the SDK-managed parts of a generated file: the top-level keys the
- * template writes and the jobs/steps listed in `managedIds`, minus the fields
+ * SDK manages and the jobs/steps listed in `managedIds`, minus the fields
  * users may edit. Comments, formatting, and user-owned nodes do not affect it.
  * @param content - Workflow or composite action YAML
  * @param layout - File layout
@@ -232,7 +232,7 @@ export function computeManagedHash(
 
 /**
  * Hash each SDK-managed part of a generated file separately: every top-level
- * key the template writes, every managed job (with the order of its managed
+ * key the SDK manages, every managed job (with the order of its managed
  * steps), and every managed step.
  * @param content - Workflow or composite action YAML
  * @param layout - File layout
@@ -601,9 +601,10 @@ function assertNeedsResolve(root: YAMLMap): void {
 
 /**
  * Carry the user-owned parts of `current` into a fresh render: top-level keys
- * the template does not write, jobs and steps outside the managed ids, and the
- * editable fields of managed nodes. Each user node is placed after the managed
- * sibling that preceded it.
+ * the SDK does not manage (replacing the template's default for one it also
+ * writes), jobs and steps outside the managed ids, and the editable fields of
+ * managed nodes. Each user node is placed after the managed sibling that
+ * preceded it.
  * @param params - Merge inputs
  * @param params.current - File content on disk
  * @param params.rendered - Fresh template render
@@ -641,12 +642,10 @@ export function mergeUserContent(params: {
 
   const containerKey = layout === "action" ? "runs" : "jobs";
   const managedTop = new Set([...MANAGED_TOP_LEVEL_KEYS[layout], containerKey]);
-  placeAfterAnchors(
-    currentRoot.items,
-    renderedRoot.items,
-    (pair) => !managedTop.has(keyOf(pair) ?? ""),
-    keyOf,
-  );
+  const userTop = currentRoot.items.filter((pair) => !managedTop.has(keyOf(pair) ?? ""));
+  const userTopKeys = new Set(userTop.map(keyOf));
+  renderedRoot.items = renderedRoot.items.filter((pair) => !userTopKeys.has(keyOf(pair)));
+  placeAfterAnchors(currentRoot.items, renderedRoot.items, (pair) => userTop.includes(pair), keyOf);
 
   if (layout === "action") {
     const currentRuns = mapAt(currentRoot, "runs");
