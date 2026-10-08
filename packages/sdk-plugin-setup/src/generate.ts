@@ -364,6 +364,10 @@ function readRootManifest(outputDir: string): RootManifest | undefined {
   }
 }
 
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 const LOCKFILES: ReadonlyArray<readonly [file: string, packageManager: PackageManager]> = [
   ["pnpm-lock.yaml", "pnpm"],
   ["yarn.lock", "yarn"],
@@ -383,12 +387,8 @@ export function detectPackageManager(outputDir: string): PackageManager | undefi
   const lockfile = LOCKFILES.find(([file]) => fs.existsSync(path.join(outputDir, file)));
   if (lockfile) return lockfile[1];
   const manifest = readRootManifest(outputDir);
-  const fromField =
-    typeof manifest?.packageManager === "string"
-      ? manifest.packageManager.split("@")[0]
-      : undefined;
-  const devEnginesName = manifest?.devEngines?.packageManager?.name;
-  const fromDevEngines = typeof devEnginesName === "string" ? devEnginesName : undefined;
+  const fromField = nonEmptyString(nonEmptyString(manifest?.packageManager)?.split("@")[0]);
+  const fromDevEngines = nonEmptyString(manifest?.devEngines?.packageManager?.name);
   if (fromField !== undefined && fromDevEngines !== undefined && fromField !== fromDevEngines) {
     throw new Error(
       `package.json at the repository root declares ${fromField} in packageManager but ` +

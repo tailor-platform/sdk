@@ -43,8 +43,7 @@ const envCommand = defineAppCommand({
 });
 
 const packageManagerArg = arg(z.enum(PACKAGE_MANAGERS).optional(), {
-  description:
-    "Package manager the workflow uses: pnpm, npm, yarn, or bun (defaults to the one the lockfile or package.json at the repository root names)",
+  description: `Package manager the workflow uses: ${new Intl.ListFormat("en", { type: "disjunction" }).format(PACKAGE_MANAGERS)} (defaults to the one the lockfile or package.json at the repository root names)`,
 });
 
 const branchCommand = defineAppCommand({

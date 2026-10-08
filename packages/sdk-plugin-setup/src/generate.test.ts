@@ -85,6 +85,8 @@ describe("detectPackageManager", () => {
       },
       "npm",
     ],
+    [{ packageManager: "", devEngines: { packageManager: { name: "pnpm" } } }, "pnpm"],
+    [{ packageManager: "yarn@4.9.2", devEngines: { packageManager: { name: "" } } }, "yarn"],
   ] as const)("detects the package manager %j declares", (manifest, expected) => {
     writeManifest(manifest);
     expect(detectPackageManager(testDir)).toBe(expected);
