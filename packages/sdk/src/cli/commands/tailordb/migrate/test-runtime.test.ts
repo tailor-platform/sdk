@@ -13,10 +13,12 @@ import {
   createMigrationTestBaselineSnapshots,
   deleteExistingUserProfileConfig,
   loadSnapshotSeedData,
+  resolveSourceMigrationNumber,
   sortSeedTypesForSnapshot,
   waitForCloneApplicationData,
 } from "./test-runtime";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { RemoteMigrationState } from "./remote-state";
 import type { PreparedMigrationTest } from "./test-types";
 
 vi.mock("./config", async (importOriginal) => {
@@ -363,6 +365,112 @@ describe("migration test runtime", () => {
     await expect(assertSourceBaselineFresh(state, prepared, "source")).rejects.toThrow(
       'Source namespace "audit" schema changed after migration test preparation',
     );
+  });
+
+  test("accepts a source baseline numbered 0 when the namespace has no migration label", async () => {
+    vi.mocked(getNamespacesWithMigrations).mockReturnValue([
+      { namespace: "main", migrationsDir: "/project/migrations/main" },
+    ]);
+    vi.mocked(verifyRemoteSchema).mockResolvedValue([
+      { namespace: "main", remoteMigrationNumber: 0, drifts: [], hasDrift: false },
+    ]);
+    const client = {
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+    } as unknown as OperatorClient;
+    const prepared = preparedMigrationTest({
+      baselines: new Map([
+        ["main", { migrationNumber: 0, snapshot: emptySnapshot("main"), historyId: null }],
+      ]),
+    });
+
+    await expect(
+      assertSourceBaselineFresh(runtimeState(client), prepared, "source"),
+    ).resolves.toBeUndefined();
+  });
+
+  function unlabeledState(overrides: Partial<RemoteMigrationState> = {}): RemoteMigrationState {
+    return {
+      metadataExists: true,
+      number: null,
+      historyId: null,
+      historyIdInvalid: false,
+      inProgress: null,
+      inProgressInvalid: false,
+      ...overrides,
+    };
+  }
+
+  function remoteClient(types: unknown[] = []) {
+    return {
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: types, nextPageToken: "" }),
+      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({ permissions: [], nextPageToken: "" }),
+    } as unknown as OperatorClient;
+  }
+
+  function migrationsDirWithInitialSchema(snapshot: ReturnType<typeof emptySnapshot>) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-unlabeled-"));
+    temporaryDirectories.push(dir);
+    fs.mkdirSync(path.join(dir, "0000"));
+    fs.writeFileSync(path.join(dir, "0000", "schema.json"), JSON.stringify(snapshot));
+    return dir;
+  }
+
+  test("returns the labeled migration number as is", async () => {
+    await expect(
+      resolveSourceMigrationNumber(
+        remoteClient(),
+        "source",
+        { namespace: "main", migrationsDir: "/unused" },
+        unlabeledState({ number: 3 }),
+      ),
+    ).resolves.toBe(3);
+  });
+
+  test("treats an unlabeled source that matches the 0000 snapshot as migration 0", async () => {
+    const migrationsDir = migrationsDirWithInitialSchema(emptySnapshot("main"));
+
+    await expect(
+      resolveSourceMigrationNumber(
+        remoteClient(),
+        "source",
+        { namespace: "main", migrationsDir },
+        unlabeledState(),
+      ),
+    ).resolves.toBe(0);
+  });
+
+  test("rejects an unlabeled source whose schema differs from the 0000 snapshot", async () => {
+    const migrationsDir = migrationsDirWithInitialSchema(
+      normalizeSchemaSnapshot({
+        version: 1,
+        namespace: "main",
+        createdAt: "2026-08-05T00:00:00.000Z",
+        tables: { AuditLog: { name: "AuditLog", pluralForm: "auditLogs", fields: {} } },
+      }),
+    );
+
+    await expect(
+      resolveSourceMigrationNumber(
+        remoteClient(),
+        "source",
+        { namespace: "main", migrationsDir },
+        unlabeledState(),
+      ),
+    ).rejects.toThrow("differs from the initial migration snapshot");
+  });
+
+  test("rejects a source namespace that was never deployed", async () => {
+    await expect(
+      resolveSourceMigrationNumber(
+        remoteClient(),
+        "source",
+        { namespace: "main", migrationsDir: "/unused" },
+        unlabeledState({ metadataExists: false }),
+      ),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
+      message: expect.stringContaining("has not been deployed"),
+    });
   });
 
   test("deletes a retained target's existing user profile config", async () => {

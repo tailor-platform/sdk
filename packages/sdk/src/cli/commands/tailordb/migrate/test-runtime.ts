@@ -33,6 +33,7 @@ import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import { bundleMigrationScript } from "./bundler";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
+import { formatMigrationDiff } from "./diff-calculator";
 import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertValidMigrationFiles,
@@ -45,6 +46,7 @@ import {
 } from "./snapshot";
 import type { LoadedApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
+import type { RemoteMigrationState } from "./remote-state";
 import type {
   MigrationTestDependencies,
   MigrationTestOptions,
@@ -397,6 +399,51 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
 }
 
 /**
+ * Resolve the migration number a source namespace is at, the way `deploy` does.
+ *
+ * A deployed namespace without a migration label is at 0 (`deploy` applies
+ * 0001 onward to it), but only when its schema matches the 0000 snapshot;
+ * otherwise running the migrations would not verify what a deploy does.
+ * @param client - Operator client
+ * @param workspaceId - Source workspace ID
+ * @param namespace - Namespace and its migrations directory
+ * @param remoteState - Migration state read from the source namespace
+ * @returns The labeled number, or 0 for an unlabeled namespace that matches 0000
+ */
+export async function resolveSourceMigrationNumber(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: { namespace: string; migrationsDir: string },
+  remoteState: RemoteMigrationState,
+): Promise<number> {
+  if (remoteState.number !== null) return remoteState.number;
+  if (!remoteState.metadataExists) {
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
+      message: `Source namespace "${namespace.namespace}" has not been deployed.`,
+      suggestion: "Deploy to the source workspace before testing.",
+    });
+  }
+  const initial = reconstructSnapshotFromMigrations(namespace.migrationsDir, 0);
+  if (!initial) {
+    throw CLIError({
+      code: "MIGRATION_BASELINE_NOT_FOUND",
+      message: `No migration baseline snapshot found for namespace "${namespace.namespace}".`,
+    });
+  }
+  const remote = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace.namespace);
+  const diff = compareSnapshots(initial, remote);
+  if (diff.changes.length > 0) {
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_INVALID",
+      message: `Source namespace "${namespace.namespace}" has no migration label and its schema differs from the initial migration snapshot (0000):\n${formatMigrationDiff(diff)}`,
+      suggestion: "Bring the source schema in line with 0000 or set its migration label.",
+    });
+  }
+  return 0;
+}
+
+/**
  * Require the source workspace to still match the prepared baselines.
  *
  * The source is verified during preparation, but the baseline deploy runs in
@@ -439,11 +486,11 @@ export async function assertSourceBaselineFresh(
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
     assertNoMigrationInProgress(remoteState, namespace.namespace);
-    const migrationNumber = remoteState.number;
+    const migrationNumber = remoteState.number ?? 0;
     if (migrationNumber !== baseline.migrationNumber) {
       throw CLIError({
         code: "MIGRATION_TEST_SOURCE_CHANGED",
-        message: `Source namespace "${namespace.namespace}" moved from migration ${baseline.migrationNumber} to ${migrationNumber ?? "none"} after migration test preparation.`,
+        message: `Source namespace "${namespace.namespace}" moved from migration ${baseline.migrationNumber} to ${migrationNumber} after migration test preparation.`,
         suggestion: "Run the migration test again.",
       });
     }
@@ -621,14 +668,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
     assertNoMigrationInProgress(remoteState, namespace.namespace);
-    const migrationNumber = remoteState.number;
-    if (migrationNumber === null) {
-      throw CLIError({
-        code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
-        message: `Source namespace "${namespace.namespace}" has no sdk-migration checkpoint.`,
-        suggestion: "Deploy or set the migration checkpoint before testing.",
-      });
-    }
+    const migrationNumber = await resolveSourceMigrationNumber(
+      client,
+      sourceWorkspaceId,
+      namespace,
+      remoteState,
+    );
     const latest = getLatestMigrationNumber(namespace.migrationsDir);
     if (migrationNumber > latest) {
       throw CLIError({
