@@ -341,6 +341,15 @@ function setConfigEnv(
   };
 }
 
+/** Options of {@link createEnvironmentPlugin}. */
+export type EnvironmentPluginOptions = {
+  /** Path to tailor.config.ts to load SecretManager values and the date default from */
+  config?: string;
+};
+
+/** Reads `defaultDateRepresentation` from an absolute config path. */
+export type DateDefaultLoader = (configAbsPath: string) => Promise<EffectiveDateDefault>;
+
 /**
  * Vite plugin that resolves the tailor-runtime environment and injects setup files.
  *
@@ -355,10 +364,8 @@ function setConfigEnv(
  * @returns Vite plugin
  */
 export function createEnvironmentPlugin(
-  options?: { config?: string },
-  loadDateDefault: (
-    configAbsPath: string,
-  ) => Promise<EffectiveDateDefault> = loadDateDefaultFromConfig,
+  options?: EnvironmentPluginOptions,
+  loadDateDefault: DateDefaultLoader = loadDateDefaultFromConfig,
 ): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const environmentPath = resolve(currentDir, "environment.mjs");
