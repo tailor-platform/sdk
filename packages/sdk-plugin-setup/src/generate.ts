@@ -497,6 +497,9 @@ function resolveMigrationTest(
     );
   }
   const data = migrationTestData ?? "clone";
+  if (data !== "clone" && data !== "seed") {
+    throw new Error(`Invalid --migration-test-data "${String(data)}". Use "clone" or "seed".`);
+  }
   if (data === "seed" && !detected.hasSeeds) {
     throw new Error(
       "--migration-test-data seed requires the seed plugin, which tailor.config.ts does not use. " +

