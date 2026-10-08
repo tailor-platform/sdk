@@ -687,6 +687,12 @@ describe("logs command list output", () => {
         error: { name: "TypeError", message: "x is undefined" },
       }),
       functionExecution({
+        id: "exec-syntax",
+        status: FunctionExecution_Status.FAILED,
+        errorKind: FunctionErrorKind.USER_NON_RUNTIME,
+        error: { name: "SyntaxError", message: "Unexpected token '}'" },
+      }),
+      functionExecution({
         id: "exec-timeout",
         status: FunctionExecution_Status.FAILED,
         errorKind: FunctionErrorKind.PLATFORM,
@@ -720,6 +726,14 @@ describe("logs command list output", () => {
         errorKind: "USER_RUNTIME",
         errorName: "TypeError",
         errorMessage: "x is undefined",
+      },
+      {
+        ...common,
+        id: "exec-syntax",
+        status: "FAILED",
+        errorKind: "USER_NON_RUNTIME",
+        errorName: "SyntaxError",
+        errorMessage: "Unexpected token '}'",
       },
       {
         ...common,
