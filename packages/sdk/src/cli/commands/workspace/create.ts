@@ -23,7 +23,7 @@ import {
   writePlatformConfig,
   type UserWorkspaceDefaults,
 } from "#/cli/shared/context";
-import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
@@ -215,6 +215,7 @@ function pointAtUserDefaults(error: unknown, defaults: UserWorkspaceDefaults): v
     withErrorDiagnostics(error, {
       suggestion: `This run targeted ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`. Check that it exists and that this user can create workspaces there, or pass --organization-id (and --folder-id) to choose another location.`,
       context: {
+        ...getErrorDiagnostics(error).context,
         defaultOrganizationId: defaults.organizationId,
         defaultFolderId: defaults.folderId ?? null,
       },

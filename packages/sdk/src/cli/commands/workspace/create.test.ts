@@ -7,7 +7,7 @@ import { z } from "zod";
 import { commonArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
-import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
@@ -686,7 +686,11 @@ describe("workspace create with user defaults", () => {
     { name: "PermissionDenied", code: Code.PermissionDenied },
   ])("points at the defaults when creating in them fails with $name", async ({ code }) => {
     const client = stubClient();
-    client.createWorkspace.mockRejectedValue(new ConnectError("not accessible", code));
+    client.createWorkspace.mockRejectedValue(
+      withErrorDiagnostics(new ConnectError("not accessible", code), {
+        context: { method: "CreateWorkspace" },
+      }),
+    );
 
     const result = await runCreateWithDefaults();
 
@@ -695,7 +699,8 @@ describe("workspace create with user defaults", () => {
     expect(error).toBeInstanceOf(ConnectError);
     const diagnostics = getErrorDiagnostics(error as Error);
     expect(diagnostics.suggestion).toContain("tailor user update");
-    expect(diagnostics.context).toMatchObject({
+    expect(diagnostics.context).toEqual({
+      method: "CreateWorkspace",
       defaultOrganizationId,
       defaultFolderId,
     });
