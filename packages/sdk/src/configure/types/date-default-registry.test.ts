@@ -89,6 +89,14 @@ declare const day: output<typeof field>;
 export const asDate: Date = day;
 `;
 
+const explicitAsProbe = `
+import { t } from "@tailor-platform/sdk";
+export const day = t.date({ as: "date" });
+export const at = t.datetime({ as: "temporal" });
+export const time = t.time({ as: "string" });
+export const optionalDay = t.date({ as: "temporal", optional: true });
+`;
+
 const stringProbe = `
 import { t, type output } from "@tailor-platform/sdk";
 const field = t.date();
@@ -127,5 +135,13 @@ describe("DateRepresentationRegistry through the public package entry", { timeou
     const resolverErrors = diagnostics.filter((d) => d.startsWith("passthrough.ts: TS2554"));
     expect(resolverErrors).toHaveLength(2);
     expect(resolverErrors[0]).toContain("Expected 2 arguments, but got 0");
+  });
+
+  test("an explicit `as` still compiles when the included apps disagree", () => {
+    const diagnostics = diagnosticsFor(
+      [{ name: "admin", defaultDateRepresentation: "temporal" }, { name: "user" }],
+      explicitAsProbe,
+    );
+    expect(diagnostics.filter((d) => d.startsWith("probe.ts:"))).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import * as mod from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { installTailordbClientStub } from "#/utils/tailordb-client-stub";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
 /**
@@ -45,21 +46,27 @@ function serialize<T>(task: () => Promise<T>): Promise<T> {
 }
 
 // Imports the way the CLI does: the same TypeScript hook resolves extensionless
-// relative imports and tsconfig paths, so a config the CLI accepts loads here.
+// relative imports and tsconfig paths, and the same tailordb stub lets a module
+// construct a client at module scope, so a config the CLI accepts loads here.
 async function importLikeCli(configPath: string): Promise<unknown> {
   const url = pathToFileURL(configPath).href;
-  if ("Bun" in globalThis || "Deno" in globalThis) return import(url);
-  const hookUrl = pathToFileURL(
-    resolve(dirname(fileURLToPath(import.meta.url)), "../cli/ts-hook.mjs"),
-  );
-  const { resolveSync, loadSync } = (await import(hookUrl.href)) as TsHookModule;
-  const hooks = mod.registerHooks({ resolve: resolveSync, load: loadSync }) as {
-    deregister?: () => void;
-  };
+  const restoreStub = installTailordbClientStub();
   try {
-    return await import(url);
+    if ("Bun" in globalThis || "Deno" in globalThis) return await import(url);
+    const hookUrl = pathToFileURL(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../cli/ts-hook.mjs"),
+    );
+    const { resolveSync, loadSync } = (await import(hookUrl.href)) as TsHookModule;
+    const hooks = mod.registerHooks({ resolve: resolveSync, load: loadSync }) as {
+      deregister?: () => void;
+    };
+    try {
+      return await import(url);
+    } finally {
+      hooks.deregister?.();
+    }
   } finally {
-    hooks.deregister?.();
+    restoreStub();
   }
 }
 

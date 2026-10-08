@@ -42,6 +42,7 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const loaderPath = resolve(here, "date-default-loader.ts");
   const hookPath = resolve(here, "../cli/ts-hook.mjs");
+  const srcDir = resolve(here, "..");
   let tmpDir: string;
 
   aroundAll(async (runSuite) => {
@@ -57,6 +58,16 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
       import * as mod from "node:module";
       const { resolveSync, loadSync } = await import(${JSON.stringify(pathToFileURL(hookPath).href)});
       mod.registerHooks({ resolve: resolveSync, load: loadSync });
+      // The source under test uses the package's "#/" path alias, which only
+      // the bundler resolves; map it onto src/ for this native import.
+      mod.registerHooks({
+        resolve(specifier, context, next) {
+          if (specifier.startsWith("#/")) {
+            return next(${JSON.stringify(pathToFileURL(srcDir + "/").href)} + specifier.slice(2) + ".ts", context);
+          }
+          return next(specifier, context);
+        },
+      });
       const { loadDateDefaultFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
       const warnings = [];
       console.warn = (...args) => warnings.push(args.join(" "));
@@ -88,6 +99,14 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
     const configPath = fixture("extensionless", {
       "sibling.ts": `export const setting: "temporal" = "temporal";\n`,
       "tailor.config.ts": `import { setting } from "./sibling";\nexport default { name: "app", defaultDateRepresentation: setting };\n`,
+    });
+    expect(run(configPath)).toEqual({ value: "temporal", warnings: [] });
+  });
+
+  test("a config whose module constructs a tailordb client at module scope loads like in the CLI", () => {
+    const configPath = fixture("module-scope-client", {
+      "db.ts": `export const client = new tailordb.Client({ namespace: "main" });\n`,
+      "tailor.config.ts": `import { client } from "./db";\nexport default { name: "app", defaultDateRepresentation: "temporal", client };\n`,
     });
     expect(run(configPath)).toEqual({ value: "temporal", warnings: [] });
   });
