@@ -343,7 +343,10 @@ describe("workspace prune command", () => {
       "0s",
       "--yes",
     ]);
-    expectFailure(unscoped, "--organization-root");
+    expectFailure(
+      unscoped,
+      "--older-than 0s requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.",
+    );
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
 
     const scoped = await runCommand(pruneCommand, [
@@ -1168,7 +1171,10 @@ describe("workspace prune command", () => {
 
       const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
 
-      expectFailure(result, "--expired requires --organization-root, --folder-id, or --personal");
+      expectFailure(
+        result,
+        "--expired requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.",
+      );
       expect(client.listWorkspaces).not.toHaveBeenCalled();
     });
 
