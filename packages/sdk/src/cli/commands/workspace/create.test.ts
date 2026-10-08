@@ -561,13 +561,6 @@ describe("workspace create with user defaults", () => {
         return [];
       },
     },
-    {
-      source: "an --env-file",
-      setUp: () => {
-        fs.writeFileSync(envFilePath, `TAILOR_PLATFORM_ORGANIZATION_ID=${otherOrganizationId}\n`);
-        return ["--env-file", envFilePath];
-      },
-    },
   ])("ignores both defaults when the organization comes from $source", async ({ setUp }) => {
     const client = stubClient();
 
@@ -588,13 +581,6 @@ describe("workspace create with user defaults", () => {
         return [];
       },
     },
-    {
-      source: "an --env-file",
-      setUp: () => {
-        fs.writeFileSync(envFilePath, `TAILOR_PLATFORM_FOLDER_ID=${defaultFolderId}\n`);
-        return ["--env-file", envFilePath];
-      },
-    },
   ])(
     "rejects a folder from $source without an organization instead of pairing it with the default organization",
     async ({ setUp }) => {
@@ -608,6 +594,24 @@ describe("workspace create with user defaults", () => {
       expect(initOperatorClient).not.toHaveBeenCalled();
     },
   );
+
+  test.each([
+    { name: "organization", line: `TAILOR_PLATFORM_ORGANIZATION_ID=${otherOrganizationId}` },
+    { name: "folder", line: `TAILOR_PLATFORM_FOLDER_ID=${defaultFolderId}` },
+  ])("does not use the defaults when the $name comes from an --env-file", async ({ line }) => {
+    fs.writeFileSync(envFilePath, `${line}\n`);
+    const client = stubClient();
+
+    const result = await runCreateWithDefaults("--env-file", envFilePath);
+
+    expect(result.success).toBe(true);
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.not.objectContaining({ organizationId: defaultOrganizationId }),
+    );
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.not.objectContaining({ folderId: defaultFolderId }),
+    );
+  });
 
   test.each(["TAILOR_PLATFORM_TOKEN", "TAILOR_TOKEN"])(
     "does not use the defaults when %s is set",
@@ -704,6 +708,20 @@ describe("workspace create with user defaults", () => {
       defaultOrganizationId,
       defaultFolderId,
     });
+  });
+
+  test("leaves a region lookup failure alone even when the defaults are in use", async () => {
+    const client = stubClient();
+    client.listAvailableWorkspaceRegions.mockRejectedValue(
+      new ConnectError("denied", Code.PermissionDenied),
+    );
+
+    const result = await runCreateWithDefaults();
+
+    expect(result.success).toBe(false);
+    const error = result.success ? undefined : result.error;
+    expect(getErrorDiagnostics(error as Error).suggestion ?? "").not.toContain("user update");
+    expect(client.createWorkspace).not.toHaveBeenCalled();
   });
 
   test("leaves a failure with an explicit organization alone", async () => {

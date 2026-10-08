@@ -99,12 +99,24 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
 export async function createWorkspace(
   options: CreateWorkspaceOptions,
 ): Promise<CreatedWorkspaceInfo> {
+  const { client, validated } = await prepareWorkspaceCreation(options);
+  return createValidatedWorkspaceWithClient(client, validated);
+}
+
+type PreparedWorkspaceCreation = {
+  client: OperatorClient;
+  validated: ValidatedCreateWorkspaceOptions;
+};
+
+async function prepareWorkspaceCreation(
+  options: CreateWorkspaceOptions,
+): Promise<PreparedWorkspaceCreation> {
   const validated = validateCreateWorkspaceOptions(options);
   const accessToken = await loadAccessToken({ profile: validated.profile });
   const platformConfig = await loadPlatformClientConfig({ profile: validated.profile });
   const client = await initOperatorClient(accessToken, platformConfig);
   await validateRegion(validated.region, client);
-  return createValidatedWorkspaceWithClient(client, validated);
+  return { client, validated };
 }
 
 /**
@@ -330,30 +342,34 @@ export const createCommand = defineAppCommand({
       };
     }
 
-    const organizationId =
-      args["organization-id"] ?? (process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined);
-    const folderId = args["folder-id"] ?? (process.env.TAILOR_PLATFORM_FOLDER_ID || undefined);
-    const defaults =
-      organizationId === undefined && folderId === undefined
-        ? await loadUserWorkspaceDefaults({ profile: args.profile })
-        : undefined;
+    const organizationId = args["organization-id"];
+    const folderId = args["folder-id"];
+    // Values loaded by --env-file never reach args, yet they still name a location.
+    const locationGiven =
+      organizationId !== undefined ||
+      folderId !== undefined ||
+      Boolean(process.env.TAILOR_PLATFORM_ORGANIZATION_ID || process.env.TAILOR_PLATFORM_FOLDER_ID);
+    const defaults = locationGiven
+      ? undefined
+      : await loadUserWorkspaceDefaults({ profile: args.profile });
     if (defaults && !args.json) {
       logger.info(
         `Creating the workspace in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`,
       );
     }
 
+    const { client, validated } = await prepareWorkspaceCreation({
+      name: args.name,
+      region: args.region,
+      deleteProtection: args["delete-protection"],
+      organizationId: defaults ? defaults.organizationId : organizationId,
+      folderId: defaults ? defaults.folderId : folderId,
+      ttl: args.ttl,
+      profile: args.profile,
+    });
     let workspace: CreatedWorkspaceInfo;
     try {
-      workspace = await createWorkspace({
-        name: args.name,
-        region: args.region,
-        deleteProtection: args["delete-protection"],
-        organizationId: defaults ? defaults.organizationId : organizationId,
-        folderId: defaults ? defaults.folderId : folderId,
-        ttl: args.ttl,
-        profile: args.profile,
-      });
+      workspace = await createValidatedWorkspaceWithClient(client, validated);
     } catch (error) {
       if (defaults) pointAtUserDefaults(error, defaults);
       throw error;

@@ -84,8 +84,8 @@ export const updateCommand = defineAppCommand({
     if (!entry) {
       throw CLIError({
         code: "USER_NOT_FOUND",
-        message: `User "${user}" is not logged in on the selected platform.`,
-        suggestion: "Log in on that platform first.",
+        message: `User "${user}" has no login of its own on the selected platform.`,
+        suggestion: "Log in on that platform to store the defaults with that login.",
         next: login,
       });
     }
