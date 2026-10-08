@@ -642,10 +642,10 @@ export function mergeUserContent(params: {
 
   const containerKey = layout === "action" ? "runs" : "jobs";
   const managedTop = new Set([...MANAGED_TOP_LEVEL_KEYS[layout], containerKey]);
-  const userTop = currentRoot.items.filter((pair) => !managedTop.has(keyOf(pair) ?? ""));
-  const userTopKeys = new Set(userTop.map(keyOf));
-  renderedRoot.items = renderedRoot.items.filter((pair) => !userTopKeys.has(keyOf(pair)));
-  placeAfterAnchors(currentRoot.items, renderedRoot.items, (pair) => userTop.includes(pair), keyOf);
+  const userTopKeys = currentRoot.items
+    .map((pair) => keyOf(pair) ?? "")
+    .filter((key) => !managedTop.has(key));
+  carryFields(currentRoot, renderedRoot, userTopKeys);
 
   if (layout === "action") {
     const currentRuns = mapAt(currentRoot, "runs");
