@@ -115,6 +115,10 @@ tailor workspace create [options]
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+**Notes**
+
+Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with `user update`. Giving either option replaces both defaults, and --folder-id requires --organization-id.
+
 ### workspace delete
 
 Delete a Tailor Platform workspace.

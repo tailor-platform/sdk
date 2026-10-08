@@ -121,12 +121,13 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                         | Description                    |
-| ------------------------------- | ------------------------------ |
-| [`user current`](#user-current) | Show current user.             |
-| [`user list`](#user-list)       | List all users.                |
-| [`user switch`](#user-switch)   | Set current user.              |
-| [`user pat`](#user-pat)         | Manage personal access tokens. |
+| Command                         | Description                                                                |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| [`user current`](#user-current) | Show current user.                                                         |
+| [`user list`](#user-list)       | List all users.                                                            |
+| [`user switch`](#user-switch)   | Set current user.                                                          |
+| [`user update`](#user-update)   | Set the current user's default organization and folder for new workspaces. |
+| [`user pat`](#user-pat)         | Manage personal access tokens.                                             |
 
 ### user current
 
@@ -302,6 +303,35 @@ tailor user switch [options] <user>
 | `--profile <PROFILE>` | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### user update
+
+Set the current user's default organization and folder for new workspaces.
+
+**Usage**
+
+```
+tailor user update [options]
+```
+
+**Options**
+
+| Option                                                | Alias | Description                                                                                                      | Required | Default | Env                       |
+| ----------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------- |
+| `--default-organization-id <DEFAULT_ORGANIZATION_ID>` | `-o`  | Organization that `workspace create` uses when no location is given. Pass an empty string to clear the defaults. | No       | -       | -                         |
+| `--default-folder-id <DEFAULT_FOLDER_ID>`             | `-f`  | Folder in the default organization that `workspace create` uses (requires --default-organization-id)             | No       | -       | -                         |
+| `--profile <PROFILE>`                                 | `-p`  | Workspace profile                                                                                                | No       | -       | `TAILOR_PLATFORM_PROFILE` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+`workspace create` creates a workspace in the default folder, or directly under the default organization when no folder is set. Giving --organization-id or --folder-id to `workspace create`, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, replaces both defaults for that run. The defaults are not used while TAILOR_PLATFORM_TOKEN is set, because that token does not belong to a user logged in here.
+
+Each run replaces both defaults: --default-organization-id alone clears the default folder, --default-folder-id is accepted only together with --default-organization-id, and --default-organization-id "" clears both. The IDs are not checked against the Platform here; `workspace create` points back to them when it cannot use them.
+
+The defaults belong to this user's login on the selected platform, so `logout` removes them, and older SDK versions drop them when they rewrite the CLI config file.
+
 When no subcommand is provided, defaults to `list`.
 
 **Output (default):**

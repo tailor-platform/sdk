@@ -61,13 +61,15 @@ const pfUserFileSchema = z.looseObject({
 
 const pfUserSchemaV2 = z.discriminatedUnion("storage", [pfUserKeyringSchema, pfUserFileSchema]);
 
-const pfUserKeyringSchemaV3 = pfUserKeyringSchema.extend({
+const pfUserMetadataV3 = {
   email: z.string().optional(),
-});
+  default_organization_id: z.string().optional(),
+  default_folder_id: z.string().optional(),
+};
 
-const pfUserFileSchemaV3 = pfUserFileSchema.extend({
-  email: z.string().optional(),
-});
+const pfUserKeyringSchemaV3 = pfUserKeyringSchema.extend(pfUserMetadataV3);
+
+const pfUserFileSchemaV3 = pfUserFileSchema.extend(pfUserMetadataV3);
 
 const pfUserSchemaV3 = z.discriminatedUnion("storage", [pfUserKeyringSchemaV3, pfUserFileSchemaV3]);
 
@@ -829,6 +831,37 @@ export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<Aut
     permission: profileEntry?.readonly === true ? "read" : "write",
     platformUrl,
     tokenStatus,
+  };
+}
+
+/** Where `workspace create` places a workspace when no location is given. */
+export type UserWorkspaceDefaults = {
+  organizationId: string;
+  folderId?: string;
+};
+
+/**
+ * Load the default organization and folder stored on the user that config-based authentication
+ * selects. An environment token's identity is not a config user, so none apply while one is set.
+ * @param opts - Profile options
+ * @returns The user's defaults, or undefined when none apply
+ */
+export async function loadUserWorkspaceDefaults(
+  opts?: LoadAccessTokenOptions,
+): Promise<UserWorkspaceDefaults | undefined> {
+  if (process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN) return undefined;
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  const config = await readPlatformConfig();
+  const profileEntry = profile ? config.profiles[profile] : undefined;
+  if (profile && !profileEntry) return undefined;
+  const user = profileEntry?.user ?? config.current_user;
+  if (!user) return undefined;
+  const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  const { userEntry } = findUserEntry(config, user, platformConfig, { allowLegacyUserKey: false });
+  if (!userEntry?.default_organization_id) return undefined;
+  return {
+    organizationId: userEntry.default_organization_id,
+    ...(userEntry.default_folder_id ? { folderId: userEntry.default_folder_id } : {}),
   };
 }
 

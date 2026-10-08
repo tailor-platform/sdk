@@ -342,6 +342,7 @@ Commands for authentication and user management.
 | [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                                                      |
 | [user pat update](./cli/user.md#user-pat-update) | Update a personal access token (delete and recreate).                                 |
 | [user switch](./cli/user.md#user-switch)         | Set current user.                                                                     |
+| [user update](./cli/user.md#user-update)         | Set the current user's default organization and folder for new workspaces.            |
 
 ### [Organization Commands](./cli/organization.md)
 

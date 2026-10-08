@@ -1,4 +1,5 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { recoveryContextArgs } from "#/cli/shared/args";
@@ -15,11 +16,14 @@ import { defineAppCommand } from "#/cli/shared/command";
 import {
   loadAccessToken,
   loadPlatformClientConfig,
+  loadUserWorkspaceDefaults,
   platformConfigFromProfile,
   readPlatformConfig,
   resolveConfigUser,
   writePlatformConfig,
+  type UserWorkspaceDefaults,
 } from "#/cli/shared/context";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
@@ -27,6 +31,7 @@ import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 import { ageArg, parseAge } from "./age";
 import { writeWorkspaceExpiry } from "./expiry";
 import {
@@ -185,7 +190,36 @@ async function recordTtl(
 export function validateCreateWorkspaceOptions(
   options: CreateWorkspaceOptions,
 ): ValidatedCreateWorkspaceOptions {
-  return parseOptions(createWorkspaceOptionsSchema, options);
+  const validated = parseOptions(createWorkspaceOptionsSchema, options);
+  if (validated.folderId !== undefined && validated.organizationId === undefined) {
+    throw CLIError({
+      code: "WORKSPACE_FOLDER_WITHOUT_ORGANIZATION",
+      message: "A folder ID requires an organization ID.",
+      suggestion: "Pass --organization-id with the organization that owns the folder.",
+    });
+  }
+  return validated;
+}
+
+function describeUserDefaults(defaults: UserWorkspaceDefaults): string {
+  return defaults.folderId
+    ? `folder ${defaults.folderId} in organization ${defaults.organizationId}`
+    : `organization ${defaults.organizationId}`;
+}
+
+function pointAtUserDefaults(error: unknown, defaults: UserWorkspaceDefaults): void {
+  if (
+    error instanceof ConnectError &&
+    (error.code === Code.NotFound || error.code === Code.PermissionDenied)
+  ) {
+    withErrorDiagnostics(error, {
+      suggestion: `The workspace was created in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`. Check that it exists and that this user can create workspaces there, or pass --organization-id (and --folder-id) to choose another location.`,
+      context: {
+        defaultOrganizationId: defaults.organizationId,
+        defaultFolderId: defaults.folderId ?? null,
+      },
+    });
+  }
 }
 
 export { validateWorkspaceName } from "#/cli/shared/workspace-name";
@@ -193,6 +227,9 @@ export { validateWorkspaceName } from "#/cli/shared/workspace-name";
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
+  notes: ml`
+    Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with \`user update\`. Giving either option replaces both defaults, and --folder-id requires --organization-id.
+  `,
   args: z.strictObject({
     // createWorkspace() re-applies this schema for programmatic callers; here it
     // fails --name during option parsing, before any Platform request.
@@ -292,16 +329,33 @@ export const createCommand = defineAppCommand({
       };
     }
 
-    // Execute workspace create logic
-    const workspace = await createWorkspace({
-      name: args.name,
-      region: args.region,
-      deleteProtection: args["delete-protection"],
-      organizationId: args["organization-id"],
-      folderId: args["folder-id"],
-      ttl: args.ttl,
-      profile: args.profile,
-    });
+    const organizationId = args["organization-id"] ?? process.env.TAILOR_PLATFORM_ORGANIZATION_ID;
+    const folderId = args["folder-id"] ?? process.env.TAILOR_PLATFORM_FOLDER_ID;
+    const defaults =
+      organizationId === undefined && folderId === undefined
+        ? await loadUserWorkspaceDefaults({ profile: args.profile })
+        : undefined;
+    if (defaults && !args.json) {
+      logger.info(
+        `Creating the workspace in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`,
+      );
+    }
+
+    let workspace: CreatedWorkspaceInfo;
+    try {
+      workspace = await createWorkspace({
+        name: args.name,
+        region: args.region,
+        deleteProtection: args["delete-protection"],
+        organizationId: defaults ? defaults.organizationId : organizationId,
+        folderId: defaults ? defaults.folderId : folderId,
+        ttl: args.ttl,
+        profile: args.profile,
+      });
+    } catch (error) {
+      if (defaults) pointAtUserDefaults(error, defaults);
+      throw error;
+    }
 
     let profileInfo: ProfileInfo | undefined;
     if (profileSetup) {
