@@ -444,6 +444,7 @@ export async function resolveSourceMigrationNumber(
   const drifts = await compareRemoteSchemaWithSnapshot(
     client,
     workspaceId,
+    namespace.namespace,
     initial,
     config,
     inputs,

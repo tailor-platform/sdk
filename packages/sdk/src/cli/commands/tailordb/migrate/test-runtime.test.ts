@@ -485,6 +485,25 @@ describe("migration test runtime", () => {
     ).resolves.toBe(0);
   });
 
+  test("queries the configured namespace even when the 0000 snapshot records another one", async () => {
+    const migrationsDir = migrationsDirWithInitialSchema(emptySnapshot("copied-from-elsewhere"));
+    const client = remoteClient();
+
+    await expect(
+      resolveSourceMigrationNumber(
+        client,
+        "source",
+        { namespace: "main", migrationsDir },
+        unlabeledState(),
+        {} as LoadedConfig,
+        [],
+      ),
+    ).resolves.toBe(0);
+    expect(client.listTailorDBTypes).toHaveBeenCalledWith(
+      expect.objectContaining({ namespaceName: "main" }),
+    );
+  });
+
   test("returns the labeled migration number as is", async () => {
     await expect(
       resolveSourceMigrationNumber(

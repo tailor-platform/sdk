@@ -296,6 +296,7 @@ function reconstructPreMigrationSnapshot(
  * Compare a namespace's deployed schema with a snapshot the way a deploy would leave it
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace whose remote schema is compared
  * @param snapshot - Snapshot the remote is expected to match
  * @param config - Loaded application config
  * @param tailorDBInputs - Deploy inputs for namespace defaults
@@ -305,19 +306,20 @@ function reconstructPreMigrationSnapshot(
 export async function compareRemoteSchemaWithSnapshot(
   client: OperatorClient,
   workspaceId: string,
+  namespace: string,
   snapshot: SchemaSnapshot,
   config: LoadedConfig,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   ignoredSettings: readonly (keyof SnapshotSettings)[] = [],
 ): Promise<SchemaDrift[]> {
   const [remoteTypes, remoteGqlPermissions] = await Promise.all([
-    fetchRemoteTypes(client, workspaceId, snapshot.namespace),
-    fetchRemoteGqlPermissions(client, workspaceId, snapshot.namespace),
+    fetchRemoteTypes(client, workspaceId, namespace),
+    fetchRemoteGqlPermissions(client, workspaceId, namespace),
   ]);
   const expectedDeploySnapshot = deployComparableSnapshot(
     snapshot,
     remoteTypes,
-    namespaceGqlOperations(config, tailorDBInputs, snapshot.namespace),
+    namespaceGqlOperations(config, tailorDBInputs, namespace),
   );
   return compareRemoteWithSnapshot(
     remoteTypes,
@@ -447,6 +449,7 @@ export async function verifyRemoteSchema(
     const drifts = await compareRemoteSchemaWithSnapshot(
       client,
       workspaceId,
+      namespace,
       expectedSnapshot,
       config,
       tailorDBInputs,
