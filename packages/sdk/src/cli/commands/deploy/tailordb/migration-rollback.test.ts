@@ -4,6 +4,8 @@
  */
 
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { logger } from "#/cli/shared/logger";
 import { applyTailorDB, captureMigrationFileState } from "./index";
 import type { SchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
@@ -453,6 +455,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (call) => (call[0] as any)?.tailordbType?.schema?.fields?.value?.type,
       );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function withRestorableGoodsReceipt(): any {
+    const planResult = createMockPlanResult();
+    planResult.context.tailorDBInputs = [{ namespace: "test-ns", config: {}, types: {} }];
+    return planResult;
   }
 
   function deletedTableNames(client: OperatorClient) {
@@ -1093,6 +1102,196 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         expect(client.updateTailorDBType).not.toHaveBeenCalled();
       },
     );
+  });
+
+  describe("what is left restricted when restoration does not finish", () => {
+    const restrictedWrite = (call: unknown[]) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (call[0] as any)?.tailordbType?.schema?.settings?.disableGqlOperations?.create === true;
+
+    function failRestoringGoodsReceipt(client: OperatorClient) {
+      const original = vi.mocked(client.updateTailorDBType).getMockImplementation();
+      vi.mocked(client.updateTailorDBType).mockImplementation(async (request, ...rest) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const type = (request as any)?.tailordbType;
+        if (type?.name === "GoodsReceipt" && !restrictedWrite([request])) {
+          throw new Error("settings write refused");
+        }
+        return original ? original(request, ...rest) : ({} as never);
+      });
+    }
+
+    function checkpointReadsAfterCommit(
+      client: OperatorClient,
+      read: () => { number: number } | Error,
+    ) {
+      let committed = false;
+      vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+        async (_client, _workspaceId, _namespace, number, historyId) => {
+          remoteCheckpoint.number = number;
+          remoteCheckpoint.historyId = historyId ?? null;
+          committed = true;
+          return true;
+        },
+      );
+      const original = vi.mocked(client.getMetadata).getMockImplementation()!;
+      vi.mocked(client.getMetadata).mockImplementation(async (...args) => {
+        if (!committed) return original(...args);
+        const result = read();
+        if (result instanceof Error) throw result;
+        return {
+          metadata: { labels: { "sdk-migration": `m${String(result.number).padStart(4, "0")}` } },
+        } as never;
+      });
+    }
+
+    test("names the namespace and tables that stay restricted when restoring fails after a migration failure", async () => {
+      const client = createMockClient();
+      failRestoringGoodsReceipt(client);
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        new Error("original migration failure"),
+      );
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(
+        applyTailorDB(client, withRestorableGoodsReceipt(), "create-update"),
+      ).rejects.toThrow("original migration failure");
+
+      const message = warn.mock.calls.map(([line]) => line).join("\n");
+      expect(message).toContain("settings write refused");
+      expect(message).toContain("namespace 'test-ns': GoodsReceipt");
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
+      warn.mockRestore();
+      log.mockRestore();
+    });
+
+    test("reports the restricted tables as diagnostics when restoring is the only failure", async () => {
+      const client = createMockClient();
+      failRestoringGoodsReceipt(client);
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+
+      const error = await applyTailorDB(
+        client,
+        withRestorableGoodsReceipt(),
+        "create-update",
+      ).catch((thrown: Error) => thrown);
+
+      expect(error).toMatchObject({ message: "settings write refused" });
+      expect(getErrorDiagnostics(error as Error)).toMatchObject({
+        code: "MIGRATION_RESTORE_FAILED",
+        suggestion: expect.stringContaining("Deploy again"),
+        context: { unrestored: [{ namespace: "test-ns", tables: ["GoodsReceipt"] }] },
+      });
+    });
+
+    test("tells how to inspect the checkpoint when its ownership cannot be verified", async () => {
+      const client = createMockClient();
+      checkpointReadsAfterCommit(client, () => new Error("metadata unavailable"));
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+
+      await expect(
+        applyTailorDB(client, withRestorableGoodsReceipt(), "create-update"),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_CHECKPOINT_UNVERIFIED",
+        suggestion: expect.stringContaining("tailor tailordb migration status --namespace test-ns"),
+        context: { namespace: "test-ns" },
+      });
+    });
+
+    test("tells how to inspect the checkpoint when another deploy advanced it", async () => {
+      const client = createMockClient();
+      checkpointReadsAfterCommit(client, () => ({ number: 2 }));
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+
+      await expect(
+        applyTailorDB(client, withRestorableGoodsReceipt(), "create-update"),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_CHECKPOINT_CONFLICT",
+        suggestion: expect.stringContaining("tailor tailordb migration status --namespace test-ns"),
+        context: { namespace: "test-ns", expectedCheckpoint: 1, remoteCheckpoint: 2 },
+      });
+    });
+
+    test("shows the same guidance beside the original failure when the checkpoint cannot be verified", async () => {
+      const client = createMockClient();
+      checkpointReadsAfterCommit(client, () => new Error("metadata unavailable"));
+      setPendingMigrations([
+        mkAddFieldMigration(1, "GoodsReceipt", "note"),
+        mkAddFieldMigration(2, "GoodsReceipt", "extra"),
+      ]);
+      vi.mocked(migrationModule.executeMigrations).mockImplementation(
+        (_ctx: unknown, migrations: PendingMigration[]) =>
+          migrations.some((m) => m.number === 2)
+            ? Promise.reject(new Error("migration 2 failed"))
+            : Promise.resolve(undefined),
+      );
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(
+        applyTailorDB(client, createUpdatePlanResult(), "create-update"),
+      ).rejects.toThrow("migration 2 failed");
+
+      expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain("Skipping restoration");
+      expect(log).toHaveBeenCalledWith(
+        expect.stringContaining("tailor tailordb migration status --namespace test-ns"),
+      );
+      warn.mockRestore();
+      log.mockRestore();
+    });
+
+    test("names the tables that stay restricted when the failed migration's new table cannot be removed", async () => {
+      const client = createMockClient();
+      vi.mocked(client.deleteTailorDBType).mockRejectedValue(new Error("delete refused"));
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        new Error("original migration failure"),
+      );
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(applyTailorDB(client, createMockPlanResult(), "create-update")).rejects.toThrow(
+        "original migration failure",
+      );
+
+      expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain(
+        "namespace 'test-ns': StockReservation",
+      );
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
+      warn.mockRestore();
+      log.mockRestore();
+    });
+
+    test("names the tables a partially applied migration keeps restricted", async () => {
+      const client = createMockClient();
+      setPendingMigrations([
+        {
+          ...mkAddTypeMigration(1, "StockReservation"),
+          scriptForm: { kind: "steps", order: ["a", "b"] },
+        },
+      ]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        CLIError({ code: "MIGRATION_PARTIALLY_APPLIED", message: "failed at b after a completed" }),
+      );
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(applyTailorDB(client, createMockPlanResult(), "create-update")).rejects.toThrow(
+        "failed at b after a completed",
+      );
+
+      expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain(
+        "namespace 'test-ns': GoodsReceipt, StockReservation",
+      );
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
+      warn.mockRestore();
+      log.mockRestore();
+    });
   });
 
   describe("a multi-step migration whose steps partly committed", () => {

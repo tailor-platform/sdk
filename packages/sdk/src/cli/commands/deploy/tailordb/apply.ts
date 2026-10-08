@@ -38,8 +38,11 @@ import {
   getDeletedTableNames,
   migrationSnapshotCache,
   processedTables,
+  readUnrestoredTables,
+  RESTRICTION_EFFECT,
   resolveMigrationSnapshotSettings,
   rollbackSingleMigrationAfterFailure,
+  warnTablesLeftRestricted,
   type MigrationRestrictionState,
 } from "./migration-execution";
 import { assertMigrationSkipSteps } from "./migration-skip-steps";
@@ -314,20 +317,21 @@ async function removeRunResources(
  * @param migration - The partially applied migration
  * @param restorationSnapshots - Snapshots to restore, updated in place
  * @param restorationSettings - Settings to restore, updated in place
+ * @returns Names of the tables left restricted
  */
 function keepMigrationTablesRestricted(
   namespaceName: string,
   migration: PendingMigration,
   restorationSnapshots: Map<string, SchemaSnapshot>,
   restorationSettings: MigrationRestrictionState,
-): void {
+): string[] {
   const committed = restorationSnapshots.get(namespaceName);
-  if (!committed) return;
   const migrationTables = new Set([
-    ...Object.keys(committed.tables),
+    ...Object.keys(committed?.tables ?? {}),
     ...Object.keys(migrationSnapshotCache.load(migration).tables),
     ...getDeletedTableNames(migration),
   ]);
+  if (!committed) return [...migrationTables].toSorted();
   restorationSnapshots.set(namespaceName, { ...committed, tables: {} });
   restorationSettings.set(
     namespaceName,
@@ -337,6 +341,7 @@ function keepMigrationTablesRestricted(
       ),
     ),
   );
+  return [...migrationTables].toSorted();
 }
 
 function describeMigrationCheckpoint(number: number | null | undefined): string {
@@ -797,11 +802,20 @@ export async function applyTailorDB(
             message:
               `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
+            suggestion:
+              `Another deploy changed the checkpoint, so the tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). ` +
+              `Wait for the other deploy to finish, run \`tailor tailordb migration status --namespace ${namespaceName}\` to see the checkpoint and any migration in progress, then deploy again if the tables are still restricted.`,
+            context: {
+              namespace: namespaceName,
+              expectedCheckpoint: expectedCheckpoint.number,
+              remoteCheckpoint: remoteState.number,
+            },
           });
           if (migrationFailure) {
             logger.warn(
               `${concurrencyError.message} The original migration error is reported below.`,
             );
+            if (concurrencyError.suggestion) logger.log(concurrencyError.suggestion);
           } else {
             migrationFailure = { error: concurrencyError };
           }
@@ -813,11 +827,16 @@ export async function applyTailorDB(
               `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
               `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
+            suggestion:
+              `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). ` +
+              `Run \`tailor tailordb migration status --namespace ${namespaceName}\` to check the checkpoint, restore connectivity if it fails, then deploy again.`,
+            context: { namespace: namespaceName, expectedCheckpoint: expectedCheckpoint.number },
           });
           if (migrationFailure) {
             logger.warn(
               `${ownershipError.message} The original migration error is reported below.`,
             );
+            if (ownershipError.suggestion) logger.log(ownershipError.suggestion);
           } else {
             migrationFailure = { error: ownershipError };
           }
@@ -831,11 +850,15 @@ export async function applyTailorDB(
         }
       }
       for (const [namespaceName, migration] of partialMigrations) {
-        keepMigrationTablesRestricted(
+        const tables = keepMigrationTablesRestricted(
           namespaceName,
           migration,
           restorationSnapshots,
           restorationSettings,
+        );
+        warnTablesLeftRestricted(
+          `Migration ${namespaceName}/${formatMigrationNumber(migration.number)} is partially applied.`,
+          [{ namespace: namespaceName, tables }],
         );
       }
 
@@ -850,11 +873,13 @@ export async function applyTailorDB(
         );
       } catch (restorationError) {
         if (!migrationFailure) throw restorationError;
-        logger.warn(
+        warnTablesLeftRestricted(
           `Could not restore every TailorDB table after the migration failed: ${
             restorationError instanceof Error ? restorationError.message : String(restorationError)
-          }. The original migration error is reported below.`,
+          }.`,
+          readUnrestoredTables(restorationError),
         );
+        logger.log("The original migration error is reported below.");
       }
       if (migrationFailure) throw migrationFailure.error;
 
