@@ -206,10 +206,9 @@ yourself, for example to generate the workflow before the lockfile exists:
 tailor setup ci branch --name my-app-stg --package-manager pnpm
 ```
 
-The workflow sets up the package manager and installs dependencies at the
-repository root, so commit the lockfile there before it runs.
-`tailor setup update` keeps a package manager chosen with `--package-manager`
-and detects it again otherwise.
+The workflow installs dependencies at the repository root, so commit the
+lockfile there before it runs. `tailor setup update` keeps a package manager
+chosen with `--package-manager` and detects it again otherwise.
 
 ## Generated files
 
