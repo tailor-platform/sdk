@@ -223,7 +223,7 @@ ${secretVaultFields}
   // keyed by its name, recording the setting (or "unset").
   const dateRepresentationBody = dateRepresentation
     ? `{
-    ${JSON.stringify(dateRepresentation.appName)}: ${JSON.stringify(dateRepresentation.defaultDateRepresentation ?? "unset")};
+    ${isValidIdentifier(dateRepresentation.appName) ? dateRepresentation.appName : JSON.stringify(dateRepresentation.appName)}: ${JSON.stringify(dateRepresentation.defaultDateRepresentation ?? "unset")};
   }`
     : "{}";
 
