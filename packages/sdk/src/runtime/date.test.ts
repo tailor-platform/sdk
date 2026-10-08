@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createResolver } from "#/configure/services/resolver/resolver";
 import { t } from "#/configure/types/type";
 import { ResolverSchema } from "#/parser/service/resolver/schema";
-import { serializeDateFields } from "./date";
+import { dateRepresentationOf, hasDateRepresentationFields, serializeDateFields } from "./date";
 import { parseDateFields, parseInputFields } from "./field-parse";
 import { Temporal } from "./temporal";
 import type { DateFieldOptions } from "#/configure/types/field.types";
@@ -29,7 +29,8 @@ describe("Date representation", () => {
     expectTypeOf<output<ReturnType<typeof dynamic>>>().toEqualTypeOf<
       string | Date | Temporal.PlainDate
     >();
-    expect(plain.metadata).not.toHaveProperty("as");
+    expect(plain.metadata.as).toBe("default");
+    expect(explicit.metadata.as).toBe("string");
     expect(date.metadata.as).toBe("date");
     expect(temporal.metadata.as).toBe("temporal");
   });
@@ -390,5 +391,60 @@ describe("parseDateFields", () => {
         path: ["rows", "[0]", "day"],
       },
     ]);
+  });
+});
+
+describe("dateRepresentationOf", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
+
+  test("a field following the default converts to the effective default representation", () => {
+    expect(dateRepresentationOf("date", "default", "temporal")).toBe("temporal");
+    expect(dateRepresentationOf("datetime", "default", "temporal")).toBe("temporal");
+    expect(dateRepresentationOf("time", "default", "temporal")).toBe("temporal");
+  });
+
+  test("a field following the default stays a string under the legacy default", () => {
+    expect(dateRepresentationOf("date", "default", "legacy")).toBeUndefined();
+  });
+
+  test("a field following the default converts to Date under the date default", () => {
+    expect(dateRepresentationOf("date", "default", "date")).toBe("date");
+    expect(dateRepresentationOf("datetime", "default", "date")).toBe("date");
+    expect(dateRepresentationOf("time", "default", "date")).toBe("date");
+  });
+
+  test("an explicit `as` wins over the effective default", () => {
+    expect(dateRepresentationOf("date", "string", "temporal")).toBeUndefined();
+    expect(dateRepresentationOf("date", "date", "temporal")).toBe("date");
+    expect(dateRepresentationOf("date", "temporal", "legacy")).toBe("temporal");
+  });
+
+  test("fields of other types never convert", () => {
+    expect(dateRepresentationOf("string", "default", "temporal")).toBeUndefined();
+    expect(dateRepresentationOf("nested", "temporal", "temporal")).toBeUndefined();
+  });
+
+  test("without an explicit default it reads the bundle gate at call time", () => {
+    const previous = process.env[GATE];
+    try {
+      delete process.env[GATE];
+      expect(dateRepresentationOf("date", "default")).toBeUndefined();
+      process.env[GATE] = "temporal";
+      expect(dateRepresentationOf("date", "default")).toBe("temporal");
+      process.env[GATE] = "date";
+      expect(dateRepresentationOf("date", "default")).toBe("date");
+    } finally {
+      if (previous === undefined) delete process.env[GATE];
+      else process.env[GATE] = previous;
+    }
+  });
+});
+
+describe("hasDateRepresentationFields with a date default", () => {
+  test("counts fields following a temporal default as Temporal fields", () => {
+    const field = t.object({ day: t.date() });
+    expect(hasDateRepresentationFields(field, "temporal", "temporal")).toBe(true);
+    expect(hasDateRepresentationFields(field, "date", "temporal")).toBe(false);
+    expect(hasDateRepresentationFields(field, undefined, "legacy")).toBe(false);
   });
 });

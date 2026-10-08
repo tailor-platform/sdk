@@ -102,10 +102,38 @@ describe("addMigrationScriptFiles", () => {
     expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).temporal).toBe(true);
   });
 
+  test("records the date default in diff.json when the script is added", async () => {
+    setupMigration();
+
+    await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      dateDefault: "temporal",
+    });
+
+    expect(
+      JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).dateRepresentation,
+    ).toBe("temporal");
+  });
+
   test("raises a legacy migration to the current format version when recording temporal", async () => {
     setupMigration({ version: 3 });
 
     await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, temporal: true });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(
+      SCHEMA_SNAPSHOT_VERSION,
+    );
+  });
+
+  test("raises a legacy migration to the current format version when recording the date default", async () => {
+    setupMigration({ version: 3 });
+
+    await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      dateDefault: "temporal",
+    });
 
     expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(
       SCHEMA_SNAPSHOT_VERSION,
@@ -297,7 +325,22 @@ describe("addMigrationScriptFiles", () => {
     expect(result.migratePath).toBe(migrationFile(MIGRATE_FILE_NAME));
     expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
     const content = fs.readFileSync(result.testPath!, "utf-8");
-    expect(content).toContain('import { main } from "./migrate"');
+    expect(content).toContain('const { main } = await import("./migrate");');
+  });
+
+  test("pins the unit test scaffold to the date default recorded while adding the script", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      dateDefault: "temporal",
+    });
+
+    expect(fs.readFileSync(result.testPath!, "utf-8")).toContain(
+      'applyDateRepresentation("temporal")',
+    );
   });
 
   test("adds only the test when migrate.ts already exists and withTest is set", async () => {

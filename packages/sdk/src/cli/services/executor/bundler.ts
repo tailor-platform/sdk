@@ -12,7 +12,7 @@ import {
 } from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
@@ -24,6 +24,7 @@ import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
 import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 interface ExecutorInfo {
   name: string;
@@ -52,6 +53,8 @@ export interface BundleExecutorsOptions {
   tsconfigCache?: TsconfigLookupCache;
   /** Globals each installed package may reference */
   allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+  /** Representation applied to `t` date fields that omit `as` */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /**
@@ -77,6 +80,7 @@ export async function bundleExecutors(
     baseDir,
     tsconfigCache,
     allowedRuntimeGlobals,
+    dateDefault = "legacy",
   } = options;
   const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
@@ -130,6 +134,7 @@ export async function bundleExecutors(
       bundleLogLevel,
       tsconfigCache,
       allowedRuntimeGlobals,
+      dateDefault,
     ),
   );
 
@@ -151,12 +156,15 @@ async function bundleSingleExecutor(
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
   const contextHash = computeBundlerContextHash({
     sourceFile: executor.sourceFile,
-    extraContext: serializedStartContext,
+    // The date default is folded into the bundle but lives in the config file,
+    // so a cached bundle would otherwise survive a change to it.
+    extraContext: JSON.stringify([serializedStartContext, dateDefault]),
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -195,7 +203,7 @@ async function bundleSingleExecutor(
       }
       plugins.push(
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        platformBundleDefinePlugin,
+        createPlatformBundleDefinePlugin(undefined, dateDefault),
         ...cachePlugins,
       );
 

@@ -9,13 +9,19 @@ import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
-async function buildEntry(entryPath: string, entryContent: string, projectDir: string) {
+async function buildEntry(
+  entryPath: string,
+  entryContent: string,
+  projectDir: string,
+  dateDefault: EffectiveDateDefault,
+) {
   fs.writeFileSync(entryPath, entryContent);
   const tsconfig = await resolveTSConfigWithFallback(projectDir);
 
@@ -25,7 +31,7 @@ async function buildEntry(entryPath: string, entryContent: string, projectDir: s
     plugins: [
       createGeneratedEntryResolverPlugin(entryPath, projectDir),
       createTsconfigPathsPlugin(),
-      platformBundleDefinePlugin,
+      createPlatformBundleDefinePlugin(undefined, dateDefault),
     ],
     input: entryPath,
     write: false,
@@ -78,6 +84,8 @@ export interface MigrationBundleResult {
  * @param {boolean} [temporal] - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`; matches
  * the `tailordb.Client` this script runs against to the Temporal column types its `db.ts` was generated with.
  * Defaults to `false`.
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`, as recorded in the
+ * migration's `diff.json` when it was generated. Defaults to `"legacy"`.
  * @returns {Promise<MigrationBundleResult>} Bundled migration result
  */
 export async function bundleMigrationScript(
@@ -87,6 +95,7 @@ export async function bundleMigrationScript(
   env: Record<string, string | number | boolean> = {},
   baseDir?: string,
   temporal = false,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<MigrationBundleResult> {
   // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
@@ -123,6 +132,7 @@ export async function bundleMigrationScript(
     entryPath,
     entryContent,
     baseDir ?? path.dirname(absoluteSourcePath),
+    dateDefault,
   );
 
   return {
@@ -147,6 +157,8 @@ export interface BundleMigrationStepsOptions {
   baseDir?: string;
   /** Whether the script's `db.ts` uses Temporal column types. Defaults to `false`. */
   temporal?: boolean;
+  /** Representation applied to `t` date fields that omit `as`, as recorded in the migration's `diff.json`. */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /**
@@ -169,6 +181,7 @@ export async function bundleMigrationSteps(
     order,
     runnerJobFunctionName,
     temporal = false,
+    dateDefault = "legacy",
   } = options;
   const outputDir = path.resolve(getDistDir(), "migrations");
   fs.mkdirSync(outputDir, { recursive: true });
@@ -215,6 +228,7 @@ export async function bundleMigrationSteps(
     entryPath,
     entryContent,
     options.baseDir ?? path.dirname(absoluteSourcePath),
+    dateDefault,
   );
   return { namespace, migrationNumber, bundledCode };
 }
