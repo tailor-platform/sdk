@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import * as os from "node:os";
 import { fillSeedData } from "@tailor-platform/sdk/seed";
 import * as path from "pathe";
@@ -270,5 +270,69 @@ describe("fillSeedData", () => {
     const widgetId = (await readRows(widgetPath))[0]?.id;
     expect(uuid.safeParse(widgetId).success, `id: ${String(widgetId)}`).toBe(true);
     expect((await readRows(gadgetPath))[0]).not.toHaveProperty("id");
+  });
+
+  // Rewrites the file the way another tool saving mid-fill would: after the fill
+  // read it, before the fill writes.
+  async function editFileWhenHookRuns(typeName: string, content: string): Promise<void> {
+    const schemaPath = path.join(dataDir, `${typeName}.schema.ts`);
+    const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
+    const source = (await readFile(schemaPath, "utf-8"))
+      .replace("import { db, t }", 'import { writeFileSync } from "node:fs";\nimport { db, t }')
+      .replace(
+        "export const hook = createTailorDBHook(type);",
+        `const baseHook = createTailorDBHook(type);
+export const hook = (row) => {
+  writeFileSync(${JSON.stringify(jsonlPath)}, ${JSON.stringify(content)});
+  return baseHook(row);
+};`,
+      );
+    await writeFile(schemaPath, source);
+  }
+
+  test("writes nothing when another tool changed a file while the fill ran", async () => {
+    const jsonlPath = await writeTable("Widget", ['{"name":"mine"}']);
+    const other = '{"name":"edited elsewhere"}\n';
+    await editFileWhenHookRuns("Widget", other);
+
+    const error = await fillSeedData({ path: dataDir }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/Widget\.jsonl.*was changed after it was read/);
+    await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(other);
+  });
+
+  test("writes no table when a conflict is found in another one", async () => {
+    const gadgetPath = await writeTable("Gadget", ['{"name":"g"}']);
+    const widgetPath = await writeTable("Widget", ['{"name":"w"}']);
+    await editFileWhenHookRuns("Widget", '{"name":"edited"}\n');
+    const gadgetBefore = await readFile(gadgetPath, "utf-8");
+
+    await expect(fillSeedData({ path: dataDir })).rejects.toThrow(/was changed after it was read/);
+
+    await expect(readFile(gadgetPath, "utf-8")).resolves.toBe(gadgetBefore);
+    await expect(readFile(widgetPath, "utf-8")).resolves.toBe('{"name":"edited"}\n');
+  });
+
+  test.skipIf(process.platform === "win32")("keeps the permissions of a filled file", async () => {
+    const jsonlPath = await writeTable("Widget", ['{"name":"a"}']);
+    await chmod(jsonlPath, 0o640);
+
+    await fillSeedData({ path: dataDir });
+
+    expect((await stat(jsonlPath)).mode & 0o777).toBe(0o640);
+    expect((await readRows(jsonlPath))[0]).toHaveProperty("id");
+  });
+
+  test("fills the first row of a file that starts with a byte order mark and keeps the mark", async () => {
+    const jsonlPath = await writeTable("Widget", []);
+    await writeFile(jsonlPath, '\uFEFF{"name":"a"}\n{"name":"b"}\n');
+
+    const result = await fillSeedData({ path: dataDir });
+
+    const content = await readFile(jsonlPath, "utf-8");
+    expect(content.startsWith("\uFEFF")).toBe(true);
+    expect(result.filled[0]?.count).toBe(2);
+    expect(JSON.parse(content.slice(1).split("\n")[0]!)).toHaveProperty("id");
   });
 });

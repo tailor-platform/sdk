@@ -313,6 +313,29 @@ describe("migration test runtime", () => {
     ).rejects.toThrow('Source namespace "main" moved from migration 1 to 2');
   });
 
+  test("rejects a source with a partially applied migration", async () => {
+    vi.mocked(getNamespacesWithMigrations).mockReturnValue([
+      { namespace: "main", migrationsDir: "/project/migrations/main" },
+    ]);
+    vi.mocked(verifyRemoteSchema).mockResolvedValue([
+      { namespace: "main", remoteMigrationNumber: 1, drifts: [], hasDrift: false },
+    ]);
+    const client = {
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
+      }),
+    } as unknown as OperatorClient;
+    const prepared = preparedMigrationTest({
+      baselines: new Map([
+        ["main", { migrationNumber: 1, snapshot: emptySnapshot("main"), historyId: null }],
+      ]),
+    });
+
+    await expect(
+      assertSourceBaselineFresh(runtimeState(client), prepared, "source"),
+    ).rejects.toThrow("partially applied");
+  });
+
   test("rejects an unmigrated clone namespace whose schema changed after preparation", async () => {
     vi.mocked(getNamespacesWithMigrations).mockReturnValue([]);
     vi.mocked(verifyRemoteSchema).mockResolvedValue([]);

@@ -5,6 +5,11 @@ import {
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
+  isStaleMigrationInProgress,
+  type MigrationInProgress,
+  type RemoteMigrationState,
+} from "#/cli/commands/tailordb/migrate/remote-state";
+import {
   checkMigrationDiffs,
   formatMigrationCheckResults,
   formatRemoteVerificationResults,
@@ -35,7 +40,21 @@ export type ValidateAndDetectResult = {
   namespacesWithMigrations: NamespaceWithMigrations[];
   migrationFileState: Record<string, string>;
   migrationHistoryIds: Record<string, string | null>;
+  /** Migrations an earlier deploy left partially applied, by namespace. */
+  inProgressMigrations: Record<string, MigrationInProgress>;
+  /** In-progress records naming a migration whose checkpoint is already committed. */
+  staleInProgress: StaleMigrationInProgress[];
 };
+
+interface StaleMigrationInProgress {
+  namespace: string;
+  migrationNumber: number;
+}
+
+interface InProgressValidation {
+  inProgressMigrations: Record<string, MigrationInProgress>;
+  staleInProgress: StaleMigrationInProgress[];
+}
 
 export function migrationFileStatesEqual(
   planned: Readonly<Record<string, string>>,
@@ -50,6 +69,71 @@ export function migrationFileStatesEqual(
         namespace === currentNamespaces[index] && planned[namespace] === current[namespace],
     )
   );
+}
+
+/**
+ * Validate what earlier deploys recorded as in progress against the remote
+ * checkpoint and the local migrations, so a deploy never resumes the wrong
+ * migration. Runs even when schema checks are skipped.
+ * @param remoteStates - Remote migration state of each namespace whose checkpoint is not being repaired
+ * @param repairedInProgress - Namespaces under checkpoint repair that also record a migration in progress
+ * @param pendingMigrations - Pending migrations, sorted by namespace and number
+ * @returns In-progress migrations to resume and stale records to clear
+ */
+function validateMigrationsInProgress(
+  remoteStates: ReadonlyMap<string, RemoteMigrationState>,
+  repairedInProgress: readonly string[],
+  pendingMigrations: readonly PendingMigration[],
+): InProgressValidation {
+  const repaired = repairedInProgress[0];
+  if (repaired !== undefined) {
+    throw CLIError({
+      code: "MIGRATION_IN_PROGRESS_CONFLICT",
+      message: `A migration is in progress in namespace "${repaired}", so its checkpoint cannot be repaired.`,
+      suggestion:
+        "Deploy the migration history that started the migration and let it complete first.",
+    });
+  }
+
+  const result: InProgressValidation = { inProgressMigrations: {}, staleInProgress: [] };
+  for (const [namespace, state] of remoteStates) {
+    if (state.inProgressInvalid) {
+      throw CLIError({
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message: `The in-progress migration recorded for namespace "${namespace}" cannot be read.`,
+        suggestion:
+          "The namespace metadata was edited outside the SDK. Restore the in-progress labels it recorded before deploying again.",
+      });
+    }
+    const inProgress = state.inProgress;
+    if (!inProgress) continue;
+    const migrationLabel = `${namespace}/${formatMigrationNumber(inProgress.number)}`;
+    if (isStaleMigrationInProgress(state)) {
+      result.staleInProgress.push({ namespace, migrationNumber: inProgress.number });
+      continue;
+    }
+    const next = pendingMigrations.find((migration) => migration.namespace === namespace);
+    if (next?.number !== inProgress.number) {
+      throw CLIError({
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message: `Migration ${migrationLabel} is in progress, but the next pending migration is ${
+          next ? formatMigrationNumber(next.number) : "none"
+        }.`,
+        suggestion:
+          "Deploy the migration history that started the migration and let it complete first.",
+      });
+    }
+    if (next.scriptForm?.kind !== "steps") {
+      throw CLIError({
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message: `Migration ${migrationLabel} was partially applied by its steps, but its migrate.ts no longer exports \`steps\`.`,
+        suggestion:
+          "Keep the migration as `steps` so the deploy can finish it; steps that already completed do not run again.",
+      });
+    }
+    result.inProgressMigrations[namespace] = inProgress;
+  }
+  return result;
 }
 
 /**
@@ -74,6 +158,8 @@ export async function validateAndDetectMigrations(
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   let pendingMigrations: PendingMigration[] = [];
   let checkpointRepairs: MigrationCheckpointRepair[] = [];
+  let inProgress: InProgressValidation = { inProgressMigrations: {}, staleInProgress: [] };
+  let repairedInProgress: string[] = [];
   const migrationHistoryIds = Object.create(null) as Record<string, string | null>;
 
   if (namespacesWithMigrations.length > 0) {
@@ -120,6 +206,9 @@ export async function validateAndDetectMigrations(
           ? [{ namespace: result.namespace, ...result.checkpointRepair }]
           : [],
       );
+      repairedInProgress = remoteVerificationResults
+        .filter((result) => result.checkpointRepair && result.migrationInProgress)
+        .map((result) => result.namespace);
       const missingCheckpointResults = remoteVerificationResults.filter(
         (result) => result.checkpointMissingLocal,
       );
@@ -162,13 +251,16 @@ export async function validateAndDetectMigrations(
     const currentMigrationOverrides = new Map(
       checkpointRepairs.map((repair) => [repair.namespace, repair.to]),
     );
+    const remoteStates = new Map<string, RemoteMigrationState>();
     pendingMigrations = await detectPendingMigrations(
       client,
       workspaceId,
       namespacesWithMigrations,
       config.path,
       currentMigrationOverrides,
+      remoteStates,
     );
+    inProgress = validateMigrationsInProgress(remoteStates, repairedInProgress, pendingMigrations);
 
     if (pendingMigrations.length > 0) {
       logger.newline();
@@ -199,5 +291,6 @@ export async function validateAndDetectMigrations(
     namespacesWithMigrations,
     migrationFileState: captureMigrationFileState(namespacesWithMigrations),
     migrationHistoryIds,
+    ...inProgress,
   };
 }

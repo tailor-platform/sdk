@@ -15,6 +15,8 @@ import {
   isSchemaError,
   sanitizeMigrationLabel,
   parseMigrationLabelNumber,
+  executionIdToLabel,
+  parseExecutionLabel,
   MAX_LABEL_LENGTH,
   SCHEMA_ERROR_PATTERNS,
 } from "./types";
@@ -172,5 +174,22 @@ describe("isSchemaError", () => {
     ["Database sqlaccess error occurred during migration", true],
   ])("isSchemaError(%j) is %s", (message, expected) => {
     expect(isSchemaError(message)).toBe(expected);
+  });
+});
+
+describe("execution labels", () => {
+  const executionId = "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60";
+
+  test("round-trips an execution id through a label-safe value", () => {
+    const label = executionIdToLabel(executionId);
+    expect(label).toBe("e0190f3a27c1e7d4b9a6f1b2c3d4e5f60");
+    expect(label).toMatch(/^[a-z][a-z0-9_-]{0,62}$/);
+    expect(parseExecutionLabel(label)).toBe(executionId);
+  });
+
+  test("rejects values that are not an encoded execution id", () => {
+    expect(parseExecutionLabel("e1234")).toBeNull();
+    expect(parseExecutionLabel(executionIdToLabel(executionId).slice(1))).toBeNull();
+    expect(parseExecutionLabel("e0190F3A27C1E7D4B9A6F1B2C3D4E5F60")).toBeNull();
   });
 });

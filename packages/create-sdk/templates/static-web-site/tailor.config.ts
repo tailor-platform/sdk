@@ -12,7 +12,7 @@ const idp = defineIdp("my-idp", {
     read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
   },
   userAuthPolicy: {
     useNonEmailIdentifier: false,

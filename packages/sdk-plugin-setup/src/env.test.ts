@@ -76,11 +76,22 @@ describe("how to get each value", () => {
     },
   );
 
-  test("asks the user to contact Tailor support for the machine user credentials", () => {
+  test("points to the Console and an organization or folder admin for the machine user credentials, not to Tailor support", () => {
     const [clientId, clientSecret] = targetRequirements("branch");
 
-    expect(clientId?.howTo).toContain("https://docs.tailor.tech/administration/support");
-    expect(clientSecret?.howTo).toContain("https://docs.tailor.tech/administration/support");
+    for (const requirement of [clientId, clientSecret]) {
+      expect(requirement?.howTo).toContain("organization or folder admin");
+      expect(requirement?.howTo).toContain("Tailor Console");
+      expect(requirement?.howTo).not.toContain("support");
+    }
+  });
+
+  test("says that without the required permission machine users can be neither viewed nor created", () => {
+    const [clientId] = targetRequirements("branch");
+
+    expect(clientId?.howTo).toContain("without the required permission");
+    expect(clientId?.howTo).toContain("cannot view or create machine users");
+    expect(clientId?.howTo).not.toContain("admin role");
   });
 });
 

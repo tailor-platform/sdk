@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 2.26.0
+
+### Minor Changes
+
+- [#2525](https://github.com/tailor-platform/sdk/pull/2525) [`d21806e`](https://github.com/tailor-platform/sdk/commit/d21806ed60bfd1c48eaf6be35102818206c59fbb) Thanks [@dqn](https://github.com/dqn)! - These state-changing commands now print a JSON result on stdout under `--json` instead of leaving it empty: `authconnection delete`, `authconnection revoke`, `organization folder delete`, `secret create`, `secret update`, `secret delete`, `secret vault delete`, `workspace delete`, `workspace restore`, `workspace user remove`, `tailordb truncate`, `tailordb migration set`, `tailordb migration rebaseline`, `tailordb migration sync`, and `tailordb migration generate`. Each result carries the same `changed` boolean as the other commands: for example, `tailordb migration set` to the checkpoint and migration history ID already in place, and `tailordb migration generate` with no migration to write, report `false`. Under `--json`, `tailordb migration generate` and `tailordb migration script` no longer open the file they create in the editor set by `VISUAL` or `EDITOR`, which would otherwise write to the same stdout. Output without `--json` is unchanged.
+
+- [#2470](https://github.com/tailor-platform/sdk/pull/2470) [`090297d`](https://github.com/tailor-platform/sdk/commit/090297d2b1c2ba6c5615d0dfd4e1651ec598ec21) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a `temporal` option to `kyselyTypePlugin`. When enabled, `date`/`datetime` fields and top-level `time` fields resolve to `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` (instead of `Date`/`string`) in generated Kysely types, migration `db.ts` files, and `tailor function script` types, and the generated `getDB()` reads them back as those values. Nested `time` fields remain strings. The mode is fixed by the plugin setting; `getDB()` takes no `temporal` option.
+  
+  Each migration records whether its `db.ts` was generated with Temporal types, and deploy runs that migration's script in the same mode, so migrations generated before `temporal` was enabled keep receiving `Date` values. Migration files are now written as format version 7, which older SDK versions refuse to read. `mockTailordbWithPGlite` and `createKyselyPGlite` (with `{ temporal: true }`) return Temporal values from PGlite to match, and accept Temporal values as query parameters.
+
 ## 2.25.0
 
 ### Minor Changes

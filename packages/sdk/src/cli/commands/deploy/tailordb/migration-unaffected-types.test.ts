@@ -260,6 +260,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       namespace: "test-ns",
       migrationsDir: "/test/migrations",
       hasScript: options.hasScript ?? true,
+      scriptForm: (options.hasScript ?? true) ? { kind: "main" } : null,
       diff: {
         version: 1,
         namespace: "test-ns",
