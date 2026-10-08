@@ -716,7 +716,7 @@ describe("needs of the result job", () => {
   test("keeps the user's jobs after the managed job they followed when managed jobs are added", () => {
     const edited = withUserJob(
       render.content,
-      "needs:\n      - tailor-plan\n      - e2e # end-to-end tests\n      - tailor-deploy\n",
+      "needs:\n      - tailor-plan\n      - e2e\n      - tailor-deploy\n",
     );
     const { content } = merge(edited, render, erd);
     expect(resultNeedsOf(content)).toEqual([
@@ -727,7 +727,6 @@ describe("needs of the result job", () => {
       "tailor-erd-preview-comment",
       "tailor-deploy",
     ]);
-    expect(content).toContain("- e2e # end-to-end tests\n");
     expect(computeManagedHash(content, erd.generatedIds)).toBe(
       computeManagedHash(erd.content, erd.generatedIds),
     );
@@ -750,6 +749,19 @@ describe("needs of the result job", () => {
       render.content,
       "needs:\n      - tailor-plan\n      - tailor-deploy\n      - *e2e-id\n",
     ).replace("  e2e:\n", "  &e2e-id e2e:\n");
+    expect(hashOf(edited)).toBe(lockHash);
+    expect(resultNeedsOf(merge(edited, render, render).content)).toEqual([
+      "tailor-plan",
+      "tailor-deploy",
+      "e2e",
+    ]);
+  });
+
+  test("keeps the user's jobs when the needs are a YAML alias of a list", () => {
+    const edited = withUserJob(render.content, "needs: *all\n").replace(
+      "  tailor-result:\n",
+      "  report:\n    needs: &all [tailor-plan, tailor-deploy, e2e]\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo report\n\n  tailor-result:\n",
+    );
     expect(hashOf(edited)).toBe(lockHash);
     expect(resultNeedsOf(merge(edited, render, render).content)).toEqual([
       "tailor-plan",

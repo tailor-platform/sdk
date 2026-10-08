@@ -1,11 +1,11 @@
 import {
-  isAlias,
   isMap,
   isNode,
   isPair,
   isScalar,
   isSeq,
   parseDocument,
+  Scalar,
   type Document,
   type Pair,
   type YAMLMap,
@@ -120,11 +120,15 @@ function isUserNeed(need: unknown): boolean {
   return typeof need === "string" && !need.startsWith(RESERVED_PREFIX);
 }
 
+function needsList(needs: unknown): unknown[] | undefined {
+  if (typeof needs === "string") return [needs];
+  return Array.isArray(needs) ? needs : undefined;
+}
+
 function withoutUserNeeds(jobId: string, job: Plain): Plain {
   if (!RESULT_JOBS.includes(jobId)) return job;
-  const needs = job["needs"];
-  const list = typeof needs === "string" ? [needs] : needs;
-  return Array.isArray(list) ? { ...job, needs: list.filter((need) => !isUserNeed(need)) } : job;
+  const list = needsList(job["needs"]);
+  return list ? { ...job, needs: list.filter((need) => !isUserNeed(need)) } : job;
 }
 
 function canonicalJson(value: unknown, seen = new WeakSet<object>()): string {
@@ -490,19 +494,18 @@ function mergeSteps(
   );
 }
 
-function carryUserNeeds(current: YAMLMap, rendered: YAMLMap, doc: Document): void {
-  const currentNeeds = findPair(current, "needs")?.value;
+function carryUserNeeds(currentRoot: unknown, jobId: string, rendered: YAMLMap): void {
   const renderedNeeds = findPair(rendered, "needs")?.value;
-  if (currentNeeds === undefined || !isSeq(renderedNeeds)) return;
-  const items = isSeq(currentNeeds) ? currentNeeds.items : [currentNeeds];
-  const needOf = (node: unknown): string | undefined => {
-    const target = isAlias(node) ? node.resolve(doc) : node;
-    const value: unknown = isScalar(target) ? target.value : undefined;
+  const jobs = isPlainObject(currentRoot) ? currentRoot["jobs"] : undefined;
+  const job = isPlainObject(jobs) ? lookup(jobs, jobId) : undefined;
+  if (!isPlainObject(job) || !isSeq(renderedNeeds)) return;
+  const source = (needsList(job["needs"]) ?? []).map((need) =>
+    isUserNeed(need) ? new Scalar(need) : need,
+  );
+  placeAfterAnchors(source, renderedNeeds.items, isScalar, (item) => {
+    const value: unknown = isScalar(item) ? item.value : item;
     return typeof value === "string" ? value : undefined;
-  };
-  const userNeeds = items.filter((node) => isUserNeed(needOf(node)));
-  if (isSeq(currentNeeds)) carryLeadingComment(currentNeeds, items[0], userNeeds);
-  placeAfterAnchors(items, renderedNeeds.items, (node) => userNeeds.includes(node), needOf);
+  });
 }
 
 function assertNeedsResolve(root: YAMLMap): void {
@@ -551,6 +554,7 @@ export function mergeUserContent(params: {
   if (!isMap(currentRoot) || !isMap(renderedRoot)) {
     throw new ManagedMergeError("The file is not a YAML mapping.");
   }
+  const currentPlain = toPlain(currentDoc, "The file");
   const ctx: MergeContext = {
     previous: new Set(params.previousIds),
     force: params.force,
@@ -576,7 +580,7 @@ export function mergeUserContent(params: {
       const renderedJob = mapAt(renderedJobs, jobId);
       if (renderedJob) {
         carryFields(pair.value, renderedJob, editableJobKeys(jobId));
-        if (RESULT_JOBS.includes(jobId)) carryUserNeeds(pair.value, renderedJob, currentDoc);
+        if (RESULT_JOBS.includes(jobId)) carryUserNeeds(currentPlain, jobId, renderedJob);
       }
       mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
     }
