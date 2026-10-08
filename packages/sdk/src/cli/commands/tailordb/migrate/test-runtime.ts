@@ -33,7 +33,11 @@ import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import { bundleMigrationScript } from "./bundler";
-import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
+import {
+  getNamespacesWithMigrations,
+  migrationConfigNotFoundError,
+  type NamespaceWithMigrations,
+} from "./config";
 import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertValidMigrationFiles,
@@ -417,7 +421,7 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
 export async function resolveSourceMigrationNumber(
   client: OperatorClient,
   workspaceId: string,
-  namespace: { namespace: string; migrationsDir: string },
+  namespace: NamespaceWithMigrations,
   remoteState: RemoteMigrationState,
   config: LoadedConfig,
   inputs: ReadonlyArray<TailorDBDeployInput>,
