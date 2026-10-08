@@ -9,6 +9,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { createCommand, createWorkspace } from "./create";
@@ -537,6 +538,20 @@ describe("workspace create with user defaults", () => {
     );
   });
 
+  test("reports the default location it creates the workspace in", async () => {
+    stubClient();
+    using _logger = silenceLogger("out", "success", "warn", "error");
+    using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west"]);
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `folder ${defaultFolderId} in organization ${defaultOrganizationId}, the default set by \`tailor user update\``,
+      ),
+    );
+  });
+
   test.each([
     { source: "--organization-id", setUp: () => ["--organization-id", otherOrganizationId] },
     {
@@ -605,6 +620,32 @@ describe("workspace create with user defaults", () => {
       expect(client.createWorkspace).toHaveBeenCalledWith(
         expect.objectContaining({ organizationId: undefined, folderId: undefined }),
       );
+    },
+  );
+
+  test.each([
+    {
+      name: "folder",
+      line: "TAILOR_PLATFORM_FOLDER_ID=",
+      args: ["--organization-id", otherOrganizationId],
+      expected: { organizationId: otherOrganizationId, folderId: undefined },
+    },
+    {
+      name: "organization",
+      line: "TAILOR_PLATFORM_ORGANIZATION_ID=",
+      args: [],
+      expected: { organizationId: defaultOrganizationId, folderId: defaultFolderId },
+    },
+  ])(
+    "treats an empty $name line in an --env-file as not given",
+    async ({ line, args, expected }) => {
+      fs.writeFileSync(envFilePath, `${line}\n`);
+      const client = stubClient();
+
+      const result = await runCreateWithDefaults("--env-file", envFilePath, ...args);
+
+      expect(result.success).toBe(true);
+      expect(client.createWorkspace).toHaveBeenCalledWith(expect.objectContaining(expected));
     },
   );
 

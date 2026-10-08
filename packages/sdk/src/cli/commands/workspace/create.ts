@@ -228,7 +228,7 @@ export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
   notes: ml`
-    Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with \`user update\`. Giving either option replaces both defaults, and --folder-id requires --organization-id.
+    Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with \`user update\`, unless TAILOR_PLATFORM_TOKEN is set. Giving either option replaces both defaults, and --folder-id requires --organization-id.
   `,
   args: z.strictObject({
     // createWorkspace() re-applies this schema for programmatic callers; here it
@@ -329,8 +329,9 @@ export const createCommand = defineAppCommand({
       };
     }
 
-    const organizationId = args["organization-id"] ?? process.env.TAILOR_PLATFORM_ORGANIZATION_ID;
-    const folderId = args["folder-id"] ?? process.env.TAILOR_PLATFORM_FOLDER_ID;
+    const organizationId =
+      args["organization-id"] ?? (process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined);
+    const folderId = args["folder-id"] ?? (process.env.TAILOR_PLATFORM_FOLDER_ID || undefined);
     const defaults =
       organizationId === undefined && folderId === undefined
         ? await loadUserWorkspaceDefaults({ profile: args.profile })

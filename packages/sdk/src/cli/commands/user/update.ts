@@ -90,7 +90,8 @@ export const updateCommand = defineAppCommand({
       });
     }
 
-    const previous = [entry.default_organization_id, entry.default_folder_id];
+    const previousOrganizationId = entry.default_organization_id ?? null;
+    const previousFolderId = entry.default_folder_id ?? null;
     delete entry.default_organization_id;
     delete entry.default_folder_id;
     if (organizationId) {
@@ -115,7 +116,7 @@ export const updateCommand = defineAppCommand({
     }
     printMutationResult({
       changed:
-        previous[0] !== entry.default_organization_id || previous[1] !== entry.default_folder_id,
+        previousOrganizationId !== defaultOrganizationId || previousFolderId !== defaultFolderId,
       user,
       profile: profileName || null,
       defaultOrganizationId,
