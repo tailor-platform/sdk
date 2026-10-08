@@ -670,16 +670,13 @@ describe("environment on a managed job", () => {
 describe("needs of the result job", () => {
   const erd = renderBranchWorkflow({ ...branchBase, erdPreview: { namespaces: ["main"] } });
   const E2E_JOB = "  e2e:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo e2e\n\n";
-  const withNeeds = (content: string, needs: string): string =>
-    content.replace(
-      /( {2}tailor-result:\n(?: {4}.*\n)*? {4})needs:\n(?: {6}- .*\n)+/,
-      `$1${needs}`,
-    );
-  const withUserJob = (content: string, needs: string): string => {
-    const edited = withNeeds(content, needs).replace(
-      "  tailor-result:\n",
-      `${E2E_JOB}  tailor-result:\n`,
-    );
+  const withUserJob = (content: string, needs: string, resultJob = "tailor-result"): string => {
+    const edited = content
+      .replace(
+        new RegExp(`( {2}${resultJob}:\\n(?: {4}.*\\n)*? {4})needs:\\n(?: {6}- .*\\n)+`),
+        `$1${needs}`,
+      )
+      .replace(`  ${resultJob}:\n`, `${E2E_JOB}  ${resultJob}:\n`);
     expect(edited).not.toBe(content);
     return edited;
   };
@@ -765,13 +762,11 @@ describe("needs of the result job", () => {
       packageManager: "pnpm",
       region: "us-west",
     });
-    const edited = preview.content
-      .replace(
-        /( {2}tailor-preview-result:\n(?: {4}.*\n)*? {4}needs:\n(?: {6}- .*\n)+)/,
-        "$1      - e2e\n",
-      )
-      .replace("  tailor-preview-result:\n", `${E2E_JOB}  tailor-preview-result:\n`);
-    expect(edited).not.toBe(preview.content);
+    const edited = withUserJob(
+      preview.content,
+      "needs:\n      - tailor-preview-deploy\n      - tailor-preview-cleanup\n      - e2e\n",
+      "tailor-preview-result",
+    );
     expect(computeManagedHash(edited, preview.generatedIds)).toBe(
       computeManagedHash(preview.content, preview.generatedIds),
     );
