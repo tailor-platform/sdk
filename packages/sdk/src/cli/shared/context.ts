@@ -313,7 +313,9 @@ function hasCurrentUserEntry(users: PfConfigV1["users"], currentUser: string): b
   return hasUserKeyForName(users, currentUser);
 }
 
-function declaredKeys(...schemas: { shape: object }[]): Set<string> {
+type ObjectSchema = { shape: object };
+
+function declaredKeys(...schemas: ObjectSchema[]): Set<string> {
   return new Set(schemas.flatMap((schema) => Object.keys(schema.shape)));
 }
 
@@ -943,16 +945,20 @@ function userExtraFields(entry: PfUser | undefined) {
   return extraFields;
 }
 
+type RemoveUserAliasOptions = {
+  carryExtraFields: boolean;
+};
+
 async function removeUserAlias(
   config: PfConfig,
   aliasKey: string,
   canonicalKey: string,
-  carryExtraFields: boolean,
+  opts: RemoveUserAliasOptions,
 ) {
   const entry = config.users[aliasKey];
   if (aliasKey === canonicalKey || !entry) return;
   const canonicalEntry = config.users[canonicalKey];
-  if (carryExtraFields && canonicalEntry) {
+  if (opts.carryExtraFields && canonicalEntry) {
     config.users[canonicalKey] = { ...userExtraFields(entry), ...canonicalEntry };
   }
   if (entry.storage === "keyring") {
@@ -1081,14 +1087,11 @@ export async function removeLegacyUserAlias(
   updateUserReferences(config, legacyUser, canonicalUser);
   const canonicalKey = platformUserKey(canonicalUser, platformConfig);
   const scopedLegacyKey = platformUserKey(legacyUser, platformConfig);
-  await removeUserAlias(config, scopedLegacyKey, canonicalKey, true);
-  // A bare key on another platform belongs to the default platform unless legacy lookup allows it here.
-  await removeUserAlias(
-    config,
-    legacyUser,
-    canonicalKey,
-    canUseLegacyUserKey(getPlatformBaseUrl(platformConfig)),
-  );
+  await removeUserAlias(config, scopedLegacyKey, canonicalKey, { carryExtraFields: true });
+  const legacyKeyServesThisPlatform = canUseLegacyUserKey(getPlatformBaseUrl(platformConfig));
+  await removeUserAlias(config, legacyUser, canonicalKey, {
+    carryExtraFields: legacyKeyServesThisPlatform,
+  });
 }
 
 function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean {
@@ -1197,7 +1200,9 @@ export async function fetchLatestToken(
     { platformConfig, email },
   );
   await removeLegacyUserAlias(config, user, resolvedUser, platformConfig);
-  await removeUserAlias(config, storedUser, platformUserKey(resolvedUser, platformConfig), true);
+  await removeUserAlias(config, storedUser, platformUserKey(resolvedUser, platformConfig), {
+    carryExtraFields: true,
+  });
   if (previousEmail && email && previousEmail !== email) {
     logger.info(`Updated local user email from "${previousEmail}" to "${email}".`);
   }
