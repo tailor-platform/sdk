@@ -272,7 +272,7 @@ request is closed, for draft and fork pull requests, and for unlabeled ones with
 Each new preview workflow run for a pull request, such as after a push or when
 the pull request is closed, cancels the run still in progress for it, including
 your jobs, so they do not keep running against a workspace that the new run
-redeploys or deletes. Events on an already-closed pull request, such as a label
+may redeploy or delete. Events on an already-closed pull request, such as a label
 added after merging, do not cancel anything. A job with `if: always()` still
 runs when its run is cancelled; use `if: ${{ !cancelled() }}` instead so it
 stops with the run.

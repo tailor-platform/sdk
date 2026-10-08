@@ -1890,7 +1890,7 @@ export default defineConfig({
       loadConfigName: async () => "my-app",
       loadConfigId: async () => undefined,
     } as const;
-    const wf = () => path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+    const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
     const topLevelConcurrency = /^concurrency:\n(?: {2}.*\n)+\n/m;
     const jobConcurrency =
       "    concurrency:\n" +
@@ -1900,12 +1900,13 @@ export default defineConfig({
       "concurrency:\n" +
       "  group: mine-${{ github.workflow }}-${{ github.event.pull_request.number }}\n" +
       "  cancel-in-progress: true\n\n";
-    const writeLegacy = (generated: string, topLevel: string): string => {
+    const writeLegacy = (generated: string, topLevel: string) => {
       expect(generated).toMatch(topLevelConcurrency);
       const legacy = generated
         .replace(topLevelConcurrency, topLevel)
         .replace("    outputs:\n", `${jobConcurrency}    outputs:\n`);
-      fs.writeFileSync(wf(), legacy);
+      expect(legacy).toContain(jobConcurrency);
+      fs.writeFileSync(wf, legacy);
       const lock = readLock(testDir);
       const [target] = lock?.targets ?? [];
       if (!lock || !target) throw new Error("expected a lock target");
@@ -1919,27 +1920,26 @@ export default defineConfig({
           },
         ],
       });
-      return legacy;
     };
 
     test("moves it to the top level", async () => {
       await setupTarget(opts);
-      const generated = fs.readFileSync(wf(), "utf-8");
+      const generated = fs.readFileSync(wf, "utf-8");
       writeLegacy(generated, "");
 
       await setupTarget(opts);
 
-      expect(fs.readFileSync(wf(), "utf-8")).toBe(generated);
+      expect(fs.readFileSync(wf, "utf-8")).toBe(generated);
     });
 
     test("keeps a top-level concurrency the user added", async () => {
       await setupTarget(opts);
-      const generated = fs.readFileSync(wf(), "utf-8");
+      const generated = fs.readFileSync(wf, "utf-8");
       writeLegacy(generated, userConcurrency);
 
       await setupTarget(opts);
 
-      expect(fs.readFileSync(wf(), "utf-8")).toBe(
+      expect(fs.readFileSync(wf, "utf-8")).toBe(
         generated.replace(topLevelConcurrency, userConcurrency),
       );
     });

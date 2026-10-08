@@ -599,6 +599,21 @@ describe("mergeUserContent", () => {
 
       expect(mergePreview(without).content).toBe(preview.content);
     });
+
+    test("is only the preview workflow's concurrency", () => {
+      const unhashed = variants.flatMap(([name, layout, { content, generatedIds }]) => {
+        const hash = computeManagedHash(content, layout, generatedIds);
+        return Object.keys(parseDocument(content).toJS() as Record<string, unknown>)
+          .filter((key) => {
+            const edited = parseDocument(content);
+            edited.set(key, "edited");
+            return computeManagedHash(edited.toString(), layout, generatedIds) === hash;
+          })
+          .map((key) => `${name}: ${key}`);
+      });
+
+      expect(unhashed).toEqual(["preview: concurrency"]);
+    });
   });
 
   test("puts a user step before every managed step at the start of the job", () => {
