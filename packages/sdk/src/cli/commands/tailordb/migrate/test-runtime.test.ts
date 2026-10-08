@@ -440,7 +440,20 @@ describe("migration test runtime", () => {
         }),
       ).rejects.toMatchObject({
         code: "MIGRATION_TEST_OPTIONS_INVALID",
-        message: expect.stringContaining(`Folder "${otherFolder}"`),
+        message: expect.stringContaining(
+          `Folder "${otherFolder}" was not found in organization "${otherOrganization}"`,
+        ),
+      });
+    });
+
+    test("names the source organization when only --folder-id is given and the folder is not in it", async () => {
+      await expect(
+        resolveTemporaryWorkspaceLocation(folderClient(false), source, { folderId: otherFolder }),
+      ).rejects.toMatchObject({
+        message: expect.stringContaining(
+          `was not found in organization "${sourceOrganization}" (the source workspace's organization)`,
+        ),
+        suggestion: expect.stringContaining("--organization-id"),
       });
     });
 

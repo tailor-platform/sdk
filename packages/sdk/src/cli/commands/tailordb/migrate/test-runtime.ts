@@ -434,8 +434,12 @@ export async function resolveTemporaryWorkspaceLocation(
     if (!folder) {
       throw CLIError({
         code: "MIGRATION_TEST_OPTIONS_INVALID",
-        message: `Folder "${options.folderId}" not found in organization "${organizationId}".`,
-        suggestion: "Pass a --folder-id that belongs to --organization-id.",
+        message: `Folder "${options.folderId}" was not found in organization "${organizationId}"${
+          options.organizationId ? "" : " (the source workspace's organization)"
+        }. The folder does not exist there, belongs to a different organization, or is not accessible.`,
+        suggestion: options.organizationId
+          ? "Pass a --folder-id that belongs to --organization-id."
+          : "Pass --organization-id together with --folder-id if the folder is in another organization.",
       });
     }
   }
