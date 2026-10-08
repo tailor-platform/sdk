@@ -4,7 +4,7 @@ import { resolve } from "pathe";
 import * as rolldown from "rolldown";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { findUndefinedReferences, TS_TYPE_FIELDS } from "#/cli/shared/free-variables";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { stringifyFunction } from "#/parser/service/tailordb/field";
@@ -16,6 +16,7 @@ import {
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import type { ScriptExprKind } from "#/parser/service/tailordb/types";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 type ScriptFunction = (...args: unknown[]) => unknown;
@@ -33,32 +34,39 @@ export type SourceBinding = {
   kind: "import" | "declaration";
 };
 
-function toScriptFunction(value: unknown, kind: ScriptExprKind): ScriptFunction | undefined {
+function toScriptFunction(
+  value: unknown,
+  kind: ScriptExprKind,
+  dateDefault: EffectiveDateDefault,
+): ScriptFunction | undefined {
   if (typeof value !== "function") return undefined;
   // Already pinned (e.g. a built-in SDK hook, see `db.fields.timestamps()`) - bundling
   // it again would derive a new expr from this build's `Function.prototype.toString()`
   // output and overwrite the pin.
-  if (getPrecompiledScriptExpr(value as ScriptFunction, kind)) return undefined;
+  if (getPrecompiledScriptExpr(value as ScriptFunction, kind, dateDefault)) return undefined;
   return value as unknown as ScriptFunction;
 }
 
-function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
+function collectScriptTargets(
+  type: TailorDBTypeSchemaOutput,
+  dateDefault: EffectiveDateDefault,
+): ScriptTarget[] {
   const targets: ScriptTarget[] = [];
 
   const collectFieldTargets = (field: TailorDBTypeSchemaOutput["fields"][string]) => {
     const metadata = field.metadata;
 
-    const createHook = toScriptFunction(metadata.hooks?.create, "hooks.create");
+    const createHook = toScriptFunction(metadata.hooks?.create, "hooks.create", dateDefault);
     if (createHook) {
       targets.push({ fn: createHook, kind: "hooks.create" });
     }
-    const updateHook = toScriptFunction(metadata.hooks?.update, "hooks.update");
+    const updateHook = toScriptFunction(metadata.hooks?.update, "hooks.update", dateDefault);
     if (updateHook) {
       targets.push({ fn: updateHook, kind: "hooks.update" });
     }
 
     for (const validateInput of metadata.validate ?? []) {
-      const validateFn = toScriptFunction(validateInput, "validate");
+      const validateFn = toScriptFunction(validateInput, "validate", dateDefault);
       if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
     }
 
@@ -76,14 +84,14 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
   if (type.metadata.typeHook) {
     for (const op of ["create", "update"] as const) {
       const kind = `typeHook.${op}` as const;
-      const fn = toScriptFunction(type.metadata.typeHook[op], kind);
+      const fn = toScriptFunction(type.metadata.typeHook[op], kind, dateDefault);
       if (fn) {
         targets.push({ fn, kind });
       }
     }
   }
 
-  const typeValidateFn = toScriptFunction(type.metadata.typeValidate, "typeValidate");
+  const typeValidateFn = toScriptFunction(type.metadata.typeValidate, "typeValidate", dateDefault);
   if (typeValidateFn) {
     targets.push({ fn: typeValidateFn, kind: "typeValidate" });
   }
@@ -307,8 +315,18 @@ async function bundleScriptTarget(args: {
   tableName: string;
   targetIndex: number;
   tsconfig: string | undefined;
+  dateDefault: EffectiveDateDefault;
 }): Promise<string> {
-  const { fn, kind, sourceFilePath, sourceBindings, tableName, targetIndex, tsconfig } = args;
+  const {
+    fn,
+    kind,
+    sourceFilePath,
+    sourceBindings,
+    tableName,
+    targetIndex,
+    tsconfig,
+    dateDefault,
+  } = args;
   const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
   if ((kind === "typeValidate" || kind === "validate") && fn.constructor.name === "AsyncFunction") {
@@ -364,7 +382,7 @@ async function bundleScriptTarget(args: {
     plugins: [
       entry.plugin,
       createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFilePath }),
-      platformBundleDefinePlugin,
+      createPlatformBundleDefinePlugin(undefined, dateDefault),
     ],
     input: entry.input,
     write: false,
@@ -398,13 +416,15 @@ async function bundleScriptTarget(args: {
  * @param type - TailorDB table schema output.
  * @param sourceFilePath - Source file where the table is defined.
  * @param tsconfig - Resolved tsconfig path, or undefined if not found.
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`.
  */
 export async function precompileTailorDBTypeScripts(
   type: TailorDBTypeSchemaOutput,
   sourceFilePath: string,
   tsconfig: string | undefined,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<void> {
-  const targets = collectScriptTargets(type);
+  const targets = collectScriptTargets(type, dateDefault);
   if (targets.length === 0) return;
 
   // Collect source bindings once for all targets in this file
@@ -420,6 +440,7 @@ export async function precompileTailorDBTypeScripts(
         tableName: type.name,
         targetIndex: index,
         tsconfig,
+        dateDefault,
       }),
     ),
   );
@@ -430,7 +451,7 @@ export async function precompileTailorDBTypeScripts(
   for (const [index, result] of results.entries()) {
     if (result.status === "fulfilled") {
       const target = assertDefined(targets[index], `bundle target at index ${index} missing`);
-      setPrecompiledScriptExpr(target.fn, target.kind, result.value);
+      setPrecompiledScriptExpr(target.fn, target.kind, result.value, dateDefault);
     }
   }
 }

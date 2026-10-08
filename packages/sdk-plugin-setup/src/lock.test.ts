@@ -121,6 +121,18 @@ describe("readLock / writeLock", () => {
     expect(() => readLock(testDir)).toThrow(/must be a UUID/);
   });
 
+  test.each(["coordinate", "action"])(
+    "rejects a lock holding a removed `%s` target and points to the multi-dir branch target",
+    (kind) => {
+      const lock = makeLock();
+      lock.targets.push({ ...lock.targets[0]!, kind: kind as never, workspaceName: "platform" });
+      writeLock(testDir, lock);
+      expect(() => readLock(testDir)).toThrow(
+        new RegExp(`"platform" \\(${kind}\\).*setup ci branch --dir`),
+      );
+    },
+  );
+
   test("throws on a forward-incompatible version", () => {
     const lock = makeLock();
     lock.version = LOCK_VERSION + 1;

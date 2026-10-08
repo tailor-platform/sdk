@@ -2456,3 +2456,11 @@ describe("TailorDBField decimal type tests", () => {
     },
   );
 });
+
+describe("TailorDBField date representation", () => {
+  test("db date fields never follow the resolver date default", () => {
+    expect(db.date().metadata).not.toHaveProperty("as");
+    expect(db.datetime().metadata).not.toHaveProperty("as");
+    expect(db.time().metadata).not.toHaveProperty("as");
+  });
+});

@@ -254,6 +254,7 @@ async function executeSingleMigration(
     env,
     configDir,
     migration.diff.temporal ?? false,
+    migration.diff.dateRepresentation ?? "legacy",
   );
 
   const result = await executeMigrationAsWorkflow({
@@ -508,6 +509,7 @@ async function executeStepsMigration(
       migrationWorkflowResourceName(migration.namespace, migration.number),
     ),
     temporal: migration.diff.temporal ?? false,
+    dateDefault: migration.diff.dateRepresentation ?? "legacy",
   });
 
   const notify = (level: "info" | "warn", message: string) => {

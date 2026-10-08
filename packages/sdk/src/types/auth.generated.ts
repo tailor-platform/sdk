@@ -1402,8 +1402,8 @@ export type AuthConfigInput =
             | "nested";
           /** Field metadata configuration */
           metadata: {
-            /** Date value representation */
-            as?: "string" | "date" | "temporal" | undefined;
+            /** Date value representation; "default" follows defaultDateRepresentation */
+            as?: "string" | "date" | "default" | "temporal" | undefined;
             /** Whether the field is required */
             required?: boolean | undefined;
             /** Whether the field is an array */
@@ -2874,8 +2874,8 @@ export type AuthConfig =
             | "nested";
           /** Field metadata configuration */
           metadata: {
-            /** Date value representation */
-            as?: "string" | "date" | "temporal" | undefined;
+            /** Date value representation; "default" follows defaultDateRepresentation */
+            as?: "string" | "date" | "default" | "temporal" | undefined;
             /** Whether the field is required */
             required?: boolean | undefined;
             /** Whether the field is an array */

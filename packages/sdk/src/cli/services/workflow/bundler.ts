@@ -13,7 +13,7 @@ import {
 } from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
@@ -28,6 +28,7 @@ import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
 import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);
@@ -295,6 +296,7 @@ export interface BundleWorkflowJobsResult {
  *   (reachability cannot change unless the sources do, but the sources can change between calls,
  *   e.g. during an interactive confirmation pause before a rebuild)
  * @param allowedRuntimeGlobals - Globals each installed package may reference
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -312,6 +314,7 @@ export async function bundleWorkflowJobs(
     "usedJobNames" | "mainJobDeps" | "sourceFileState"
   >,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<BundleWorkflowJobsResult> {
   const jobSourceFiles = allJobs.map((job) => job.sourceFile);
   const sourceFileState = hashReachabilitySourceFiles([
@@ -360,6 +363,7 @@ export async function bundleWorkflowJobs(
       bundleLogLevel,
       tsconfigCache,
       allowedRuntimeGlobals,
+      dateDefault,
     ),
   );
 
@@ -612,6 +616,7 @@ async function bundleSingleJob(
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -621,7 +626,7 @@ async function bundleSingleJob(
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: job.sourceFile,
-    extraContext: serializedStartContext,
+    extraContext: JSON.stringify([serializedStartContext, dateDefault]),
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -715,7 +720,7 @@ async function bundleSingleJob(
         entry.plugin,
         transformPlugin,
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        platformBundleDefinePlugin,
+        createPlatformBundleDefinePlugin(undefined, dateDefault),
         ...cachePlugins,
       ];
 

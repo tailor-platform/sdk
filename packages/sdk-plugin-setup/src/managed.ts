@@ -9,22 +9,13 @@ import {
   type Pair,
   type YAMLMap,
 } from "yaml";
-import { hashContent, type LockInputs, type LockTarget, type TargetKind } from "./lock";
-
-/**
- * Workflow files keep jobs under `jobs:`; composite actions keep one step list
- * under `runs.steps`, whose step ids are recorded unqualified.
- */
-export type Layout = "workflow" | "action";
+import { hashContent, type LockTarget } from "./lock";
 
 const MANAGED_HASH_PREFIX = "managed-v1:";
 
 const RESERVED_PREFIX = "tailor-";
 
-const MANAGED_TOP_LEVEL_KEYS: Record<Layout, readonly string[]> = {
-  workflow: ["name", "on", "permissions"],
-  action: ["name", "description", "inputs", "outputs", "runs"],
-};
+const MANAGED_TOP_LEVEL_KEYS: readonly string[] = ["name", "on", "permissions"];
 
 const EDITABLE_JOB_KEYS = ["runs-on", "timeout-minutes", "container", "env"];
 
@@ -53,54 +44,16 @@ const EDITABLE_WITH_KEYS: Record<string, readonly string[]> = {
   setup: ["node-version-file"],
 };
 
-// Coordinator steps call an app's generated composite action.
-const APP_ACTION_USES = /^\.\/\.github\/actions\/tailor-[^/]+$/;
-const APP_ACTION_EDITABLE_WITH_KEYS = ["user-mapping"];
-
-// Slots are SDK-placed steps whose listed fields belong to the user.
-const SLOTS: Record<Layout, Record<string, readonly string[]>> = {
-  workflow: {},
-  action: { "tailor-build-site": ["run"] },
+// Non-`tailor-` step ids that earlier template versions wrote, mapped to the ids that replaced them.
+const RETIRED_IDS: Record<string, string> = {
+  "tailor-deploy/slack-prereq": "tailor-deploy/tailor-slack-prereq",
 };
-
-// Non-`tailor-` step ids that earlier template versions wrote, mapped to the
-// ids that replaced them. `wrote` limits a retirement to lock entries whose
-// template could have emitted the old id, so a user step reusing it elsewhere stays the user's.
-type Retirement = { replacement: string; wrote?: (inputs: LockInputs) => boolean };
-const RETIRED_IDS: Record<Layout, Record<string, Retirement>> = {
-  workflow: { "tailor-deploy/slack-prereq": { replacement: "tailor-deploy/tailor-slack-prereq" } },
-  action: {
-    "build-site": {
-      replacement: "tailor-build-site",
-      wrote: (inputs) => inputs.hasStaticWebsites === true,
-    },
-  },
-};
-
-function retiredIdsOf(layout: Layout, inputs: LockInputs | undefined): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(RETIRED_IDS[layout])
-      .filter(
-        ([, retirement]) => !retirement.wrote || (inputs !== undefined && retirement.wrote(inputs)),
-      )
-      .map(([id, retirement]) => [id, retirement.replacement]),
-  );
-}
 
 const STRINGIFY_OPTIONS = { lineWidth: 0, flowCollectionPadding: false } as const;
 
 /** Raised when a file cannot be parsed or merged without losing user content. */
 export class ManagedMergeError extends Error {
   override name = "ManagedMergeError";
-}
-
-/**
- * File layout of a target kind.
- * @param kind - Lock target kind
- * @returns The layout used to locate its jobs/steps
- */
-export function layoutOf(kind: TargetKind): Layout {
-  return kind === "action" ? "action" : "workflow";
 }
 
 /**
@@ -149,7 +102,6 @@ function lookup<T>(record: Record<string, T>, key: string): T | undefined {
 
 function editableWithKeys(uses: unknown): readonly string[] | undefined {
   if (typeof uses !== "string") return undefined;
-  if (APP_ACTION_USES.test(uses)) return APP_ACTION_EDITABLE_WITH_KEYS;
   const name = /^tailor-platform\/actions\/([a-z0-9-]+)@/.exec(uses)?.[1];
   return name === undefined ? undefined : lookup(EDITABLE_WITH_KEYS, name);
 }
@@ -187,22 +139,12 @@ function resolveRetired(
   return replacement !== undefined && !recorded.has(replacement) ? replacement : qualifiedId;
 }
 
-function projectSteps(
-  steps: unknown,
-  prefix: string,
-  managed: ReadonlySet<string>,
-  slots: Record<string, readonly string[]>,
-  retired: Record<string, string>,
-): unknown[] {
+function projectSteps(steps: unknown, prefix: string, managed: ReadonlySet<string>): unknown[] {
   if (!Array.isArray(steps)) return [];
   return steps.filter(isPlainObject).flatMap((step) => {
     const id = step["id"];
     if (typeof id !== "string") return [];
     const qualifiedId = `${prefix}${id}`;
-    const resolvedId = resolveRetired(qualifiedId, retired, managed);
-    const recorded = resolvedId !== qualifiedId || managed.has(qualifiedId);
-    const slotFields = recorded ? lookup(slots, resolvedId) : undefined;
-    if (slotFields) return [omit(step, slotFields)];
     if (!managed.has(qualifiedId)) return [];
     const editable = editableWithKeys(step["uses"]) ?? [];
     const withMap = step["with"];
@@ -214,19 +156,12 @@ function projectSteps(
  * Hash the SDK-managed parts of a generated file: the top-level keys the
  * SDK manages and the jobs/steps listed in `managedIds`, minus the fields
  * users may edit. Comments, formatting, and user-owned nodes do not affect it.
- * @param content - Workflow or composite action YAML
- * @param layout - File layout
+ * @param content - Workflow YAML
  * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
- * @param inputs - Lock inputs the file was generated with, which decide the retired ids it may hold
  * @returns Versioned hash string
  */
-export function computeManagedHash(
-  content: string,
-  layout: Layout,
-  managedIds: readonly string[],
-  inputs?: LockInputs,
-): string {
-  const projection = projectManaged(content, layout, managedIds, inputs);
+export function computeManagedHash(content: string, managedIds: readonly string[]): string {
+  const projection = projectManaged(content, managedIds);
   return `${MANAGED_HASH_PREFIX}${hashContent(canonicalJson(projection))}`;
 }
 
@@ -234,19 +169,15 @@ export function computeManagedHash(
  * Hash each SDK-managed part of a generated file separately: every top-level
  * key the SDK manages, every managed job (with the order of its managed
  * steps), and every managed step.
- * @param content - Workflow or composite action YAML
- * @param layout - File layout
+ * @param content - Workflow YAML
  * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
- * @param inputs - Lock inputs the file was generated with, which decide the retired ids it may hold
- * @returns Hashes keyed by top-level key, `<job>`, or `<job>/<step>` (`<step>` in an action)
+ * @returns Hashes keyed by top-level key, `<job>`, or `<job>/<step>`
  */
 export function computeManagedParts(
   content: string,
-  layout: Layout,
   managedIds: readonly string[],
-  inputs?: LockInputs,
 ): Record<string, string> {
-  const projection = projectManaged(content, layout, managedIds, inputs);
+  const projection = projectManaged(content, managedIds);
   const parts: Record<string, unknown> = {};
   const addWithSteps = (key: string, container: Plain, prefix: string): void => {
     const steps = (container["steps"] as Plain[]).map(
@@ -255,13 +186,9 @@ export function computeManagedParts(
     parts[key] = { ...omit(container, ["steps"]), steps: steps.map(([id]) => id) };
     for (const [id, step] of steps) parts[id] = step;
   };
-  for (const key of MANAGED_TOP_LEVEL_KEYS[layout]) parts[key] = projection[key];
-  if (layout === "action") {
-    addWithSteps("runs", projection["runs"] as Plain, "");
-  } else {
-    for (const [jobId, job] of Object.entries(projection["jobs"] as Record<string, Plain | null>)) {
-      if (job !== null) addWithSteps(jobId, job, `${jobId}/`);
-    }
+  for (const key of MANAGED_TOP_LEVEL_KEYS) parts[key] = projection[key];
+  for (const [jobId, job] of Object.entries(projection["jobs"] as Record<string, Plain | null>)) {
+    if (job !== null) addWithSteps(jobId, job, `${jobId}/`);
   }
   return Object.fromEntries(
     Object.entries(parts).map(([key, part]) => [key, hashContent(canonicalJson(part))]),
@@ -295,13 +222,12 @@ export function findEditedParts(
  * @returns Edited parts, or undefined when the lock records no per-part hashes or the file cannot be read
  */
 export function editedPartsOf(
-  target: Pick<LockTarget, "kind" | "generatedIds" | "managedHashes" | "inputs">,
+  target: Pick<LockTarget, "generatedIds" | "managedHashes">,
   content: string,
 ): string[] | undefined {
   if (target.managedHashes === undefined) return undefined;
   try {
-    const layout = layoutOf(target.kind);
-    const current = computeManagedParts(content, layout, target.generatedIds, target.inputs);
+    const current = computeManagedParts(content, target.generatedIds);
     return findEditedParts(target.managedHashes, current);
   } catch (error) {
     if (error instanceof ManagedMergeError) return undefined;
@@ -322,47 +248,32 @@ export function describeHandEdit(subject: string, parts: readonly string[] | und
   return `SDK-managed parts of ${subject} were edited by hand: ${parts.map((part) => `"${part}"`).join(", ")}.`;
 }
 
-function projectManaged(
-  content: string,
-  layout: Layout,
-  managedIds: readonly string[],
-  inputs: LockInputs | undefined,
-): Plain {
+function projectManaged(content: string, managedIds: readonly string[]): Plain {
   const doc = readMapping(content);
   const sdkIds = managedIds.filter(
-    (id) => localId(id).startsWith(RESERVED_PREFIX) || Object.hasOwn(RETIRED_IDS[layout], id),
+    (id) => localId(id).startsWith(RESERVED_PREFIX) || Object.hasOwn(RETIRED_IDS, id),
   );
   const managed = new Set(sdkIds);
-  const slots = SLOTS[layout];
-  const retired = retiredIdsOf(layout, inputs);
   const projection: Plain = {};
-  for (const key of MANAGED_TOP_LEVEL_KEYS[layout]) {
+  for (const key of MANAGED_TOP_LEVEL_KEYS) {
     projection[key] = doc[key] ?? null;
   }
-  if (layout === "action") {
-    const runs = isPlainObject(doc["runs"]) ? doc["runs"] : {};
-    projection["runs"] = {
-      ...omit(runs, ["steps"]),
-      steps: projectSteps(runs["steps"], "", managed, slots, retired),
-    };
-  } else {
-    const jobs = isPlainObject(doc["jobs"]) ? doc["jobs"] : {};
-    projection["jobs"] = Object.fromEntries(
-      sdkIds
-        .filter((id) => !id.includes("/"))
-        .map((jobId) => {
-          const job = jobs[jobId];
-          if (!isPlainObject(job)) return [jobId, null];
-          return [
-            jobId,
-            {
-              ...omit(job, [...editableJobKeys(jobId), "steps"]),
-              steps: projectSteps(job["steps"], `${jobId}/`, managed, slots, retired),
-            },
-          ];
-        }),
-    );
-  }
+  const jobs = isPlainObject(doc["jobs"]) ? doc["jobs"] : {};
+  projection["jobs"] = Object.fromEntries(
+    sdkIds
+      .filter((id) => !id.includes("/"))
+      .map((jobId) => {
+        const job = jobs[jobId];
+        if (!isPlainObject(job)) return [jobId, null];
+        return [
+          jobId,
+          {
+            ...omit(job, [...editableJobKeys(jobId), "steps"]),
+            steps: projectSteps(job["steps"], `${jobId}/`, managed),
+          },
+        ];
+      }),
+  );
   return projection;
 }
 
@@ -376,29 +287,18 @@ function stepIds(steps: unknown, prefix: string): string[] {
 /**
  * List the jobs and steps that use the reserved `tailor-` prefix without
  * being managed by the SDK.
- * @param content - Workflow or composite action YAML
- * @param layout - File layout
+ * @param content - Workflow YAML
  * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
  * @returns Offending ids in file order
  */
-export function findReservedIds(
-  content: string,
-  layout: Layout,
-  managedIds: readonly string[],
-): string[] {
+export function findReservedIds(content: string, managedIds: readonly string[]): string[] {
   const doc = readMapping(content);
   const managed = new Set(managedIds);
-  let ids: string[];
-  if (layout === "action") {
-    const runs = isPlainObject(doc["runs"]) ? doc["runs"] : {};
-    ids = stepIds(runs["steps"], "");
-  } else {
-    const jobs = isPlainObject(doc["jobs"]) ? doc["jobs"] : {};
-    ids = Object.entries(jobs).flatMap(([jobId, job]) => [
-      jobId,
-      ...(isPlainObject(job) ? stepIds(job["steps"], `${jobId}/`) : []),
-    ]);
-  }
+  const jobs = isPlainObject(doc["jobs"]) ? doc["jobs"] : {};
+  const ids = Object.entries(jobs).flatMap(([jobId, job]) => [
+    jobId,
+    ...(isPlainObject(job) ? stepIds(job["steps"], `${jobId}/`) : []),
+  ]);
   return ids.filter((id) => localId(id).startsWith(RESERVED_PREFIX) && !managed.has(id));
 }
 
@@ -479,8 +379,6 @@ function carryLeadingComment(
 
 type MergeContext = {
   previous: ReadonlySet<string>;
-  slots: Record<string, readonly string[]>;
-  retired: Record<string, string>;
   force: boolean;
   dropped: string[];
 };
@@ -491,7 +389,7 @@ function localId(qualifiedId: string): string {
 
 /**
  * Explain how to fix a user job or step id that uses the reserved prefix.
- * @param qualifiedId - `<job>` / `<job>/<step>` in a workflow, `<step>` in a composite action
+ * @param qualifiedId - `<job>` / `<job>/<step>`
  * @returns Message naming the id and a rename suggestion
  */
 export function describeReservedId(qualifiedId: string): string {
@@ -508,7 +406,7 @@ function reservedIdError(qualifiedId: string): ManagedMergeError {
 }
 
 function isSdkOwned(qualifiedId: string, ctx: MergeContext): boolean {
-  if (resolveRetired(qualifiedId, ctx.retired, ctx.previous) !== qualifiedId) return true;
+  if (resolveRetired(qualifiedId, RETIRED_IDS, ctx.previous) !== qualifiedId) return true;
   if (!localId(qualifiedId).startsWith(RESERVED_PREFIX)) return false;
   if (ctx.previous.has(qualifiedId)) return true;
   throw reservedIdError(qualifiedId);
@@ -554,18 +452,13 @@ function mergeSteps(
     const id = stepIdOf(node);
     return id === undefined
       ? undefined
-      : localId(resolveRetired(`${prefix}${id}`, ctx.retired, ctx.previous));
+      : localId(resolveRetired(`${prefix}${id}`, RETIRED_IDS, ctx.previous));
   };
   for (const node of currentSteps.items) {
     const renderedId = renderedIdOf(node);
     if (renderedId === undefined || !isMap(node)) continue;
     const match = renderedSteps.items.find((candidate) => stepIdOf(candidate) === renderedId);
     if (!isMap(match)) continue;
-    const slotFields = lookup(ctx.slots, `${prefix}${renderedId}`);
-    if (slotFields) {
-      carryFields(node, match, slotFields);
-      continue;
-    }
     const editable = editableWithKeys(match.get("uses"));
     const currentWith = mapAt(node, "with");
     const renderedWith = mapAt(match, "with");
@@ -608,9 +501,7 @@ function assertNeedsResolve(root: YAMLMap): void {
  * @param params - Merge inputs
  * @param params.current - File content on disk
  * @param params.rendered - Fresh template render
- * @param params.layout - File layout
  * @param params.previousIds - Managed ids recorded when `current` was generated
- * @param params.previousInputs - Lock inputs recorded when `current` was generated
  * @param params.renderedIds - Managed ids of `rendered`
  * @param params.force - Drop user steps whose managed job no longer exists instead of failing
  * @returns Merged content and the labels of any dropped user steps
@@ -618,13 +509,10 @@ function assertNeedsResolve(root: YAMLMap): void {
 export function mergeUserContent(params: {
   current: string;
   rendered: string;
-  layout: Layout;
   previousIds: readonly string[];
-  previousInputs?: LockInputs;
   renderedIds: readonly string[];
   force: boolean;
 }): { content: string; dropped: string[] } {
-  const { layout } = params;
   const currentDoc = parse(params.current, "The file");
   const renderedDoc = parse(params.rendered, "The rendered template");
   const currentRoot = currentDoc.contents;
@@ -634,46 +522,37 @@ export function mergeUserContent(params: {
   }
   const ctx: MergeContext = {
     previous: new Set(params.previousIds),
-    slots: SLOTS[layout],
-    retired: retiredIdsOf(layout, params.previousInputs),
     force: params.force,
     dropped: [],
   };
 
-  const containerKey = layout === "action" ? "runs" : "jobs";
-  const managedTop = new Set([...MANAGED_TOP_LEVEL_KEYS[layout], containerKey]);
+  const managedTop = new Set([...MANAGED_TOP_LEVEL_KEYS, "jobs"]);
   const userTopKeys = currentRoot.items
     .map((pair) => keyOf(pair) ?? "")
     .filter((key) => !managedTop.has(key));
   carryFields(currentRoot, renderedRoot, userTopKeys);
 
-  if (layout === "action") {
-    const currentRuns = mapAt(currentRoot, "runs");
-    const renderedRuns = mapAt(renderedRoot, "runs");
-    if (currentRuns) mergeSteps(currentRuns, renderedRuns, "", ctx);
-  } else {
-    const currentJobs = mapAt(currentRoot, "jobs");
-    const renderedJobs = mapAt(renderedRoot, "jobs");
-    if (currentJobs && renderedJobs) {
-      const userJobs = currentJobs.items.filter((pair) => !isSdkOwned(keyOf(pair) ?? "", ctx));
-      for (const pair of userJobs) assertNoReservedSteps(pair.value, `${keyOf(pair) ?? ""}/`);
-      for (const pair of currentJobs.items) {
-        if (userJobs.includes(pair) || !isMap(pair.value)) continue;
-        const jobId = keyOf(pair) ?? "";
-        const renderedJob = mapAt(renderedJobs, jobId);
-        if (renderedJob) carryFields(pair.value, renderedJob, editableJobKeys(jobId));
-        mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
-      }
-      carryLeadingComment(currentJobs, currentJobs.items[0], userJobs);
-      placeAfterAnchors(
-        currentJobs.items,
-        renderedJobs.items,
-        (pair) => userJobs.includes(pair),
-        keyOf,
-      );
+  const currentJobs = mapAt(currentRoot, "jobs");
+  const renderedJobs = mapAt(renderedRoot, "jobs");
+  if (currentJobs && renderedJobs) {
+    const userJobs = currentJobs.items.filter((pair) => !isSdkOwned(keyOf(pair) ?? "", ctx));
+    for (const pair of userJobs) assertNoReservedSteps(pair.value, `${keyOf(pair) ?? ""}/`);
+    for (const pair of currentJobs.items) {
+      if (userJobs.includes(pair) || !isMap(pair.value)) continue;
+      const jobId = keyOf(pair) ?? "";
+      const renderedJob = mapAt(renderedJobs, jobId);
+      if (renderedJob) carryFields(pair.value, renderedJob, editableJobKeys(jobId));
+      mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
     }
-    assertNeedsResolve(renderedRoot);
+    carryLeadingComment(currentJobs, currentJobs.items[0], userJobs);
+    placeAfterAnchors(
+      currentJobs.items,
+      renderedJobs.items,
+      (pair) => userJobs.includes(pair),
+      keyOf,
+    );
   }
+  assertNeedsResolve(renderedRoot);
 
   if (currentDoc.comment) renderedDoc.comment = currentDoc.comment;
   const mergeFailed = (detail: string) =>
@@ -687,31 +566,14 @@ export function mergeUserContent(params: {
   } catch (error) {
     throw mergeFailed(`: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const expected = computeManagedHash(params.rendered, layout, params.renderedIds);
+  const expected = computeManagedHash(params.rendered, params.renderedIds);
   const roundTripped =
     canonicalJson(toPlain(renderedDoc, "The merged file")) ===
     canonicalJson(toPlain(parse(content, "The merged file"), "The merged file"));
-  if (!roundTripped || computeManagedHash(content, layout, params.renderedIds) !== expected) {
+  if (!roundTripped || computeManagedHash(content, params.renderedIds) !== expected) {
     throw mergeFailed("");
   }
   return { content, dropped: ctx.dropped };
-}
-
-// Lock entries written before managed hashing record a whole-file hash, with
-// the build-site slot body normalized for composite actions.
-const BUILD_SITE_RUN_RE =
-  /([ \t]*- id: build-site\n(?:[ \t]+if: [^\n]+\n)?[ \t]+shell: bash\n[ \t]+run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/;
-
-/**
- * Replace the build-site slot body with a placeholder, as legacy lock hashes do.
- * @param content - Composite action content
- * @returns Content with the build-site run body normalized
- */
-export function normalizeActionContent(content: string): string {
-  return content.replace(
-    BUILD_SITE_RUN_RE,
-    (_, header, _body, tail) => `${header}\n        true${tail}`,
-  );
 }
 
 /**
@@ -721,15 +583,15 @@ export function normalizeActionContent(content: string): string {
  * @returns The comparable hash, or null when the file is not valid YAML
  */
 export function currentContentHash(
-  target: Pick<LockTarget, "kind" | "contentHash" | "generatedIds" | "inputs">,
+  target: Pick<LockTarget, "contentHash" | "generatedIds">,
   content: string,
 ): string | null {
   try {
     if (isManagedHash(target.contentHash)) {
-      return computeManagedHash(content, layoutOf(target.kind), target.generatedIds, target.inputs);
+      return computeManagedHash(content, target.generatedIds);
     }
     readMapping(content);
-    return hashContent(target.kind === "action" ? normalizeActionContent(content) : content);
+    return hashContent(content);
   } catch (error) {
     if (error instanceof ManagedMergeError) return null;
     throw error;
