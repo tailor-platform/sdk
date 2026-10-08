@@ -125,8 +125,11 @@ The job runs only when someone adds the `tailor:migration-test` label to a pull
 request from the same repository (change the label with
 `--migration-test-label`). It runs the pending migrations in a temporary
 workspace created next to the source workspace, writes the `--json` result to
-the job summary, and always removes the label as its last step, whether the test
-succeeded, failed, or was cancelled. To run it again, add the label again.
+the job summary, and removes the label as its last step, whether the test
+succeeded, failed, or was cancelled while running. To run it again, add the label
+again. If a run is cancelled before the job starts (for example, a reviewer
+rejects the environment's approval), the label stays on the pull request: remove
+it and add it again.
 Anyone who can label pull requests in your repository can start the job, and
 each run creates and deletes a workspace. Runs for one pull request never
 cancel each other.

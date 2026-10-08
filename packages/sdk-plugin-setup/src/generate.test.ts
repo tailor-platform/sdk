@@ -1023,6 +1023,12 @@ describe("renderBranchWorkflow migration test job", () => {
     expect(content).not.toMatch(NO_MARKER);
   });
 
+  test("leaves no unreplaced marker in the rendered workflow", () => {
+    const { content } = render({ workingDirectory: "apps/backend" });
+
+    expect(content).not.toMatch(NO_MARKER);
+  });
+
   test("adds the labeled event to the pull_request types", () => {
     const { workflow } = render();
 

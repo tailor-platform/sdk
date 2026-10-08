@@ -205,6 +205,18 @@ describe("collectEnvironmentRequirements", () => {
       expect(names).toContain("TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID");
     });
 
+    test("keeps the plan and deploy wording when the dedicated environment is the deploy environment", () => {
+      const [env] = collectEnvironmentRequirements(
+        withMigrationTest({ migrationTestEnvironment: "STG" }),
+      );
+      const clientId = env?.requirements.find(
+        (r) => r.name === "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID",
+      );
+
+      expect(env?.targets).toEqual(["branch my-app", "branch my-app (migration test)"]);
+      expect(clientId?.description).toMatch(/plan and deploy/);
+    });
+
     test("matches the secrets and variables the rendered job references", () => {
       const { content } = renderBranchWorkflow({
         workspaceName: "my-app",

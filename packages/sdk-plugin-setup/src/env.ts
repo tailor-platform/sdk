@@ -166,7 +166,7 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
       const existing = entry.requirements.findIndex((r) => r.name === requirement.name);
       if (existing === -1) {
         entry.requirements.push(requirement);
-      } else if (requirement.required) {
+      } else if (requirement.required && !entry.requirements[existing]?.required) {
         entry.requirements[existing] = requirement;
       }
     }
