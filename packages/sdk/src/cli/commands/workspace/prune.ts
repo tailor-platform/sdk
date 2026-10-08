@@ -284,6 +284,10 @@ const KEPT_REASONS: {
   { key: "unknownAge", selection: "missingCreateTime", reason: "creation time is unknown" },
 ];
 
+function unscopedSweepMessage(option: string): string {
+  return `${option} requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.`;
+}
+
 export const pruneCommand = defineAppCommand({
   name: "prune",
   description:
@@ -396,8 +400,7 @@ export const pruneCommand = defineAppCommand({
     if (args.expired && !hasLocation(criteria)) {
       throw CLIError({
         code: "UNSCOPED_EXPIRED",
-        message:
-          "--expired requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.",
+        message: unscopedSweepMessage("--expired"),
         details:
           "The expiry lives on the workspace, and writing a workspace's metadata is a lesser permission than deleting it, so an unscoped sweep would delete on behalf of anyone able to write that metadata.",
       });
@@ -405,8 +408,7 @@ export const pruneCommand = defineAppCommand({
     if (olderThanMs === 0 && !hasLocation(criteria)) {
       throw CLIError({
         code: "UNSCOPED_ZERO_AGE",
-        message:
-          "--older-than 0s requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.",
+        message: unscopedSweepMessage("--older-than 0s"),
         details:
           "Without an age check the name filter is the only guard, so the sweep must name the organization roots, folders, or personal workspaces it covers.",
       });
