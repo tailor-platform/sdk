@@ -551,8 +551,13 @@ export interface MigrationStepsWorkflowOptions extends LongRunningMigrationOptio
   onBeforeStart: () => Promise<void>;
   /** Called as soon as a new execution exists, before waiting on it. */
   onExecutionStarted: (executionId: string) => Promise<void>;
-  /** Reports what happens to an earlier run. */
-  notify: (level: "info" | "warn", message: string) => void;
+  /**
+   * Steps of the earlier run that are reported as done instead of run again.
+   * Each must have succeeded in that run; see {@link assertSkippableSteps}.
+   */
+  skipSteps?: readonly string[];
+  /** Reports what happens to an earlier run, with what to do about it when there is something to do. */
+  notify: (level: "info" | "warn", message: string, suggestion?: string) => void;
   /** Called while waiting, with the number of steps that have completed. */
   onProgress?: (completedSteps: number, totalSteps: number) => void;
 }
@@ -599,6 +604,131 @@ function classifySteps(
     );
   });
   return { completed, failed };
+}
+
+async function readSucceededStepNames(
+  client: OperatorClient,
+  workspaceId: string,
+  execution: WorkflowExecution,
+  runnerName: string,
+): Promise<string[]> {
+  const succeeded = execution.jobExecutions
+    .filter(
+      (job) =>
+        job.kind.case === "jobFunction" &&
+        job.kind.value.name === runnerName &&
+        job.status === WorkflowJobExecution_Status.SUCCESS &&
+        job.executionId,
+    )
+    .toSorted((a, b) => (a.position?.callIndex ?? 0) - (b.position?.callIndex ?? 0));
+  const names = await Promise.all(
+    succeeded.map(async (job) => {
+      try {
+        const { execution: functionExecution } = await client.getFunctionExecution({
+          workspaceId,
+          executionId: job.executionId,
+        });
+        const parsed: unknown = JSON.parse(functionExecution?.result ?? "");
+        const step = (parsed as { step?: unknown } | null)?.step;
+        return typeof step === "string" ? step : undefined;
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+  return [...new Set(names.filter((name): name is string => name !== undefined))];
+}
+
+type SkipRejection = "unknown_step" | "no_earlier_run" | "not_succeeded";
+
+const SKIP_REJECTION_REASONS: Record<SkipRejection, string> = {
+  unknown_step: "is not a step of this migration",
+  no_earlier_run: "has no earlier run to have succeeded in",
+  not_succeeded: "did not succeed in the earlier run",
+};
+
+export interface SkippableStepsOptions {
+  client: OperatorClient;
+  workspaceId: string;
+  namespace: string;
+  migrationNumber: number;
+  /** Step names of the migration, in execution order. */
+  order: readonly string[];
+  /** What an earlier deploy recorded for this migration, if anything. */
+  inProgress: { executionId?: string } | undefined;
+  /** Steps the caller asked to skip. */
+  requested: readonly string[];
+}
+
+/**
+ * Reject a request to skip steps that did not succeed in the migration's
+ * earlier run, before anything of the migration runs.
+ * @param options - The requested steps and where the earlier run is recorded
+ */
+export async function assertSkippableSteps(options: SkippableStepsOptions): Promise<void> {
+  const { client, workspaceId, namespace, migrationNumber, order, inProgress, requested } = options;
+  const name = migrationWorkflowResourceName(namespace, migrationNumber);
+  const execution = inProgress
+    ? await findRecordedExecution(client, workspaceId, name, inProgress.executionId)
+    : undefined;
+  const succeededSteps = execution
+    ? await readSucceededStepNames(client, workspaceId, execution, migrationStepRunnerName(name))
+    : [];
+  const invalid = requested.flatMap((step) => {
+    const reason: SkipRejection | undefined = !order.includes(step)
+      ? "unknown_step"
+      : !execution
+        ? "no_earlier_run"
+        : !succeededSteps.includes(step)
+          ? "not_succeeded"
+          : undefined;
+    return reason ? [{ step, reason }] : [];
+  });
+  if (invalid.length === 0) return;
+  const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
+  throw CLIError({
+    code: "MIGRATION_SKIP_STEPS_INVALID",
+    message:
+      `Cannot skip steps of migration ${migrationLabel}: ` +
+      invalid.map(({ step, reason }) => `'${step}' ${SKIP_REJECTION_REASONS[reason]}`).join("; ") +
+      ".",
+    suggestion:
+      succeededSteps.length > 0
+        ? `Skip only steps that succeeded in the earlier run: ${succeededSteps.join(", ")}.`
+        : "Skipping applies only to a migration that an earlier deploy left partially applied, and only to its steps that succeeded. Remove --migration-skip-steps for this migration.",
+    context: { namespace, migrationNumber, requested: [...requested], invalid, succeededSteps },
+  });
+}
+
+function describeRerun(params: {
+  migrationLabel: string;
+  namespace: string;
+  reason: string;
+  succeeded: readonly string[];
+  skipped: readonly string[];
+}): { message: string; suggestion: string } {
+  const { migrationLabel, namespace, reason, succeeded, skipped } = params;
+  const base = `Migration ${migrationLabel} cannot be resumed because ${reason}`;
+  if (skipped.length > 0) {
+    return {
+      message: `${base}; starting it again and skipping ${skipped.join(", ")}.`,
+      suggestion: "Every other step runs again, so each must be safe to run twice.",
+    };
+  }
+  if (succeeded.length === 0) {
+    return {
+      message: `${base}; every step runs again.`,
+      suggestion:
+        "A step that had already committed would run a second time, so each step must be safe to run twice.",
+    };
+  }
+  return {
+    message: `${base}; every step runs again, including ${succeeded.join(", ")}, which already succeeded.`,
+    suggestion:
+      "A step that is not safe to run twice breaks on its second run. If any of them is not, " +
+      `interrupt this deploy and deploy again with --migration-skip-steps ${succeeded.map((step) => `${namespace}/${step}`).join(",")}. ` +
+      "A renamed step cannot be skipped.",
+  };
 }
 
 async function listMigrationExecutions(
@@ -754,6 +884,7 @@ export async function executeMigrationStepsAsWorkflow(
   const { notify } = options;
 
   if (options.inProgress) {
+    let waited = false;
     const execution = await findRecordedExecution(
       client,
       workspaceId,
@@ -769,6 +900,7 @@ export async function executeMigrationStepsAsWorkflow(
         `Migration ${migrationLabel} is still running from an earlier deploy; waiting.`,
       );
       const earlier = await waitForSteps(options, execution.id);
+      waited = true;
       if (planUnchanged) return earlier;
     } else if (execution?.status === WorkflowExecution_Status.SUCCESS && planUnchanged) {
       return await summarizeSteps(client, workspaceId, execution, runnerName, order);
@@ -788,10 +920,21 @@ export async function executeMigrationStepsAsWorkflow(
         : execution.status === WorkflowExecution_Status.CANCELED
           ? "its earlier run was canceled"
           : "its steps changed since its earlier run";
-    notify(
-      "warn",
-      `Migration ${migrationLabel} cannot be resumed because ${reason}; every step runs again.`,
-    );
+    const latest =
+      execution && waited
+        ? await findRecordedExecution(client, workspaceId, name, execution.id)
+        : execution;
+    const succeeded = latest
+      ? await readSucceededStepNames(client, workspaceId, latest, runnerName)
+      : [];
+    const { message, suggestion } = describeRerun({
+      migrationLabel,
+      namespace,
+      reason,
+      succeeded,
+      skipped: options.skipSteps ?? [],
+    });
+    notify("warn", message, suggestion);
   }
 
   await assertNoActiveExecution(client, workspaceId, name, migrationLabel);

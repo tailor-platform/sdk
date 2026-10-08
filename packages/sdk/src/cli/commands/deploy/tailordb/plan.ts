@@ -72,6 +72,7 @@ export async function planTailorDB(context: PlanContext) {
     forRemoval,
     config,
     noSchemaCheck,
+    migrationSkipSteps,
     forceApplyAll = false,
   } = context;
   const tailordbs: TailorDBDeployInput[] = [];
@@ -200,6 +201,7 @@ export async function planTailorDB(context: PlanContext) {
       executorUsedTables,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
+      ...(migrationSkipSteps ? { migrationSkipSteps } : {}),
       ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
       namespacesWithMigrations,
       migrationFileState,

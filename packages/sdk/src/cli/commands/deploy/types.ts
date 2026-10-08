@@ -22,6 +22,8 @@ export interface PlanContext {
   forRemoval: boolean;
   config: LoadedConfig;
   noSchemaCheck?: boolean;
+  /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   forceApplyAll?: boolean;
   /**
    * Set of IdP names that have at least one executor with an idpUser trigger.

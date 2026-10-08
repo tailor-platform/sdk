@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { writeMetadataLabelsDirect } from "../label";
 import {
+  assertSkippableSteps,
   executeMigrationStepsAsWorkflow,
   migrationPlanFingerprint,
   removeMigrationWorkflowResources,
@@ -69,7 +70,13 @@ interface StepsClientOptions {
 }
 
 function runnerJob(callIndex: number, status: WorkflowJobExecution_Status, logs: string[] = []) {
-  return { callIndex, name: RUNNER, status, logs };
+  return {
+    callIndex,
+    name: RUNNER,
+    status,
+    logs,
+    result: JSON.stringify({ step: ORDER[callIndex] }),
+  };
 }
 
 function createStepsClient(options: StepsClientOptions = {}) {
@@ -630,7 +637,11 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
       await run(client, { inProgress: { executionId: "exec-gone" }, notify, onBeforeStart });
 
-      expect(notify).toHaveBeenCalledWith("warn", expect.stringContaining("every step runs again"));
+      expect(notify).toHaveBeenCalledWith(
+        "warn",
+        expect.stringContaining("every step runs again"),
+        expect.any(String),
+      );
       expect(logger.warn).not.toHaveBeenCalled();
       expect(onBeforeStart).toHaveBeenCalledOnce();
       expect(calls.indexOf("onBeforeStart")).toBeLessThan(calls.indexOf("startWorkflow"));
@@ -722,6 +733,205 @@ describe("executeMigrationStepsAsWorkflow", () => {
         expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
       },
     );
+
+    describe("when every step has to run again", () => {
+      const succeededThenFailed = (status: WorkflowExecution_Status): ExecutionSpec => ({
+        id: "exec-old",
+        status,
+        jobs: [
+          { status: WorkflowJobExecution_Status.FAILED },
+          runnerJob(0, WorkflowJobExecution_Status.SUCCESS),
+          runnerJob(1, WorkflowJobExecution_Status.SUCCESS),
+          runnerJob(2, WorkflowJobExecution_Status.FAILED),
+        ],
+      });
+      const runKeeping = (
+        clientOptions: Parameters<typeof createStepsClient>[0],
+        overrides: Partial<MigrationStepsWorkflowOptions> = {},
+      ) => {
+        const notify = vi.fn();
+        const created = createStepsClient({
+          run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+          ...clientOptions,
+        });
+        return {
+          notify,
+          ...created,
+          result: () =>
+            run(created.client, {
+              inProgress: { executionId: "exec-old" },
+              notify,
+              ...overrides,
+            }),
+        };
+      };
+
+      test("names the steps that already succeeded when the planned steps changed", async () => {
+        const { notify, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+        });
+
+        await result();
+
+        expect(notify).toHaveBeenCalledWith(
+          "warn",
+          expect.stringMatching(/steps changed.*backfillUser, backfillInvoice/),
+          expect.stringContaining(
+            "--migration-skip-steps tailordb/backfillUser,tailordb/backfillInvoice",
+          ),
+        );
+      });
+
+      test("explains that the earlier run was canceled and still lists the succeeded steps", async () => {
+        const { notify, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+          listed: [succeededThenFailed(WorkflowExecution_Status.CANCELED)],
+        });
+
+        await result();
+
+        expect(notify).toHaveBeenCalledWith(
+          "warn",
+          expect.stringMatching(/canceled.*backfillUser, backfillInvoice/),
+          expect.stringContaining("--migration-skip-steps"),
+        );
+      });
+
+      test("does not offer skipping when the earlier run can no longer be read", async () => {
+        const { notify, result } = runKeeping({});
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).toContain("no longer available");
+        expect(suggestion).not.toContain("--migration-skip-steps");
+        expect(suggestion).toContain("safe to run twice");
+      });
+
+      test("does not list or offer skipping when no step had succeeded", async () => {
+        const { notify, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [
+            {
+              id: "exec-old",
+              status: WorkflowExecution_Status.FAILED,
+              jobs: [{ status: WorkflowJobExecution_Status.FAILED }],
+            },
+          ],
+        });
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).not.toContain("already succeeded");
+        expect(suggestion).not.toContain("--migration-skip-steps");
+      });
+
+      test("starts a new run that skips the requested steps even though the plan changed", async () => {
+        const { raw, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { skipSteps: ["backfillUser"] },
+        );
+
+        await expect(result()).resolves.toMatchObject({ success: true, executionId: "exec-new" });
+        expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
+        expect(raw.startWorkflow).toHaveBeenCalledOnce();
+      });
+
+      test("reports the skipped steps instead of claiming that every step runs again", async () => {
+        const { notify, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { skipSteps: ["backfillUser"] },
+        );
+
+        await result();
+
+        const [level, message] = notify.mock.calls[0]!;
+        expect(level).toBe("warn");
+        expect(message).not.toContain("every step runs again");
+        expect(message).toContain("skipping backfillUser");
+      });
+    });
+  });
+});
+
+describe("assertSkippableSteps", () => {
+  const succeededRun: ExecutionSpec = {
+    id: "exec-old",
+    status: WorkflowExecution_Status.FAILED,
+    jobs: [
+      { status: WorkflowJobExecution_Status.FAILED },
+      runnerJob(0, WorkflowJobExecution_Status.SUCCESS),
+      runnerJob(1, WorkflowJobExecution_Status.FAILED),
+    ],
+  };
+  const check = (requested: string[], clientOptions: Parameters<typeof createStepsClient>[0]) =>
+    assertSkippableSteps({
+      client: createStepsClient(clientOptions).client,
+      workspaceId: "ws-1",
+      namespace: "tailordb",
+      migrationNumber: 3,
+      order: ORDER,
+      inProgress: { executionId: "exec-old" },
+      requested,
+    });
+
+  test("accepts steps that succeeded in the earlier run", async () => {
+    await expect(
+      check(["backfillUser"], { existingWorkflow: { id: "wf-old" }, listed: [succeededRun] }),
+    ).resolves.toBeUndefined();
+  });
+
+  test("rejects a step that did not succeed, naming the ones that did", async () => {
+    await expect(
+      check(["backfillInvoice"], { existingWorkflow: { id: "wf-old" }, listed: [succeededRun] }),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_INVALID",
+      context: {
+        namespace: "tailordb",
+        migrationNumber: 3,
+        requested: ["backfillInvoice"],
+        invalid: [{ step: "backfillInvoice", reason: "not_succeeded" }],
+        succeededSteps: ["backfillUser"],
+      },
+    });
+  });
+
+  test("rejects a step that the migration does not define", async () => {
+    await expect(
+      check(["renamedAway"], { existingWorkflow: { id: "wf-old" }, listed: [succeededRun] }),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_INVALID",
+      context: { invalid: [{ step: "renamedAway", reason: "unknown_step" }] },
+    });
+  });
+
+  test("rejects every request when the earlier run cannot be read", async () => {
+    await expect(check(["backfillUser"], {})).rejects.toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_INVALID",
+      context: { invalid: [{ step: "backfillUser", reason: "no_earlier_run" }] },
+    });
+  });
+
+  test("rejects when the migration has no earlier run at all", async () => {
+    await expect(
+      assertSkippableSteps({
+        client: createStepsClient().client,
+        workspaceId: "ws-1",
+        namespace: "tailordb",
+        migrationNumber: 3,
+        order: ORDER,
+        inProgress: undefined,
+        requested: ["backfillUser"],
+      }),
+    ).rejects.toMatchObject({ code: "MIGRATION_SKIP_STEPS_INVALID" });
   });
 });
 

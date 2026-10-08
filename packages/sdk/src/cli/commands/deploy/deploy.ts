@@ -89,6 +89,7 @@ import { planPipeline } from "./resolver";
 import { planSecretManager } from "./secret-manager";
 import { planStaticWebsite } from "./staticwebsite";
 import { planTailorDB } from "./tailordb";
+import { assertSkipNamespacesKnown } from "./tailordb/migration-skip-steps";
 import { validatePlan } from "./validate-plan";
 import {
   collectVisibleIdpNames,
@@ -111,6 +112,8 @@ export interface DeployOptions {
   dryRun?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
+  /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   noValidate?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
@@ -275,6 +278,7 @@ type PlanDeploymentTargetParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   /** Resource kinds to reuse from `previous` instead of re-planning. */
@@ -297,6 +301,7 @@ type PlanDeploymentTargetsParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
@@ -422,6 +427,7 @@ async function planDeploymentTarget(
     client,
     workspaceId,
     noSchemaCheck,
+    migrationSkipSteps,
     migrationTestBaselines,
     migrationTestSnapshots,
     skip,
@@ -473,6 +479,7 @@ async function planDeploymentTarget(
       forRemoval: false,
       config,
       noSchemaCheck,
+      migrationSkipSteps,
       migrationTestBaselines,
       migrationTestSnapshots,
       forceApplyAll,
@@ -933,6 +940,7 @@ async function deployInternal(
         client: metadataClient,
         workspaceId,
         noSchemaCheck: options?.noSchemaCheck,
+        migrationSkipSteps: options?.migrationSkipSteps,
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
         skip: reuse?.skip,
@@ -943,6 +951,22 @@ async function deployInternal(
     };
 
     const { planTargets, metadataClient, runInputs, deployments } = await plan(targets);
+    assertSkipNamespacesKnown(
+      options?.migrationSkipSteps ?? new Map(),
+      new Set(
+        deployments.flatMap((deployment) =>
+          deployment.tailorDB.context.tailorDBInputs.map((input) => input.namespace),
+        ),
+      ),
+    );
+    assertSkipNamespacesKnown(
+      options?.migrationSkipSteps ?? new Map(),
+      new Set(
+        deployments.flatMap((deployment) =>
+          deployment.tailorDB.context.tailorDBInputs.map((input) => input.namespace),
+        ),
+      ),
+    );
 
     // Phase 1b: Confirm
     const missingDependentApps = (

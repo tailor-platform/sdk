@@ -42,6 +42,7 @@ import {
   rollbackSingleMigrationAfterFailure,
   type MigrationRestrictionState,
 } from "./migration-execution";
+import { assertMigrationSkipSteps } from "./migration-skip-steps";
 import {
   migrationFileStatesEqual,
   validateAndDetectMigrations,
@@ -155,6 +156,7 @@ async function buildMigrationContextForScripts(
     configDir: path.dirname(migrationContext.config.path),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,
+    skipSteps: migrationContext.migrationSkipSteps,
   };
 }
 
@@ -381,6 +383,18 @@ export async function applyTailorDB(
             migrationsRequiringScripts,
           )
         : undefined;
+
+    await assertMigrationSkipSteps({
+      client,
+      workspaceId: migrationContext.workspaceId,
+      requested: new Map(
+        [...(migrationContext.migrationSkipSteps ?? [])].filter(([namespace]) =>
+          migrationContext.tailorDBInputs.some((input) => input.namespace === namespace),
+        ),
+      ),
+      pendingMigrations,
+      inProgressByNamespace: inProgressMigrations,
+    });
 
     for (const repair of checkpointRepairs) {
       await updateMigrationLabel(

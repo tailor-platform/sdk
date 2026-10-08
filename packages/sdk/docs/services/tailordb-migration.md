@@ -413,10 +413,31 @@ Because steps commit separately, a failure does not undo the steps that already 
 - If a step fails after another step has completed, `tailor deploy` stops and leaves the migration **in progress**. The pre-migration schema stays in place, the checkpoint is not advanced, and the namespace's tables stay in maintenance mode, as while the migration runs: GraphQL operations and record events remain disabled. `tailor tailordb migration status` reports the migration as in progress.
 - If `tailor deploy` cannot confirm whether the steps started, for example because the connection dropped while starting them, the migration also stays in progress. Run `tailor deploy` again; it checks whether the steps ran before continuing.
 - Fix the failing step and run `tailor deploy` again. The deploy resumes the migration: completed steps do not run again, and the failed step and the steps after it run with the updated script. A completed step is treated like an applied migration — editing it afterwards does not run it again.
-- If the steps changed since the earlier run (a step added, removed, or renamed, or the order the steps run in changed), or that run is no longer available, every step runs again from the beginning. Editing a step's code does not count as a change.
+- If the steps changed since the earlier run, or that run is no longer available, every step runs again from the beginning. See [Editing steps of a migration in progress](#editing-steps-of-a-migration-in-progress).
 - If every step completed but the post-migration schema changes fail (for example, a field the migration makes required still has empty values), the migration also stays in progress with its pre-migration schema, and the next deploy retries those schema changes without running the steps again.
-- To run a completed step again (because it had a bug, or to fix rows the post-migration schema changes reject), change the steps: rename that step and update the `dependsOn` lists that name it, or add a step that fixes the rows. Every step then runs again from the beginning, so this relies on every step being safe to run again.
+- To run a completed step again (because it had a bug, or to fix rows the post-migration schema changes reject), change the steps: rename that step and update the `dependsOn` lists that name it, or add a step that fixes the rows. Every step then runs again from the beginning, so this relies on every step being safe to run again; to keep the other completed steps from running again, skip them as described below.
 - While a migration is in progress, `migration set`, `migration sync`, and `migration rebaseline` refuse to run, and `migration test` refuses to use that workspace as its source. Finish the migration with `tailor deploy` first. The one exception is `migration set <N>` with the in-progress migration's own number: it marks that migration as completed and clears its in-progress record. Use it only when the migration's schema changes are already applied, for example after the deploy reported that the checkpoint write could not be confirmed.
+
+#### Editing steps of a migration in progress
+
+When `tailor deploy` finds a migration in progress, what you changed in `migrate.ts` decides how it continues:
+
+| What you changed since the earlier deploy                                  | What the next `tailor deploy` does                                                                                          |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| The code of a step that has not completed (the failed step or a later one) | Resumes: completed steps do not run again, and the rest run with the updated code.                                          |
+| The code of a step that already completed                                  | Resumes, but the change takes no effect: that step does not run again.                                                      |
+| A step added, removed, or renamed, or the order the steps run in           | Runs every step again from the beginning, and warns about it first. The warning lists the steps that had already succeeded. |
+| Nothing, but the earlier run was canceled or is no longer available        | Runs every step again from the beginning, and warns about it first.                                                         |
+
+Running every step again runs completed steps a second time, which breaks a step that is not safe to run twice. To keep specific steps from running again, pass them to `--migration-skip-steps` as comma-separated `<namespace>/<step>` entries:
+
+```bash
+tailor deploy --migration-skip-steps main-db/backfillUser,main-db/backfillInvoice
+```
+
+- A skipped step is reported as completed and is not run. Only steps that succeeded in the migration's earlier run can be skipped, so a step you renamed cannot be.
+- The option applies to the migration an earlier deploy left in progress. Deploy fails before changing anything when an entry names a step that did not succeed, a step the migration does not define, a namespace without a migration in progress, or a namespace that no deployed config defines.
+- It takes effect for the deploy you pass it to. If that run fails, the next `tailor deploy` resumes it as usual, and the skipped steps stay completed without passing the option again.
 
 Write every step so that running it again is safe: besides the cases above, a step can run a second time when a deploy is interrupted right after it commits. Use `where` clauses that skip rows a step already migrated, as in the example. Maintenance mode blocks GraphQL access, not the writes your resolvers, executors, or workflows make through Kysely; rows they write while a migration is in progress are not seen by steps that already completed, so stop such writers until the migration finishes or write steps that tolerate them.
 

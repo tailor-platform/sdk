@@ -68,6 +68,7 @@ vi.mock("./migration", async (importOriginal) => {
 vi.mock("./migration-workflow", async (importOriginal) => ({
   ...(await importOriginal()),
   removeMigrationWorkflowResources: vi.fn().mockResolvedValue(undefined),
+  assertSkippableSteps: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("#/cli/commands/tailordb/migrate/config", () => ({
@@ -147,7 +148,7 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { CLIError } from "#/cli/shared/errors";
 import * as migrationModule from "./migration";
-import { removeMigrationWorkflowResources } from "./migration-workflow";
+import { assertSkippableSteps, removeMigrationWorkflowResources } from "./migration-workflow";
 import type { RemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 
@@ -1259,6 +1260,46 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         "test-ns",
         1,
       );
+    });
+
+    test("rejects a step that cannot be skipped before it changes any table or runs the migration", async () => {
+      const client = createMockClient();
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      vi.mocked(assertSkippableSteps).mockRejectedValueOnce(
+        CLIError({ code: "MIGRATION_SKIP_STEPS_INVALID", message: "cannot skip recompute" }),
+      );
+      vi.mocked(migrationModule.executeMigrations).mockClear();
+      vi.mocked(client.updateTailorDBType).mockClear();
+      const plan = withInputs(createMockPlanResult());
+      plan.context.migrationSkipSteps = new Map([["test-ns", ["recompute"]]]);
+
+      await expect(applyTailorDB(client, plan, "create-update")).rejects.toMatchObject({
+        code: "MIGRATION_SKIP_STEPS_INVALID",
+      });
+
+      expect(assertSkippableSteps).toHaveBeenCalledWith(
+        expect.objectContaining({
+          namespace: "test-ns",
+          migrationNumber: 1,
+          order: ["backfill", "recompute"],
+          requested: ["recompute"],
+        }),
+      );
+      expect(migrationModule.executeMigrations).not.toHaveBeenCalled();
+      expect(client.updateTailorDBType).not.toHaveBeenCalled();
+    });
+
+    test("ignores steps requested for a namespace this config does not define", async () => {
+      const client = createMockClient();
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      vi.mocked(assertSkippableSteps).mockClear();
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+      const plan = withInputs(createMockPlanResult());
+      plan.context.migrationSkipSteps = new Map([["other-app-ns", ["recompute"]]]);
+
+      await applyTailorDB(client, plan, "create-update");
+
+      expect(assertSkippableSteps).not.toHaveBeenCalled();
     });
 
     test("lifts maintenance mode on the tables the resumed migration created", async () => {
