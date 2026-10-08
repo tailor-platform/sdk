@@ -317,16 +317,14 @@ function declaredKeys(...schemas: { shape: object }[]): Set<string> {
   return new Set(schemas.flatMap((schema) => Object.keys(schema.shape)));
 }
 
-const v1ConfigKeys = declaredKeys(pfConfigSchemaV1);
 const v2ConfigKeys = declaredKeys(pfConfigSchemaV2);
 const v2UserKeys = declaredKeys(pfUserKeyringSchema, pfUserFileSchema);
 const profileKeys = declaredKeys(pfProfileSchema);
 // An older format does not validate keys a later format declares, so migration drops them.
-const v2OnlyConfigKeys = new Set([...v2ConfigKeys].filter((key) => !v1ConfigKeys.has(key)));
-const v3OnlyUserKeys = new Set(
-  [...declaredKeys(pfUserKeyringSchemaV3, pfUserFileSchemaV3)].filter(
-    (key) => !v2UserKeys.has(key),
-  ),
+const v2OnlyConfigKeys = v2ConfigKeys.difference(declaredKeys(pfConfigSchemaV1));
+const v3OnlyConfigKeys = declaredKeys(pfConfigSchemaV3).difference(v2ConfigKeys);
+const v3OnlyUserKeys = declaredKeys(pfUserKeyringSchemaV3, pfUserFileSchemaV3).difference(
+  v2UserKeys,
 );
 
 function withoutKeys<T extends object>(entry: T, keys: ReadonlySet<string>): T {
@@ -374,7 +372,7 @@ function migrateV2ToV3(v2Config: PfConfigV2): PfConfig {
   }
 
   return {
-    ...v2Config,
+    ...withoutKeys(v2Config, v3OnlyConfigKeys),
     version: LATEST_CONFIG_VERSION,
     min_sdk_version: V3_MIN_SDK_VERSION,
     users,
