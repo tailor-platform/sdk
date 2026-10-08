@@ -4,6 +4,7 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import {
+  FunctionErrorKind,
   FunctionExecution_Status,
   FunctionExecution_Type,
   FunctionExecutionSchema,
@@ -12,7 +13,11 @@ import {
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import {
+  captureStderr,
+  captureStdout,
+  captureStdoutStream,
+} from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import {
@@ -385,6 +390,50 @@ describe("logs command detail output", () => {
     expect(plain.match(/starting/g)).toHaveLength(1);
   });
 
+  test("--json reports the error kind next to a consistent error object", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+    const error = {
+      name: "TypeError",
+      message: "x is undefined",
+      stackTrace: "TypeError: x is undefined\n    at main (file:///bundle.js:1:1)",
+    };
+    mockClient([
+      functionExecution({
+        status: FunctionExecution_Status.FAILED,
+        errorKind: FunctionErrorKind.USER_RUNTIME,
+        error,
+      }),
+    ]);
+
+    await runCommand(logsCommand, ["exec-1"]);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toMatchObject({
+      status: "FAILED",
+      errorKind: "USER_RUNTIME",
+      errorName: error.name,
+      errorMessage: error.message,
+      error,
+    });
+  });
+
+  test("shows the error kind in the summary", async () => {
+    using stdout = captureStdoutStream();
+    using _stderr = captureStderr();
+    mockClient([
+      functionExecution({
+        status: FunctionExecution_Status.FAILED,
+        errorKind: FunctionErrorKind.PLATFORM,
+      }),
+    ]);
+
+    await runCommand(logsCommand, ["exec-1"]);
+
+    expect(stripAnsi(stdout.output)).toMatch(/errorKind\s*│\s*PLATFORM/);
+  });
+
   test("omits the logs section when no entries are available", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
@@ -617,5 +666,106 @@ describe("logs command list output", () => {
     expect(stripAnsi(stderr.output)).toContain(
       "More results exist beyond --limit 50. Raise --limit to see more.",
     );
+  });
+
+  function mockList(executions: FunctionExecution[]): void {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listFunctionExecutions: vi.fn(async () => ({ executions, nextPageToken: "" })),
+    } as unknown as OperatorClient);
+  }
+
+  test("--json reports the error kind, name, and message of each execution", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+    mockList([
+      functionExecution({ id: "exec-ok", errorKind: FunctionErrorKind.NONE }),
+      functionExecution({
+        id: "exec-user",
+        status: FunctionExecution_Status.FAILED,
+        errorKind: FunctionErrorKind.USER_RUNTIME,
+        error: { name: "TypeError", message: "x is undefined" },
+      }),
+      functionExecution({
+        id: "exec-timeout",
+        status: FunctionExecution_Status.FAILED,
+        errorKind: FunctionErrorKind.PLATFORM,
+        error: { message: "execution aborted due to timeout or cancellation" },
+      }),
+      functionExecution({ id: "exec-unrecorded", status: FunctionExecution_Status.FAILED }),
+      functionExecution({ id: "exec-newer-kind", errorKind: 99 as FunctionErrorKind }),
+    ]);
+
+    await runCommand(logsCommand, []);
+
+    const common = {
+      scriptName: "workflow--billing.main",
+      type: "JOB",
+      startedAt: null,
+      finishedAt: null,
+    };
+    expect(JSON.parse(stdout.output)).toEqual([
+      {
+        ...common,
+        id: "exec-ok",
+        status: "SUCCESS",
+        errorKind: "NONE",
+        errorName: null,
+        errorMessage: null,
+      },
+      {
+        ...common,
+        id: "exec-user",
+        status: "FAILED",
+        errorKind: "USER_RUNTIME",
+        errorName: "TypeError",
+        errorMessage: "x is undefined",
+      },
+      {
+        ...common,
+        id: "exec-timeout",
+        status: "FAILED",
+        errorKind: "PLATFORM",
+        errorName: null,
+        errorMessage: "execution aborted due to timeout or cancellation",
+      },
+      {
+        ...common,
+        id: "exec-unrecorded",
+        status: "FAILED",
+        errorKind: "UNSPECIFIED",
+        errorName: null,
+        errorMessage: null,
+      },
+      {
+        ...common,
+        id: "exec-newer-kind",
+        status: "SUCCESS",
+        errorKind: "UNSPECIFIED",
+        errorName: null,
+        errorMessage: null,
+      },
+    ]);
+  });
+
+  test("shows the error kind and name in the table and leaves the message to --json", async () => {
+    using stdout = captureStdoutStream();
+    using _stderr = captureStderr();
+    mockList([
+      functionExecution({
+        status: FunctionExecution_Status.FAILED,
+        errorKind: FunctionErrorKind.USER_RUNTIME,
+        error: { name: "TypeError", message: "x is undefined" },
+      }),
+    ]);
+
+    await runCommand(logsCommand, []);
+
+    const plain = stripAnsi(stdout.output);
+    expect(plain).toContain("errorKind");
+    expect(plain).toContain("USER_RUNTIME");
+    expect(plain).toContain("TypeError");
+    expect(plain).not.toContain("errorMessage");
+    expect(plain).not.toContain("x is undefined");
   });
 });

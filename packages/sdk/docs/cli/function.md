@@ -129,6 +129,8 @@ $ tailor function logs <execution-id> --follow
 
 **Notes**
 
+Each execution includes `errorKind`, which tells you where a failure came from: `USER_RUNTIME` (your code threw while running), `USER_NON_RUNTIME` (your code failed before it started running, such as a syntax error), `PLATFORM` (the Platform stopped it, such as on a timeout), `NONE` (no error), or `UNSPECIFIED` (not recorded). `errorName` and `errorMessage` hold the error's name and message, or `null` when none was recorded. The list table omits `errorMessage`; use `--json` or the execution details to read it.
+
 Execution details include `logEntries`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running. The `logs` string joins their messages with newlines.
 
 Use `--follow` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless `--timeout` is set. With `--json`, `--follow` waits for completion and then emits the final execution details once.
