@@ -235,6 +235,28 @@ describe("tailordb migration test", () => {
     expect(events).toEqual([]);
   });
 
+  test.each([
+    ["--organization-id", { organizationId: "66666666-6666-4666-8666-666666666666" }],
+    ["--folder-id", { folderId: "77777777-7777-4777-8777-777777777777" }],
+  ])("rejects %s with a designated target workspace", async (flag, location) => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+
+    await expect(
+      runMigrationTest(
+        {
+          data: "seed",
+          targetWorkspaceId: "55555555-5555-4555-8555-555555555555",
+          yes: true,
+          ...location,
+        },
+        dependencies,
+      ),
+    ).rejects.toThrow(flag);
+
+    expect(events).toEqual([]);
+  });
+
   test("deletes an automatically-created workspace when migration execution fails", async () => {
     const events: string[] = [];
     const dependencies = createDependencies(events);

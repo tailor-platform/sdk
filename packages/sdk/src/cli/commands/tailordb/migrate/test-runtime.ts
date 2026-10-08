@@ -396,6 +396,55 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
   return assertDefined(state, "migration test runtime was used before preparation");
 }
 
+interface TemporaryWorkspaceLocation {
+  organizationId?: string;
+  folderId?: string;
+}
+
+/**
+ * Decide the organization and folder the temporary workspace is created in.
+ *
+ * Only `--organization-id` places it at that organization's root; the source
+ * folder is not carried over because it may belong to another organization.
+ * @param client - Operator client
+ * @param source - Organization and folder of the source workspace
+ * @param options - `--organization-id` and `--folder-id` values
+ * @returns The location to pass to workspace creation
+ */
+export async function resolveTemporaryWorkspaceLocation(
+  client: OperatorClient,
+  source: { organizationId?: string; folderId?: string },
+  options: { organizationId?: string; folderId?: string },
+): Promise<TemporaryWorkspaceLocation> {
+  if (!options.organizationId && !options.folderId) {
+    return {
+      ...(source.organizationId ? { organizationId: source.organizationId } : {}),
+      ...(source.folderId ? { folderId: source.folderId } : {}),
+    };
+  }
+  const organizationId = options.organizationId ?? (source.organizationId || undefined);
+  if (options.folderId && organizationId) {
+    const folder = await getOrNull(async () => {
+      const { folder } = await client.getOrganizationFolder({
+        organizationId,
+        folderId: options.folderId as string,
+      });
+      return folder;
+    });
+    if (!folder) {
+      throw CLIError({
+        code: "MIGRATION_TEST_OPTIONS_INVALID",
+        message: `Folder "${options.folderId}" not found in organization "${organizationId}".`,
+        suggestion: "Pass a --folder-id that belongs to --organization-id.",
+      });
+    }
+  }
+  return {
+    ...(organizationId ? { organizationId } : {}),
+    ...(options.folderId ? { folderId: options.folderId } : {}),
+  };
+}
+
 /**
  * Require the source workspace to still match the prepared baselines.
  *
@@ -583,6 +632,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       )
     : undefined;
 
+  const temporaryLocation = await resolveTemporaryWorkspaceLocation(
+    client,
+    sourceWorkspace,
+    options,
+  );
+
   const remoteChecks = await verifyRemoteSchema(
     client,
     sourceWorkspaceId,
@@ -681,8 +736,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     temporaryWorkspace: {
       name: temporaryWorkspaceName(),
       region: sourceWorkspace.region,
-      ...(sourceWorkspace.organizationId ? { organizationId: sourceWorkspace.organizationId } : {}),
-      ...(sourceWorkspace.folderId ? { folderId: sourceWorkspace.folderId } : {}),
+      ...temporaryLocation,
     },
     baselines,
     baselineSnapshots,

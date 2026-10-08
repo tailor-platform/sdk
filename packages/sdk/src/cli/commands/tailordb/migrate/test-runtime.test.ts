@@ -13,6 +13,7 @@ import {
   createMigrationTestBaselineSnapshots,
   deleteExistingUserProfileConfig,
   loadSnapshotSeedData,
+  resolveTemporaryWorkspaceLocation,
   sortSeedTypesForSnapshot,
   waitForCloneApplicationData,
 } from "./test-runtime";
@@ -363,6 +364,94 @@ describe("migration test runtime", () => {
     await expect(assertSourceBaselineFresh(state, prepared, "source")).rejects.toThrow(
       'Source namespace "audit" schema changed after migration test preparation',
     );
+  });
+
+  describe("temporary workspace location", () => {
+    const sourceOrganization = "11111111-1111-4111-8111-111111111111";
+    const sourceFolder = "22222222-2222-4222-8222-222222222222";
+    const otherOrganization = "33333333-3333-4333-8333-333333333333";
+    const otherFolder = "44444444-4444-4444-8444-444444444444";
+
+    function folderClient(found = true) {
+      return {
+        getOrganizationFolder: vi
+          .fn()
+          .mockImplementation(async () =>
+            found
+              ? { folder: { id: "folder" } }
+              : Promise.reject(new ConnectError("not found", Code.NotFound)),
+          ),
+      } as unknown as OperatorClient;
+    }
+
+    const source = { organizationId: sourceOrganization, folderId: sourceFolder };
+
+    test("inherits the source organization and folder when nothing is specified", async () => {
+      const client = folderClient();
+
+      await expect(resolveTemporaryWorkspaceLocation(client, source, {})).resolves.toEqual({
+        organizationId: sourceOrganization,
+        folderId: sourceFolder,
+      });
+      expect(client.getOrganizationFolder).not.toHaveBeenCalled();
+    });
+
+    test("places the workspace at the organization root when only --organization-id is given", async () => {
+      const client = folderClient();
+
+      await expect(
+        resolveTemporaryWorkspaceLocation(client, source, { organizationId: otherOrganization }),
+      ).resolves.toEqual({ organizationId: otherOrganization });
+      expect(client.getOrganizationFolder).not.toHaveBeenCalled();
+    });
+
+    test("places the workspace in the folder of the source organization when only --folder-id is given", async () => {
+      const client = folderClient();
+
+      await expect(
+        resolveTemporaryWorkspaceLocation(client, source, { folderId: otherFolder }),
+      ).resolves.toEqual({ organizationId: sourceOrganization, folderId: otherFolder });
+      expect(client.getOrganizationFolder).toHaveBeenCalledWith({
+        organizationId: sourceOrganization,
+        folderId: otherFolder,
+      });
+    });
+
+    test("places the workspace in the given folder of the given organization", async () => {
+      const client = folderClient();
+
+      await expect(
+        resolveTemporaryWorkspaceLocation(client, source, {
+          organizationId: otherOrganization,
+          folderId: otherFolder,
+        }),
+      ).resolves.toEqual({ organizationId: otherOrganization, folderId: otherFolder });
+      expect(client.getOrganizationFolder).toHaveBeenCalledWith({
+        organizationId: otherOrganization,
+        folderId: otherFolder,
+      });
+    });
+
+    test("rejects a folder that does not belong to the organization", async () => {
+      await expect(
+        resolveTemporaryWorkspaceLocation(folderClient(false), source, {
+          organizationId: otherOrganization,
+          folderId: otherFolder,
+        }),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_TEST_OPTIONS_INVALID",
+        message: expect.stringContaining(`Folder "${otherFolder}"`),
+      });
+    });
+
+    test("leaves the folder to the platform when the source has no organization", async () => {
+      const client = folderClient();
+
+      await expect(
+        resolveTemporaryWorkspaceLocation(client, {}, { folderId: otherFolder }),
+      ).resolves.toEqual({ folderId: otherFolder });
+      expect(client.getOrganizationFolder).not.toHaveBeenCalled();
+    });
   });
 
   test("deletes a retained target's existing user profile config", async () => {
