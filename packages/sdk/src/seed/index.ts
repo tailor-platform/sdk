@@ -6,20 +6,21 @@
  * seed-specific utility functions used by the code generator.
  */
 
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
-import { LinesDB, ErrorFormatter, findSchemaFile, unwrap } from "@toiroakr/lines-db";
+import { readdir, stat } from "node:fs/promises";
+import { LinesDB, ErrorFormatter, fillFields, unwrap } from "@toiroakr/lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
-import { basename, dirname, join } from "pathe";
+import { basename, dirname, normalize } from "pathe";
 import { firstErrorLocation } from "./record-lines";
-import type { JsonObject, JsonlParseError, ValidationErrorDetail } from "@toiroakr/lines-db";
+import type { JsonlParseError, RowFiller, ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
 export type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 /** Fields `fillSeedData` writes when the caller names none. */
 const DEFAULT_FILL_FIELDS = ["id"];
+
+type SeedHook = RowFiller;
 
 type SeedDataTarget = {
   dataDir: string;
@@ -197,93 +198,6 @@ export async function validateSeedData(
   };
 }
 
-// A row's own value for a field, or undefined when the row has none.
-function ownValue(row: Record<string, unknown>, field: string): unknown {
-  return Object.hasOwn(row, field) ? row[field] : undefined;
-}
-
-// Not `row[field] = value`: a field named `__proto__` goes through the inherited
-// setter, which leaves no own property for the serializer to read back.
-function setField(row: JsonObject, field: string, value: JsonObject[string]): void {
-  Object.defineProperty(row, field, {
-    value,
-    enumerable: true,
-    writable: true,
-    configurable: true,
-  });
-}
-
-function isBlank(value: unknown): boolean {
-  if (value === undefined || value === null) {
-    return true;
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  // A nested field the row never had comes back as an object whose keys carry no
-  // value of their own, and writing that into the line fills nothing in.
-  return Object.values(value).every(isBlank);
-}
-
-/** A JSONL line, kept as text so an untouched line is written back verbatim. */
-type SeedLine = {
-  text: string;
-  /** Line separator the file used after this line, kept so CRLF survives. */
-  eol: string;
-  row: JsonObject | undefined;
-};
-
-function splitLines(content: string): SeedLine[] {
-  if (content === "") {
-    return [];
-  }
-  return content.split("\n").map((raw, index, all) => {
-    const eol = index === all.length - 1 ? "" : "\n";
-    const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-    const carriage = raw.endsWith("\r") ? "\r" : "";
-    let row: JsonObject | undefined;
-    if (text.trim() !== "") {
-      try {
-        const parsed: unknown = JSON.parse(text);
-        row =
-          parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
-            ? (parsed as JsonObject)
-            : undefined;
-      } catch {
-        row = undefined;
-      }
-    }
-    return { text, eol: `${carriage}${eol}`, row };
-  });
-}
-
-// Keys go in the order the hook produced them, which is the order the table
-// declares its fields. Keys the table does not declare follow the declared ones.
-function serializeRow(row: JsonObject, fieldOrder: string[]): string {
-  const rank = new Map(fieldOrder.map((field, index) => [field, index]));
-  const rankOf = (key: string): number => rank.get(key) ?? fieldOrder.length;
-  return JSON.stringify(
-    Object.fromEntries(Object.entries(row).toSorted(([a], [b]) => rankOf(a) - rankOf(b))),
-  );
-}
-
-type SeedHook = (row: unknown) => Record<string, unknown>;
-
-async function loadSeedHook(dataDir: string, table: string): Promise<SeedHook | undefined> {
-  const schemaPath = await findSchemaFile(dataDir, table);
-  if (!schemaPath) {
-    return undefined;
-  }
-  const loaded: unknown = await import(pathToFileURL(schemaPath).href);
-  const hook = (loaded as { hook?: unknown }).hook;
-  if (typeof hook !== "function") {
-    throw new Error(
-      `${schemaPath} does not export \`hook\`. Run \`tailor generate\` to regenerate the seed schema files.`,
-    );
-  }
-  return hook as SeedHook;
-}
-
 /**
  * Fill in the values a record gets on create for the JSONL seed data rows that
  * are missing them, so a row can be referenced by `id` or carry a timestamp
@@ -305,7 +219,9 @@ async function loadSeedHook(dataDir: string, table: string): Promise<SeedHook | 
  *
  * The values are read from the schema files generated next to the data, and all
  * of them are read before anything is written: a file that predates the current
- * generator stops the run with nothing filled in anywhere.
+ * generator stops the run with nothing filled in anywhere. Likewise, a file that
+ * another tool changed after the fill read it is not overwritten: the call
+ * rejects with an error naming that file, and no file is written.
  * @param options - Fill options including path and fields
  * @returns Which files received which fields
  */
@@ -317,80 +233,37 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
   const { dataDir, tableName } = await resolveSeedDataTarget(resolvedPath);
   const tables = tableName ? [tableName] : await listSeedTables(dataDir);
 
-  const warnings: string[] = [];
-  const filled: FilledSeedFile[] = [];
-  const producedFields = new Set<string>();
-
-  // Every hook loads before anything is written, so a schema file that predates
-  // `tailor generate` stops the run instead of leaving half the files filled.
-  const hooks: { table: string; hook: SeedHook }[] = [];
-  for (const table of tables) {
-    const hook = await loadSeedHook(dataDir, table);
-    if (!hook) {
-      warnings.push(`No schema file for ${table}, so nothing can be filled in there`);
-      continue;
-    }
-    hooks.push({ table, hook });
-  }
-
-  // Every line is decided before any file is written, so a hook that throws on
-  // one table cannot leave another one already rewritten.
-  const writes: { file: string; content: string }[] = [];
-  for (const { table, hook } of hooks) {
-    const file = join(dataDir, `${table}.jsonl`);
-    const lines = splitLines(await readFile(file, "utf-8"));
-
-    const written = new Set<string>();
-    const unreadable: number[] = [];
-    let count = 0;
-    let fieldOrder: string[] = [];
-    for (const [index, line] of lines.entries()) {
-      const row = line.row;
-      if (!row) {
-        if (line.text.trim() !== "") {
-          unreadable.push(index + 1);
+  const result = unwrap(
+    await fillFields({
+      path: resolvedPath,
+      fields,
+      loadFiller: (schemaModule, { schemaPath }) => {
+        const hook = schemaModule.hook;
+        if (typeof hook !== "function") {
+          throw new Error(
+            `${schemaPath} does not export \`hook\`. Run \`tailor generate\` to regenerate the seed schema files.`,
+          );
         }
-        continue;
-      }
-      const hooked = hook(row);
-      fieldOrder = Object.keys(hooked);
-      const gained = fields.filter((field) => {
-        const value = ownValue(hooked, field);
-        if (isBlank(value)) {
-          return false;
-        }
-        producedFields.add(field);
-        return isBlank(ownValue(row, field));
-      });
-      if (gained.length === 0) {
-        continue;
-      }
-      for (const field of gained) {
-        setField(row, field, hooked[field] as JsonObject[string]);
-        written.add(field);
-      }
-      line.text = serializeRow(row, fieldOrder);
-      count += 1;
-    }
+        return hook as SeedHook;
+      },
+    }),
+  );
+  const { tablesWithoutSchema, unproducedFields } = result;
+  const filled = result.filled.map((entry) => ({ ...entry, file: normalize(entry.file) }));
+  const unreadableLines = result.unreadableLines.map((entry) => ({
+    ...entry,
+    file: normalize(entry.file),
+  }));
 
-    if (unreadable.length > 0) {
-      warnings.push(
-        `${file}: line(s) ${unreadable.join(", ")} are not JSON objects, so nothing was filled in there`,
-      );
-    }
-
-    if (count === 0) {
-      continue;
-    }
-    writes.push({ file, content: lines.map((line) => `${line.text}${line.eol}`).join("") });
-    filled.push({ table, file, fields: [...written], count });
-  }
-
-  for (const { file, content } of writes) {
-    await writeFile(file, content);
-  }
-
-  const unproducedFields = fields.filter((field) => !producedFields.has(field));
+  const warnings = [
+    ...tablesWithoutSchema.map(
+      (table) => `No schema file for ${table}, so nothing can be filled in there`,
+    ),
+    ...unreadableLines.map(
+      ({ file, lines }) =>
+        `${file}: line(s) ${lines.join(", ")} are not JSON objects, so nothing was filled in there`,
+    ),
+  ];
   if (tables.length > 0 && unproducedFields.length > 0) {
     warnings.push(`No seed data produces a value for: ${unproducedFields.join(", ")}`);
   }

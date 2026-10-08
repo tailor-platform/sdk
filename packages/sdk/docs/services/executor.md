@@ -278,7 +278,7 @@ Executor callbacks receive the trigger args, including `env` from `defineConfig(
 
 ### Job Function Operation
 
-For long-running operations, use `jobFunction` which runs asynchronously and supports extended execution times. See [Job Function Operation](https://docs.tailor.tech/guides/executor/job-function-operation) for details.
+For work that needs more than the 60-second `function` limit, use `jobFunction`, which can run for up to 5 minutes. See [Job Function Operation](https://docs.tailor.tech/guides/executor/job-function-operation) for details.
 
 ```typescript
 import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
@@ -292,7 +292,7 @@ export default createExecutor({
     kind: "jobFunction",
     body: async () => {
       const db = getDB("tailordb");
-      // Long-running report generation logic
+      // Report generation logic (runs up to 5 minutes)
       const records = await db.selectFrom("Order").selectAll().execute();
       // Process records...
     },

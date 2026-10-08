@@ -41,7 +41,7 @@ const idp = defineIdp("my-idp", {
     read: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
   },
   userAuthPolicy: {

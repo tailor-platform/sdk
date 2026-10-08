@@ -32,6 +32,12 @@ export interface User {
    * `idp.Client.unenrollMfa()` to remove that factor.
    */
   mfaFactorIds: string[];
+  /**
+   * When the user's password was last set, as an ISO 8601 UTC string
+   * (e.g. `2026-10-05T01:02:03.456Z`). `null` when the user has no password,
+   * including after `idp.Client.updateUser()` with `clearPassword: true`.
+   */
+  passwordUpdatedAt: string | null;
 }
 
 /** Filter options for `idp.Client.users()`. */

@@ -192,6 +192,67 @@ describe("template-generator", () => {
     });
   });
 
+  describe("generated migrate.ts header", () => {
+    const snapshot = createTestSnapshot({
+      User: {
+        name: "User",
+        pluralForm: "Users",
+        fields: { name: { type: "string", required: true } },
+      },
+    });
+
+    test.each([
+      {
+        name: "a schema migration",
+        generate: async () =>
+          (
+            await generateDiffFiles(
+              createMockMigrationDiff({
+                changes: [
+                  {
+                    kind: "field_added",
+                    tableName: "User",
+                    fieldName: "email",
+                    after: { type: "string", required: true },
+                  },
+                ],
+                hasBreakingChanges: true,
+                breakingChanges: [
+                  { tableName: "User", fieldName: "email", reason: "Required field added" },
+                ],
+                requiresMigrationScript: true,
+              }),
+              tempDir,
+              1,
+              snapshot,
+            )
+          ).migrateFilePath,
+      },
+      {
+        name: "a data-only migration",
+        generate: async () =>
+          (
+            await generateDataOnlyMigrationFiles({
+              diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+              migrationsDir: tempDir,
+              migrationNumber: 1,
+              snapshot,
+            })
+          ).migrateFilePath,
+      },
+    ])("points $name to steps and scopes the rollback to main", async ({ generate }) => {
+      const migrateFilePath = await generate();
+      expect(migrateFilePath).toBeDefined();
+      const script = await fs.readFile(migrateFilePath!, "utf-8");
+
+      expect(script).toContain("export async function main");
+      expect(script).toContain("`main` runs in one transaction");
+      expect(script).not.toContain("all changes will be rolled back");
+      expect(script).toContain("export `steps` instead of `main`");
+      expect(script).toContain('"Splitting a migration into steps"');
+    });
+  });
+
   describe("generateDiffFiles", () => {
     const previousSnapshot = createTestSnapshot({
       User: {

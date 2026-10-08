@@ -8,14 +8,8 @@ import * as fs from "node:fs/promises";
 import { generatePgliteSchemaModule, type DDLTableConfig } from "#/utils/tailordb-ddl";
 import { writeDbTypesFile } from "./db-types-generator";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
-import {
-  applyPreMigrationFieldAdjustmentsToSnapshot,
-  applyPreMigrationIndexAdjustmentsToSnapshot,
-  buildPreMigrationChangesMapFromDiffs,
-  buildPreMigrationIndexChangesMapFromDiffs,
-} from "./pre-migration-schema";
-import { applyDiffToSnapshot, getMigrationFilePath } from "./snapshot";
-import { copySnapshotRecord } from "./snapshot-normalization";
+import { buildPreMigrationSnapshot } from "./pre-migration-schema";
+import { getMigrationFilePath } from "./snapshot";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { MigrationDiff } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
@@ -37,26 +31,7 @@ export function buildPreMigrationTables(
   previousSnapshot: SchemaSnapshot,
   diff: MigrationDiff,
 ): DDLTableConfig[] {
-  const target = applyDiffToSnapshot(previousSnapshot, diff);
-  const fieldChanges = buildPreMigrationChangesMapFromDiffs([diff]);
-  const indexChanges = buildPreMigrationIndexChangesMapFromDiffs([diff]);
-
-  const tables: DDLTableConfig[] = Object.values(target.tables).map((table) => {
-    const fields = copySnapshotRecord(table.fields);
-    const typeChanges = fieldChanges.get(table.name);
-    if (typeChanges) applyPreMigrationFieldAdjustmentsToSnapshot(fields, typeChanges);
-    const indexes = copySnapshotRecord(table.indexes);
-    const typeIndexChanges = indexChanges.get(table.name);
-    if (typeIndexChanges) applyPreMigrationIndexAdjustmentsToSnapshot(indexes, typeIndexChanges);
-    return { name: table.name, fields, indexes };
-  });
-
-  for (const change of diff.changes) {
-    if (change.kind === "table_removed" || change.kind === "table_renamed") {
-      tables.push(toDDLTable(change.before));
-    }
-  }
-  return tables;
+  return Object.values(buildPreMigrationSnapshot(previousSnapshot, diff).tables).map(toDDLTable);
 }
 
 /**

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { describe, expect, test, aroundEach, aroundAll, vi } from "vitest";
-import { bundleMigrationScript } from "./bundler";
+import { bundleMigrationScript, bundleMigrationSteps } from "./bundler";
 import type * as pkgTypes from "pkg-types";
 
 type PkgTypesModule = typeof pkgTypes;
@@ -207,5 +207,183 @@ export async function main(trx: Transaction): Promise<void> {
 
       expect(result.bundledCode).toMatch(/["'`]temporal["'`]/);
     });
+  });
+});
+
+describe("bundleMigrationSteps", () => {
+  let testDir: string;
+
+  aroundAll(async (runSuite) => {
+    await runSuite();
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
+    fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });
+  });
+
+  aroundEach(async (runTest) => {
+    testDir = path.join(
+      TEST_BUNDLER_BASE,
+      `steps-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
+    await runTest();
+  });
+
+  interface RuntimeRecord {
+    sql: string[];
+    jobs: { name: string; args: unknown }[];
+    clientOptions: unknown[];
+  }
+
+  type BundledMain = (input: unknown) => Promise<unknown>;
+
+  /**
+   * Bundle a steps script and import it with stand-ins for the platform globals.
+   * @param stepsSource - Source of the `steps` object literal
+   * @param temporal - Temporal mode to bundle the steps with
+   * @returns The bundle's `main` and what it did against the stand-ins
+   */
+  async function loadStepsBundle(
+    stepsSource: string,
+    temporal?: boolean,
+  ): Promise<{ main: BundledMain; record: RuntimeRecord }> {
+    const scriptPath = path.join(testDir, "migrate.ts");
+    fs.writeFileSync(
+      scriptPath,
+      `import type { Transaction, MigrationContext } from "./db";\nexport const steps = ${stepsSource};\n`,
+    );
+    fs.writeFileSync(path.join(testDir, "db.ts"), DB_TS_WITH_CONTEXT);
+
+    const result = await bundleMigrationSteps({
+      sourceFile: scriptPath,
+      namespace: "main-db",
+      migrationNumber: 3,
+      env: { STAGE: "test" },
+      order: ["first", "second"],
+      runnerJobFunctionName: "runner-job",
+      temporal,
+    });
+
+    const record: RuntimeRecord = { sql: [], jobs: [], clientOptions: [] };
+    const globals = globalThis as Record<string, unknown>;
+    globals.tailordb = {
+      Client: class {
+        constructor(options: unknown) {
+          record.clientOptions.push(options);
+        }
+        async connect() {}
+        async end() {}
+        async queryObject(sql: string) {
+          record.sql.push(sql);
+          return { rows: [], command: "SELECT" };
+        }
+      },
+    };
+    globals.tailor = {
+      workflow: {
+        execJobFunction: (name: string, args: unknown) => {
+          record.jobs.push({ name, args });
+          return args;
+        },
+      },
+    };
+    globals.__migrationEvents = [];
+
+    const bundlePath = path.join(testDir, "bundle.mjs");
+    fs.writeFileSync(bundlePath, result.bundledCode);
+    const module = (await import(/* @vite-ignore */ bundlePath)) as { main: BundledMain };
+    return { main: module.main, record };
+  }
+
+  const STEPS = `{
+    second: {
+      dependsOn: ["first"],
+      run: async (trx: Transaction, { env }: MigrationContext) => {
+        (globalThis as any).__migrationEvents.push(["second", env.STAGE]);
+        await trx.selectFrom("User").selectAll().execute();
+      },
+    },
+    first: {
+      run: async () => {
+        (globalThis as any).__migrationEvents.push(["first"]);
+      },
+    },
+  }`;
+
+  test("orchestrates every step as a runner job in the given order", async () => {
+    const { main, record } = await loadStepsBundle(STEPS);
+
+    await expect(main({})).resolves.toEqual({ success: true });
+
+    expect(record.jobs).toEqual([
+      { name: "runner-job", args: { step: "first" } },
+      { name: "runner-job", args: { step: "second" } },
+    ]);
+    expect(record.sql).toEqual([]);
+  });
+
+  test("runs one step inside its own transaction with the injected env", async () => {
+    const { main, record } = await loadStepsBundle(STEPS);
+
+    await expect(main({ step: "second" })).resolves.toEqual({ step: "second" });
+
+    expect((globalThis as Record<string, unknown>).__migrationEvents).toEqual([["second", "test"]]);
+    expect(record.sql).toEqual(["begin", 'select * from "User"', "commit"]);
+    expect(record.jobs).toEqual([]);
+  });
+
+  test("connects in Date mode by default", async () => {
+    const { main, record } = await loadStepsBundle(STEPS);
+
+    await main({ step: "second" });
+
+    expect(record.clientOptions).toEqual([{ namespace: "main-db", temporal: false }]);
+  });
+
+  test("connects in Temporal mode when requested", async () => {
+    const { main, record } = await loadStepsBundle(STEPS, true);
+
+    await main({ step: "second" });
+
+    expect(record.clientOptions).toEqual([{ namespace: "main-db", temporal: true }]);
+  });
+
+  test("folds the recorded date default into the steps bundle", async () => {
+    const scriptPath = path.join(testDir, "migrate.ts");
+    fs.writeFileSync(
+      scriptPath,
+      `import type { Transaction } from "./db";\nexport const steps = { first: { run: async (trx: Transaction) => { await trx.updateTable("User").set({ stage: globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT }).execute(); } } };\n`,
+    );
+    fs.writeFileSync(path.join(testDir, "db.ts"), DB_TS_WITH_CONTEXT);
+
+    const result = await bundleMigrationSteps({
+      sourceFile: scriptPath,
+      namespace: "main-db",
+      migrationNumber: 3,
+      env: {},
+      order: ["first"],
+      runnerJobFunctionName: "runner-job",
+      dateDefault: "temporal",
+    });
+
+    expect(result.bundledCode).not.toContain("__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT");
+    expect(result.bundledCode).toMatch(/["'`]temporal["'`]/);
+  });
+
+  test("rolls back the step's transaction when it throws", async () => {
+    const { main, record } = await loadStepsBundle(`{
+      first: { run: async () => { throw new Error("boom"); } },
+      second: { run: async () => {} },
+    }`);
+
+    await expect(main({ step: "first" })).rejects.toThrow("boom");
+    expect(record.sql).toEqual(["begin", "rollback"]);
+  });
+
+  test("rejects a step name outside the planned order", async () => {
+    const { main, record } = await loadStepsBundle(STEPS);
+
+    await expect(main({ step: "toString" })).rejects.toThrow('Unknown migration step "toString"');
+    expect(record.sql).toEqual([]);
   });
 });

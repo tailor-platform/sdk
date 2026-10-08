@@ -300,6 +300,12 @@ describe("defineAuth", () => {
       expectTypeOf(claims.federated_identity?.claims.picture).toEqualTypeOf<string | undefined>();
     });
 
+    test("typed claims expose password_updated_at as epoch seconds", () => {
+      type Claims = BeforeLoginHookArgs["claims"];
+
+      expectTypeOf<Claims["password_updated_at"]>().toEqualTypeOf<number | undefined>();
+    });
+
     test("is optional — existing tests continue to pass without it", () => {
       const authConfig = defineAuth("no-hook", {
         userProfile: basicUserProfile,

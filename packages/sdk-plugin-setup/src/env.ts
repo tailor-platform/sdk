@@ -21,8 +21,8 @@ export type EnvironmentRequirements = {
 };
 
 const MACHINE_USER_HOW_TO =
-  "contact Tailor support (https://docs.tailor.tech/administration/support) to get a " +
-  "platform machine user for your organization or folder";
+  "have an organization or folder admin create a platform machine user in the Tailor Console " +
+  "and grant it a role (without the required permission you cannot view or create machine users)";
 
 const CONCEPTS_NOTE =
   "Organizations, folders, and machine users: https://docs.tailor.tech/administration/account-management";

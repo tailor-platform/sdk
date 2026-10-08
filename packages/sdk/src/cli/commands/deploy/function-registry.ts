@@ -1,5 +1,6 @@
 import * as crypto from "node:crypto";
 import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
+import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -18,7 +19,6 @@ import {
 } from "./owned-resource";
 import type { Application } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
-import type { OperatorClient } from "#/cli/shared/client";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BundledScripts, FunctionEntry } from "./function-registry-types";
 import type { ApplyPhase } from "./phase";
@@ -532,12 +532,16 @@ export async function applyFunctionRegistry(
     ]);
   } else {
     await Promise.all(
-      changeSet.deletes.map((del) =>
-        client.deleteFunctionRegistry({
-          workspaceId: del.workspaceId,
-          name: del.name,
-        }),
-      ),
+      changeSet.deletes.map(async (del) => {
+        try {
+          await client.deleteFunctionRegistry({
+            workspaceId: del.workspaceId,
+            name: del.name,
+          });
+        } catch (error) {
+          if (!isNotFoundError(error)) throw error;
+        }
+      }),
     );
   }
 }
