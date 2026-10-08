@@ -606,10 +606,7 @@ describe("workspace create with user defaults", () => {
 
     expect(result.success).toBe(true);
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.not.objectContaining({ organizationId: defaultOrganizationId }),
-    );
-    expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.not.objectContaining({ folderId: defaultFolderId }),
+      expect.objectContaining({ organizationId: undefined, folderId: undefined }),
     );
   });
 

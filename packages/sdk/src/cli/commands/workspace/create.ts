@@ -207,7 +207,7 @@ export function validateCreateWorkspaceOptions(
     throw CLIError({
       code: "WORKSPACE_FOLDER_WITHOUT_ORGANIZATION",
       message: "A folder ID requires an organization ID.",
-      suggestion: "Pass --organization-id with the organization that owns the folder.",
+      suggestion: "Give the organization that owns the folder as well.",
     });
   }
   return validated;
@@ -237,6 +237,9 @@ function pointAtUserDefaults(error: unknown, defaults: UserWorkspaceDefaults): v
 
 export { validateWorkspaceName } from "#/cli/shared/workspace-name";
 
+const ORGANIZATION_ID_ENV = "TAILOR_PLATFORM_ORGANIZATION_ID";
+const FOLDER_ID_ENV = "TAILOR_PLATFORM_FOLDER_ID";
+
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
@@ -261,12 +264,12 @@ export const createCommand = defineAppCommand({
     "organization-id": arg(z.string().optional(), {
       alias: "o",
       description: "Organization ID to workspace associate with",
-      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+      env: ORGANIZATION_ID_ENV,
     }),
     "folder-id": arg(z.string().optional(), {
       alias: "f",
       description: "Folder ID to workspace associate with",
-      env: "TAILOR_PLATFORM_FOLDER_ID",
+      env: FOLDER_ID_ENV,
     }),
     ttl: arg(ageArg.optional(), {
       description:
@@ -348,7 +351,7 @@ export const createCommand = defineAppCommand({
     const locationGiven =
       organizationId !== undefined ||
       folderId !== undefined ||
-      Boolean(process.env.TAILOR_PLATFORM_ORGANIZATION_ID || process.env.TAILOR_PLATFORM_FOLDER_ID);
+      Boolean(process.env[ORGANIZATION_ID_ENV] || process.env[FOLDER_ID_ENV]);
     const defaults = locationGiven
       ? undefined
       : await loadUserWorkspaceDefaults({ profile: args.profile });

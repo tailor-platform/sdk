@@ -120,6 +120,17 @@ describe("user update", () => {
     expect(user).not.toHaveProperty("default_folder_id");
   });
 
+  test("clears only the folder when the folder is an empty string", async () => {
+    seedConfig({ default_organization_id: organizationId, default_folder_id: folderId });
+
+    const result = await runUpdate("-o", organizationId, "-f", "");
+
+    expect(result.success).toBe(true);
+    const user = (await readPlatformConfig()).users["platform-user-sub"];
+    expect(user?.default_organization_id).toBe(organizationId);
+    expect(user).not.toHaveProperty("default_folder_id");
+  });
+
   test("clears both defaults when the organization is an empty string", async () => {
     seedConfig({ default_organization_id: organizationId, default_folder_id: folderId });
 

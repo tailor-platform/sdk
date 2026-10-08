@@ -328,7 +328,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 `workspace create` creates a workspace in the default folder, or directly under the default organization when no folder is set. Giving --organization-id or --folder-id to `workspace create`, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, replaces both defaults for that run. The defaults are not used while TAILOR_PLATFORM_TOKEN is set, because that token does not belong to a user logged in here.
 
-Each run replaces both defaults: --default-organization-id alone clears the default folder, --default-folder-id is accepted only together with --default-organization-id, and --default-organization-id "" clears both. The IDs are not checked against the Platform here; `workspace create` points back to them when it cannot use them.
+Each run replaces both defaults: --default-organization-id alone clears the default folder, --default-folder-id is accepted only together with --default-organization-id, and --default-organization-id "" clears both. The IDs are not checked against the Platform here; `workspace create` points back to them when the Platform cannot find them or denies access to them.
 
 The defaults belong to this user's login on the selected platform, so `logout` removes them, and older SDK versions drop them when they rewrite the CLI config file.
 
