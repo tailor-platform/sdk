@@ -59,7 +59,7 @@ function seedConfig(defaults: Record<string, string> = {}) {
 
 async function runUpdate(...args: string[]) {
   using _logger = silenceLogger("success", "warn", "error");
-  return runCommand(updateCommand, args);
+  return await runCommand(updateCommand, args);
 }
 
 function errorCode(result: Awaited<ReturnType<typeof runUpdate>>) {

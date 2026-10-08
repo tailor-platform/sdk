@@ -502,10 +502,14 @@ describe("workspace create with user defaults", () => {
 
   async function runCreateWithDefaults(...extraArgs: string[]) {
     using _logger = silenceLogger("out", "success", "warn", "info", "error");
-    return runCommand(createCommand, ["--name", "test-ws", "--region", "us-west", ...extraArgs], {
-      // strip unknown keys
-      globalArgs: z.object(commonArgs),
-    });
+    return await runCommand(
+      createCommand,
+      ["--name", "test-ws", "--region", "us-west", ...extraArgs],
+      {
+        // strip unknown keys
+        globalArgs: z.object(commonArgs),
+      },
+    );
   }
 
   test("creates the workspace in the user's default organization and folder", async () => {
@@ -560,23 +564,57 @@ describe("workspace create with user defaults", () => {
     );
   });
 
-  test("rejects an explicit folder without an organization instead of pairing it with the default organization", async () => {
-    stubClient();
+  test.each([
+    { source: "--folder-id", setUp: () => ["--folder-id", defaultFolderId] },
+    {
+      source: "TAILOR_PLATFORM_FOLDER_ID",
+      setUp: () => {
+        vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", defaultFolderId);
+        return [];
+      },
+    },
+    {
+      source: "an --env-file",
+      setUp: () => {
+        fs.writeFileSync(envFilePath, `TAILOR_PLATFORM_FOLDER_ID=${defaultFolderId}\n`);
+        return ["--env-file", envFilePath];
+      },
+    },
+  ])(
+    "rejects a folder from $source without an organization instead of pairing it with the default organization",
+    async ({ setUp }) => {
+      stubClient();
 
-    const result = await runCreateWithDefaults("--folder-id", defaultFolderId);
+      const result = await runCreateWithDefaults(...setUp());
 
-    expect(result.success).toBe(false);
-    const error = result.success ? undefined : result.error;
-    expect(isCLIError(error) && error.code).toBe("WORKSPACE_FOLDER_WITHOUT_ORGANIZATION");
-    expect(initOperatorClient).not.toHaveBeenCalled();
-  });
+      expect(result.success).toBe(false);
+      const error = result.success ? undefined : result.error;
+      expect(isCLIError(error) && error.code).toBe("WORKSPACE_FOLDER_WITHOUT_ORGANIZATION");
+      expect(initOperatorClient).not.toHaveBeenCalled();
+    },
+  );
 
-  test("does not use the defaults when TAILOR_PLATFORM_TOKEN is set", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");
+  test.each(["TAILOR_PLATFORM_TOKEN", "TAILOR_TOKEN"])(
+    "does not use the defaults when %s is set",
+    async (name) => {
+      vi.stubEnv(name, "mock-token");
+      const client = stubClient();
+
+      await runCreateWithDefaults();
+
+      expect(client.createWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: undefined, folderId: undefined }),
+      );
+    },
+  );
+
+  test("does not use defaults stored on a legacy user key shared with the default platform", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     const client = stubClient();
 
-    await runCreateWithDefaults();
+    const result = await runCreateWithDefaults();
 
+    expect(result.success).toBe(true);
     expect(client.createWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: undefined, folderId: undefined }),
     );

@@ -213,7 +213,7 @@ function pointAtUserDefaults(error: unknown, defaults: UserWorkspaceDefaults): v
     (error.code === Code.NotFound || error.code === Code.PermissionDenied)
   ) {
     withErrorDiagnostics(error, {
-      suggestion: `The workspace was created in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`. Check that it exists and that this user can create workspaces there, or pass --organization-id (and --folder-id) to choose another location.`,
+      suggestion: `This run targeted ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`. Check that it exists and that this user can create workspaces there, or pass --organization-id (and --folder-id) to choose another location.`,
       context: {
         defaultOrganizationId: defaults.organizationId,
         defaultFolderId: defaults.folderId ?? null,
