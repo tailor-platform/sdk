@@ -148,7 +148,7 @@ const previewCommand = defineAppCommand({
   args: z.strictObject({
     name: arg(z.string().min(1).optional(), {
       alias: "n",
-      description: "Name (defaults to the config 'name')",
+      description: "Name (defaults to the config 'name'); at most 50 characters",
     }),
     branch: arg(z.string().min(1).optional(), {
       description: "Branch to filter PRs by (defaults to the detected default branch)",

@@ -153,6 +153,10 @@ or end with a hyphen. It is used for the generated file name, the workflow
 select which workspace gets deployed (see
 [Targeting a workspace](#targeting-a-workspace)).
 
+For a preview target, the name can be at most 50 characters: each pull request
+gets its own workspace named `<name>-pr-<number>`, which must fit in 63
+characters.
+
 ## Targeting a workspace
 
 The generated `plan` and `deploy` jobs target a workspace by **id**, read from
