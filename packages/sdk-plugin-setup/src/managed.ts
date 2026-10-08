@@ -1,4 +1,5 @@
 import {
+  isAlias,
   isMap,
   isNode,
   isPair,
@@ -489,13 +490,14 @@ function mergeSteps(
   );
 }
 
-function carryUserNeeds(current: YAMLMap, rendered: YAMLMap): void {
+function carryUserNeeds(current: YAMLMap, rendered: YAMLMap, doc: Document): void {
   const currentNeeds = findPair(current, "needs")?.value;
   const renderedNeeds = findPair(rendered, "needs")?.value;
   if (currentNeeds === undefined || !isSeq(renderedNeeds)) return;
   const items = isSeq(currentNeeds) ? currentNeeds.items : [currentNeeds];
   const needOf = (node: unknown): string | undefined => {
-    const value: unknown = isScalar(node) ? node.value : undefined;
+    const target = isAlias(node) ? node.resolve(doc) : node;
+    const value: unknown = isScalar(target) ? target.value : undefined;
     return typeof value === "string" ? value : undefined;
   };
   const userNeeds = items.filter((node) => isUserNeed(needOf(node)));
@@ -574,7 +576,7 @@ export function mergeUserContent(params: {
       const renderedJob = mapAt(renderedJobs, jobId);
       if (renderedJob) {
         carryFields(pair.value, renderedJob, editableJobKeys(jobId));
-        if (RESULT_JOBS.includes(jobId)) carryUserNeeds(pair.value, renderedJob);
+        if (RESULT_JOBS.includes(jobId)) carryUserNeeds(pair.value, renderedJob, currentDoc);
       }
       mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
     }

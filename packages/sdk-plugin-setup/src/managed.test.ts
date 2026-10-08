@@ -745,6 +745,19 @@ describe("needs of the result job", () => {
     ]);
   });
 
+  test("keeps a user job referenced through a YAML alias", () => {
+    const edited = withUserJob(
+      render.content,
+      "needs:\n      - tailor-plan\n      - tailor-deploy\n      - *e2e-id\n",
+    ).replace("  e2e:\n", "  &e2e-id e2e:\n");
+    expect(hashOf(edited)).toBe(lockHash);
+    expect(resultNeedsOf(merge(edited, render, render).content)).toEqual([
+      "tailor-plan",
+      "tailor-deploy",
+      "e2e",
+    ]);
+  });
+
   test("keeps a user job written as a scalar when --force resets the managed jobs", () => {
     const edited = withUserJob(render.content, "needs: e2e\n");
     expect(resultNeedsOf(merge(edited, render, render, true).content)).toEqual([
