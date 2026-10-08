@@ -32,23 +32,16 @@ import {
   editedPartsOf,
   findReservedIds,
   isManagedHash,
-  layoutOf,
   ManagedMergeError,
   mergeUserContent,
 } from "./managed";
 import {
   appSlug,
   detectPackageManager,
-  renderActionWorkflow,
   renderBranchWorkflow,
-  renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
-  renderTailorSetupAction,
   TEMPLATE_VERSION,
-  type CoordinateApp,
-  type CoordinateAppGroup,
-  type CoordinateKind,
   type PackageManager,
   type RenderApp,
   type RenderResult,
@@ -73,8 +66,6 @@ type CommonSetupOptions = {
   loadHasMigrations?: (configPath: string) => Promise<boolean>;
   /** Injectable seed plugin detector, for testing. Defaults to loading the config. */
   loadHasSeeds?: (configPath: string) => Promise<boolean>;
-  /** Injectable static website detector, for testing. Defaults to loading the config. */
-  loadHasStaticWebsites?: (configPath: string) => Promise<boolean>;
 };
 
 export type BranchSetupOptions = CommonSetupOptions & {
@@ -107,50 +98,7 @@ type PreviewSetupOptions = CommonSetupOptions & {
   requirePreviewLabel?: boolean;
 };
 
-type ActionSetupOptions = CommonSetupOptions & {
-  kind: "action";
-};
-
-export type SetupTargetOptions =
-  | BranchSetupOptions
-  | TagSetupOptions
-  | PreviewSetupOptions
-  | ActionSetupOptions;
-
-export type CoordinateSetupOptions = {
-  coordinatorName: string;
-  coordinateKind: CoordinateKind;
-  /** Action names or comma-separated action groups, in deploy order. */
-  actions: string[];
-  branch?: string;
-  tagPattern?: string;
-  environment?: string;
-  restrictDispatch?: boolean;
-  force: boolean;
-  outputDir: string;
-  /** Injectable git runner, for testing. */
-  gitRunner?: GitRunner;
-};
-
-function splitActionGroup(input: string): string[] {
-  const names = input.split(",").map((entry) => entry.trim());
-  if (names.some((name) => name.length === 0)) {
-    throw new Error("--action must contain one or more non-empty action names.");
-  }
-  return names;
-}
-
-function uniqueGroupId(names: readonly string[], usedIds: Set<string>): string {
-  const base = names.join("-");
-  let id = base;
-  let suffix = 2;
-  while (usedIds.has(id)) {
-    id = `${base}-${suffix}`;
-    suffix += 1;
-  }
-  usedIds.add(id);
-  return id;
-}
+export type SetupTargetOptions = BranchSetupOptions | TagSetupOptions | PreviewSetupOptions;
 
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
@@ -175,11 +123,6 @@ async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
 async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
   const { plugins } = await loadConfig(configPath);
   return plugins.some((p) => p.id === "@tailor-platform/seed");
-}
-
-async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean> {
-  const { config } = await loadConfig(configPath);
-  return (config.staticWebsites?.length ?? 0) > 0;
 }
 
 // The name is used as the plan label, the generated file name, and the default
@@ -491,10 +434,8 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   let erdNamespaces: string[] = [];
   let hasMigrations = false;
   let hasSeeds = false;
-  let hasStaticWebsites = false;
   const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
   const loadHasSeeds = options.loadHasSeeds ?? defaultLoadHasSeeds;
-  const loadHasStaticWebsites = options.loadHasStaticWebsites ?? defaultLoadHasStaticWebsites;
   const loadApps = async (checks: boolean): Promise<RenderApp[] | undefined> => {
     if (!multi) return undefined;
     return Promise.all(
@@ -588,7 +529,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       seedValidate: hasSeeds,
       restrictDispatch: options.restrictDispatch ?? false,
     });
-  } else if (kind === "preview") {
+  } else {
     branchAutoDetected = options.branch === undefined;
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
     validateBranch(branch);
@@ -605,22 +546,15 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       region: options.region,
       requirePreviewLabel: options.requirePreviewLabel ?? false,
     });
-  } else {
-    // action — no branch detection, no package-manager embedding (caller installs)
-    hasStaticWebsites = await loadHasStaticWebsites(configPath);
-    render = renderActionWorkflow({ workspaceName, workingDirectory, hasStaticWebsites });
   }
 
   // File name encodes the target kind so branch + tag + preview can coexist
   // under the same workspace name without colliding.
   const kindSuffix = kind === "tag" ? "-tag" : kind === "preview" ? "-preview" : "";
-  const file =
-    kind === "action"
-      ? `.github/actions/tailor-${workspaceName}/action.yml`
-      : `.github/workflows/tailor-${workspaceName}${kindSuffix}.yml`;
+  const file = `.github/workflows/tailor-${workspaceName}${kindSuffix}.yml`;
 
   const inputs: LockInputs = {
-    branch: kind === "action" ? null : branch,
+    branch,
     branchAutoDetected: kind === "branch" || kind === "preview" ? branchAutoDetected : undefined,
     tagPattern: kind === "tag" ? options.tagPattern : null,
     environment,
@@ -637,7 +571,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     paths: extraPaths.length > 0 ? extraPaths : undefined,
     migrationDriftCheck: (kind === "branch" || kind === "tag") && !apps ? hasMigrations : undefined,
     seedValidate: (kind === "branch" || kind === "tag") && !apps ? hasSeeds : undefined,
-    hasStaticWebsites: kind === "action" ? hasStaticWebsites : undefined,
     restrictDispatch:
       kind === "branch" || kind === "tag" ? (options.restrictDispatch ?? false) : undefined,
   };
@@ -701,11 +634,7 @@ export function decideAction(obj: {
         "This file is not valid YAML. Fix it, or re-run with --force to replace it with a fresh copy.",
     };
   }
-  const [reservedId] = findReservedIds(
-    currentContent,
-    layoutOf(existing.kind),
-    existing.generatedIds,
-  );
+  const [reservedId] = findReservedIds(currentContent, existing.generatedIds);
   if (reservedId !== undefined) {
     return { action: "conflict", reason: describeReservedId(reservedId) };
   }
@@ -727,7 +656,6 @@ export function decideAction(obj: {
  * user-owned parts of the current file carried over when it is managed.
  * @param obj - Reconciliation inputs
  * @param obj.file - Repository-relative file path, for error messages
- * @param obj.kind - Target kind
  * @param obj.decision - Reconciliation action from {@link decideAction}
  * @param obj.existing - The matching lock target, if any
  * @param obj.currentContent - On-disk content when present
@@ -736,16 +664,14 @@ export function decideAction(obj: {
  */
 function reconcileContent(obj: {
   file: string;
-  kind: TargetKind;
   decision: Decision;
   existing: LockTarget | undefined;
   currentContent: string | null;
   render: RenderResult;
 }): { content: string; contentHash: string; managedHashes: Record<string, string> } {
-  const { file, kind, decision, existing, currentContent, render } = obj;
-  const layout = layoutOf(kind);
-  const contentHash = computeManagedHash(render.content, layout, render.generatedIds);
-  const managedHashes = computeManagedParts(render.content, layout, render.generatedIds);
+  const { file, decision, existing, currentContent, render } = obj;
+  const contentHash = computeManagedHash(render.content, render.generatedIds);
+  const managedHashes = computeManagedParts(render.content, render.generatedIds);
   if (decision.action !== "regenerate" || !existing || currentContent === null) {
     return { content: render.content, contentHash, managedHashes };
   }
@@ -753,9 +679,7 @@ function reconcileContent(obj: {
     const merged = mergeUserContent({
       current: currentContent,
       rendered: render.content,
-      layout,
       previousIds: existing.generatedIds,
-      previousInputs: existing.inputs,
       renderedIds: render.generatedIds,
       force: decision.force,
     });
@@ -815,7 +739,7 @@ function printEnvironmentStep(environment: string): void {
 
 export type SetupTargetResult = {
   kind: TargetKind;
-  /** Repository-relative path of the generated workflow or action. */
+  /** Repository-relative path of the generated workflow. */
   file: string;
   /** Resolved GitHub Environment name. */
   environment: string;
@@ -828,22 +752,7 @@ export type SetupTargetResult = {
  * @param result - What {@link setupTarget} generated
  */
 export function printTargetNextSteps(result: SetupTargetResult): void {
-  const { kind, file, environment, configEdited } = result;
-
-  if (kind === "action") {
-    logger.newline();
-    logger.info("Next steps:");
-    logger.newline();
-    logger.log(`The composite action has been generated at ${styles.path(file)}.`);
-    logger.log(
-      "Use `tailor setup ci coordinate` to generate a coordinator workflow that orchestrates this action.",
-    );
-    logger.log(`Commit ${TAILOR_LOCK_FILENAME} alongside it: it records this app's id.`);
-    if (configEdited) {
-      logger.log("The app id was moved out of tailor.config.ts; commit that change too.");
-    }
-    return;
-  }
+  const { environment, configEdited } = result;
 
   logger.newline();
   logger.info("Next steps:");
@@ -920,7 +829,6 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
 
   const { content, contentHash, managedHashes } = reconcileContent({
     file: resolved.file,
-    kind: resolved.kind,
     decision,
     existing,
     currentContent,
@@ -974,215 +882,4 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     environment: resolved.environment,
     configEdited,
   };
-}
-
-/**
- * Generate the coordinator workflow that orchestrates per-app composite actions.
- *
- * Unlike `setupTarget`, this function does not read a Tailor config. The coordinator
- * name is required via `--name`. App working directories are resolved from
- * the lock file entries created by `setup ci action`.
- * @param options - Coordinate setup options
- * @returns What was generated, for {@link printCoordinateNextSteps}
- */
-export async function setupCoordinate(
-  options: CoordinateSetupOptions,
-): Promise<SetupCoordinateResult> {
-  const { coordinatorName, coordinateKind, actions, force, outputDir } = options;
-  validateWorkspaceName(coordinatorName);
-
-  if (actions.length === 0) {
-    throw new Error(
-      "At least one --action is required. " +
-        "Run `tailor setup ci action --dir <app-dir>` for each app first.",
-    );
-  }
-
-  const environment = options.environment ?? coordinatorName;
-  validateEnvironment(environment);
-
-  let branch: string | null = null;
-  let branchAutoDetected = false;
-  if (coordinateKind === "branch") {
-    branchAutoDetected = options.branch === undefined;
-    branch = options.branch ?? detectDefaultBranch(outputDir, options.gitRunner);
-    validateBranch(branch);
-  } else if (options.branch !== undefined) {
-    validateBranch(options.branch);
-    branch = options.branch;
-  }
-
-  const tagPattern = options.tagPattern ?? "v*";
-  if (coordinateKind === "tag") {
-    validateTagPattern(tagPattern);
-  }
-
-  const packageManager = detectPackageManager(outputDir);
-  const lock = readLock(outputDir);
-
-  if (!lock) {
-    throw new Error(
-      ".github/tailor.lock not found. " +
-        "Run `tailor setup ci action --name <name>` for each app before running setup ci coordinate.",
-    );
-  }
-
-  const actionTargets = new Map(
-    lock.targets.filter((t) => t.kind === "action").map((target) => [target.workspaceName, target]),
-  );
-
-  // Resolve each action name to its lock entry to get the working directory.
-  const seenNames = new Set<string>();
-  const usedGroupIds = new Set<string>();
-  const actionGroups: CoordinateAppGroup[] = actions.map((actionGroup) => {
-    const names = splitActionGroup(actionGroup);
-    const apps: CoordinateApp[] = names.map((name) => {
-      if (seenNames.has(name)) {
-        throw new Error(
-          `Duplicate --action "${name}". Each composite action can only appear once in a coordinator.`,
-        );
-      }
-      seenNames.add(name);
-      const entry = actionTargets.get(name);
-      if (!entry) {
-        const unprefixed = name.startsWith("tailor-") ? name.slice("tailor-".length) : null;
-        throw new Error(
-          `Action target "${name}" not found in .github/tailor.lock. ` +
-            (unprefixed !== null && actionTargets.has(unprefixed)
-              ? `--action takes the action's name; use \`--action ${unprefixed}\`.`
-              : `Run \`tailor setup ci action --name ${name}\` first.`),
-        );
-      }
-      if (names.length > 1 && entry.templateVersion < TEMPLATE_VERSION) {
-        throw new Error(
-          `Action target "${name}" was generated with an older setup template. ` +
-            `Run \`tailor setup ci action --name ${name} --force\` before grouping it in setup ci coordinate.`,
-        );
-      }
-      validateDir(entry.inputs.dir);
-      return {
-        name,
-        dir: entry.inputs.dir,
-        hasStaticWebsites: entry.inputs.hasStaticWebsites,
-      };
-    });
-    return { id: uniqueGroupId(names, usedGroupIds), apps };
-  });
-
-  const render = renderCoordinateWorkflow({
-    coordinatorName,
-    kind: coordinateKind,
-    actionGroups,
-    branch: branch ?? undefined,
-    tagPattern: coordinateKind === "tag" ? tagPattern : undefined,
-    environment,
-    packageManager,
-    restrictDispatch: options.restrictDispatch ?? false,
-  });
-
-  const kindSuffix = coordinateKind === "tag" ? "-tag" : "";
-  const file = `.github/workflows/tailor-coordinate-${coordinatorName}${kindSuffix}.yml`;
-  const absFile = path.join(outputDir, file);
-
-  assertNoKindCollision({ lock, kind: "coordinate", workspaceName: coordinatorName, file });
-
-  const existing = findTarget(lock, "coordinate", coordinatorName);
-  const fileExists = fs.existsSync(absFile);
-  const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
-
-  const decision = decideAction({ existing, fileExists, currentContent, force });
-  if (decision.action === "conflict") {
-    throw new Error(`${file}: ${decision.reason}`);
-  }
-
-  const { content, contentHash, managedHashes } = reconcileContent({
-    file,
-    kind: "coordinate",
-    decision,
-    existing,
-    currentContent,
-    render,
-  });
-
-  fs.mkdirSync(path.dirname(absFile), { recursive: true });
-  fs.writeFileSync(absFile, content, "utf-8");
-
-  // Generate the local tailor-setup action (user-owned: created once, never overwritten).
-  const tailorSetupFile = ".github/actions/tailor-setup/action.yml";
-  const absTailorSetupFile = path.join(outputDir, tailorSetupFile);
-  if (!fs.existsSync(absTailorSetupFile)) {
-    fs.mkdirSync(path.dirname(absTailorSetupFile), { recursive: true });
-    fs.writeFileSync(absTailorSetupFile, renderTailorSetupAction({ packageManager }), "utf-8");
-    logger.success(`Generated ${styles.path(tailorSetupFile)}`);
-  }
-
-  const newTarget: LockTarget = {
-    kind: "coordinate",
-    workspaceName: coordinatorName,
-    file,
-    templateVersion: TEMPLATE_VERSION,
-    inputs: {
-      branch,
-      branchAutoDetected:
-        coordinateKind === "branch" ? branchAutoDetected : branch !== null ? false : undefined,
-      tagPattern: coordinateKind === "tag" ? tagPattern : null,
-      environment,
-      dir: ".",
-      packageManager,
-      actionDirs: actionGroups.flatMap((group) => group.apps.map((a) => a.dir)),
-      actionGroups: actionGroups.map((group) => group.apps.map((a) => a.name)),
-      restrictDispatch: options.restrictDispatch ?? false,
-    },
-    generatedIds: render.generatedIds,
-    contentHash,
-    managedHashes,
-  };
-
-  const targets = [...lock.targets];
-  const idx = targets.findIndex(
-    (t) => t.kind === newTarget.kind && t.workspaceName === newTarget.workspaceName,
-  );
-  if (idx === -1) {
-    targets.push(newTarget);
-  } else {
-    targets[idx] = newTarget;
-  }
-  writeLock(outputDir, { ...lock, version: LOCK_VERSION, targets });
-
-  if (decision.action === "restore") {
-    logger.success(`Regenerated ${styles.path(file)} (was missing on disk)`);
-  } else if (decision.action === "regenerate" || decision.action === "adopt") {
-    logger.success(`Regenerated ${styles.path(file)}`);
-  } else {
-    logger.success(`Generated ${styles.path(file)}`);
-  }
-
-  return { file, environment, tailorSetupFile };
-}
-
-export type SetupCoordinateResult = {
-  /** Repository-relative path of the generated coordinator workflow. */
-  file: string;
-  /** Resolved GitHub Environment name. */
-  environment: string;
-  /** Repository-relative path of the user-owned tailor-setup action. */
-  tailorSetupFile: string;
-};
-
-/**
- * Print next-step guidance after generating a coordinator workflow.
- * @param result - What {@link setupCoordinate} generated
- */
-export function printCoordinateNextSteps(result: SetupCoordinateResult): void {
-  const { file, environment, tailorSetupFile } = result;
-
-  logger.newline();
-  logger.info("Next steps:");
-  logger.newline();
-  printEnvironmentStep(environment);
-  logger.newline();
-  logger.log("2. Commit the generated files:");
-  logger.log(`   - ${file}`);
-  logger.log(`   - ${tailorSetupFile}  (if newly created)`);
-  logger.log("   - .github/tailor.lock");
 }

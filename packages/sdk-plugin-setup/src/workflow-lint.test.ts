@@ -1,5 +1,5 @@
 /**
- * zizmor audit of generated GitHub Actions workflows and composite actions.
+ * zizmor audit of generated GitHub Actions workflows.
  *
  * Each rendered file is written to a temp directory and audited with
  * `zizmor --offline`. The audit suites are skipped when the `zizmor` binary is
@@ -11,12 +11,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
 import {
-  renderActionWorkflow,
   renderBranchWorkflow,
-  renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
-  renderTailorSetupAction,
   type PackageManager,
 } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
@@ -68,14 +65,6 @@ const zizmorAvailable = isZizmorAvailable();
 
 function writeAndAudit(name: string, content: string): AuditResult {
   const filePath = path.join(tmpDir, ".github", "workflows", `${name}.yml`);
-  fs.writeFileSync(filePath, content, "utf-8");
-  return runZizmor(filePath);
-}
-
-function writeAndAuditAction(name: string, content: string): AuditResult {
-  const dir = path.join(tmpDir, ".github", "actions", name);
-  fs.mkdirSync(dir, { recursive: true });
-  const filePath = path.join(dir, "action.yml");
   fs.writeFileSync(filePath, content, "utf-8");
   return runZizmor(filePath);
 }
@@ -297,70 +286,6 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderTagWorkflow", () => {
   test.each(cases)("$name has no zizmor findings", ({ fileName, params }) => {
     const { content } = renderTagWorkflow({ ...COMMON, ...params });
     const { ok, output } = writeAndAudit(fileName, content);
-    expect(ok, `zizmor findings:\n${output}`).toBe(true);
-  });
-});
-
-describe.skipIf(!zizmorAvailable)("zizmor audit of renderCoordinateWorkflow", () => {
-  const COORD_COMMON = {
-    coordinatorName: "main",
-    actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
-    environment: "production",
-    packageManager: "pnpm" as PackageManager,
-  };
-
-  test("coordinate / branch has no zizmor findings", () => {
-    const { content } = renderCoordinateWorkflow({
-      ...COORD_COMMON,
-      kind: "branch",
-      branch: "main",
-    });
-    const { ok, output } = writeAndAudit("coord-branch", content);
-    expect(ok, `zizmor findings:\n${output}`).toBe(true);
-  });
-
-  test("coordinate / tag has no zizmor findings", () => {
-    const { content } = renderCoordinateWorkflow({
-      ...COORD_COMMON,
-      kind: "tag",
-      branch: "main",
-      tagPattern: "v*",
-    });
-    const { ok, output } = writeAndAudit("coord-tag", content);
-    expect(ok, `zizmor findings:\n${output}`).toBe(true);
-  });
-
-  test.each(["branch", "tag"] as const)(
-    "coordinate / %s / restricted dispatch has no zizmor findings",
-    (kind) => {
-      const { content } = renderCoordinateWorkflow({
-        ...COORD_COMMON,
-        kind,
-        branch: "main",
-        tagPattern: "v*",
-        restrictDispatch: true,
-      });
-      const { ok, output } = writeAndAudit(`coord-${kind}-restrict`, content);
-      expect(ok, `zizmor findings:\n${output}`).toBe(true);
-    },
-  );
-});
-
-describe.skipIf(!zizmorAvailable)("zizmor audit of the coordinate composite actions", () => {
-  test.each([false, true])(
-    "per-app action (static websites: %s) has no zizmor findings",
-    (hasStaticWebsites) => {
-      const { content } = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites });
-      const { ok, output } = writeAndAuditAction(`tailor-api-${hasStaticWebsites}`, content);
-      expect(ok, `zizmor findings:\n${output}`).toBe(true);
-    },
-  );
-
-  test.each(ALL_PM)("tailor-setup action / %s has no zizmor findings", (packageManager) => {
-    const { ok, output } = writeAndAuditAction(
-      `tailor-setup-${packageManager}`,
-      renderTailorSetupAction({ packageManager }),
-    );
     expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
 });
