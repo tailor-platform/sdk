@@ -313,6 +313,26 @@ function hasCurrentUserEntry(users: PfConfigV1["users"], currentUser: string): b
   return hasUserKeyForName(users, currentUser);
 }
 
+function declaredKeys(...schemas: { shape: object }[]): Set<string> {
+  return new Set(schemas.flatMap((schema) => Object.keys(schema.shape)));
+}
+
+const v1ConfigKeys = declaredKeys(pfConfigSchemaV1);
+const v2ConfigKeys = declaredKeys(pfConfigSchemaV2);
+const v2UserKeys = declaredKeys(pfUserKeyringSchema, pfUserFileSchema);
+const profileKeys = declaredKeys(pfProfileSchema);
+// An older format does not validate keys a later format declares, so migration drops them.
+const v2OnlyConfigKeys = new Set([...v2ConfigKeys].filter((key) => !v1ConfigKeys.has(key)));
+const v3OnlyUserKeys = new Set(
+  [...declaredKeys(pfUserKeyringSchemaV3, pfUserFileSchemaV3)].filter(
+    (key) => !v2UserKeys.has(key),
+  ),
+);
+
+function withoutKeys<T extends object>(entry: T, keys: ReadonlySet<string>): T {
+  return Object.fromEntries(Object.entries(entry).filter(([key]) => !keys.has(key))) as T;
+}
+
 /**
  * Migrate a v1 config to v2.
  * Tokens are kept in the config file (storage: "file") during migration.
@@ -330,7 +350,7 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfigV2 {
   }
 
   return {
-    ...v1Config,
+    ...withoutKeys(v1Config, v2OnlyConfigKeys),
     version: V2_CONFIG_VERSION,
     min_sdk_version: V2_MIN_SDK_VERSION,
     users,
@@ -348,7 +368,7 @@ function migrateV2ToV3(v2Config: PfConfigV2): PfConfig {
     if (!entry) continue;
     const email = inferEmailFromUserId(user);
     users[user] = {
-      ...entry,
+      ...withoutKeys(entry, v3OnlyUserKeys),
       ...(email ? { email } : {}),
     };
   }
@@ -503,13 +523,6 @@ function hasProfilePlatformSettings(config: Pick<PfConfig | PfConfigV1, "profile
 function hasScopedUserKeys(config: Pick<PfConfig | PfConfigV1, "users">): boolean {
   return Object.keys(config.users).some((userKey) => userKey.includes("|"));
 }
-
-const v2ConfigKeys = new Set(Object.keys(pfConfigSchemaV2.shape));
-const v2UserKeys = new Set([
-  ...Object.keys(pfUserKeyringSchema.shape),
-  ...Object.keys(pfUserFileSchema.shape),
-]);
-const profileKeys = new Set(Object.keys(pfProfileSchema.shape));
 
 function hasKeysOutside(entry: object | undefined, knownKeys: ReadonlySet<string>): boolean {
   return (
@@ -932,10 +945,17 @@ function userExtraFields(entry: PfUser | undefined) {
   return extraFields;
 }
 
-function carryUserExtraFields(config: PfConfig, fromKey: string, toKey: string) {
-  const target = config.users[toKey];
-  if (fromKey === toKey || !target) return;
-  config.users[toKey] = { ...userExtraFields(config.users[fromKey]), ...target };
+async function removeUserAlias(config: PfConfig, aliasKey: string, canonicalKey: string) {
+  if (aliasKey === canonicalKey) return;
+  const entry = config.users[aliasKey];
+  const canonicalEntry = config.users[canonicalKey];
+  if (canonicalEntry) {
+    config.users[canonicalKey] = { ...userExtraFields(entry), ...canonicalEntry };
+  }
+  if (entry?.storage === "keyring") {
+    await deleteKeyringTokens(aliasKey);
+  }
+  delete config.users[aliasKey];
 }
 
 /**
@@ -1059,13 +1079,7 @@ export async function removeLegacyUserAlias(
   const canonicalKey = platformUserKey(canonicalUser, platformConfig);
   const legacyKeys = new Set([legacyUser, platformUserKey(legacyUser, platformConfig)]);
   for (const legacyKey of legacyKeys) {
-    if (legacyKey === canonicalKey) continue;
-    carryUserExtraFields(config, legacyKey, canonicalKey);
-    const entry = config.users[legacyKey];
-    if (entry?.storage === "keyring") {
-      await deleteKeyringTokens(legacyKey);
-    }
-    delete config.users[legacyKey];
+    await removeUserAlias(config, legacyKey, canonicalKey);
   }
 }
 
@@ -1175,15 +1189,7 @@ export async function fetchLatestToken(
     { platformConfig, email },
   );
   await removeLegacyUserAlias(config, user, resolvedUser, platformConfig);
-  const canonicalKey = platformUserKey(resolvedUser, platformConfig);
-  if (storedUser !== canonicalKey) {
-    carryUserExtraFields(config, storedUser, canonicalKey);
-    const entry = config.users[storedUser];
-    if (entry?.storage === "keyring") {
-      await deleteKeyringTokens(storedUser);
-    }
-    delete config.users[storedUser];
-  }
+  await removeUserAlias(config, storedUser, platformUserKey(resolvedUser, platformConfig));
   if (previousEmail && email && previousEmail !== email) {
     logger.info(`Updated local user email from "${previousEmail}" to "${email}".`);
   }

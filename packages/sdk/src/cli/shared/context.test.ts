@@ -2075,6 +2075,38 @@ describe("unknown config keys", () => {
     },
   );
 
+  test.each([
+    {
+      name: "an older version's user email",
+      config: {
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: { "user-sub": { storage: "keyring", token_expires_at: futureDate, email: null } },
+        profiles: {},
+        current_user: "user-sub",
+      },
+    },
+    {
+      name: "a V1 config's latest_min_sdk_version",
+      config: {
+        version: 1,
+        latest_min_sdk_version: "next",
+        users: { "user@example.com": { access_token: "token", token_expires_at: futureDate } },
+        profiles: {},
+        current_user: "user@example.com",
+      },
+    },
+  ])(
+    "keeps the config readable after migrating $name that the older format does not validate",
+    async ({ config }) => {
+      writeRawConfig(config);
+
+      writePlatformConfig(await readPlatformConfig());
+
+      await expect(readPlatformConfig()).resolves.toMatchObject({ version: 3 });
+    },
+  );
+
   test("drops file tokens left on a keyring user while keeping its other keys", async () => {
     writeRawConfig({
       version: 3,
