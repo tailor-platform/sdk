@@ -5,6 +5,7 @@ import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
+import { computeSourceScriptHash } from "#/parser/service/tailordb/type-script";
 import { getNamespacesWithMigrations } from "./config";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
@@ -18,6 +19,7 @@ import {
   waitForCloneApplicationData,
 } from "./test-runtime";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { RemoteMigrationState } from "./remote-state";
 import type { PreparedMigrationTest } from "./test-types";
 
@@ -431,6 +433,54 @@ describe("migration test runtime", () => {
     return dir;
   }
 
+  test("treats an unlabeled source as 0 when 0000 holds field defaults that the remote does not carry", async () => {
+    const initial = normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "main",
+      createdAt: "2026-08-05T00:00:00.000Z",
+      tables: {
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: { name: { type: "string", required: true, default: "unnamed" } },
+        },
+      },
+    });
+    const migrationsDir = migrationsDirWithInitialSchema(initial);
+    const scriptHash = computeSourceScriptHash(initial.tables.Item!.fields);
+    const remoteItem = {
+      name: "Item",
+      schema: {
+        typeHook: { create: { expr: `_value // @sdk-source-hash:${scriptHash}` } },
+        fields: {
+          name: {
+            type: "string",
+            required: true,
+            array: false,
+            index: false,
+            unique: false,
+            foreignKey: false,
+            description: "",
+            allowedValues: [],
+            validate: [],
+            fields: {},
+          },
+        },
+      },
+    };
+
+    await expect(
+      resolveSourceMigrationNumber(
+        remoteClient([remoteItem]),
+        "source",
+        { namespace: "main", migrationsDir },
+        unlabeledState(),
+        {} as LoadedConfig,
+        [],
+      ),
+    ).resolves.toBe(0);
+  });
+
   test("returns the labeled migration number as is", async () => {
     await expect(
       resolveSourceMigrationNumber(
@@ -438,6 +488,8 @@ describe("migration test runtime", () => {
         "source",
         { namespace: "main", migrationsDir: "/unused" },
         unlabeledState({ number: 3 }),
+        {} as LoadedConfig,
+        [],
       ),
     ).resolves.toBe(3);
   });
@@ -451,6 +503,8 @@ describe("migration test runtime", () => {
         "source",
         { namespace: "main", migrationsDir },
         unlabeledState(),
+        {} as LoadedConfig,
+        [],
       ),
     ).resolves.toBe(0);
   });
@@ -471,6 +525,8 @@ describe("migration test runtime", () => {
         "source",
         { namespace: "main", migrationsDir },
         unlabeledState(),
+        {} as LoadedConfig,
+        [],
       ),
     ).rejects.toThrow("differs from the initial migration snapshot");
   });
@@ -482,6 +538,8 @@ describe("migration test runtime", () => {
         "source",
         { namespace: "main", migrationsDir: "/unused" },
         unlabeledState({ metadataExists: false }),
+        {} as LoadedConfig,
+        [],
       ),
     ).rejects.toMatchObject({
       code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",

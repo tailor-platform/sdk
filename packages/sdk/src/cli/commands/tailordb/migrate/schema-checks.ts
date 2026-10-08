@@ -293,6 +293,41 @@ function reconstructPreMigrationSnapshot(
 }
 
 /**
+ * Compare a namespace's deployed schema with a snapshot the way a deploy would leave it
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param snapshot - Snapshot the remote is expected to match
+ * @param config - Loaded application config
+ * @param tailorDBInputs - Deploy inputs for namespace defaults
+ * @param ignoredSettings - Table settings left out of the comparison on both sides
+ * @returns Drifts between the remote and the snapshot
+ */
+export async function compareRemoteSchemaWithSnapshot(
+  client: OperatorClient,
+  workspaceId: string,
+  snapshot: SchemaSnapshot,
+  config: LoadedConfig,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  ignoredSettings: readonly (keyof SnapshotSettings)[] = [],
+): Promise<SchemaDrift[]> {
+  const [remoteTypes, remoteGqlPermissions] = await Promise.all([
+    fetchRemoteTypes(client, workspaceId, snapshot.namespace),
+    fetchRemoteGqlPermissions(client, workspaceId, snapshot.namespace),
+  ]);
+  const expectedDeploySnapshot = deployComparableSnapshot(
+    snapshot,
+    remoteTypes,
+    namespaceGqlOperations(config, tailorDBInputs, snapshot.namespace),
+  );
+  return compareRemoteWithSnapshot(
+    remoteTypes,
+    expectedDeploySnapshot,
+    remoteGqlPermissions,
+    ignoredSettings,
+  );
+}
+
+/**
  * Verify remote schema matches the expected snapshot state
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
@@ -409,22 +444,12 @@ export async function verifyRemoteSchema(
       continue;
     }
 
-    // Fetch remote tables
-    const [remoteTypes, remoteGqlPermissions] = await Promise.all([
-      fetchRemoteTypes(client, workspaceId, namespace),
-      fetchRemoteGqlPermissions(client, workspaceId, namespace),
-    ]);
-    const expectedDeploySnapshot = deployComparableSnapshot(
+    const drifts = await compareRemoteSchemaWithSnapshot(
+      client,
+      workspaceId,
       expectedSnapshot,
-      remoteTypes,
-      namespaceGqlOperations(config, tailorDBInputs, namespace),
-    );
-
-    // Compare remote with expected snapshot
-    const drifts = compareRemoteWithSnapshot(
-      remoteTypes,
-      expectedDeploySnapshot,
-      remoteGqlPermissions,
+      config,
+      tailorDBInputs,
       inProgressNumber === undefined ? [] : MIGRATION_RESTRICTION_SETTINGS,
     );
 

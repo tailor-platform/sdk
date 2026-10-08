@@ -14,6 +14,7 @@ import {
 } from "#/cli/commands/deploy/tailordb/migration";
 import { bundleSeedScript } from "#/cli/commands/generate/seed/bundler";
 import {
+  compareRemoteSchemaWithSnapshot,
   fetchRemoteSchemaSnapshot,
   toTailorDBDeployInput,
   type TailorDBDeployInput,
@@ -33,7 +34,6 @@ import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import { bundleMigrationScript } from "./bundler";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
-import { formatMigrationDiff } from "./diff-calculator";
 import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertValidMigrationFiles,
@@ -44,6 +44,8 @@ import {
   type NormalizedSchemaSnapshot,
   type SnapshotFieldConfig,
 } from "./snapshot";
+import { formatSchemaDrifts } from "./snapshot-remote";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { LoadedApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { RemoteMigrationState } from "./remote-state";
@@ -408,6 +410,8 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
  * @param workspaceId - Source workspace ID
  * @param namespace - Namespace and its migrations directory
  * @param remoteState - Migration state read from the source namespace
+ * @param config - Loaded application config
+ * @param inputs - TailorDB deploy inputs for namespace defaults
  * @returns The labeled number, or 0 for an unlabeled namespace that matches 0000
  */
 export async function resolveSourceMigrationNumber(
@@ -415,6 +419,8 @@ export async function resolveSourceMigrationNumber(
   workspaceId: string,
   namespace: { namespace: string; migrationsDir: string },
   remoteState: RemoteMigrationState,
+  config: LoadedConfig,
+  inputs: ReadonlyArray<TailorDBDeployInput>,
 ): Promise<number> {
   if (remoteState.number !== null) return remoteState.number;
   if (!remoteState.metadataExists) {
@@ -431,12 +437,17 @@ export async function resolveSourceMigrationNumber(
       message: `No migration baseline snapshot found for namespace "${namespace.namespace}".`,
     });
   }
-  const remote = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace.namespace);
-  const diff = compareSnapshots(initial, remote);
-  if (diff.changes.length > 0) {
+  const drifts = await compareRemoteSchemaWithSnapshot(
+    client,
+    workspaceId,
+    initial,
+    config,
+    inputs,
+  );
+  if (drifts.length > 0) {
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_INVALID",
-      message: `Source namespace "${namespace.namespace}" has no migration label and its schema differs from the initial migration snapshot (0000):\n${formatMigrationDiff(diff)}`,
+      message: `Source namespace "${namespace.namespace}" has no migration label and its schema differs from the initial migration snapshot (0000):\n${formatSchemaDrifts(drifts)}`,
       suggestion: "Bring the source schema in line with 0000 or set its migration label.",
     });
   }
@@ -491,6 +502,8 @@ export async function assertSourceBaselineFresh(
       sourceWorkspaceId,
       namespace,
       remoteState,
+      loaded.config,
+      inputs,
     );
     if (migrationNumber !== baseline.migrationNumber) {
       throw CLIError({
@@ -678,6 +691,8 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       sourceWorkspaceId,
       namespace,
       remoteState,
+      loaded.config,
+      inputs,
     );
     const latest = getLatestMigrationNumber(namespace.migrationsDir);
     if (migrationNumber > latest) {
