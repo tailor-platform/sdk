@@ -184,7 +184,7 @@ importers:
         version: 24.19.1
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       knip:
         specifier: 6.39.0
         version: 6.39.0
@@ -251,7 +251,7 @@ importers:
         version: 7.0.0-dev.20260707.2
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       graphql:
         specifier: 17.0.2
         version: 17.0.2
@@ -290,7 +290,7 @@ importers:
         version: 24.19.1
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -333,7 +333,7 @@ importers:
         version: 24.19.1
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -603,8 +603,8 @@ importers:
         specifier: 24.19.1
         version: 24.19.1
       eslint:
-        specifier: 10.11.0
-        version: 10.11.0(jiti@2.7.0)(supports-color@7.2.0)
+        specifier: 10.12.0
+        version: 10.12.0(jiti@2.7.0)(supports-color@7.2.0)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -809,7 +809,7 @@ importers:
         version: 5.0.3(vitest@5.0.3)
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       oxfmt:
         specifier: 0.71.0
         version: 0.71.0
@@ -876,7 +876,7 @@ importers:
         version: 7.8.0
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -907,7 +907,7 @@ importers:
         version: 24.19.1
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -950,7 +950,7 @@ importers:
         version: 24.19.1
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -1005,7 +1005,7 @@ importers:
         version: 0.3.1
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -3361,6 +3361,16 @@ packages:
       jiti:
         optional: true
 
+  eslint@10.12.0:
+    resolution: {integrity: sha512-npHjrHb2o4ehH3mE+YuxABR+0gyb0aVWCIolgJDArwCiHEIsonBm3ZKjel5b0U5+a+MbEvIyRCGCzD3eKKK2NA==}
+    engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+    hasBin: true
+    peerDependencies:
+      jiti: '*'
+    peerDependenciesMeta:
+      jiti:
+        optional: true
+
   espree@11.2.0:
     resolution: {integrity: sha512-7p3DrVEIopW1B1avAGLuCSh1jubc01H2JHc8B4qqGblmg5gI9yumBgACjWo4JlIc04ufug4xJ3SQI8HkS/Rgzw==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
@@ -4948,11 +4958,25 @@ snapshots:
       eslint: 10.11.0(jiti@2.7.0)(supports-color@7.2.0)
       eslint-visitor-keys: 3.4.3
 
+  '@eslint-community/eslint-utils@4.10.1(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))':
+    dependencies:
+      eslint: 10.12.0(jiti@2.7.0)(supports-color@7.2.0)
+      eslint-visitor-keys: 3.4.3
+
   '@eslint-community/regexpp@4.12.2': {}
 
   '@eslint-zod/utils@6.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
     dependencies:
       '@typescript-eslint/utils': 8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
+      esquery: 1.7.0
+    transitivePeerDependencies:
+      - eslint
+      - supports-color
+      - typescript
+
+  '@eslint-zod/utils@6.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
+    dependencies:
+      '@typescript-eslint/utils': 8.71.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
       esquery: 1.7.0
     transitivePeerDependencies:
       - eslint
@@ -5856,6 +5880,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@typescript-eslint/utils@8.71.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
+    dependencies:
+      '@eslint-community/eslint-utils': 4.10.1(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))
+      '@typescript-eslint/scope-manager': 8.71.0
+      '@typescript-eslint/types': 8.71.0
+      '@typescript-eslint/typescript-estree': 8.71.0(supports-color@7.2.0)(typescript@6.0.3)
+      eslint: 10.12.0(jiti@2.7.0)(supports-color@7.2.0)
+      typescript: 6.0.3
+    transitivePeerDependencies:
+      - supports-color
+
   '@typescript-eslint/visitor-keys@8.71.0':
     dependencies:
       '@typescript-eslint/types': 8.71.0
@@ -6324,6 +6359,18 @@ snapshots:
       - supports-color
       - typescript
 
+  eslint-plugin-zod@5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5):
+    dependencies:
+      '@eslint-zod/utils': 6.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
+      '@typescript-eslint/utils': 8.71.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
+    optionalDependencies:
+      eslint: 10.12.0(jiti@2.7.0)(supports-color@7.2.0)
+      oxlint: 1.86.0(oxlint-tsgolint@7.0.2003)
+      zod: 4.6.5
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
+
   eslint-scope@9.1.2:
     dependencies:
       '@types/esrecurse': 4.3.1
@@ -6338,6 +6385,43 @@ snapshots:
   eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0):
     dependencies:
       '@eslint-community/eslint-utils': 4.10.1(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))
+      '@eslint-community/regexpp': 4.12.2
+      '@eslint/config-array': 0.23.5(supports-color@7.2.0)
+      '@eslint/config-helpers': 0.7.0
+      '@eslint/core': 1.2.1
+      '@eslint/plugin-kit': 0.7.3
+      '@humanfs/node': 0.16.8
+      '@humanwhocodes/module-importer': 1.0.1
+      '@humanwhocodes/retry': 0.4.3
+      '@types/estree': 1.0.9
+      ajv: 6.15.0
+      cross-spawn: 7.0.6
+      debug: 4.4.3(supports-color@7.2.0)
+      escape-string-regexp: 4.0.0
+      eslint-scope: 9.1.2
+      eslint-visitor-keys: 5.0.1
+      espree: 11.2.0
+      esquery: 1.7.0
+      esutils: 2.0.3
+      fast-deep-equal: 3.1.3
+      file-entry-cache: 11.1.5
+      find-up: 5.0.0
+      glob-parent: 6.0.2
+      ignore: 5.3.2
+      imurmurhash: 0.1.4
+      is-glob: 4.0.3
+      json-stable-stringify-without-jsonify: 1.0.1
+      minimatch: 10.2.6
+      natural-compare: 1.4.0
+      optionator: 0.9.4
+    optionalDependencies:
+      jiti: 2.7.0
+    transitivePeerDependencies:
+      - supports-color
+
+  eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0):
+    dependencies:
+      '@eslint-community/eslint-utils': 4.10.1(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))
       '@eslint-community/regexpp': 4.12.2
       '@eslint/config-array': 0.23.5(supports-color@7.2.0)
       '@eslint/config-helpers': 0.7.0
