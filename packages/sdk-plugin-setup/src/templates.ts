@@ -10,7 +10,7 @@ import tagTemplate from "./tag.workflow.yml";
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
 // Released template fingerprint: 9573076951333090912c519662c444240e996ae0fc4da4c8cde719a8a3101fb5
 const RELEASED_TEMPLATE_VERSION = 16;
-const TEMPLATE_CHANGED_SINCE_RELEASE = false;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
   RELEASED_TEMPLATE_VERSION + (TEMPLATE_CHANGED_SINCE_RELEASE ? 1 : 0);
@@ -48,6 +48,20 @@ export type RenderApp = {
   migrationDriftCheck?: boolean;
 };
 
+/** Label-triggered `tailordb migration test` job of a branch target. */
+export type RenderMigrationTestParams = {
+  /** PR label that triggers the job; removed when the job ends. */
+  label: string;
+  /** Data source passed to `--data`. */
+  data: "clone" | "seed";
+  /**
+   * Dedicated GitHub Environment holding the source workspace in
+   * `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID`; omit to use the plan/deploy
+   * environment and its `TAILOR_PLATFORM_WORKSPACE_ID`.
+   */
+  environment?: string;
+};
+
 export type RenderBranchParams = {
   workspaceName: string;
   branch: string;
@@ -64,6 +78,8 @@ export type RenderBranchParams = {
   /** Include the migration-drift-check step in the plan job (default: false). */
   migrationDriftCheck?: boolean;
   erdPreview: { namespaces: string[] } | null;
+  /** Add the label-triggered migration test job (ignored with `apps`). */
+  migrationTest?: RenderMigrationTestParams;
   /** Deploy on manual dispatch only from the target branch. */
   restrictDispatch?: boolean;
 };
@@ -432,6 +448,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   const seedValidate = !params.apps && (params.seedValidate ?? false);
   const migrationDriftCheck = !params.apps && (params.migrationDriftCheck ?? false);
   const erdPreview = params.erdPreview;
+  const migrationTest = params.apps ? undefined : params.migrationTest;
 
   let out = branchTemplate;
   out = block(out, "PLAN_JOB", true);
@@ -439,31 +456,52 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   out = block(out, "ERD_PREVIEW_COMMENT_JOB", erdPreview !== null);
   out = block(out, "PULL_REQUEST", true);
   out = block(out, "DISPATCH_INPUTS", true);
+  out = block(out, "MIGRATION_TEST_JOB", migrationTest !== undefined);
+  out = line(
+    out,
+    "PR_TYPES",
+    migrationTest ? "types: [opened, synchronize, reopened, labeled]" : undefined,
+  );
   out = block(out, "SEED_VALIDATE", seedValidate);
   out = block(out, "MIGRATION_DRIFT_CHECK", migrationDriftCheck);
   // SEED_DATA is dropped from the default rendering; users add their own step.
   out = block(out, "SEED_DATA", false);
   const patterns = changePatterns(params);
+  // A label event reaches the plan and ERD jobs too; only the migration test job reacts to it.
+  const pullRequest = migrationTest
+    ? "(github.event_name == 'pull_request' && github.event.action != 'labeled')"
+    : "github.event_name == 'pull_request'";
   out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
   out = line(
     out,
     "PLAN_IF",
     gateOnChanges(
-      "if: |-\n  github.event_name == 'pull_request' ||\n  (github.event_name == 'workflow_dispatch' && inputs['dry-run'])",
+      `if: |-\n  ${pullRequest} ||\n  (github.event_name == 'workflow_dispatch' && inputs['dry-run'])`,
       patterns,
     ),
   );
-  out = line(
-    out,
-    "ERD_MATRIX_IF",
-    gateOnChanges("if: github.event_name == 'pull_request'", patterns),
-  );
+  out = line(out, "ERD_MATRIX_IF", gateOnChanges(`if: ${pullRequest}`, patterns));
   out = line(
     out,
     "DEPLOY_IF",
     gateOnChanges(branchDeployIf(params.restrictDispatch ?? false), patterns),
   );
   out = line(out, "CHANGES_GUARD", changesGuard(patterns));
+
+  if (migrationTest) {
+    out = out
+      .replaceAll("__MIGRATION_TEST_LABEL__", () => migrationTest.label)
+      .replaceAll("__MIGRATION_TEST_DATA__", () => migrationTest.data)
+      .replaceAll(
+        "__MIGRATION_TEST_ENVIRONMENT__",
+        () => migrationTest.environment ?? params.environment,
+      )
+      .replaceAll("__MIGRATION_TEST_SOURCE_VARIABLE__", () =>
+        migrationTest.environment === undefined
+          ? "TAILOR_PLATFORM_WORKSPACE_ID"
+          : "TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID",
+      );
+  }
 
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
 
@@ -503,6 +541,17 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-erd-preview/tailor-upload-erd-viewer",
       "tailor-erd-preview-comment",
       "tailor-erd-preview-comment/tailor-comment-erd-preview",
+    );
+  }
+  if (migrationTest) {
+    generatedIds.push(
+      "tailor-migration-test",
+      "tailor-migration-test/tailor-checkout",
+      "tailor-migration-test/tailor-setup",
+      "tailor-migration-test/tailor-install",
+      "tailor-migration-test/tailor-migration-test-login",
+      "tailor-migration-test/tailor-migration-test",
+      "tailor-migration-test/tailor-migration-test-unlabel",
     );
   }
   generatedIds.push(

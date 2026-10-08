@@ -33,6 +33,28 @@ const lockTarget = (
 });
 
 describe("planUpdate", () => {
+  test("branch: carries the recorded migration test options into the regeneration", () => {
+    const plan = planUpdate(
+      lockTarget("branch", "my-app", {
+        migrationTest: true,
+        migrationTestLabel: "run-migration-test",
+        migrationTestEnvironment: "prod-source",
+        migrationTestData: "seed",
+      }),
+      common,
+    );
+
+    expect(plan).toMatchObject({
+      kind: "target",
+      options: {
+        migrationTest: true,
+        migrationTestLabel: "run-migration-test",
+        migrationTestEnvironment: "prod-source",
+        migrationTestData: "seed",
+      },
+    });
+  });
+
   test("branch: regenerates with the recorded name, dir, environment, branch and flags", () => {
     const plan = planUpdate(
       lockTarget("branch", "my-app", {

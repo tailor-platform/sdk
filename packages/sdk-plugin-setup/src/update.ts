@@ -41,6 +41,10 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): UpdatePlan
           branch: recordedBranchUnlessDetected(inputs),
           extraPaths: inputs.paths,
           erdPreview: inputs.erdPreview ?? false,
+          migrationTest: inputs.migrationTest,
+          migrationTestLabel: inputs.migrationTestLabel,
+          migrationTestEnvironment: inputs.migrationTestEnvironment,
+          migrationTestData: inputs.migrationTestData,
           restrictDispatch: inputs.restrictDispatch ?? false,
         },
       };

@@ -985,6 +985,178 @@ describe("renderPreviewWorkflow", () => {
   });
 });
 
+type WorkflowJob = {
+  if?: string;
+  environment?: string;
+  "timeout-minutes"?: number;
+  permissions?: Record<string, string>;
+  concurrency?: { group: string; "cancel-in-progress": boolean };
+  steps: { id?: string; if?: string; env?: Record<string, string>; run?: string }[];
+};
+type Workflow = {
+  on: { pull_request: { types?: string[] } };
+  jobs: Record<string, WorkflowJob>;
+};
+
+describe("renderBranchWorkflow migration test job", () => {
+  const migrationTest = { label: "tailor:migration-test", data: "clone" } as const;
+  const render = (overrides: Partial<RenderBranchParams> = {}) => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      migrationDriftCheck: true,
+      migrationTest,
+      ...overrides,
+    });
+    return { content, generatedIds, workflow: parseYAML(content) as Workflow };
+  };
+
+  test("renders no migration test job and keeps the default pull_request types when disabled", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      migrationDriftCheck: true,
+    });
+    const workflow = parseYAML(content) as Workflow;
+
+    expect(workflow.jobs["tailor-migration-test"]).toBeUndefined();
+    expect(workflow.on.pull_request.types).toBeUndefined();
+    expect(generatedIds.some((id) => id.startsWith("tailor-migration-test"))).toBe(false);
+    expect(content).not.toMatch(NO_MARKER);
+  });
+
+  test("adds the labeled event to the pull_request types", () => {
+    const { workflow } = render();
+
+    expect(workflow.on.pull_request.types).toEqual([
+      "opened",
+      "synchronize",
+      "reopened",
+      "labeled",
+    ]);
+  });
+
+  test("runs only when the configured label is added to a same-repository pull request", () => {
+    const { workflow } = render();
+    const job = workflow.jobs["tailor-migration-test"]!;
+
+    expect(job.if).toBe(
+      [
+        "github.event_name == 'pull_request' &&",
+        "github.event.action == 'labeled' &&",
+        "github.event.label.name == 'tailor:migration-test' &&",
+        "!github.event.pull_request.head.repo.fork",
+      ].join("\n"),
+    );
+  });
+
+  test("keeps plan and ERD jobs from re-running when any label is added", () => {
+    const { workflow } = render({ erdPreview: { namespaces: ["main"] } });
+
+    expect(workflow.jobs["tailor-plan"]?.if).toContain("github.event.action != 'labeled'");
+    expect(workflow.jobs["tailor-erd-preview-matrix"]?.if).toContain(
+      "github.event.action != 'labeled'",
+    );
+  });
+
+  test("uses the plan environment and its workspace variable by default", () => {
+    const { workflow } = render();
+    const job = workflow.jobs["tailor-migration-test"]!;
+    const run = job.steps.find((step) => step.id === "tailor-migration-test");
+
+    expect(job.environment).toBe("my-app");
+    expect(run?.env?.TAILOR_PLATFORM_WORKSPACE_ID).toBe("${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}");
+  });
+
+  test("uses a dedicated environment and its source workspace variable when given", () => {
+    const { workflow } = render({
+      migrationTest: { ...migrationTest, environment: "prod-readonly" },
+    });
+    const job = workflow.jobs["tailor-migration-test"]!;
+    const run = job.steps.find((step) => step.id === "tailor-migration-test");
+
+    expect(job.environment).toBe("prod-readonly");
+    expect(run?.env?.TAILOR_PLATFORM_WORKSPACE_ID).toBe(
+      "${{ vars.TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID }}",
+    );
+  });
+
+  test.each(["clone", "seed"] as const)(
+    "runs migration test with --data %s under a job time limit",
+    (data) => {
+      const { workflow } = render({ migrationTest: { ...migrationTest, data } });
+      const job = workflow.jobs["tailor-migration-test"]!;
+      const run = job.steps.find((step) => step.id === "tailor-migration-test");
+
+      expect(run?.run).toContain(
+        `pnpm exec tailor tailordb migration test --data ${data} --yes --json`,
+      );
+      expect(job["timeout-minutes"]).toBe(60);
+    },
+  );
+
+  test("signs in with the machine user only in the login step", () => {
+    const { workflow } = render();
+    const steps = workflow.jobs["tailor-migration-test"]!.steps;
+    const login = steps.find((step) => step.id === "tailor-migration-test-login");
+
+    expect(login?.run).toContain("pnpm exec tailor login --machine-user");
+    expect(login?.env).toEqual({
+      TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:
+        "${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
+      TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET:
+        "${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
+    });
+    expect(
+      steps.filter((step) => step.env?.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET),
+    ).toHaveLength(1);
+  });
+
+  test("always removes the label as the last step, with minimal permissions", () => {
+    const { workflow } = render();
+    const job = workflow.jobs["tailor-migration-test"]!;
+    const last = job.steps.at(-1)!;
+
+    expect(last.id).toBe("tailor-migration-test-unlabel");
+    expect(last.if).toBe("always()");
+    expect(last.env?.LABEL).toBe("tailor:migration-test");
+    expect(last.run).toContain("DELETE");
+    expect(job.permissions).toEqual({ contents: "read", "pull-requests": "write" });
+  });
+
+  test("never cancels a running migration test for the same pull request", () => {
+    const { workflow } = render();
+
+    expect(workflow.jobs["tailor-migration-test"]?.concurrency).toEqual({
+      group: "tailor-migration-test-my-app-${{ github.event.pull_request.number }}",
+      "cancel-in-progress": false,
+    });
+  });
+
+  test("records the job and its steps as managed ids", () => {
+    const { generatedIds } = render();
+
+    expect(generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-migration-test",
+        "tailor-migration-test/tailor-checkout",
+        "tailor-migration-test/tailor-setup",
+        "tailor-migration-test/tailor-install",
+        "tailor-migration-test/tailor-migration-test-login",
+        "tailor-migration-test/tailor-migration-test",
+        "tailor-migration-test/tailor-migration-test-unlabel",
+      ]),
+    );
+  });
+
+  test("runs the CLI steps in the working directory", () => {
+    const { workflow } = render({ workingDirectory: "apps/backend" });
+    const run = workflow.jobs["tailor-migration-test"]!.steps.find(
+      (step) => step.id === "tailor-migration-test",
+    ) as { "working-directory"?: string };
+
+    expect(run["working-directory"]).toBe("apps/backend");
+  });
+});
+
 describe("Tailor Platform action pins", () => {
   test("pins every generated Tailor Platform action to the release pin", () => {
     expect(ACTIONS_SHA).toMatch(/^[0-9a-f]{40}$/);
@@ -1890,6 +2062,88 @@ export default defineConfig({
     expect(lock?.targets[0]).toMatchObject({ inputs: { migrationDriftCheck: true } });
   });
 
+  describe("migration test", () => {
+    const enabled = (overrides: Partial<BranchSetupOptions> = {}) =>
+      baseOptions({
+        workspaceName: "my-app",
+        loadHasMigrations: async () => true,
+        loadHasSeeds: async () => false,
+        migrationTest: true,
+        ...overrides,
+      });
+    const readWorkflow = () =>
+      parseYAML(
+        fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8"),
+      ) as Workflow;
+
+    test("generates the job with the default label and clone data, and records the inputs in the lock", async () => {
+      await setupTarget(enabled());
+
+      expect(readWorkflow().jobs["tailor-migration-test"]?.if).toContain(
+        "github.event.label.name == 'tailor:migration-test'",
+      );
+      expect(readLock(testDir)?.targets[0]).toMatchObject({
+        inputs: {
+          migrationTest: true,
+          migrationTestLabel: "tailor:migration-test",
+          migrationTestData: "clone",
+        },
+      });
+    });
+
+    test("records and renders a custom label, data kind, and dedicated environment", async () => {
+      await setupTarget(
+        enabled({
+          loadHasSeeds: async () => true,
+          migrationTestLabel: "run-migration-test",
+          migrationTestData: "seed",
+          migrationTestEnvironment: "prod-source",
+        }),
+      );
+
+      const job = readWorkflow().jobs["tailor-migration-test"]!;
+      expect(job.environment).toBe("prod-source");
+      expect(job.if).toContain("github.event.label.name == 'run-migration-test'");
+      expect(readLock(testDir)?.targets[0]).toMatchObject({
+        inputs: {
+          migrationTestLabel: "run-migration-test",
+          migrationTestData: "seed",
+          migrationTestEnvironment: "prod-source",
+        },
+      });
+    });
+
+    test("rejects enabling it for a config without TailorDB migrations", async () => {
+      await expect(setupTarget(enabled({ loadHasMigrations: async () => false }))).rejects.toThrow(
+        /--migration-test.*migrations/,
+      );
+    });
+
+    test("rejects seed data for a config without the seed plugin", async () => {
+      await expect(setupTarget(enabled({ migrationTestData: "seed" }))).rejects.toThrow(
+        /--migration-test-data seed.*seed plugin/,
+      );
+    });
+
+    test("rejects the migration test options without --migration-test", async () => {
+      await expect(
+        setupTarget(
+          baseOptions({
+            workspaceName: "my-app",
+            loadHasMigrations: async () => true,
+            migrationTestLabel: "x",
+          }),
+        ),
+      ).rejects.toThrow(/require --migration-test/);
+    });
+
+    test.each(["has'quote", "bad\nlabel", ""])("rejects the unsafe label %j", async (label) => {
+      await expect(setupTarget(enabled({ migrationTestLabel: label }))).rejects.toThrow(
+        /Invalid --migration-test-label/,
+      );
+    });
+  });
+
   test("enables seed-validate step and lock flag when loadHasSeeds returns true", async () => {
     await setupTarget(baseOptions({ workspaceName: "my-app", loadHasSeeds: async () => true }));
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
@@ -2039,6 +2293,21 @@ export default defineConfig({
       await expect(setupTarget(baseOptions({ workspaceName: "erp", dir: dirs }))).rejects.toThrow(
         /Add @tailor-platform\/sdk to the dependencies of package\.json/,
       );
+    });
+
+    test("rejects --migration-test, which supports a single app directory only", async () => {
+      dirs.forEach(writeApp);
+
+      await expect(
+        setupTarget(
+          baseOptions({
+            workspaceName: "erp",
+            dir: dirs,
+            loadHasMigrations: async () => true,
+            migrationTest: true,
+          }),
+        ),
+      ).rejects.toThrow(/--migration-test is not supported with several --dir/);
     });
 
     test("requires --name, because no single config names a workflow that deploys several apps", async () => {

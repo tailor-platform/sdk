@@ -142,6 +142,92 @@ describe("collectEnvironmentRequirements", () => {
     ]);
   });
 
+  describe("migration test", () => {
+    const withMigrationTest = (inputs: Partial<LockTarget["inputs"]> = {}) => {
+      const branch = target("branch", "my-app", "stg");
+      return lockOf({
+        ...branch,
+        inputs: {
+          ...branch.inputs,
+          migrationTest: true,
+          migrationTestLabel: "tailor:migration-test",
+          migrationTestData: "clone",
+          ...inputs,
+        },
+      });
+    };
+
+    test("asks for no extra secrets or variables when it shares the deploy environment", () => {
+      const environments = collectEnvironmentRequirements(withMigrationTest());
+
+      expect(environments.map((e) => e.environment)).toEqual(["stg"]);
+      expect(environments[0]?.requirements).toEqual(
+        collectEnvironmentRequirements(lockOf(target("branch", "my-app", "stg")))[0]?.requirements,
+      );
+    });
+
+    test("lists a dedicated environment with its own credentials and source workspace", () => {
+      const environments = collectEnvironmentRequirements(
+        withMigrationTest({ migrationTestEnvironment: "prod-source" }),
+      );
+      const dedicated = environments.find((e) => e.environment === "prod-source");
+
+      expect(environments.map((e) => e.environment)).toEqual(["stg", "prod-source"]);
+      expect(dedicated?.targets).toEqual(["branch my-app (migration test)"]);
+      expect(dedicated?.requirements.map((r) => [r.type, r.name, r.required])).toEqual([
+        ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID", true],
+        ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET", true],
+        ["variable", "TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID", true],
+      ]);
+    });
+
+    test("explains the roles the machine user needs, including creating and deleting the temporary workspace", () => {
+      const [, dedicated] = collectEnvironmentRequirements(
+        withMigrationTest({ migrationTestEnvironment: "prod-source" }),
+      );
+      const text = dedicated?.requirements.map((r) => r.description).join("\n");
+
+      expect(text).toMatch(/editor/);
+      expect(text).toMatch(/temporary workspace/);
+    });
+
+    test("merges into an existing environment of the same name", () => {
+      const branch = target("branch", "my-app", "stg");
+      const lock = lockOf(branch, target("branch", "other", "prod-source"), {
+        ...branch,
+        workspaceName: "third",
+        inputs: { ...branch.inputs, migrationTest: true, migrationTestEnvironment: "PROD-SOURCE" },
+      });
+      const names = collectEnvironmentRequirements(lock)
+        .find((e) => e.environment === "prod-source")
+        ?.requirements.map((r) => r.name);
+
+      expect(names).toContain("TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID");
+    });
+
+    test("matches the secrets and variables the rendered job references", () => {
+      const { content } = renderBranchWorkflow({
+        workspaceName: "my-app",
+        environment: "stg",
+        packageManager: "pnpm",
+        branch: "main",
+        erdPreview: null,
+        migrationTest: { label: "x", data: "clone", environment: "prod-source" },
+      });
+      const job = content.slice(
+        content.indexOf("  tailor-migration-test:"),
+        content.indexOf("  tailor-deploy:"),
+      );
+      const [, dedicated] = collectEnvironmentRequirements(
+        withMigrationTest({ migrationTestEnvironment: "prod-source" }),
+      );
+
+      expect(referencedNames(job)).toEqual(
+        dedicated?.requirements.map((r) => `${r.type} ${r.name}`).toSorted(),
+      );
+    });
+  });
+
   test("marks Slack notification and fail-on-drift settings as optional", () => {
     const [env] = collectEnvironmentRequirements(lockOf(target("branch", "my-app", "stg")));
 

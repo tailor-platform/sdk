@@ -111,6 +111,75 @@ all-added or all-removed viewer artifacts. Re-run `setup ci branch` after adding
 removing TailorDB namespaces. `setup check` reports drift when the recorded ERD
 preview namespaces no longer match the current config.
 
+#### Migration test on a labeled pull request
+
+Pass `--migration-test` on a branch target to add a job that runs
+[`tailor tailordb migration test`](./cli/tailordb.md) against a pull request on
+demand. It is opt-in and requires a config with TailorDB migrations.
+
+```bash
+tailor setup ci branch --name my-app-stg --migration-test
+```
+
+The job runs only when someone adds the `tailor:migration-test` label to a pull
+request from the same repository (change the label with
+`--migration-test-label`). It runs the pending migrations in a temporary
+workspace created next to the source workspace, writes the `--json` result to
+the job summary, and always removes the label as its last step, whether the test
+succeeded, failed, or was cancelled. To run it again, add the label again.
+Anyone who can label pull requests in your repository can start the job, and
+each run creates and deletes a workspace. Runs for one pull request never
+cancel each other.
+
+The generated workflow also lists `labeled` in its `pull_request` types. The
+plan and ERD preview jobs skip label events, so adding an unrelated label does
+not re-run them.
+
+The job has a 60-minute time limit. If GitHub cancels the job at that limit, the
+command has no chance to clean up: delete the leftover temporary workspace with
+`tailor workspace delete`.
+
+##### Choosing the source workspace and data
+
+`migration test` reads the source workspace (it is not modified), builds a
+temporary workspace from it in the same organization and folder, and deletes
+that workspace afterwards. Because the machine user creates and deletes that
+workspace, it needs an editor or admin role on the organization or folder that
+holds the source workspace; a viewer role is not enough. A clone also needs the
+same role on the source side.
+
+Two setups are supported:
+
+- **Source is the plan/deploy workspace (default).** The job uses the same GitHub
+  Environment as the plan and deploy jobs, so it reads the same
+  `TAILOR_PLATFORM_WORKSPACE_ID` variable and machine-user secrets. Nothing
+  extra to configure. If that workspace holds too little data to be a useful
+  test, regenerate with `--migration-test-data seed`, which loads your seed
+  fixtures instead of cloning records (it requires the seed plugin).
+- **Source is a different workspace, such as production.** Pass
+  `--migration-test-environment <env>`. The job then uses that GitHub
+  Environment and reads the source workspace from its
+  `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID` variable, together with the
+  machine-user secrets set on that same environment. Give this environment a
+  machine user whose role you are willing to hold on the source workspace's
+  organization or folder, since it needs the editor-or-admin role described
+  above. Pending migrations run from the source workspace's migration number up
+  to the latest, so a source that is behind the deploy target replays more
+  migrations, which is closer to what a production deploy will do.
+
+A job can declare only one GitHub Environment, and a repository secret or
+variable is read from that environment, which is why a different source needs its
+own environment. `tailor setup ci env` prints what each environment needs,
+including the dedicated one. Keep the dedicated environment separate from your
+production deploy environment: a pull request job runs on the pull request merge
+ref (`refs/pull/<number>/merge`), so if an environment restricts which branches
+may deploy or requires reviewers, check how that affects the pull request job
+before pointing the migration test at it. A required-reviewers rule makes the
+job wait for approval before it can read the environment's secrets.
+
+Fork pull requests cannot read secrets, so the job is skipped for them.
+`--migration-test` is not available together with several `--dir` values.
+
 ### Tag target (recommended for production)
 
 The tag target fires when a tag matching `--tag-pattern` (default `v*`) is

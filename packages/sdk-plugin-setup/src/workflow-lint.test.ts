@@ -234,6 +234,29 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderBranchWorkflow", () => 
       fileName: "branch-pnpm-restrict",
       params: { packageManager: "pnpm" as const, restrictDispatch: true },
     },
+    ...ALL_PM.map((pm) => ({
+      name: `branch / ${pm} / with migration test`,
+      fileName: `branch-${pm}-migration-test`,
+      params: {
+        packageManager: pm,
+        migrationDriftCheck: true,
+        migrationTest: { label: "tailor:migration-test", data: "clone" as const },
+      },
+    })),
+    {
+      name: "branch / pnpm / with migration test in a dedicated environment and ERD preview",
+      fileName: "branch-pnpm-migration-test-dedicated",
+      params: {
+        packageManager: "pnpm" as const,
+        workingDirectory: "apps/backend",
+        erdPreview: { namespaces: ["tailordb"] },
+        migrationTest: {
+          label: "tailor:migration-test",
+          data: "seed" as const,
+          environment: "prod-source",
+        },
+      },
+    },
   ];
 
   test.each(cases)("$name has no zizmor findings", ({ fileName, params }) => {
