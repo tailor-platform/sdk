@@ -446,19 +446,30 @@ describe("mergeUserContent", () => {
       expect(mergePreview(without).content).toBe(preview.content);
     });
 
+    const topLevelKeys = ({ content, generatedIds }: RenderResult) => {
+      const hash = computeManagedHash(content, generatedIds);
+      const isHashed = (key: string) => {
+        const edited = parseDocument(content);
+        edited.set(key, "edited");
+        return computeManagedHash(edited.toString(), generatedIds) !== hash;
+      };
+      const keys = Object.keys(parseDocument(content).toJS() as Record<string, unknown>);
+      return { hashed: keys.filter(isHashed), unhashed: keys.filter((key) => !isHashed(key)) };
+    };
+
     test("is only the preview workflow's concurrency", () => {
-      const unhashed = variants.flatMap(([name, { content, generatedIds }]) => {
-        const hash = computeManagedHash(content, generatedIds);
-        return Object.keys(parseDocument(content).toJS() as Record<string, unknown>)
-          .filter((key) => {
-            const edited = parseDocument(content);
-            edited.set(key, "edited");
-            return computeManagedHash(edited.toString(), generatedIds) === hash;
-          })
-          .map((key) => `${name}: ${key}`);
-      });
+      const unhashed = variants.flatMap(([name, render]) =>
+        topLevelKeys(render).unhashed.map((key) => `${name}: ${key}`),
+      );
 
       expect(unhashed).toEqual(["preview: concurrency"]);
+    });
+
+    test.each(variants)("leaves the %s header naming exactly the hashed ones", (_name, render) => {
+      const hashed = topLevelKeys(render).hashed.filter((key) => key !== "jobs");
+      const listed = new Intl.ListFormat("en", { type: "conjunction" }).format(hashed);
+
+      expect(render.content).toContain(`top-level ${listed}.`);
     });
   });
 
