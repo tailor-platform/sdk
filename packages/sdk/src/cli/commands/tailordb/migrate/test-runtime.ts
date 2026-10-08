@@ -451,7 +451,8 @@ export async function resolveSourceMigrationNumber(
   if (drifts.length > 0) {
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_INVALID",
-      message: `Source namespace "${namespace.namespace}" has no migration label and its schema differs from the initial migration snapshot (0000):\n${formatSchemaDrifts(drifts)}`,
+      message: `Source namespace "${namespace.namespace}" has no migration label and its schema differs from the initial migration snapshot (0000).`,
+      details: formatSchemaDrifts(drifts),
       suggestion: "Bring the source schema in line with 0000 or set its migration label.",
     });
   }

@@ -397,7 +397,11 @@ describe("migration test runtime", () => {
   test("rejects a numbered 0 baseline whose unlabeled source schema changed after preparation", async () => {
     await expect(
       unlabeledBaselineCase({ labels: {} }, [{ name: "AuditLog", schema: { fields: {} } }]),
-    ).rejects.toThrow("differs from the initial migration snapshot");
+    ).rejects.toMatchObject({
+      code: "MIGRATION_TEST_SOURCE_INVALID",
+      message: expect.not.stringContaining("AuditLog"),
+      details: expect.stringContaining("AuditLog"),
+    });
   });
 
   test("rejects a numbered 0 baseline whose source metadata disappeared after preparation", async () => {
