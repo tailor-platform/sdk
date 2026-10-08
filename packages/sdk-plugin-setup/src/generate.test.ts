@@ -1338,12 +1338,14 @@ describe("setupTarget (integration)", () => {
     });
   });
 
-  test("stops without writing anything when no package manager can be detected", async () => {
+  test("stops before loading the config, without writing anything, when no package manager can be detected", async () => {
     fs.rmSync(path.join(testDir, "pnpm-lock.yaml"));
+    const loadConfigName = vi.fn(async () => "cfg-app");
 
-    await expect(setupTarget(baseOptions({ workspaceName: "my-app" }))).rejects.toThrow(
+    await expect(setupTarget(baseOptions({ loadConfigName }))).rejects.toThrow(
       /Could not detect the package manager[\s\S]*--package-manager/,
     );
+    expect(loadConfigName).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(testDir, ".github"))).toBe(false);
   });
 

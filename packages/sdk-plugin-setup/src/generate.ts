@@ -452,17 +452,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   if (multi) assertDistinctConfigs(dirs, configPaths);
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
 
-  const loadName = options.loadConfigName ?? defaultLoadConfigName;
-  const workspaceName = options.workspaceName ?? (await loadName(configPath));
-  if (!workspaceName) {
-    throw new Error(
-      "Could not determine the workspace name. " +
-        "Pass --name, or set 'name' in tailor.config.ts.",
-    );
-  }
-  validateWorkspaceName(workspaceName);
-
-  const { kind } = options;
   const packageManager = options.packageManager ?? detectPackageManager(options.outputDir);
   if (packageManager === undefined) {
     throw new Error(
@@ -474,6 +463,18 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
         "pass --package-manager to `tailor setup ci`.",
     );
   }
+
+  const loadName = options.loadConfigName ?? defaultLoadConfigName;
+  const workspaceName = options.workspaceName ?? (await loadName(configPath));
+  if (!workspaceName) {
+    throw new Error(
+      "Could not determine the workspace name. " +
+        "Pass --name, or set 'name' in tailor.config.ts.",
+    );
+  }
+  validateWorkspaceName(workspaceName);
+
+  const { kind } = options;
   // The env-scoped TAILOR_PLATFORM_WORKSPACE_ID variable is only readable by a
   // job that declares `environment:`, so every plan/deploy job sets one. When
   // --environment is omitted it defaults to the workspace name.
