@@ -1,6 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { deploymentArgs } from "#/cli/shared/args";
+import { deploymentArgs, durationArg, parseDuration } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
@@ -168,7 +168,7 @@ export const testCommand = defineAppCommand({
   description:
     "Test pending migrations with seed fixtures or cloned data in a temporary workspace.",
   notes:
-    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs.",
+    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs, and waits up to --clone-timeout (default 30m) for the copy to finish. If the wait times out the copy keeps running on the platform, but the temporary workspace is deleted.",
   args: z.strictObject({
     ...deploymentArgs,
     yes: arg(z.boolean().default(false), {
@@ -180,6 +180,9 @@ export const testCommand = defineAppCommand({
     }),
     "target-workspace-id": arg(z.uuid().optional(), {
       description: "Existing throwaway workspace to retain after the test (requires --yes)",
+    }),
+    "clone-timeout": arg(durationArg.default("30m"), {
+      description: "Maximum time to wait for the --data clone copy to finish (e.g., '30m', '90s')",
     }),
     keep: arg(z.boolean().default(false), {
       description: "Keep the automatically created workspace after the test",
@@ -204,6 +207,7 @@ export const testCommand = defineAppCommand({
       data: args.data,
       targetWorkspaceId: args["target-workspace-id"],
       keep: args.keep,
+      cloneTimeout: parseDuration(args["clone-timeout"]),
       assertionPath: args.assert,
       assertionNamespace: args["assert-namespace"],
       machineUser: args["machine-user"],

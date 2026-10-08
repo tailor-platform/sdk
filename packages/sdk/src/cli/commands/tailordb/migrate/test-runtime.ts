@@ -53,7 +53,7 @@ import type {
 import type { JsonObject, JsonValue } from "type-fest";
 
 const CLONE_POLL_INTERVAL = 1_000;
-const CLONE_TIMEOUT = 5 * 60 * 1_000;
+const CLONE_TIMEOUT = 30 * 60 * 1_000;
 
 interface RuntimeState {
   client: OperatorClient;
@@ -257,7 +257,14 @@ export async function waitForCloneApplicationData(
 
   throw CLIError({
     code: "MIGRATION_TEST_CLONE_TIMEOUT",
-    message: `Application data clone timed out after ${Math.round(timeout / 1_000)} seconds.`,
+    message: `Stopped waiting for the application data clone after ${Math.round(timeout / 1_000)} seconds. The clone continues on the platform; only the CLI stopped waiting.`,
+    suggestion:
+      "Retry with a longer --clone-timeout (e.g. --clone-timeout 60m). The operation ID is in the error context.",
+    context: {
+      operationId: options.operationId,
+      sourceWorkspaceId: options.sourceWorkspaceId,
+      targetWorkspaceId: options.targetWorkspaceId,
+    },
   });
 }
 
@@ -847,6 +854,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         sourceWorkspaceId,
         targetWorkspaceId,
         operationId,
+        timeout: state.options.cloneTimeout,
       });
     },
     deployMigrations: async ({ prepared, targetWorkspaceId }) => {
