@@ -499,14 +499,14 @@ tailor setup ci branch --name my-app --dir apps/backend
 ```
 
 The `working-directory` for SDK commands is set accordingly, and the workflow
-only plans and deploys when that subdirectory changes. The workflow itself
-starts on every pull request and push: a `tailor-changes` job checks whether
-the change touches `apps/backend/**` or the generated workflow file itself, and
-the plan, deploy, and ERD preview jobs are skipped when it does not. A skipped
-job reports success, so you can make these checks required in branch protection;
-a workflow that a `paths` trigger filter never started would leave them pending
-instead. If the `tailor-changes` job itself fails (for example, on a GitHub API
-error), the plan, deploy, and ERD
+only plans and deploys when that subdirectory or the generated workflow file
+changes. The workflow itself starts on every pull request and push: a
+`tailor-changes` job checks whether the change touches `apps/backend/**` or the
+generated workflow file itself, and the plan, deploy, and ERD preview jobs are
+skipped when it does not. A skipped job reports success, so you can make these
+checks required in branch protection; a workflow that a `paths` trigger filter
+never started would leave them pending instead. If the `tailor-changes` job
+itself fails (for example, on a GitHub API error), the plan, deploy, and ERD
 preview jobs fail too instead of being skipped, so a required check blocks
 merging and nothing is deployed. Re-run the failed jobs once the cause is gone.
 
