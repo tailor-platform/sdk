@@ -556,14 +556,19 @@ export const RESTRICTION_EFFECT =
 const RESTRICTED_TABLES_RECOVERY =
   "Deploy again: once it finishes, the deploy writes these tables' configured settings back.";
 
+export const ROLLBACK_LEFTOVER_RECOVERY =
+  "Check these tables in the workspace and delete or repair them by hand. A deploy that finds a table the migration history does not know stops with remote schema drift, so deploying again does not release them.";
+
 /**
  * Warn about tables that keep their migration restrictions, and how they are released.
  * @param reason - What left the tables restricted
  * @param restricted - The tables, by namespace
+ * @param recovery - How the tables are released
  */
 export function warnTablesLeftRestricted(
   reason: string,
   restricted: readonly RestrictedTables[],
+  recovery: string = RESTRICTED_TABLES_RECOVERY,
 ): void {
   const tables = restricted.filter((entry) => entry.tables.length > 0);
   if (tables.length === 0) {
@@ -574,7 +579,7 @@ export function warnTablesLeftRestricted(
     `${reason} Still restricted (${RESTRICTION_EFFECT}): ` +
       `${tables.map((entry) => `namespace '${entry.namespace}': ${entry.tables.join(", ")}`).join("; ")}.`,
   );
-  logger.log(RESTRICTED_TABLES_RECOVERY);
+  logger.log(recovery);
 }
 
 async function rewriteRestrictedTables(

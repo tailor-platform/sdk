@@ -41,6 +41,7 @@ import {
   migrationSnapshotCache,
   processedTables,
   readUnrestoredTables,
+  ROLLBACK_LEFTOVER_RECOVERY,
   RESTRICTION_EFFECT,
   resolveMigrationSnapshotSettings,
   rollbackSingleMigrationAfterFailure,
@@ -972,6 +973,7 @@ export async function applyTailorDB(
         warnTablesLeftRestricted(
           `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely.`,
           [{ namespace: migration.namespace, tables: remaining }],
+          ROLLBACK_LEFTOVER_RECOVERY,
         );
       }
       if (migrationFailure) {

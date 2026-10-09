@@ -1344,7 +1344,8 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain(
         "a table that already refused writes keeps its own read setting",
       );
-      expect(log).toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("remote schema drift"));
+      expect(log).not.toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
       warn.mockRestore();
       log.mockRestore();
     });
