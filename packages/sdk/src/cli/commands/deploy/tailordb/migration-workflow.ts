@@ -122,7 +122,7 @@ async function uploadMigrationFunction(
   appId: string | undefined,
   mode: "create" | "update" = "create",
 ): Promise<void> {
-  const content = `console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n${code}`;
+  const content = `globalThis.console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n${code}`;
   const buffer = Buffer.from(content, "utf-8");
   const info = {
     workspaceId,
@@ -434,9 +434,7 @@ async function hasLoggedScriptStart(
 ): Promise<boolean | undefined> {
   try {
     const { execution } = await client.getFunctionExecution({ workspaceId, executionId });
-    return (
-      execution?.logEntries.some((entry) => entry.message === MIGRATION_SCRIPT_STARTED_LOG) ?? false
-    );
+    return execution?.logEntries.some((entry) => entry.message === MIGRATION_SCRIPT_STARTED_LOG);
   } catch (error) {
     logger.debug(
       `Could not read the logs of migration job execution '${executionId}': ${

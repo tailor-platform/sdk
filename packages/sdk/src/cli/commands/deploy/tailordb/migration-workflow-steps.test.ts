@@ -1,3 +1,4 @@
+import * as vm from "node:vm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
@@ -658,9 +659,11 @@ describe("executeMigrationStepsAsWorkflow", () => {
       for await (const message of stream) {
         if (message.payload.case === "chunk") chunks.push(message.payload.value as Uint8Array);
       }
-      expect(Buffer.concat(chunks).toString("utf-8")).toBe(
-        `console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n// bundled steps`,
-      );
+      const content = Buffer.concat(chunks).toString("utf-8");
+      const logged: string[] = [];
+      vm.runInNewContext(content, { console: { log: (message: string) => logged.push(message) } });
+      expect(content.endsWith("\n// bundled steps")).toBe(true);
+      expect(logged).toEqual([MIGRATION_SCRIPT_STARTED_LOG]);
     });
 
     test("finds the run by name when its execution id was never recorded", async () => {

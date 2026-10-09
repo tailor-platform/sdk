@@ -1,4 +1,5 @@
 import * as crypto from "node:crypto";
+import * as vm from "node:vm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
@@ -527,11 +528,19 @@ describe("observing when the migration script runs", () => {
   const running = WorkflowJobExecution_Status.RUNNING;
   const succeeded = WorkflowJobExecution_Status.SUCCESS;
 
-  test("uploads the script behind a log line that marks its start", async () => {
+  async function upload(code: string) {
     const { client, raw } = createMockClient();
-
-    await run(client);
-
+    await executeMigrationAsWorkflow({
+      client,
+      workspaceId: "ws-1",
+      code,
+      namespace: "tailordb",
+      migrationNumber: 3,
+      invoker,
+      appName: "my-app",
+      appId: "app-1",
+      pollIntervalMs: 0,
+    });
     const [stream] = raw.createFunctionRegistry.mock.calls[0] as unknown as [
       AsyncIterable<{ payload: { case: string; value: unknown } }>,
     ];
@@ -541,14 +550,30 @@ describe("observing when the migration script runs", () => {
       if (message.payload.case === "info") info = message.payload.value as typeof info;
       else chunks.push(message.payload.value as Uint8Array);
     }
-    const uploaded = Buffer.concat(chunks).toString("utf-8");
-    expect(uploaded).toBe(
-      `console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n// bundled`,
-    );
+    return { content: Buffer.concat(chunks).toString("utf-8"), info };
+  }
+
+  function evaluate(content: string): string[] {
+    const logged: string[] = [];
+    vm.runInNewContext(content, { console: { log: (message: string) => logged.push(message) } });
+    return logged;
+  }
+
+  test("uploads the script behind a log line that marks its start", async () => {
+    const { content, info } = await upload("// bundled");
+
+    expect(content.endsWith("\n// bundled")).toBe(true);
+    expect(evaluate(content)).toEqual([MIGRATION_SCRIPT_STARTED_LOG]);
     expect(info).toMatchObject({
-      sizeBytes: BigInt(Buffer.byteLength(uploaded)),
-      contentHash: crypto.createHash("sha256").update(uploaded, "utf-8").digest("hex"),
+      sizeBytes: BigInt(Buffer.byteLength(content)),
+      contentHash: crypto.createHash("sha256").update(content, "utf-8").digest("hex"),
     });
+  });
+
+  test("logs the start of a script that declares its own console", async () => {
+    const { content } = await upload("const console = { log() {} };");
+
+    expect(evaluate(content)).toEqual([MIGRATION_SCRIPT_STARTED_LOG]);
   });
 
   test("reports waiting until a running job logs the start, then running", async () => {
@@ -756,6 +781,28 @@ describe("observing when the migration script runs", () => {
       ],
       { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
     );
+
+    const { result, events } = runObserved(client);
+
+    await result;
+    expect(events).toEqual(["waiting", "unknown", "finished:true"]);
+  });
+
+  test("reports a poll whose job execution came back empty as unknown", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
+    );
+    raw.getFunctionExecution.mockResolvedValueOnce({ execution: undefined } as never);
 
     const { result, events } = runObserved(client);
 
