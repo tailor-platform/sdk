@@ -464,6 +464,14 @@ export async function resolveTemporaryWorkspaceLocation(
   }
   const { folderId } = options;
   const organizationId = options.organizationId ?? (source.organizationId || undefined);
+  if (folderId && !organizationId) {
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message:
+        "--folder-id requires --organization-id because the source workspace is not in an organization.",
+      suggestion: "Pass --organization-id together with --folder-id.",
+    });
+  }
   if (folderId && organizationId) {
     const folder = await getOrNull(async () => {
       const { folder } = await client.getOrganizationFolder({ organizationId, folderId });
@@ -485,6 +493,37 @@ export async function resolveTemporaryWorkspaceLocation(
     ...(organizationId ? { organizationId } : {}),
     ...(folderId ? { folderId } : {}),
   };
+}
+
+/**
+ * Require the designated target workspace to be where `--organization-id` and
+ * `--folder-id` say, since a target that already exists cannot be moved.
+ * @param target - Designated target workspace
+ * @param options - `--organization-id` and `--folder-id` values
+ */
+export function assertTargetMatchesLocation(
+  target: { id: string; organizationId?: string; folderId?: string },
+  options: { organizationId?: string; folderId?: string },
+): void {
+  const checks = [
+    {
+      flag: "--organization-id",
+      kind: "organization",
+      wanted: options.organizationId,
+      actual: target.organizationId,
+    },
+    { flag: "--folder-id", kind: "folder", wanted: options.folderId, actual: target.folderId },
+  ];
+  for (const { flag, kind, wanted, actual } of checks) {
+    if (wanted === undefined || wanted.toLowerCase() === actual?.toLowerCase()) continue;
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: `${flag} "${wanted}" does not match the designated target workspace "${target.id}", which ${
+        actual ? `is in ${kind} "${actual}"` : `has no ${kind}`
+      }.`,
+      suggestion: `Pass the ${kind} the target workspace is in, or omit ${flag}.`,
+    });
+  }
 }
 
 /**
@@ -541,37 +580,6 @@ export async function resolveSourceMigrationNumber(
     });
   }
   return 0;
-}
-
-/**
- * Require the designated target workspace to be where `--organization-id` and
- * `--folder-id` say, since a target that already exists cannot be moved.
- * @param target - Designated target workspace
- * @param options - `--organization-id` and `--folder-id` values
- */
-export function assertTargetMatchesLocation(
-  target: { id: string; organizationId?: string; folderId?: string },
-  options: { organizationId?: string; folderId?: string },
-): void {
-  const checks = [
-    {
-      flag: "--organization-id",
-      kind: "organization",
-      wanted: options.organizationId,
-      actual: target.organizationId,
-    },
-    { flag: "--folder-id", kind: "folder", wanted: options.folderId, actual: target.folderId },
-  ];
-  for (const { flag, kind, wanted, actual } of checks) {
-    if (wanted === undefined || wanted === (actual || undefined)) continue;
-    throw CLIError({
-      code: "MIGRATION_TEST_OPTIONS_INVALID",
-      message: `${flag} "${wanted}" does not match the designated target workspace "${target.id}", which ${
-        actual ? `is in ${kind} "${actual}"` : `has no ${kind}`
-      }.`,
-      suggestion: `Pass the ${kind} the target workspace is in, or omit ${flag}.`,
-    });
-  }
 }
 
 /**
