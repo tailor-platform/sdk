@@ -169,14 +169,14 @@ describe("renderBranchWorkflow", () => {
   test("includes generate + generate-check in plan only (deploy delegates)", () => {
     const { content } = renderBranchWorkflow(branchBase);
     const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
-    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
+    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy", "tailor-result"]);
     expect(content.match(/id: tailor-generate-check/g)).toHaveLength(1);
   });
 
   test("omits ERD preview jobs by default", () => {
     const { content, generatedIds } = renderBranchWorkflow(branchBase);
     const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
-    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
+    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy", "tailor-result"]);
     expect(content).not.toContain("tailor-erd-preview");
     expect(generatedIds).not.toContain("tailor-erd-preview");
   });
@@ -209,6 +209,7 @@ describe("renderBranchWorkflow", () => {
       "tailor-erd-preview",
       "tailor-erd-preview-comment",
       "tailor-deploy",
+      "tailor-result",
     ]);
     expect(content).toContain(
       "namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}",
@@ -1072,6 +1073,113 @@ describe("renderPreviewWorkflow", () => {
       }
     },
   );
+});
+
+describe("workflow result job", () => {
+  type Job = {
+    name?: string;
+    needs?: string[];
+    if?: string;
+    permissions?: Record<string, string>;
+    steps?: Array<Record<string, unknown>>;
+  };
+  const jobsOf = (content: string) => (parseYAML(content) as { jobs: Record<string, Job> }).jobs;
+  const previewBase = {
+    workspaceName: "my-app",
+    branch: "main",
+    environment: "my-app",
+    packageManager: "pnpm",
+    region: "us-west",
+  } as const;
+  const variants = [
+    ["branch", renderBranchWorkflow(branchBase), "tailor-result", ["tailor-plan", "tailor-deploy"]],
+    [
+      "branch with change detection and ERD preview",
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/a",
+        erdPreview: { namespaces: ["main"] },
+      }),
+      "tailor-result",
+      [
+        "tailor-changes",
+        "tailor-plan",
+        "tailor-erd-preview-matrix",
+        "tailor-erd-preview",
+        "tailor-erd-preview-comment",
+        "tailor-deploy",
+      ],
+    ],
+    [
+      "preview",
+      renderPreviewWorkflow(previewBase),
+      "tailor-preview-result",
+      ["tailor-preview-deploy", "tailor-preview-cleanup"],
+    ],
+    [
+      "preview with change detection",
+      renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/a" }),
+      "tailor-preview-result",
+      ["tailor-changes", "tailor-preview-deploy", "tailor-preview-cleanup"],
+    ],
+  ] as const;
+
+  test.each(variants)(
+    "%s workflow ends with a result job that always runs after every other managed job",
+    (_name, render, resultJob, needs) => {
+      const jobs = jobsOf(render.content);
+
+      expect(Object.keys(jobs).at(-1)).toBe(resultJob);
+      expect(jobs[resultJob]).toMatchObject({ needs, if: "always()", permissions: {} });
+      expect(render.generatedIds).toEqual(
+        expect.arrayContaining([resultJob, `${resultJob}/${resultJob}`]),
+      );
+    },
+  );
+
+  test("names the check after the workspace so several workflows can each be required", () => {
+    expect(jobsOf(renderBranchWorkflow(branchBase).content)["tailor-result"]?.name).toBe(
+      "tailor-result (my-app)",
+    );
+    expect(jobsOf(renderPreviewWorkflow(previewBase).content)["tailor-preview-result"]?.name).toBe(
+      "tailor-preview-result (my-app)",
+    );
+  });
+
+  // Evaluates the result step's `if:`, mapping the GitHub expression syntax it
+  // uses onto JavaScript; the step fails the job whenever it runs.
+  const failsOn = (results: readonly string[]) =>
+    variants.map(([, render, resultJob]) => {
+      const step = jobsOf(render.content)[resultJob]?.steps?.[0];
+      expect(step?.run).toContain("exit 1");
+      return Boolean(
+        vm.runInNewContext(String(step?.if).replaceAll("needs.*.result", "results"), {
+          always: () => true,
+          contains: (values: readonly string[], value: string) => values.includes(value),
+          results,
+        }),
+      );
+    });
+
+  test.each([
+    [["success", "success"], false],
+    [["success", "skipped"], false],
+    [["skipped", "skipped"], false],
+    [["success", "failure"], true],
+    [["skipped", "cancelled"], true],
+  ] as const)("fails when the needed jobs end in %j: %s", (results, fails) => {
+    expect(failsOn(results)).toEqual(variants.map(() => fails));
+  });
+
+  test("is not mentioned in a tag workflow, which has none", () => {
+    expect(renderTagWorkflow(tagBase).content).not.toMatch(/tailor-(preview-)?result/);
+  });
+
+  test("checks the results even when the workflow run is cancelled", () => {
+    for (const [, render, resultJob] of variants) {
+      expect(jobsOf(render.content)[resultJob]?.steps?.[0]?.if).toMatch(/^always\(\) && /);
+    }
+  });
 });
 
 describe("Tailor Platform action pins", () => {

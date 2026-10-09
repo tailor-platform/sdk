@@ -686,3 +686,19 @@ jobs:
           slack-token: ${{ secrets.TAILOR_SLACK_BOT_TOKEN }}
           slack-channel-id: ${{ vars.TAILOR_SLACK_CHANNEL_ID }}
           # editable: user-mapping: ${{ vars.TAILOR_SLACK_USER_MAPPING }}
+
+  tailor-result:
+    name: tailor-result (__WORKSPACE_NAME__)
+    # Add your own jobs to needs to count them toward this check; tailor setup keeps them.
+    needs:
+      # __RESULT_NEEDS__
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - id: tailor-result
+        if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+        run: |
+          echo "::error::A job in needs failed or was cancelled."
+          exit 1
