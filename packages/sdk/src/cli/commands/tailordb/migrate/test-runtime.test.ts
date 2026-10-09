@@ -445,9 +445,8 @@ describe("migration test runtime", () => {
         }),
       ).rejects.toMatchObject({
         code: "MIGRATION_TEST_OPTIONS_INVALID",
-        message: expect.stringContaining(
-          `Folder "${otherFolder}" was not found in organization "${otherOrganization}"`,
-        ),
+        message: `Folder "${otherFolder}" was not found in organization "${otherOrganization}".`,
+        details: expect.stringContaining("belongs to a different organization"),
       });
     });
 
@@ -455,9 +454,7 @@ describe("migration test runtime", () => {
       await expect(
         resolveTemporaryWorkspaceLocation(folderClient(false), source, { folderId: otherFolder }),
       ).rejects.toMatchObject({
-        message: expect.stringContaining(
-          `was not found in organization "${sourceOrganization}" (the source workspace's organization)`,
-        ),
+        message: `Folder "${otherFolder}" was not found in organization "${sourceOrganization}" (the source workspace's organization).`,
         suggestion: expect.stringContaining("--organization-id"),
       });
     });
@@ -469,9 +466,8 @@ describe("migration test runtime", () => {
         resolveTemporaryWorkspaceLocation(client, {}, { folderId: otherFolder }),
       ).rejects.toMatchObject({
         code: "MIGRATION_TEST_OPTIONS_INVALID",
-        message: expect.stringContaining(
-          "--folder-id requires --organization-id because the source workspace is not in an organization",
-        ),
+        message: "--folder-id requires --organization-id.",
+        details: "The source workspace is not in an organization.",
       });
       expect(client.getOrganizationFolder).not.toHaveBeenCalled();
     });
