@@ -58,8 +58,6 @@ describe("setup ci subcommand nesting", () => {
       "run-migration-test",
       "--migration-test-environment",
       "prod-source",
-      "--migration-test-data",
-      "seed",
     ]);
 
     expect(result.success).toBe(true);
@@ -69,7 +67,6 @@ describe("setup ci subcommand nesting", () => {
         migrationTest: true,
         migrationTestLabel: "run-migration-test",
         migrationTestEnvironment: "prod-source",
-        migrationTestData: "seed",
       }),
     );
   });
@@ -82,18 +79,17 @@ describe("setup ci subcommand nesting", () => {
         migrationTest: false,
         migrationTestLabel: undefined,
         migrationTestEnvironment: undefined,
-        migrationTestData: undefined,
       }),
     );
   });
 
-  test("ci branch rejects an unknown --migration-test-data", async () => {
+  test("ci branch no longer accepts --migration-test-data", async () => {
     const result = await runCommand(setupCommand, [
       "ci",
       "branch",
       "--migration-test",
       "--migration-test-data",
-      "copy",
+      "seed",
     ]);
 
     expect(result.success).toBe(false);

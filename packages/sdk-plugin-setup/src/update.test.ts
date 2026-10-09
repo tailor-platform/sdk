@@ -39,7 +39,6 @@ describe("planUpdate", () => {
         migrationTest: true,
         migrationTestLabel: "run-migration-test",
         migrationTestEnvironment: "prod-source",
-        migrationTestData: "seed",
       }),
       common,
     );
@@ -50,7 +49,6 @@ describe("planUpdate", () => {
         migrationTest: true,
         migrationTestLabel: "run-migration-test",
         migrationTestEnvironment: "prod-source",
-        migrationTestData: "seed",
       },
     });
   });

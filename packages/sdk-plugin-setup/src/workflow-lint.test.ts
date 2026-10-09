@@ -239,7 +239,7 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderBranchWorkflow", () => 
       params: {
         packageManager: pm,
         migrationDriftCheck: true,
-        migrationTest: { label: "tailor:migration-test", data: "clone" as const },
+        migrationTest: { label: "tailor:migration-test" },
       },
     })),
     {
@@ -251,7 +251,6 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderBranchWorkflow", () => 
         erdPreview: { namespaces: ["tailordb"] },
         migrationTest: {
           label: "tailor:migration-test",
-          data: "seed" as const,
           environment: "prod-source",
         },
       },
