@@ -660,7 +660,7 @@ While `tailor deploy` applies pending migrations, the migrating namespaces' tabl
 
 Phases that repeat across several migrations are added up. A job can be reported as started on the platform well before its code runs, so deploy tells waiting from running by a line every job of a migration logs before your script: `[tailor-sdk] migration script started`. You may see that line in function execution logs; deploy leaves it out of the logs it prints. A script that exports [`steps`](#splitting-a-migration-into-steps) waits for each step's job to start, and that time counts as `waiting to start` too. When deploy never sees the line — for example, while it waits for a run that an older SDK version started — the time is reported as `waiting to start or running` instead.
 
-Deploy checks the run every few seconds, so a boundary between `waiting to start` and `running` can be off by that much. With `--json`, the same breakdown is in `tailordbMaintenance` (see [Deploy JSON result](../cli/application.md#deploy)). Add `--verbose` to also print each phase as it ends and every change in the job's status.
+Deploy checks the run every few seconds, so a boundary between `waiting to start` and `running` can be off by that much. With `--json`, the same breakdown is in `tailordbMaintenance` (see [Deploy JSON result](../cli/application.md#deploy)). Add `--verbose` to also print how long each phase took and every change in the job's status.
 
 ### Schema verification
 

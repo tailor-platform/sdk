@@ -701,6 +701,35 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     }
   });
 
+  test("reports the maintenance window when a change applied after it fails", async () => {
+    const client = createMockClient();
+    const planResult = createUpdatePlanResult();
+    planResult.changeSet.type.deletes.push({
+      name: "Legacy",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "other-ns",
+        tailordbTypeName: "Legacy",
+      },
+    });
+    vi.mocked(client.deleteTailorDBType).mockRejectedValue(new Error("delete failed"));
+    setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+    vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+    const info = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    try {
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        "delete failed",
+      );
+
+      expect(info).toHaveBeenCalledWith(
+        expect.stringMatching(/^Tables of namespace test-ns were in maintenance mode for /),
+      );
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   test("in a multi-migration run, rolls back the failed migration to snapshot[N-1] and keeps the prior one committed", async () => {
     const client = createMockClient();
     const planResult = createUpdatePlanResult();

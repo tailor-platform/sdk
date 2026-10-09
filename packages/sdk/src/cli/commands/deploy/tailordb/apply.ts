@@ -857,6 +857,7 @@ export async function applyTailorDB(
       timeline.finish();
       if (migrationFailure) throw migrationFailure.error;
       maintenance = timeline.report([...migratingNamespaces]);
+      logger.info(formatMaintenanceSummary(maintenance));
 
       for (const create of changeSet.type.creates) {
         const namespaceName = create.request.namespaceName;
@@ -988,7 +989,6 @@ export async function applyTailorDB(
         migrationHistoryIds,
       );
     }
-    if (maintenance) logger.info(formatMaintenanceSummary(maintenance));
   } else if (phase === "delete-resources") {
     // Delete GQL permissions first, then tables
     await Promise.all(
