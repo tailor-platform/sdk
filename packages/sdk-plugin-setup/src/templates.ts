@@ -167,10 +167,30 @@ export function appSlug(dir: string): string {
 
 const ALL_ZERO_SHA = "0000000000000000000000000000000000000000";
 
+export type WorkflowKind = "branch" | "tag" | "preview";
+
+const WORKFLOW_FILE_SUFFIX: Record<WorkflowKind, string> = {
+  branch: "",
+  tag: "-tag",
+  preview: "-preview",
+};
+
+/**
+ * Path of the workflow a target generates. The kind is part of the name so a branch, tag, and
+ * preview workflow can share a workspace name.
+ * @param kind - Target kind
+ * @param workspaceName - Workspace name the workflow is generated for
+ * @returns Workflow file path relative to the repository root
+ */
+export function workflowFilePath(kind: WorkflowKind, workspaceName: string): string {
+  return `.github/workflows/tailor-${workspaceName}${WORKFLOW_FILE_SUFFIX[kind]}.yml`;
+}
+
 function changePatterns(params: {
   workingDirectory?: string;
   apps?: RenderApp[];
   extraPaths?: string[];
+  workflowFile: string;
 }): string[] | undefined {
   const dirs = params.apps
     ? params.apps.map((app) => app.dir)
@@ -178,7 +198,12 @@ function changePatterns(params: {
       ? [params.workingDirectory]
       : [];
   if (dirs.length === 0 || dirs.includes(".")) return undefined;
-  return [...dirs.map((dir) => `${dir}/**`), ...(params.extraPaths ?? [])];
+  // Ahead of the extra paths: the last matching pattern decides, so a later `!` pattern can drop it.
+  return [
+    ...dirs.map((dir) => `${dir}/**`),
+    params.workflowFile,
+    ...(params.extraPaths ?? []).filter((pattern) => pattern !== params.workflowFile),
+  ];
 }
 
 function changesJob(patterns: readonly string[]): string {
@@ -404,7 +429,10 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   out = block(out, "MIGRATION_DRIFT_CHECK", migrationDriftCheck);
   // SEED_DATA is dropped from the default rendering; users add their own step.
   out = block(out, "SEED_DATA", false);
-  const patterns = changePatterns(params);
+  const patterns = changePatterns({
+    ...params,
+    workflowFile: workflowFilePath("branch", params.workspaceName),
+  });
   out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
   out = line(
     out,
@@ -577,7 +605,10 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   const deployIf = requirePreviewLabel
     ? `if: |-\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`
     : `if: |-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`;
-  const patterns = changePatterns(params);
+  const patterns = changePatterns({
+    ...params,
+    workflowFile: workflowFilePath("preview", params.workspaceName),
+  });
   out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
   out = line(out, "DEPLOY_IF", gateOnChanges(deployIf, patterns));
   out = line(out, "CHANGES_GUARD", changesGuard(patterns));

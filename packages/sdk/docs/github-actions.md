@@ -501,11 +501,12 @@ tailor setup ci branch --name my-app --dir apps/backend
 The `working-directory` for SDK commands is set accordingly, and the workflow
 only plans and deploys when that subdirectory changes. The workflow itself
 starts on every pull request and push: a `tailor-changes` job checks whether
-the change touches `apps/backend/**`, and the plan, deploy, and ERD preview jobs
-are skipped when it does not. A skipped job reports success, so you can make
-these checks required in branch protection; a workflow that a `paths` trigger
-filter never started would leave them pending instead. If the `tailor-changes` job
-itself fails (for example, on a GitHub API error), the plan, deploy, and ERD
+the change touches `apps/backend/**` or the generated workflow file itself, and
+the plan, deploy, and ERD preview jobs are skipped when it does not. A skipped
+job reports success, so you can make these checks required in branch protection;
+a workflow that a `paths` trigger filter never started would leave them pending
+instead. If the `tailor-changes` job itself fails (for example, on a GitHub API
+error), the plan, deploy, and ERD
 preview jobs fail too instead of being skipped, so a required check blocks
 merging and nothing is deployed. Re-run the failed jobs once the cause is gone.
 
@@ -545,8 +546,12 @@ tailor setup ci preview --name erp --region asia-northeast \
   --paths "apps/*/frontend/**" --paths "modules/**" --paths pnpm-lock.yaml
 ```
 
-The patterns are checked after the app directories, in order, and the last
-pattern that matches a changed file decides whether it counts. `*` matches
+The patterns are checked after the app directories and the generated workflow
+file, in order, and the last pattern that matches a changed file decides whether
+it counts. A change to the workflow file alone runs the jobs, so a job you add to
+it runs in the pull request that adds it; to skip the jobs for such a change,
+exclude the file, for example `--paths '!.github/workflows/tailor-erp.yml'`
+(`tailor-erp-preview.yml` for the preview workflow). `*` matches
 within one path segment, `**` matches any number of segments, and a pattern
 starting with `!` excludes matching paths, so it can also exclude files inside
 an app directory, for example `--paths '!apps/erp/backend/**/*.md'`. Other glob

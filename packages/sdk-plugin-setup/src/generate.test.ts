@@ -792,7 +792,7 @@ describe("change detection", () => {
     expect(workflow.on.push?.paths).toBeUndefined();
   });
 
-  test("detects changes under every app directory and the additional paths, in order", () => {
+  test("detects changes under every app directory, to the workflow file itself, and to the additional paths, in order", () => {
     const workflow = parseYAML(
       renderBranchWorkflow({
         ...branchBase,
@@ -804,8 +804,49 @@ describe("change detection", () => {
     expect(patternsOf(workflow)).toEqual([
       "apps/a/**",
       "apps/b/**",
+      ".github/workflows/tailor-my-app.yml",
       "modules/**",
       "!apps/a/**/*.md",
+    ]);
+  });
+
+  test("runs the jobs when only the branch workflow file changes", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toContain(".github/workflows/tailor-my-app.yml");
+  });
+
+  test("places the workflow file before the additional paths, so a later exclusion can drop it", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/a",
+        extraPaths: ["!.github/workflows/tailor-my-app.yml"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app.yml",
+      "!.github/workflows/tailor-my-app.yml",
+    ]);
+  });
+
+  test("lists the workflow file once when the additional paths already name it", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/a",
+        extraPaths: [".github/workflows/tailor-my-app.yml", "modules/**"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app.yml",
+      "modules/**",
     ]);
   });
 
@@ -832,6 +873,22 @@ describe("change detection", () => {
 
     expect(gated(jobs["tailor-preview-deploy"])).toBe(true);
     expect(jobs["tailor-preview-cleanup"]?.needs).toBeUndefined();
+  });
+
+  test("runs the preview deploy when only the preview workflow file changes", () => {
+    const workflow = parseYAML(
+      renderPreviewWorkflow({
+        ...previewBase,
+        workingDirectory: "apps/a",
+        extraPaths: ["modules/**"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app-preview.yml",
+      "modules/**",
+    ]);
   });
 
   test("generates no change detection for an app at the repository root", () => {
@@ -1851,7 +1908,7 @@ export default defineConfig({
 
       const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-erp.yml"), "utf-8");
       expect(wf).toContain(
-        "path-patterns: |\n            apps/erp/backend/**\n            apps/erp/frontend/**\n            pnpm-lock.yaml\n",
+        "path-patterns: |\n            apps/erp/backend/**\n            .github/workflows/tailor-erp.yml\n            apps/erp/frontend/**\n            pnpm-lock.yaml\n",
       );
       expect(readLock(testDir)?.targets[0]?.inputs.paths).toEqual([
         "apps/erp/frontend/**",
