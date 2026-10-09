@@ -120,7 +120,10 @@ export function assertSkipNamespacesKnown(
     throw CLIError({
       code: "MIGRATION_SKIP_STEPS_INVALID",
       message: `Cannot skip steps in namespace '${namespace}': no deployed config defines a TailorDB namespace with that name.`,
-      suggestion: `Use one of the TailorDB namespaces: ${namespaces.join(", ")}.`,
+      suggestion:
+        namespaces.length > 0
+          ? `Use one of the TailorDB namespaces: ${namespaces.join(", ")}.`
+          : "The deployed config defines no TailorDB namespace. Remove --migration-skip-steps.",
       context: { namespace, requested: [...steps], namespaces },
     });
   }

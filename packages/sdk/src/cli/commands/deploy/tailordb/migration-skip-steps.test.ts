@@ -116,6 +116,15 @@ describe("assertSkipNamespacesKnown", () => {
     ).not.toThrow();
   });
 
+  test("tells to drop the option when no deployed config defines a namespace", () => {
+    expect(() => assertSkipNamespacesKnown(new Map([["main", ["a"]]]), new Set())).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_SKIP_STEPS_INVALID",
+        suggestion: expect.stringContaining("Remove --migration-skip-steps"),
+      }),
+    );
+  });
+
   test("rejects a namespace no deployed config defines, listing the ones that exist", () => {
     expect(() =>
       assertSkipNamespacesKnown(new Map([["mian", ["a"]]]), new Set(["main", "audit"])),
