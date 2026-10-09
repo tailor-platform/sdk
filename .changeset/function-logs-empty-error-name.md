@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-`tailor function logs <execution-id>` no longer starts the error with a stray `: ` when the error has no name, such as an execution aborted by a timeout or cancellation; it shows the message alone.
+`tailor function logs <execution-id>` no longer shows a stray `: ` in the error when its name or message is empty. An execution aborted by a timeout or cancellation, which has no error name, now shows just its message.
