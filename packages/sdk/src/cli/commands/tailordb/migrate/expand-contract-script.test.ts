@@ -255,8 +255,12 @@ describe("db.ts for an expand migration", () => {
   });
 });
 
+interface FieldRequirement {
+  required: boolean;
+}
+
 describe("rename that finishes a conversion", () => {
-  const contractScript = (before: { required: boolean }, after: { required: boolean }) => {
+  const contractScript = (before: FieldRequirement, after: FieldRequirement) => {
     const finished: ExpandContractPlan = {
       ...plan,
       before: snapshotField("integer", before),

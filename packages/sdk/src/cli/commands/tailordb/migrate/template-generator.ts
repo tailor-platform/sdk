@@ -334,6 +334,11 @@ const OVERWRITE_NOTE = `// Overwrites existing values. Once this step commits it
 
 const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 
+/** The part of a table field that says which table it points to. */
+interface ForeignKeyField {
+  foreignKeyType?: string;
+}
+
 /**
  * The tables other than itself that the fields of a table point to.
  * @param fields - Fields of the table
@@ -341,7 +346,7 @@ const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name
  * @returns Names of the referenced tables
  */
 function foreignKeyTargets(
-  fields: Readonly<Record<string, { foreignKeyType?: string }>>,
+  fields: Readonly<Record<string, ForeignKeyField>>,
   tableName: string,
 ): string[] {
   return [

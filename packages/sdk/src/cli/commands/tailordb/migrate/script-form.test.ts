@@ -257,6 +257,17 @@ describe("countUnresolvedTodos", () => {
     expect(count(`${body}\nexport async function main(trx) {}`)).toBe(0);
   });
 
+  test("does not count the review marker text inside a string or template literal", () => {
+    expect(
+      count(ml`
+        export async function main(trx) {
+          const a = "TODO(tailor-migration-review)";
+          const b = \`TODO(tailor-migration-review)\`;
+        }
+      `),
+    ).toBe(0);
+  });
+
   test("counts the review marker that earlier versions generated", () => {
     expect(
       count(ml`

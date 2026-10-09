@@ -279,7 +279,10 @@ function collectTodoBindings(program: Program): { names: Set<string>; namespaces
  * @returns Number of unresolved placeholders
  */
 export function countUnresolvedTodos(source: string, filePath: string): number {
-  const { program, errors } = parseSync(filePath, source, { sourceType: "module", lang: "ts" });
+  const { program, comments, errors } = parseSync(filePath, source, {
+    sourceType: "module",
+    lang: "ts",
+  });
   if (errors.length > 0) {
     throw CLIError({
       code: "MIGRATION_SCRIPT_INVALID",
@@ -304,7 +307,8 @@ export function countUnresolvedTodos(source: string, filePath: string): number {
       }
     },
   }).visit(program);
-  return calls + source.split(LEGACY_REVIEW_MARKER).length - 1;
+  const markers = comments.filter((comment) => comment.value.includes(LEGACY_REVIEW_MARKER)).length;
+  return calls + markers;
 }
 
 /**
