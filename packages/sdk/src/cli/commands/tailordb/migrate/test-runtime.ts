@@ -405,6 +405,102 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
   return assertDefined(state, "migration test runtime was used before preparation");
 }
 
+interface TemporaryWorkspaceLocation {
+  organizationId?: string;
+  folderId?: string;
+}
+
+interface DesignatedTargetLocation extends TemporaryWorkspaceLocation {
+  id: string;
+}
+
+/**
+ * Decide the organization and folder the temporary workspace is created in.
+ *
+ * Only `--organization-id` places it at that organization's root; the source
+ * folder is not carried over because it may belong to another organization.
+ * @param client - Operator client
+ * @param source - Organization and folder of the source workspace
+ * @param options - `--organization-id` and `--folder-id` values
+ * @returns The location to pass to workspace creation
+ */
+export async function resolveTemporaryWorkspaceLocation(
+  client: OperatorClient,
+  source: TemporaryWorkspaceLocation,
+  options: TemporaryWorkspaceLocation,
+): Promise<TemporaryWorkspaceLocation> {
+  if (!options.organizationId && !options.folderId) {
+    return {
+      ...(source.organizationId ? { organizationId: source.organizationId } : {}),
+      ...(source.folderId ? { folderId: source.folderId } : {}),
+    };
+  }
+  const { folderId } = options;
+  const organizationId = options.organizationId ?? (source.organizationId || undefined);
+  if (folderId && !organizationId) {
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: "--folder-id requires --organization-id.",
+      details: "The source workspace is not in an organization.",
+      suggestion: "Pass --organization-id together with --folder-id.",
+    });
+  }
+  if (folderId && organizationId) {
+    const folder = await getOrNull(async () => {
+      const { folder } = await client.getOrganizationFolder({ organizationId, folderId });
+      return folder;
+    });
+    if (!folder) {
+      throw CLIError({
+        code: "MIGRATION_TEST_OPTIONS_INVALID",
+        message: `Folder "${folderId}" was not found in organization "${organizationId}"${
+          options.organizationId ? "" : " (the source workspace's organization)"
+        }.`,
+        details:
+          "The folder does not exist there, belongs to a different organization, or is not accessible.",
+        suggestion: options.organizationId
+          ? "Pass a --folder-id that belongs to --organization-id."
+          : "Pass --organization-id together with --folder-id if the folder is in another organization.",
+      });
+    }
+  }
+  return {
+    ...(organizationId ? { organizationId } : {}),
+    ...(folderId ? { folderId } : {}),
+  };
+}
+
+/**
+ * Require the designated target workspace to be where `--organization-id` and
+ * `--folder-id` say, since a target that already exists cannot be moved.
+ * @param target - Designated target workspace
+ * @param options - `--organization-id` and `--folder-id` values
+ */
+export function assertTargetMatchesLocation(
+  target: DesignatedTargetLocation,
+  options: TemporaryWorkspaceLocation,
+): void {
+  const checks = [
+    {
+      flag: "--organization-id",
+      kind: "organization",
+      wanted: options.organizationId,
+      actual: target.organizationId,
+    },
+    { flag: "--folder-id", kind: "folder", wanted: options.folderId, actual: target.folderId },
+  ];
+  for (const { flag, kind, wanted, actual } of checks) {
+    if (wanted === undefined || wanted.toLowerCase() === actual?.toLowerCase()) continue;
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: `${flag} "${wanted}" does not match the designated target workspace "${target.id}", which ${
+        actual ? `is in ${kind} "${actual}"` : `has no ${kind}`
+      }.`,
+      suggestion: `Pass the ${kind} the target workspace is in, or omit ${flag}.`,
+    });
+  }
+}
+
 /**
  * Resolve the migration number a source namespace is at, the way `deploy` does.
  *
@@ -636,7 +732,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       workspaceId: sourceWorkspaceId,
       applicationName: loaded.config.name,
     }),
-    options.data === "clone" && options.targetWorkspaceId
+    options.targetWorkspaceId
       ? client.getWorkspace({ workspaceId: options.targetWorkspaceId })
       : Promise.resolve(undefined),
   ]);
@@ -654,6 +750,13 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
         `target workspace "${options.targetWorkspaceId}" not found`,
       )
     : undefined;
+
+  if (designatedTarget) assertTargetMatchesLocation(designatedTarget, options);
+  const temporaryLocation = await resolveTemporaryWorkspaceLocation(
+    client,
+    sourceWorkspace,
+    designatedTarget ? {} : options,
+  );
 
   const remoteChecks = await verifyRemoteSchema(
     client,
@@ -753,8 +856,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     temporaryWorkspace: {
       name: temporaryWorkspaceName(),
       region: sourceWorkspace.region,
-      ...(sourceWorkspace.organizationId ? { organizationId: sourceWorkspace.organizationId } : {}),
-      ...(sourceWorkspace.folderId ? { folderId: sourceWorkspace.folderId } : {}),
+      ...temporaryLocation,
     },
     baselines,
     baselineSnapshots,
