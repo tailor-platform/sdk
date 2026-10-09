@@ -80,18 +80,7 @@ function functionExecutionTypeToString(type: FunctionExecution_Type): string {
  * @returns Error kind string representation
  */
 function functionErrorKindToString(kind: FunctionErrorKind): string {
-  switch (kind) {
-    case FunctionErrorKind.NONE:
-      return "NONE";
-    case FunctionErrorKind.USER_RUNTIME:
-      return "USER_RUNTIME";
-    case FunctionErrorKind.USER_NON_RUNTIME:
-      return "USER_NON_RUNTIME";
-    case FunctionErrorKind.PLATFORM:
-      return "PLATFORM";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumName(FunctionErrorKind, kind) ?? "UNSPECIFIED";
 }
 
 /**
