@@ -1,4 +1,5 @@
 import {
+  isCollection,
   isMap,
   isNode,
   isPair,
@@ -494,11 +495,48 @@ function mergeSteps(
   );
 }
 
+function plainJob(root: unknown, jobId: string): Plain | undefined {
+  const jobs = isPlainObject(root) ? root["jobs"] : undefined;
+  const job = isPlainObject(jobs) ? lookup(jobs, jobId) : undefined;
+  return isPlainObject(job) ? job : undefined;
+}
+
+function sharedValue(values: readonly unknown[]): unknown {
+  const [first] = values;
+  return values.every((value) => canonicalJson(value) === canonicalJson(first)) ? first : undefined;
+}
+
+// Only a runner every kept job shares is carried; mixed runners are not guessed between.
+function carryRunsOnToAddedJobs(params: {
+  doc: Document;
+  currentJobs: YAMLMap;
+  renderedJobs: YAMLMap;
+  currentRoot: unknown;
+  renderedRoot: unknown;
+}): void {
+  const templateOf = (jobId: string): unknown => plainJob(params.renderedRoot, jobId)?.["runs-on"];
+  const jobIds = params.renderedJobs.items.map((pair) => keyOf(pair) ?? "");
+  const kept = jobIds.filter((jobId) => findPair(params.currentJobs, jobId) !== undefined);
+  const template = sharedValue(kept.map(templateOf));
+  const runsOn = sharedValue(
+    kept.map((jobId) => plainJob(params.currentRoot, jobId)?.["runs-on"] ?? templateOf(jobId)),
+  );
+  if (template === undefined || runsOn === undefined) return;
+  if (canonicalJson(runsOn) === canonicalJson(template)) return;
+  const source = mapAt(params.currentJobs, kept[0] ?? "")?.get("runs-on", true);
+  const flow = isCollection(source) && source.flow === true;
+  for (const pair of params.renderedJobs.items) {
+    const jobId = keyOf(pair) ?? "";
+    if (kept.includes(jobId) || !isMap(pair.value)) continue;
+    if (canonicalJson(templateOf(jobId)) !== canonicalJson(template)) continue;
+    pair.value.set("runs-on", params.doc.createNode(runsOn, { flow }));
+  }
+}
+
 function carryUserNeeds(currentRoot: unknown, jobId: string, rendered: YAMLMap): void {
   const renderedNeeds = findPair(rendered, "needs")?.value;
-  const jobs = isPlainObject(currentRoot) ? currentRoot["jobs"] : undefined;
-  const job = isPlainObject(jobs) ? lookup(jobs, jobId) : undefined;
-  if (!isPlainObject(job) || !isSeq(renderedNeeds)) return;
+  const job = plainJob(currentRoot, jobId);
+  if (!job || !isSeq(renderedNeeds)) return;
   const source = (needsList(job["needs"]) ?? []).map((need) =>
     isUserNeed(need) ? new Scalar(need) : need,
   );
@@ -556,6 +594,7 @@ export function mergeUserContent(params: {
     throw new ManagedMergeError("The file is not a YAML mapping.");
   }
   const currentPlain = toPlain(currentDoc, "The file");
+  const renderedPlain = toPlain(renderedDoc, "The rendered template");
   const ctx: MergeContext = {
     previous: new Set(params.previousIds),
     force: params.force,
@@ -583,6 +622,13 @@ export function mergeUserContent(params: {
       }
       mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
     }
+    carryRunsOnToAddedJobs({
+      doc: renderedDoc,
+      currentJobs,
+      renderedJobs,
+      currentRoot: currentPlain,
+      renderedRoot: renderedPlain,
+    });
     carryLeadingComment(currentJobs, currentJobs.items[0], userJobs);
     placeAfterAnchors(
       currentJobs.items,

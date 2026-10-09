@@ -876,3 +876,132 @@ describe("needs of the result job", () => {
     );
   });
 });
+
+describe("runs-on of a managed job the merge adds", () => {
+  const SELF_HOSTED = "runs-on: [self-hosted, linux]";
+  const withRunsOn = (content: string, runsOn = SELF_HOSTED): string =>
+    content.replaceAll("runs-on: ubuntu-latest", () => runsOn);
+  const setRunsOn = (content: string, jobs: readonly string[], value: string): string =>
+    jobs.reduce((c, job) => {
+      const edited = c.replace(
+        new RegExp(`( {2}${job}:\\n(?: {4}.*\\n)*? {4})runs-on: .*`),
+        (_match, head: string) => `${head}${value}`,
+      );
+      expect(edited).not.toBe(c);
+      return edited;
+    }, content);
+  const withoutJob = ({ content, generatedIds }: RenderResult, jobId: string): RenderResult => {
+    const doc = parseDocument(content);
+    expect(doc.deleteIn(["jobs", jobId])).toBe(true);
+    return {
+      content: doc.toString({ lineWidth: 0, flowCollectionPadding: false }),
+      generatedIds: generatedIds.filter((id) => id !== jobId && !id.startsWith(`${jobId}/`)),
+    };
+  };
+  const jobsOf = (content: string): Record<string, Record<string, unknown>> =>
+    (parseDocument(content).toJS() as { jobs: Record<string, Record<string, unknown>> }).jobs;
+  const merge = (current: string, previous: RenderResult, next: RenderResult) =>
+    mergeUserContent({
+      current,
+      rendered: next.content,
+      previousIds: previous.generatedIds,
+      renderedIds: next.generatedIds,
+      force: false,
+    }).content;
+
+  const previewBase = {
+    workspaceName: "my-app",
+    branch: "main",
+    environment: "my-app",
+    packageManager: "pnpm",
+    region: "us-west",
+  } as const;
+  const preview = renderPreviewWorkflow(previewBase);
+  const previewWithDir = renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/api" });
+  const tagBase = {
+    workspaceName: "my-app",
+    tagPattern: "v*",
+    environment: "my-app",
+    packageManager: "npm",
+  } as const;
+  const erd = renderBranchWorkflow({ ...branchBase, erdPreview: { namespaces: ["main"] } });
+  const beforeResult = withoutJob(render, "tailor-result");
+
+  test.each([
+    ["tailor-result", beforeResult, render],
+    ["tailor-preview-result", withoutJob(preview, "tailor-preview-result"), preview],
+    ["the ERD preview jobs", render, erd],
+    [
+      "tailor-tag-guard",
+      renderTagWorkflow(tagBase),
+      renderTagWorkflow({ ...tagBase, branch: "main" }),
+    ],
+    ["tailor-changes", preview, previewWithDir],
+  ])("runs %s on the runner every managed job was moved to", (_name, previous, next) => {
+    const jobs = jobsOf(merge(withRunsOn(previous.content), previous, next));
+    expect(Object.keys(jobs)).toEqual(Object.keys(jobsOf(next.content)));
+    for (const job of Object.values(jobs)) {
+      expect(job["runs-on"]).toEqual(["self-hosted", "linux"]);
+    }
+  });
+
+  test.each([
+    ["a block sequence", "runs-on:\n      - self-hosted\n      - linux"],
+    ["a mapping", "runs-on:\n      group: runners\n      labels: linux"],
+    ["an expression", "runs-on: ${{ vars.RUNNER }}"],
+  ])("copies a runner written as %s", (_name, runsOn) => {
+    expect(merge(withRunsOn(beforeResult.content, runsOn), beforeResult, render)).toBe(
+      withRunsOn(render.content, runsOn),
+    );
+  });
+
+  test("leaves the template's runner when no managed job was moved", () => {
+    expect(merge(beforeResult.content, beforeResult, render)).toBe(render.content);
+  });
+
+  test("leaves the template's runner when the managed jobs run on different ones", () => {
+    const edited = setRunsOn(beforeResult.content, ["tailor-deploy"], SELF_HOSTED);
+    const jobs = jobsOf(merge(edited, beforeResult, render));
+    expect(jobs["tailor-deploy"]?.["runs-on"]).toEqual(["self-hosted", "linux"]);
+    expect(jobs["tailor-result"]?.["runs-on"]).toBe("ubuntu-latest");
+  });
+
+  test("counts a managed job without runs-on as running on the template's runner", () => {
+    const edited = withRunsOn(beforeResult.content).replace(
+      /( {2}tailor-plan:\n(?: {4}.*\n)*?) {4}runs-on: .*\n/,
+      "$1",
+    );
+    expect(edited).not.toBe(withRunsOn(beforeResult.content));
+    const jobs = jobsOf(merge(edited, beforeResult, render));
+    expect(jobs["tailor-plan"]?.["runs-on"]).toBe("ubuntu-latest");
+    expect(jobs["tailor-result"]?.["runs-on"]).toBe("ubuntu-latest");
+  });
+
+  test("counts only the managed jobs the new template keeps", () => {
+    const previous = withoutJob(erd, "tailor-result");
+    const edited = setRunsOn(previous.content, ["tailor-plan", "tailor-deploy"], SELF_HOSTED);
+    expect(merge(edited, previous, render)).toBe(withRunsOn(render.content));
+  });
+
+  test("does not count the user's jobs", () => {
+    const edited = `${withRunsOn(beforeResult.content)}  e2e:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo e2e\n`;
+    const jobs = jobsOf(merge(edited, beforeResult, render));
+    expect(jobs["e2e"]?.["runs-on"]).toBe("ubuntu-latest");
+    expect(jobs["tailor-result"]?.["runs-on"]).toEqual(["self-hosted", "linux"]);
+  });
+
+  test("writes the runner without the anchor it was read through", () => {
+    const edited = setRunsOn(
+      setRunsOn(
+        preview.content,
+        ["tailor-preview-deploy"],
+        "runs-on: &runner [self-hosted, linux]",
+      ),
+      ["tailor-preview-cleanup", "tailor-preview-result"],
+      "runs-on: *runner",
+    );
+    const content = merge(edited, preview, previewWithDir);
+    expect(jobsOf(content)["tailor-changes"]?.["runs-on"]).toEqual(["self-hosted", "linux"]);
+    expect(content.match(/&runner/g)).toHaveLength(1);
+  });
+});

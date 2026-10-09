@@ -1732,6 +1732,26 @@ export default defineConfig({
       },
     );
 
+    test("runs the jobs it adds on the runner every managed job was moved to", async () => {
+      const opts = baseOptions({ workspaceName: "my-app" });
+      await setupTarget(opts);
+      const edited = fs
+        .readFileSync(wfPath(), "utf-8")
+        .replaceAll("runs-on: ubuntu-latest", "runs-on: [self-hosted, linux]");
+      fs.writeFileSync(wfPath(), edited);
+      const erdOpts = { ...opts, erdPreview: true, loadErdNamespaces: async () => ["tailordb"] };
+
+      await setupTarget(erdOpts);
+
+      const content = fs.readFileSync(wfPath(), "utf-8");
+      expect(content).toContain("  tailor-erd-preview:\n");
+      expect(content).not.toContain("ubuntu-latest");
+      const [target] = readLock(testDir)?.targets ?? [];
+      expect(target?.contentHash).toBe(computeManagedHash(content, target?.generatedIds ?? []));
+      await setupTarget(erdOpts);
+      expect(fs.readFileSync(wfPath(), "utf-8")).toBe(content);
+    });
+
     test("replaces an invalid YAML file of a legacy entry on --force", async () => {
       const opts = baseOptions({ workspaceName: "my-app" });
       await setupTarget(opts);
