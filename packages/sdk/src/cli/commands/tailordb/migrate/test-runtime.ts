@@ -441,6 +441,10 @@ interface TemporaryWorkspaceLocation {
   folderId?: string;
 }
 
+interface DesignatedTargetLocation extends TemporaryWorkspaceLocation {
+  id: string;
+}
+
 /**
  * Decide the organization and folder the temporary workspace is created in.
  *
@@ -453,8 +457,8 @@ interface TemporaryWorkspaceLocation {
  */
 export async function resolveTemporaryWorkspaceLocation(
   client: OperatorClient,
-  source: { organizationId?: string; folderId?: string },
-  options: { organizationId?: string; folderId?: string },
+  source: TemporaryWorkspaceLocation,
+  options: TemporaryWorkspaceLocation,
 ): Promise<TemporaryWorkspaceLocation> {
   if (!options.organizationId && !options.folderId) {
     return {
@@ -467,8 +471,8 @@ export async function resolveTemporaryWorkspaceLocation(
   if (folderId && !organizationId) {
     throw CLIError({
       code: "MIGRATION_TEST_OPTIONS_INVALID",
-      message:
-        "--folder-id requires --organization-id because the source workspace is not in an organization.",
+      message: "--folder-id requires --organization-id.",
+      details: "The source workspace is not in an organization.",
       suggestion: "Pass --organization-id together with --folder-id.",
     });
   }
@@ -482,7 +486,9 @@ export async function resolveTemporaryWorkspaceLocation(
         code: "MIGRATION_TEST_OPTIONS_INVALID",
         message: `Folder "${folderId}" was not found in organization "${organizationId}"${
           options.organizationId ? "" : " (the source workspace's organization)"
-        }. The folder does not exist there, belongs to a different organization, or is not accessible.`,
+        }.`,
+        details:
+          "The folder does not exist there, belongs to a different organization, or is not accessible.",
         suggestion: options.organizationId
           ? "Pass a --folder-id that belongs to --organization-id."
           : "Pass --organization-id together with --folder-id if the folder is in another organization.",
@@ -502,8 +508,8 @@ export async function resolveTemporaryWorkspaceLocation(
  * @param options - `--organization-id` and `--folder-id` values
  */
 export function assertTargetMatchesLocation(
-  target: { id: string; organizationId?: string; folderId?: string },
-  options: { organizationId?: string; folderId?: string },
+  target: DesignatedTargetLocation,
+  options: TemporaryWorkspaceLocation,
 ): void {
   const checks = [
     {
