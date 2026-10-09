@@ -6,6 +6,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import {
   loadAccessToken,
   loadPlatformClientConfig,
+  loadUserWorkspaceDefaults,
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
@@ -25,6 +26,9 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadPlatformClientConfig: vi.fn().mockResolvedValue(undefined),
+  loadUserWorkspaceDefaults: vi.fn().mockResolvedValue({
+    organizationId: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa",
+  }),
   readPlatformConfig: vi.fn().mockResolvedValue({ profiles: {} }),
   writePlatformConfig: vi.fn(),
 }));
@@ -343,7 +347,10 @@ describe("workspace prune command", () => {
       "0s",
       "--yes",
     ]);
-    expectFailure(unscoped, "--organization-root");
+    expectFailure(
+      unscoped,
+      "--older-than 0s requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.",
+    );
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
 
     const scoped = await runCommand(pruneCommand, [
@@ -1168,8 +1175,12 @@ describe("workspace prune command", () => {
 
       const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
 
-      expectFailure(result, "--expired requires --organization-root, --folder-id, or --personal");
+      expectFailure(
+        result,
+        "--expired requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.",
+      );
       expect(client.listWorkspaces).not.toHaveBeenCalled();
+      expect(loadUserWorkspaceDefaults).not.toHaveBeenCalled();
     });
 
     test("accepts a folder as the location", async () => {
