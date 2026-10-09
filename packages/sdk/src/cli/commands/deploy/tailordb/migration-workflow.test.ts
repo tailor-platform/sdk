@@ -384,6 +384,18 @@ describe("executeMigrationAsWorkflow", () => {
     });
   });
 
+  test("warns against deploying before the sync", async () => {
+    const { client } = createMockClient({
+      startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: false },
+    });
+
+    await expect(run(client)).rejects.toMatchObject({
+      suggestion: expect.stringContaining(
+        "Do not deploy before running sync, even with `--no-schema-check` to skip the drift check: the deploy may run the `main` script again even if the execution succeeded.",
+      ),
+    });
+  });
+
   test("refuses to replace a leftover workflow when its executions cannot be listed", async () => {
     const { client, raw } = createMockClient({
       leftoverWorkflowId: "stale-wf",
