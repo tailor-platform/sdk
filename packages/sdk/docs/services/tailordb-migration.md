@@ -97,15 +97,19 @@ A typical change cycle:
 3. **Edit `migrate.ts`** to populate data for the new required field:
 
    ```typescript
-   import type { Transaction } from "./db";
+   import type { MigrationSteps, Transaction } from "./db";
 
-   export async function main(trx: Transaction): Promise<void> {
+   async function populateUserEmail(trx: Transaction): Promise<void> {
      await trx
        .updateTable("User")
        .set({ email: "default@example.com" })
        .where("email", "is", null)
        .execute();
    }
+
+   export const steps = {
+     populateUserEmail: { run: populateUserEmail },
+   } satisfies MigrationSteps;
    ```
 
 4. **Apply.**
@@ -236,7 +240,7 @@ Sometimes existing data must be transformed without any schema change — fixing
 tailor tailordb migration generate --data-only --name "normalize legacy phone numbers"
 ```
 
-This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skeleton, and `db.ts` typed against the current schema. Edit `migrate.ts` to implement the transformation; the next `tailor deploy` runs it like any other migration script — in a single transaction, advancing the migration checkpoint (see [Performance and Large Tables](#performance-and-large-tables) for batching patterns). Because the entry is part of the migration history, the fix is versioned, ordered relative to schema changes, and applied once per workspace.
+This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skeleton (a single `migrate` step), and `db.ts` typed against the current schema. Edit `migrate.ts` to implement the transformation; the next `tailor deploy` runs it like any other migration script — in a single transaction, advancing the migration checkpoint (see [Performance and Large Tables](#performance-and-large-tables) for batching patterns). Because the entry is part of the migration history, the fix is versioned, ordered relative to schema changes, and applied once per workspace.
 
 The command requires a clean state: if the namespace has schema changes that are not yet in migration files, generate the schema migration first. With multiple namespaces, pass `--namespace` to name the target. `--data-only` cannot be combined with `--init`, `--rename`, `--drop`, or `--expand-contract`.
 
@@ -268,15 +272,15 @@ export default defineConfig({
 
 ## Generated Files
 
-| File                          | When generated                                                                                                                            | Description                                                                                                              |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `0000/schema.json`            | First `migration generate`                                                                                                                | Full snapshot of all tables in the namespace.                                                                            |
-| `XXXX/diff.json`              | Every subsequent migration                                                                                                                | Field-level diff against the previous snapshot.                                                                          |
-| `XXXX/migrate.ts`             | Auto-generated for breaking changes and `--data-only` migrations; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`.                                           |
-| `XXXX/db.ts`                  | Generated once when `migrate.ts` is created                                                                                               | Kysely types reflecting the schema **before** this migration. Exports `Database`, `Transaction`, and `MigrationContext`. |
-| `XXXX/db.pglite.ts`           | Generated with `db.ts`                                                                                                                    | `CREATE TABLE` script of the same schema, for running `migrate.ts` on PGlite. Never deployed.                            |
-| `XXXX/migrate.test.ts`        | Added via `tailordb migration script --with-test`                                                                                         | Unit-test scaffold for `migrate.ts` (see [Testing Migrations Locally](#testing-migrations-locally)). Never deployed.     |
-| `XXXX/migrate.pglite.test.ts` | Added via `tailordb migration script --with-test` when `@electric-sql/pglite` is installed                                                | PGlite test scaffold for `migrate.ts`. Never deployed.                                                                   |
+| File                          | When generated                                                                                                                            | Description                                                                                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `0000/schema.json`            | First `migration generate`                                                                                                                | Full snapshot of all tables in the namespace.                                                                                          |
+| `XXXX/diff.json`              | Every subsequent migration                                                                                                                | Field-level diff against the previous snapshot.                                                                                        |
+| `XXXX/migrate.ts`             | Auto-generated for breaking changes and `--data-only` migrations; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`; a `steps` export runs each step in its own transaction. |
+| `XXXX/db.ts`                  | Generated once when `migrate.ts` is created                                                                                               | Kysely types reflecting the schema **before** this migration. Exports `Database`, `Transaction`, and `MigrationContext`.               |
+| `XXXX/db.pglite.ts`           | Generated with `db.ts`                                                                                                                    | `CREATE TABLE` script of the same schema, for running `migrate.ts` on PGlite. Never deployed.                                          |
+| `XXXX/migrate.test.ts`        | Added via `tailordb migration script --with-test`                                                                                         | Unit-test scaffold for `migrate.ts` (see [Testing Migrations Locally](#testing-migrations-locally)). Never deployed.                   |
+| `XXXX/migrate.pglite.test.ts` | Added via `tailordb migration script --with-test` when `@electric-sql/pglite` is installed                                                | PGlite test scaffold for `migrate.ts`. Never deployed.                                                                                 |
 
 `db.ts` reflects the pre-migration schema because the script runs after the pre-migration phase has temporarily relaxed breaking constraints (e.g., a new `required` field is added as `optional` first), so the data being read still matches the previous shape.
 
@@ -293,6 +297,8 @@ The SDK used for this transition must read the old history and write a baseline 
 There is no migration-file conversion command. Keeping applied files unchanged preserves the record of what ran, while `migration rebaseline` provides the escape hatch when the supported replay window changes.
 
 ## Migration Script Anatomy
+
+`migration generate` and `migration script` scaffold `migrate.ts` as `steps`, with one step for each schema change that needs a data migration (see [Splitting a migration into steps](#splitting-a-migration-into-steps)). The examples in this section use `main`, the single-transaction form, which still works. A `steps` script receives the same transaction and `MigrationContext` in each step's `run`.
 
 ```typescript
 import type { Transaction } from "./db";
@@ -401,11 +407,14 @@ export const steps = {
 ```
 
 - A script exports either `main` or `steps`. If it exports both, `main` runs as before and `steps` is ignored with a warning from `tailor deploy` and `tailor tailordb migration validate`.
+- Generated scripts export `steps`. Each schema change that needs a data migration gets its own step, named for what it does: `populate<Table><Field>` for an added required field (for example `populateUserEmail`), `rename<Table><Field>` for a renamed field, `copy<Old>To<New>` for a renamed table, `update<Table><Field>` for a changed field, `resolve<Table><Index>` for a unique index, and `convert<Table><Field>` for a field type conversion. When that name is not a valid step name (for example because it is longer than 64 characters), or when another step or a helper in the script already uses it, the step is named `change<N>` instead (`expand<N>` for a conversion through a temporary field), where N is the change's position in the migration; the fallback does not mean the schema-derived name was wrong. A step lists in `dependsOn` every earlier step that touches the same field (a foreign key that changes its target also touches `id` of the table it now points to), so steps that touch the same field run in the order the changes are listed and changes to different fields do not wait for each other. The copy of a renamed table's rows runs after the copies of the renamed tables its foreign keys point to, so the rows they reference already exist. It skips the rows whose ids the new table already has, so running it again does not insert them twice. A step that rewrites values that already exist (the duplicate resolution of a unique index or field, a field change, a conversion through a temporary field) has a comment above its function saying so: once it commits it cannot be undone, so check the values it writes before you deploy. Where the scaffold cannot pick a value for you (what an added required field holds in existing records, the new value of duplicates, the value that replaces a removed enum value, the new reference of a retargeted foreign key, the copy of renamed tables that reference each other), it calls `TODO(message)`, which `./db` exports. The migration fails at that call, and `tailordb migration validate` and `tailor deploy` reject a `migrate.ts` that still calls it before anything is changed. Replace each call with the value, then remove the `TODO` import. A `--data-only` migration, and a migration with no data statements to scaffold, get a single `migrate` step; split it into several steps where the work divides.
 - Each step is an object with a `run` function — it receives its own transaction and the same `MigrationContext` as `main` — and an optional `dependsOn` list naming the steps that must complete before it starts.
 - Steps with no dependency between them have no guaranteed order. Declaration order is not execution order, and a future SDK version may run independent steps concurrently, so declare `dependsOn` for every ordering your steps rely on.
 - Declare `steps` directly as `export const steps = { ... }`, with each step written inside it as an object literal with a literal name and `dependsOn` list. Step names start with a letter and contain only letters, digits, and underscores, up to 64 characters. `tailor tailordb migration validate` and `tailor deploy` reject unknown dependencies and cycles before anything is changed.
 - Each step runs as a separate job, so steps cannot hand data to each other through module-level variables; read what a step needs from the database.
 - `MigrationSteps` is declared by `db.ts` files generated by this SDK version. With an older `db.ts`, annotate each `run` parameter with `Transaction` instead.
+
+A script with a single step runs like a `main` script: one job and one transaction, and a failure inside the transaction rolls its data changes back. Nothing is recorded as in progress. If the post-migration schema changes fail after the transaction committed, the schema is restored to its state before the migration but the data changes stay, so the next deploy runs the step again and the step must tolerate rows it already migrated. The rules below apply once the script has two or more steps. A migration that an earlier deploy already left in progress keeps running step by step until it completes, even if the script has since been reduced to one step.
 
 Because steps commit separately, a failure does not undo the steps that already completed:
 
@@ -501,9 +510,9 @@ A `float` field that is already unique cannot convert to `decimal` in place, bec
 For example, changing `User.age` from `integer` to `float` generates a `migrate.ts` that scans non-null values in batches of 100:
 
 ```typescript
-import type { Transaction } from "./db";
+import { TODO, type MigrationSteps, type Transaction } from "./db";
 
-export async function main(trx: Transaction): Promise<void> {
+async function updateUserAge(trx: Transaction): Promise<void> {
   // Normalize User.age from integer to float while the previous type is still active
   {
     let lastId: string | undefined;
@@ -521,11 +530,11 @@ export async function main(trx: Transaction): Promise<void> {
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        // TODO(tailor-migration-review): Remove this marker and the `never` annotation after reviewing the normalization.
-        // Keep the value accepted by the active integer type and castable to float.
         const sourceValue = row.age;
         if (sourceValue === null) continue;
-        const normalizedValue: never = sourceValue;
+        const normalizedValue = TODO(
+          "normalize User.age to a value the active integer type accepts and the float type can cast",
+        );
         if (Object.is(normalizedValue, sourceValue)) continue;
         await trx
           .updateTable("User")
@@ -537,9 +546,13 @@ export async function main(trx: Transaction): Promise<void> {
     }
   }
 }
+
+export const steps = {
+  updateUserAge: { run: updateUserAge },
+} satisfies MigrationSteps;
 ```
 
-The generated `never` annotation intentionally causes a TypeScript error until you review the normalization. If the existing values are already suitable for the target type, remove the annotation and review marker to accept the identity transformation; it does not write any rows. If values need application-specific normalization, replace the expression and remove the annotation and marker while keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
+The generated `TODO()` call stops the migration until you replace it, and `tailordb migration validate` and `tailor deploy` reject the migration while it is still there. If the existing values are already suitable for the target type, replace the call with `sourceValue` to accept the identity transformation; it does not write any rows. If values need application-specific normalization, replace it with your expression, keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
 
 ### Converting a field type
 
@@ -552,10 +565,10 @@ User.price changes from string to integer, which cannot be applied in one step.
 
 Confirming writes two migrations:
 
-1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there. When only the array-ness changes (`string` → `string[]`), the conversion stores each value as a one-element array and carries no review marker; when the element type changes as well (`integer` → `string[]`), you convert the element and the script wraps it.
+1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `TODO()` call fails the migration, and `tailordb migration validate` and `tailor deploy` reject it while the call is still there. When only the array-ness changes (`string` → `string[]`), the conversion stores each value as a one-element array and has no `TODO()` call; when the element type changes as well (`integer` → `string[]`), you convert the element and the script wraps it.
 2. **The rename.** Renames the temporary field back to `price`. Its copy script is complete, but this migration also carries every other schema change the same run picked up, so review it as you would any generated migration.
 
-If converting to an array also reduces a decimal field's `scale` or removes enum values, the conversion keeps the review marker. Edit the element conversion to satisfy the target field before deploying.
+If converting to an array also reduces a decimal field's `scale` or removes enum values, the conversion keeps the `TODO()` call. Edit the element conversion to satisfy the target field before deploying.
 
 `tailor deploy` applies both. Because the conversion only touches rows whose original value is still set, a re-run resumes where it stopped rather than converting a row twice.
 
@@ -584,7 +597,7 @@ Some changes are still rejected and need a temporary field you add yourself — 
 
 The command performs the following sequence:
 
-1. Reads each migration-enabled namespace's `sdk-migration` checkpoint from the source workspace and reconstructs that exact snapshot from local migration history.
+1. Reads each migration-enabled namespace's `sdk-migration` checkpoint from the source workspace and reconstructs that exact snapshot from local migration history. A deployed namespace that has no checkpoint is treated as migration 0, as `tailor deploy` does, but only when its schema matches the `0000` snapshot; otherwise the command fails and lists the differences. A namespace that was never deployed also fails.
 2. Creates a temporary workspace in the same region, organization, and folder as the source, unless `--target-workspace-id` names an existing throwaway workspace.
 3. Deploys the checkpoint snapshots and writes their checkpoint labels.
 4. Loads fixture data or clones source records.
@@ -684,7 +697,7 @@ Namespace: tailordb
 
 The error also points you at `migration status`, `migration generate`, `migration sync`, and `migration set` — see [Remote schema drift detected](#remote-schema-drift-detected) for which one applies.
 
-To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script, and no unresolved generated normalization review markers):
+To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script, and no `TODO()` call left in a `migrate.ts`):
 
 ```bash
 tailor tailordb migration validate
@@ -1010,6 +1023,8 @@ test("backfills every table", async () => {
   // assert the rows
 });
 ```
+
+`tailor tailordb migration script <N> --with-test` writes both test scaffolds against `steps` when `migrate.ts` exports `steps`, calling `runMigrationSteps` instead of `main`.
 
 To test one step on its own, call its `run` with a transaction — and a `{ env }` context when the step takes one: `await db.transaction().execute((trx) => steps.backfillInvoice.run(trx))`. With `createKyselyMock`, pass `transaction: (run) => mock.withTx(run)`.
 

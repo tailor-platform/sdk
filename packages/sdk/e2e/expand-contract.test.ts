@@ -18,7 +18,6 @@ import {
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
-import { MIGRATION_REVIEW_REQUIRED_MARKER } from "../src/cli/commands/tailordb/migrate/template-generator";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import {
@@ -229,12 +228,9 @@ export async function main(trx: Transaction): Promise<void> {
     ]);
 
     const script = fs.readFileSync(conversionScriptPath(), "utf8");
-    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
     // The array conversion is mechanical, so only the price conversion asks for review.
     expect(script).toContain(`["tagsMigrate"]: convertedValue`);
-    expect(
-      script.match(new RegExp(MIGRATION_REVIEW_REQUIRED_MARKER.replaceAll(/[()]/g, "\\$&"), "g")),
-    ).toHaveLength(1);
+    expect(script.match(/\bTODO\(/g)).toHaveLength(1);
   }, 600000);
 
   test("reports the unreviewed conversion through migration validate", async () => {
@@ -243,24 +239,16 @@ export async function main(trx: Transaction): Promise<void> {
     const result = tryCli(["tailordb", "migration", "validate", "--config", configPath]);
 
     expect(result.ok).toBe(false);
-    expect(result.output).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(result.output).toContain("TODO()");
   }, 300000);
 
   test("carries the values across when the conversion is filled in", async () => {
     const configPath = createConfig();
     const migratePath = conversionScriptPath();
-    // The marker text contains regex metacharacters, so drop its lines literally.
     const reviewed = fs
       .readFileSync(migratePath, "utf8")
-      .split("\n")
-      .filter((line) => !line.includes(MIGRATION_REVIEW_REQUIRED_MARKER))
-      .join("\n")
-      .replace(
-        "const convertedValue: never = sourceValue;",
-        "const convertedValue = sourceValue > 0;",
-      );
-    expect(reviewed).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
-    expect(reviewed).not.toContain(": never");
+      .replace(/const convertedValue = TODO\("[^"]*"\);/, "const convertedValue = row.price > 0;");
+    expect(reviewed).not.toMatch(/\bTODO\(/);
     fs.writeFileSync(migratePath, reviewed);
 
     runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], 900000);
