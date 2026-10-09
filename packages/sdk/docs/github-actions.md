@@ -237,10 +237,10 @@ Everything else is yours, and re-running `setup` keeps it:
   (for example, the ERD preview jobs when you add `--erd-preview`) uses it too;
   otherwise, set the new job's `runs-on` yourself. On a managed job generated
   without an `environment:` (such as `tailor-tag-guard` or
-  `tailor-erd-preview`), you can also add one, for example so a step you added there can read that GitHub
-  Environment's secrets. The `environment:` of `tailor-plan`, `tailor-deploy`,
-  and the preview jobs comes from `--environment`, so change it with that
-  option instead.
+  `tailor-erd-preview`), you can also add one, for example so a step you added
+  there can read that GitHub Environment's secrets. The `environment:` of
+  `tailor-plan`, `tailor-deploy`, and the preview jobs comes from
+  `--environment`, so change it with that option instead.
 - **These inputs of managed steps:** `ignore` on `tailor-generate-check` and
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on

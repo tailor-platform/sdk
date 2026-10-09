@@ -966,6 +966,16 @@ describe("runs-on of a managed job the merge adds", () => {
     expect(jobs["tailor-result"]?.["runs-on"]).toBe("ubuntu-latest");
   });
 
+  test("leaves the runner of an added job whose template runs it elsewhere", () => {
+    const next = {
+      ...render,
+      content: setRunsOn(render.content, ["tailor-result"], "runs-on: windows-latest"),
+    };
+    const jobs = jobsOf(merge(withRunsOn(beforeResult.content), beforeResult, next));
+    expect(jobs["tailor-deploy"]?.["runs-on"]).toEqual(["self-hosted", "linux"]);
+    expect(jobs["tailor-result"]?.["runs-on"]).toBe("windows-latest");
+  });
+
   test("counts a managed job without runs-on as running on the template's runner", () => {
     const edited = withRunsOn(beforeResult.content).replace(
       /( {2}tailor-plan:\n(?: {4}.*\n)*?) {4}runs-on: .*\n/,
