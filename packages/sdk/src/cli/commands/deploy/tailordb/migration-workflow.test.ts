@@ -300,6 +300,32 @@ describe("executeMigrationAsWorkflow", () => {
     expect(result.error).toBe("Migration workflow execution was canceled.");
   });
 
+  test("reports success from the execution status when its logs cannot be read", async () => {
+    const { client, raw, calls } = createMockClient();
+    raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+
+    const result = await run(client);
+
+    expect(result).toEqual({ success: true, logs: "" });
+    expect(deletesAfter(calls, "getWorkflowExecution")).toContain("deleteWorkflow");
+  });
+
+  test("reports failure from the execution status when its logs cannot be read", async () => {
+    const { client, raw, calls } = createMockClient({
+      statuses: [WorkflowExecution_Status.FAILED],
+    });
+    raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+
+    const result = await run(client);
+
+    expect(result).toEqual({
+      success: false,
+      logs: "",
+      error: "Migration workflow execution failed.",
+    });
+    expect(deletesAfter(calls, "getWorkflowExecution")).toContain("deleteWorkflow");
+  });
+
   test.each(
     [Code.InvalidArgument, Code.NotFound, Code.PermissionDenied, Code.Unauthenticated].map(
       (code) => ({ code, codeName: Code[code] }),
