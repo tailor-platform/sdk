@@ -1,5 +1,95 @@
 # @tailor-platform/sdk
 
+## 2.27.0
+
+### Minor Changes
+
+- [#2570](https://github.com/tailor-platform/sdk/pull/2570) [`80624d1`](https://github.com/tailor-platform/sdk/commit/80624d199d1b035f2c127e3aeadc7ebd68c61fd7) Thanks [@dqn](https://github.com/dqn)! - `@tailor-platform/sdk/cli` now exports `WORKSPACE_NAME_MAX_LENGTH`, the maximum number of characters in a workspace name, so plugins can size names derived from a workspace name without hardcoding the limit.
+
+- [#2526](https://github.com/tailor-platform/sdk/pull/2526) [`95952c9`](https://github.com/tailor-platform/sdk/commit/95952c9125aa22dbc264de7731073713acfd0ec4) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `defaultDateRepresentation` to `defineConfig()`. Setting it to `"temporal"` gives `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as` Temporal values (`Temporal.PlainDate`, `Temporal.Instant`, `Temporal.PlainTime`) instead of strings, so a project can use Temporal everywhere without repeating `as: "temporal"`; `"date"` gives them `Date` values the same way. A field's own `as`, including `as: "string"`, still takes precedence; `db.*` fields are unaffected. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
+  
+  The default is applied in every bundled function (resolvers, executors, workflow jobs, auth hooks, TailorDB hooks and validators, migration scripts), in `tailor function run`, and in the `tailor-runtime` Vitest environment when `tailorRuntime({ config })` points at the config (the config is read once when Vitest starts; a missing or unparsable config, or a value other than `"temporal"` or `"date"`, fails the run, while a config that throws while loading prints a warning and keeps string values, as it already does for secrets). Under `"temporal"`, every resolver bundle keeps the Temporal conversion, so `.parse()` on a field declared inside `body` works too. Each migration records the representation in effect when its script was generated and keeps running with it; a migration generated under `"temporal"` or `"date"` is written as format version 8, which older SDK versions refuse to read, and every generated `migrate.test.ts` scaffold calls the new `applyDateRepresentation` helper from `@tailor-platform/sdk/vitest` with the recorded value (`"string"` when none is recorded) before importing the script, so the test runs it with the same values (tests of `"temporal"` migrations run in the `tailor-runtime` Vitest environment, which provides `Temporal`). `tailor.d.ts` now declares the setting per application, keyed by the application name; when several applications' `tailor.d.ts` files are included in one TypeScript program and disagree, calling a date builder without `as` is a type error until they are aligned.
+  
+  For projects that never set the option: `t.date()`/`t.datetime()`/`t.time()` now record `as: "default"` (and an explicit `as: "string"`) in their metadata, `tailor.d.ts` gains a `DateRepresentationRegistry` entry (`"<app>": "unset"`), and the resolver, executor, workflow job, and auth hook bundle caches are rebuilt once on the next deploy.
+
+- [#2573](https://github.com/tailor-platform/sdk/pull/2573) [`66a8d86`](https://github.com/tailor-platform/sdk/commit/66a8d86dbb00a1d47288d8079be17aed34010573) Thanks [@dqn](https://github.com/dqn)! - Show why each function execution failed in `tailor function logs`. Every execution now includes `errorKind` (`USER_RUNTIME`, `USER_NON_RUNTIME`, `PLATFORM`, `NONE`, or `UNSPECIFIED`), `errorName`, and `errorMessage`, so the list tells you whether a failure came from your code or the Platform without opening each execution. The list table shows `errorKind` and `errorName`; `--json` and the execution details also include `errorMessage`.
+
+- [#2551](https://github.com/tailor-platform/sdk/pull/2551) [`5c17144`](https://github.com/tailor-platform/sdk/commit/5c17144578950729f5a7c34b9258b55b00e48b84) Thanks [@k1LoW](https://github.com/k1LoW)! - Expose when a Built-in IdP user's password was last set. The runtime `idp.Client` `User` records now include `passwordUpdatedAt` (an ISO 8601 string, or `null` for users without a password), and the Auth `beforeLogin` hook claims are typed with `password_updated_at` (seconds since the Unix epoch), so applications can enforce their own password expiration.
+
+- [#2546](https://github.com/tailor-platform/sdk/pull/2546) [`613d6a4`](https://github.com/tailor-platform/sdk/commit/613d6a44a81612e6311b5f88514dc5451ffc13ef) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor tailordb migration generate` and `tailor tailordb migration script` now scaffold `migrate.ts` as a multi-step script that exports `steps`. It has one step for each schema change that needs a data migration, and steps that touch the same field are ordered with `dependsOn`. `migration script --with-test` writes the test scaffolds against `steps` when `migrate.ts` exports it.
+  
+  Where a generated `migrate.ts` leaves a value or logic for you to decide, such as what an added required field holds in existing records, it now calls `TODO(message)` from `./db` instead of writing `null` next to a `// TODO:` comment or a `never` annotation. The migration fails at that call, and `tailor tailordb migration validate` and `tailor deploy` reject a `migrate.ts` that still calls it before anything is changed. `tailor deploy` also rejects a `migrate.ts` that still carries the `TODO(tailor-migration-review)` marker earlier versions generated, which only `migration validate` checked before.
+
+- [#2504](https://github.com/tailor-platform/sdk/pull/2504) [`b7cbbb4`](https://github.com/tailor-platform/sdk/commit/b7cbbb43efe5550c439fc0a9e7886c7f3fa38d8e) Thanks [@dqn](https://github.com/dqn)! - A TailorDB migration script can now export `steps` instead of `main` to split its data migration into steps. Each step runs as its own job in its own transaction, so a long migration is no longer bound by a single job's execution-time limit, and `dependsOn` declares which steps must complete before another starts.
+  
+  ```ts
+  import type { MigrationSteps } from "./db";
+  
+  export const steps = {
+    backfillInvoice: {
+      run: async (trx) => {
+        /* ... */
+      },
+    },
+    recomputeTotals: {
+      dependsOn: ["backfillInvoice"],
+      run: async (trx, { env }) => {
+        /* ... */
+      },
+    },
+  } satisfies MigrationSteps;
+  ```
+  
+  When a step fails after other steps completed, `tailor deploy` keeps the migration in progress instead of rolling it back: the next deploy resumes it from the steps that have not completed, and `tailordb migration status` reports it. A script with a single step runs like a `main` script, in one transaction: a failure inside it rolls its data changes back, and a failure in the post-migration schema changes restores the schema while the next deploy runs the step again. Steps must be safe to run again. `runMigrationSteps` in `@tailor-platform/sdk/vitest` runs `steps` in tests the same way. Scripts that export `main` behave as before; a script that exports both runs `main` and warns that `steps` is ignored.
+
+### Patch Changes
+
+- [#2549](https://github.com/tailor-platform/sdk/pull/2549) [`736faf2`](https://github.com/tailor-platform/sdk/commit/736faf28ab95b3b2dbe380495c3ae6c06554ee09) Thanks [@toiroakr](https://github.com/toiroakr)! - Document that `tailor deploy --json` writes exactly one JSON object to stdout and sends progress and diagnostics to stderr, and that deploy plugins report through `ctx.logger` and `ctx.exec` to keep that output parseable.
+
+- [#2550](https://github.com/tailor-platform/sdk/pull/2550) [`18e4dfb`](https://github.com/tailor-platform/sdk/commit/18e4dfbc042582663124d4d70c286ef33e72ee45) Thanks [@toiroakr](https://github.com/toiroakr)! - Restrict the `defineIdp` permission examples in the docs, the `IdPPermission` JSDoc, the `example` project and the `static-web-site` template to an administrator role, and warn in the IdP docs that a `_loggedIn` policy lets every authenticated user read and change other users' login information and send password reset emails
+
+- [#2531](https://github.com/tailor-platform/sdk/pull/2531) [`fb86a11`](https://github.com/tailor-platform/sdk/commit/fb86a11bdc8b044044eaba3b6206d6cd475891d6) Thanks [@haru0017](https://github.com/haru0017)! - Correct the job function timeout in the Executor service docs to 5 minutes.
+
+- [#2569](https://github.com/tailor-platform/sdk/pull/2569) [`80cbc74`](https://github.com/tailor-platform/sdk/commit/80cbc747a4e2389b943d826fcbb616eaea961b93) Thanks [@toiroakr](https://github.com/toiroakr)! - Stop disabling the GraphQL `read` operation of a table while `tailor deploy` applies a TailorDB migration. Create, update, delete, and bulk upsert are still disabled and record events are still not published. `read` keeps the table's live setting when the restrictions begin, and a table that a migration touches then follows that migration's schema, so a migration that changes `read` changes it before its script runs
+
+- [#2562](https://github.com/tailor-platform/sdk/pull/2562) [`892a813`](https://github.com/tailor-platform/sdk/commit/892a813a2d1dade41e1572a623be039c6dfc0480) Thanks [@dqn](https://github.com/dqn)! - When `tailor deploy` cannot confirm whether a TailorDB migration that runs in one transaction (a script that exports `main`, or `steps` with a single step) started or finished, it no longer removes the run and rolls back the migration's schema changes while the script may still be running. It reports the outcome as unconfirmed, keeps the namespace in maintenance mode, and explains how to check the run and settle the migration. A later deploy refuses to run the migration again while that run is still executing. While the script runs, the deploy now keeps waiting while the platform is temporarily unavailable instead of giving up.
+
+- [#2559](https://github.com/tailor-platform/sdk/pull/2559) [`cf8da6b`](https://github.com/tailor-platform/sdk/commit/cf8da6bb32d065559ba211dbfe338f3952ec1b2a) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor tailordb migration test` no longer fails when the source namespace was deployed without a migration label (for example, before it adopted SDK migrations). Like `tailor deploy`, it treats the namespace as being at migration 0 and tests 0001 onward, provided the namespace's schema matches the 0000 snapshot; otherwise it fails and shows the differences.
+
+- [#2539](https://github.com/tailor-platform/sdk/pull/2539) [`228487c`](https://github.com/tailor-platform/sdk/commit/228487c73fa75d9d6729bbb92f4181dd89c2aa4b) Thanks [@toiroakr](https://github.com/toiroakr)! - List the workspace regions in `tailor workspace create --help` in the order the Platform returns them (`asia-northeast, us-west`)
+
+- [#2509](https://github.com/tailor-platform/sdk/pull/2509) [`54f95b9`](https://github.com/tailor-platform/sdk/commit/54f95b91dc1aad1561b93ab9f57a1f7c4a7342c2) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.19.1
+
+- [#2521](https://github.com/tailor-platform/sdk/pull/2521) [`1910e15`](https://github.com/tailor-platform/sdk/commit/1910e15409751bd72e3837d1fb65986574e833be) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​bufbuild/protobuf to v2.16.0
+
+- [#2524](https://github.com/tailor-platform/sdk/pull/2524) [`9210a2d`](https://github.com/tailor-platform/sdk/commit/9210a2d15c98a6b29a4c7bd23015abb21c4a0614) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​toiroakr/lines-db to v0.14.0
+
+- [#2528](https://github.com/tailor-platform/sdk/pull/2528) [`d8c2825`](https://github.com/tailor-platform/sdk/commit/d8c2825e95ad5a7b4cc8af6a44ae461a31e0e9f8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update secretlint monorepo to v13.0.7
+
+- [#2535](https://github.com/tailor-platform/sdk/pull/2535) [`75b61a0`](https://github.com/tailor-platform/sdk/commit/75b61a053e9ce836d64893b2e20586cf48a71a30) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.13.0
+
+- [#2536](https://github.com/tailor-platform/sdk/pull/2536) [`248ea98`](https://github.com/tailor-platform/sdk/commit/248ea98c49ae47cdc0d552dbe6678c6bbc5d841c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency oxc-parser to v0.152.0
+
+- [#2537](https://github.com/tailor-platform/sdk/pull/2537) [`a99da7d`](https://github.com/tailor-platform/sdk/commit/a99da7d38ea7b3e092c7ceab43018e276ae75267) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency std-env to v4.3.0
+
+- [#2540](https://github.com/tailor-platform/sdk/pull/2540) [`0d8bc9c`](https://github.com/tailor-platform/sdk/commit/0d8bc9c6a92ae4d2934780e8684ca2221fa5ec2c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​toiroakr/lines-db to v0.15.0
+
+- [#2543](https://github.com/tailor-platform/sdk/pull/2543) [`2547d99`](https://github.com/tailor-platform/sdk/commit/2547d99b4214378c21e41ded77633414776a04c2) Thanks [@toiroakr](https://github.com/toiroakr)! - `fillSeedData` (`tailor seed fill`) now refuses to write any file when a seed JSONL file was changed by another tool after the fill read it, instead of overwriting that change, and fills the first row of a file that starts with a byte order mark instead of skipping it
+
+- [#2538](https://github.com/tailor-platform/sdk/pull/2538) [`7485f14`](https://github.com/tailor-platform/sdk/commit/7485f14cc0087dd4dc30f5b390358c31fa6d8e80) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor setup ci env` and the GitHub Actions guide now tell an organization or folder admin to create the platform machine user in the Tailor Console and grant it a role, and say that without the required permission you cannot view or create machine users, instead of telling you to contact Tailor support
+
+- [#2570](https://github.com/tailor-platform/sdk/pull/2570) [`88e17e9`](https://github.com/tailor-platform/sdk/commit/88e17e9013f19e216bdc5c99208c032eded1fe06) Thanks [@dqn](https://github.com/dqn)! - `tailor setup ci preview` now rejects a name longer than 50 characters. Each pull request's preview workspace is named `<name>-pr-<number>`, which must fit in 63 characters, so a longer name made preview deploys fail once pull request numbers grew (from the first pull request for names of 59 characters or more). A preview workflow already recorded in `.github/tailor.lock` under a longer name still regenerates, for example with `tailor setup update`, with a warning naming the first pull request number whose preview deploy fails.
+
+- [#2571](https://github.com/tailor-platform/sdk/pull/2571) [`d6527ca`](https://github.com/tailor-platform/sdk/commit/d6527cab6209968cb50ef0802cb48c6e5a3003b9) Thanks [@dqn](https://github.com/dqn)! - `tailor setup ci preview` now cancels the whole superseded preview run, including the jobs you added with `needs: tailor-preview-deploy`, so they no longer keep running against a preview workspace that a newer run is redeploying or that closing the pull request deletes. Run `tailor setup update` to regenerate existing preview workflows; a top-level `concurrency:` you already set in one is kept in place of the new default.
+
+- [#2574](https://github.com/tailor-platform/sdk/pull/2574) [`e2619b3`](https://github.com/tailor-platform/sdk/commit/e2619b3a01a362ef588d4e9da300c666bc6e2491) Thanks [@dqn](https://github.com/dqn)! - `tailor setup ci branch` and `tailor setup ci preview` now generate a final job, `tailor-result` and `tailor-preview-result`, whose check (such as `tailor-result (my-app)`) reports whether the whole workflow passed, so branch protection needs only that one check instead of every job. It fails when a job it needs failed or was cancelled and passes when they succeeded or were skipped. Add your own jobs, such as end-to-end tests or a matrix job, to its `needs` to make them count; regenerating the workflow keeps them, and `tailor setup check` does not report them as hand edits.
+  
+  Run `tailor setup update` to add the job to existing workflows with the flags they were generated with; `tailor setup check` reports them as outdated until then. If you set `runs-on` on the managed jobs, for example to use self-hosted runners, set it on the new job too.
+
+- [#2546](https://github.com/tailor-platform/sdk/pull/2546) [`649ca55`](https://github.com/tailor-platform/sdk/commit/649ca55a614941dd3c0d382a510f47add4ba3d6d) Thanks [@toiroakr](https://github.com/toiroakr)! - When `tailor deploy` loses the response to starting a TailorDB migration that runs in one transaction (a script that exports `main`, or `steps` with a single step), it now waits for the migration that the platform started instead of removing it and rolling the schema back while it runs.
+
+- [#2504](https://github.com/tailor-platform/sdk/pull/2504) [`13143fd`](https://github.com/tailor-platform/sdk/commit/13143fd168bfd9a313e347f4c7666f4ad0ee1ace) Thanks [@dqn](https://github.com/dqn)! - Starting a workflow, from `tailor workflow start` or for a TailorDB migration during `tailor deploy`, is no longer retried after a transient platform error, because the retry could start a second execution.
+
 ## 2.26.0
 
 ### Minor Changes
