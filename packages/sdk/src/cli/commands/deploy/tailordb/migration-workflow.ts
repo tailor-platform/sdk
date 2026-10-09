@@ -658,6 +658,17 @@ export interface SkippableStepsOptions {
   requested: readonly string[];
 }
 
+function skipSuggestion(succeededSteps: readonly string[], order: readonly string[]): string {
+  const skippable = succeededSteps.filter((step) => order.includes(step));
+  if (skippable.length > 0) {
+    return `Skip only steps that succeeded in the earlier run and are still steps of this migration: ${skippable.join(", ")}.`;
+  }
+  if (succeededSteps.length > 0) {
+    return "None of the steps that succeeded in the earlier run is still a step of this migration, so there is nothing to skip. Remove --migration-skip-steps for this migration.";
+  }
+  return "Skipping applies only to a migration that an earlier deploy left partially applied, and only to its steps that succeeded. Remove --migration-skip-steps for this migration.";
+}
+
 /**
  * Reject a request to skip steps that did not succeed in the migration's
  * earlier run, before anything of the migration runs.
@@ -690,10 +701,7 @@ export async function assertSkippableSteps(options: SkippableStepsOptions): Prom
       `Cannot skip steps of migration ${migrationLabel}: ` +
       invalid.map(({ step, reason }) => `'${step}' ${SKIP_REJECTION_REASONS[reason]}`).join("; ") +
       ".",
-    suggestion:
-      succeededSteps.length > 0
-        ? `Skip only steps that succeeded in the earlier run: ${succeededSteps.join(", ")}.`
-        : "Skipping applies only to a migration that an earlier deploy left partially applied, and only to its steps that succeeded. Remove --migration-skip-steps for this migration.",
+    suggestion: skipSuggestion(succeededSteps, order),
     context: { namespace, migrationNumber, requested: [...requested], invalid, succeededSteps },
   });
 }

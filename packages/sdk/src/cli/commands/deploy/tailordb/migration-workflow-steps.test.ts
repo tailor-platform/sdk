@@ -938,6 +938,29 @@ describe("assertSkippableSteps", () => {
     });
   });
 
+  test("suggests only succeeded steps that the migration still defines", async () => {
+    const error = await assertSkippableSteps({
+      client: createStepsClient({
+        existingWorkflow: { id: "wf-old" },
+        listed: [succeededRun],
+      }).client,
+      workspaceId: "ws-1",
+      namespace: "tailordb",
+      migrationNumber: 3,
+      order: ["renamedUser", "backfillInvoice", "recomputeTotals"],
+      inProgress: { executionId: "exec-old" },
+      requested: ["backfillInvoice"],
+    }).catch((thrown: Error) => thrown);
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_INVALID",
+      suggestion: expect.stringContaining(
+        "None of the steps that succeeded in the earlier run is still a step",
+      ),
+      context: { succeededSteps: ["backfillUser"] },
+    });
+  });
+
   test("rejects a step that the migration does not define", async () => {
     await expect(
       check(["renamedAway"], { existingWorkflow: { id: "wf-old" }, listed: [succeededRun] }),
