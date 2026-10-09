@@ -534,7 +534,7 @@ type RewriteRestrictedTablesParams = {
   continueOnError?: boolean;
 };
 
-function acceptsMigrationWrites(settings: MigrationTableSettings): boolean {
+export function acceptsMigrationWrites(settings: MigrationTableSettings): boolean {
   const operations = settings.disableGqlOperations;
   return (
     settings.publishRecordEvents ||

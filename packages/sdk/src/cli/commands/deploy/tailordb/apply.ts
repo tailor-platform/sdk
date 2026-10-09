@@ -30,6 +30,7 @@ import {
 } from "./migration";
 import {
   applyMigrationRestrictions,
+  acceptsMigrationWrites,
   captureMigrationRestrictionState,
   deletedResources,
   executeSingleMigrationPostPhase,
@@ -328,6 +329,7 @@ async function removeRunResources(
  * @param migration - The partially applied migration
  * @param restorationSnapshots - Snapshots to restore, updated in place
  * @param restorationSettings - Settings to restore, updated in place
+ * @param capturedSettings - Settings captured before any restriction was applied
  * @returns Names of the tables left restricted
  */
 function keepMigrationTablesRestricted(
@@ -335,6 +337,7 @@ function keepMigrationTablesRestricted(
   migration: PendingMigration,
   restorationSnapshots: Map<string, SchemaSnapshot>,
   restorationSettings: MigrationRestrictionState,
+  capturedSettings: MigrationRestrictionState,
 ): string[] {
   const committed = restorationSnapshots.get(namespaceName);
   const migrationTables = new Set([
@@ -342,7 +345,7 @@ function keepMigrationTablesRestricted(
     ...Object.keys(migrationSnapshotCache.load(migration).tables),
     ...getDeletedTableNames(migration),
   ]);
-  if (!committed) return [...migrationTables].toSorted();
+  if (!committed) return restrictedByDeploy(namespaceName, migrationTables, capturedSettings);
   restorationSnapshots.set(namespaceName, { ...committed, tables: {} });
   restorationSettings.set(
     namespaceName,
@@ -352,24 +355,40 @@ function keepMigrationTablesRestricted(
       ),
     ),
   );
-  return [...migrationTables].toSorted();
+  return restrictedByDeploy(namespaceName, migrationTables, capturedSettings);
 }
 
 function describeSkippedTables(tables: readonly string[]): string {
   return tables.length > 0 ? `Restricted tables: ${tables.join(", ")}. ` : "";
 }
 
+function restrictedByDeploy(
+  namespaceName: string,
+  tableNames: Iterable<string>,
+  capturedSettings: MigrationRestrictionState,
+): string[] {
+  return [...new Set(tableNames)]
+    .filter((tableName) => {
+      const captured = capturedSettings.get(namespaceName)?.get(tableName);
+      return !captured || acceptsMigrationWrites(captured);
+    })
+    .toSorted();
+}
+
 function skippedRestorationTables(
   namespaceName: string,
   restorationSnapshots: ReadonlyMap<string, SchemaSnapshot>,
   restorationSettings: MigrationRestrictionState,
+  capturedSettings: MigrationRestrictionState,
 ): string[] {
-  return [
-    ...new Set([
+  return restrictedByDeploy(
+    namespaceName,
+    [
       ...Object.keys(restorationSnapshots.get(namespaceName)?.tables ?? {}),
       ...(restorationSettings.get(namespaceName)?.keys() ?? []),
-    ]),
-  ].toSorted();
+    ],
+    capturedSettings,
+  );
 }
 
 function describeMigrationCheckpoint(number: number | null | undefined): string {
@@ -824,6 +843,7 @@ export async function applyTailorDB(
             namespaceName,
             restorationSnapshots,
             restorationSettings,
+            restrictionState,
           );
           restorationSnapshots.delete(namespaceName);
           const concurrencyError = CLIError({
@@ -855,6 +875,7 @@ export async function applyTailorDB(
             namespaceName,
             restorationSnapshots,
             restorationSettings,
+            restrictionState,
           );
           restorationSnapshots.delete(namespaceName);
           const ownershipError = CLIError({
@@ -896,6 +917,7 @@ export async function applyTailorDB(
           migration,
           restorationSnapshots,
           restorationSettings,
+          restrictionState,
         );
         warnTablesLeftRestricted(
           `Migration ${namespaceName}/${formatMigrationNumber(migration.number)} is partially applied.`,

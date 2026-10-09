@@ -1415,6 +1415,44 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       warn.mockRestore();
     });
 
+    test("leaves a table that already refuses writes out of the restricted tables it names", async () => {
+      const client = createMockClient();
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [
+          {
+            name: "GoodsReceipt",
+            schema: {
+              settings: {
+                bulkUpsert: false,
+                publishRecordEvents: false,
+                disableGqlOperations: { create: true, update: true, delete: true, read: false },
+              },
+            },
+          },
+        ],
+      } as never);
+      setPendingMigrations([
+        {
+          ...mkAddTypeMigration(1, "StockReservation"),
+          scriptForm: { kind: "steps", order: ["a", "b"] },
+        },
+      ]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        CLIError({ code: "MIGRATION_PARTIALLY_APPLIED", message: "failed at b after a completed" }),
+      );
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(applyTailorDB(client, createMockPlanResult(), "create-update")).rejects.toThrow(
+        "failed at b after a completed",
+      );
+
+      const lines = warn.mock.calls.map(([line]) => line).join("\n");
+      expect(lines).toContain("namespace 'test-ns': StockReservation.");
+      expect(lines).not.toContain("GoodsReceipt");
+      warn.mockRestore();
+    });
+
     test("names the tables a partially applied migration keeps restricted", async () => {
       const client = createMockClient();
       setPendingMigrations([
