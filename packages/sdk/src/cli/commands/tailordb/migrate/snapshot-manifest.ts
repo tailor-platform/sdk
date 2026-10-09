@@ -62,8 +62,8 @@ export interface GenerateManifestOptions {
    * subscribes, so `subscribed` alone cannot silence it while migrations run.
    */
   suppressRecordEvents?: boolean;
-  /** Force GraphQL create, update, delete, and bulk upsert off; read keeps the snapshot's setting. */
-  suppressGqlMutations?: boolean;
+  /** Force every GraphQL operation, including bulk upsert, off. */
+  suppressGqlOperations?: boolean;
   /** Default gqlOperations for the namespace */
   namespaceGqlOperations?: {
     create?: boolean;
@@ -120,7 +120,7 @@ export function generateTailorDBTypeManifestFromSnapshot(
   } = {
     aggregation: snapshotType.settings?.aggregation ?? false,
     bulkUpsert:
-      options.suppressGqlMutations === true ? false : (snapshotType.settings?.bulkUpsert ?? false),
+      options.suppressGqlOperations === true ? false : (snapshotType.settings?.bulkUpsert ?? false),
     draft: false,
     defaultQueryLimitSize: 100n,
     maxBulkUpsertSize: 1000n,
@@ -133,12 +133,12 @@ export function generateTailorDBTypeManifestFromSnapshot(
 
   // Apply gqlOperations from snapshot settings or namespace default
   const ops = snapshotType.settings?.gqlOperations ?? options.namespaceGqlOperations;
-  if (ops || options.suppressGqlMutations === true) {
+  if (ops || options.suppressGqlOperations === true) {
     defaultSettings.disableGqlOperations = {
-      create: options.suppressGqlMutations === true || ops?.create === false,
-      update: options.suppressGqlMutations === true || ops?.update === false,
-      delete: options.suppressGqlMutations === true || ops?.delete === false,
-      read: ops?.read === false,
+      create: options.suppressGqlOperations === true || ops?.create === false,
+      update: options.suppressGqlOperations === true || ops?.update === false,
+      delete: options.suppressGqlOperations === true || ops?.delete === false,
+      read: options.suppressGqlOperations === true || ops?.read === false,
     };
   }
 

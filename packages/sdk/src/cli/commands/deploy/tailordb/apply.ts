@@ -551,7 +551,7 @@ export async function applyTailorDB(
             namespaceName,
             tailordbType: generateTailorDBTypeManifestFromSnapshot(priorTable, {
               suppressRecordEvents: true,
-              suppressGqlMutations: true,
+              suppressGqlOperations: true,
               namespaceGqlOperations: input?.config.gqlOperations,
             }),
           });

@@ -449,7 +449,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const operationWrites = gqlOperationWrites(client).filter(([name]) => name === "Order");
     expect(operationWrites.length).toBeGreaterThan(0);
     for (const [, operations] of operationWrites.slice(0, -1)) {
-      expect(operations).toEqual({ create: true, update: true, delete: true, read: false });
+      expect(operations).toEqual({ create: true, update: true, delete: true, read: true });
     }
     expect(operationWrites.at(-1)?.[1]).toBeUndefined();
   });
@@ -500,7 +500,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       "Order",
       expect.objectContaining({
         publishRecordEvents: false,
-        disableGqlOperations: { create: true, update: true, delete: true, read: false },
+        disableGqlOperations: { create: true, update: true, delete: true, read: true },
       }),
     ]);
   });
@@ -580,7 +580,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     expect(futureWrite?.[1]).toMatchObject({
       bulkUpsert: false,
       publishRecordEvents: false,
-      disableGqlOperations: { create: true, update: true, delete: true, read: false },
+      disableGqlOperations: { create: true, update: true, delete: true, read: true },
     });
   });
 
@@ -750,7 +750,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
     const writes = gqlOperationWrites(client);
     expect(writes.filter(([name]) => name === "Order").map(([, operations]) => operations)).toEqual(
-      [{ create: true, update: true, delete: true, read: false }, undefined],
+      [{ create: true, update: true, delete: true, read: true }, undefined],
     );
     expect(
       writes.filter(([name]) => name === "PrivateLog").map(([, operations]) => operations),
@@ -1091,7 +1091,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         create: true,
         update: true,
         delete: true,
-        read: false,
+        read: true,
       })),
     );
     expect(operationWrites.at(-1)).toBeUndefined();
@@ -1110,7 +1110,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         Order: snapshotTable(
           "Order",
           { status: { type: "string", required: true } },
-          { bulkUpsert: true, gqlOperations: { read: false } },
+          { bulkUpsert: true },
         ),
       },
       1: {
@@ -1120,7 +1120,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             status: { type: "string", required: true },
             requiredLater: { type: "string", required: true },
           },
-          { bulkUpsert: true, gqlOperations: { read: false } },
+          { bulkUpsert: true },
         ),
       },
     };
