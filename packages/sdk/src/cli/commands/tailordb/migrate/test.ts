@@ -50,20 +50,6 @@ export async function runMigrationTest(
       command: "tailordb migration test",
     });
   }
-  if (options.targetWorkspaceId) {
-    const flag = options.organizationId
-      ? "--organization-id"
-      : options.folderId
-        ? "--folder-id"
-        : "";
-    if (flag) {
-      throw CLIError({
-        code: "MIGRATION_TEST_OPTIONS_INVALID",
-        message: `${flag} applies only to automatically created workspaces; a designated target already exists.`,
-        command: "tailordb migration test",
-      });
-    }
-  }
   if (options.assertionNamespace && !options.assertionPath) {
     throw CLIError({
       code: "MIGRATION_TEST_OPTIONS_INVALID",
@@ -200,12 +186,12 @@ export const testCommand = defineAppCommand({
     }),
     "organization-id": arg(z.uuid().optional(), {
       description:
-        "Organization to create the temporary workspace in, at its root unless --folder-id is given (default: the source workspace's organization and folder)",
+        "Organization to create the temporary workspace in, at its root unless --folder-id is given (default: the source workspace's organization and folder). With --target-workspace-id, must match the target's organization",
       env: "TAILOR_PLATFORM_ORGANIZATION_ID",
     }),
     "folder-id": arg(z.uuid().optional(), {
       description:
-        "Folder to create the temporary workspace in (default: the source workspace's folder)",
+        "Folder to create the temporary workspace in (default: the source workspace's folder). With --target-workspace-id, must match the target's folder",
       env: "TAILOR_PLATFORM_FOLDER_ID",
     }),
     assert: arg(z.string().optional(), {

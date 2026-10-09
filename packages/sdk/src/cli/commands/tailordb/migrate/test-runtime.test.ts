@@ -12,6 +12,7 @@ import {
   assertSourceBaselineFresh,
   createMigrationTestBaselineSnapshots,
   deleteExistingUserProfileConfig,
+  assertTargetMatchesLocation,
   loadSnapshotSeedData,
   resolveTemporaryWorkspaceLocation,
   sortSeedTypesForSnapshot,
@@ -464,6 +465,54 @@ describe("migration test runtime", () => {
         resolveTemporaryWorkspaceLocation(client, {}, { folderId: otherFolder }),
       ).resolves.toEqual({ folderId: otherFolder });
       expect(client.getOrganizationFolder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("designated target location", () => {
+    const organization = "11111111-1111-4111-8111-111111111111";
+    const folder = "22222222-2222-4222-8222-222222222222";
+    const otherOrganization = "33333333-3333-4333-8333-333333333333";
+    const otherFolder = "44444444-4444-4444-8444-444444444444";
+    const target = { id: "target-id", organizationId: organization, folderId: folder };
+
+    test("accepts a target that is in the specified organization and folder", () => {
+      expect(() =>
+        assertTargetMatchesLocation(target, { organizationId: organization, folderId: folder }),
+      ).not.toThrow();
+    });
+
+    test("accepts a target when no organization or folder is specified", () => {
+      expect(() => assertTargetMatchesLocation(target, {})).not.toThrow();
+    });
+
+    test("rejects a specified organization that differs from the target's", () => {
+      expect(() =>
+        assertTargetMatchesLocation(target, { organizationId: otherOrganization }),
+      ).toThrow(
+        expect.objectContaining({
+          code: "MIGRATION_TEST_OPTIONS_INVALID",
+          message: expect.stringContaining(
+            `--organization-id "${otherOrganization}" does not match the designated target workspace "target-id", which is in organization "${organization}"`,
+          ),
+        }),
+      );
+    });
+
+    test("rejects a specified folder that differs from the target's", () => {
+      expect(() => assertTargetMatchesLocation(target, { folderId: otherFolder })).toThrow(
+        expect.objectContaining({
+          code: "MIGRATION_TEST_OPTIONS_INVALID",
+          message: expect.stringContaining(
+            `--folder-id "${otherFolder}" does not match the designated target workspace "target-id", which is in folder "${folder}"`,
+          ),
+        }),
+      );
+    });
+
+    test("describes a target outside any folder as having no folder", () => {
+      expect(() =>
+        assertTargetMatchesLocation({ ...target, folderId: "" }, { folderId: folder }),
+      ).toThrow(expect.objectContaining({ message: expect.stringContaining("has no folder") }));
     });
   });
 
