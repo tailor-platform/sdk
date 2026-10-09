@@ -6,7 +6,7 @@
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger } from "#/cli/shared/logger";
-import { applyTailorDB, captureMigrationFileState } from "./index";
+import { applyTailorDB, captureMigrationFileState, preflightTailorDB } from "./index";
 import type { SchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
@@ -1306,6 +1306,41 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       warn.mockRestore();
     });
 
+    test("does not call a table restricted when the prior schema is missing but restoration still lifts it", async () => {
+      const client = createMockClient();
+      setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        new Error("original migration failure"),
+      );
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      let baselineReads = 0;
+      await withOverriddenSnapshot(
+        (migrationsDir, maxVersion) =>
+          (maxVersion ?? 0) === 0 && ++baselineReads > 2
+            ? null
+            : (snapshotFixtures.reconstructSnapshotFromMigrations(
+                migrationsDir,
+                maxVersion,
+              ) as SchemaSnapshot),
+        async () => {
+          await expect(
+            applyTailorDB(
+              client,
+              withRestorableGoodsReceipt(createUpdatePlanResult()),
+              "create-update",
+            ),
+          ).rejects.toThrow("original migration failure");
+        },
+      );
+
+      const lines = warn.mock.calls.map(([line]) => line).join("\n");
+      expect(lines).toContain("Cannot roll back migration");
+      expect(lines).not.toContain("Still restricted");
+      warn.mockRestore();
+    });
+
     test("names the tables a partially applied migration keeps restricted", async () => {
       const client = createMockClient();
       setPendingMigrations([
@@ -1524,6 +1559,21 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         }),
       );
       expect(migrationModule.executeMigrations).not.toHaveBeenCalled();
+      expect(client.updateTailorDBType).not.toHaveBeenCalled();
+    });
+
+    test("rejects a step that cannot be skipped in the preflight that runs before any deployment is applied", async () => {
+      const client = createMockClient();
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      vi.mocked(assertSkippableSteps).mockRejectedValueOnce(
+        CLIError({ code: "MIGRATION_SKIP_STEPS_INVALID", message: "cannot skip recompute" }),
+      );
+      const plan = withInputs(createMockPlanResult());
+      plan.context.migrationSkipSteps = new Map([["test-ns", ["recompute"]]]);
+
+      await expect(preflightTailorDB(client, plan)).rejects.toMatchObject({
+        code: "MIGRATION_SKIP_STEPS_INVALID",
+      });
       expect(client.updateTailorDBType).not.toHaveBeenCalled();
     });
 

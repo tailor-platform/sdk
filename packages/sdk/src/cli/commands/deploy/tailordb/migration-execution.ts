@@ -405,13 +405,24 @@ export const deletedResources = {
   },
 };
 
+/**
+ * Roll a failed migration's Pre-phase back, logging what could not be reverted.
+ * Whether the tables it names stay restricted is for the caller to report once
+ * restoration has had its chance to lift them.
+ * @param client - Operator client instance
+ * @param migration - The failed migration
+ * @param workspaceId - Workspace ID
+ * @param tailorDBInputs - Deploy inputs
+ * @param attemptedTables - Tables the migration's phases touched
+ * @returns Names of the tables the rollback left in their restricted state
+ */
 export async function rollbackSingleMigrationAfterFailure(
   client: OperatorClient,
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   attemptedTables: ReadonlySet<string>,
-): Promise<void> {
+): Promise<string[]> {
   const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
   let leftRestricted: string[];
   try {
@@ -429,11 +440,7 @@ export async function rollbackSingleMigrationAfterFailure(
     );
     leftRestricted = [...attemptedTables];
   }
-  if (leftRestricted.length > 0) {
-    warnTablesLeftRestricted(`Migration ${migrationLabel} was not rolled back completely.`, [
-      { namespace: migration.namespace, tables: leftRestricted },
-    ]);
-  }
+  return leftRestricted;
 }
 
 /**

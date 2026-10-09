@@ -229,6 +229,17 @@ async function validateTailorDBMigrationState(
       suggestion: "Run the deployment again to create a fresh plan.",
     });
   }
+  await assertMigrationSkipSteps({
+    client,
+    workspaceId: context.workspaceId,
+    requested: new Map(
+      [...(context.migrationSkipSteps ?? [])].filter(([namespace]) =>
+        context.tailorDBInputs.some((input) => input.namespace === namespace),
+      ),
+    ),
+    pendingMigrations: validation.pendingMigrations,
+    inProgressByNamespace: validation.inProgressMigrations,
+  });
   return validation;
 }
 
@@ -401,18 +412,6 @@ export async function applyTailorDB(
             migrationsRequiringScripts,
           )
         : undefined;
-
-    await assertMigrationSkipSteps({
-      client,
-      workspaceId: migrationContext.workspaceId,
-      requested: new Map(
-        [...(migrationContext.migrationSkipSteps ?? [])].filter(([namespace]) =>
-          migrationContext.tailorDBInputs.some((input) => input.namespace === namespace),
-        ),
-      ),
-      pendingMigrations,
-      inProgressByNamespace: inProgressMigrations,
-    });
 
     for (const repair of checkpointRepairs) {
       await updateMigrationLabel(
@@ -595,6 +594,7 @@ export async function applyTailorDB(
       let migrationFailure: { error: unknown } | undefined;
       const partialMigrations = new Map<string, PendingMigration>();
       const reachedMigrations = new Set<PendingMigration>();
+      const unrolledBack: { migration: PendingMigration; tables: string[] }[] = [];
       try {
         // A committed checkpoint drops its migration from the next run's pending set.
         await applyMigrationRestrictions(
@@ -634,13 +634,16 @@ export async function applyTailorDB(
               partialMigrations.set(migration.namespace, migration);
               throw error;
             }
-            await rollbackSingleMigrationAfterFailure(
-              client,
+            unrolledBack.push({
               migration,
-              migrationContext.workspaceId,
-              migrationContext.tailorDBInputs,
-              attemptedTables,
-            );
+              tables: await rollbackSingleMigrationAfterFailure(
+                client,
+                migration,
+                migrationContext.workspaceId,
+                migrationContext.tailorDBInputs,
+                attemptedTables,
+              ),
+            });
             throw error;
           }
 
@@ -666,13 +669,16 @@ export async function applyTailorDB(
               );
               throw error;
             }
-            await rollbackSingleMigrationAfterFailure(
-              client,
+            unrolledBack.push({
               migration,
-              migrationContext.workspaceId,
-              migrationContext.tailorDBInputs,
-              attemptedTables,
-            );
+              tables: await rollbackSingleMigrationAfterFailure(
+                client,
+                migration,
+                migrationContext.workspaceId,
+                migrationContext.tailorDBInputs,
+                attemptedTables,
+              ),
+            });
             throw error;
           }
 
@@ -908,6 +914,18 @@ export async function applyTailorDB(
           readUnrestoredTables(restorationError),
         );
         logger.log("The original migration error is reported below.");
+      }
+      for (const { migration, tables } of unrolledBack) {
+        const lifted = new Set([
+          ...Object.keys(restorationSnapshots.get(migration.namespace)?.tables ?? {}),
+          ...(restorationSettings.get(migration.namespace)?.keys() ?? []),
+        ]);
+        const remaining = tables.filter((tableName) => !lifted.has(tableName));
+        if (remaining.length === 0) continue;
+        warnTablesLeftRestricted(
+          `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely.`,
+          [{ namespace: migration.namespace, tables: remaining }],
+        );
       }
       if (migrationFailure) throw migrationFailure.error;
 
