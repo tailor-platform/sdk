@@ -13,7 +13,6 @@ import {
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
-import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
@@ -34,12 +33,14 @@ import {
   executeSingleMigrationPostPhase,
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
+  generateMigrationPhaseManifest,
   restoreMigrationRestrictions,
   getDeletedTableNames,
   migrationSnapshotCache,
   processedTables,
   resolveMigrationSnapshotSettings,
   rollbackSingleMigrationAfterFailure,
+  type MigrationPhaseSettings,
   type MigrationRestrictionState,
 } from "./migration-execution";
 import {
@@ -110,12 +111,14 @@ async function reconcileMigrationLabels(
  * @param client - Operator client instance
  * @param migrationContext - Planned TailorDB context
  * @param migrationsRequiringScripts - Migrations that require scripts
+ * @param maintenanceMode - Whether the migrating namespaces are in maintenance mode
  * @returns Migration context for script execution
  */
 async function buildMigrationContextForScripts(
   client: OperatorClient,
   migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
   migrationsRequiringScripts: PendingMigration[],
+  maintenanceMode: boolean,
 ): Promise<MigrationContext> {
   const authService = migrationContext.application.authService;
   if (!authService) {
@@ -155,6 +158,7 @@ async function buildMigrationContextForScripts(
     configDir: path.dirname(migrationContext.config.path),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,
+    maintenanceMode,
   };
 }
 
@@ -263,14 +267,14 @@ function includeUndeletedTables(
  * @param client - Operator client instance
  * @param changeSet - TailorDB change set
  * @param migration - Migration whose Post-phase failed
- * @param tailorDBInputs - Deploy inputs
+ * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables the migration's phases touched
  */
 async function reapplyPrePhaseAfterPostPhaseFailure(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
-  tailorDBInputs: Parameters<typeof executeSingleMigrationPrePhase>[3],
+  phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
 ): Promise<void> {
   try {
@@ -278,7 +282,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
       client,
       changeSet,
       migration,
-      tailorDBInputs,
+      phaseSettings,
       attemptedTables,
     );
   } catch (error) {
@@ -341,18 +345,39 @@ function describeMigrationCheckpoint(number: number | null | undefined): string 
   return number == null ? "<unset>" : formatMigrationNumber(number);
 }
 
+/** Lifts the maintenance mode an apply held; run it once the deploy settles. */
+export type MaintenanceModeRelease = (client: OperatorClient) => Promise<void>;
+
+export type ApplyTailorDBOptions = {
+  /**
+   * Receives the release of a `"deploy"` maintenance mode instead of the
+   * apply running it, so the caller can keep the migrated namespaces
+   * restricted until the rest of the deploy is applied. The caller must run
+   * it even when the apply throws afterwards.
+   */
+  holdMaintenanceMode?: (release: MaintenanceModeRelease) => void;
+};
+
 /**
  * Apply TailorDB-related changes for the given phase.
  * @param client - Operator client instance
  * @param result - Planned TailorDB changes
  * @param phase - Apply phase (defaults to "create-update")
+ * @param options - Apply options
  */
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
   phase: Exclude<ApplyPhase, "delete"> = "create-update",
+  options: ApplyTailorDBOptions = {},
 ): Promise<void> {
   const { changeSet, context: migrationContext } = result;
+  const maintenanceMode = migrationContext.config.maintenanceMode ?? false;
+  const phaseSettings: MigrationPhaseSettings = {
+    tailorDBInputs: migrationContext.tailorDBInputs,
+    executorUsedTables: migrationContext.executorUsedTables,
+    restricted: maintenanceMode !== false,
+  };
 
   if (phase === "create-update") {
     // Plan-time validation makes dry runs fail fast. Repeat the full validation
@@ -379,6 +404,7 @@ export async function applyTailorDB(
             client,
             migrationContext,
             migrationsRequiringScripts,
+            phaseSettings.restricted,
           )
         : undefined;
 
@@ -507,18 +533,13 @@ export async function applyTailorDB(
           // would erase the removal boundary (the plan holds no delete entry
           // for a name its final state keeps).
           if (pendingDeletedTables.get(namespaceName)?.has(tableName)) continue;
-          const input = migrationContext.tailorDBInputs.find((i) => i.namespace === namespaceName);
           // Recorded so the pre-phase GQL-permission fallback does not create
           // the type a second time.
           processedTables.created.add(tableName);
           await client.createTailorDBType({
             workspaceId: create.request.workspaceId,
             namespaceName,
-            tailordbType: generateTailorDBTypeManifestFromSnapshot(priorTable, {
-              suppressRecordEvents: true,
-              suppressGqlOperations: true,
-              namespaceGqlOperations: input?.config.gqlOperations,
-            }),
+            tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
           });
         }
         for (const update of changeSet.type.updates) {
@@ -565,14 +586,16 @@ export async function applyTailorDB(
       const reachedMigrations = new Set<PendingMigration>();
       try {
         // A committed checkpoint drops its migration from the next run's pending set.
-        await applyMigrationRestrictions(
-          client,
-          preMigrationSnapshots,
-          restrictionState,
-          migrationContext.tailorDBInputs,
-          migrationContext.executorUsedTables,
-          migrationContext.workspaceId,
-        );
+        if (phaseSettings.restricted) {
+          await applyMigrationRestrictions(
+            client,
+            preMigrationSnapshots,
+            restrictionState,
+            migrationContext.tailorDBInputs,
+            migrationContext.executorUsedTables,
+            migrationContext.workspaceId,
+          );
+        }
         for (const migration of pendingMigrations) {
           reachedMigrations.add(migration);
           const attemptedTables = new Set<string>();
@@ -585,7 +608,7 @@ export async function applyTailorDB(
                 client,
                 changeSet,
                 migration,
-                migrationContext.tailorDBInputs,
+                phaseSettings,
                 attemptedTables,
               ),
             );
@@ -606,7 +629,7 @@ export async function applyTailorDB(
               client,
               migration,
               migrationContext.workspaceId,
-              migrationContext.tailorDBInputs,
+              phaseSettings,
               attemptedTables,
             );
             throw error;
@@ -618,7 +641,7 @@ export async function applyTailorDB(
                 client,
                 changeSet,
                 migration,
-                migrationContext.tailorDBInputs,
+                phaseSettings,
                 attemptedTables,
               ),
             );
@@ -629,7 +652,7 @@ export async function applyTailorDB(
                 client,
                 changeSet,
                 migration,
-                migrationContext.tailorDBInputs,
+                phaseSettings,
                 attemptedTables,
               );
               throw error;
@@ -638,7 +661,7 @@ export async function applyTailorDB(
               client,
               migration,
               migrationContext.workspaceId,
-              migrationContext.tailorDBInputs,
+              phaseSettings,
               attemptedTables,
             );
             throw error;
@@ -825,15 +848,21 @@ export async function applyTailorDB(
         );
       }
 
-      try {
-        await restoreMigrationRestrictions(
-          client,
+      const restore = (restoreClient: OperatorClient) =>
+        restoreMigrationRestrictions(
+          restoreClient,
           restorationSnapshots,
           restorationSettings,
           migrationContext.tailorDBInputs,
           migrationContext.executorUsedTables,
           migrationContext.workspaceId,
         );
+      try {
+        if (maintenanceMode === "deploy" && options.holdMaintenanceMode && !migrationFailure) {
+          options.holdMaintenanceMode(restore);
+        } else {
+          await restore(client);
+        }
       } catch (restorationError) {
         if (!migrationFailure) throw restorationError;
         logger.warn(

@@ -51,7 +51,7 @@ import {
   normalizeComparableGqlPermission,
   normalizeComparableTailorDBType,
 } from "./compare";
-import { validateAndDetectMigrations } from "./migration-validation";
+import { validateAndDetectMigrations, warnUnsetMaintenanceMode } from "./migration-validation";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { PlanContext } from "../types";
 
@@ -135,22 +135,30 @@ export async function planTailorDB(context: PlanContext) {
     }
   }
   const migrationConfig = getNamespacesWithMigrations(config, path.dirname(config.path));
-  const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = forRemoval
-    ? { namespacesWithMigrations: [], migrationFileState: {}, checkpointRepairs: [] }
-    : migrationTestBaselines
+  const { namespacesWithMigrations, migrationFileState, checkpointRepairs, pendingMigrations } =
+    forRemoval
       ? {
-          namespacesWithMigrations: migrationConfig,
-          migrationFileState: captureMigrationFileState(migrationConfig),
+          namespacesWithMigrations: [],
+          migrationFileState: {},
           checkpointRepairs: [],
+          pendingMigrations: [],
         }
-      : await validateAndDetectMigrations(
-          client,
-          workspaceId,
-          typesByNamespace,
-          config,
-          noSchemaCheck ?? false,
-          tailordbs,
-        );
+      : migrationTestBaselines
+        ? {
+            namespacesWithMigrations: migrationConfig,
+            migrationFileState: captureMigrationFileState(migrationConfig),
+            checkpointRepairs: [],
+            pendingMigrations: [],
+          }
+        : await validateAndDetectMigrations(
+            client,
+            workspaceId,
+            typesByNamespace,
+            config,
+            noSchemaCheck ?? false,
+            tailordbs,
+          );
+  if (!migrationTestSnapshots) warnUnsetMaintenanceMode(config, pendingMigrations);
 
   const {
     changeSet: serviceChangeSet,

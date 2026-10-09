@@ -410,7 +410,7 @@ export const steps = {
 Because steps commit separately, a failure does not undo the steps that already completed:
 
 - If the first step fails before any other step has completed, the migration fails like a `main` script: the pre-migration schema changes are rolled back.
-- If a step fails after another step has completed, `tailor deploy` stops and leaves the migration **in progress**. The pre-migration schema stays in place, the checkpoint is not advanced, and the namespace's tables stay in maintenance mode, as while the migration runs: GraphQL operations and record events remain disabled. `tailor tailordb migration status` reports the migration as in progress.
+- If a step fails after another step has completed, `tailor deploy` stops and leaves the migration **in progress**. The pre-migration schema stays in place and the checkpoint is not advanced. With [maintenance mode](#maintenance-mode) on, the namespace's tables stay in it, as while the migration runs: GraphQL operations and record events remain disabled. `tailor tailordb migration status` reports the migration as in progress.
 - If `tailor deploy` cannot confirm whether the steps started, for example because the connection dropped while starting them, the migration also stays in progress. Run `tailor deploy` again; it checks whether the steps ran before continuing.
 - Fix the failing step and run `tailor deploy` again. The deploy resumes the migration: completed steps do not run again, and the failed step and the steps after it run with the updated script. A completed step is treated like an applied migration — editing it afterwards does not run it again.
 - If the steps changed since the earlier run (a step added, removed, or renamed, or the order the steps run in changed), or that run is no longer available, every step runs again from the beginning. Editing a step's code does not count as a change.
@@ -418,7 +418,7 @@ Because steps commit separately, a failure does not undo the steps that already 
 - To run a completed step again (because it had a bug, or to fix rows the post-migration schema changes reject), change the steps: rename that step and update the `dependsOn` lists that name it, or add a step that fixes the rows. Every step then runs again from the beginning, so this relies on every step being safe to run again.
 - While a migration is in progress, `migration set`, `migration sync`, and `migration rebaseline` refuse to run, and `migration test` refuses to use that workspace as its source. Finish the migration with `tailor deploy` first. The one exception is `migration set <N>` with the in-progress migration's own number: it marks that migration as completed and clears its in-progress record. Use it only when the migration's schema changes are already applied, for example after the deploy reported that the checkpoint write could not be confirmed.
 
-Write every step so that running it again is safe: besides the cases above, a step can run a second time when a deploy is interrupted right after it commits. Use `where` clauses that skip rows a step already migrated, as in the example. Maintenance mode blocks GraphQL access, not the writes your resolvers, executors, or workflows make through Kysely; rows they write while a migration is in progress are not seen by steps that already completed, so stop such writers until the migration finishes or write steps that tolerate them.
+Write every step so that running it again is safe: besides the cases above, a step can run a second time when a deploy is interrupted right after it commits. Use `where` clauses that skip rows a step already migrated, as in the example. Rows written while a migration is in progress are not seen by steps that already completed. [Maintenance mode](#maintenance-mode) blocks GraphQL access but not the writes your resolvers, executors, or workflows make through Kysely, and without it GraphQL clients can write too, so stop such writers until the migration finishes or write steps that tolerate them.
 
 ## Supported Schema Changes
 
@@ -642,6 +642,45 @@ For each pending migration:
 4. **Checkpoint and cleanup**: The `sdk-migration` label is bumped to this migration's number, then removed GQL permissions and tables — including the old table left behind by a rename — are deleted. Advancing the checkpoint first prevents a failed checkpoint write from requiring the SDK to recreate irreversibly deleted records.
 
 This split is what allows existing rows to be backfilled before the database starts rejecting nulls, and what lets `migrate.ts` traverse foreign-key fields that the same migration removes.
+
+### Maintenance mode
+
+`maintenanceMode` in `defineConfig` decides whether `tailor deploy` puts each namespace with pending migrations into maintenance mode while it applies them. A table in maintenance mode accepts no GraphQL `create`, `update`, `delete`, `read`, or bulk upsert operation and publishes no record events.
+
+| Value             | Maintenance mode                                                                                                                                                                       |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `false` (default) | None. Tables keep their configured settings throughout the deploy.                                                                                                                     |
+| `"migration"`     | From before the first pending migration runs until the last one completes.                                                                                                             |
+| `"deploy"`        | From before the first pending migration runs until the deploy has applied every other change, including resolvers, executors, and workflows, and has removed the resources it deletes. |
+
+A deploy without pending migrations never enters maintenance mode. When `maintenanceMode` is unset and migrations are pending, `tailor deploy` prints a warning; set it to `false` to keep the default without the warning. The value is read from the config like any other, so it can differ per environment (see [Multi-Environment Configuration](../multi-environment.md#varying-config-values-per-environment)):
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  maintenanceMode: process.env.APP_ENV === "production" ? "deploy" : false,
+});
+```
+
+**Without maintenance mode**, the SDK does not guarantee what requests that run during the migration observe. A table can still have its [pre-migration shape](#per-migration-phases), with new required fields optional and removed fields present; a client can write rows after `migrate.ts` has already read the table; and the records `migrate.ts` writes publish events to the executors of the previous deploy, which were written for the old shape. Use it only where clients and executors tolerate that.
+
+**`"migration"` vs `"deploy"`**: the new resolvers and executors are deployed after the migrations. With `"migration"`, the migrated tables accept requests and publish events again while the resolvers and executors of the previous deploy are still in place. `"deploy"` keeps the tables in maintenance mode until they are replaced.
+
+Maintenance mode restricts GraphQL access and record events only. Resolvers, executors (including scheduled and webhook triggers), and workflows keep running, and the writes they make through Kysely are not blocked.
+
+**When a deploy stops early:**
+
+- If a migration fails, the tables leave maintenance mode before the error is reported: they return to the settings of the last checkpoint that completed. A migration that did not reach its checkpoint returns existing tables to their previous settings and keeps the tables it created in maintenance mode until a later deploy applies it. The settings are not restored if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion also stays in maintenance mode for manual recovery.
+- A [multi-step migration](#splitting-a-migration-into-steps) left in progress keeps its tables in maintenance mode until a deploy completes it.
+- With `"deploy"`, if a later part of the deploy fails, the tables leave maintenance mode before the error is reported.
+- If the deploy process is interrupted after its migrations completed but before maintenance mode ended, the tables stay in maintenance mode until the next `tailor deploy` releases them.
+
+#### Keeping maintenance mode short
+
+Maintenance mode lasts for the whole migration job, including the time the platform takes to start it, which can far exceed the time `migrate.ts` itself needs. Keep in `migrate.ts` only the work that must be done before the post-migration schema is applied, and move the rest into a workflow that you start after the deploy (for example with [`tailor workflow start`](../cli/workflow.md#workflow-start)).
+
+- **Must stay in `migrate.ts`**: anything the post-migration schema enforces or removes — filling a field that becomes required, resolving duplicates before a unique index, converting values for a field type change, and copying data out of a field or table that the migration renames or removes.
+- **Can move to a workflow**: work the post-migration schema does not depend on, such as filling an optional field, recomputing derived values, or cleaning up rows. Requests that run before the workflow finishes see the data in its unfixed state.
 
 ### Schema verification
 

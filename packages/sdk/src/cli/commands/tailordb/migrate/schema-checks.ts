@@ -31,6 +31,7 @@ import {
   getLatestMigrationNumber,
   getMigrationFilePath,
   loadDiff,
+  isMigrationRestricted,
   MIGRATION_RESTRICTION_SETTINGS,
   MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
   stripFieldScriptProps,
@@ -421,11 +422,20 @@ export async function verifyRemoteSchema(
     );
 
     // Compare remote with expected snapshot
+    // A deploy interrupted while holding maintenance mode leaves its tables
+    // restricted after the checkpoint committed; the next deploy lifts it.
     const drifts = compareRemoteWithSnapshot(
       remoteTypes,
       expectedDeploySnapshot,
       remoteGqlPermissions,
-      inProgressNumber === undefined ? [] : MIGRATION_RESTRICTION_SETTINGS,
+      MIGRATION_RESTRICTION_SETTINGS,
+      inProgressNumber === undefined
+        ? new Set(
+            remoteTypes
+              .filter((type) => isMigrationRestricted(type.schema?.settings))
+              .map((type) => type.name),
+          )
+        : undefined,
     );
 
     results.push({

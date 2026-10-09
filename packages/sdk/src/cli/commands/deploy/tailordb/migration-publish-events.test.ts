@@ -252,6 +252,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     gqlPermissionTypes?: string[];
     /** Tables an enabled executor subscribes to, so publishing is on for them. */
     subscribedTables?: string[];
+    /** Defaults to "migration"; pass `undefined` explicitly to leave it unset. */
+    maintenanceMode?: LoadedConfig["maintenanceMode"];
   }) {
     const migratedService = {
       namespace: "test-ns",
@@ -322,7 +324,10 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           },
         ] as never,
         executorUsedTables: new Set<string>(options.subscribedTables ?? []),
-        config: mockConfig,
+        config: {
+          ...mockConfig,
+          maintenanceMode: "maintenanceMode" in options ? options.maintenanceMode : "migration",
+        },
         noSchemaCheck: true,
         checkpointRepairs: [],
         namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
@@ -1376,5 +1381,162 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       .map(([, flag]) => flag);
     expect(flags.length).toBeGreaterThan(0);
     expect(flags).not.toContain(true);
+  });
+
+  describe("maintenanceMode", () => {
+    const orderTable = () => snapshotTable("Order", { status: { type: "string", required: true } });
+
+    function mockAddedOrderMigration() {
+      snapshotState.tablesByVersion = { 0: {}, 1: { Order: orderTable() } };
+      vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+        mkPendingMigration([
+          { kind: "table_added", tableName: "Order" },
+          {
+            kind: "field_added",
+            tableName: "Order",
+            fieldName: "status",
+            after: { type: "string", required: true },
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ] as any),
+      ]);
+    }
+
+    function lastOrderSettings(client: OperatorClient) {
+      return typeSettingWrites(client)
+        .filter(([name]) => name === "Order")
+        .at(-1)?.[1];
+    }
+
+    const restricted = {
+      publishRecordEvents: false,
+      disableGqlOperations: { create: true, update: true, delete: true, read: true },
+    };
+
+    test.each([
+      ["unset", undefined],
+      ["false", false],
+    ] as const)("leaves every write unrestricted when it is %s", async (_label, mode) => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: mode,
+      });
+      mockAddedOrderMigration();
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      const writes = typeSettingWrites(client).filter(([name]) => name === "Order");
+      expect(writes.length).toBeGreaterThan(1);
+      for (const [, settings] of writes) {
+        expect(settings?.publishRecordEvents).toBe(true);
+        expect(settings?.disableGqlOperations).toBeUndefined();
+      }
+    });
+
+    test("writes a checkpoint table that opts out of publishing while an executor subscribes", async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: false,
+      });
+      snapshotState.tablesByVersion = {
+        0: {
+          Order: snapshotTable(
+            "Order",
+            { status: { type: "string", required: true } },
+            { publishEvents: false },
+          ),
+        },
+        1: { Order: orderTable() },
+      };
+      vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+        mkPendingMigration([]),
+      ]);
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      const flags = publishFlagWrites(client)
+        .filter(([name]) => name === "Order")
+        .map(([, flag]) => flag);
+      expect(flags[0]).toBe(false);
+      expect(flags.at(-1)).toBe(true);
+    });
+
+    test('"deploy" keeps the namespace restricted until the returned release runs', async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "deploy",
+      });
+      mockAddedOrderMigration();
+
+      const releases: Array<(client: OperatorClient) => Promise<void>> = [];
+      await applyTailorDB(client, planResult, "create-update", {
+        holdMaintenanceMode: (release) => releases.push(release),
+      });
+
+      expect(lastOrderSettings(client)).toEqual(expect.objectContaining(restricted));
+      expect(releases).toHaveLength(1);
+
+      await releases[0]?.(client);
+
+      expect(lastOrderSettings(client)).toEqual(
+        expect.objectContaining({ publishRecordEvents: true, disableGqlOperations: undefined }),
+      );
+    });
+
+    test.each([
+      ['"deploy" without holding', "deploy", false],
+      ['"migration" when asked to hold', "migration", true],
+    ] as const)("%s releases the namespace before returning", async (_label, mode, hold) => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: mode,
+      });
+      mockAddedOrderMigration();
+      const holdMaintenanceMode = vi.fn();
+
+      await applyTailorDB(client, planResult, "create-update", hold ? { holdMaintenanceMode } : {});
+
+      expect(holdMaintenanceMode).not.toHaveBeenCalled();
+      expect(lastOrderSettings(client)).toEqual(
+        expect.objectContaining({ publishRecordEvents: true, disableGqlOperations: undefined }),
+      );
+    });
+
+    test('"deploy" releases the namespace at once when a migration fails', async () => {
+      const client = createMockClient({
+        existingSettings: { Order: { publishRecordEvents: true } },
+      });
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "deploy",
+      });
+      snapshotState.tablesByVersion = { 0: { Order: orderTable() }, 1: { Order: orderTable() } };
+      vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        mkPendingMigration([{ kind: "table_added", tableName: "Order" } as any]),
+      ]);
+      vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+        new Error("checkpoint update failed"),
+      );
+
+      const holdMaintenanceMode = vi.fn();
+      await expect(
+        applyTailorDB(client, planResult, "create-update", { holdMaintenanceMode }),
+      ).rejects.toThrow(/checkpoint update failed/);
+
+      expect(holdMaintenanceMode).not.toHaveBeenCalled();
+      expect(lastOrderSettings(client)).toEqual(
+        expect.objectContaining({ publishRecordEvents: true, disableGqlOperations: undefined }),
+      );
+    });
   });
 });

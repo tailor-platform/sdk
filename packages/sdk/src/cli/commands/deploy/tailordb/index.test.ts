@@ -2518,6 +2518,32 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(client.createTailorDBType).not.toHaveBeenCalled();
   });
 
+  test("accepts a table a deploy left in maintenance mode after its checkpoint committed", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient({
+      ...(unchangedRemoteSettings() as object),
+      disableGqlOperations: { create: true, update: true, delete: true, read: true },
+    });
+
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
+  });
+
+  test("rejects a table whose GraphQL writes are only partly disabled", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient({
+      ...(unchangedRemoteSettings() as object),
+      disableGqlOperations: { create: true, update: false, delete: true, read: true },
+    });
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+  });
+
   test("revalidates remote schema immediately before apply", async () => {
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);

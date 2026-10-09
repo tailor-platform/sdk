@@ -220,4 +220,25 @@ export interface AppConfig<
    * @example defaultDateRepresentation: "temporal"
    */
   defaultDateRepresentation?: "temporal" | "date";
+  /**
+   * Whether `deploy` puts the TailorDB namespaces that have pending migrations
+   * into maintenance mode while it applies them. In maintenance mode, the
+   * generated GraphQL create, update, delete, read, and bulk upsert operations
+   * of every table in those namespaces are disabled and record events are not
+   * published.
+   *
+   * - `false` (default): no maintenance mode. While migrations run, the SDK does
+   *   not guarantee what concurrent requests observe: tables can be in an
+   *   intermediate schema, and record writes made by migration scripts publish
+   *   events to the executors of the previous deploy.
+   * - `"migration"`: maintenance mode from the first pending migration until the
+   *   last one completes.
+   * - `"deploy"`: maintenance mode from the first pending migration until the
+   *   deploy has applied every other change, including resolvers, executors,
+   *   and workflows.
+   *
+   * A deploy without pending migrations never enters maintenance mode.
+   * @example maintenanceMode: "migration"
+   */
+  maintenanceMode?: false | "migration" | "deploy";
 }

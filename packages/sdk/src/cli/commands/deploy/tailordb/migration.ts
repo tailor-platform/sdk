@@ -70,6 +70,7 @@ interface MigrationExecutionOptions {
   configDir: string;
   appName: string;
   appId: string | undefined;
+  maintenanceMode: boolean;
 }
 
 /**
@@ -87,6 +88,8 @@ export interface MigrationContext {
   appName: string;
   /** Application id, used to label a migration's temporary resources. */
   appId: string | undefined;
+  /** Whether the migrating namespaces are in maintenance mode. */
+  maintenanceMode: boolean;
 }
 
 interface ExecutionResult {
@@ -363,10 +366,21 @@ export function isMigrationPartiallyApplied(error: unknown): boolean {
   return isCLIError(error) && error.code === "MIGRATION_PARTIALLY_APPLIED";
 }
 
+function withMaintenanceModeNote(
+  suggestion: string | undefined,
+  namespace: string,
+  maintenanceMode: boolean,
+): string | undefined {
+  if (!maintenanceMode) return suggestion;
+  const note = `Until the migration completes, the tables of namespace '${namespace}' stay in maintenance mode, as during the migration.`;
+  return suggestion ? `${suggestion} ${note}` : note;
+}
+
 function partiallyAppliedError(
   migration: PendingMigration,
   result: Pick<MigrationStepsWorkflowResult, "completedSteps" | "failedSteps" | "executionId">,
   cause: unknown,
+  maintenanceMode: boolean,
 ): Error {
   const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
   const failed = result.failedSteps.length > 0 ? ` at ${result.failedSteps.join(", ")}` : "";
@@ -379,13 +393,13 @@ function partiallyAppliedError(
     message: `Migration ${migrationLabel} failed${failed}${completed}: ${
       cause instanceof Error ? cause.message : String(cause)
     }`,
-    suggestion:
-      `${
-        isCLIError(cause) && cause.suggestion
-          ? cause.suggestion
-          : "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again."
-      } ` +
-      `Until the migration completes, the tables of namespace '${migration.namespace}' stay in maintenance mode, as during the migration.`,
+    suggestion: withMaintenanceModeNote(
+      isCLIError(cause) && cause.suggestion
+        ? cause.suggestion
+        : "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again.",
+      migration.namespace,
+      maintenanceMode,
+    ),
     context: {
       namespace: migration.namespace,
       migrationNumber: migration.number,
@@ -401,6 +415,7 @@ function unreleasedRecordError(
   migration: PendingMigration,
   cause: unknown,
   recordConfirmed: boolean,
+  maintenanceMode: boolean,
 ): Error {
   const { namespace } = migration;
   const number = formatMigrationNumber(migration.number);
@@ -415,19 +430,21 @@ function unreleasedRecordError(
     message: `Migration ${namespace}/${number} failed before any step completed: ${
       cause instanceof Error ? cause.message : String(cause)
     }`,
-    suggestion: `${next} Until then, the tables of namespace '${namespace}' stay in maintenance mode, as during the migration.`,
+    suggestion: withMaintenanceModeNote(next, namespace, maintenanceMode),
     context: { namespace, migrationNumber: migration.number, completedSteps: [], failedSteps: [] },
     cause,
   });
 }
 
-function unconfirmedStartError(migration: PendingMigration, cause: CLIError): Error {
+function unconfirmedStartError(
+  migration: PendingMigration,
+  cause: CLIError,
+  maintenanceMode: boolean,
+): Error {
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
     message: cause.message,
-    suggestion:
-      `${cause.suggestion ? `${cause.suggestion} ` : ""}` +
-      `Until the migration completes, the tables of namespace '${migration.namespace}' stay in maintenance mode, as during the migration.`,
+    suggestion: withMaintenanceModeNote(cause.suggestion, migration.namespace, maintenanceMode),
     context: {
       namespace: migration.namespace,
       migrationNumber: migration.number,
@@ -465,7 +482,7 @@ async function releaseMigrationInProgress(
         resourceTrn(options.workspaceId, "tailordb", migration.namespace),
       );
     } catch {
-      return unreleasedRecordError(migration, cause, false);
+      return unreleasedRecordError(migration, cause, false, options.maintenanceMode);
     }
     if (!state.inProgressInvalid && state.inProgress?.number !== migration.number) {
       return undefined;
@@ -475,7 +492,7 @@ async function releaseMigrationInProgress(
       `Could not clear the in-progress record of migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
         `${error instanceof Error ? error.message : String(error)}.`,
     );
-    return unreleasedRecordError(migration, cause, true);
+    return unreleasedRecordError(migration, cause, true, options.maintenanceMode);
   }
 }
 
@@ -553,11 +570,16 @@ async function executeStepsMigration(
     });
   } catch (error) {
     if (isCLIError(error) && error.code === "MIGRATION_START_UNCONFIRMED") {
-      throw unconfirmedStartError(migration, error);
+      throw unconfirmedStartError(migration, error, options.maintenanceMode);
     }
     const anotherRunActive = isCLIError(error) && error.code === "MIGRATION_EXECUTION_ACTIVE";
     if (started || anotherRunActive) {
-      throw partiallyAppliedError(migration, { completedSteps: [], failedSteps: [] }, error);
+      throw partiallyAppliedError(
+        migration,
+        { completedSteps: [], failedSteps: [] },
+        error,
+        options.maintenanceMode,
+      );
     }
     const failure = mayBeRecorded
       ? await releaseMigrationInProgress(options, migration, error, notify)
@@ -583,7 +605,12 @@ async function executeStepsMigration(
   if (result.stepsMayHaveCommitted || inProgress) {
     return {
       ...failed,
-      failure: partiallyAppliedError(migration, result, result.error ?? "Migration failed"),
+      failure: partiallyAppliedError(
+        migration,
+        result,
+        result.error ?? "Migration failed",
+        options.maintenanceMode,
+      ),
     };
   }
   const failure = await releaseMigrationInProgress(
@@ -647,6 +674,7 @@ export async function executeMigrations(
       configDir: context.configDir,
       appName: context.appName,
       appId: context.appId,
+      maintenanceMode: context.maintenanceMode,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);

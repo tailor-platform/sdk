@@ -151,7 +151,10 @@ import { removeMigrationWorkflowResources } from "./migration-workflow";
 import type { RemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 
-const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
+const mockConfig = {
+  path: "/test/tailor.config.ts",
+  maintenanceMode: "migration",
+} as LoadedConfig;
 
 describe("applyTailorDB: rollback of migration schema after failures", () => {
   function createMockClient() {
