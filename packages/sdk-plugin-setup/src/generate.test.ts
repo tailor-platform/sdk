@@ -977,6 +977,43 @@ describe("renderPreviewWorkflow", () => {
       "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
     });
   });
+
+  test.each([false, true])(
+    "cancels a superseded run as a whole, except from an event on a closed pull request (requirePreviewLabel: %s)",
+    (requirePreviewLabel) => {
+      const { content } = renderPreviewWorkflow({
+        workspaceName: "my-app",
+        branch: "main",
+        environment: "my-app",
+        packageManager: "pnpm",
+        region: "us-west",
+        requirePreviewLabel,
+      });
+      const workflow = parseYAML(content) as {
+        concurrency?: { group?: string; "cancel-in-progress"?: boolean };
+        jobs: Record<string, Record<string, unknown>>;
+      };
+      const groupOn = (action: string, state: "open" | "closed") =>
+        String(workflow.concurrency?.group).replace(/\$\{\{(.*?)\}\}/g, (_match, expression) =>
+          String(
+            vm.runInNewContext(expression, {
+              format: (template: string, ...args: unknown[]) =>
+                template.replace(/\{(\d+)\}/g, (_m, index) => String(args[Number(index)])),
+              github: { run_id: 9001, event: { action, pull_request: { number: 42, state } } },
+            }),
+          ),
+        );
+
+      expect(workflow.concurrency?.["cancel-in-progress"]).toBe(true);
+      expect(groupOn("synchronize", "open")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("reopened", "open")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("closed", "closed")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("labeled", "closed")).toBe("tailor-preview-my-app-run-9001");
+      for (const job of Object.values(workflow.jobs)) {
+        expect(job).not.toHaveProperty("concurrency");
+      }
+    },
+  );
 });
 
 describe("Tailor Platform action pins", () => {
@@ -1770,6 +1807,73 @@ export default defineConfig({
     await setupTarget(opts);
 
     expect(fs.readFileSync(wf, "utf-8")).toBe(generated.concat(userJob));
+  });
+
+  describe("preview: re-running on a workflow whose concurrency was on the deploy job", () => {
+    const opts = {
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+    } as const;
+    const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+    const topLevelConcurrency = /^concurrency:\n(?: {2}.*\n)+\n/m;
+    const jobConcurrency =
+      "    concurrency:\n" +
+      "      group: tailor-preview-my-app-${{ github.event.pull_request.number }}\n" +
+      "      cancel-in-progress: true\n";
+    const userConcurrency =
+      "concurrency:\n" +
+      "  group: mine-${{ github.workflow }}-${{ github.event.pull_request.number }}\n" +
+      "  cancel-in-progress: true\n\n";
+    const writeLegacy = (generated: string, topLevel: string) => {
+      expect(generated).toMatch(topLevelConcurrency);
+      const legacy = generated
+        .replace(topLevelConcurrency, topLevel)
+        .replace("    outputs:\n", `${jobConcurrency}    outputs:\n`);
+      expect(legacy).toContain(jobConcurrency);
+      fs.writeFileSync(wf, legacy);
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, {
+        ...lock,
+        targets: [
+          {
+            ...target,
+            templateVersion: TEMPLATE_VERSION - 1,
+            contentHash: computeManagedHash(legacy, target.generatedIds),
+          },
+        ],
+      });
+    };
+
+    test("moves it to the top level", async () => {
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wf, "utf-8");
+      writeLegacy(generated, "");
+
+      await setupTarget(opts);
+
+      expect(fs.readFileSync(wf, "utf-8")).toBe(generated);
+    });
+
+    test("keeps a top-level concurrency the user added", async () => {
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wf, "utf-8");
+      writeLegacy(generated, userConcurrency);
+
+      await setupTarget(opts);
+
+      expect(fs.readFileSync(wf, "utf-8")).toBe(
+        generated.replace(topLevelConcurrency, userConcurrency),
+      );
+    });
   });
 
   test("preview: require-preview-label variant adds label filter to trigger", async () => {
