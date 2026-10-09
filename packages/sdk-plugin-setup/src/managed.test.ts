@@ -420,6 +420,73 @@ describe("mergeUserContent", () => {
     expect(content).toContain("# Authenticate the private registry.\n      - name: Registry auth");
   });
 
+  describe("an unmanaged top-level key the template writes", () => {
+    const preview = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const mergePreview = (current: string) =>
+      mergeUserContent({
+        current,
+        rendered: preview.content,
+        previousIds: preview.generatedIds,
+        renderedIds: preview.generatedIds,
+        force: false,
+      });
+    const concurrency = /^concurrency:\n(?: {2}.*\n)+/m;
+
+    test("keeps the user's version instead of the template's", () => {
+      const edited = preview.content.replace(
+        concurrency,
+        "concurrency:\n  group: mine-${{ github.ref }}\n",
+      );
+      expect(edited).not.toBe(preview.content);
+
+      const { content } = mergePreview(edited);
+
+      expect(content).toBe(edited);
+      expect(computeManagedHash(content, preview.generatedIds)).toBe(
+        computeManagedHash(preview.content, preview.generatedIds),
+      );
+    });
+
+    test("adds the template's version when the file has none", () => {
+      const without = preview.content.replace(concurrency, "");
+      expect(without).not.toBe(preview.content);
+
+      expect(mergePreview(without).content).toBe(preview.content);
+    });
+
+    const topLevelKeys = ({ content, generatedIds }: RenderResult) => {
+      const hash = computeManagedHash(content, generatedIds);
+      const isHashed = (key: string) => {
+        const edited = parseDocument(content);
+        edited.set(key, "edited");
+        return computeManagedHash(edited.toString(), generatedIds) !== hash;
+      };
+      const keys = Object.keys(parseDocument(content).toJS() as Record<string, unknown>);
+      return { hashed: keys.filter(isHashed), unhashed: keys.filter((key) => !isHashed(key)) };
+    };
+
+    test("is only the preview workflow's concurrency", () => {
+      const unhashed = variants.flatMap(([name, render]) =>
+        topLevelKeys(render).unhashed.map((key) => `${name}: ${key}`),
+      );
+
+      expect(unhashed).toEqual(["preview: concurrency"]);
+    });
+
+    test.each(variants)("leaves the %s header naming exactly the hashed ones", (_name, render) => {
+      const hashed = topLevelKeys(render).hashed.filter((key) => key !== "jobs");
+      const listed = new Intl.ListFormat("en", { type: "conjunction" }).format(hashed);
+
+      expect(render.content).toContain(`top-level ${listed}.`);
+    });
+  });
+
   test("puts a user step before every managed step at the start of the job", () => {
     const edited = render.content.replace(
       /( {2}tailor-deploy:[\s\S]*? {4}steps:\n)/,

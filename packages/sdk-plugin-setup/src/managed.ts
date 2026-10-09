@@ -175,7 +175,7 @@ function projectSteps(steps: unknown, prefix: string, managed: ReadonlySet<strin
 
 /**
  * Hash the SDK-managed parts of a generated file: the top-level keys the
- * template writes and the jobs/steps listed in `managedIds`, minus the fields
+ * SDK manages and the jobs/steps listed in `managedIds`, minus the fields
  * users may edit. Comments, formatting, and user-owned nodes do not affect it.
  * @param content - Workflow YAML
  * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
@@ -188,7 +188,7 @@ export function computeManagedHash(content: string, managedIds: readonly string[
 
 /**
  * Hash each SDK-managed part of a generated file separately: every top-level
- * key the template writes, every managed job (with the order of its managed
+ * key the SDK manages, every managed job (with the order of its managed
  * steps), and every managed step.
  * @param content - Workflow YAML
  * @param managedIds - Managed ids as recorded in the lock (`<job>` / `<job>/<step>`)
@@ -529,9 +529,10 @@ function assertNeedsResolve(root: YAMLMap): void {
 
 /**
  * Carry the user-owned parts of `current` into a fresh render: top-level keys
- * the template does not write, jobs and steps outside the managed ids, and the
- * editable fields of managed nodes. Each user node is placed after the managed
- * sibling that preceded it.
+ * the SDK does not manage (replacing the template's default for one it also
+ * writes), jobs and steps outside the managed ids, and the editable fields of
+ * managed nodes. Each user node is placed after the managed sibling that
+ * preceded it.
  * @param params - Merge inputs
  * @param params.current - File content on disk
  * @param params.rendered - Fresh template render
@@ -562,12 +563,10 @@ export function mergeUserContent(params: {
   };
 
   const managedTop = new Set([...MANAGED_TOP_LEVEL_KEYS, "jobs"]);
-  placeAfterAnchors(
-    currentRoot.items,
-    renderedRoot.items,
-    (pair) => !managedTop.has(keyOf(pair) ?? ""),
-    keyOf,
-  );
+  const userTopKeys = currentRoot.items
+    .map((pair) => keyOf(pair) ?? "")
+    .filter((key) => !managedTop.has(key));
+  carryFields(currentRoot, renderedRoot, userTopKeys);
 
   const currentJobs = mapAt(currentRoot, "jobs");
   const renderedJobs = mapAt(renderedRoot, "jobs");

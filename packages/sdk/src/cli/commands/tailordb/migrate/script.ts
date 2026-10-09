@@ -32,6 +32,7 @@ import {
 } from "./config";
 import { parseMigrationNumberArg } from "./migration-number";
 import { tryWritePgliteSchemaFile, writeMigrationTypeFiles } from "./pglite-schema-generator";
+import { analyzeMigrationScript } from "./script-form";
 import {
   formatMigrationNumber,
   getMigrationFilePath,
@@ -262,6 +263,8 @@ export async function addMigrationScriptFiles(
     });
   }
 
+  const scriptKind = migrateExists ? analyzeMigrationScript(migratePath).kind : "steps";
+
   if (!migrateExists && previousSnapshot) {
     await fsPromises.writeFile(migratePath, generateMigrationScript(diff));
     result.migratePath = migratePath;
@@ -288,7 +291,10 @@ export async function addMigrationScriptFiles(
 
   if (writeUnitTest) {
     // Re-read: writeMigrationTypeFiles may have just recorded the runtime modes.
-    await fsPromises.writeFile(testPath, generateMigrationTestScript(loadDiff(diffPath)));
+    await fsPromises.writeFile(
+      testPath,
+      generateMigrationTestScript(loadDiff(diffPath), scriptKind),
+    );
     result.testPath = testPath;
   }
   result.pgliteTestRequested = pgliteTestRequested;
@@ -296,7 +302,7 @@ export async function addMigrationScriptFiles(
   if (pgliteTestRequested && fs.existsSync(pgliteSchemaPath)) {
     await fsPromises.writeFile(
       pgliteTestPath,
-      generateMigrationPgliteTestScript(loadDiff(diffPath)),
+      generateMigrationPgliteTestScript(loadDiff(diffPath), scriptKind),
     );
     result.pgliteTestPath = pgliteTestPath;
   }

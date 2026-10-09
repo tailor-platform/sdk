@@ -402,22 +402,25 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
-    test.each([{ read: true }, { read: false }])(
-      "suppresses every GraphQL operation regardless of read=$read",
-      ({ read }) => {
+    test.each([
+      { read: true, readDisabled: false },
+      { read: false, readDisabled: true },
+    ])(
+      "suppresses create, update, and delete but keeps read as the snapshot sets it (read=$read)",
+      ({ read, readDisabled }) => {
         const snapshotType = createTestSnapshotType("User", {
           settings: { gqlOperations: { create: true, update: true, delete: true, read } },
         });
 
         const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-          suppressGqlOperations: true,
+          suppressGqlMutations: true,
         });
 
         expect(manifest.schema?.settings?.disableGqlOperations).toEqual({
           create: true,
           update: true,
           delete: true,
-          read: true,
+          read: readDisabled,
         });
       },
     );
@@ -428,7 +431,7 @@ describe("snapshot-manifest", () => {
       });
 
       const restricted = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        suppressGqlOperations: true,
+        suppressGqlMutations: true,
       });
       const restored = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 

@@ -4,17 +4,16 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { logger } from "#/cli/shared/logger";
+import { protoEnumLookup } from "#/cli/shared/proto-enum";
 
-const grantTypeToString = (grantType: AuthOAuth2Client_GrantType): string => {
-  switch (grantType) {
-    case AuthOAuth2Client_GrantType.AUTHORIZATION_CODE:
-      return "authorization_code";
-    case AuthOAuth2Client_GrantType.REFRESH_TOKEN:
-      return "refresh_token";
-    default:
-      return "unknown";
-  }
-};
+const GRANT_TYPE_LABEL = {
+  [AuthOAuth2Client_GrantType.UNSPECIFIED]: "unknown",
+  [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE]: "authorization_code",
+  [AuthOAuth2Client_GrantType.REFRESH_TOKEN]: "refresh_token",
+} satisfies Record<AuthOAuth2Client_GrantType, string>;
+
+const grantTypeToString = (grantType: AuthOAuth2Client_GrantType): string =>
+  protoEnumLookup(GRANT_TYPE_LABEL, grantType, "unknown");
 
 export interface OAuth2ClientInfo {
   name: string;
