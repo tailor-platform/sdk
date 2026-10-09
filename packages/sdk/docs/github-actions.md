@@ -367,15 +367,17 @@ as a secret is deprecated, and the fallback will be removed in a future release,
 so move it to a variable (`gh variable set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`)
 and delete the secret.
 
-Set it on the target GitHub Environment (the `--environment` value, or the
-workspace name when omitted); `tailor setup ci env` prints the commands (see
+Set the client secret as a secret and the client ID as a variable on the target
+GitHub Environment (the `--environment` value, or the workspace name when
+omitted); `tailor setup ci env` prints the commands (see
 [Setting secrets and variables](#setting-secrets-and-variables)).
 
 Setting them at the environment level isolates each target's credentials and
 keeps them alongside that environment's `TAILOR_PLATFORM_WORKSPACE_ID`
-variable. You can also set them as repository-level secrets if every target
-shares one machine user, but then any workflow on any branch can read them, so
-the environment's protection rules no longer guard your deploys.
+variable. You can also set the client secret as a repository-level secret and the
+client ID as a repository-level variable if every target shares one machine user,
+but then any workflow on any branch can read them, so the environment's
+protection rules no longer guard your deploys.
 
 ### Setting secrets and variables
 
