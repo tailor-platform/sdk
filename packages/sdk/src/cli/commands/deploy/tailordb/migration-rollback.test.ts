@@ -1341,6 +1341,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain(
         "namespace 'test-ns': StockReservation",
       );
+      expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain(
+        "a table that already refused writes keeps its own read setting",
+      );
       expect(log).toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
       warn.mockRestore();
       log.mockRestore();

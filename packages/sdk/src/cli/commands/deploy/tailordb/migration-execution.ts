@@ -551,7 +551,7 @@ type RestrictedTablesRewrite = { failedTables: string[]; firstError?: Error };
 export type RestrictedTables = { namespace: string; tables: string[] };
 
 export const RESTRICTION_EFFECT =
-  "the GraphQL create, update, delete, and read operations and bulk upsert are disabled, and record events are not published";
+  "the GraphQL create, update, delete, and read operations and bulk upsert are disabled, and record events are not published; a table that already refused writes keeps its own read setting";
 
 const RESTRICTED_TABLES_RECOVERY =
   "Deploy again: once it finishes, the deploy writes these tables' configured settings back.";
