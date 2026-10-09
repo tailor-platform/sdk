@@ -213,9 +213,8 @@ for what you can edit.
 ### Customizing the generated workflow
 
 The SDK owns the jobs and steps whose `id` starts with `tailor-`, and the
-top-level keys it writes (`name:`, `on:`, and `permissions:` in a workflow; the
-metadata, inputs, and outputs of a composite action). Do not edit or rename
-them. Everything else is yours, and re-running `setup` keeps it:
+top-level keys it writes (`name:`, `on:`, and `permissions:`). Do not edit or
+rename them. Everything else is yours, and re-running `setup` keeps it:
 
 - **Your own jobs and steps.** Add them anywhere, with an `id` (if any) that
   does not start with `tailor-`: the prefix is reserved for the SDK, even in a
@@ -236,8 +235,7 @@ them. Everything else is yours, and re-running `setup` keeps it:
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
   `tailor-setup`, `label` on `tailor-plan`, and `user-mapping` on
-  `tailor-notify` and on a coordinator's steps that call an app action.
-- **The `run:` command of the `tailor-build-site` step** in a composite action.
+  `tailor-notify`.
 
 In a preview workflow, the `tailor-preview-deploy` job exposes the per-PR
 workspace as the outputs `workspace-id`, `workspace-name`, and `app-url`, so a
@@ -250,7 +248,7 @@ deploy-assets:
   environment: my-app
   env:
     TAILOR_PLATFORM_WORKSPACE_ID: ${{ needs.tailor-preview-deploy.outputs.workspace-id }}
-    TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+    TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
     TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
   steps:
     # checkout, dependency installation, and your tailor commands
@@ -353,23 +351,33 @@ the move.
 
 ## Secrets
 
-The generated workflow requires two secrets (the optional Slack token is listed in
+The generated workflow requires one secret (the optional Slack token is listed in
 [Setting secrets and variables](#setting-secrets-and-variables)):
 
 | Secret                                       | Description                |
 | -------------------------------------------- | -------------------------- |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Machine user client ID     |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Machine user client secret |
 
-Set them on the target GitHub Environment (the `--environment` value, or the
-workspace name when omitted); `tailor setup ci env` prints the commands (see
+The machine user client ID is a variable, not a secret: it cannot authenticate
+without the client secret. The generated workflow reads
+`vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` and falls back to
+`secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`, so a repository that already
+stores the client ID as a secret keeps working unchanged. Storing the client ID
+as a secret is deprecated, and the fallback will be removed in a future release,
+so move it to a variable (`gh variable set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`)
+and delete the secret.
+
+Set the client secret as a secret and the client ID as a variable on the target
+GitHub Environment (the `--environment` value, or the workspace name when
+omitted); `tailor setup ci env` prints the commands (see
 [Setting secrets and variables](#setting-secrets-and-variables)).
 
 Setting them at the environment level isolates each target's credentials and
 keeps them alongside that environment's `TAILOR_PLATFORM_WORKSPACE_ID`
-variable. You can also set them as repository-level secrets if every target
-shares one machine user, but then any workflow on any branch can read them, so
-the environment's protection rules no longer guard your deploys.
+variable. You can also set the client secret as a repository-level secret and the
+client ID as a repository-level variable if every target shares one machine user,
+but then any workflow on any branch can read them, so the environment's
+protection rules no longer guard your deploys.
 
 ### Setting secrets and variables
 
@@ -389,24 +397,23 @@ tailor setup ci env --environment my-app-stg # only one environment (repeat for 
 
 The list follows what each generated workflow actually reads:
 
-| Name                                         | Kind     | Targets                 | Required | Where the value comes from                                                                                                                                                                                                           |
-| -------------------------------------------- | -------- | ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | secret   | all                     | yes      | Client ID of the platform machine user CI signs in as; it needs an editor or admin role on the organization or folder that holds the workspace. Contact [Tailor support](https://docs.tailor.tech/administration/support) to get one |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all                     | yes      | Client secret of the same platform machine user                                                                                                                                                                                      |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag, coordinate | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                      |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview                 | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                        |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview                 | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself |
-| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all                     | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                   |
-| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag, coordinate | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                         |
-| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag, coordinate | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                 |
-| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag             | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                 |
+| Name                                         | Kind     | Targets     | Required | Where the value comes from                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------- | -------- | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | variable | all         | yes      | Client ID of the platform machine user CI signs in as (an existing secret of the same name still works as a deprecated fallback); it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all         | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                                                                                            |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                                                                                            |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview     | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                                                                                              |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview     | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                                                                                                       |
+| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all         | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                                                                                                         |
+| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                                                                                               |
+| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                                                                                                       |
+| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                                       |
 
 See [Account management](https://docs.tailor.tech/administration/account-management)
 for how organizations, folders, workspaces, and machine users relate.
 
-Composite actions (`setup ci action`) read nothing themselves; the coordinator
-that calls them does. Set `TAILOR_SLACK_BOT_TOKEN` and `TAILOR_SLACK_CHANNEL_ID`
-together to enable Slack deploy notifications.
+Set `TAILOR_SLACK_BOT_TOKEN` and `TAILOR_SLACK_CHANNEL_ID` together to enable
+Slack deploy notifications.
 
 The `gh` output creates an environment only when GitHub reports it missing and
 leaves optional entries commented out. Run the commands one at a time: each
@@ -463,8 +470,7 @@ dispatches, so you can deploy any commit regardless of branch membership.
 
 ### Restricting manual deploys
 
-Pass `--restrict-dispatch` to `setup ci branch`, `setup ci tag`, or
-`setup ci coordinate` to limit what a manual dispatch with `dry-run` off can
+Pass `--restrict-dispatch` to `setup ci branch` or `setup ci tag` to limit what a manual dispatch with `dry-run` off can
 deploy:
 
 - **Branch target:** only the target branch. Dispatching another branch skips
@@ -675,14 +681,12 @@ finding names a stable rule key for future suppression. Run
 [`tailor setup update`](#updating-the-generated-workflow) to regenerate the
 targets it reports.
 
-Workflows generated by `setup ci branch`, `setup ci tag`, `setup ci preview`, and
-`setup ci coordinate` self-audit: each contains a `tailor-drift-check` step that
+Workflows generated by `setup ci branch`, `setup ci tag`, and `setup ci preview`
+self-audit: each contains a `tailor-drift-check` step that
 runs the check in CI. Preview workflows run it alongside each preview deploy,
 so pull requests that deploy no preview (drafts, fork PRs, and unlabeled PRs
 in label-triggered mode) skip the check. A single run audits every target
-recorded in `.github/tailor.lock`, so per-app composite actions generated by
-`setup ci action` are covered by their coordinator's step and do not carry one
-of their own.
+recorded in `.github/tailor.lock`.
 
 Drift findings are advisory by default. Set the repository variable
 `TAILOR_PLATFORM_FAIL_ON_DRIFT` to `true` to make unsuppressed findings fail
@@ -702,28 +706,20 @@ pick up template improvements:
 tailor setup update
 ```
 
-It regenerates every workflow and composite action recorded in
+It regenerates every workflow recorded in
 `.github/tailor.lock` with the flags each one was generated with, so you do not
 have to re-type `setup ci branch`, `setup ci tag`, and the rest one by one.
 Your own jobs, steps, and settings are kept (see
 [Customizing the generated workflow](#customizing-the-generated-workflow)). A
 branch that was detected from the repository default branch is detected again,
 and the parts that follow your config — the migration drift check, seed
-validation, static website builds, and ERD preview namespaces — are derived
+validation, and ERD preview namespaces — are derived
 from the current `tailor.config.ts`.
 
 A target that cannot be regenerated, for example because you edited a managed
 part, does not stop the others: `update` regenerates the rest, then lists the
 targets it could not update and exits non-zero. Revert the edit, or run
 `tailor setup update --force` to reset the managed parts of every target.
-
-Coordinators generated by an older plugin version did not record how their
-`--action` values were grouped, so `update` lists them instead of guessing
-which apps deploy together. Re-run `tailor setup ci coordinate` once with all
-of its original flags and its original `--action` groups. The message `update`
-prints fills in the recorded flags (`--tag`, `--branch`, `--environment`,
-`--restrict-dispatch`), so you only add the `--action` values. Later updates
-pick the grouping up from the lock.
 
 To change a flag for one target, re-run its `setup ci` subcommand with the new
 flags. `.github/tailor.lock` records them, and later updates reuse them.

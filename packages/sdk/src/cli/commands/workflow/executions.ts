@@ -28,6 +28,7 @@ import {
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { styles, logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { parseProtoEnumName, protoEnumNames } from "#/cli/shared/proto-enum";
 import { waitArgs } from "./args";
 import { type WorkflowWaitUntil } from "./status";
 import {
@@ -89,33 +90,15 @@ export interface GetWorkflowExecutionResult {
 }
 
 function parseStatus(status: string): WorkflowExecution_Status {
-  const upperStatus = status.toUpperCase();
-  switch (upperStatus) {
-    case "PENDING":
-      return WorkflowExecution_Status.PENDING;
-    case "PENDING_RESUME":
-      return WorkflowExecution_Status.PENDING_RESUME;
-    case "RUNNING":
-      return WorkflowExecution_Status.RUNNING;
-    case "SUCCESS":
-      return WorkflowExecution_Status.SUCCESS;
-    case "FAILED":
-      return WorkflowExecution_Status.FAILED;
-    case "PENDING_RETRY":
-      return WorkflowExecution_Status.PENDING_RETRY;
-    case "WAITING":
-      return WorkflowExecution_Status.WAITING;
-    case "CANCELED":
-      return WorkflowExecution_Status.CANCELED;
-    case "UNSPECIFIED":
-      return WorkflowExecution_Status.UNSPECIFIED;
-    default:
-      throw CLIError({
-        code: "WORKFLOW_STATUS_INVALID",
-        message: `Invalid status: ${status}. Valid values: UNSPECIFIED, PENDING, PENDING_RESUME, RUNNING, SUCCESS, FAILED, PENDING_RETRY, WAITING, CANCELED`,
-        command: "workflow executions",
-      });
+  const parsed = parseProtoEnumName(WorkflowExecution_Status, status);
+  if (parsed === undefined) {
+    throw CLIError({
+      code: "WORKFLOW_STATUS_INVALID",
+      message: `Invalid status: ${status}. Valid values: ${protoEnumNames(WorkflowExecution_Status).join(", ")}`,
+      command: "workflow executions",
+    });
   }
+  return parsed;
 }
 
 /**

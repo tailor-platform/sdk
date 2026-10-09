@@ -195,7 +195,7 @@ function buildSnapshotTypeManifest(
     // `restoreMigrationRestrictions` turns it back on once they have settled.
     // Overrides a declared `publishEvents: true`, which `subscribed` cannot.
     suppressRecordEvents: true,
-    suppressGqlOperations: true,
+    suppressGqlMutations: true,
     namespaceGqlOperations: input?.config.gqlOperations,
   });
 }
@@ -555,7 +555,7 @@ async function rewriteRestrictedTables(
         ? restricted
           ? generateTailorDBTypeManifestFromSnapshot(snapshotType, {
               suppressRecordEvents: true,
-              suppressGqlOperations: true,
+              suppressGqlMutations: true,
               namespaceGqlOperations: input.config.gqlOperations,
             })
           : generateTailorDBTypeManifestFromSnapshot(snapshotType, {
@@ -575,7 +575,7 @@ async function rewriteRestrictedTables(
           create: true,
           update: true,
           delete: true,
-          read: true,
+          read: activeSettings?.disableGqlOperations?.read ?? false,
         };
       }
       if (!restricted && activeSettings) {
@@ -801,7 +801,7 @@ async function rollbackSingleMigrationPrePhase(
     try {
       const manifest = generateTailorDBTypeManifestFromSnapshot(priorTable, {
         suppressRecordEvents: true,
-        suppressGqlOperations: true,
+        suppressGqlMutations: true,
         namespaceGqlOperations: input?.config.gqlOperations,
       });
       await client.updateTailorDBType({

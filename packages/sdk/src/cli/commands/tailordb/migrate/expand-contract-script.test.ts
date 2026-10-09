@@ -3,7 +3,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { writeDbTypesFile } from "./db-types-generator";
-import { MIGRATION_REVIEW_REQUIRED_MARKER, generateMigrationScript } from "./template-generator";
+import { countUnresolvedTodos } from "./script-form";
+import { generateMigrationScript } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import { snapshotField, snapshotType } from "./test-helpers/schema-fixtures";
 import type { ExpandContractPlan } from "./expand-contract";
@@ -21,7 +22,12 @@ function expandScript(plans: ExpandContractPlan[] = [plan]): string {
   return generateMigrationScript(
     createMockMigrationDiff({
       changes: [
-        { kind: "field_added", tableName: "User", fieldName: "priceMigrate", after: plan.after },
+        {
+          kind: "field_added",
+          tableName: "User",
+          fieldName: "priceMigrate",
+          after: { ...plan.after, required: false },
+        },
         { kind: "field_removed", tableName: "User", fieldName: "price", before: plan.before },
       ],
     }),
@@ -51,8 +57,8 @@ describe("expand conversion script", () => {
   test("marks the conversion as needing review", () => {
     const script = expandScript();
 
-    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
-    expect(script).toContain("const convertedValue: never = sourceValue;");
+    expect(countUnresolvedTodos(script, "migrate.ts")).toBeGreaterThan(0);
+    expect(script).toContain("const convertedValue = TODO(");
   });
 
   test("emits a conversion for each planned field", () => {
@@ -93,8 +99,8 @@ describe("expand conversion script for a single value becoming an array", () => 
   test("wraps the stored value without asking for review", () => {
     const script = expandScript([arrayPlan]);
 
-    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
-    expect(script).not.toContain(": never");
+    expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
+    expect(script).not.toContain("TODO(");
     expect(script).toContain("const convertedValue = [sourceValue];");
     expect(script).toContain(`.set({
             ["priceMigrate"]: convertedValue,
@@ -118,8 +124,8 @@ describe("expand conversion script for a single value becoming an array", () => 
         },
       ]);
 
-      expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
-      expect(script).toContain("const convertedValue: never = sourceValue;");
+      expect(countUnresolvedTodos(script, "migrate.ts")).toBeGreaterThan(0);
+      expect(script).toContain("const convertedValue = TODO(");
       expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
     },
   );
@@ -142,7 +148,7 @@ describe("expand conversion script for a single value becoming an array", () => 
         },
       ]);
 
-      expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+      expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
       expect(script).toContain("const convertedValue = [sourceValue];");
     },
   );
@@ -156,7 +162,7 @@ describe("expand conversion script for a single value becoming an array", () => 
       },
     ]);
 
-    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(countUnresolvedTodos(script, "migrate.ts")).toBeGreaterThan(0);
     expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
   });
 
@@ -172,7 +178,7 @@ describe("expand conversion script for a single value becoming an array", () => 
       },
     ]);
 
-    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
     expect(script).toContain("const convertedValue = [sourceValue];");
   });
 
@@ -188,7 +194,7 @@ describe("expand conversion script for a single value becoming an array", () => 
       },
     ]);
 
-    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
     expect(script).toContain("const convertedValue = [sourceValue];");
   });
 
@@ -197,8 +203,8 @@ describe("expand conversion script for a single value becoming an array", () => 
       { ...arrayPlan, after: snapshotField("string", { required: true, array: true }) },
     ]);
 
-    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
-    expect(script).toContain("const convertedValue: never = sourceValue;");
+    expect(countUnresolvedTodos(script, "migrate.ts")).toBeGreaterThan(0);
+    expect(script).toContain("const convertedValue = TODO(");
     expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
   });
 });
@@ -246,5 +252,47 @@ describe("db.ts for an expand migration", () => {
     // Kysely reads the third ColumnType slot for updates, which is what the
     // conversion writes null through.
     expect(content).toContain("price: ColumnType<number | null, number | null, number | null>;");
+  });
+});
+
+interface FieldRequirement {
+  required: boolean;
+}
+
+describe("rename that finishes a conversion", () => {
+  const contractScript = (before: FieldRequirement, after: FieldRequirement) => {
+    const finished: ExpandContractPlan = {
+      ...plan,
+      before: snapshotField("integer", before),
+      after: snapshotField("string", after),
+    };
+    return generateMigrationScript(
+      createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            tableName: "User",
+            previousFieldName: "priceMigrate",
+            fieldName: "price",
+            before: snapshotField("string", { required: false }),
+            after: snapshotField("string", after),
+          },
+        ],
+      }),
+      [],
+      [finished],
+    );
+  };
+
+  test("leaves nothing to resolve when the converted field was required all along", () => {
+    expect(
+      countUnresolvedTodos(contractScript({ required: true }, { required: true }), "migrate.ts"),
+    ).toBe(0);
+  });
+
+  test("still asks to resolve null values when the original field was optional and becomes required", () => {
+    expect(
+      countUnresolvedTodos(contractScript({ required: false }, { required: true }), "migrate.ts"),
+    ).toBe(1);
   });
 });

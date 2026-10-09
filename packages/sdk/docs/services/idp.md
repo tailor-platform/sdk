@@ -105,6 +105,9 @@ defineIdp("my-idp", {
 
 **Operators:** `"="`, `"!="`, `"in"`, `"not in"`
 
+> [!WARNING]
+> A policy of `[{ user: "_loggedIn" }, "=", true]` permits every authenticated user to run the operation against any IdP user. For `read` and `update` this exposes and lets them change other users' login information (such as email addresses), and for `sendPasswordResetEmail` it lets them send reset emails to anyone. Use it only when every user who can sign in to the project is trusted. For an IdP used by external users (such as business partners), restrict each operation to an administrator role as shown above.
+
 **Helper:** `unsafeAllowAllIdPPermission` grants full access without conditions. Intended only for development and testing.
 
 ```typescript
@@ -191,7 +194,7 @@ defineIdp("my-idp", {
     read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
   },
 });

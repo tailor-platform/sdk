@@ -9,12 +9,7 @@ import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupEnv } from "./env";
-import {
-  printCoordinateNextSteps,
-  printTargetNextSteps,
-  setupCoordinate,
-  setupTarget,
-} from "./generate";
+import { printTargetNextSteps, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
 import { setupUpdate } from "./update";
 
@@ -43,87 +38,6 @@ const envCommand = defineAppCommand({
   run: (args) => {
     logBetaWarning("setup");
     setupEnv({ outputDir: process.cwd(), format: args.format, environments: args.environment });
-  },
-});
-
-const coordinateCommand = defineAppCommand({
-  name: "coordinate",
-  description:
-    "Generate a coordinator workflow that orchestrates multiple --action-generated composite actions.",
-  args: z.strictObject({
-    name: arg(z.string().min(1), {
-      alias: "n",
-      description: "Coordinator name (used in the generated workflow file name and job names)",
-    }),
-    action: arg(z.array(z.string().min(1)).min(1), {
-      description:
-        "Composite action to include. Repeat for separate deploy steps, or use commas to deploy actions as one multi-config group. Takes the name given to setup ci action.",
-    }),
-    branch: arg(z.string().min(1).optional(), {
-      description: "Branch target: deploy trigger branch (defaults to the detected default branch)",
-    }),
-    tag: arg(z.boolean().default(false), {
-      description: "Generate a tag target coordinator",
-    }),
-    environment: arg(z.string().min(1).optional(), {
-      description: "GitHub Environment for the plan/deploy jobs",
-    }),
-    "restrict-dispatch": arg(z.boolean().default(false), {
-      description:
-        "Deploy on manual dispatch only from the target branch (branch) or a tag (--tag); dry runs stay unrestricted",
-    }),
-    force: arg(z.boolean().default(false), {
-      description: "Reset hand edits to SDK-managed parts (your own jobs and steps are kept)",
-    }),
-  }),
-  run: async (args) => {
-    logBetaWarning("setup");
-    const coordinateKind = args.tag ? "tag" : "branch";
-    const result = await setupCoordinate({
-      coordinatorName: args.name,
-      coordinateKind,
-      actions: args.action,
-      branch: args.branch,
-      environment: args.environment,
-      restrictDispatch: args["restrict-dispatch"],
-      force: args.force,
-      outputDir: process.cwd(),
-    });
-    printCoordinateNextSteps(result);
-  },
-});
-
-const actionCommand = defineAppCommand({
-  name: "action",
-  description:
-    "Generate a per-app composite action for use with setup ci coordinate (monorepo multi-app deploys).",
-  args: z.strictObject({
-    name: arg(z.string().min(1).optional(), {
-      alias: "n",
-      description: "Name (defaults to the config 'name')",
-    }),
-    dir: arg(z.string().min(1).default("."), {
-      alias: "d",
-      description: "App directory",
-    }),
-    environment: arg(z.string().min(1).optional(), {
-      description: "GitHub Environment (defaults to the workspace name)",
-    }),
-    force: arg(z.boolean().default(false), {
-      description: "Reset hand edits to SDK-managed parts (your own steps are kept)",
-    }),
-  }),
-  run: async (args) => {
-    logBetaWarning("setup");
-    const result = await setupTarget({
-      kind: "action",
-      workspaceName: args.name,
-      dir: args.dir,
-      environment: args.environment,
-      force: args.force,
-      outputDir: process.cwd(),
-    });
-    printTargetNextSteps(result);
   },
 });
 
@@ -283,7 +197,7 @@ const previewCommand = defineAppCommand({
 const updateCommand = defineAppCommand({
   name: "update",
   description:
-    "Regenerate every workflow/action in .github/tailor.lock with the flags it was generated with.",
+    "Regenerate every workflow in .github/tailor.lock with the flags it was generated with.",
   args: z.strictObject({
     force: arg(z.boolean().default(false), {
       description:
@@ -321,13 +235,12 @@ const depsCommand = defineAppCommand({
 
 const deleteCommand = defineAppCommand({
   name: "delete",
-  description: "Delete managed workflow/action file(s) and their .github/tailor.lock entries.",
+  description: "Delete managed workflow file(s) and their .github/tailor.lock entries.",
   args: z.strictObject({
     ...confirmationArgs,
     files: arg(z.string().array().min(1), {
       positional: true,
-      description:
-        "Workflow/action file(s) to delete, as generated under .github/workflows or .github/actions",
+      description: "Workflow file(s) to delete, as generated under .github/workflows",
     }),
   }),
   run: async (args) => {
@@ -339,13 +252,11 @@ const deleteCommand = defineAppCommand({
 const ciCommand = defineCommand({
   name: "ci",
   description:
-    "Generate a GitHub Actions deploy workflow or composite action, tracked in .github/tailor.lock and drift-checked by `setup check`, and list the GitHub Environment settings they need.",
+    "Generate a GitHub Actions deploy workflow, tracked in .github/tailor.lock and drift-checked by `setup check`, and list the GitHub Environment settings it needs.",
   subCommands: {
     branch: branchCommand,
     tag: tagCommand,
     preview: previewCommand,
-    action: actionCommand,
-    coordinate: coordinateCommand,
     env: envCommand,
   },
 });

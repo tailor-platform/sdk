@@ -23,6 +23,7 @@ import {
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
+import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
 import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
@@ -331,11 +332,15 @@ export async function executeMigrationAsWorkflow(
 
   const created: CreatedMigrationWorkflow = {};
   let workflowId: string;
+  let executionIdsBeforeStart: ReadonlySet<string>;
   try {
     await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
     workflowId = await createMigrationWorkflow(
       { client, workspaceId, name, jobFunctionNames: [name], appName, appId },
       created,
+    );
+    executionIdsBeforeStart = new Set(
+      (await listMigrationExecutions(client, workspaceId, name)).map((execution) => execution.id),
     );
   } catch (error) {
     await teardown(client, workspaceId, name, created.workflowId);
@@ -357,7 +362,13 @@ export async function executeMigrationAsWorkflow(
     let started: WorkflowExecution | undefined;
     let lookupFailure = "";
     try {
-      started = await findStartedExecution(client, workspaceId, name, pollInterval);
+      started = await findStartedExecution(
+        client,
+        workspaceId,
+        name,
+        executionIdsBeforeStart,
+        pollInterval,
+      );
     } catch (lookupError) {
       lookupFailure = `\nListing its executions failed: ${formatWaitError(lookupError)}`;
     }
@@ -368,6 +379,10 @@ export async function executeMigrationAsWorkflow(
         { cause: error },
       );
     }
+    logger.debug(
+      `Start of migration workflow '${name}' failed (${formatWaitError(error)}), ` +
+        `but execution '${started.id}' was created; waiting for it.`,
+    );
     executionId = started.id;
   }
 
@@ -385,29 +400,34 @@ export async function executeMigrationAsWorkflow(
   return result;
 }
 
-const START_LOOKUP_ATTEMPTS = 3;
+const START_LOOKUP_ATTEMPTS = 5;
 
 /**
- * Look for the execution a start created although its response was lost.
+ * Look for the execution a start created although its response was lost. The
+ * lookup is a read, so it is retried through every error but a refusal.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param name - Shared resource name
+ * @param executionIdsBeforeStart - Executions listed before the start, which it did not create
  * @param pollInterval - Wait between lookups in milliseconds
- * @returns The newest execution of the workflow this run created, if one is listed
+ * @returns The newest execution that was not listed before the start, if one is listed
  */
 async function findStartedExecution(
   client: OperatorClient,
   workspaceId: string,
   name: string,
+  executionIdsBeforeStart: ReadonlySet<string>,
   pollInterval: number,
 ): Promise<WorkflowExecution | undefined> {
-  for (let attempt = 0; attempt < START_LOOKUP_ATTEMPTS; attempt++) {
-    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  for (let attempt = 1; attempt <= START_LOOKUP_ATTEMPTS; attempt++) {
+    if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, pollInterval));
     try {
-      const [execution] = await listMigrationExecutions(client, workspaceId, name);
-      if (execution) return execution;
+      const started = (await listMigrationExecutions(client, workspaceId, name)).find(
+        (execution) => !executionIdsBeforeStart.has(execution.id),
+      );
+      if (started) return started;
     } catch (error) {
-      if (!isRetryableWaitError(error) || attempt === START_LOOKUP_ATTEMPTS - 1) throw error;
+      if (attempt === START_LOOKUP_ATTEMPTS || isStartRefused(error)) throw error;
     }
   }
   return undefined;
@@ -626,14 +646,11 @@ function prefixLines(text: string, prefix: string): string {
 /** Label recording which step plan a temporary migration workflow was created for. */
 const MIGRATION_PLAN_LABEL_KEY = "sdk-migration-plan";
 
-const TERMINAL_EXECUTION_STATUSES: ReadonlySet<WorkflowExecution_Status> = new Set([
-  WorkflowExecution_Status.SUCCESS,
-  WorkflowExecution_Status.FAILED,
-  WorkflowExecution_Status.CANCELED,
-]);
-
 function isExecutionActive(execution: WorkflowExecution): boolean {
-  return !TERMINAL_EXECUTION_STATUSES.has(execution.status);
+  return (
+    execution.status !== WorkflowExecution_Status.SUCCESS &&
+    !isWorkflowExecutionFailureStatus(execution.status)
+  );
 }
 
 /** Codes the platform returns for a start before it creates the execution. */

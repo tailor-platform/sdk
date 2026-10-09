@@ -15,6 +15,7 @@ import type {
   ParsedRelationship,
   TailorDBType,
 } from "#/parser/service/tailordb/types";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 /**
@@ -23,18 +24,26 @@ import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailor
  * @param rawTypes - Raw TailorDB tables keyed by name
  * @param namespace - TailorDB namespace name
  * @param typeSourceInfo - Optional table source information
+ * @param dateDefault - Representation of `t` date fields the precompiled hook expressions were compiled under
  * @returns Parsed tables
  */
 export function parseTypes(
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Record<string, TailorDBType> {
   const types = createRecord<TailorDBType>();
   const allTableNames = new Set(Object.keys(rawTypes));
 
   for (const [tableName, type] of Object.entries(rawTypes)) {
-    types[tableName] = parseTailorDBType(type, allTableNames, rawTypes, typeSourceInfo);
+    types[tableName] = parseTailorDBType(
+      type,
+      allTableNames,
+      rawTypes,
+      typeSourceInfo,
+      dateDefault,
+    );
   }
 
   buildBackwardRelationships(types, namespace, typeSourceInfo);
@@ -49,13 +58,15 @@ export function parseTypes(
  * @param allTableNames - Set of all TailorDB table names
  * @param rawTypes - All raw TailorDB tables keyed by name
  * @param typeSourceInfo - Optional table source information
+ * @param dateDefault - Representation of `t` date fields the precompiled hook expressions were compiled under
  * @returns Parsed TailorDB table
  */
 function parseTailorDBType(
   type: TailorDBTypeSchemaOutput,
   allTableNames: Set<string>,
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
-  typeSourceInfo?: TypeSourceInfo,
+  typeSourceInfo: TypeSourceInfo | undefined,
+  dateDefault: EffectiveDateDefault,
 ): TailorDBType {
   const metadata = type.metadata;
   const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
@@ -73,6 +84,7 @@ function parseTailorDBType(
     let fieldConfig = parseFieldConfig(fieldDef, {
       tableName: type.name,
       fieldPath: [fieldName],
+      dateDefault,
     });
     const rawRelation = fieldConfig.rawRelation;
 
@@ -174,15 +186,15 @@ function parseTailorDBType(
     ...(metadata.typeHook && {
       typeHookExpr: {
         ...(typeof metadata.typeHook.create === "function" && {
-          create: convertTypeHookToExpr(metadata.typeHook.create, "create"),
+          create: convertTypeHookToExpr(metadata.typeHook.create, "create", dateDefault),
         }),
         ...(typeof metadata.typeHook.update === "function" && {
-          update: convertTypeHookToExpr(metadata.typeHook.update, "update"),
+          update: convertTypeHookToExpr(metadata.typeHook.update, "update", dateDefault),
         }),
       },
     }),
     ...(typeof metadata.typeValidate === "function" && {
-      typeValidateExpr: convertTypeValidateToExpr(metadata.typeValidate),
+      typeValidateExpr: convertTypeValidateToExpr(metadata.typeValidate, dateDefault),
     }),
   };
 }

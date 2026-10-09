@@ -73,12 +73,19 @@ vi.mock("#/cli/shared/spinner", () => ({
 // Mock the bundler and the workflow executor so executeMigrations can run
 // without touching the network or building real bundles.
 const bundleMigrationScriptMock = vi.fn();
-const bundleMigrationStepsMock = vi.fn(async (_options: { temporal?: boolean }) => ({
-  bundledCode: "// bundled steps",
+const bundleMigrationStepsMock = vi.fn(
+  async (_options: { temporal?: boolean; dateDefault?: "legacy" | "temporal" }) => ({
+    bundledCode: "// bundled steps",
+  }),
+);
+const bundleSingleStepMigrationMock = vi.fn(async (_options: unknown) => ({
+  bundledCode: "// bundled single step",
 }));
 vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
-  bundleMigrationSteps: (options: { temporal?: boolean }) => bundleMigrationStepsMock(options),
+  bundleMigrationSteps: (options: { temporal?: boolean; dateDefault?: "legacy" | "temporal" }) =>
+    bundleMigrationStepsMock(options),
+  bundleSingleStepMigration: (options: unknown) => bundleSingleStepMigrationMock(options),
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
 const executeMigrationStepsAsWorkflowMock = vi.fn();
@@ -501,6 +508,50 @@ describe("migration", () => {
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("no data yet"));
     });
 
+    test("throws before anything changes when a pending migration script still calls TODO", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+      writeMigrateFile(
+        testDir,
+        1,
+        'import { TODO } from "./db";\nexport async function main() { TODO("fill email"); }',
+      );
+
+      const error = await detectPendingMigrations(client, workspaceId, [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ]).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).toMatchObject({ code: "MIGRATION_SCRIPT_REVIEW_REQUIRED" });
+      expect(error!.message).toContain("tailordb/0001");
+      expect((error as CLIError).suggestion).toContain("Replace each TODO() call");
+      expect((error as CLIError).suggestion).toContain("TODO(tailor-migration-review)");
+    });
+
+    test("accepts a pending migration script that no longer calls TODO", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+      writeMigrateFile(testDir, 1, "export async function main() {}");
+
+      const pending = await detectPendingMigrations(client, workspaceId, [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ]);
+
+      expect(pending.map((migration) => migration.number)).toEqual([1]);
+    });
+
     test("throws when a migration has both a script skip acknowledgment and migrate.ts", async () => {
       const client = createMockClient({ tailordb: 0 });
 
@@ -754,7 +805,7 @@ describe("migration", () => {
       await runTest();
     });
 
-    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill"] };
+    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill", "recompute"] };
 
     function stepsContext(setMetadataMock: ReturnType<typeof vi.fn>): MigrationContext {
       return {
@@ -953,7 +1004,7 @@ describe("migration", () => {
 
     test("keeps the remediation of a failure that is not a step's own", async () => {
       const migration = createMockMigration({
-        scriptForm: { kind: "steps", order: ["backfill"] },
+        scriptForm: { kind: "steps", order: ["backfill", "recompute"] },
       });
       executeMigrationStepsAsWorkflowMock.mockRejectedValueOnce(
         CLIError({
@@ -1000,6 +1051,60 @@ describe("migration", () => {
         appName: "test-app",
         appId: "test-app-id",
       });
+    });
+
+    test("runs a script with a single step like a main script", async () => {
+      const migration = createMockMigration({
+        number: 1,
+        hasScript: true,
+        scriptForm: { kind: "steps", order: ["backfill"] },
+      });
+
+      await executeMigrations(createMockContext(), [migration]);
+
+      expect(bundleSingleStepMigrationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "tailordb", migrationNumber: 1, step: "backfill" }),
+      );
+      expect(executeMigrationAsWorkflowMock).toHaveBeenCalledWith(
+        expect.objectContaining({ code: "// bundled single step" }),
+      );
+      expect(executeMigrationStepsAsWorkflowMock).not.toHaveBeenCalled();
+    });
+
+    test("bundles a single-step script with the date default recorded for its migration", async () => {
+      const migration = createMockMigration({
+        number: 1,
+        hasScript: true,
+        scriptForm: { kind: "steps", order: ["backfill"] },
+        diff: createMockMigrationDiff({ dateRepresentation: "temporal" }),
+      });
+
+      await executeMigrations(createMockContext(), [migration]);
+
+      expect(bundleSingleStepMigrationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ dateDefault: "temporal" }),
+      );
+    });
+
+    test("keeps running a single-step script through the step runner when an earlier deploy left it in progress", async () => {
+      const migration = createMockMigration({
+        number: 1,
+        hasScript: true,
+        scriptForm: { kind: "steps", order: ["backfill"] },
+      });
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: true,
+        logs: "",
+        executionId: "exec-1",
+        completedSteps: ["backfill"],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      });
+
+      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+
+      expect(executeMigrationStepsAsWorkflowMock).toHaveBeenCalledTimes(1);
+      expect(executeMigrationAsWorkflowMock).not.toHaveBeenCalled();
     });
 
     test("surfaces a failed workflow migration as a migration failure", async () => {
@@ -1069,6 +1174,24 @@ describe("migration", () => {
       expect(bundleMigrationScriptMock.mock.calls.map((call) => call[5])).toEqual([true, false]);
     });
 
+    test("runs each migration script with the date default recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ dateRepresentation: "temporal" }),
+        }),
+        createMockMigration({ number: 2, hasScript: true }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(bundleMigrationScriptMock.mock.calls.map((call) => call[6])).toEqual([
+        "temporal",
+        "legacy",
+      ]);
+    });
+
     test("runs each steps script with the temporal mode recorded in its diff", async () => {
       const migrations = [
         createMockMigration({
@@ -1095,6 +1218,35 @@ describe("migration", () => {
       expect(bundleMigrationStepsMock.mock.calls.map(([options]) => options.temporal)).toEqual([
         true,
         false,
+      ]);
+    });
+
+    test("runs each steps script with the date default recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          scriptForm: stepsForm,
+          diff: createMockMigrationDiff({ dateRepresentation: "temporal" }),
+        }),
+        createMockMigration({ number: 2, scriptForm: stepsForm }),
+      ];
+      const completed = {
+        success: true,
+        logs: "",
+        completedSteps: ["backfill"],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      };
+      bundleMigrationStepsMock.mockClear();
+      executeMigrationStepsAsWorkflowMock
+        .mockResolvedValueOnce(completed)
+        .mockResolvedValueOnce(completed);
+
+      await executeMigrations(stepsContext(vi.fn()), migrations);
+
+      expect(bundleMigrationStepsMock.mock.calls.map(([options]) => options.dateDefault)).toEqual([
+        "temporal",
+        "legacy",
       ]);
     });
 

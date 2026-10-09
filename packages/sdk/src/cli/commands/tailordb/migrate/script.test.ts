@@ -14,6 +14,7 @@ import {
   markMigrationScriptSkipped,
   scriptCommand,
 } from "./script";
+import { analyzeMigrationScript } from "./script-form";
 import {
   formatMigrationNumber,
   loadDiff,
@@ -102,10 +103,38 @@ describe("addMigrationScriptFiles", () => {
     expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).temporal).toBe(true);
   });
 
+  test("records the date default in diff.json when the script is added", async () => {
+    setupMigration();
+
+    await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      dateDefault: "temporal",
+    });
+
+    expect(
+      JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).dateRepresentation,
+    ).toBe("temporal");
+  });
+
   test("raises a legacy migration to the current format version when recording temporal", async () => {
     setupMigration({ version: 3 });
 
     await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, temporal: true });
+
+    expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(
+      SCHEMA_SNAPSHOT_VERSION,
+    );
+  });
+
+  test("raises a legacy migration to the current format version when recording the date default", async () => {
+    setupMigration({ version: 3 });
+
+    await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      dateDefault: "temporal",
+    });
 
     expect(JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")).version).toBe(
       SCHEMA_SNAPSHOT_VERSION,
@@ -285,7 +314,18 @@ describe("addMigrationScriptFiles", () => {
     );
   });
 
-  test("creates migrate.test.ts alongside the script with withTest", async () => {
+  test("creates migrate.ts as steps by default", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
+
+    expect(analyzeMigrationScript(result.migratePath!)).toEqual({
+      kind: "steps",
+      order: ["migrate"],
+    });
+  });
+
+  test("scaffolds the test against steps by default", async () => {
     setupMigration();
 
     const result = await addMigrationScriptFiles({
@@ -294,10 +334,60 @@ describe("addMigrationScriptFiles", () => {
       withTest: true,
     });
 
-    expect(result.migratePath).toBe(migrationFile(MIGRATE_FILE_NAME));
-    expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
     const content = fs.readFileSync(result.testPath!, "utf-8");
-    expect(content).toContain('import { main } from "./migrate"');
+    expect(content).toContain('const { steps } = await import("./migrate");');
+    expect(content).toContain("runMigrationSteps(steps");
+  });
+
+  test("scaffolds the test against steps when the existing script exports steps", async () => {
+    setupMigration();
+    fs.mkdirSync(path.dirname(migrationFile(MIGRATE_FILE_NAME)), { recursive: true });
+    fs.writeFileSync(
+      migrationFile(MIGRATE_FILE_NAME),
+      "export const steps = { fill: { run: async () => {} } };",
+    );
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(fs.readFileSync(result.testPath!, "utf-8")).toContain(
+      'const { steps } = await import("./migrate");',
+    );
+  });
+
+  test("scaffolds the test against main when the existing script exports main", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(fs.readFileSync(result.testPath!, "utf-8")).toContain(
+      'const { main } = await import("./migrate");',
+    );
+  });
+
+  test("pins the unit test scaffold to the date default recorded while adding the script", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      dateDefault: "temporal",
+    });
+
+    expect(fs.readFileSync(result.testPath!, "utf-8")).toContain(
+      'applyDateRepresentation("temporal")',
+    );
   });
 
   test("adds only the test when migrate.ts already exists and withTest is set", async () => {
@@ -685,6 +775,26 @@ describe("script command results", () => {
       pgliteTestPath: null,
       clearedScriptSkip: false,
     });
+  });
+
+  test("creates migrate.ts as steps by default", async () => {
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(true);
+    expect(analyzeMigrationScript(migrationFile(MIGRATE_FILE_NAME)).kind).toBe("steps");
+  });
+
+  test("has no flag to choose the form of the script", async () => {
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+
+    const result = await runCommand(scriptCommand, ["0001", "--main"]);
+
+    expect(result.success).toBe(false);
+    expect(fs.existsSync(migrationFile(MIGRATE_FILE_NAME))).toBe(false);
   });
 
   test("reports the recorded script skip that creating the script removed", async () => {

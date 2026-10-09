@@ -585,4 +585,5 @@ export const migrationDiffSchema: z.ZodType<MigrationDiff> = z.looseObject({
   requiresMigrationScript: z.boolean(),
   scriptSkipped: scriptSkippedInfoSchema.optional(),
   temporal: z.boolean().optional(),
+  dateRepresentation: z.enum(["temporal", "date"]).optional(),
 });

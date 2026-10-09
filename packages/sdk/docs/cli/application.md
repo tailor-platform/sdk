@@ -93,6 +93,13 @@ tailor deploy --json > deploy-result.json
 jq '.applications[] | {name, url, staticWebsites, auth}' deploy-result.json
 ```
 
+After a successful apply, stdout is exactly one line: the JSON object. A dry-run writes its
+plan as one JSON object. Progress and diagnostics go to stderr, so the output can be captured
+as it is, for example
+`result=$(tailor deploy --json)`. A failed deploy exits non-zero and writes its error as
+JSON to stderr, leaving stdout empty. A deploy plugin that writes to stdout itself makes
+the output unparseable; plugins report through `ctx.logger` and run commands through `ctx.exec`.
+
 Dry-run and build-only deployments do not return deployed application information.
 If resources were applied but loading the JSON result fails, the command reports
 `DEPLOY_RESULT_LOAD_FAILED`; fix the error and run `tailor deploy` again.

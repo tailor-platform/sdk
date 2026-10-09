@@ -1,23 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
-import {
-  renderBranchWorkflow,
-  renderCoordinateWorkflow,
-  renderPreviewWorkflow,
-  renderTagWorkflow,
-} from "./templates";
+import { renderBranchWorkflow, renderPreviewWorkflow, renderTagWorkflow } from "./templates";
 
 type Step = { id?: string; uses?: string; with?: Record<string, unknown> };
 type Workflow = { jobs: Record<string, { steps?: Step[] }> };
 
 const COMMON = { workspaceName: "my-app", environment: "my-app", packageManager: "pnpm" as const };
-const COORDINATE = {
-  coordinatorName: "main",
-  actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
-  environment: "production",
-  packageManager: "pnpm" as const,
-};
-
 const workflows: [string, string][] = [
   ["branch", renderBranchWorkflow({ ...COMMON, branch: "main", erdPreview: null }).content],
   [
@@ -30,15 +18,6 @@ const workflows: [string, string][] = [
     renderTagWorkflow({ ...COMMON, tagPattern: "v*", branch: "main" }).content,
   ],
   ["preview", renderPreviewWorkflow({ ...COMMON, branch: "main", region: "us-west" }).content],
-  [
-    "coordinate branch",
-    renderCoordinateWorkflow({ ...COORDINATE, kind: "branch", branch: "main" }).content,
-  ],
-  [
-    "coordinate tag",
-    renderCoordinateWorkflow({ ...COORDINATE, kind: "tag", branch: "main", tagPattern: "v*" })
-      .content,
-  ],
 ];
 
 function steps(content: string, uses: string): { job: string; step: Step }[] {
