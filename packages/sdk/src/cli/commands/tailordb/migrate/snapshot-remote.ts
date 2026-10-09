@@ -842,7 +842,7 @@ function withoutSettings(
   ignored: readonly (keyof SnapshotSettings)[],
   tableNames?: ReadonlySet<string>,
 ): SchemaSnapshot {
-  if (ignored.length === 0) return snapshot;
+  if (ignored.length === 0 || tableNames?.size === 0) return snapshot;
   const tables = createSnapshotRecord<TailorDBSnapshotType>();
   for (const [tableName, type] of Object.entries(snapshot.tables)) {
     if (!type.settings || (tableNames && !tableNames.has(tableName))) {

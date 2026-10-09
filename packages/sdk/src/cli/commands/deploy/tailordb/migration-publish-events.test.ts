@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { applyTailorDB, captureMigrationFileState } from "./index";
+import { applyTailorDB, captureMigrationFileState, type MaintenanceModeRelease } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
@@ -401,6 +401,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     );
   }
 
+  function lastOrderSettings(client: OperatorClient) {
+    return typeSettingWrites(client)
+      .filter(([name]) => name === "Order")
+      .at(-1)?.[1];
+  }
+
   beforeEach(() => {
     snapshotState.tablesByVersion = {};
     snapshotState.historyId = null;
@@ -570,10 +576,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       /script failed/,
     );
 
-    const finalSettings = typeSettingWrites(client)
-      .filter(([name]) => name === "Order")
-      .at(-1)?.[1];
-    expect(finalSettings).toEqual(
+    expect(lastOrderSettings(client)).toEqual(
       expect.objectContaining({ publishRecordEvents: false, disableGqlOperations: undefined }),
     );
   });
@@ -1436,12 +1439,6 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       ]);
     }
 
-    function lastOrderSettings(client: OperatorClient) {
-      return typeSettingWrites(client)
-        .filter(([name]) => name === "Order")
-        .at(-1)?.[1];
-    }
-
     const restricted = {
       publishRecordEvents: false,
       disableGqlOperations: { create: true, update: true, delete: true, read: true },
@@ -1509,7 +1506,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       });
       mockAddedOrderMigration();
 
-      const releases: Array<(client: OperatorClient) => Promise<void>> = [];
+      const releases: MaintenanceModeRelease[] = [];
       await applyTailorDB(client, planResult, "create-update", {
         holdMaintenanceMode: (release) => releases.push(release),
       });
@@ -1521,6 +1518,43 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
     });
+
+    test.each([
+      [
+        "advanced",
+        (_client: OperatorClient) => {
+          remoteCheckpoint.number = 2;
+        },
+        /advanced concurrently to 0002/i,
+      ],
+      [
+        "cannot be read",
+        (client: OperatorClient) => {
+          vi.mocked(client.getMetadata).mockRejectedValueOnce(new Error("ownership read failed"));
+        },
+        /Could not verify ownership.*ownership read failed/i,
+      ],
+    ] as const)(
+      '"deploy" keeps a namespace restricted when its checkpoint %s while held',
+      async (_label, changeCheckpoint, error) => {
+        const client = createMockClient();
+        const planResult = createMockPlanResult({
+          creates: ["Order"],
+          subscribedTables: ["Order"],
+          maintenanceMode: "deploy",
+        });
+        mockAddedOrderMigration();
+
+        const releases: MaintenanceModeRelease[] = [];
+        await applyTailorDB(client, planResult, "create-update", {
+          holdMaintenanceMode: (release) => releases.push(release),
+        });
+        changeCheckpoint(client);
+
+        await expect(releases[0]?.(client)).rejects.toThrow(error);
+        expect(lastOrderSettings(client)).toEqual(expect.objectContaining(restricted));
+      },
+    );
 
     test.each([
       ['"deploy" without holding', "deploy", false],

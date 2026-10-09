@@ -15,7 +15,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { resourceTrn, writeMetadataLabels } from "../label";
@@ -345,6 +345,59 @@ function describeMigrationCheckpoint(number: number | null | undefined): string 
   return number == null ? "<unset>" : formatMigrationNumber(number);
 }
 
+type ExpectedMigrationCheckpoint = { number: number | null; historyId: string | null };
+
+/**
+ * Find the namespaces whose migration checkpoint no longer matches the one
+ * this deploy expects, so their table settings are not restored over a
+ * concurrent deploy's.
+ * @param client - Operator client instance
+ * @param workspaceId - Target workspace ID
+ * @param expectedCheckpoints - Checkpoint this deploy expects in each namespace
+ * @param outcome - What the deploy does about such a namespace, appended to its error
+ * @returns The error to report for each namespace whose checkpoint changed or could not be read
+ */
+async function findUnownedMigrationCheckpoints(
+  client: OperatorClient,
+  workspaceId: string,
+  expectedCheckpoints: ReadonlyMap<string, ExpectedMigrationCheckpoint>,
+  outcome: string,
+): Promise<Map<string, CLIError>> {
+  const unowned = new Map<string, CLIError>();
+  for (const [namespaceName, expectedCheckpoint] of expectedCheckpoints) {
+    try {
+      const remoteState = await fetchRemoteMigrationState(
+        client,
+        resourceTrn(workspaceId, "tailordb", namespaceName),
+      );
+      const checkpointStillOwned =
+        remoteState.number === expectedCheckpoint.number &&
+        !remoteState.historyIdInvalid &&
+        remoteState.historyId === expectedCheckpoint.historyId;
+      if (checkpointStillOwned) continue;
+
+      unowned.set(
+        namespaceName,
+        CLIError({
+          code: "MIGRATION_CHECKPOINT_CONFLICT",
+          message: `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ${outcome}`,
+        }),
+      );
+    } catch (checkpointReadError) {
+      unowned.set(
+        namespaceName,
+        CLIError({
+          code: "MIGRATION_CHECKPOINT_UNVERIFIED",
+          message:
+            `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
+            `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ${outcome}`,
+        }),
+      );
+    }
+  }
+  return unowned;
+}
+
 /** Lifts the maintenance mode an apply held; run it once the deploy settles. */
 export type MaintenanceModeRelease = (client: OperatorClient) => Promise<void>;
 
@@ -569,10 +622,7 @@ export async function applyTailorDB(
 
       const restorationSnapshots = new Map(preMigrationSnapshots);
       const restorationSettings = new Map(restrictionState);
-      const restorationCheckpoints = new Map<
-        string,
-        { number: number | null; historyId: string | null }
-      >(
+      const restorationCheckpoints = new Map<string, ExpectedMigrationCheckpoint>(
         [...firstPendingByNamespace].map(([namespaceName, firstMigration]) => [
           namespaceName,
           {
@@ -774,7 +824,10 @@ export async function applyTailorDB(
           } catch (error) {
             logger.warn(
               `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-                "The leftover resources remain locked. Remove them manually before the next deployment; remote schema verification will fail closed until then.",
+                (phaseSettings.restricted
+                  ? "The leftover resources remain locked. Remove them"
+                  : "Remove the leftover resources") +
+                " manually before the next deployment; remote schema verification will fail closed until then.",
             );
             throw error;
           }
@@ -788,48 +841,18 @@ export async function applyTailorDB(
         migrationFailure = { error };
       }
 
-      for (const [namespaceName, expectedCheckpoint] of restorationCheckpoints) {
-        try {
-          const remoteState = await fetchRemoteMigrationState(
-            client,
-            resourceTrn(migrationContext.workspaceId, "tailordb", namespaceName),
-          );
-          const checkpointStillOwned =
-            remoteState.number === expectedCheckpoint.number &&
-            !remoteState.historyIdInvalid &&
-            remoteState.historyId === expectedCheckpoint.historyId;
-          if (checkpointStillOwned) continue;
-
-          restorationSnapshots.delete(namespaceName);
-          const concurrencyError = CLIError({
-            code: "MIGRATION_CHECKPOINT_CONFLICT",
-            message:
-              `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ` +
-              "Skipping restoration for this namespace and aborting this deployment.",
-          });
-          if (migrationFailure) {
-            logger.warn(
-              `${concurrencyError.message} The original migration error is reported below.`,
-            );
-          } else {
-            migrationFailure = { error: concurrencyError };
-          }
-        } catch (checkpointReadError) {
-          restorationSnapshots.delete(namespaceName);
-          const ownershipError = CLIError({
-            code: "MIGRATION_CHECKPOINT_UNVERIFIED",
-            message:
-              `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
-              `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ` +
-              "Skipping restoration for this namespace and aborting this deployment.",
-          });
-          if (migrationFailure) {
-            logger.warn(
-              `${ownershipError.message} The original migration error is reported below.`,
-            );
-          } else {
-            migrationFailure = { error: ownershipError };
-          }
+      const unownedCheckpoints = await findUnownedMigrationCheckpoints(
+        client,
+        migrationContext.workspaceId,
+        restorationCheckpoints,
+        "Skipping restoration for this namespace and aborting this deployment.",
+      );
+      for (const [namespaceName, ownershipError] of unownedCheckpoints) {
+        restorationSnapshots.delete(namespaceName);
+        if (migrationFailure) {
+          logger.warn(`${ownershipError.message} The original migration error is reported below.`);
+        } else {
+          migrationFailure = { error: ownershipError };
         }
       }
 
@@ -859,7 +882,26 @@ export async function applyTailorDB(
         );
       try {
         if (maintenanceMode === "deploy" && options.holdMaintenanceMode && !migrationFailure) {
-          options.holdMaintenanceMode(restore);
+          options.holdMaintenanceMode(async (releaseClient) => {
+            const unowned = await findUnownedMigrationCheckpoints(
+              releaseClient,
+              migrationContext.workspaceId,
+              restorationCheckpoints,
+              "Leaving its table settings unchanged.",
+            );
+            for (const namespaceName of unowned.keys()) restorationSnapshots.delete(namespaceName);
+            const [ownershipError, ...otherErrors] = unowned.values();
+            for (const error of otherErrors) logger.warn(error.message);
+            try {
+              await restore(releaseClient);
+            } catch (restorationError) {
+              if (!ownershipError) throw restorationError;
+              logger.warn(
+                `Could not restore every TailorDB table: ${toError(restorationError).message}.`,
+              );
+            }
+            if (ownershipError) throw ownershipError;
+          });
         } else {
           await restore(client);
         }
