@@ -418,6 +418,7 @@ describe("template-generator", () => {
 
         expect(order(script)).toEqual(["copyCustomerToClient", "copyOrderToPurchase"]);
         expect(script).toContain('copyOrderToPurchase: { dependsOn: ["copyCustomerToClient"]');
+        expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
       });
 
       test("keeps the listed order when two renamed tables reference each other", () => {
@@ -441,6 +442,31 @@ describe("template-generator", () => {
           "copyOrderToPurchase",
           "copyCustomerToClient",
         ]);
+      });
+
+      test("leaves the copy of a cycle to the author, in the first copy only", () => {
+        const first = {
+          ...child,
+          after: {
+            ...child.after,
+            fields: { peerId: { type: "uuid", required: false, foreignKeyType: "Client" } },
+          },
+        } as const;
+        const second = {
+          ...renamedTable("Customer", "Client"),
+          after: {
+            name: "Client",
+            pluralForm: "Clients",
+            fields: { peerId: { type: "uuid", required: false, foreignKeyType: "Purchase" } },
+          },
+        } as const;
+
+        const script = generateMigrationScript(stepsDiff(first, second));
+
+        expect(countUnresolvedTodos(script, "migrate.ts")).toBe(1);
+        expect(script).toContain(
+          'void TODO("copy Purchase with the foreign key to Client set to null, then fill it in after the copy of Client");',
+        );
       });
 
       test("keeps the listed order for tables that do not reference each other", () => {

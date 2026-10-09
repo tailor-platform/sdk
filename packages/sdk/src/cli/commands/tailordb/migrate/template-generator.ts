@@ -354,6 +354,28 @@ function foreignKeyTargets(
 }
 
 /**
+ * The renamed table a renamed table references whose copy runs after its own, which happens
+ * when the renamed tables reference each other and no order lets every copy find its parents.
+ * @param change - Table rename to check
+ * @param later - Changes that run after it
+ * @returns The referenced table that is copied later, if any
+ */
+function copiedLater(change: TableRenamedChange, later: readonly DiffChange[]): string | undefined {
+  const names = new Set(
+    later.flatMap((candidate) => (candidate.kind === "table_renamed" ? [candidate.tableName] : [])),
+  );
+  return foreignKeyTargets(change.after.fields, change.tableName).find((target) =>
+    names.has(target),
+  );
+}
+
+function cycleCopyTodo(change: TableRenamedChange, parent: string): string {
+  const message = `copy ${change.tableName} with the foreign key to ${parent} set to null, then fill it in after the copy of ${parent}`;
+  return `  // ${change.tableName} and ${parent} reference each other, so neither copy can find the rows its foreign key points to.
+  void TODO(${JSON.stringify(message)});`;
+}
+
+/**
  * Put the renamed tables a renamed table references before it, so its copy finds the
  * rows its foreign keys point to. The renames keep their slots among the other changes
  * and the order they were listed in, apart from that; a cycle keeps the listed order.
@@ -537,9 +559,14 @@ function buildScriptSteps(
       { table: plan.tableName, field: plan.tempFieldName },
     ],
   }));
-  orderTableRenames(diff.changes).forEach((change, index) => {
+  const orderedChanges = orderTableRenames(diff.changes);
+  orderedChanges.forEach((change, index) => {
     const statements = generateChangeStatements(change, typeRenameTargets, finishedExpansions);
     if (statements.length === 0) return;
+    if (change.kind === "table_renamed") {
+      const cycle = copiedLater(change, orderedChanges.slice(index + 1));
+      if (cycle) statements.unshift(cycleCopyTodo(change, cycle));
+    }
     const { preferredName, touches } = describeChange(change);
     drafts.push({
       preferredName,
