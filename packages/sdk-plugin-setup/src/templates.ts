@@ -103,6 +103,11 @@ export type RenderPreviewParams = {
    * Default false: preview deploys on every PR (open, sync, reopen).
    */
   requirePreviewLabel?: boolean;
+  /**
+   * When true, draft PRs get a preview too. Default false: drafts are skipped and the preview
+   * deploys once the PR is marked ready for review.
+   */
+  includeDrafts?: boolean;
 };
 
 export type RenderResult = {
@@ -552,31 +557,39 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
 /**
  * Render the preview workflow (PR open/sync/close triggers).
  *
- * The deploy job runs on opened/synchronize/reopened events; the cleanup job
- * runs on the closed event.  Both jobs run in the same workflow so PR number
- * context is always available.
+ * The deploy job runs on opened/synchronize/reopened events, plus ready_for_review
+ * unless drafts are included; the cleanup job runs on the closed event.  Both jobs
+ * run in the same workflow so PR number context is always available.
  * @param params - Workspace and rendering configuration
  * @returns Rendered YAML and the list of managed job/step ids
  */
 export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult {
   const { branch } = params;
   const requirePreviewLabel = params.requirePreviewLabel ?? false;
+  const includeDrafts = params.includeDrafts ?? false;
 
   let out = previewTemplate;
 
   // PR trigger event types — single line() marker avoids duplicate YAML map keys in the template.
-  out = line(
-    out,
-    "PR_TYPES",
-    requirePreviewLabel
-      ? "types: [labeled, synchronize, reopened, closed]"
-      : "types: [opened, synchronize, reopened, closed]",
-  );
+  const types = [
+    requirePreviewLabel ? "labeled" : "opened",
+    "synchronize",
+    "reopened",
+    ...(includeDrafts ? [] : ["ready_for_review"]),
+    "closed",
+  ];
+  out = line(out, "PR_TYPES", `types: [${types.join(", ")}]`);
 
   // Deploy job if condition. Fork PRs don't have access to secrets/vars, so guard them out.
-  const deployIf = requirePreviewLabel
-    ? `if: |-\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`
-    : `if: |-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`;
+  const deployConditions = [
+    ...(requirePreviewLabel
+      ? ["contains(github.event.pull_request.labels.*.name, 'tailor:preview')"]
+      : []),
+    "github.event.action != 'closed'",
+    ...(includeDrafts ? [] : ["!github.event.pull_request.draft"]),
+    "!github.event.pull_request.head.repo.fork",
+  ];
+  const deployIf = `if: |-\n  ${deployConditions.join(" &&\n  ")}`;
   const patterns = changePatterns(params);
   out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
   out = line(out, "DEPLOY_IF", gateOnChanges(deployIf, patterns));

@@ -47,6 +47,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         extraPaths: inputs.paths,
         region: inputs.region ?? "",
         requirePreviewLabel: inputs.requirePreviewLabel ?? false,
+        includeDrafts: inputs.includeDrafts ?? false,
       };
   }
 }

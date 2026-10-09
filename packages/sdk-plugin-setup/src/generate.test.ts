@@ -1793,6 +1793,81 @@ export default defineConfig({
     expect(content).toContain("labeled");
   });
 
+  describe("preview: draft PRs", () => {
+    async function generatePreview(extra: {
+      requirePreviewLabel?: boolean;
+      includeDrafts?: boolean;
+    }) {
+      await setupTarget({
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west",
+        ...extra,
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
+      });
+      return fs.readFileSync(
+        path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
+        "utf-8",
+      );
+    }
+
+    test("skips draft PRs by default and deploys when the draft is marked ready for review", async () => {
+      const content = await generatePreview({});
+
+      expect(content).toContain("types: [opened, synchronize, reopened, ready_for_review, closed]");
+      expect(content).toContain("!github.event.pull_request.draft");
+    });
+
+    test("deploys a labeled draft once it is marked ready for review in label mode", async () => {
+      const content = await generatePreview({ requirePreviewLabel: true });
+
+      expect(content).toContain(
+        "types: [labeled, synchronize, reopened, ready_for_review, closed]",
+      );
+      expect(content).toContain("!github.event.pull_request.draft");
+    });
+
+    test("deploys draft PRs with the include-drafts option, so ready_for_review adds no event", async () => {
+      const content = await generatePreview({ includeDrafts: true });
+
+      expect(content).toContain("types: [opened, synchronize, reopened, closed]");
+      expect(content).not.toContain("pull_request.draft");
+    });
+
+    test("deploys labeled draft PRs with include-drafts in label mode", async () => {
+      const content = await generatePreview({ requirePreviewLabel: true, includeDrafts: true });
+
+      expect(content).toContain("types: [labeled, synchronize, reopened, closed]");
+      expect(content).toContain("tailor:preview");
+      expect(content).not.toContain("pull_request.draft");
+    });
+
+    test("still guards fork PRs when drafts are deployed", async () => {
+      const content = await generatePreview({ includeDrafts: true });
+
+      expect(content).toContain("!github.event.pull_request.head.repo.fork");
+    });
+
+    test("records include-drafts in the lock so update regenerates the same workflow", async () => {
+      await generatePreview({ includeDrafts: true });
+
+      const lock = readLock(testDir);
+      expect(lock?.targets[0]).toMatchObject({ inputs: { includeDrafts: true } });
+    });
+
+    test("records that drafts are skipped when the option is not given", async () => {
+      await generatePreview({});
+
+      const lock = readLock(testDir);
+      expect(lock?.targets[0]).toMatchObject({ inputs: { includeDrafts: false } });
+    });
+  });
+
   test("preview: rejects an invalid region", async () => {
     await expect(
       setupTarget({

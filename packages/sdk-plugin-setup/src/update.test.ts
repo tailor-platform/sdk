@@ -126,9 +126,37 @@ describe("planUpdate", () => {
       branch: "develop",
       region: "asia-northeast",
       requirePreviewLabel: true,
+      includeDrafts: false,
       force: false,
       outputDir: "/repo",
     });
+  });
+
+  test("preview: regenerates with the recorded draft setting", () => {
+    const plan = planUpdate(
+      lockTarget("preview", "my-app", {
+        branch: "main",
+        branchAutoDetected: false,
+        region: "us-west",
+        includeDrafts: true,
+      }),
+      common,
+    );
+
+    expect(plan).toMatchObject({ kind: "preview", includeDrafts: true });
+  });
+
+  test("preview: skips drafts when the lock predates the draft setting", () => {
+    const plan = planUpdate(
+      lockTarget("preview", "my-app", {
+        branch: "main",
+        branchAutoDetected: false,
+        region: "us-west",
+      }),
+      common,
+    );
+
+    expect(plan).toMatchObject({ kind: "preview", includeDrafts: false });
   });
 
   test("preview: re-detects the default branch when it was auto-detected", () => {

@@ -83,6 +83,10 @@ function renderAll(): RenderedTemplate[] {
       requirePreviewLabel: true,
     }),
   );
+  add(
+    "preview/include-drafts",
+    renderPreviewWorkflow({ ...full, branch: "main", region: "us-west", includeDrafts: true }),
+  );
   const apps = [
     { dir: "apps/erp/backend", seedValidate: true, migrationDriftCheck: true },
     { dir: "apps/users/backend" },
