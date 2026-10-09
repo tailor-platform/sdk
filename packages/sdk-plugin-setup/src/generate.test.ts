@@ -10,6 +10,7 @@ import {
   printTargetNextSteps,
   setupTarget,
   type BranchSetupOptions,
+  type SetupTargetOptions,
 } from "./generate";
 import { detectDefaultBranch } from "./git";
 import { hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
@@ -1780,6 +1781,50 @@ export default defineConfig({
     await expect(setupTarget(baseOptions({ workspaceName: "Bad_Name" }))).rejects.toThrow(
       /Invalid workspace name/,
     );
+  });
+
+  describe("preview name length", () => {
+    type PreviewOptions = Extract<SetupTargetOptions, { kind: "preview" }>;
+    const previewOptions = (overrides: Partial<PreviewOptions> = {}): PreviewOptions => ({
+      kind: "preview",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "cfg-app",
+      loadConfigId: async () => undefined,
+      ...overrides,
+    });
+
+    test("accepts a 50-character preview name", async () => {
+      const name = "a".repeat(50);
+      await setupTarget(previewOptions({ workspaceName: name }));
+      expect(readLock(testDir)?.targets[0]).toMatchObject({ kind: "preview", workspaceName: name });
+    });
+
+    test.each([
+      ["--name", { workspaceName: "a".repeat(51) }],
+      ["the config name", { loadConfigName: async () => "a".repeat(51) }],
+    ] as const)(
+      "rejects a 51-character preview name from %s before writing anything",
+      async (_label, overrides) => {
+        await expect(setupTarget(previewOptions(overrides))).rejects.toThrow(
+          /at most 50 characters[\s\S]*-pr-<number>/,
+        );
+        expect(fs.existsSync(path.join(testDir, ".github"))).toBe(false);
+      },
+    );
+
+    test("branch and tag targets still accept a 63-character name", async () => {
+      const name = "a".repeat(63);
+      await setupTarget(baseOptions({ workspaceName: name }));
+      await setupTarget({ ...baseOptions({ workspaceName: name }), kind: "tag", tagPattern: "v*" });
+      expect(readLock(testDir)?.targets.map((t) => [t.kind, t.workspaceName])).toEqual([
+        ["branch", name],
+        ["tag", name],
+      ]);
+    });
   });
 
   test.each([

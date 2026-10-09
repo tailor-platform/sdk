@@ -8,6 +8,7 @@ import {
   removeAdoptedConfigIds,
   styles,
   TAILOR_LOCK_FILENAME,
+  WORKSPACE_NAME_MAX_LENGTH,
   workspaceNameSchema,
   getNamespacesWithMigrations,
 } from "@tailor-platform/sdk/cli";
@@ -140,6 +141,38 @@ export function validateWorkspaceName(name: string): void {
         "Pass a valid name with --name.",
     );
   }
+}
+
+const PREVIEW_PR_INFIX = "-pr-";
+const PREVIEW_PR_NUMBER_MAX_DIGITS = 9;
+export const PREVIEW_NAME_MAX_LENGTH =
+  WORKSPACE_NAME_MAX_LENGTH - PREVIEW_PR_INFIX.length - PREVIEW_PR_NUMBER_MAX_DIGITS;
+
+/**
+ * Reject a new preview target whose per-PR workspace names would not fit, and
+ * warn when an already generated one is regenerated under such a name.
+ * @param obj - Check inputs
+ * @param obj.name - Preview name
+ * @param obj.file - Repository-relative workflow file path, for the warning
+ * @param obj.existing - Whether the lock already records this preview target
+ */
+function checkPreviewNameLength(obj: { name: string; file: string; existing: boolean }): void {
+  const { name, file, existing } = obj;
+  if (name.length <= PREVIEW_NAME_MAX_LENGTH) return;
+  if (!existing) {
+    throw new Error(
+      `Preview name "${name}" is ${String(name.length)} characters, but preview names can be ` +
+        `at most ${String(PREVIEW_NAME_MAX_LENGTH)} characters so that each pull request's ` +
+        `workspace name ("<name>${PREVIEW_PR_INFIX}<number>") fits in ` +
+        `${String(WORKSPACE_NAME_MAX_LENGTH)} characters. Pass a shorter name with --name.`,
+    );
+  }
+  const firstFailingPr =
+    10 ** Math.max(0, WORKSPACE_NAME_MAX_LENGTH - PREVIEW_PR_INFIX.length - name.length);
+  logger.warn(
+    `${file}: preview name "${name}" is longer than ${String(PREVIEW_NAME_MAX_LENGTH)} ` +
+      `characters, so preview deploys fail from pull request #${String(firstFailingPr)}.`,
+  );
 }
 
 // The values below are embedded into workflow YAML. Restrict them to
@@ -785,6 +818,13 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
   });
 
   const existing = findTarget(lock, resolved.kind, resolved.workspaceName);
+  if (resolved.kind === "preview") {
+    checkPreviewNameLength({
+      name: resolved.workspaceName,
+      file: resolved.file,
+      existing: existing !== undefined,
+    });
+  }
   const fileExists = fs.existsSync(absFile);
   const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
 
