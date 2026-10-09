@@ -548,8 +548,9 @@ tailor setup ci preview --name erp --region asia-northeast \
 
 The patterns are checked after the app directories and the generated workflow
 file, in order, and the last pattern that matches a changed file decides whether
-it counts. A change to the workflow file alone runs the jobs, so a job you add to
-it runs in the pull request that adds it; to skip the jobs for such a change,
+it counts. A change to the workflow file alone runs the generated plan, deploy,
+and preview jobs, and with them any job of yours that needs them, in the pull
+request or push that makes the change; to skip the jobs for such a change,
 exclude the file, for example `--paths '!.github/workflows/tailor-erp.yml'`
 (`tailor-erp-preview.yml` for the preview workflow). `*` matches
 within one path segment, `**` matches any number of segments, and a pattern
