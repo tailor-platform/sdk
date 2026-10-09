@@ -535,6 +535,23 @@ describe("executeMigrationStepsAsWorkflow", () => {
     expect(result.logs).toBe("[backfillUser] backfilled 10 users");
   });
 
+  test("reports a poll of the run that failed as unknown", async () => {
+    const { client, raw } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [runnerJob(0, WorkflowJobExecution_Status.RUNNING, [MIGRATION_SCRIPT_STARTED_LOG])],
+      },
+    });
+    raw.getWorkflowExecution.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
+    const { events, onRunEvent } = recordRunEvents();
+
+    await run(client, { onRunEvent });
+
+    expect(events).toEqual(["waiting", "unknown", "running", "finished:true"]);
+  });
+
   test("treats a run that disappears while polling as possibly committed", async () => {
     const { client, raw } = createStepsClient({
       run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },

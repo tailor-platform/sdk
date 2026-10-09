@@ -55,10 +55,13 @@ const START_LOG_REREADS = 2;
  */
 export const MIGRATION_SCRIPT_STARTED_LOG = "[tailor-sdk] migration script started";
 
+type RunState = "waiting" | "running" | "unknown";
+
 /** Progress of a migration run as observed while waiting for it, timed with `performance.now()`. */
 export type MigrationRunEvent =
   | { type: "waiting"; at: number }
   | { type: "running"; at: number }
+  | { type: "unknown"; at: number }
   | { type: "polled"; at: number; execution: WorkflowExecution }
   | { type: "finished"; at: number; scriptStarted: boolean };
 
@@ -75,8 +78,8 @@ export interface LongRunningMigrationOptions {
   pollIntervalMs?: number;
   /**
    * Called when no job is running the script (`waiting`, also when waiting starts), when a job is
-   * (`running`), on every poll that finds the run active, and when the run finished, with whether
-   * any job was seen running the script.
+   * (`running`), when a poll cannot tell (`unknown`), on every poll that finds the run active, and
+   * when the run finished, with whether any job was seen running the script.
    */
   onRunEvent?: (event: MigrationRunEvent) => void;
 }
@@ -370,6 +373,8 @@ interface PollExecutionOptions {
   retryTransientErrors: boolean;
   /** Called with each polled execution that is still active. */
   onActive?: (execution: WorkflowExecution) => void | Promise<void>;
+  /** Called for each poll whose transient error was retried. */
+  onPollFailed?: () => void;
 }
 
 /**
@@ -396,6 +401,7 @@ async function pollUntilTerminal(
       ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
     } catch (error) {
       if (!options.retryTransientErrors || !isRetryableWaitError(error)) throw error;
+      options.onPollFailed?.();
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
       continue;
     }
@@ -457,31 +463,33 @@ async function observeRun(
   const { client, workspaceId, onRunEvent } = options;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
   const started = new Set<string>();
-  let running = false;
-  const unreadRunningJobs = new Set<string>();
+  let state: RunState = "waiting";
+  const report = (next: RunState) => {
+    if (next === state) return;
+    state = next;
+    onRunEvent?.({ type: next, at: performance.now() });
+  };
   onRunEvent?.({ type: "waiting", at: performance.now() });
 
   const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval, {
     retryTransientErrors: params.retryTransientErrors,
+    onPollFailed: () => report("unknown"),
     onActive: async (active) => {
-      let nowRunning = false;
+      let next: RunState = "waiting";
       for (const job of active.jobExecutions) {
         if (job.status !== WorkflowJobExecution_Status.RUNNING || !params.runsScript(job)) continue;
         const id = job.executionId;
         if (!started.has(id)) {
           const logged = id ? await hasLoggedScriptStart(client, workspaceId, id) : undefined;
-          if (logged === undefined) unreadRunningJobs.add(job.id);
           if (logged) started.add(id);
+          else if (logged === undefined) next = "unknown";
         }
         if (started.has(id)) {
-          nowRunning = true;
+          next = "running";
           break;
         }
       }
-      if (nowRunning !== running) {
-        running = nowRunning;
-        onRunEvent?.({ type: running ? "running" : "waiting", at: performance.now() });
-      }
+      report(next);
       onRunEvent?.({ type: "polled", at: performance.now(), execution: active });
       await params.onActive?.(active);
     },
@@ -489,10 +497,8 @@ async function observeRun(
   const finishedAt = performance.now();
 
   let outcomes = await collectJobOutcomes(client, workspaceId, execution, params);
-  const everyRunningJobWasRead = unreadRunningJobs.size === 0;
   const startLogPending = () =>
     started.size === 0 &&
-    everyRunningJobWasRead &&
     !outcomes.scriptStarted &&
     execution.status === WorkflowExecution_Status.SUCCESS;
   for (let reread = 0; reread < START_LOG_REREADS && startLogPending(); reread++) {
@@ -502,7 +508,7 @@ async function observeRun(
   onRunEvent?.({
     type: "finished",
     at: finishedAt,
-    scriptStarted: started.size > 0 || (everyRunningJobWasRead && outcomes.scriptStarted),
+    scriptStarted: started.size > 0 || outcomes.scriptStarted,
   });
   return { execution, outcomes };
 }

@@ -704,6 +704,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
             startObserved: true,
             waitingToStartMs: 60_000,
             runningMs: 9_000,
+            waitingOrRunningMs: 0,
           },
         ],
       });

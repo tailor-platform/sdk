@@ -18,7 +18,7 @@ export type MaintenancePhase = keyof typeof PHASE_LABELS;
 
 const MAINTENANCE_PHASES = Object.keys(PHASE_LABELS) as MaintenancePhase[];
 
-type ScriptRunPhase = "jobSetup" | "waitingToStart" | "running" | "jobCleanup";
+type ScriptRunPhase = "jobSetup" | "waitingToStart" | "running" | "waitingOrRunning" | "jobCleanup";
 
 interface Mark<Phase extends MaintenancePhase = MaintenancePhase> {
   phase: Phase;
@@ -29,10 +29,12 @@ interface Mark<Phase extends MaintenancePhase = MaintenancePhase> {
 export interface MigrationScriptTiming {
   namespace: string;
   migrationNumber: number;
-  /** Whether the script was seen running; when it was not, the split between waiting and running is unknown. */
+  /** Whether the script was seen running; when it was not, all of its time is in `waitingOrRunningMs`. */
   startObserved: boolean;
-  waitingToStartMs: number | null;
-  runningMs: number | null;
+  waitingToStartMs: number;
+  runningMs: number;
+  /** Time when it could not be told whether the script was running. */
+  waitingOrRunningMs: number;
 }
 
 /** How long a deploy kept tables in maintenance mode while applying migrations, by phase. */
@@ -109,6 +111,11 @@ export class ScriptRunTimer {
     return this.#closedMs("running");
   }
 
+  /** @returns Time when it could not be told whether the script was running, up to the current phase */
+  get unobservedMs(): number {
+    return this.#closedMs("waitingOrRunning");
+  }
+
   get startObserved(): boolean {
     return this.#marks.some((mark) => mark.phase === "running");
   }
@@ -125,6 +132,11 @@ export class ScriptRunTimer {
   /** @param at - When a job of the run was seen running the script */
   running(at: number): void {
     this.#enter("running", at);
+  }
+
+  /** @param at - When it could no longer be told whether a job of the run was running the script */
+  unknown(at: number): void {
+    this.#enter("waitingOrRunning", at);
   }
 
   /**
@@ -200,13 +212,14 @@ export class MaintenanceTimeline {
     const marks = run.marks();
     for (const mark of marks) this.enter(mark.phase, mark.at);
     const durations = sumDurations(marks, at);
-    const observed = run.startObserved;
+    const ms = (phase: MaintenancePhase) => Math.round(durations.get(phase) ?? 0);
     this.#scripts.push({
       namespace: run.namespace,
       migrationNumber: run.migrationNumber,
-      startObserved: observed,
-      waitingToStartMs: observed ? Math.round(durations.get("waitingToStart") ?? 0) : null,
-      runningMs: observed ? Math.round(durations.get("running") ?? 0) : null,
+      startObserved: run.startObserved,
+      waitingToStartMs: ms("waitingToStart"),
+      runningMs: ms("running"),
+      waitingOrRunningMs: ms("waitingOrRunning"),
     });
   }
 

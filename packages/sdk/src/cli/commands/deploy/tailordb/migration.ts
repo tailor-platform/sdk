@@ -286,11 +286,13 @@ function displayMigrationRun(
     if (logger.verbose) aside(() => logger.debug(message));
   };
   const render = (at: number) => {
-    const elapsed = formatDuration(at - timer.phaseStartedAt);
+    const progress = `(${steps}${formatDuration(at - timer.phaseStartedAt)})`;
     sp.text =
       timer.phase === "running"
-        ? `Running migration ${migrationLabel} (${steps}${elapsed})...`
-        : `Waiting for a job of migration ${migrationLabel} to start (${steps}${elapsed})...`;
+        ? `Running migration ${migrationLabel} ${progress}...`
+        : timer.phase === "waitingOrRunning"
+          ? `Executing migration ${migrationLabel} ${progress}...`
+          : `Waiting for a job of migration ${migrationLabel} to start ${progress}...`;
   };
   return {
     onRunEvent: (event) => {
@@ -306,7 +308,11 @@ function displayMigrationRun(
       const firstStart = event.type === "running" && !timer.startObserved;
       if (event.type === "waiting") timer.waiting(event.at);
       if (event.type === "running") timer.running(event.at);
+      if (event.type === "unknown") timer.unknown(event.at);
       render(event.at);
+      if (event.type === "unknown") {
+        debug(`Migration ${migrationLabel}: could not tell whether its script is running.`);
+      }
       if (firstStart) {
         aside(() =>
           logger.info(
@@ -315,7 +321,7 @@ function displayMigrationRun(
           ),
         );
       }
-      if (event.type === "polled") {
+      if (event.type === "polled" && logger.verbose) {
         const status = describeRunStatus(event.execution);
         if (status !== lastStatus) debug(`Migration ${migrationLabel}: ${status}.`);
         lastStatus = status;
@@ -796,10 +802,20 @@ export async function executeMigrations(
       }
 
       if (result.success) {
-        const timing = timer.startObserved
-          ? ` (waiting to start ${formatDuration(timer.waitedMs)}, running ${formatDuration(timer.ranMs)})`
-          : "";
-        sp.succeed(`Migration ${migrationLabel} completed successfully${timing}`);
+        const timing = [
+          ...(timer.startObserved
+            ? [
+                `waiting to start ${formatDuration(timer.waitedMs)}`,
+                `running ${formatDuration(timer.ranMs)}`,
+              ]
+            : []),
+          ...(timer.unobservedMs > 0
+            ? [`waiting to start or running ${formatDuration(timer.unobservedMs)}`]
+            : []),
+        ].join(", ");
+        sp.succeed(
+          `Migration ${migrationLabel} completed successfully${timing ? ` (${timing})` : ""}`,
+        );
 
         // Show logs if any
         if (result.logs && result.logs.trim()) {

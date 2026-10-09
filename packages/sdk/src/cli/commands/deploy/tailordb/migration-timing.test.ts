@@ -61,6 +61,7 @@ describe("MaintenanceTimeline", () => {
           startObserved: true,
           waitingToStartMs: 900_000,
           runningMs: 101_000,
+          waitingOrRunningMs: 0,
         },
       ],
     });
@@ -121,6 +122,7 @@ describe("ScriptRunTimer", () => {
         startObserved: true,
         waitingToStartMs: 70,
         runningMs: 20,
+        waitingOrRunningMs: 0,
       },
     ]);
   });
@@ -142,8 +144,9 @@ describe("ScriptRunTimer", () => {
         namespace: "tailordb",
         migrationNumber: 1,
         startObserved: false,
-        waitingToStartMs: null,
-        runningMs: null,
+        waitingToStartMs: 0,
+        runningMs: 0,
+        waitingOrRunningMs: 60,
       },
     ]);
   });
@@ -170,7 +173,12 @@ describe("ScriptRunTimer", () => {
       jobCleanup: 15,
     });
     expect(report.migrations).toEqual([
-      expect.objectContaining({ startObserved: true, waitingToStartMs: 20, runningMs: 20 }),
+      expect.objectContaining({
+        startObserved: true,
+        waitingToStartMs: 20,
+        runningMs: 20,
+        waitingOrRunningMs: 30,
+      }),
     ]);
     expect(run.waitedMs).toBe(20);
   });
@@ -191,6 +199,31 @@ describe("ScriptRunTimer", () => {
       "waitingToStart",
       "running",
       "jobCleanup",
+    ]);
+  });
+
+  test("reports a stretch it could not observe as waiting to start or running", () => {
+    const timeline = new MaintenanceTimeline();
+    timeline.enter("preMigration", 0);
+    const run = new ScriptRunTimer("tailordb", 1, 0);
+    run.waiting(10);
+    run.running(20);
+    run.waiting(30);
+    run.unknown(40);
+    run.finished(100, true);
+    timeline.recordScript(run, 100);
+    timeline.finish(100);
+
+    const report = timeline.report(["tailordb"]);
+
+    expect(report.phases).toMatchObject({ waitingToStart: 20, running: 10, waitingOrRunning: 60 });
+    expect(report.migrations).toEqual([
+      expect.objectContaining({
+        startObserved: true,
+        waitingToStartMs: 20,
+        runningMs: 10,
+        waitingOrRunningMs: 60,
+      }),
     ]);
   });
 

@@ -717,7 +717,7 @@ describe("observing when the migration script runs", () => {
     expect(raw.getFunctionExecution).toHaveBeenCalledTimes(1);
   });
 
-  test("does not trust a start first seen in the final logs of a run it could not read", async () => {
+  test("reports the polls that could not read a running job's logs as unknown", async () => {
     const { client, raw } = observedClient(
       [
         {
@@ -742,10 +742,10 @@ describe("observing when the migration script runs", () => {
     const { result, events } = runObserved(client);
 
     expect(await result).toMatchObject({ success: true, logs: "INFO done" });
-    expect(events).toEqual(["waiting", "finished:false"]);
+    expect(events).toEqual(["waiting", "unknown", "finished:true"]);
   });
 
-  test("does not trust a start first seen in the final logs of a job it could not identify", async () => {
+  test("reports a poll that finds a running job without an execution as unknown", async () => {
     const { client } = observedClient(
       [
         { status: WorkflowExecution_Status.RUNNING, jobs: [{ executionId: "", status: running }] },
@@ -760,7 +760,7 @@ describe("observing when the migration script runs", () => {
     const { result, events } = runObserved(client);
 
     await result;
-    expect(events).toEqual(["waiting", "finished:false"]);
+    expect(events).toEqual(["waiting", "unknown", "finished:true"]);
   });
 
   test("keeps polling when a job's logs cannot be read", async () => {
@@ -788,6 +788,6 @@ describe("observing when the migration script runs", () => {
     const { result, events } = runObserved(client);
 
     expect(await result).toMatchObject({ success: true });
-    expect(events).toEqual(["waiting", "running", "finished:true"]);
+    expect(events).toEqual(["waiting", "unknown", "running", "finished:true"]);
   });
 });

@@ -1366,15 +1366,53 @@ describe("migration", () => {
           expect.anything(),
         );
         expect(spinnerMock.succeed).toHaveBeenCalledWith(
-          "Migration tailordb/0001 completed successfully",
+          "Migration tailordb/0001 completed successfully (waiting to start or running 4.0s)",
         );
         expect(timeline.report(["tailordb"]).migrations).toEqual([
           expect.objectContaining({
             startObserved: false,
-            waitingToStartMs: null,
-            runningMs: null,
+            waitingToStartMs: 0,
+            runningMs: 0,
+            waitingOrRunningMs: 4_000,
           }),
         ]);
+      });
+
+      test("reports the stretches it could not observe apart from waiting and running", async () => {
+        const texts = emitting([
+          { type: "waiting", at: 1_000 },
+          { type: "running", at: 5_000 },
+          { type: "unknown", at: 8_000 },
+          { type: "finished", at: 20_000, scriptStarted: true },
+        ]);
+
+        await executeMigrations(createMockContext(), [createMockMigration()]);
+
+        expect(texts[2]).toBe("Executing migration tailordb/0001 (0.0s)...");
+        expect(spinnerMock.succeed).toHaveBeenCalledWith(
+          "Migration tailordb/0001 completed successfully (waiting to start 4.0s, running 3.0s, waiting to start or running 12s)",
+        );
+      });
+
+      test("does not describe the run's status unless --verbose is on", async () => {
+        const jobExecutions = vi.fn(() => []);
+        emitting([
+          { type: "waiting", at: 1_000 },
+          {
+            type: "polled",
+            at: 2_000,
+            execution: {
+              status: WorkflowExecution_Status.RUNNING,
+              get jobExecutions() {
+                return jobExecutions();
+              },
+            } as never,
+          },
+        ]);
+
+        await executeMigrations(createMockContext(), [createMockMigration()]);
+
+        expect(jobExecutions).not.toHaveBeenCalled();
       });
 
       test("updates the spinner before reporting that the script started running", async () => {

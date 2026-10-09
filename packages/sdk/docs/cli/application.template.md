@@ -31,8 +31,7 @@ application whose migrations ran: its `application` name, `namespaces`, `mainten
 long their tables were in maintenance mode, equal to the sum of `phases`), `phases` in milliseconds
 (`restrict`, `preMigration`, `jobSetup`, `waitingToStart`, `running`, `waitingOrRunning`,
 `jobCleanup`, `postMigration`, `restore`), and `migrations` with each script's `namespace`,
-`migrationNumber`, `waitingToStartMs`, and `runningMs`, the last two `null` when `startObserved`
-is `false`. See
+`migrationNumber`, `startObserved`, `waitingToStartMs`, `runningMs`, and `waitingOrRunningMs`. See
 [Time spent in maintenance mode](../services/tailordb-migration.md#time-spent-in-maintenance-mode).
 
 ```sh
