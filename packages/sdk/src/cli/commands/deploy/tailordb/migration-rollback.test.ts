@@ -1167,7 +1167,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         create: true,
         update: true,
         delete: true,
-        read: true,
+        read: false,
       });
     });
 
