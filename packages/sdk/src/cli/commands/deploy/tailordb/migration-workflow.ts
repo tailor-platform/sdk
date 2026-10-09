@@ -407,14 +407,7 @@ async function pollUntilTerminal(
   }
 }
 
-interface ObserveRunParams extends CollectJobOutcomesOptions {
-  /** Keep polling through transient errors instead of failing on the first one. */
-  retryTransientErrors: boolean;
-  /** Whether a job runs the migration script itself, as opposed to orchestrating it. */
-  runsScript: (job: WorkflowJobExecution) => boolean;
-  /** Called with each polled execution that is still active. */
-  onActive?: (execution: WorkflowExecution) => void;
-}
+type ObserveRunParams = CollectJobOutcomesOptions & PollExecutionOptions;
 
 /**
  * Whether a function execution has logged {@link MIGRATION_SCRIPT_STARTED_LOG}. A failed read
@@ -485,7 +478,7 @@ async function observeRun(
         onRunEvent?.({ type: running ? "running" : "waiting", at: performance.now() });
       }
       onRunEvent?.({ type: "polled", at: performance.now(), execution: active });
-      params.onActive?.(active);
+      await params.onActive?.(active);
     },
   });
   const finishedAt = performance.now();
@@ -546,8 +539,8 @@ interface CollectJobOutcomesOptions {
   labelJob?: (job: WorkflowJobExecution) => string | undefined;
   /** Whether a job's error or result can explain the failure. */
   reportsFailure?: (job: WorkflowJobExecution) => boolean;
-  /** Whether a job runs the migration script itself. */
-  runsScript?: (job: WorkflowJobExecution) => boolean;
+  /** Whether a job runs the migration script itself, as opposed to orchestrating it. */
+  runsScript: (job: WorkflowJobExecution) => boolean;
 }
 
 /**
@@ -565,13 +558,9 @@ async function collectJobOutcomes(
   client: OperatorClient,
   workspaceId: string,
   execution: WorkflowExecution,
-  options: CollectJobOutcomesOptions = {},
+  options: CollectJobOutcomesOptions,
 ): Promise<JobOutcomes> {
-  const {
-    labelJob = () => undefined,
-    reportsFailure = () => true,
-    runsScript = () => true,
-  } = options;
+  const { labelJob = () => undefined, reportsFailure = () => true, runsScript } = options;
   const outcomes = await Promise.all(
     execution.jobExecutions.map(async (job) => {
       const label = labelJob(job);

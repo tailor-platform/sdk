@@ -532,7 +532,7 @@ describe("observing when the migration script runs", () => {
   });
 
   test("reports a finished run whose script was never seen starting", async () => {
-    const { client } = observedClient(
+    const { client, raw } = observedClient(
       [
         {
           status: WorkflowExecution_Status.SUCCESS,
@@ -546,6 +546,25 @@ describe("observing when the migration script runs", () => {
 
     expect(await result).toMatchObject({ success: true, logs: "INFO done" });
     expect(events).toEqual(["waiting", "finished:false"]);
+    expect(raw.getFunctionExecution).toHaveBeenCalledTimes(3);
+  });
+
+  test("does not reread the logs of a failed run", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.FAILED,
+          jobs: [{ executionId: "fn-1", status: WorkflowJobExecution_Status.FAILED }],
+        },
+      ],
+      { "fn-1": [["ERROR boom"]] },
+    );
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: false });
+    expect(events).toEqual(["waiting", "finished:false"]);
+    expect(raw.getFunctionExecution).toHaveBeenCalledTimes(1);
   });
 
   test("keeps polling when a job's logs cannot be read", async () => {

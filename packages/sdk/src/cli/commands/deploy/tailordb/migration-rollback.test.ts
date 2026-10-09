@@ -652,16 +652,29 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   test("reports how long the migrating namespace stayed in maintenance mode", async () => {
     const client = createMockClient();
     setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
-    vi.mocked(migrationModule.executeMigrations).mockImplementation(
+    let clock = 0;
+    vi.mocked(migrationModule.executeMigrations).mockImplementationOnce(
       async (_ctx, migrations, _inProgress, timeline) => {
-        const at = performance.now();
-        const run = new ScriptRunTimer("test-ns", migrations[0]!.number, at);
-        run.waiting(at);
-        run.running(at);
-        run.finished(at);
-        timeline?.recordScript(run, at);
+        const run = new ScriptRunTimer("test-ns", migrations[0]!.number, clock);
+        clock += 2_000;
+        run.waiting(clock);
+        clock += 60_000;
+        run.running(clock);
+        clock += 9_000;
+        run.finished(clock, true);
+        clock += 1_000;
+        timeline?.recordScript(run, clock);
       },
     );
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+      async (_client, _workspaceId, _namespace, number, historyId) => {
+        clock += 4_000;
+        remoteCheckpoint.number = number;
+        remoteCheckpoint.historyId = historyId ?? null;
+        return true;
+      },
+    );
+    const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
     const info = vi.spyOn(logger, "info").mockImplementation(() => {});
 
     try {
@@ -670,16 +683,36 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]![3]).toBeInstanceOf(
         MaintenanceTimeline,
       );
-      expect(report).toMatchObject({
+      expect(report).toEqual({
         namespaces: ["test-ns"],
-        migrations: [{ namespace: "test-ns", migrationNumber: 1, startObserved: true }],
+        maintenanceMs: 76_000,
+        phases: {
+          restrict: 0,
+          preMigration: 0,
+          jobSetup: 2_000,
+          waitingToStart: 60_000,
+          running: 9_000,
+          waitingOrRunning: 0,
+          jobCleanup: 1_000,
+          postMigration: 4_000,
+          restore: 0,
+        },
+        migrations: [
+          {
+            namespace: "test-ns",
+            migrationNumber: 1,
+            startObserved: true,
+            waitingToStartMs: 60_000,
+            runningMs: 9_000,
+          },
+        ],
       });
-      const sum = Object.values(report!.phases).reduce((total, ms) => total + ms, 0);
-      expect(report!.maintenanceMs).toBe(sum);
       expect(info).toHaveBeenCalledWith(
-        expect.stringMatching(/^Tables of namespace test-ns were in maintenance mode for /),
+        "Tables of namespace test-ns were in maintenance mode for 1m16s (job setup 2.0s, " +
+          "waiting to start 1m00s, running 9.0s, job cleanup 1.0s, post-migration 4.0s).",
       );
     } finally {
+      now.mockRestore();
       info.mockRestore();
     }
   });

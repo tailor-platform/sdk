@@ -1360,6 +1360,67 @@ describe("migration", () => {
           "Migration tailordb/0001: workflow execution RUNNING, jobs job=SUCCESS.",
         ]);
       });
+
+      test("explains under --verbose only for a run whose script was never seen starting", async () => {
+        emitting([
+          { type: "waiting", at: 1_000 },
+          { type: "running", at: 2_000 },
+          { type: "finished", at: 3_000, scriptStarted: true },
+        ]);
+        emitting([
+          { type: "waiting", at: 4_000 },
+          { type: "finished", at: 5_000, scriptStarted: false },
+        ]);
+        logger.verbose = true;
+
+        try {
+          await executeMigrations(createMockContext(), [
+            createMockMigration({ number: 1 }),
+            createMockMigration({ number: 2 }),
+          ]);
+        } finally {
+          logger.verbose = false;
+        }
+
+        const unsplit = vi
+          .mocked(logger.debug)
+          .mock.calls.map(([message]) => message)
+          .filter((message) => message.startsWith("Could not observe"));
+        expect(unsplit).toEqual([
+          "Could not observe when migration tailordb/0002 started running, so its run is not split into waiting and running.",
+        ]);
+      });
+
+      test("shows a steps migration's progress next to how long it has run", async () => {
+        let text: string | undefined;
+        executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+          async (options: {
+            onRunEvent: (event: MigrationRunEvent) => void;
+            onProgress: (completed: number, total: number) => void;
+          }) => {
+            clock = 1_000;
+            options.onRunEvent({ type: "waiting", at: clock });
+            clock = 16_000;
+            options.onRunEvent({ type: "running", at: clock });
+            clock = 21_000;
+            options.onProgress(0, 1);
+            text = spinnerMock.text;
+            return {
+              success: true,
+              logs: "",
+              completedSteps: ["backfill"],
+              failedSteps: [],
+              stepsMayHaveCommitted: true,
+            };
+          },
+        );
+
+        await executeMigrations(createMockContext(), [
+          createMockMigration({ scriptForm: stepsForm }),
+        ]);
+
+        expect(text).toBe("Running migration tailordb/0001 (0/1 steps completed, 5.0s)...");
+      });
     });
   });
 });
