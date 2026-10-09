@@ -148,6 +148,52 @@ describe("ScriptRunTimer", () => {
     ]);
   });
 
+  test("splits only the runs whose script was seen running", () => {
+    const timeline = new MaintenanceTimeline();
+    timeline.enter("preMigration", 0);
+    const run = new ScriptRunTimer("tailordb", 1, 0);
+    run.waiting(10);
+    run.finished(40, false);
+    run.waiting(50);
+    run.running(60);
+    run.waiting(80);
+    run.finished(90, true);
+    timeline.recordScript(run, 95);
+    timeline.finish(95);
+
+    const report = timeline.report(["tailordb"]);
+
+    expect(report.phases).toMatchObject({
+      waitingOrRunning: 30,
+      waitingToStart: 20,
+      running: 20,
+      jobCleanup: 15,
+    });
+    expect(report.migrations).toEqual([
+      expect.objectContaining({ startObserved: true, waitingToStartMs: 20, runningMs: 20 }),
+    ]);
+    expect(run.waitedMs).toBe(20);
+  });
+
+  test("counts a run whose start was only seen once it finished as having run", () => {
+    const run = new ScriptRunTimer("tailordb", 1, 0);
+    run.waiting(10);
+    run.running(20);
+    run.finished(30, true);
+    run.waiting(40);
+    run.finished(70, true);
+
+    expect(run.marks().map((mark) => mark.phase)).toEqual([
+      "jobSetup",
+      "waitingToStart",
+      "running",
+      "jobCleanup",
+      "waitingToStart",
+      "running",
+      "jobCleanup",
+    ]);
+  });
+
   test("ignores a repeated report of the current phase", () => {
     const run = new ScriptRunTimer("tailordb", 1, 0);
     run.waiting(10);
@@ -193,6 +239,17 @@ describe("formatMaintenanceSummary", () => {
     expect(formatMaintenanceSummary(timeline.report(["a", "b"]))).toBe(
       "Tables of namespaces a, b were in maintenance mode for 4.0s " +
         "(restrict 1.0s, pre-migration 1.0s, post-migration 1.0s, restore 1.0s).",
+    );
+  });
+
+  test("leaves out the breakdown when no phase took a whole millisecond", () => {
+    const timeline = new MaintenanceTimeline();
+    timeline.enter("restrict", 0);
+    timeline.enter("restore", 0.2);
+    timeline.finish(0.4);
+
+    expect(formatMaintenanceSummary(timeline.report(["tailordb"]))).toBe(
+      "Tables of namespace tailordb were in maintenance mode for 0.0s.",
     );
   });
 });

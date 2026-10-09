@@ -50,6 +50,7 @@ import {
 import { type OperatorClient } from "#/cli/shared/client";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
 import { formatDuration, ScriptRunTimer, type MaintenanceTimeline } from "./migration-timing";
@@ -243,11 +244,10 @@ interface MigrationRunDisplay {
 function describeRunStatus(execution: WorkflowExecution): string {
   const jobs = execution.jobExecutions.map((job) => {
     const name = job.kind.case === "jobFunction" ? job.kind.value.name : (job.kind.case ?? "job");
-    return `${name}=${WorkflowJobExecution_Status[job.status]}`;
+    return `${name}=${protoEnumName(WorkflowJobExecution_Status, job.status) ?? job.status}`;
   });
-  return `workflow execution ${WorkflowExecution_Status[execution.status]}, ${
-    jobs.length > 0 ? `jobs ${jobs.join(", ")}` : "no jobs yet"
-  }`;
+  const status = protoEnumName(WorkflowExecution_Status, execution.status) ?? execution.status;
+  return `workflow execution ${status}, ${jobs.length > 0 ? `jobs ${jobs.join(", ")}` : "no jobs yet"}`;
 }
 
 /**
@@ -282,8 +282,7 @@ function displayMigrationRun(
   return {
     onRunEvent: (event) => {
       if (event.type === "finished") {
-        if (event.scriptStarted && !timer.startObserved) timer.running(event.at);
-        timer.finished(event.at);
+        timer.finished(event.at, event.scriptStarted);
         if (!timer.startObserved) {
           debug(
             `Could not observe when migration ${migrationLabel} started running, so its run is not split into waiting and running.`,
@@ -764,6 +763,7 @@ export async function executeMigrations(
         sp.fail(`Migration ${migrationLabel} failed`);
         throw error;
       } finally {
+        sp.stop();
         timeline?.recordScript(timer);
       }
 

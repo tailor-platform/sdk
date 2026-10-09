@@ -127,24 +127,44 @@ export class ScriptRunTimer {
     this.#enter("running", at);
   }
 
-  /** @param at - When the run reached a terminal state */
-  finished(at = performance.now()): void {
+  /**
+   * @param at - When the run reached a terminal state
+   * @param scriptStarted - Whether its script was seen running, possibly only in its final logs
+   */
+  finished(at = performance.now(), scriptStarted = false): void {
+    if (scriptStarted && !this.#runSeenRunning()) this.#enter("running", at);
     this.#enter("jobCleanup", at);
   }
 
   /**
-   * The run's phases, with waiting relabeled when the script was never seen running.
+   * The phases, with the waiting of each run whose script was never seen running relabeled.
    * @returns Marks in time order
    */
   marks(): Mark[] {
-    if (this.startObserved) return [...this.#marks];
-    return this.#marks.map((mark) =>
-      mark.phase === "waitingToStart" ? { ...mark, phase: "waitingOrRunning" } : mark,
+    let finishedRuns = 0;
+    const runOf = this.#marks.map((mark) =>
+      mark.phase === "jobCleanup" ? finishedRuns++ : finishedRuns,
+    );
+    const observedRuns = new Set(
+      this.#marks.flatMap((mark, index) => (mark.phase === "running" ? [runOf[index]] : [])),
+    );
+    return this.#marks.map((mark, index) =>
+      mark.phase === "waitingToStart" && !observedRuns.has(runOf[index])
+        ? { ...mark, phase: "waitingOrRunning" }
+        : mark,
     );
   }
 
+  #runSeenRunning(): boolean {
+    for (const mark of this.#marks.toReversed()) {
+      if (mark.phase === "running") return true;
+      if (mark.phase === "jobCleanup") return false;
+    }
+    return false;
+  }
+
   #closedMs(phase: ScriptRunPhase): number {
-    return sumDurations(this.#marks.slice(0, -1), this.#current.at).get(phase) ?? 0;
+    return sumDurations(this.marks().slice(0, -1), this.#current.at).get(phase) ?? 0;
   }
 
   #enter(phase: ScriptRunPhase, at: number): void {
@@ -236,5 +256,5 @@ export function formatMaintenanceSummary(report: MaintenanceReport): string {
   const breakdown = MAINTENANCE_PHASES.filter((phase) => report.phases[phase] > 0)
     .map((phase) => `${PHASE_LABELS[phase]} ${formatDuration(report.phases[phase])}`)
     .join(", ");
-  return `Tables of ${subject} were in maintenance mode for ${formatDuration(report.maintenanceMs)} (${breakdown}).`;
+  return `Tables of ${subject} were in maintenance mode for ${formatDuration(report.maintenanceMs)}${breakdown ? ` (${breakdown})` : ""}.`;
 }

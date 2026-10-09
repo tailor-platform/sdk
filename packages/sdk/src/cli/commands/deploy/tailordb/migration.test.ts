@@ -1289,6 +1289,33 @@ describe("migration", () => {
         expect(textOnRestart).toBe("Running migration tailordb/0001 (0.0s)...");
       });
 
+      test("stops the spinner before logging the run's phases", async () => {
+        emitting([
+          { type: "waiting", at: 1_000 },
+          { type: "running", at: 16_000 },
+          { type: "finished", at: 20_000, scriptStarted: true },
+        ]);
+        spinnerMock.start.mockClear();
+        spinnerMock.stop.mockClear();
+        const timeline = new MaintenanceTimeline();
+        timeline.enter("preMigration", 0);
+
+        await executeMigrations(createMockContext(), [createMockMigration()], {}, timeline);
+
+        const debug = vi.mocked(logger.debug).mock;
+        const firstPhaseLine = debug.calls.findIndex(([message]) =>
+          message.startsWith("Maintenance phase"),
+        );
+        expect(firstPhaseLine).toBeGreaterThanOrEqual(0);
+        const phaseLoggedAt = debug.invocationCallOrder[firstPhaseLine] ?? Number.NaN;
+        const lastRestartAt = Math.max(...spinnerMock.start.mock.invocationCallOrder);
+        expect(
+          spinnerMock.stop.mock.invocationCallOrder.some(
+            (order) => order > lastRestartAt && order < phaseLoggedAt,
+          ),
+        ).toBe(true);
+      });
+
       test("shows in the spinner what the run is doing and for how long", async () => {
         const texts = emitting([
           { type: "waiting", at: 1_000 },
