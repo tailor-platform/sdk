@@ -19,6 +19,9 @@ import type {
   FieldOutput,
   TailorField as TailorFieldBase,
   FieldValidateInput,
+  DateDefaultConflictMessage,
+  DateRepresentationOption,
+  HasDateDefaultConflict,
 } from "#/configure/types/field.types";
 import type { InferFieldsOutput, Prettify, TypeLevelError, output } from "#/types/helpers";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
@@ -26,6 +29,20 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
 // Erased fields stay assignable across builder method-state changes.
 // oxlint-disable-next-line no-explicit-any
 type AnyBuilderMethod = any;
+
+// While the tailor.d.ts files in one program disagree on
+// defaultDateRepresentation, a date builder called without `as` has no single
+// type to give its value, so the call itself is rejected: the second parameter
+// carries the message and cannot be supplied.
+type DateBuilderArgs<Opt extends FieldOptions & { as?: DateRepresentationOption }> =
+  HasDateDefaultConflict extends true
+    ? Opt extends { as: DateRepresentationOption }
+      ? [options: Opt]
+      : [
+          options: Opt & { as: DateRepresentationOption },
+          conflict: TypeLevelError<DateDefaultConflictMessage>,
+        ]
+    : [options?: Opt];
 
 export type TailorAnyField = Omit<
   TailorFieldBase<AnyBuilderMethod, AnyBuilderMethod, FieldMetadata, TailorFieldType>,
@@ -363,52 +380,51 @@ function decimal<const Opt extends FieldOptions>(options?: Opt) {
 
 /**
  * Create a date field for resolver input/output.
- * @param options - Field configuration options
+ * @param args - Field configuration options; `as` is required while the included `tailor.d.ts` files disagree on `defaultDateRepresentation`
  * @returns A date field
  * @example t.date()
  * @example t.date({ as: "date" })
  * @example t.date({ as: "temporal" })
  */
-function date<const Opt extends DateFieldOptions = FieldOptions>(options?: Opt) {
+function date<const Opt extends DateFieldOptions = FieldOptions>(...args: DateBuilderArgs<Opt>) {
+  const [options] = args;
   const field = createTailorField<"date", Opt, DateFieldValue<Opt["as"]>>("date", options);
-  if (options?.as === "date" || options?.as === "temporal") {
-    field._metadata.as = options.as;
-  }
+  field._metadata.as = options?.as ?? "default";
   return field;
 }
 
 /**
  * Create a datetime field for resolver input/output.
- * @param options - Field configuration options
+ * @param args - Field configuration options; `as` is required while the included `tailor.d.ts` files disagree on `defaultDateRepresentation`
  * @returns A datetime field
  * @example t.datetime()
  * @example t.datetime({ as: "date" })
  * @example t.datetime({ as: "temporal" })
  */
-function datetime<const Opt extends DateTimeFieldOptions = FieldOptions>(options?: Opt) {
+function datetime<const Opt extends DateTimeFieldOptions = FieldOptions>(
+  ...args: DateBuilderArgs<Opt>
+) {
+  const [options] = args;
   const field = createTailorField<"datetime", Opt, DateTimeFieldValue<Opt["as"]>>(
     "datetime",
     options,
   );
-  if (options?.as === "date" || options?.as === "temporal") {
-    field._metadata.as = options.as;
-  }
+  field._metadata.as = options?.as ?? "default";
   return field;
 }
 
 /**
  * Create a time field for resolver input/output.
- * @param options - Field configuration options
+ * @param args - Field configuration options; `as` is required while the included `tailor.d.ts` files disagree on `defaultDateRepresentation`
  * @returns A time field
  * @example t.time()
  * @example t.time({ as: "date" })
  * @example t.time({ as: "temporal" })
  */
-function time<const Opt extends TimeFieldOptions = FieldOptions>(options?: Opt) {
+function time<const Opt extends TimeFieldOptions = FieldOptions>(...args: DateBuilderArgs<Opt>) {
+  const [options] = args;
   const field = createTailorField<"time", Opt, TimeFieldValue<Opt["as"]>>("time", options);
-  if (options?.as === "date" || options?.as === "temporal") {
-    field._metadata.as = options.as;
-  }
+  field._metadata.as = options?.as ?? "default";
   return field;
 }
 

@@ -1,3 +1,5 @@
+import { installTailordbClientStub } from "#/utils/tailordb-client-stub";
+
 /**
  * Install a stub `globalThis.tailordb` so that user code loaded by the CLI
  * (e.g. via `createGetDB` in `@tailor-platform/sdk/kysely`) can reference
@@ -10,20 +12,5 @@
  * without bundlers eliminating the install step.
  */
 export function installCliTailordbStub(): void {
-  (
-    globalThis as unknown as {
-      tailordb: {
-        Client: typeof tailordb.Client;
-      };
-    }
-  ).tailordb = {
-    Client: class {
-      constructor(_config: { namespace: string }) {}
-      async connect(): Promise<void> {}
-      async end(): Promise<void> {}
-      async queryObject<O>(): Promise<tailordb.QueryResult<O>> {
-        return {} as Promise<tailordb.QueryResult<O>>;
-      }
-    },
-  };
+  installTailordbClientStub();
 }

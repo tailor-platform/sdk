@@ -21,6 +21,7 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
   DiffChange,
@@ -117,6 +118,7 @@ export async function generateSchemaFile(
  * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
  * column types instead of their `Date`/`string` defaults. Should match whatever
  * `kyselyTypePlugin` was configured with. Defaults to `false`.
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
  * @returns {Promise<GenerateDiffResult>} Generated file info
  */
 export async function generateDiffFiles(
@@ -127,6 +129,7 @@ export async function generateDiffFiles(
   description?: string,
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<GenerateDiffResult> {
   // Create migration directory
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
@@ -174,6 +177,7 @@ export async function generateDiffFiles(
       migrationNumber,
       expandPlans,
       temporal,
+      dateDefault,
     });
     result.dbTypesFilePath = typeFiles.dbTypesPath;
     result.pgliteSchemaFilePath = typeFiles.pgliteSchemaPath;
@@ -198,6 +202,8 @@ interface GenerateDataOnlyFilesOptions {
    * was configured with. Defaults to `false`.
    */
   temporal?: boolean;
+  /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /** Files written for a data-only migration. */
@@ -221,7 +227,14 @@ interface GenerateDataOnlyFilesResult {
 export async function generateDataOnlyMigrationFiles(
   options: GenerateDataOnlyFilesOptions,
 ): Promise<GenerateDataOnlyFilesResult> {
-  const { migrationsDir, migrationNumber, snapshot, description, temporal = false } = options;
+  const {
+    migrationsDir,
+    migrationNumber,
+    snapshot,
+    description,
+    temporal = false,
+    dateDefault = "legacy",
+  } = options;
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
   await fs.mkdir(migrationDir, { recursive: true });
 
@@ -243,6 +256,7 @@ export async function generateDataOnlyMigrationFiles(
     migrationsDir,
     migrationNumber,
     temporal,
+    dateDefault,
   });
 
   return {
@@ -353,26 +367,52 @@ ${updates.join("\n\n")}
 `;
 }
 
+// Emitted into both test scaffolds so the test runs the script with the values
+// deploy gives it, as recorded in diff.json (string values when nothing is
+// recorded), even after tailor.config.ts changes. The script is imported after
+// the pin so that fields it parses at import time already follow it.
+function dateRepresentationPin(diff: MigrationDiff): string {
+  const representation = diff.dateRepresentation ?? "string";
+  const reason = diff.dateRepresentation
+    ? `// diff.json records that this migration was generated under
+// defaultDateRepresentation: ${JSON.stringify(representation)}, and deploy runs it that way.`
+    : `// diff.json records no defaultDateRepresentation for this migration, so deploy
+// runs it with string values whatever tailor.config.ts sets today.`;
+  return `
+${reason}
+const restoreDateRepresentation = applyDateRepresentation(${JSON.stringify(representation)});
+afterAll(restoreDateRepresentation);
+const { main } = await import("./migrate");
+`;
+}
+
 /**
  * Generate migration test file content
  * @param {MigrationDiff} diff - Migration diff
  * @returns {string} Migration test file content
  */
 export function generateMigrationTestScript(diff: MigrationDiff): string {
+  const temporalDefault = diff.dateRepresentation === "temporal";
   return `/**
  * Unit test for the ${diff.namespace} migration script.
  *
  * The mock compiles queries to the same SQL as the deployed migration, so the
  * test verifies the exact statements migrate.ts issues. Stage the rows each
  * query returns, run main() inside a transaction, then assert the executed
- * statements.
+ * statements.${
+   temporalDefault
+     ? `
+ *
+ * Date fields declared with t that omit \`as\` carry Temporal values here, so run
+ * this file in the tailor-runtime Vitest environment, which provides Temporal.`
+     : ""
+ }
  */
 
-import { createKyselyMock } from "@tailor-platform/sdk/vitest";
-import { describe, expect, test } from "vitest";
+import { applyDateRepresentation, createKyselyMock } from "@tailor-platform/sdk/vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
-import { main } from "./migrate";
-
+${dateRepresentationPin(diff)}
 describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
   test("issues the intended statements", async () => {
     const mock = createKyselyMock<Database>();
@@ -403,28 +443,32 @@ export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
   const schema = /^[A-Za-z_$][\w$]*$/.test(diff.namespace)
     ? `pgliteSchema.${diff.namespace}`
     : `pgliteSchema[${JSON.stringify(diff.namespace)}]`;
+  const temporalDefault = diff.dateRepresentation === "temporal";
   return `/**
  * PGlite test for the ${diff.namespace} migration script.
  *
  * The generated db.pglite.ts creates the tables as they stand while migrate.ts
  * runs, on an in-memory Postgres. Stage the rows the script converts, run
  * main() inside a transaction, then assert the rows it leaves behind.${
-   diff.temporal
+   diff.temporal || temporalDefault
      ? `
  *
- * Date, datetime, and time columns are Temporal values here, so run this file
+ * ${
+   diff.temporal
+     ? "Date, datetime, and time columns are Temporal values here"
+     : "Date fields declared with t that omit `as` carry Temporal values here"
+ }, so run this file
  * in the tailor-runtime Vitest environment, which provides Temporal.`
      : ""
  }
  */
 
 import { PGlite } from "@electric-sql/pglite";
-import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
+import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { pgliteSchema } from "./db.pglite";
-import { main } from "./migrate";
-
+${dateRepresentationPin(diff)}
 const pglite = new PGlite();
 const db = createKyselyPGlite<Unmigrated<Database>>(pglite${diff.temporal ? ", { temporal: true }" : ""});
 

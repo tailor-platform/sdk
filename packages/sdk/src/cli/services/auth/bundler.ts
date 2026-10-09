@@ -6,7 +6,7 @@ import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
@@ -16,6 +16,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { LogLevel } from "#/configure/config/types";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 /**
  * Options for bundling auth hooks
@@ -41,6 +42,8 @@ export interface BundleAuthHooksOptions {
   baseDir: string;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
+  /** Representation applied to `t` date fields that omit `as` */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /**
@@ -66,6 +69,7 @@ export async function bundleAuthHooks(
     bundleLogLevel = "DEBUG",
     baseDir,
     tsconfigCache,
+    dateDefault = "legacy",
   } = options;
 
   logger.newline();
@@ -85,7 +89,7 @@ export async function bundleAuthHooks(
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: absoluteConfigPath,
-    extraContext: serializedStartContext,
+    extraContext: JSON.stringify([serializedStartContext, dateDefault]),
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -121,7 +125,7 @@ export async function bundleAuthHooks(
       }
       plugins.push(
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        platformBundleDefinePlugin,
+        createPlatformBundleDefinePlugin(undefined, dateDefault),
         ...cachePlugins,
       );
 

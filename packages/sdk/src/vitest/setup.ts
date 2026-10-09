@@ -1,13 +1,17 @@
 /**
- * Vitest setup file that seeds the SecretManager mock from `tailor.config.ts`.
+ * Vitest setup file that seeds the SecretManager mock from `tailor.config.ts`
+ * and applies the date default the plugin read from it.
  *
  * This file is auto-injected by tailorRuntime() but only activates when
  * the tailor-runtime environment is active (detected via __tailorRuntimeActive,
  * a flag set by injectMocks() during environment setup).
  */
 import { pathToFileURL } from "node:url";
-import { beforeAll } from "vitest";
+import { afterAll, beforeAll } from "vitest";
+import { applyDateDefault } from "./date-representation";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
+
+export { applyDateDefault };
 
 function isTailorRuntime(): boolean {
   return RUNTIME_FLAG_KEY in globalThis;
@@ -66,6 +70,20 @@ export async function loadSecretsFromConfig(
     return null;
   }
 }
+
+// The plugin reads the config in the Vitest host and passes the result here.
+// Applied at the top level, before the test file and its imports evaluate, so a
+// field parsed at import time already follows the configured default.
+const configuredDateDefault = isTailorRuntime()
+  ? process.env.__TAILOR_RUNTIME_DATE_DEFAULT
+  : undefined;
+const restoreDateDefault =
+  configuredDateDefault === "temporal" ||
+  configuredDateDefault === "date" ||
+  configuredDateDefault === "legacy"
+    ? applyDateDefault(configuredDateDefault)
+    : undefined;
+afterAll(() => restoreDateDefault?.());
 
 // Load secrets from tailor.config.ts if config path is provided via env var
 beforeAll(async () => {

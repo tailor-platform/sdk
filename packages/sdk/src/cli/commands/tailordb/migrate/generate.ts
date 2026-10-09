@@ -15,6 +15,7 @@ import { configArg, confirmationArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
@@ -91,6 +92,7 @@ import {
   generateDiffFiles,
   generateDataOnlyMigrationFiles,
 } from "./template-generator";
+import type { EffectiveDateDefault } from "#/runtime/types";
 
 export interface GenerateOptions {
   configPath?: string;
@@ -252,6 +254,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   const { config, plugins } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
   const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
+  const dateDefault = effectiveDateDefault(config);
 
   // Get namespaces with migrations config
   const namespacesWithMigrations: NamespaceWithMigrations[] = getNamespacesWithMigrations(
@@ -441,6 +444,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       dataOnlyTargetNamespace,
       options,
       temporal,
+      dateDefault,
     );
     return { changed: true, clearedNamespaces, migrations: [migration] };
   }
@@ -608,6 +612,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
         currentSnapshot,
         expandPlans ?? [],
         temporal,
+        dateDefault,
       );
       if (generated.declined) declinedNamespaces.push(namespace);
       migrations.push(...generated.migrations.map((files) => generatedMigration(namespace, files)));
@@ -634,6 +639,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
  * @param {string} namespace - Target namespace
  * @param {GenerateOptions} options - Generate options
  * @param {boolean} temporal - Whether date/datetime/time fields resolve to their Temporal column types
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
  * @returns {Promise<GeneratedMigration>} The migration written
  */
 async function generateDataOnlyMigration(
@@ -641,6 +647,7 @@ async function generateDataOnlyMigration(
   namespace: string,
   options: GenerateOptions,
   temporal: boolean,
+  dateDefault: EffectiveDateDefault,
 ): Promise<GeneratedMigration> {
   const generation = generations.find((g) => g.namespace === namespace);
   if (!generation) {
@@ -678,6 +685,7 @@ async function generateDataOnlyMigration(
     snapshot: previousSnapshot,
     description: options.name,
     temporal,
+    dateDefault,
   });
 
   logger.success(
@@ -1266,6 +1274,7 @@ type DiffGeneration = {
  * @param expandPlans - Field changes confirmed for a migration pair
  * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
  * column types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
  * @returns {Promise<DiffGeneration>} Whether the user declined, and the files written otherwise
  */
 async function generateDiffFromSnapshot(
@@ -1276,6 +1285,7 @@ async function generateDiffFromSnapshot(
   currentSnapshot: NormalizedSchemaSnapshot,
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
+  dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<DiffGeneration> {
   if (!hasChanges(diff)) {
     logger.info("No schema differences detected.");
@@ -1375,6 +1385,7 @@ async function generateDiffFromSnapshot(
       migrationsDir,
       description: options.name,
       temporal,
+      dateDefault,
     });
     return { declined: false, migrations: pair };
   }
@@ -1391,6 +1402,7 @@ async function generateDiffFromSnapshot(
     options.name,
     [],
     temporal,
+    dateDefault,
   );
 
   logger.success(
@@ -1435,6 +1447,8 @@ interface GenerateExpandContractOptions {
    * was configured with. Defaults to `false`.
    */
   temporal?: boolean;
+  /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /**
@@ -1454,6 +1468,7 @@ async function generateExpandContractMigrations(
     migrationsDir,
     description,
     temporal = false,
+    dateDefault = "legacy",
   } = input;
   const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
   // Comparing from the relaxed base records the removal with an optional
@@ -1507,6 +1522,7 @@ async function generateExpandContractMigrations(
     description,
     plans,
     temporal,
+    dateDefault,
   );
   const contract = await generateDiffFiles(
     contractDiff,
@@ -1516,6 +1532,7 @@ async function generateExpandContractMigrations(
     description,
     [],
     temporal,
+    dateDefault,
   );
 
   const fields = plans.map((plan) => `${plan.tableName}.${plan.fieldName}`).join(", ");

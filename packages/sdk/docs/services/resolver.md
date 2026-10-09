@@ -141,7 +141,7 @@ GraphQL still accepts and returns `YYYY-MM-DD` strings. The SDK converts input t
 
 This option also works in nested objects and with `array: true` or `optional: true`. Input must be a valid calendar date, and output must be a valid `Date` with a 4-digit UTC year (0000-9999). Both deployed resolvers and `tailor function run` perform these conversions.
 
-A resolver bundle only includes the conversion code for the representations (`as: "date"` or `as: "temporal"`) its `input` and `output` use. To parse other values with such fields inside `body`, for example an external API response, use `parseDateFields` instead of `.parse()`. It takes the same arguments and returns the same result as `.parse()`. Calling `.parse()` on a field whose representation the bundle leaves out throws an error that points to `parseDateFields`.
+A resolver bundle only includes the conversion code for the representations (`as: "date"` or `as: "temporal"`) its `input` and `output` use; with [`defaultDateRepresentation: "temporal"`](../configuration.md#application-settings), the Temporal conversion is always included. To parse other values with such fields inside `body`, for example an external API response, use `parseDateFields` instead of `.parse()`. It takes the same arguments and returns the same result as `.parse()`. Calling `.parse()` on a field whose representation the bundle leaves out throws an error that points to `parseDateFields`.
 
 ```typescript
 import { parseDateFields } from "@tailor-platform/sdk/runtime";
@@ -203,6 +203,8 @@ createResolver({
 - **Time**: `t.time({ as: "temporal" })` uses `Temporal.PlainTime`; `t.time({ as: "date" })` uses a `Date` on `1970-01-01` in UTC. Input and output use `HH:mm` in the range `00:00`–`23:59`. For `Date` output, only the UTC hours and minutes are used; the date portion is ignored. Both representations truncate seconds and fractional seconds without rounding up: `12:30:59.999` becomes `12:30`. Use UTC getters/setters when changing a `Date` time. Without `as`, or with `as: "string"`, time values remain strings.
 
 All three field types support `array`, `optional`, nested objects, and input validators with the selected representation. Both deployed resolvers and `tailor function run` convert input and output. Executors using `resolverExecutedTrigger` receive date, datetime, and time results as strings.
+
+To use Temporal values without writing `as: "temporal"` on every field, set [`defaultDateRepresentation: "temporal"`](../configuration.md#application-settings) in `defineConfig()`. Fields that omit `as` then use `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime`, and `as: "string"` opts a single field back to strings. `defaultDateRepresentation: "date"` does the same for `Date` values. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
 
 The SDK supplies Temporal types, so existing projects can use `as: "temporal"` without changing `compilerOptions.lib`. To construct values or name their types, import `Temporal` from the SDK:
 

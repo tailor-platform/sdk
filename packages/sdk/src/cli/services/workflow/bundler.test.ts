@@ -1289,3 +1289,40 @@ export default createWorkflow({
     });
   });
 });
+
+describe("bundleWorkflowJobs date default", () => {
+  test("folds the configured date default into job bundles", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-date-default-")));
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT,
+});
+`,
+    );
+    try {
+      const result = await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        ["main-job"],
+        {},
+        { modules: new Map() },
+        tmpDir,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "temporal",
+      );
+      expect(result.bundledCode.get("main-job")).toMatch(/["'`]temporal["'`]/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});

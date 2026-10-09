@@ -21,6 +21,9 @@ declare module "@tailor-platform/sdk" {
     "main-auth": true;
   }
   interface SecretVaultNameRegistry {}
+  interface DateRepresentationRegistry {
+    "inventory-management": "unset";
+  }
 }
 
 export {};

@@ -73,15 +73,17 @@ vi.mock("#/cli/shared/spinner", () => ({
 // Mock the bundler and the workflow executor so executeMigrations can run
 // without touching the network or building real bundles.
 const bundleMigrationScriptMock = vi.fn();
-const bundleMigrationStepsMock = vi.fn(
-  async (_options: { temporal?: boolean; skipSteps?: readonly string[] }) => ({
-    bundledCode: "// bundled steps",
-  }),
-);
+type BundleStepsOptions = {
+  temporal?: boolean;
+  dateDefault?: "legacy" | "temporal";
+  skipSteps?: readonly string[];
+};
+const bundleMigrationStepsMock = vi.fn(async (_options: BundleStepsOptions) => ({
+  bundledCode: "// bundled steps",
+}));
 vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
-  bundleMigrationSteps: (options: { temporal?: boolean; skipSteps?: readonly string[] }) =>
-    bundleMigrationStepsMock(options),
+  bundleMigrationSteps: (options: BundleStepsOptions) => bundleMigrationStepsMock(options),
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
 const executeMigrationStepsAsWorkflowMock = vi.fn();
@@ -1127,6 +1129,24 @@ describe("migration", () => {
       expect(bundleMigrationScriptMock.mock.calls.map((call) => call[5])).toEqual([true, false]);
     });
 
+    test("runs each migration script with the date default recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ dateRepresentation: "temporal" }),
+        }),
+        createMockMigration({ number: 2, hasScript: true }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(bundleMigrationScriptMock.mock.calls.map((call) => call[6])).toEqual([
+        "temporal",
+        "legacy",
+      ]);
+    });
+
     test("runs each steps script with the temporal mode recorded in its diff", async () => {
       const migrations = [
         createMockMigration({
@@ -1153,6 +1173,35 @@ describe("migration", () => {
       expect(bundleMigrationStepsMock.mock.calls.map(([options]) => options.temporal)).toEqual([
         true,
         false,
+      ]);
+    });
+
+    test("runs each steps script with the date default recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          scriptForm: stepsForm,
+          diff: createMockMigrationDiff({ dateRepresentation: "temporal" }),
+        }),
+        createMockMigration({ number: 2, scriptForm: stepsForm }),
+      ];
+      const completed = {
+        success: true,
+        logs: "",
+        completedSteps: ["backfill"],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      };
+      bundleMigrationStepsMock.mockClear();
+      executeMigrationStepsAsWorkflowMock
+        .mockResolvedValueOnce(completed)
+        .mockResolvedValueOnce(completed);
+
+      await executeMigrations(stepsContext(vi.fn()), migrations);
+
+      expect(bundleMigrationStepsMock.mock.calls.map(([options]) => options.dateDefault)).toEqual([
+        "temporal",
+        "legacy",
       ]);
     });
 
