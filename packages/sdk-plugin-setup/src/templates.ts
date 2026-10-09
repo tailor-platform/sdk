@@ -199,11 +199,7 @@ function changePatterns(params: {
       : [];
   if (dirs.length === 0 || dirs.includes(".")) return undefined;
   // Ahead of the extra paths: the last matching pattern decides, so a later `!` pattern can drop it.
-  return [
-    ...dirs.map((dir) => `${dir}/**`),
-    params.workflowFile,
-    ...(params.extraPaths ?? []).filter((pattern) => pattern !== params.workflowFile),
-  ];
+  return [...dirs.map((dir) => `${dir}/**`), params.workflowFile, ...(params.extraPaths ?? [])];
 }
 
 function changesJob(patterns: readonly string[]): string {

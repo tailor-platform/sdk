@@ -834,19 +834,20 @@ describe("change detection", () => {
     ]);
   });
 
-  test("lists the workflow file once when the additional paths already name it", () => {
+  test("keeps an additional path that re-includes the workflow file after excluding it", () => {
     const workflow = parseYAML(
       renderBranchWorkflow({
         ...branchBase,
         workingDirectory: "apps/a",
-        extraPaths: [".github/workflows/tailor-my-app.yml", "modules/**"],
+        extraPaths: ["!.github/workflows/tailor-my-app.yml", ".github/workflows/tailor-my-app.yml"],
       }).content,
     ) as Workflow;
 
     expect(patternsOf(workflow)).toEqual([
       "apps/a/**",
       ".github/workflows/tailor-my-app.yml",
-      "modules/**",
+      "!.github/workflows/tailor-my-app.yml",
+      ".github/workflows/tailor-my-app.yml",
     ]);
   });
 
