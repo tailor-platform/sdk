@@ -5,6 +5,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { SCHEMA_SNAPSHOT_VERSION } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import {
   applyPreMigrationFieldAdjustments,
   applyPreMigrationIndexAdjustments,
@@ -2296,7 +2297,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       path.join(migrationDir, "diff.json"),
       JSON.stringify({
         ...createMockMigrationDiff({ namespace: "test-tailordb" }),
-        version: 8,
+        version: SCHEMA_SNAPSHOT_VERSION + 1,
       }),
     );
     const planResult = makePlanResult(true);
@@ -2305,7 +2306,9 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
       code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
-      details: expect.stringMatching(/supports migration file format versions 1-7/),
+      details: expect.stringMatching(
+        new RegExp(`supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`),
+      ),
     });
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();

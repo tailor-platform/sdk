@@ -4,11 +4,13 @@ import * as path from "pathe";
 import ts from "typescript";
 import { describe, expect, test, aroundEach } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
+import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
 import {
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
   MIGRATE_PGLITE_TEST_FILE_NAME,
+  MIGRATE_TEST_FILE_NAME,
   DB_TYPES_FILE_NAME,
   DB_PGLITE_SCHEMA_FILE_NAME,
   compareSnapshots,
@@ -21,11 +23,13 @@ import {
   generateDataOnlyMigrationFiles,
   generateDiffFiles,
   generateMigrationPgliteTestScript,
+  generateMigrationScript,
   generateMigrationTestScript,
   migrationScriptExists,
   getMigrationScriptPath,
 } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
+import type { DiffChange } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
@@ -171,6 +175,25 @@ describe("template-generator", () => {
       const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
       expect(parsed.temporal).toBe(true);
     });
+
+    test("records the date default in diff.json so the script keeps running with it", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot: createTestSnapshot({
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { name: { type: "string", required: true } },
+          },
+        }),
+        dateDefault: "temporal",
+      });
+
+      const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
+      expect(parsed.dateRepresentation).toBe("temporal");
+    });
   });
 
   describe("generated migrate.ts header", () => {
@@ -221,17 +244,557 @@ describe("template-generator", () => {
             })
           ).migrateFilePath,
       },
-    ])("points $name to steps and scopes the rollback to main", async ({ generate }) => {
+    ])("scaffolds $name as steps and explains when it runs like main", async ({ generate }) => {
       const migrateFilePath = await generate();
       expect(migrateFilePath).toBeDefined();
       const script = await fs.readFile(migrateFilePath!, "utf-8");
 
-      expect(script).toContain("export async function main");
-      expect(script).toContain("`main` runs in one transaction");
-      expect(script).not.toContain("all changes will be rolled back");
-      expect(script).toContain("export `steps` instead of `main`");
+      expect(script).toContain("export const steps = {");
+      expect(script).not.toContain("export async function main");
+      expect(script).toContain("A script with one step runs like `main`");
       expect(script).toContain('"Splitting a migration into steps"');
     });
+  });
+
+  describe("steps script form", () => {
+    const snapshot = createTestSnapshot({
+      User: {
+        name: "User",
+        pluralForm: "Users",
+        fields: { name: { type: "string", required: true } },
+      },
+    });
+    const breakingDiff = createMockMigrationDiff({
+      changes: [
+        {
+          kind: "field_added",
+          tableName: "User",
+          fieldName: "email",
+          after: { type: "string", required: true },
+        },
+      ],
+      hasBreakingChanges: true,
+      breakingChanges: [{ tableName: "User", fieldName: "email", reason: "Required field added" }],
+      requiresMigrationScript: true,
+    });
+
+    const addedRequired = (tableName: string, fieldName: string) =>
+      ({
+        kind: "field_added",
+        tableName,
+        fieldName,
+        after: { type: "string", required: true },
+      }) as const;
+    const stepsDiff = (...changes: DiffChange[]) =>
+      createMockMigrationDiff({
+        changes,
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+    const order = (script: string) => {
+      const form = analyzeMigrationScriptSource(script, "migrate.ts");
+      return form.kind === "steps" ? form.order : [];
+    };
+
+    test("generates a script that deploy reads as a step for the added required field", () => {
+      const script = generateMigrationScript(breakingDiff);
+
+      expect(analyzeMigrationScriptSource(script, "migrate.ts")).toEqual({
+        kind: "steps",
+        order: ["populateUserEmail"],
+      });
+      expect(script).not.toContain("export async function main");
+    });
+
+    test("splits added required fields into one step each", () => {
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("User", "email"), addedRequired("User", "phone")),
+      );
+
+      expect(order(script)).toEqual(["populateUserEmail", "populateUserPhone"]);
+      expect(script).toContain("async function populateUserPhone(trx: Transaction)");
+      expect(script).not.toContain("dependsOn:");
+    });
+
+    const renamedField = (tableName: string, previousFieldName: string, fieldName: string) =>
+      ({
+        kind: "field_renamed",
+        tableName,
+        fieldName,
+        previousFieldName,
+        before: { type: "string", required: false },
+        after: { type: "string", required: false },
+      }) as const;
+    const renamedTable = (previousTableName: string, tableName: string) =>
+      ({
+        kind: "table_renamed",
+        tableName,
+        previousTableName,
+        before: {
+          name: previousTableName,
+          pluralForm: `${previousTableName}s`,
+          fields: { email: { type: "string", required: false } },
+        },
+        after: {
+          name: tableName,
+          pluralForm: `${tableName}s`,
+          fields: { email: { type: "string", required: false } },
+        },
+      }) as const;
+
+    test("gives each change its own step, with no ordering between independent changes", () => {
+      const script = generateMigrationScript(
+        stepsDiff(renamedField("User", "fullName", "displayName"), addedRequired("User", "email")),
+      );
+
+      expect(order(script)).toEqual(["renameUserDisplayName", "populateUserEmail"]);
+      expect(script).not.toContain("dependsOn:");
+    });
+
+    test("orders the changes on a renamed table after the copy of its rows", () => {
+      const script = generateMigrationScript(
+        stepsDiff(renamedTable("User", "Person"), addedRequired("Person", "phone")),
+      );
+
+      expect(order(script)).toEqual(["copyUserToPerson", "populatePersonPhone"]);
+      expect(script).toContain('populatePersonPhone: { dependsOn: ["copyUserToPerson"]');
+    });
+
+    test("copies only the rows of a renamed table whose ids the new table does not have yet", () => {
+      const diff = stepsDiff(renamedTable("User", "Person"));
+      const stepsScript = generateMigrationScript(diff);
+
+      expect(stepsScript).toContain('.selectFrom("Person")');
+      expect(stepsScript).toContain('.where("id", "in", rows.map((row) => row.id))');
+      expect(stepsScript).toContain("rows.filter((row) => !copiedIds.has(row.id))");
+      expect(stepsScript).not.toContain('"not in"');
+    });
+
+    test("fills a required field through a TODO call that the script imports from db.ts", () => {
+      const script = generateMigrationScript(stepsDiff(addedRequired("User", "email")));
+
+      expect(script).toContain(
+        'import { TODO, type MigrationSteps, type Transaction } from "./db";',
+      );
+      expect(script).toContain('email: TODO("');
+      expect(script).not.toContain("// TODO");
+      expect(countUnresolvedTodos(script, "migrate.ts")).toBe(1);
+    });
+
+    test("imports only the types when the script has nothing left to decide", () => {
+      const script = generateMigrationScript(stepsDiff(renamedTable("User", "Person")));
+
+      expect(script).toContain('import type { MigrationSteps, Transaction } from "./db";');
+      expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
+    });
+
+    describe("copies of renamed tables that reference each other", () => {
+      const child = {
+        kind: "table_renamed",
+        tableName: "Purchase",
+        previousTableName: "Order",
+        before: {
+          name: "Order",
+          pluralForm: "Orders",
+          fields: { customerId: { type: "uuid", required: false, foreignKeyType: "Customer" } },
+        },
+        after: {
+          name: "Purchase",
+          pluralForm: "Purchases",
+          fields: { customerId: { type: "uuid", required: false, foreignKeyType: "Client" } },
+        },
+      } as const;
+      const parent = renamedTable("Customer", "Client");
+
+      test("copies the parent first even when the child is listed first", () => {
+        const script = generateMigrationScript(stepsDiff(child, parent));
+
+        expect(order(script)).toEqual(["copyCustomerToClient", "copyOrderToPurchase"]);
+        expect(script).toContain('copyOrderToPurchase: { dependsOn: ["copyCustomerToClient"]');
+      });
+
+      test("keeps the listed order when the parent is already first", () => {
+        const script = generateMigrationScript(stepsDiff(parent, child));
+
+        expect(order(script)).toEqual(["copyCustomerToClient", "copyOrderToPurchase"]);
+        expect(script).toContain('copyOrderToPurchase: { dependsOn: ["copyCustomerToClient"]');
+        expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
+      });
+
+      test("keeps the listed order when two renamed tables reference each other", () => {
+        const first = {
+          ...child,
+          after: {
+            ...child.after,
+            fields: { peerId: { type: "uuid", required: false, foreignKeyType: "Client" } },
+          },
+        } as const;
+        const second = {
+          ...renamedTable("Customer", "Client"),
+          after: {
+            name: "Client",
+            pluralForm: "Clients",
+            fields: { peerId: { type: "uuid", required: false, foreignKeyType: "Purchase" } },
+          },
+        } as const;
+
+        expect(order(generateMigrationScript(stepsDiff(first, second)))).toEqual([
+          "copyOrderToPurchase",
+          "copyCustomerToClient",
+        ]);
+      });
+
+      test("leaves the copy of a cycle to the author, in the first copy only", () => {
+        const first = {
+          ...child,
+          after: {
+            ...child.after,
+            fields: { peerId: { type: "uuid", required: false, foreignKeyType: "Client" } },
+          },
+        } as const;
+        const second = {
+          ...renamedTable("Customer", "Client"),
+          after: {
+            name: "Client",
+            pluralForm: "Clients",
+            fields: { peerId: { type: "uuid", required: false, foreignKeyType: "Purchase" } },
+          },
+        } as const;
+
+        const script = generateMigrationScript(stepsDiff(first, second));
+
+        expect(countUnresolvedTodos(script, "migrate.ts")).toBe(1);
+        expect(script).toContain(
+          'void TODO("copy Purchase with the foreign key to Client set to null, then fill it in after the copy of Client");',
+        );
+      });
+
+      test("names every table a cycle copy has to wait for", () => {
+        const renamedWith = (previous: string, name: string, targets: string[]) =>
+          ({
+            ...renamedTable(previous, name),
+            after: {
+              name,
+              pluralForm: `${name}s`,
+              fields: Object.fromEntries(
+                targets.map((target) => [
+                  `${target.toLowerCase()}Id`,
+                  { type: "uuid", required: false, foreignKeyType: target },
+                ]),
+              ),
+            },
+          }) as const;
+
+        const script = generateMigrationScript(
+          stepsDiff(
+            renamedWith("OldA", "Alpha", ["Beta", "Gamma"]),
+            renamedWith("OldB", "Beta", ["Alpha"]),
+            renamedWith("OldC", "Gamma", ["Alpha"]),
+          ),
+        );
+
+        expect(countUnresolvedTodos(script, "migrate.ts")).toBe(1);
+        expect(script).toContain(
+          'void TODO("copy Alpha with its foreign keys to Beta, Gamma set to null, then fill them in after the copies of Beta, Gamma");',
+        );
+      });
+
+      test("keeps the listed order for tables that do not reference each other", () => {
+        const script = generateMigrationScript(
+          stepsDiff(renamedTable("User", "Person"), renamedTable("Team", "Group")),
+        );
+
+        expect(order(script)).toEqual(["copyUserToPerson", "copyTeamToGroup"]);
+        expect(script).not.toContain("dependsOn:");
+      });
+    });
+
+    test("orders the retarget of a foreign key after the copy of the table it points to", () => {
+      const script = generateMigrationScript(
+        stepsDiff(renamedTable("User", "Person"), {
+          kind: "field_modified",
+          tableName: "Order",
+          fieldName: "ownerId",
+          before: { type: "uuid", required: false, foreignKeyType: "Account" },
+          after: { type: "uuid", required: false, foreignKeyType: "Person" },
+        }),
+      );
+
+      expect(order(script)).toEqual(["copyUserToPerson", "updateOrderOwnerId"]);
+      expect(script).toContain('updateOrderOwnerId: { dependsOn: ["copyUserToPerson"]');
+    });
+
+    test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("User", "name"), {
+          kind: "index_added",
+          tableName: "User",
+          indexName: "name_org",
+          after: { fields: ["name", "org"], unique: true },
+        }),
+      );
+
+      expect(order(script)).toEqual(["populateUserName", "resolveUserName_org"]);
+      expect(script).toContain('resolveUserName_org: { dependsOn: ["populateUserName"]');
+    });
+
+    test("keeps the statements for one field's change together, in the order they run", () => {
+      const script = generateMigrationScript(
+        stepsDiff({
+          kind: "field_modified",
+          tableName: "Item",
+          fieldName: "price",
+          before: { type: "decimal", scale: 2, required: true },
+          after: { type: "decimal", scale: 4, required: true, unique: true },
+        }),
+      );
+
+      expect(order(script)).toEqual(["updateItemPrice"]);
+      expect(script.indexOf("Re-save existing Item rows")).toBeGreaterThan(-1);
+      expect(script.indexOf("Re-save existing Item rows")).toBeLessThan(
+        script.indexOf("Ensure price values are unique"),
+      );
+    });
+
+    test("converts through a temporary field in its own step", () => {
+      const script = generateMigrationScript(stepsDiff(), [
+        {
+          tableName: "User",
+          fieldName: "name",
+          tempFieldName: "nameMigrate",
+          before: { type: "integer", required: true },
+          after: { type: "string", required: true },
+        },
+      ]);
+
+      expect(order(script)).toEqual(["convertUserName"]);
+    });
+
+    describe("note before a step that overwrites existing values", () => {
+      const NOTE = [
+        "// Overwrites existing values. Once this step commits it cannot be undone,",
+        "// so check the values it writes before you deploy.",
+      ].join("\n");
+      const noteBefore = (script: string, stepName: string) =>
+        script.includes(`${NOTE}\nasync function ${stepName}(`);
+
+      test("is written before the duplicate resolution of an index", () => {
+        const script = generateMigrationScript(
+          stepsDiff({
+            kind: "index_added",
+            tableName: "User",
+            indexName: "name_org",
+            after: { fields: ["name", "org"], unique: true },
+          }),
+        );
+
+        expect(noteBefore(script, "resolveUserName_org")).toBe(true);
+      });
+
+      test("is written before a field change that rewrites values", () => {
+        const script = generateMigrationScript(
+          stepsDiff({
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "email",
+            before: { type: "string", required: true },
+            after: { type: "string", required: true, unique: true },
+          }),
+        );
+
+        expect(noteBefore(script, "updateUserEmail")).toBe(true);
+      });
+
+      test("is written before the conversion through a temporary field", () => {
+        const script = generateMigrationScript(stepsDiff(), [
+          {
+            tableName: "User",
+            fieldName: "name",
+            tempFieldName: "nameMigrate",
+            before: { type: "integer", required: true },
+            after: { type: "string", required: true },
+          },
+        ]);
+
+        expect(noteBefore(script, "convertUserName")).toBe(true);
+      });
+
+      test("is not written before steps that only fill new columns or tables", () => {
+        const script = generateMigrationScript(
+          stepsDiff(
+            addedRequired("User", "phone"),
+            renamedField("User", "fullName", "displayName"),
+            renamedTable("Account", "Person"),
+          ),
+        );
+
+        expect(script).not.toContain("Overwrites existing values");
+      });
+
+      test("is not written before a field change that only adds nested members", () => {
+        const script = generateMigrationScript(
+          stepsDiff({
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false } },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: { zipCode: { type: "string", required: false } },
+            },
+            memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+          }),
+        );
+
+        expect(order(script)).toEqual(["updateUserAddress"]);
+        expect(script).not.toContain("Overwrites existing values");
+      });
+    });
+
+    test("names a step change<N> when its descriptive name cannot be a step name", () => {
+      const longName = "a".repeat(70);
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("User", "email"), addedRequired("User", longName)),
+      );
+
+      expect(order(script)).toEqual(["populateUserEmail", "change2"]);
+      expect(script).toContain(longName);
+    });
+
+    test("does not name a step after the helper that renames nested members", () => {
+      const script = generateMigrationScript(
+        stepsDiff(renamedField("Nested", "old", "member"), {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: {
+            type: "nested",
+            required: false,
+            fields: { zip: { type: "string", required: false } },
+          },
+          after: {
+            type: "nested",
+            required: false,
+            fields: { zipCode: { type: "string", required: false } },
+          },
+          memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+        }),
+      );
+
+      expect(order(script)).toEqual(["change1", "updateUserAddress"]);
+      expect(script.match(/function renameNestedMember\(/g)).toHaveLength(1);
+    });
+
+    test("names the later of two steps with the same name change<N>", () => {
+      const script = generateMigrationScript(
+        stepsDiff(addedRequired("A", "bC"), addedRequired("AB", "c")),
+      );
+
+      expect(order(script)).toEqual(["populateABC", "change2"]);
+      expect(script).toContain('.updateTable("AB")');
+    });
+
+    test("declares the statements of a change as a plain function and points the step at it", () => {
+      const script = generateMigrationScript(breakingDiff);
+
+      expect(script).toContain(
+        [
+          "async function populateUserEmail(trx: Transaction): Promise<void> {",
+          "  // Populate email for existing User records",
+          "  await trx",
+          '    .updateTable("User")',
+        ].join("\n"),
+      );
+      expect(script).toContain("populateUserEmail: { run: populateUserEmail },");
+    });
+
+    test("scaffolds a data-only migration as a single step", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot,
+      });
+      const script = await fs.readFile(result.migrateFilePath, "utf-8");
+
+      expect(analyzeMigrationScriptSource(script, result.migrateFilePath)).toEqual({
+        kind: "steps",
+        order: ["migrate"],
+      });
+    });
+
+    test("typechecks a data-only step against the generated db.ts", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot,
+      });
+
+      expect(getTypeScriptDiagnostics(result.migrateFilePath)).toEqual([]);
+    }, 30_000);
+
+    test.each([
+      {
+        name: "unit",
+        fileName: MIGRATE_TEST_FILE_NAME,
+        generate: generateMigrationTestScript,
+      },
+      {
+        name: "PGlite",
+        fileName: MIGRATE_PGLITE_TEST_FILE_NAME,
+        generate: generateMigrationPgliteTestScript,
+      },
+    ])(
+      "typechecks the $name test scaffold against a steps script",
+      async ({ fileName, generate }) => {
+        await generateDiffFiles(breakingDiff, tempDir, 1, snapshot);
+        const testPath = path.join(tempDir, "0001", fileName);
+        await fs.writeFile(testPath, generate(breakingDiff, "steps"));
+
+        expect(getTypeScriptDiagnostics(testPath)).toEqual([]);
+      },
+      60_000,
+    );
+
+    const placeholderErrorCodes = async (
+      diff: ReturnType<typeof stepsDiff>,
+      previous: typeof snapshot,
+      migrationNumber: number,
+    ) => {
+      const result = await generateDiffFiles(diff, tempDir, migrationNumber, previous);
+      return getTypeScriptDiagnostics(result.migrateFilePath!).map(({ code }) => code);
+    };
+
+    test("typechecks the TODO call of each added required field, which fails the migration until it is replaced", async () => {
+      await expect(placeholderErrorCodes(breakingDiff, snapshot, 1)).resolves.toEqual([]);
+      await expect(
+        placeholderErrorCodes(
+          stepsDiff(addedRequired("User", "email"), addedRequired("User", "phone")),
+          snapshot,
+          2,
+        ),
+      ).resolves.toEqual([]);
+    }, 30_000);
+
+    test("typechecks the copy of a renamed table's rows that skips ids already copied", async () => {
+      const userSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: { email: { type: "string", required: false } },
+        },
+      });
+
+      await expect(
+        placeholderErrorCodes(stepsDiff(renamedTable("User", "Person")), userSnapshot, 1),
+      ).resolves.toEqual([]);
+    }, 30_000);
   });
 
   describe("generateDiffFiles", () => {
@@ -302,6 +865,27 @@ describe("template-generator", () => {
       expect(parsed.temporal).toBe(true);
     });
 
+    test("records the date default in diff.json and leaves it out under the legacy default", async () => {
+      const pinned = await generateDiffFiles(
+        breakingDiff(),
+        tempDir,
+        1,
+        previousSnapshot,
+        undefined,
+        [],
+        false,
+        "temporal",
+      );
+      expect(JSON.parse(await fs.readFile(pinned.diffFilePath, "utf-8")).dateRepresentation).toBe(
+        "temporal",
+      );
+
+      const legacy = await generateDiffFiles(breakingDiff(), tempDir, 2, previousSnapshot);
+      expect(JSON.parse(await fs.readFile(legacy.diffFilePath, "utf-8"))).not.toHaveProperty(
+        "dateRepresentation",
+      );
+    });
+
     test("leaves temporal out of diff.json when db.ts is generated with Date types", async () => {
       const result = await generateDiffFiles(breakingDiff(), tempDir, 1, previousSnapshot);
 
@@ -358,7 +942,7 @@ describe("template-generator", () => {
       expect(result.dbTypesFilePath).toBe(path.join(tempDir, "0001", DB_TYPES_FILE_NAME));
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
-      expect(scriptContent).toContain("export async function main");
+      expect(scriptContent).toContain("export const steps = {");
       expect(scriptContent).toContain("Transaction");
       expect(scriptContent).toContain("email");
 
@@ -390,7 +974,7 @@ describe("template-generator", () => {
       });
       await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
       const testPath = path.join(tempDir, "0001", MIGRATE_PGLITE_TEST_FILE_NAME);
-      await fs.writeFile(testPath, generateMigrationPgliteTestScript(diff));
+      await fs.writeFile(testPath, generateMigrationPgliteTestScript(diff, "steps"));
 
       // The scaffold pulls in the vitest and PGlite typings, which takes seconds on CI.
       expect(getTypeScriptDiagnostics(testPath)).toEqual([]);
@@ -727,7 +1311,9 @@ describe("template-generator", () => {
       const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
-      expect(scriptContent).toContain("TODO: fullName is optional but displayName is required");
+      expect(scriptContent).toContain(
+        'void TODO("resolve the null values of User.fullName that displayName cannot hold");',
+      );
       expect(scriptContent).toContain('.set((eb) => ({ displayName: eb.ref("fullName") }))');
 
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
@@ -775,7 +1361,7 @@ describe("template-generator", () => {
       expect(scriptContent).toContain('.select(["id", "email"])');
       expect(scriptContent).toContain('.orderBy("id", "asc")');
       expect(scriptContent).toContain(".limit(100)");
-      expect(scriptContent).toContain('trx.insertInto("Person").values(rows).execute()');
+      expect(scriptContent).toContain('trx.insertInto("Person").values(pending).execute()');
       expect(scriptContent).not.toContain("No data migration needed");
 
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
@@ -833,7 +1419,9 @@ describe("template-generator", () => {
       const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
-      expect(scriptContent).toContain(".values(rows.map((row) => ({ ...row, parentId: null })))");
+      expect(scriptContent).toContain(
+        ".values(pending.map((row) => ({ ...row, parentId: null })))",
+      );
       expect(scriptContent).toContain("Backfill the self-referential column(s)");
       const insertPosition = scriptContent.indexOf('insertInto("Section")');
       const backfillPosition = scriptContent.indexOf("Backfill the self-referential column(s)");
@@ -993,27 +1581,18 @@ describe("template-generator", () => {
       expect(scriptContent).toContain(".limit(100)");
       expect(scriptContent).toContain("const sourceValue = row.age");
       expect(scriptContent).toContain("if (sourceValue === null) continue");
-      expect(scriptContent).toContain("const normalizedValue: never = sourceValue");
       expect(scriptContent).toContain(
-        "TODO(tailor-migration-review): Remove this marker and the `never` annotation after reviewing the normalization",
-      );
-      expect(scriptContent).toContain(
-        "Keep the value accepted by the active integer type and castable to float",
+        'const normalizedValue = TODO("normalize User.age to a value the active integer type accepts and the float type can cast");',
       );
       expect(scriptContent).toContain("if (Object.is(normalizedValue, sourceValue)) continue");
       expect(scriptContent).toContain('.set({ ["age"]: normalizedValue })');
 
-      const unresolvedDiagnostics = getTypeScriptDiagnostics(result.migrateFilePath!);
-      expect(unresolvedDiagnostics).toEqual([
-        expect.objectContaining({
-          code: 2322,
-          messageText: "Type 'number' is not assignable to type 'never'.",
-        }),
-      ]);
+      expect(countUnresolvedTodos(scriptContent, "migrate.ts")).toBe(1);
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
 
       await fs.writeFile(
         result.migrateFilePath!,
-        scriptContent.replace("const normalizedValue: never", "const normalizedValue"),
+        scriptContent.replace(/TODO\("[^"]*"\)/, "sourceValue"),
       );
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
@@ -1094,7 +1673,7 @@ describe("template-generator", () => {
 
       expect(scriptContent).toContain("Normalize User.age from integer to float");
       expect(scriptContent).toContain(
-        "TODO: Resolve duplicate User.age values before adding the unique constraint",
+        'TODO("resolve the duplicate User.age values before the unique constraint is added");',
       );
     });
 
@@ -1549,7 +2128,7 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("removed enum values");
     });
 
-    test("rejects the null placeholder when an enum value change also makes the field required", async () => {
+    test("leaves the replacement of removed enum values to a TODO call when the field also becomes required", async () => {
       const before = {
         type: "enum" as const,
         required: false,
@@ -1577,26 +2156,17 @@ describe("template-generator", () => {
       const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
 
-      expect(scriptContent).toContain("status: null, // TODO: Set appropriate default value");
-      expect(scriptContent).toContain('.set({ status: "ACTIVE" })');
-      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([
-        expect.objectContaining({
-          code: 2322,
-          messageText: expect.stringContaining("Type 'null' is not assignable to type"),
-        }),
-      ]);
-
-      await fs.writeFile(
-        result.migrateFilePath!,
-        scriptContent.replace(
-          "status: null, // TODO: Set appropriate default value",
-          'status: "ACTIVE",',
-        ),
+      expect(scriptContent).toContain(
+        'status: TODO("set the value Task.status takes where it is null"),',
       );
+      expect(scriptContent).toContain(
+        '.set({ status: TODO("choose the Task.status value that replaces DRAFT (ACTIVE, ARCHIVED)") })',
+      );
+      expect(countUnresolvedTodos(scriptContent, "migrate.ts")).toBe(2);
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
 
-    test("writes null for removed values when an emptied enum also becomes optional", async () => {
+    test("leaves the replacement of removed values to a TODO call when an emptied enum also becomes optional", async () => {
       const before = { type: "enum" as const, required: true, allowedValues: [{ value: "A" }] };
       const after = { type: "enum" as const, required: false };
       const snapshot = createTestSnapshot({
@@ -1614,7 +2184,9 @@ describe("template-generator", () => {
       const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
 
-      expect(scriptContent).toContain(".set({ kind: null })");
+      expect(scriptContent).toContain(
+        '.set({ kind: TODO("choose the Task.kind value that replaces A") })',
+      );
       expect(scriptContent).not.toContain("NEW_VALUE");
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
@@ -1667,15 +2239,14 @@ describe("template-generator", () => {
         );
         const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
 
-        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([
-          expect.objectContaining({ code: 2322 }),
-        ]);
+        expect(countUnresolvedTodos(scriptContent, "migrate.ts")).toBe(1);
+        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
 
         await fs.writeFile(
           result.migrateFilePath!,
           scriptContent.replace(
-            "const convertedValue: never = sourceValue;",
-            "const convertedValue = String(sourceValue);",
+            /const convertedValue = TODO\("[^"]*"\);/,
+            "const convertedValue = String(row.value);",
           ),
         );
         expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
@@ -1723,11 +2294,11 @@ describe("template-generator", () => {
 
       expect(script).toContain('import { PGlite } from "@electric-sql/pglite"');
       expect(script).toContain(
-        'import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+        'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('import type { Database } from "./db"');
       expect(script).toContain('import { pgliteSchema } from "./db.pglite"');
-      expect(script).toContain('import { main } from "./migrate"');
+      expect(script).toContain('const { main } = await import("./migrate");');
       expect(script).toContain("pglite.exec(pgliteSchema.tailordb)");
       expect(script).toContain("}, 60_000);");
       expect(script).toContain(
@@ -1743,6 +2314,35 @@ describe("template-generator", () => {
         "const db = createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true });",
       );
       expect(script).toContain("tailor-runtime");
+    });
+
+    test("applies the recorded date representation before running a temporal-default migration", () => {
+      const script = generateMigrationPgliteTestScript(
+        createMockMigrationDiff({ dateRepresentation: "temporal" }),
+      );
+
+      expect(script).toContain(
+        'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+      );
+      expect(script).toContain('applyDateRepresentation("temporal")');
+      expect(script).toContain("tailor-runtime");
+      expect(script).toContain('const { main } = await import("./migrate");');
+    });
+
+    test("pins a date-default migration without requiring the tailor-runtime environment", () => {
+      const script = generateMigrationPgliteTestScript(
+        createMockMigrationDiff({ dateRepresentation: "date" }),
+      );
+
+      expect(script).toContain('applyDateRepresentation("date")');
+      expect(script).not.toContain("tailor-runtime");
+    });
+
+    test("pins string values for a migration without a recorded default", () => {
+      const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
+
+      expect(script).toContain('applyDateRepresentation("string")');
+      expect(script).not.toContain("tailor-runtime");
     });
 
     test("reads Date values from PGlite for a migration without a temporal record", () => {
@@ -1762,13 +2362,42 @@ describe("template-generator", () => {
   });
 
   describe("generateMigrationTestScript", () => {
+    test("applies the recorded date representation before running a temporal-default migration", () => {
+      const script = generateMigrationTestScript(
+        createMockMigrationDiff({ dateRepresentation: "temporal" }),
+      );
+
+      expect(script).toContain(
+        'import { applyDateRepresentation, createKyselyMock } from "@tailor-platform/sdk/vitest"',
+      );
+      expect(script).toContain('import { afterAll, describe, expect, test } from "vitest"');
+      expect(script).toContain('applyDateRepresentation("temporal")');
+      expect(script).toContain("tailor-runtime");
+      expect(script).toContain('const { main } = await import("./migrate");');
+      expect(script).not.toContain('import { main } from "./migrate";');
+      expect(script.indexOf("applyDateRepresentation(")).toBeLessThan(
+        script.indexOf('await import("./migrate")'),
+      );
+    });
+
+    test("pins string values for a migration without a recorded default", () => {
+      const script = generateMigrationTestScript(createMockMigrationDiff());
+
+      expect(script).toContain('applyDateRepresentation("string")');
+      expect(script).toContain("records no defaultDateRepresentation");
+      expect(script).toContain('const { main } = await import("./migrate");');
+      expect(script).not.toContain("tailor-runtime");
+    });
+
     test("should generate a test scaffold wired to the mock and generated types", () => {
       const script = generateMigrationTestScript(createMockMigrationDiff());
 
-      expect(script).toContain('import { createKyselyMock } from "@tailor-platform/sdk/vitest"');
-      expect(script).toContain('import { describe, expect, test } from "vitest"');
+      expect(script).toContain(
+        'import { applyDateRepresentation, createKyselyMock } from "@tailor-platform/sdk/vitest"',
+      );
+      expect(script).toContain('import { afterAll, describe, expect, test } from "vitest"');
       expect(script).toContain('import type { Database } from "./db"');
-      expect(script).toContain('import { main } from "./migrate"');
+      expect(script).toContain('const { main } = await import("./migrate");');
       expect(script).toContain("createKyselyMock<Database>()");
       expect(script).toContain("mock.withTx((trx) => main(trx))");
     });

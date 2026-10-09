@@ -29,7 +29,7 @@ const CONCEPTS_NOTE =
 
 const CLIENT_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID",
-  type: "secret",
+  type: "variable",
   required: true,
   description:
     "Client ID of the platform machine user that CI signs in as for plan and deploy; it needs " +
@@ -127,10 +127,9 @@ const DEPLOY_REQUIREMENTS = [
   SLACK_CHANNEL_ID,
 ];
 
-const REQUIREMENTS: Record<Exclude<TargetKind, "action">, EnvRequirement[]> = {
+const REQUIREMENTS: Record<TargetKind, EnvRequirement[]> = {
   branch: [...DEPLOY_REQUIREMENTS, SLACK_USER_MAPPING],
   tag: [...DEPLOY_REQUIREMENTS, SLACK_USER_MAPPING],
-  coordinate: DEPLOY_REQUIREMENTS,
   preview: [CLIENT_ID, CLIENT_SECRET, ORGANIZATION_ID, FOLDER_ID, FAIL_ON_DRIFT],
 };
 
@@ -139,7 +138,7 @@ const REQUIREMENTS: Record<Exclude<TargetKind, "action">, EnvRequirement[]> = {
  * @param kind - Target kind
  * @returns Requirements in display order
  */
-export function targetRequirements(kind: Exclude<TargetKind, "action">): EnvRequirement[] {
+export function targetRequirements(kind: TargetKind): EnvRequirement[] {
   return REQUIREMENTS[kind];
 }
 
@@ -172,7 +171,6 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
     }
   };
   for (const target of lock.targets) {
-    if (target.kind === "action") continue;
     const { environment, migrationTest, migrationTestEnvironment } = target.inputs;
     validateEnvironment(environment);
     validateWorkspaceName(target.workspaceName);
@@ -446,12 +444,6 @@ export function setupEnv(options: {
     );
   }
   const allEnvironments = collectEnvironmentRequirements(lock);
-  if (allEnvironments.length === 0) {
-    throw new Error(
-      "Composite actions read no secrets or variables themselves. " +
-        "Run `tailor setup ci coordinate` to generate the workflow that uses them, then re-run this command.",
-    );
-  }
   const environments = selectEnvironments(allEnvironments, options.environments ?? []);
   if (logger.jsonMode) {
     logger.out(environments);

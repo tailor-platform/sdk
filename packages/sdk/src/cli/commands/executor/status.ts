@@ -5,6 +5,12 @@ import {
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { CLIError } from "#/cli/shared/errors";
 import { styles } from "#/cli/shared/logger";
+import {
+  parseProtoEnumName,
+  protoEnumLookup,
+  protoEnumName,
+  protoEnumNames,
+} from "#/cli/shared/proto-enum";
 
 // ============================================================================
 // Executor Job Status
@@ -34,45 +40,14 @@ export function colorizeExecutorJobStatus(status: string): string {
   }
 }
 
-/**
- * Check if executor job status is terminal.
- * @param status - Executor job status enum value
- * @returns True if status is terminal
- */
-function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean {
-  return isExecutorJobSuccessStatus(status) || isExecutorJobFailureStatus(status);
-}
-
-/**
- * Check if executor job status is successful.
- * @param status - Executor job status enum value
- * @returns True if status is success
- */
-function isExecutorJobSuccessStatus(status: ExecutorJobStatus): boolean {
-  return status === ExecutorJobStatus.SUCCESS;
-}
-
-/**
- * Check if executor job status is a terminal failure.
- * @param status - Executor job status enum value
- * @returns True if status is failure
- */
-function isExecutorJobFailureStatus(status: ExecutorJobStatus): boolean {
-  return status === ExecutorJobStatus.FAILED || status === ExecutorJobStatus.CANCELED;
-}
-
-/**
- * Check if executor job status can still progress.
- * @param status - Executor job status enum value
- * @returns True if status is transient
- */
-function isExecutorJobTransientStatus(status: ExecutorJobStatus): boolean {
-  return (
-    status === ExecutorJobStatus.UNSPECIFIED ||
-    status === ExecutorJobStatus.PENDING ||
-    status === ExecutorJobStatus.RUNNING
-  );
-}
+const EXECUTOR_JOB_STATUS_CLASS = {
+  [ExecutorJobStatus.UNSPECIFIED]: "transient",
+  [ExecutorJobStatus.PENDING]: "transient",
+  [ExecutorJobStatus.RUNNING]: "transient",
+  [ExecutorJobStatus.SUCCESS]: "success",
+  [ExecutorJobStatus.FAILED]: "failure",
+  [ExecutorJobStatus.CANCELED]: "failure",
+} satisfies Record<ExecutorJobStatus, ExecutorJobStatusClass>;
 
 /**
  * Classify executor job status for waiter decisions.
@@ -80,18 +55,16 @@ function isExecutorJobTransientStatus(status: ExecutorJobStatus): boolean {
  * @returns Classified executor job status
  */
 export function classifyExecutorJobStatus(status: ExecutorJobStatus): ExecutorJobStatusClass {
-  if (isExecutorJobSuccessStatus(status)) {
-    return "success";
-  }
-  if (isExecutorJobTerminalStatus(status)) {
-    return "failure";
-  }
-  if (isExecutorJobTransientStatus(status)) {
-    return "transient";
-  }
-  // Safety net: unknown future statuses are treated as transient
-  return "transient";
+  // A status newer than the stubs is treated as transient, so waiting continues until the timeout.
+  return protoEnumLookup(EXECUTOR_JOB_STATUS_CLASS, status, "transient");
 }
+
+/**
+ * Statuses accepted by the `--status` filter of `executor jobs`.
+ */
+export const EXECUTOR_JOB_STATUS_FILTER_NAMES = protoEnumNames(ExecutorJobStatus).filter(
+  (name) => name !== "UNSPECIFIED",
+);
 
 /**
  * Parse executor job status string to enum.
@@ -99,29 +72,28 @@ export function classifyExecutorJobStatus(status: ExecutorJobStatus): ExecutorJo
  * @returns ExecutorJobStatus enum value
  */
 export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
-  const upperStatus = status.toUpperCase();
-  switch (upperStatus) {
-    case "PENDING":
-      return ExecutorJobStatus.PENDING;
-    case "RUNNING":
-      return ExecutorJobStatus.RUNNING;
-    case "SUCCESS":
-      return ExecutorJobStatus.SUCCESS;
-    case "FAILED":
-      return ExecutorJobStatus.FAILED;
-    case "CANCELED":
-      return ExecutorJobStatus.CANCELED;
-    default:
-      throw CLIError({
-        code: "EXECUTOR_STATUS_INVALID",
-        message: `Invalid status: ${status}. Valid values: PENDING, RUNNING, SUCCESS, FAILED, CANCELED`,
-      });
+  const parsed = parseProtoEnumName(ExecutorJobStatus, status, [ExecutorJobStatus.UNSPECIFIED]);
+  if (parsed === undefined) {
+    throw CLIError({
+      code: "EXECUTOR_STATUS_INVALID",
+      message: `Invalid status: ${status}. Valid values: ${EXECUTOR_JOB_STATUS_FILTER_NAMES.join(", ")}`,
+    });
   }
+  return parsed;
 }
 
 // ============================================================================
 // Executor Target Type
 // ============================================================================
+
+const EXECUTOR_TARGET_TYPE_LABEL = {
+  [ExecutorTargetType.UNSPECIFIED]: "UNSPECIFIED",
+  [ExecutorTargetType.WEBHOOK]: "WEBHOOK",
+  [ExecutorTargetType.TAILOR_GRAPHQL]: "GRAPHQL",
+  [ExecutorTargetType.FUNCTION]: "FUNCTION",
+  [ExecutorTargetType.JOB_FUNCTION]: "JOB_FUNCTION",
+  [ExecutorTargetType.WORKFLOW]: "WORKFLOW",
+} satisfies Record<ExecutorTargetType, string>;
 
 /**
  * Convert executor target type enum to string.
@@ -129,20 +101,7 @@ export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
  * @returns Target type string representation
  */
 export function executorTargetTypeToString(targetType: ExecutorTargetType): string {
-  switch (targetType) {
-    case ExecutorTargetType.WEBHOOK:
-      return "WEBHOOK";
-    case ExecutorTargetType.TAILOR_GRAPHQL:
-      return "GRAPHQL";
-    case ExecutorTargetType.FUNCTION:
-      return "FUNCTION";
-    case ExecutorTargetType.JOB_FUNCTION:
-      return "JOB_FUNCTION";
-    case ExecutorTargetType.WORKFLOW:
-      return "WORKFLOW";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumLookup(EXECUTOR_TARGET_TYPE_LABEL, targetType, "UNSPECIFIED");
 }
 
 /**
@@ -151,14 +110,5 @@ export function executorTargetTypeToString(targetType: ExecutorTargetType): stri
  * @returns Trigger type string representation
  */
 export function executorTriggerTypeToString(triggerType: ExecutorTriggerType): string {
-  switch (triggerType) {
-    case ExecutorTriggerType.SCHEDULE:
-      return "SCHEDULE";
-    case ExecutorTriggerType.EVENT:
-      return "EVENT";
-    case ExecutorTriggerType.INCOMING_WEBHOOK:
-      return "INCOMING_WEBHOOK";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumName(ExecutorTriggerType, triggerType) ?? "UNSPECIFIED";
 }

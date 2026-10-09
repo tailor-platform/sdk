@@ -43,6 +43,7 @@ import { waitForExecution } from "../workflow/start";
 import {
   classifyExecutorJobStatus,
   colorizeExecutorJobStatus,
+  EXECUTOR_JOB_STATUS_FILTER_NAMES,
   executorTargetTypeToString,
   parseExecutorJobStatus,
 } from "./status";
@@ -751,8 +752,7 @@ export const jobsCommand = defineAppCommand({
     }),
     status: arg(z.string().optional(), {
       alias: "s",
-      description:
-        "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)",
+      description: `Filter by status (${EXECUTOR_JOB_STATUS_FILTER_NAMES.join(", ")}) (list mode only)`,
     }),
     attempts: arg(z.boolean().default(false), {
       description: "Show job attempts (only with job ID) (detail mode only)",

@@ -3,7 +3,7 @@ import { logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
-import { setupCoordinate, setupTarget, type SetupTargetOptions } from "./generate";
+import { setupTarget, type SetupTargetOptions } from "./generate";
 import { readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
@@ -44,12 +44,10 @@ describe("planUpdate", () => {
     );
 
     expect(plan).toMatchObject({
-      kind: "target",
-      options: {
-        migrationTest: true,
-        migrationTestLabel: "run-migration-test",
-        migrationTestEnvironment: "prod-source",
-      },
+      kind: "branch",
+      migrationTest: true,
+      migrationTestLabel: "run-migration-test",
+      migrationTestEnvironment: "prod-source",
     });
   });
 
@@ -67,18 +65,15 @@ describe("planUpdate", () => {
     );
 
     expect(plan).toEqual({
-      kind: "target",
-      options: {
-        kind: "branch",
-        workspaceName: "my-app",
-        dir: "apps/api",
-        environment: "production",
-        branch: "release",
-        erdPreview: true,
-        restrictDispatch: true,
-        force: false,
-        outputDir: "/repo",
-      },
+      kind: "branch",
+      workspaceName: "my-app",
+      dir: "apps/api",
+      environment: "production",
+      branch: "release",
+      erdPreview: true,
+      restrictDispatch: true,
+      force: false,
+      outputDir: "/repo",
     });
   });
 
@@ -88,13 +83,13 @@ describe("planUpdate", () => {
       common,
     );
 
-    expect(plan).toMatchObject({ kind: "target", options: { kind: "branch", branch: undefined } });
+    expect(plan).toMatchObject({ kind: "branch", branch: undefined });
   });
 
   test("branch: keeps the recorded branch when the lock does not say it was auto-detected", () => {
     const plan = planUpdate(lockTarget("branch", "my-app", { branch: "staging" }), common);
 
-    expect(plan).toMatchObject({ kind: "target", options: { kind: "branch", branch: "staging" } });
+    expect(plan).toMatchObject({ kind: "branch", branch: "staging" });
   });
 
   test("tag: regenerates with the recorded tag pattern, guard branch and restrict-dispatch", () => {
@@ -110,25 +105,22 @@ describe("planUpdate", () => {
     );
 
     expect(plan).toEqual({
-      kind: "target",
-      options: {
-        kind: "tag",
-        workspaceName: "my-app",
-        dir: "apps/api",
-        environment: "production",
-        tagPattern: "release-*",
-        branch: "main",
-        restrictDispatch: true,
-        force: false,
-        outputDir: "/repo",
-      },
+      kind: "tag",
+      workspaceName: "my-app",
+      dir: "apps/api",
+      environment: "production",
+      tagPattern: "release-*",
+      branch: "main",
+      restrictDispatch: true,
+      force: false,
+      outputDir: "/repo",
     });
   });
 
   test("tag: keeps the tag unguarded when no branch was recorded", () => {
     const plan = planUpdate(lockTarget("tag", "my-app", { tagPattern: "v*" }), common);
 
-    expect(plan).toMatchObject({ kind: "target", options: { kind: "tag", branch: undefined } });
+    expect(plan).toMatchObject({ kind: "tag", branch: undefined });
   });
 
   test("preview: regenerates with the recorded region, label requirement and branch", () => {
@@ -145,18 +137,15 @@ describe("planUpdate", () => {
     );
 
     expect(plan).toEqual({
-      kind: "target",
-      options: {
-        kind: "preview",
-        workspaceName: "my-app",
-        dir: "apps/api",
-        environment: "preview",
-        branch: "develop",
-        region: "asia-northeast",
-        requirePreviewLabel: true,
-        force: false,
-        outputDir: "/repo",
-      },
+      kind: "preview",
+      workspaceName: "my-app",
+      dir: "apps/api",
+      environment: "preview",
+      branch: "develop",
+      region: "asia-northeast",
+      requirePreviewLabel: true,
+      force: false,
+      outputDir: "/repo",
     });
   });
 
@@ -170,7 +159,7 @@ describe("planUpdate", () => {
       common,
     );
 
-    expect(plan).toMatchObject({ kind: "target", options: { kind: "preview", branch: undefined } });
+    expect(plan).toMatchObject({ kind: "preview", branch: undefined });
   });
 
   test.each(["branch", "preview"] as const)(
@@ -187,8 +176,8 @@ describe("planUpdate", () => {
       );
 
       expect(plan).toMatchObject({
-        kind: "target",
-        options: { dir: ["apps/erp/backend", "apps/users/backend"], extraPaths: ["modules/**"] },
+        dir: ["apps/erp/backend", "apps/users/backend"],
+        extraPaths: ["modules/**"],
       });
     },
   );
@@ -203,137 +192,7 @@ describe("planUpdate", () => {
       common,
     );
 
-    expect(plan).toMatchObject({
-      kind: "target",
-      options: { dir: ["apps/erp/backend", "apps/users/backend"] },
-    });
-  });
-
-  test("action: regenerates with the recorded name, dir and environment only", () => {
-    const plan = planUpdate(
-      lockTarget("action", "api", {
-        environment: "production",
-        dir: "apps/api",
-        hasStaticWebsites: true,
-      }),
-      common,
-    );
-
-    expect(plan).toEqual({
-      kind: "target",
-      options: {
-        kind: "action",
-        workspaceName: "api",
-        dir: "apps/api",
-        environment: "production",
-        force: false,
-        outputDir: "/repo",
-      },
-    });
-  });
-
-  test("coordinate: rebuilds the --action values from the recorded grouping", () => {
-    const plan = planUpdate(
-      lockTarget("coordinate", "apps", {
-        branch: "release",
-        branchAutoDetected: false,
-        environment: "production",
-        restrictDispatch: true,
-        actionGroups: [["front", "admin"], ["api"]],
-      }),
-      common,
-    );
-
-    expect(plan).toEqual({
-      kind: "coordinate",
-      options: {
-        coordinatorName: "apps",
-        coordinateKind: "branch",
-        actions: ["front,admin", "api"],
-        branch: "release",
-        tagPattern: undefined,
-        environment: "production",
-        restrictDispatch: true,
-        force: false,
-        outputDir: "/repo",
-      },
-    });
-  });
-
-  test("coordinate: re-detects the default branch when it was auto-detected", () => {
-    const plan = planUpdate(
-      lockTarget("coordinate", "apps", {
-        branch: "main",
-        branchAutoDetected: true,
-        actionGroups: [["api"]],
-      }),
-      common,
-    );
-
-    expect(plan).toMatchObject({ kind: "coordinate", options: { branch: undefined } });
-  });
-
-  test("coordinate: a recorded tag pattern makes it a tag coordinator", () => {
-    const plan = planUpdate(
-      lockTarget("coordinate", "apps", {
-        tagPattern: "release-*",
-        branch: "main",
-        branchAutoDetected: false,
-        actionGroups: [["api"]],
-      }),
-      common,
-    );
-
-    expect(plan).toMatchObject({
-      kind: "coordinate",
-      options: { coordinateKind: "tag", tagPattern: "release-*", branch: "main" },
-    });
-  });
-
-  test("coordinate: the recovery command for an entry without a grouping repeats its recorded flags", () => {
-    const plan = planUpdate(
-      lockTarget("coordinate", "apps", {
-        tagPattern: "v*",
-        branch: "main",
-        branchAutoDetected: false,
-        environment: "production",
-        restrictDispatch: true,
-      }),
-      common,
-    );
-
-    expect(plan).toEqual({
-      kind: "skip",
-      reason: expect.stringContaining(
-        "`tailor setup ci coordinate --name apps --tag --branch main --environment production --restrict-dispatch --action <a,b> --action <c> ...`",
-      ),
-    });
-  });
-
-  test("coordinate: the recovery command leaves out a branch that was auto-detected", () => {
-    const plan = planUpdate(
-      lockTarget("coordinate", "apps", { branch: "main", branchAutoDetected: true }),
-      common,
-    );
-
-    expect(plan).toEqual({
-      kind: "skip",
-      reason: expect.stringContaining(
-        "`tailor setup ci coordinate --name apps --action <a,b> --action <c> ...`",
-      ),
-    });
-  });
-
-  test("coordinate: skips an entry without a recorded grouping and tells how to record it", () => {
-    const plan = planUpdate(
-      lockTarget("coordinate", "apps", { actionDirs: ["apps/front", "apps/api"] }),
-      common,
-    );
-
-    expect(plan).toEqual({
-      kind: "skip",
-      reason: expect.stringContaining("tailor setup ci coordinate --name apps --action"),
-    });
+    expect(plan).toMatchObject({ dir: ["apps/erp/backend", "apps/users/backend"] });
   });
 });
 
@@ -352,7 +211,6 @@ describe("setupUpdate", () => {
     loadErdNamespaces: async () => ["tailordb"],
     loadHasMigrations: async () => false,
     loadHasSeeds: async () => false,
-    loadHasStaticWebsites: async () => false,
   };
 
   const writeAppConfig = (dir: string): void => {
@@ -402,17 +260,13 @@ describe("setupUpdate", () => {
       dir: "apps/front",
       region: "us-west",
     });
-    await generate({ kind: "action", workspaceName: "front", dir: "apps/front" });
-    await generate({ kind: "action", workspaceName: "admin", dir: "apps/admin" });
-    await generate({ kind: "action", workspaceName: "api", dir: "apps/api" });
-    await setupCoordinate({
-      coordinatorName: "apps",
-      coordinateKind: "branch",
-      actions: ["front,admin", "api"],
-      force: false,
-      outputDir: testDir,
-      gitRunner: loaders.gitRunner,
+    await generate({
+      kind: "branch",
+      workspaceName: "admin",
+      dir: "apps/admin",
+      erdPreview: false,
     });
+    await generate({ kind: "tag", workspaceName: "api", dir: "apps/api", tagPattern: "v*" });
   };
 
   test("regenerates every target with the current template so check reports no drift", async () => {
@@ -422,7 +276,7 @@ describe("setupUpdate", () => {
     await setupUpdate({ force: false, outputDir: testDir, ...loaders });
 
     expect(readLock(testDir)?.targets.map((t) => t.templateVersion)).toEqual(
-      Array(6).fill(TEMPLATE_VERSION),
+      Array(4).fill(TEMPLATE_VERSION),
     );
     vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", "ws");
     try {
@@ -458,44 +312,6 @@ describe("setupUpdate", () => {
     expect(after?.[0]?.apps?.map((app) => app.dir)).toEqual(multi.dir);
   });
 
-  test("regenerates grouped actions before the coordinator that reads them", async () => {
-    await generateMonorepo();
-    ageLock();
-    const lock = readLock(testDir);
-    if (!lock) throw new Error("Expected a lock file.");
-    writeLock(testDir, {
-      ...lock,
-      targets: lock.targets.toSorted((a, b) =>
-        a.kind === "coordinate" ? -1 : b.kind === "coordinate" ? 1 : 0,
-      ),
-    });
-
-    await expect(
-      setupUpdate({ force: false, outputDir: testDir, ...loaders }),
-    ).resolves.toBeUndefined();
-  });
-
-  test("regenerates a coordinator whose action name itself starts with tailor-", async () => {
-    writeAppConfig("apps/crm");
-    await generate({ kind: "action", workspaceName: "tailor-crm", dir: "apps/crm" });
-    await setupCoordinate({
-      coordinatorName: "apps",
-      coordinateKind: "branch",
-      actions: ["tailor-crm"],
-      force: false,
-      outputDir: testDir,
-      gitRunner: loaders.gitRunner,
-    });
-    ageLock();
-
-    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
-
-    expect(readLock(testDir)?.targets.map((t) => t.templateVersion)).toEqual([
-      TEMPLATE_VERSION,
-      TEMPLATE_VERSION,
-    ]);
-  });
-
   test("keeps going past a hand-edited target and lists it as not updated", async () => {
     await generateMonorepo();
     ageLock();
@@ -518,10 +334,8 @@ describe("setupUpdate", () => {
     expect(versions).toEqual({
       "branch front": TEMPLATE_VERSION - 1,
       "preview front": TEMPLATE_VERSION,
-      "action front": TEMPLATE_VERSION,
-      "action admin": TEMPLATE_VERSION,
-      "action api": TEMPLATE_VERSION,
-      "coordinate apps": TEMPLATE_VERSION,
+      "branch admin": TEMPLATE_VERSION,
+      "tag api": TEMPLATE_VERSION,
     });
     expect(fs.readFileSync(path.join(testDir, ".github/workflows/tailor-front.yml"), "utf-8")).toBe(
       edited,
@@ -530,7 +344,12 @@ describe("setupUpdate", () => {
 
   test("lists a CLI error's suggestion under its target, labelled as in `setup ci`", async () => {
     writeAppConfig("apps/front");
-    await generate({ kind: "action", workspaceName: "front", dir: "apps/front" });
+    await generate({
+      kind: "branch",
+      workspaceName: "front",
+      dir: "apps/front",
+      erdPreview: false,
+    });
 
     await expect(
       setupUpdate({
@@ -540,7 +359,7 @@ describe("setupUpdate", () => {
         loadConfigId: async () => "c98794dd-9bf1-480f-a5c9-bf92b3679d42",
       }),
     ).rejects.toThrow(
-      /\[action front\] [^\n]+\n {4}Suggestion: Neither can be chosen automatically/,
+      /\[branch front\] [^\n]+\n {4}Suggestion: Neither can be chosen automatically/,
     );
   });
 
@@ -555,26 +374,6 @@ describe("setupUpdate", () => {
     ).toContain("cancel-in-progress: false");
   });
 
-  test("skips a coordinator without a recorded grouping and updates the rest", async () => {
-    await generateMonorepo();
-    ageLock();
-    const lock = readLock(testDir);
-    if (!lock) throw new Error("Expected a lock file.");
-    writeLock(testDir, {
-      ...lock,
-      targets: lock.targets.map((t) =>
-        t.kind === "coordinate" ? { ...t, inputs: { ...t.inputs, actionGroups: undefined } } : t,
-      ),
-    });
-
-    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
-      /\[coordinate apps\][\s\S]*tailor setup ci coordinate --name apps/,
-    );
-    expect(
-      readLock(testDir)?.targets.filter((t) => t.templateVersion === TEMPLATE_VERSION),
-    ).toHaveLength(5);
-  });
-
   test("prints one summary instead of per-target next steps", async () => {
     await generateMonorepo();
     using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
@@ -583,7 +382,7 @@ describe("setupUpdate", () => {
     await setupUpdate({ force: false, outputDir: testDir, ...loaders });
 
     expect(infoSpy).not.toHaveBeenCalledWith("Next steps:");
-    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 6 target\(s\)/));
+    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 4 target\(s\)/));
   });
 
   test("errors when there is nothing to update", async () => {

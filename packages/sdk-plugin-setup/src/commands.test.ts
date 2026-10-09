@@ -3,19 +3,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
 import { setupSubCommands } from "./commands";
 import { setupEnv } from "./env";
-import {
-  printCoordinateNextSteps,
-  printTargetNextSteps,
-  setupCoordinate,
-  setupTarget,
-} from "./generate";
+import { printTargetNextSteps, setupTarget } from "./generate";
 import { setupUpdate } from "./update";
 
 vi.mock("./generate", () => ({
   setupTarget: vi.fn(),
-  setupCoordinate: vi.fn(),
   printTargetNextSteps: vi.fn(),
-  printCoordinateNextSteps: vi.fn(),
 }));
 
 vi.mock("./check", () => ({ checkGitHub: vi.fn() }));
@@ -107,30 +100,23 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
-  test.each([
-    ["preview", ["--region", "us-west"], { kind: "preview", region: "us-west" }],
-    ["action", [], { kind: "action" }],
-  ] as const)("ci %s dispatches to setupTarget", async (subcommand, args, expected) => {
-    const result = await runCommand(setupCommand, ["ci", subcommand, ...args]);
+  test("ci preview dispatches to setupTarget with kind preview", async () => {
+    const result = await runCommand(setupCommand, ["ci", "preview", "--region", "us-west"]);
 
     expect(result.success).toBe(true);
-    expect(setupTarget).toHaveBeenCalledWith(expect.objectContaining(expected));
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "preview", region: "us-west" }),
+    );
   });
 
-  test("ci coordinate dispatches to setupCoordinate", async () => {
-    const result = await runCommand(setupCommand, [
-      "ci",
-      "coordinate",
-      "--name",
-      "apps",
-      "--action",
-      "api",
-    ]);
+  test.each(["action", "coordinate"])("ci %s is no longer a subcommand", async (subcommand) => {
+    const result = await runCommand(setupCommand, ["ci", subcommand]);
 
-    expect(result.success).toBe(true);
-    expect(setupCoordinate).toHaveBeenCalledWith(
-      expect.objectContaining({ coordinatorName: "apps", actions: ["api"] }),
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toContain(
+      `Unknown subcommand: ${subcommand}`,
     );
+    expect(setupTarget).not.toHaveBeenCalled();
   });
 
   test("ci env prints gh commands by default", async () => {
@@ -241,37 +227,22 @@ describe("next steps", () => {
     vi.clearAllMocks();
   });
 
-  test.each([
-    [["ci", "branch"]],
-    [["ci", "tag"]],
-    [["ci", "preview", "--region", "us-west"]],
-    [["ci", "action"]],
-  ])("setup %j prints next steps for the generated target", async (argv) => {
-    const result = {
-      kind: "branch",
-      file: ".github/workflows/tailor-app.yml",
-      environment: "app",
-      configEdited: false,
-    } as const;
-    vi.mocked(setupTarget).mockResolvedValue(result);
+  test.each([[["ci", "branch"]], [["ci", "tag"]], [["ci", "preview", "--region", "us-west"]]])(
+    "setup %j prints next steps for the generated target",
+    async (argv) => {
+      const result = {
+        kind: "branch",
+        file: ".github/workflows/tailor-app.yml",
+        environment: "app",
+        configEdited: false,
+      } as const;
+      vi.mocked(setupTarget).mockResolvedValue(result);
 
-    await runCommand(setupCommand, argv);
+      await runCommand(setupCommand, argv);
 
-    expect(printTargetNextSteps).toHaveBeenCalledWith(result);
-  });
-
-  test("ci coordinate prints next steps for the generated coordinator", async () => {
-    const result = {
-      file: ".github/workflows/tailor-coordinate-apps.yml",
-      environment: "apps",
-      tailorSetupFile: ".github/actions/tailor-setup/action.yml",
-    };
-    vi.mocked(setupCoordinate).mockResolvedValue(result);
-
-    await runCommand(setupCommand, ["ci", "coordinate", "--name", "apps", "--action", "api"]);
-
-    expect(printCoordinateNextSteps).toHaveBeenCalledWith(result);
-  });
+      expect(printTargetNextSteps).toHaveBeenCalledWith(result);
+    },
+  );
 });
 
 describe("setup check command", () => {
@@ -324,8 +295,6 @@ describe("beta warning", () => {
     [["ci", "branch"]],
     [["ci", "tag"]],
     [["ci", "preview", "--region", "us-west"]],
-    [["ci", "action"]],
-    [["ci", "coordinate", "--name", "apps", "--action", "api"]],
     [["ci", "env"]],
     [["deps"]],
     [["check"]],

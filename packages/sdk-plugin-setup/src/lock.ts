@@ -25,7 +25,7 @@ function assertSafeLockPath(outputDir: string): void {
   }
 }
 
-export type TargetKind = "branch" | "tag" | "preview" | "action" | "coordinate";
+export type TargetKind = "branch" | "tag" | "preview";
 
 type LockApp = {
   dir: string;
@@ -59,10 +59,6 @@ export type LockInputs = {
   apps?: LockApp[];
   /** For branch/preview targets: `--paths` patterns added to the app directories' filter. */
   paths?: string[];
-  /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
-  actionDirs?: string[];
-  /** For `coordinate` kind: action names per deploy step, in deploy order. */
-  actionGroups?: string[][];
   erdPreview?: boolean;
   erdNamespaces?: string[];
   /** For branch targets: whether the label-triggered migration test job was generated. */
@@ -75,9 +71,7 @@ export type LockInputs = {
   migrationDriftCheck?: boolean;
   /** Whether tailor-seed-validate was generated (config used seedPlugin). */
   seedValidate?: boolean;
-  /** Whether the config had staticWebsites when setup was last run (action kind only). */
-  hasStaticWebsites?: boolean;
-  /** Whether manual dispatch may deploy only the target branch or a tag (branch/tag/coordinate). */
+  /** Whether manual dispatch may deploy only the target branch or a tag (branch/tag). */
   restrictDispatch?: boolean;
 };
 
@@ -164,6 +158,17 @@ export function readLock(outputDir: string): LockFile | null {
     throw new Error(
       `${LOCK_FILENAME} has no valid 'targets' array. The lock file is machine-owned; ` +
         "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
+    );
+  }
+  const removed = parsed.targets.find((t) => {
+    const kind: string = t.kind;
+    return kind === "coordinate" || kind === "action";
+  });
+  if (removed) {
+    throw new Error(
+      `${LOCK_FILENAME} has "${removed.workspaceName}" (${removed.kind}), a target kind that was removed. ` +
+        "Delete its generated workflow/action and lock entry, then deploy the apps from one workflow " +
+        "with `tailor setup ci branch --dir <a> --dir <b> --name <name>` (or `tag` / `preview`).",
     );
   }
   if (parsed.appIds !== undefined) parseAppIds(parsed.appIds);

@@ -646,38 +646,6 @@ describe("checkGitHub (integration)", () => {
       fs.mkdirSync(path.join(testDir, file), { recursive: true });
       await expect(check()).rejects.toThrow(/drift/);
     });
-
-    test("coordinate targets do not report config-dir drift even when no config exists at dir", async () => {
-      // Write a coordinator workflow file and a lock with only that coordinate target.
-      const wfFile = ".github/workflows/tailor-coordinate-main.yml";
-      const wfAbsPath = path.join(testDir, wfFile);
-      fs.mkdirSync(path.dirname(wfAbsPath), { recursive: true });
-      const wfContent = "# coordinator\nname: main\n";
-      fs.writeFileSync(wfAbsPath, wfContent);
-      writeLock(testDir, {
-        version: LOCK_VERSION,
-        targets: [
-          {
-            kind: "coordinate",
-            workspaceName: "main",
-            file: wfFile,
-            templateVersion: TEMPLATE_VERSION,
-            inputs: {
-              branch: "main",
-              tagPattern: null,
-              environment: "main",
-              dir: ".",
-              packageManager: "pnpm",
-            },
-            generatedIds: [],
-            contentHash: hashContent(wfContent),
-          },
-        ],
-      });
-      // Remove the root config to confirm coordinators skip the config probe.
-      fs.rmSync(path.join(testDir, "tailor.config.ts"));
-      await expect(check()).resolves.toBeUndefined();
-    });
   });
 
   describe("outside CI (isCI: false)", () => {

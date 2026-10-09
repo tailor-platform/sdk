@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
-import { extractVaultStore, loadSecretsFromConfig } from "./setup";
+import { applyDateDefault, extractVaultStore, loadSecretsFromConfig } from "./setup";
 
 describe("extractVaultStore", () => {
   test("unwraps a defineSecretManager() shape via the .vaults field", () => {
@@ -123,5 +123,28 @@ describe("loadSecretsFromConfig", () => {
     );
     const store = await loadSecretsFromConfig(path);
     expect(store).toEqual({ aws: { K: "ts-v" } });
+  });
+});
+
+describe("applyDateDefault", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
+
+  test("applyDateDefault sets the bundle gate for temporal, clears it for legacy, and restores", () => {
+    const previous = process.env[GATE];
+    try {
+      process.env[GATE] = "stale";
+      const restore = applyDateDefault("temporal");
+      expect(process.env[GATE]).toBe("temporal");
+      restore();
+      expect(process.env[GATE]).toBe("stale");
+
+      const restoreLegacy = applyDateDefault("legacy");
+      expect(process.env[GATE]).toBeUndefined();
+      restoreLegacy();
+      expect(process.env[GATE]).toBe("stale");
+    } finally {
+      if (previous === undefined) delete process.env[GATE];
+      else process.env[GATE] = previous;
+    }
   });
 });

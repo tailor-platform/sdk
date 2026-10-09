@@ -8,11 +8,14 @@ import type {
   RawRelationConfig,
 } from "#/configure/services/tailordb/types";
 import type { OperatorFieldConfig, ScriptExprKind } from "#/parser/service/tailordb/types";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 type FieldScriptContext = {
   tableName: string;
   fieldPath: readonly string[];
+  /** Representation of `t` date fields the precompiled expressions were compiled under. */
+  dateDefault?: EffectiveDateDefault;
 };
 
 type ScriptFunction = (...args: never[]) => unknown;
@@ -194,7 +197,7 @@ const convertToScriptExpr = (
   kind: ScriptContextKind,
   context: FieldScriptContext | undefined,
 ): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn, kind);
+  const precompiledExpr = getPrecompiledScriptExpr(fn, kind, context?.dateDefault);
   if (precompiledExpr) {
     return precompiledExpr;
   }
@@ -205,10 +208,25 @@ const convertToScriptExpr = (
   );
 };
 
-// oxlint-disable-next-line typescript/no-unsafe-function-type
-export const convertTypeHookToExpr = (fn: Function, op: "create" | "update"): string => {
+/**
+ * Convert a table-level hook to a script expression.
+ * @param fn - Hook function
+ * @param op - Operation the hook runs on
+ * @param dateDefault - Representation of `t` date fields the precompiled expression was compiled under
+ * @returns JavaScript expression calling the function
+ */
+export const convertTypeHookToExpr = (
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
+  fn: Function,
+  op: "create" | "update",
+  dateDefault?: EffectiveDateDefault,
+): string => {
   const kind = `typeHook.${op}` as const;
-  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown, kind);
+  const precompiledExpr = getPrecompiledScriptExpr(
+    fn as (...args: never[]) => unknown,
+    kind,
+    dateDefault,
+  );
   if (precompiledExpr) {
     return precompiledExpr;
   }
@@ -216,11 +234,21 @@ export const convertTypeHookToExpr = (fn: Function, op: "create" | "update"): st
   return assertParsableExpression(`(${normalized})(${buildHookCallArgs(kind)})`, "type-hook");
 };
 
-// oxlint-disable-next-line typescript/no-unsafe-function-type
-export const convertTypeValidateToExpr = (fn: Function): string => {
+/**
+ * Convert a table-level validator to a script expression.
+ * @param fn - Validator function
+ * @param dateDefault - Representation of `t` date fields the precompiled expression was compiled under
+ * @returns JavaScript expression calling the function
+ */
+export const convertTypeValidateToExpr = (
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
+  fn: Function,
+  dateDefault?: EffectiveDateDefault,
+): string => {
   const precompiledExpr = getPrecompiledScriptExpr(
     fn as (...args: never[]) => unknown,
     "typeValidate",
+    dateDefault,
   );
   if (precompiledExpr) {
     return precompiledExpr;

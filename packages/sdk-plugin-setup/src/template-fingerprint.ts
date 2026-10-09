@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 import {
-  renderActionWorkflow,
   renderBranchWorkflow,
-  renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   type PackageManager,
@@ -37,54 +35,6 @@ function renderAll(): RenderedTemplate[] {
     add(
       `preview/${packageManager}`,
       renderPreviewWorkflow({ ...base, branch: "main", region: "us-west" }),
-    );
-    for (const [name, target] of [
-      ["branch", { kind: "branch", branch: "main", restrictDispatch: true }],
-      ["branch-unrestricted", { kind: "branch", branch: "main" }],
-      ["tag", { kind: "tag", tagPattern: "v*", branch: "main", restrictDispatch: true }],
-      ["tag-unguarded", { kind: "tag", tagPattern: "v*" }],
-      ["tag-guarded-unrestricted", { kind: "tag", tagPattern: "v*", branch: "main" }],
-      ["tag-unguarded-restricted", { kind: "tag", tagPattern: "v*", restrictDispatch: true }],
-    ] as const) {
-      add(
-        `coordinate-${name}/${packageManager}`,
-        renderCoordinateWorkflow({
-          coordinatorName: "platform",
-          ...target,
-          environment: "production",
-          packageManager,
-          actionGroups: [
-            { id: "core", apps: [{ name: "ims", dir: "apps/ims", hasStaticWebsites: true }] },
-            {
-              id: "apps",
-              apps: [
-                { name: "crm", dir: "apps/crm", hasStaticWebsites: true },
-                { name: "pos", dir: "apps/pos" },
-              ],
-            },
-            { id: "web", apps: [{ name: "web", dir: "." }] },
-          ],
-        }),
-      );
-    }
-    add(
-      `coordinate-root-group/${packageManager}`,
-      renderCoordinateWorkflow({
-        coordinatorName: "platform",
-        kind: "branch",
-        branch: "main",
-        environment: "production",
-        packageManager,
-        actionGroups: [
-          {
-            id: "all",
-            apps: [
-              { name: "web", dir: ".", hasStaticWebsites: true },
-              { name: "crm", dir: "apps/crm" },
-            ],
-          },
-        ],
-      }),
     );
   }
 
@@ -193,15 +143,6 @@ function renderAll(): RenderedTemplate[] {
       region: "us-west",
       apps,
       extraPaths,
-    }),
-  );
-  add("action/minimal", renderActionWorkflow({ workspaceName: "my-app" }));
-  add(
-    "action/full",
-    renderActionWorkflow({
-      workspaceName: "my-app",
-      workingDirectory: "apps/backend",
-      hasStaticWebsites: true,
     }),
   );
   return out;

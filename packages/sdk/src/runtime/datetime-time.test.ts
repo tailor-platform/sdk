@@ -48,8 +48,8 @@ describe("Datetime and time representations", () => {
     expectTypeOf<output<ReturnType<typeof dynamicTime>>>().toEqualTypeOf<
       string | Date | Temporal.PlainTime
     >();
-    expect(defaults.fields.at?.metadata).not.toHaveProperty("as");
-    expect(defaults.fields.time?.metadata).not.toHaveProperty("as");
+    expect(defaults.fields.at?.metadata.as).toBe("default");
+    expect(defaults.fields.time?.metadata.as).toBe("default");
   });
 
   test.each(["date", "temporal"] as const)(

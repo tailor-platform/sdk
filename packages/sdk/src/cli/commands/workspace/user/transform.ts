@@ -1,5 +1,6 @@
 import { WorkspacePlatformUserRole } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 import { CLIError } from "#/cli/shared/errors";
+import { parseProtoEnumName, protoEnumName, protoEnumNames } from "#/cli/shared/proto-enum";
 import type { WorkspacePlatformUser } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 export interface UserInfo {
@@ -8,33 +9,30 @@ export interface UserInfo {
   role: string;
 }
 
+type RoleName = Lowercase<Exclude<keyof typeof WorkspacePlatformUserRole, "UNSPECIFIED">>;
+
+export const validRoles = protoEnumNames(WorkspacePlatformUserRole)
+  .filter((name) => name !== "UNSPECIFIED")
+  .map((name) => name.toLowerCase()) as RoleName[];
+
 const roleToString = (role: WorkspacePlatformUserRole): string => {
-  switch (role) {
-    case WorkspacePlatformUserRole.ADMIN:
-      return "admin";
-    case WorkspacePlatformUserRole.EDITOR:
-      return "editor";
-    case WorkspacePlatformUserRole.VIEWER:
-      return "viewer";
-    default:
-      return "unknown";
-  }
+  const name = protoEnumName(WorkspacePlatformUserRole, role);
+  return name === undefined || role === WorkspacePlatformUserRole.UNSPECIFIED
+    ? "unknown"
+    : name.toLowerCase();
 };
 
 export const stringToRole = (role: string): WorkspacePlatformUserRole => {
-  switch (role.toLowerCase()) {
-    case "admin":
-      return WorkspacePlatformUserRole.ADMIN;
-    case "editor":
-      return WorkspacePlatformUserRole.EDITOR;
-    case "viewer":
-      return WorkspacePlatformUserRole.VIEWER;
-    default:
-      throw CLIError({
-        code: "WORKSPACE_ROLE_INVALID",
-        message: `Invalid role: ${role}. Valid roles: admin, editor, viewer`,
-      });
+  const parsed = parseProtoEnumName(WorkspacePlatformUserRole, role, [
+    WorkspacePlatformUserRole.UNSPECIFIED,
+  ]);
+  if (parsed === undefined) {
+    throw CLIError({
+      code: "WORKSPACE_ROLE_INVALID",
+      message: `Invalid role: ${role}. Valid roles: ${validRoles.join(", ")}`,
+    });
   }
+  return parsed;
 };
 
 export const userInfo = (user: WorkspacePlatformUser): UserInfo => {
@@ -44,5 +42,3 @@ export const userInfo = (user: WorkspacePlatformUser): UserInfo => {
     role: roleToString(user.role),
   };
 };
-
-export const validRoles = ["admin", "editor", "viewer"] as const;
