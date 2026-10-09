@@ -46,6 +46,20 @@ export function formatMigrationSkipSteps(
   return entries.length > 0 ? entries.join(",") : undefined;
 }
 
+/**
+ * Keep the requested skips that belong to the namespaces of one config.
+ * @param requested - Steps to skip, keyed by namespace
+ * @param namespaces - TailorDB namespaces of the config
+ * @returns The requested skips for those namespaces
+ */
+export function selectSkipStepsOfNamespaces(
+  requested: ReadonlyMap<string, readonly string[]> | undefined,
+  namespaces: Iterable<string>,
+): Map<string, readonly string[]> {
+  const own = new Set(namespaces);
+  return new Map([...(requested ?? [])].filter(([namespace]) => own.has(namespace)));
+}
+
 export interface MigrationSkipStepsCheck {
   client: OperatorClient;
   workspaceId: string;

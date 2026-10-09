@@ -309,6 +309,29 @@ describe("planTailorDB (service level)", () => {
     expect(result.context.migrationTestBaselines).toBeUndefined();
   });
 
+  describe("steps to skip", () => {
+    const plan = (migrationSkipSteps: ReadonlyMap<string, readonly string[]>) =>
+      planTailorDB({
+        client: createMockClient([]),
+        workspaceId,
+        application: createMockApplication([createMockTailorDBService("tailordb")]),
+        forRemoval: false,
+        config: mockConfig,
+        migrationSkipSteps,
+      });
+
+    test("rejects a skip with no partially applied migration while planning, so a dry run reports it too", async () => {
+      await expect(plan(new Map([["tailordb", ["backfillUser"]]]))).rejects.toMatchObject({
+        code: "MIGRATION_SKIP_STEPS_INVALID",
+        context: { namespace: "tailordb", requested: ["backfillUser"] },
+      });
+    });
+
+    test("leaves a skip for another config's namespace to that config", async () => {
+      await expect(plan(new Map([["other-app-ns", ["backfillUser"]]]))).resolves.toBeDefined();
+    });
+  });
+
   describe("rename scenarios (service level)", () => {
     test("old service is deleted when renamed", async () => {
       const client = createMockClient([{ name: "old-tailordb", label: appName }]);

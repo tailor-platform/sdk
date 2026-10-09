@@ -46,7 +46,7 @@ import {
   warnTablesLeftRestricted,
   type MigrationRestrictionState,
 } from "./migration-execution";
-import { assertMigrationSkipSteps } from "./migration-skip-steps";
+import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import {
   migrationFileStatesEqual,
   validateAndDetectMigrations,
@@ -233,10 +233,9 @@ async function validateTailorDBMigrationState(
   await assertMigrationSkipSteps({
     client,
     workspaceId: context.workspaceId,
-    requested: new Map(
-      [...(context.migrationSkipSteps ?? [])].filter(([namespace]) =>
-        context.tailorDBInputs.some((input) => input.namespace === namespace),
-      ),
+    requested: selectSkipStepsOfNamespaces(
+      context.migrationSkipSteps,
+      context.tailorDBInputs.map((input) => input.namespace),
     ),
     pendingMigrations: validation.pendingMigrations,
     inProgressByNamespace: validation.inProgressMigrations,
