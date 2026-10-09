@@ -29,8 +29,8 @@ import {
   deleteKeyringTokens,
 } from "./token-store";
 
-// strip unknown keys
-const pfProfileSchema = z.object({
+// Config schemas keep unknown keys so that rewriting a file written by a newer SDK does not drop them.
+const pfProfileSchema = z.looseObject({
   user: z.string(),
   workspace_id: z.string(),
   readonly: z.boolean().optional(),
@@ -41,21 +41,18 @@ const pfProfileSchema = z.object({
   console_url: z.url().optional(),
 });
 
-// strip unknown keys
-const pfUserSchemaV1 = z.object({
+const pfUserSchemaV1 = z.looseObject({
   access_token: z.string(),
   refresh_token: z.string().optional(),
   token_expires_at: z.string(),
 });
 
-// strip unknown keys
-const pfUserKeyringSchema = z.object({
+const pfUserKeyringSchema = z.looseObject({
   storage: z.literal("keyring"),
   token_expires_at: z.string(),
 });
 
-// strip unknown keys
-const pfUserFileSchema = z.object({
+const pfUserFileSchema = z.looseObject({
   storage: z.literal("file"),
   token_expires_at: z.string(),
   access_token: z.string(),
@@ -74,8 +71,7 @@ const pfUserFileSchemaV3 = pfUserFileSchema.extend({
 
 const pfUserSchemaV3 = z.discriminatedUnion("storage", [pfUserKeyringSchemaV3, pfUserFileSchemaV3]);
 
-// strip unknown keys
-const pfConfigSchemaV1 = z.object({
+const pfConfigSchemaV1 = z.looseObject({
   version: z.literal(1),
   users: z.partialRecord(z.string(), pfUserSchemaV1),
   profiles: z.partialRecord(z.string(), pfProfileSchema),
@@ -95,8 +91,7 @@ const semverSchema = z.templateLiteral([
   z.number().int(),
 ]);
 
-// strip unknown keys
-const pfConfigSchemaV2 = z.object({
+const pfConfigSchemaV2 = z.looseObject({
   version: z.literal(V2_CONFIG_VERSION),
   min_sdk_version: semverSchema,
   latest_version: z.number().int().optional(),
@@ -106,8 +101,7 @@ const pfConfigSchemaV2 = z.object({
   current_user: z.string().nullable(),
 });
 
-// strip unknown keys
-const pfConfigSchemaV3 = z.object({
+const pfConfigSchemaV3 = z.looseObject({
   version: z.literal(LATEST_CONFIG_VERSION),
   min_sdk_version: semverSchema,
   latest_version: z.number().int().optional(),
@@ -319,6 +313,26 @@ function hasCurrentUserEntry(users: PfConfigV1["users"], currentUser: string): b
   return hasUserKeyForName(users, currentUser);
 }
 
+type ObjectSchema = { shape: object };
+
+function declaredKeys(...schemas: ObjectSchema[]): Set<string> {
+  return new Set(schemas.flatMap((schema) => Object.keys(schema.shape)));
+}
+
+const v2ConfigKeys = declaredKeys(pfConfigSchemaV2);
+const v2UserKeys = declaredKeys(pfUserKeyringSchema, pfUserFileSchema);
+const profileKeys = declaredKeys(pfProfileSchema);
+// An older format does not validate keys a later format declares, so migration drops them.
+const v2OnlyConfigKeys = v2ConfigKeys.difference(declaredKeys(pfConfigSchemaV1));
+const v3OnlyConfigKeys = declaredKeys(pfConfigSchemaV3).difference(v2ConfigKeys);
+const v3OnlyUserKeys = declaredKeys(pfUserKeyringSchemaV3, pfUserFileSchemaV3).difference(
+  v2UserKeys,
+);
+
+function withoutKeys<T extends object>(entry: T, keys: ReadonlySet<string>): T {
+  return Object.fromEntries(Object.entries(entry).filter(([key]) => !keys.has(key))) as T;
+}
+
 /**
  * Migrate a v1 config to v2.
  * Tokens are kept in the config file (storage: "file") during migration.
@@ -332,20 +346,14 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfigV2 {
   for (const [name, v1User] of Object.entries(v1Config.users)) {
     if (!v1User) continue;
 
-    users[name] = {
-      access_token: v1User.access_token,
-      refresh_token: v1User.refresh_token,
-      token_expires_at: v1User.token_expires_at,
-      storage: "file",
-    };
+    users[name] = { ...withoutKeys(v1User, v3OnlyUserKeys), storage: "file" };
   }
 
   return {
+    ...withoutKeys(v1Config, v2OnlyConfigKeys),
     version: V2_CONFIG_VERSION,
     min_sdk_version: V2_MIN_SDK_VERSION,
     users,
-    profiles: v1Config.profiles,
-    current_user: v1Config.current_user,
   };
 }
 
@@ -360,17 +368,16 @@ function migrateV2ToV3(v2Config: PfConfigV2): PfConfig {
     if (!entry) continue;
     const email = inferEmailFromUserId(user);
     users[user] = {
-      ...entry,
+      ...withoutKeys(entry, v3OnlyUserKeys),
       ...(email ? { email } : {}),
     };
   }
 
   return {
+    ...withoutKeys(v2Config, v3OnlyConfigKeys),
     version: LATEST_CONFIG_VERSION,
     min_sdk_version: V3_MIN_SDK_VERSION,
     users,
-    profiles: v2Config.profiles,
-    current_user: v2Config.current_user,
   };
 }
 
@@ -517,9 +524,18 @@ function hasScopedUserKeys(config: Pick<PfConfig | PfConfigV1, "users">): boolea
   return Object.keys(config.users).some((userKey) => userKey.includes("|"));
 }
 
-function hasUserEmailMetadata(config: Pick<PfConfig | PfConfigV1, "users">): boolean {
-  return Object.values(config.users).some(
-    (user) => user != null && "email" in user && user.email !== undefined,
+function hasKeysOutside(entry: object | undefined, knownKeys: ReadonlySet<string>): boolean {
+  return (
+    entry !== undefined &&
+    Object.entries(entry).some(([key, value]) => value !== undefined && !knownKeys.has(key))
+  );
+}
+
+function hasFieldsUnknownToV2(config: PfConfig | PfConfigV2 | PfConfigV1): boolean {
+  return (
+    hasKeysOutside(config, v2ConfigKeys) ||
+    Object.values(config.users).some((user) => hasKeysOutside(user, v2UserKeys)) ||
+    Object.values(config.profiles).some((profile) => hasKeysOutside(profile, profileKeys))
   );
 }
 
@@ -538,9 +554,10 @@ function toLatestForDisk(config: PfConfig | PfConfigV2 | PfConfigV1): PfConfigV3
  * backward compatibility, so an older SDK can still read the file. Configs
  * containing a keyring user are kept in V2 or later because the keyring storage
  * variant is not representable in V1. Configs containing profile-level Platform
- * settings, platform-scoped user tokens, canonical user IDs, or email metadata
- * are written in the latest min-SDK-gated format because older SDKs would
- * silently drop or misread those settings.
+ * settings, platform-scoped user tokens, canonical user IDs, email metadata, or
+ * any other field the V2 format does not define are written in the latest
+ * min-SDK-gated format because older SDKs would silently drop or misread those
+ * settings.
  *
  * The config file may contain access/refresh tokens when the OS keyring is
  * unavailable, so it is written via {@link writeSecretFile} so other users
@@ -555,12 +572,29 @@ export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) 
     config.version === LATEST_CONFIG_VERSION ||
     hasProfilePlatformSettings(config) ||
     hasScopedUserKeys(config) ||
-    hasUserEmailMetadata(config)
+    hasFieldsUnknownToV2(config)
       ? toLatestForDisk(config)
       : config.version === V2_CONFIG_VERSION && !hasKeyringUser
         ? toV1ForDisk(config)
         : config;
-  writeSecretFile(configPath, stringifyYAML(diskConfig));
+  writeSecretFile(
+    configPath,
+    stringifyYAML(
+      diskConfig.version === 1
+        ? diskConfig
+        : { ...diskConfig, users: withoutKeyringFileTokens(diskConfig.users) },
+    ),
+  );
+}
+
+function withoutKeyringFileTokens(users: PfConfig["users"] | PfConfigV2["users"]) {
+  return Object.fromEntries(
+    Object.entries(users).map(([userKey, entry]) => {
+      if (entry?.storage !== "keyring") return [userKey, entry];
+      const { access_token: _accessToken, refresh_token: _refreshToken, ...keyringEntry } = entry;
+      return [userKey, keyringEntry];
+    }),
+  );
 }
 
 function validateUUID(value: string, source: string): string {
@@ -898,6 +932,41 @@ export async function resolveTokens(
   return tokens;
 }
 
+function userExtraFields(entry: PfUser | undefined) {
+  if (!entry) return {};
+  const {
+    storage: _storage,
+    access_token: _accessToken,
+    refresh_token: _refreshToken,
+    token_expires_at: _tokenExpiresAt,
+    email: _email,
+    ...extraFields
+  } = entry;
+  return extraFields;
+}
+
+type RemoveUserAliasOptions = {
+  carryExtraFields: boolean;
+};
+
+async function removeUserAlias(
+  config: PfConfig,
+  aliasKey: string,
+  canonicalKey: string,
+  opts: RemoveUserAliasOptions,
+) {
+  const entry = config.users[aliasKey];
+  if (aliasKey === canonicalKey || !entry) return;
+  const canonicalEntry = config.users[canonicalKey];
+  if (opts.carryExtraFields && canonicalEntry) {
+    config.users[canonicalKey] = { ...userExtraFields(entry), ...canonicalEntry };
+  }
+  if (entry.storage === "keyring") {
+    await deleteKeyringTokens(aliasKey);
+  }
+  delete config.users[aliasKey];
+}
+
 /**
  * Save tokens for a user, writing to keyring by default when available.
  * @param config - Platform config
@@ -917,18 +986,22 @@ export async function saveUserTokens(
 ): Promise<void> {
   registerTokenSecrets(tokens);
   const userKey = platformUserKey(user, opts.platformConfig);
-  const email = opts.email ?? config.users[userKey]?.email;
+  const existing = config.users[userKey];
+  const extraFields = userExtraFields(existing);
+  const email = opts.email ?? existing?.email;
   if (await trySaveTokensInKeyring(userKey, tokens)) {
     config.users[userKey] = {
+      ...extraFields,
       token_expires_at: expiresAt,
       storage: "keyring",
       ...(email ? { email } : {}),
     };
   } else {
-    if (config.users[userKey]?.storage === "keyring") {
+    if (existing?.storage === "keyring") {
       await deleteKeyringTokens(userKey);
     }
     config.users[userKey] = {
+      ...extraFields,
       access_token: tokens.accessToken,
       refresh_token: tokens.refreshToken,
       token_expires_at: expiresAt,
@@ -1013,15 +1086,12 @@ export async function removeLegacyUserAlias(
   if (legacyUser === canonicalUser) return;
   updateUserReferences(config, legacyUser, canonicalUser);
   const canonicalKey = platformUserKey(canonicalUser, platformConfig);
-  const legacyKeys = new Set([legacyUser, platformUserKey(legacyUser, platformConfig)]);
-  for (const legacyKey of legacyKeys) {
-    if (legacyKey === canonicalKey) continue;
-    const entry = config.users[legacyKey];
-    if (entry?.storage === "keyring") {
-      await deleteKeyringTokens(legacyKey);
-    }
-    delete config.users[legacyKey];
-  }
+  const scopedLegacyKey = platformUserKey(legacyUser, platformConfig);
+  await removeUserAlias(config, scopedLegacyKey, canonicalKey, { carryExtraFields: true });
+  const legacyKeyServesThisPlatform = canUseLegacyUserKey(getPlatformBaseUrl(platformConfig));
+  await removeUserAlias(config, legacyUser, canonicalKey, {
+    carryExtraFields: legacyKeyServesThisPlatform,
+  });
 }
 
 function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean {
@@ -1130,14 +1200,9 @@ export async function fetchLatestToken(
     { platformConfig, email },
   );
   await removeLegacyUserAlias(config, user, resolvedUser, platformConfig);
-  const canonicalKey = platformUserKey(resolvedUser, platformConfig);
-  if (storedUser !== canonicalKey) {
-    const entry = config.users[storedUser];
-    if (entry?.storage === "keyring") {
-      await deleteKeyringTokens(storedUser);
-    }
-    delete config.users[storedUser];
-  }
+  await removeUserAlias(config, storedUser, platformUserKey(resolvedUser, platformConfig), {
+    carryExtraFields: true,
+  });
   if (previousEmail && email && previousEmail !== email) {
     logger.info(`Updated local user email from "${previousEmail}" to "${email}".`);
   }
