@@ -415,17 +415,17 @@ type ObserveRunParams = CollectJobOutcomesOptions & PollExecutionOptions;
 
 /**
  * Whether a function execution has logged {@link MIGRATION_SCRIPT_STARTED_LOG}. A failed read
- * counts as not yet, so observing a run never fails it.
+ * does not fail the run being observed.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param executionId - Function execution id
- * @returns Whether the start was logged
+ * @returns Whether the start was logged, or undefined when the logs could not be read
  */
 async function hasLoggedScriptStart(
   client: OperatorClient,
   workspaceId: string,
   executionId: string,
-): Promise<boolean> {
+): Promise<boolean | undefined> {
   try {
     const { execution } = await client.getFunctionExecution({ workspaceId, executionId });
     return (
@@ -437,7 +437,7 @@ async function hasLoggedScriptStart(
         error instanceof Error ? error.message : String(error)
       }`,
     );
-    return false;
+    return undefined;
   }
 }
 
@@ -458,6 +458,7 @@ async function observeRun(
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
   const started = new Set<string>();
   let running = false;
+  const unreadRunningJobs = new Set<string>();
   onRunEvent?.({ type: "waiting", at: performance.now() });
 
   const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval, {
@@ -465,12 +466,12 @@ async function observeRun(
     onActive: async (active) => {
       let nowRunning = false;
       for (const job of active.jobExecutions) {
+        if (job.status !== WorkflowJobExecution_Status.RUNNING || !params.runsScript(job)) continue;
         const id = job.executionId;
-        if (job.status !== WorkflowJobExecution_Status.RUNNING || !id || !params.runsScript(job)) {
-          continue;
-        }
-        if (!started.has(id) && (await hasLoggedScriptStart(client, workspaceId, id))) {
-          started.add(id);
+        if (!started.has(id)) {
+          const logged = id ? await hasLoggedScriptStart(client, workspaceId, id) : undefined;
+          if (logged === undefined) unreadRunningJobs.add(job.id);
+          if (logged) started.add(id);
         }
         if (started.has(id)) {
           nowRunning = true;
@@ -488,8 +489,12 @@ async function observeRun(
   const finishedAt = performance.now();
 
   let outcomes = await collectJobOutcomes(client, workspaceId, execution, params);
+  // A start found only in the final logs is timed at the end of the run, which is only close
+  // when every running job's logs were read while it ran.
+  const finalLogsCount = unreadRunningJobs.size === 0;
   const startLogPending = () =>
     started.size === 0 &&
+    finalLogsCount &&
     !outcomes.scriptStarted &&
     execution.status === WorkflowExecution_Status.SUCCESS;
   for (let reread = 0; reread < START_LOG_REREADS && startLogPending(); reread++) {
@@ -499,7 +504,7 @@ async function observeRun(
   onRunEvent?.({
     type: "finished",
     at: finishedAt,
-    scriptStarted: started.size > 0 || outcomes.scriptStarted,
+    scriptStarted: started.size > 0 || (finalLogsCount && outcomes.scriptStarted),
   });
   return { execution, outcomes };
 }

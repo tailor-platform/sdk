@@ -660,18 +660,18 @@ This split is what allows existing rows to be backfilled before the database sta
 
 While `tailor deploy` applies pending migrations, the migrating namespaces' tables are in maintenance mode (see [GraphQL Operations](./tailordb.md#graphql-operations)). After the migrations are applied, deploy reports how long that lasted, split into phases:
 
-| Phase              | Covers                                                                       |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `restrict`         | Putting the tables into maintenance mode                                     |
-| `pre-migration`    | Pre-migration schema changes                                                 |
-| `job setup`        | Bundling `migrate.ts` and registering it as a job                            |
-| `waiting to start` | Time when the platform has accepted the job but none of its code runs yet    |
-| `running`          | Time when the script runs                                                    |
-| `job cleanup`      | Collecting the script's logs and removing its job, unless it exports `steps` |
-| `post-migration`   | Post-migration schema changes, the checkpoint update, and cleanup            |
-| `restore`          | Taking the tables out of maintenance mode                                    |
+| Phase              | Covers                                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `restrict`         | Putting the tables into maintenance mode                                                 |
+| `pre-migration`    | Pre-migration schema changes                                                             |
+| `job setup`        | Bundling `migrate.ts` and registering it as a job                                        |
+| `waiting to start` | Time when the platform has accepted the job but none of its code runs yet                |
+| `running`          | Time when the script runs                                                                |
+| `job cleanup`      | Collecting the script's logs and removing its job, unless its steps run as separate jobs |
+| `post-migration`   | Post-migration schema changes, the checkpoint update, and cleanup                        |
+| `restore`          | Taking the tables out of maintenance mode                                                |
 
-Phases that repeat across several migrations are added up. When deploy resumes a migration that an earlier deploy left in progress, the tables were already in maintenance mode before it started, and the report covers only this deploy. A job can be reported as started on the platform well before its code runs, so deploy tells waiting from running by a line every job of a migration logs before your script: `[tailor-sdk] migration script started`. You may see that line in function execution logs; deploy leaves it out of the logs it prints. A script that exports [`steps`](#splitting-a-migration-into-steps) waits for each step's job to start, and that time counts as `waiting to start` too. When deploy never sees the line — for example, while it waits for a run that an older SDK version started — the time is reported as `waiting to start or running` instead.
+Phases that repeat across several migrations are added up. When deploy resumes a migration that an earlier deploy left in progress, the tables were already in maintenance mode before it started, and the report covers only this deploy. A job can be reported as started on the platform well before its code runs, so deploy tells waiting from running by a line every job of a migration logs before your script: `[tailor-sdk] migration script started`. You may see that line in function execution logs; deploy leaves it out of the logs it prints. A script that exports [`steps`](#splitting-a-migration-into-steps) waits for each step's job to start, and that time counts as `waiting to start` too. When deploy cannot tell when the script started — because an older SDK version started the run and it never logs the line, or because a running job's logs could not be read — the time is reported as `waiting to start or running` instead.
 
 Deploy checks the run every few seconds, so a boundary between `waiting to start` and `running` can be off by that much. With `--json`, the same breakdown is in `tailordbMaintenance` (see [Deploy JSON result](../cli/application.md#deploy)). Add `--verbose` to also print how long each phase took and every change in the job's status.
 
@@ -718,7 +718,7 @@ tailor deploy --no-schema-check
 
 ℹ Using machine user: admin-machine-user for namespace 'tailordb'
 10:42:31 AM ℹ Migration tailordb/0002 started running after waiting 15m02s for its job to start.
-✔ Migration tailordb/0002 completed successfully (waiting to start 15m02s, running 1m41s)
+✓ Migration tailordb/0002 completed successfully (waiting to start 15m02s, running 1m41s)
 
 ✔ All data migrations completed successfully.
 ℹ Tables of namespace tailordb were in maintenance mode for 16m56s (restrict 1.2s, pre-migration 3.4s, job setup 2.1s, waiting to start 15m02s, running 1m41s, job cleanup 0.8s, post-migration 4.0s, restore 1.1s).

@@ -717,6 +717,52 @@ describe("observing when the migration script runs", () => {
     expect(raw.getFunctionExecution).toHaveBeenCalledTimes(1);
   });
 
+  test("does not trust a start first seen in the final logs of a run it could not read", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
+    );
+    raw.getFunctionExecution
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable));
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: true, logs: "INFO done" });
+    expect(events).toEqual(["waiting", "finished:false"]);
+  });
+
+  test("does not trust a start first seen in the final logs of a job it could not identify", async () => {
+    const { client } = observedClient(
+      [
+        { status: WorkflowExecution_Status.RUNNING, jobs: [{ executionId: "", status: running }] },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
+    );
+
+    const { result, events } = runObserved(client);
+
+    await result;
+    expect(events).toEqual(["waiting", "finished:false"]);
+  });
+
   test("keeps polling when a job's logs cannot be read", async () => {
     const { client, raw } = observedClient(
       [
