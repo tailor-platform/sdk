@@ -11,6 +11,7 @@
 
 import * as fs from "node:fs/promises";
 import { CLIError } from "#/cli/shared/errors";
+import { isMigrationStepName } from "#/utils/migration-steps";
 import { formatFieldShape, isSingleValueToArrayChange } from "./field-type-change";
 import { writeMigrationTypeFiles } from "./pglite-schema-generator";
 import { isBreakingForeignKeyRetarget } from "./rename-detection";
@@ -21,6 +22,7 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
   DiffChange,
@@ -29,9 +31,7 @@ import type {
   TableRenamedChange,
 } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
-
-/** Marker left in generated migration scripts until their normalization logic is reviewed. */
-export const MIGRATION_REVIEW_REQUIRED_MARKER = "TODO(tailor-migration-review)";
+import type { MigrationScriptForm } from "./script-form";
 
 /**
  * Check if a file exists
@@ -117,6 +117,8 @@ export async function generateSchemaFile(
  * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
  * column types instead of their `Date`/`string` defaults. Should match whatever
  * `kyselyTypePlugin` was configured with. Defaults to `false`.
+ * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back; every row already holds a value there
  * @returns {Promise<GenerateDiffResult>} Generated file info
  */
 export async function generateDiffFiles(
@@ -127,6 +129,8 @@ export async function generateDiffFiles(
   description?: string,
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
+  dateDefault: EffectiveDateDefault = "legacy",
+  finishedExpansions: readonly ExpandContractPlan[] = [],
 ): Promise<GenerateDiffResult> {
   // Create migration directory
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
@@ -160,7 +164,11 @@ export async function generateDiffFiles(
   };
 
   if (writeScript) {
-    const scriptContent = generateMigrationScript(diffWithDescription, expandPlans);
+    const scriptContent = generateMigrationScript(
+      diffWithDescription,
+      expandPlans,
+      finishedExpansions,
+    );
     await fs.writeFile(migrateFilePath, scriptContent);
     result.migrateFilePath = migrateFilePath;
 
@@ -174,6 +182,7 @@ export async function generateDiffFiles(
       migrationNumber,
       expandPlans,
       temporal,
+      dateDefault,
     });
     result.dbTypesFilePath = typeFiles.dbTypesPath;
     result.pgliteSchemaFilePath = typeFiles.pgliteSchemaPath;
@@ -198,6 +207,8 @@ interface GenerateDataOnlyFilesOptions {
    * was configured with. Defaults to `false`.
    */
   temporal?: boolean;
+  /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /** Files written for a data-only migration. */
@@ -221,7 +232,14 @@ interface GenerateDataOnlyFilesResult {
 export async function generateDataOnlyMigrationFiles(
   options: GenerateDataOnlyFilesOptions,
 ): Promise<GenerateDataOnlyFilesResult> {
-  const { migrationsDir, migrationNumber, snapshot, description, temporal = false } = options;
+  const {
+    migrationsDir,
+    migrationNumber,
+    snapshot,
+    description,
+    temporal = false,
+    dateDefault = "legacy",
+  } = options;
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
   await fs.mkdir(migrationDir, { recursive: true });
 
@@ -243,6 +261,7 @@ export async function generateDataOnlyMigrationFiles(
     migrationsDir,
     migrationNumber,
     temporal,
+    dateDefault,
   });
 
   return {
@@ -267,19 +286,363 @@ function generateDataOnlyMigrationScript(namespace: string): string {
  * This migration carries no schema change; it exists to run this script.
  * Edit this file to implement the data transformation.
  *
- * \`main\` runs in one transaction managed by the deploy command.
- * If any operation fails, all of its changes are rolled back.
- *
- * To commit a long data migration in parts,
- * export \`steps\` instead of \`main\`: each step runs in its own transaction.
- * See "Splitting a migration into steps" in the TailorDB migration docs.
+${scriptNotes()}
  */
 
-import type { Transaction } from "./db";
-
-export async function main(trx: Transaction): Promise<void> {
-  // TODO: Implement the data transformation for this migration
+${renderScript('  void TODO("implement the data transformation for this migration");', "")}`;
 }
+
+/**
+ * Header lines describing how the steps of the script run
+ * @returns Comment lines, each starting with ` *`
+ */
+function scriptNotes(): string {
+  return ` * A script with one step runs like \`main\`, in one transaction. Once it has several
+ * steps, each runs in its own transaction and commits on its own, and a deploy that
+ * fails after a step committed resumes from the steps that have not completed, so
+ * write every step to be safe to run again. Split a step into several steps
+ * where the work divides, and order them with \`dependsOn\`.
+ * See "Splitting a migration into steps" in the TailorDB migration docs.`;
+}
+
+/** A step of a generated `steps` script: one schema change and the earlier steps it must follow. */
+interface ScriptStep {
+  name: string;
+  body: string;
+  dependsOn: readonly string[];
+  /** The step rewrites values that already exist, which a rollback does not bring back. */
+  overwritesExistingValues?: boolean;
+}
+
+/** A field a step reads or writes; `ALL_FIELDS` stands for every field of the table. */
+interface FieldTouch {
+  table: string;
+  field: string;
+}
+
+const ALL_FIELDS = "*";
+
+/** Functions a generated script declares next to its steps, whose names a step function must not take. */
+const RESERVED_FUNCTION_NAMES = ["renameNestedMember"];
+
+const NO_DATA_MIGRATION_BODY = `  // No data migration needed for this schema change
+  // Add custom data transformations if required`;
+
+const OVERWRITE_NOTE = `// Overwrites existing values. Once this step commits it cannot be undone,
+// so check the values it writes before you deploy.
+`;
+
+const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
+
+/** The part of a table field that says which table it points to. */
+interface ForeignKeyField {
+  foreignKeyType?: string;
+}
+
+/**
+ * The tables other than itself that the fields of a table point to.
+ * @param fields - Fields of the table
+ * @param tableName - Name of the table, whose self-references are not a dependency
+ * @returns Names of the referenced tables
+ */
+function foreignKeyTargets(
+  fields: Readonly<Record<string, ForeignKeyField>>,
+  tableName: string,
+): string[] {
+  return [
+    ...new Set(
+      Object.values(fields)
+        .map((field) => field.foreignKeyType)
+        .filter((target): target is string => target !== undefined && target !== tableName),
+    ),
+  ];
+}
+
+/**
+ * The renamed tables a renamed table references whose copies run after its own, which happens
+ * when the renamed tables reference each other and no order lets every copy find its parents.
+ * @param change - Table rename to check
+ * @param later - Changes that run after it
+ * @returns The referenced tables that are copied later
+ */
+function copiedLater(change: TableRenamedChange, later: readonly DiffChange[]): string[] {
+  const names = new Set(
+    later.flatMap((candidate) => (candidate.kind === "table_renamed" ? [candidate.tableName] : [])),
+  );
+  return foreignKeyTargets(change.after.fields, change.tableName).filter((target) =>
+    names.has(target),
+  );
+}
+
+function cycleCopyTodo(change: TableRenamedChange, parents: readonly string[]): string {
+  const list = parents.join(", ");
+  const message =
+    parents.length === 1
+      ? `copy ${change.tableName} with the foreign key to ${list} set to null, then fill it in after the copy of ${list}`
+      : `copy ${change.tableName} with its foreign keys to ${list} set to null, then fill them in after the copies of ${list}`;
+  return `  // ${change.tableName} and ${list} reference each other, so neither copy can find the rows its foreign key points to.
+  void TODO(${JSON.stringify(message)});`;
+}
+
+/**
+ * Put the renamed tables a renamed table references before it, so its copy finds the
+ * rows its foreign keys point to. The renames keep their slots among the other changes
+ * and the order they were listed in, apart from that; a cycle keeps the listed order.
+ * @param changes - Changes in the order they were listed
+ * @returns The same changes with the table renames ordered by their references
+ */
+function orderTableRenames(changes: readonly DiffChange[]): DiffChange[] {
+  const remaining = changes.filter(
+    (change): change is TableRenamedChange => change.kind === "table_renamed",
+  );
+  const parentsOf = (rename: TableRenamedChange): Set<string> =>
+    new Set(
+      foreignKeyTargets(rename.after.fields, rename.tableName).filter((target) =>
+        remaining.some((candidate) => candidate.tableName === target),
+      ),
+    );
+  const ordered: TableRenamedChange[] = [];
+  while (remaining.length > 0) {
+    const copied = new Set(ordered.map((rename) => rename.tableName));
+    const index = remaining.findIndex((rename) =>
+      [...parentsOf(rename)].every((p) => copied.has(p)),
+    );
+    ordered.push(...remaining.splice(Math.max(index, 0), 1));
+  }
+  let next = 0;
+  return changes.map((change) =>
+    change.kind === "table_renamed" ? (ordered[next++] ?? change) : change,
+  );
+}
+
+/**
+ * Name the step for a change and list the fields it reads or writes. Two steps
+ * that touch the same field must run in the order the changes are listed; steps that
+ * touch different fields do not depend on each other.
+ * @param change - Diff change to describe
+ * @returns Preferred step name and the fields the change touches
+ */
+function describeChange(change: DiffChange): { preferredName: string; touches: FieldTouch[] } {
+  const table = capitalize(change.tableName);
+  switch (change.kind) {
+    case "field_added":
+      return {
+        preferredName: `populate${table}${capitalize(change.fieldName)}`,
+        touches: [{ table: change.tableName, field: change.fieldName }],
+      };
+    case "field_renamed":
+      return {
+        preferredName: `rename${table}${capitalize(change.fieldName)}`,
+        touches: [
+          { table: change.tableName, field: change.previousFieldName },
+          { table: change.tableName, field: change.fieldName },
+        ],
+      };
+    case "table_renamed":
+      return {
+        preferredName: `copy${capitalize(change.previousTableName)}To${table}`,
+        touches: [
+          { table: change.previousTableName, field: ALL_FIELDS },
+          { table: change.tableName, field: ALL_FIELDS },
+          ...foreignKeyTargets(change.after.fields, change.tableName).map((target) => ({
+            table: target,
+            field: "id",
+          })),
+        ],
+      };
+    case "field_modified":
+    case "field_type_modified": {
+      const target = change.after.foreignKeyType;
+      return {
+        preferredName: `update${table}${capitalize(change.fieldName)}`,
+        touches: [
+          { table: change.tableName, field: change.fieldName },
+          ...(target && target !== change.before.foreignKeyType
+            ? [{ table: target, field: "id" }]
+            : []),
+        ],
+      };
+    }
+    case "index_added":
+    case "index_modified":
+      return {
+        preferredName: `resolve${table}${capitalize(change.indexName)}`,
+        touches: change.after.fields.map((field) => ({ table: change.tableName, field })),
+      };
+    default:
+      return { preferredName: "", touches: [{ table: change.tableName, field: ALL_FIELDS }] };
+  }
+}
+
+/**
+ * Whether the statements of a change rewrite values that already exist. Steps
+ * that only fill columns or tables the Pre-phase added, or only add members
+ * next to the old ones, leave the original values in place.
+ * @param change - Diff change the statements were generated for
+ * @param statementCount - Number of statements generated for the change
+ * @returns True when the step overwrites existing values
+ */
+function overwritesExistingValues(change: DiffChange, statementCount: number): boolean {
+  switch (change.kind) {
+    case "index_added":
+    case "index_modified":
+    case "field_type_modified":
+      return true;
+    case "field_modified":
+      return !(change.memberRenames?.length && statementCount === 1);
+    default:
+      return false;
+  }
+}
+
+const touchesOverlap = (a: readonly FieldTouch[], b: readonly FieldTouch[]): boolean =>
+  a.some((x) =>
+    b.some(
+      (y) =>
+        x.table === y.table &&
+        (x.field === ALL_FIELDS || y.field === ALL_FIELDS || x.field === y.field),
+    ),
+  );
+
+/**
+ * The statements of one change, in the order they must run.
+ * @param change - Diff change to generate statements for
+ * @param typeRenameTargets - Confirmed type renames (old name → new name)
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back
+ * @returns Statements, or an empty array when the change needs no data migration
+ */
+function generateChangeStatements(
+  change: DiffChange,
+  typeRenameTargets: ReadonlyMap<string, string>,
+  finishedExpansions: readonly ExpandContractPlan[],
+): string[] {
+  const decimalScaleScript = generateDecimalScaleChangeScript(change);
+  const statements = generateChangeScripts(
+    change,
+    decimalScaleScript !== null,
+    typeRenameTargets,
+    finishedExpansions,
+  );
+  if (decimalScaleScript) {
+    statements.push(decimalScaleScript);
+
+    const uniqueConstraintScript = generateUniqueConstraintScript(change);
+    if (uniqueConstraintScript) {
+      statements.push(uniqueConstraintScript);
+    }
+  }
+  return statements;
+}
+
+/**
+ * Split a migration into one step per change that needs a data migration. A
+ * step depends on every earlier step that touches the same field, so the
+ * order the changes are listed in stays the order the steps run in. A step
+ * can also be skipped on a re-run, because each one commits on its own.
+ * @param diff - Migration diff
+ * @param expandPlans - Field changes carried through temporary fields
+ * @param typeRenameTargets - Confirmed type renames (old name → new name)
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back
+ * @returns Steps in the order of the changes
+ */
+function buildScriptSteps(
+  diff: MigrationDiff,
+  expandPlans: readonly ExpandContractPlan[],
+  typeRenameTargets: ReadonlyMap<string, string>,
+  finishedExpansions: readonly ExpandContractPlan[],
+): ScriptStep[] {
+  interface Draft {
+    preferredName: string;
+    fallbackName: string;
+    body: string;
+    touches: readonly FieldTouch[];
+    overwritesExistingValues: boolean;
+  }
+  const drafts: Draft[] = expandPlans.map((plan, index) => ({
+    preferredName: `convert${capitalize(plan.tableName)}${capitalize(plan.fieldName)}`,
+    fallbackName: `expand${index + 1}`,
+    body: generateExpandConversionScript(plan),
+    overwritesExistingValues: true,
+    touches: [
+      { table: plan.tableName, field: plan.fieldName },
+      { table: plan.tableName, field: plan.tempFieldName },
+    ],
+  }));
+  const orderedChanges = orderTableRenames(diff.changes);
+  orderedChanges.forEach((change, index) => {
+    const statements = generateChangeStatements(change, typeRenameTargets, finishedExpansions);
+    if (statements.length === 0) return;
+    if (change.kind === "table_renamed") {
+      const cycle = copiedLater(change, orderedChanges.slice(index + 1));
+      if (cycle.length > 0) statements.unshift(cycleCopyTodo(change, cycle));
+    }
+    const { preferredName, touches } = describeChange(change);
+    drafts.push({
+      preferredName,
+      fallbackName: `change${index + 1}`,
+      body: [...statements].join("\n\n"),
+      touches,
+      overwritesExistingValues: overwritesExistingValues(change, statements.length),
+    });
+  });
+
+  const usedNames = new Set<string>(RESERVED_FUNCTION_NAMES);
+  const earlier: { name: string; touches: readonly FieldTouch[] }[] = [];
+  return drafts.map((draft) => {
+    const name =
+      isMigrationStepName(draft.preferredName) && !usedNames.has(draft.preferredName)
+        ? draft.preferredName
+        : draft.fallbackName;
+    usedNames.add(name);
+    const dependsOn = earlier
+      .filter((step) => touchesOverlap(step.touches, draft.touches))
+      .map((step) => step.name);
+    earlier.push({ name, touches: draft.touches });
+    return {
+      name,
+      body: draft.body,
+      dependsOn,
+      overwritesExistingValues: draft.overwritesExistingValues,
+    };
+  });
+}
+
+/**
+ * Render the imports and the exported steps of a migration script
+ * @param body - Statements of the migration, held by a single `migrate` step when there are no steps
+ * @param helpers - Helper declarations placed between the import and the steps
+ * @param steps - Steps of the script, one per change that needs a data migration
+ * @returns Script source after the header comment
+ */
+function renderScript(body: string, helpers: string, steps: readonly ScriptStep[] = []): string {
+  const units: readonly ScriptStep[] =
+    steps.length > 0 ? steps : [{ name: "migrate", body, dependsOn: [] }];
+  const functions = units
+    .map(
+      (
+        unit,
+      ) => `${unit.overwritesExistingValues ? OVERWRITE_NOTE : ""}async function ${unit.name}(trx: Transaction): Promise<void> {
+${unit.body}
+}`,
+    )
+    .join("\n\n");
+  const entries = units
+    .map((unit) => {
+      const dependsOn =
+        unit.dependsOn.length > 0 ? `dependsOn: ${JSON.stringify(unit.dependsOn)}, ` : "";
+      return `  ${unit.name}: { ${dependsOn}run: ${unit.name} },`;
+    })
+    .join("\n");
+  const dbImport = units.some((unit) => unit.body.includes("TODO("))
+    ? 'import { TODO, type MigrationSteps, type Transaction } from "./db";'
+    : 'import type { MigrationSteps, Transaction } from "./db";';
+  return `${dbImport}
+${helpers}
+${functions}
+
+export const steps = {
+${entries}
+} satisfies MigrationSteps;
 `;
 }
 
@@ -287,40 +650,21 @@ export async function main(trx: Transaction): Promise<void> {
  * Generate migration script content based on diff
  * @param {MigrationDiff} diff - Migration diff
  * @param expandPlans - Field changes carried through temporary fields
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back
  * @returns {string} Migration script content
  */
 export function generateMigrationScript(
   diff: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
+  finishedExpansions: readonly ExpandContractPlan[] = [],
 ): string {
-  const updates: string[] = [];
   const typeRenameTargets = new Map(
     diff.changes
       .filter((change): change is TableRenamedChange => change.kind === "table_renamed")
       .map((change) => [change.previousTableName, change.tableName]),
   );
 
-  for (const plan of expandPlans) {
-    updates.push(generateExpandConversionScript(plan));
-  }
-
-  for (const change of diff.changes) {
-    const decimalScaleScript = generateDecimalScaleChangeScript(change);
-    updates.push(...generateChangeScripts(change, decimalScaleScript !== null, typeRenameTargets));
-    if (decimalScaleScript) {
-      updates.push(decimalScaleScript);
-
-      const uniqueConstraintScript = generateUniqueConstraintScript(change);
-      if (uniqueConstraintScript) {
-        updates.push(uniqueConstraintScript);
-      }
-    }
-  }
-
-  if (updates.length === 0) {
-    updates.push(`  // No data migration needed for this schema change
-  // Add custom data transformations if required`);
-  }
+  const steps = buildScriptSteps(diff, expandPlans, typeRenameTargets, finishedExpansions);
 
   const helpers = diff.changes.some(
     (change) => change.kind === "field_modified" && change.memberRenames?.length,
@@ -337,42 +681,63 @@ export function generateMigrationScript(
  * for warning-tier changes it is optional). Edit this file to implement
  * your data migration logic.
  *
- * \`main\` runs in one transaction managed by the deploy command.
- * If any operation fails, all of its changes are rolled back.
- *
- * To commit a long data migration in parts,
- * export \`steps\` instead of \`main\`: each step runs in its own transaction.
- * See "Splitting a migration into steps" in the TailorDB migration docs.
+${scriptNotes()}
  */
 
-import type { Transaction } from "./db";
-${helpers}
-export async function main(trx: Transaction): Promise<void> {
-${updates.join("\n\n")}
+${renderScript(NO_DATA_MIGRATION_BODY, helpers, steps)}`;
 }
+
+// Emitted into both test scaffolds so the test runs the script with the values
+// deploy gives it, as recorded in diff.json (string values when nothing is
+// recorded), even after tailor.config.ts changes. The script is imported after
+// the pin so that fields it parses at import time already follow it.
+function dateRepresentationPin(diff: MigrationDiff, exportName: "main" | "steps"): string {
+  const representation = diff.dateRepresentation ?? "string";
+  const reason = diff.dateRepresentation
+    ? `// diff.json records that this migration was generated under
+// defaultDateRepresentation: ${JSON.stringify(representation)}, and deploy runs it that way.`
+    : `// diff.json records no defaultDateRepresentation for this migration, so deploy
+// runs it with string values whatever tailor.config.ts sets today.`;
+  return `
+${reason}
+const restoreDateRepresentation = applyDateRepresentation(${JSON.stringify(representation)});
+afterAll(restoreDateRepresentation);
+const { ${exportName} } = await import("./migrate");
 `;
 }
 
 /**
  * Generate migration test file content
  * @param {MigrationDiff} diff - Migration diff
+ * @param scriptKind - Whether migrate.ts exports `main` or `steps`
  * @returns {string} Migration test file content
  */
-export function generateMigrationTestScript(diff: MigrationDiff): string {
+export function generateMigrationTestScript(
+  diff: MigrationDiff,
+  scriptKind: MigrationScriptForm["kind"] = "main",
+): string {
+  const isSteps = scriptKind === "steps";
+  const temporalDefault = diff.dateRepresentation === "temporal";
   return `/**
  * Unit test for the ${diff.namespace} migration script.
  *
  * The mock compiles queries to the same SQL as the deployed migration, so the
  * test verifies the exact statements migrate.ts issues. Stage the rows each
- * query returns, run main() inside a transaction, then assert the executed
- * statements.
+ * query returns, run ${isSteps ? "the steps, each in its own transaction," : "main() inside a transaction,"} then assert the executed
+ * statements.${
+   temporalDefault
+     ? `
+ *
+ * Date fields declared with t that omit \`as\` carry Temporal values here, so run
+ * this file in the tailor-runtime Vitest environment, which provides Temporal.`
+     : ""
+ }
  */
 
-import { createKyselyMock } from "@tailor-platform/sdk/vitest";
-import { describe, expect, test } from "vitest";
+import { applyDateRepresentation, createKyselyMock${isSteps ? ", runMigrationSteps" : ""} } from "@tailor-platform/sdk/vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
-import { main } from "./migrate";
-
+${dateRepresentationPin(diff, isSteps ? "steps" : "main")}
 describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
   test("issues the intended statements", async () => {
     const mock = createKyselyMock<Database>();
@@ -380,9 +745,15 @@ describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
     // Stage the rows each query returns, in execution order:
     // mock.enqueueResult([{ id: "record-1" }]);
 
-    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
+${
+  isSteps
+    ? `    // Pass env when your steps use it: runMigrationSteps(steps, { transaction, env: { ... } })
+    await runMigrationSteps(steps, { transaction: (run) => mock.withTx(run) });
+`
+    : `    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
     await mock.withTx((trx) => main(trx));
-
+`
+}
     // Replace with assertions on the statements the script must issue:
     // expect(mock.updates).toHaveLength(1);
     // expect(mock.updates[0]?.updateValues()).toEqual({ field: "value" });
@@ -397,34 +768,43 @@ describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
 /**
  * Generate the PGlite test file content
  * @param {MigrationDiff} diff - Migration diff
+ * @param scriptKind - Whether migrate.ts exports `main` or `steps`
  * @returns {string} PGlite test file content
  */
-export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
+export function generateMigrationPgliteTestScript(
+  diff: MigrationDiff,
+  scriptKind: MigrationScriptForm["kind"] = "main",
+): string {
+  const isSteps = scriptKind === "steps";
   const schema = /^[A-Za-z_$][\w$]*$/.test(diff.namespace)
     ? `pgliteSchema.${diff.namespace}`
     : `pgliteSchema[${JSON.stringify(diff.namespace)}]`;
+  const temporalDefault = diff.dateRepresentation === "temporal";
   return `/**
  * PGlite test for the ${diff.namespace} migration script.
  *
  * The generated db.pglite.ts creates the tables as they stand while migrate.ts
  * runs, on an in-memory Postgres. Stage the rows the script converts, run
- * main() inside a transaction, then assert the rows it leaves behind.${
-   diff.temporal
+ * ${isSteps ? "the steps, each in its own transaction," : "main() inside a transaction,"} then assert the rows it leaves behind.${
+   diff.temporal || temporalDefault
      ? `
  *
- * Date, datetime, and time columns are Temporal values here, so run this file
+ * ${
+   diff.temporal
+     ? "Date, datetime, and time columns are Temporal values here"
+     : "Date fields declared with t that omit `as` carry Temporal values here"
+ }, so run this file
  * in the tailor-runtime Vitest environment, which provides Temporal.`
      : ""
  }
  */
 
 import { PGlite } from "@electric-sql/pglite";
-import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
+import { applyDateRepresentation, createKyselyPGlite${isSteps ? ", runMigrationSteps" : ""}, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { pgliteSchema } from "./db.pglite";
-import { main } from "./migrate";
-
+${dateRepresentationPin(diff, isSteps ? "steps" : "main")}
 const pglite = new PGlite();
 const db = createKyselyPGlite<Unmigrated<Database>>(pglite${diff.temporal ? ", { temporal: true }" : ""});
 
@@ -442,9 +822,15 @@ describe(${JSON.stringify(`${diff.namespace} migration (PGlite)`)}, () => {
     // Stage the rows the script converts:
     // await db.insertInto("Table").values([{ field: "before" }]).execute();
 
-    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
+${
+  isSteps
+    ? `    // Pass env when your steps use it: runMigrationSteps(steps, { transaction, env: { ... } })
+    await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+`
+    : `    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
     await expect(db.transaction().execute((trx) => main(trx))).resolves.toBeUndefined();
-
+`
+}
     // Add assertions on the rows the script leaves behind:
     // expect(await db.selectFrom("Table").selectAll().execute()).toEqual([{ field: "after" }]);
   });
@@ -457,12 +843,14 @@ describe(${JSON.stringify(`${diff.namespace} migration (PGlite)`)}, () => {
  * @param {DiffChange} change - Diff change to generate script for
  * @param {boolean} deferUniqueConstraint - Generate the unique check after decimal re-serialization
  * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back
  * @returns {string[]} Script contents, or an empty array if no script is needed
  */
 function generateChangeScripts(
   change: DiffChange,
   deferUniqueConstraint = false,
   typeRenameTargets?: ReadonlyMap<string, string>,
+  finishedExpansions: readonly ExpandContractPlan[] = [],
 ): string[] {
   if (change.kind === "index_added" || change.kind === "index_modified") {
     const before = change.kind === "index_modified" ? change.before : undefined;
@@ -491,7 +879,7 @@ function generateChangeScripts(
       for (let i = 1; i < records.length; i++) {
         await trx
           .updateTable("${change.tableName}")
-          .set({ ${fields[0]}: null }) // TODO: Set appropriate unique value
+          .set({ ${fields[0]}: TODO("set a unique ${change.tableName}.${fields[0]} value for the duplicates") })
           .where("id", "=", records[i].id)
           .execute();
       }
@@ -508,7 +896,7 @@ function generateChangeScripts(
   await trx
     .updateTable("${change.tableName}")
     .set({
-      ${change.fieldName}: null, // TODO: Set appropriate default value
+      ${change.fieldName}: TODO("set the value ${change.tableName}.${change.fieldName} takes in existing records"),
     })
     .execute();`,
       ];
@@ -517,7 +905,14 @@ function generateChangeScripts(
   }
 
   if (change.kind === "field_renamed") {
-    const scripts = [generateFieldRenameCopyScript(change)];
+    const everyRowFilled = finishedExpansions.some(
+      (plan) =>
+        plan.tableName === change.tableName &&
+        plan.tempFieldName === change.previousFieldName &&
+        plan.fieldName === change.fieldName &&
+        (plan.before.required || !plan.after.required),
+    );
+    const scripts = [generateFieldRenameCopyScript(change, everyRowFilled)];
     // The unique constraint is deferred to the post-migration phase, so
     // duplicates in the copied values must be resolved before it is enforced.
     // A previously unique source still needs the check when the copy itself
@@ -558,7 +953,7 @@ function generateChangeScripts(
   await trx
     .updateTable("${change.tableName}")
     .set({
-      ${change.fieldName}: null, // TODO: Set appropriate default value
+      ${change.fieldName}: TODO("set the value ${change.tableName}.${change.fieldName} takes where it is null"),
     })
     .where("${change.fieldName}", "is", null)
     .execute();`);
@@ -581,17 +976,11 @@ function generateChangeScripts(
     const afterValues = (after.allowedValues ?? []).map((v) => v.value);
     const removedValues = beforeValues.filter((v) => !afterValues.includes(v));
     if (removedValues.length > 0) {
-      const [firstValue] = afterValues;
-      const replacement =
-        firstValue !== undefined
-          ? JSON.stringify(firstValue)
-          : after.required
-            ? '"NEW_VALUE"'
-            : "null";
+      const choices = afterValues.length > 0 ? ` (${afterValues.join(", ")})` : "";
       scripts.push(`  // Migrate records with removed enum values: ${removedValues.join(", ")}
   await trx
     .updateTable("${change.tableName}")
-    .set({ ${change.fieldName}: ${replacement} }) // TODO: Set appropriate value
+    .set({ ${change.fieldName}: TODO(${JSON.stringify(`choose the ${change.tableName}.${change.fieldName} value that replaces ${removedValues.join(", ")}${choices}`)}) })
     .where("${change.fieldName}", "in", [${removedValues.map((v) => JSON.stringify(v)).join(", ")}])
     .execute();`);
     }
@@ -613,7 +1002,7 @@ function generateChangeScripts(
     for (const record of orphanedRecords) {
       await trx
         .updateTable("${change.tableName}")
-        .set({ ${change.fieldName}: null }) // TODO: Set appropriate new reference
+        .set({ ${change.fieldName}: TODO("set the ${after.foreignKeyType} reference for ${change.tableName}.${change.fieldName}") })
         .where("id", "=", record.id)
         .execute();
     }
@@ -629,13 +1018,17 @@ function renameCopyCanCollapseValues(change: FieldRenamedChange): boolean {
   return (after.scale ?? DEFAULT_DECIMAL_SCALE) < (before.scale ?? DEFAULT_DECIMAL_SCALE);
 }
 
-function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
+function generateFieldRenameCopyScript(
+  change: FieldRenamedChange,
+  everyRowFilled: boolean,
+): string {
   const { tableName, fieldName, previousFieldName, before, after } = change;
   const requiredTodo =
-    !before.required && after.required
+    !before.required && after.required && !everyRowFilled
       ? `
-  // TODO: ${previousFieldName} is optional but ${fieldName} is required.
-  // Resolve null values, or the post-migration phase will fail.`
+  // ${previousFieldName} is optional but ${fieldName} is required: resolve its null values,
+  // or the post-migration phase will fail.
+  void TODO("resolve the null values of ${tableName}.${previousFieldName} that ${fieldName} cannot hold");`
       : "";
   const roundingWarning = renameCopyCanCollapseValues(change)
     ? `
@@ -749,8 +1142,8 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
     .map(([name]) => name);
   const insertValues =
     selfRefColumns.length > 0
-      ? `rows.map((row) => ({ ...row, ${selfRefColumns.map((name) => `${name}: null`).join(", ")} }))`
-      : "rows";
+      ? `pending.map((row) => ({ ...row, ${selfRefColumns.map((name) => `${name}: null`).join(", ")} }))`
+      : "pending";
   const selfRefBackfill =
     selfRefColumns.length > 0
       ? `
@@ -773,7 +1166,7 @@ ${selfRefColumns
 
   return `  // Copy every ${previousTableName} row into ${tableName}, preserving ids so that
   // stored foreign key references remain valid. ${previousTableName} stays readable
-  // until the post-migration phase drops it.
+  // until the post-migration phase drops it. Rows already copied by an earlier run are skipped.
   {
     let lastId: string | undefined;
     while (true) {
@@ -788,7 +1181,16 @@ ${selfRefColumns
       const rows = await query.execute();
       if (rows.length === 0) break;
 
-      await trx.insertInto("${tableName}").values(${insertValues}).execute();
+      const copied = await trx
+        .selectFrom("${tableName}")
+        .select("id")
+        .where("id", "in", rows.map((row) => row.id))
+        .execute();
+      const copiedIds = new Set(copied.map((row) => row.id));
+      const pending = rows.filter((row) => !copiedIds.has(row.id));
+      if (pending.length > 0) {
+        await trx.insertInto("${tableName}").values(${insertValues}).execute();
+      }
       lastId = rows[rows.length - 1]!.id;
     }
   }${selfRefBackfill}`;
@@ -814,11 +1216,9 @@ function generateFieldTypeChangeScript(
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.
-        // Keep the value accepted by the active ${change.before.type} type and castable to ${change.after.type}.
         const sourceValue = row.${change.fieldName};
         if (sourceValue === null) continue;
-        const normalizedValue: never = sourceValue;
+        const normalizedValue = TODO("normalize ${change.tableName}.${change.fieldName} to a value the active ${change.before.type} type accepts and the ${change.after.type} type can cast");
         if (Object.is(normalizedValue, sourceValue)) continue;
         await trx
           .updateTable("${change.tableName}")
@@ -848,10 +1248,8 @@ function generateExpandConversionValue(plan: ExpandContractPlan): string {
   const target = plan.after.array
     ? `an element of the ${formatFieldShape(plan.after)} field`
     : `the ${plan.after.type} type`;
-  return `        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the conversion.
-        // Produce a value accepted by ${target} from the stored ${plan.before.type} value.
-        const sourceValue = row.${plan.fieldName};
-        const convertedValue: never = sourceValue;`;
+  return `        // Produce a value accepted by ${target} from the stored ${plan.before.type} value in row.${plan.fieldName}.
+        const convertedValue = TODO(${JSON.stringify(`convert ${plan.tableName}.${plan.fieldName} to a value accepted by ${target}`)});`;
 }
 
 function generateExpandConversionScript(plan: ExpandContractPlan): string {
@@ -911,15 +1309,13 @@ function generateUniqueDedupeScript(
   const duplicateResolution =
     resolution === "throw"
       ? `      if (records.length > 1) {
-        throw new Error(
-          "TODO: Resolve duplicate ${tableName}.${fieldName} values before adding the unique constraint",
-        );
+        TODO("resolve the duplicate ${tableName}.${fieldName} values before the unique constraint is added");
       }`
-      : `      // Keep first record, add suffix to others
+      : `      // Keep the first record and give the others a new value
       for (let i = 1; i < records.length; i++) {
         await trx
           .updateTable("${tableName}")
-          .set({ ${fieldName}: \`\${records[i].${fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+          .set({ ${fieldName}: TODO("set a unique ${tableName}.${fieldName} value for the duplicates") })
           .where("id", "=", records[i].id)
           .execute();
       }`;

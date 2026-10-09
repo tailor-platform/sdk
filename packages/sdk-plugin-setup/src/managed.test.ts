@@ -10,18 +10,14 @@ import {
   findReservedIds,
   isManagedHash,
   mergeUserContent,
-  type Layout,
 } from "./managed";
 import {
-  renderActionWorkflow,
   renderBranchWorkflow,
-  renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   type RenderBranchParams,
   type RenderResult,
 } from "./templates";
-import type { LockInputs } from "./lock";
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -31,11 +27,10 @@ const branchBase: RenderBranchParams = {
   erdPreview: null,
 };
 
-const variants: Array<[string, Layout, RenderResult]> = [
-  ["branch", "workflow", renderBranchWorkflow(branchBase)],
+const variants: Array<[string, RenderResult]> = [
+  ["branch", renderBranchWorkflow(branchBase)],
   [
     "branch with every option",
-    "workflow",
     renderBranchWorkflow({
       ...branchBase,
       workingDirectory: "apps/api",
@@ -47,7 +42,6 @@ const variants: Array<[string, Layout, RenderResult]> = [
   ],
   [
     "tag without guard",
-    "workflow",
     renderTagWorkflow({
       workspaceName: "my-app",
       tagPattern: "v*",
@@ -57,7 +51,6 @@ const variants: Array<[string, Layout, RenderResult]> = [
   ],
   [
     "tag with guard",
-    "workflow",
     renderTagWorkflow({
       workspaceName: "my-app",
       tagPattern: "v*",
@@ -71,7 +64,6 @@ const variants: Array<[string, Layout, RenderResult]> = [
   ],
   [
     "preview",
-    "workflow",
     renderPreviewWorkflow({
       workspaceName: "my-app",
       branch: "main",
@@ -81,68 +73,22 @@ const variants: Array<[string, Layout, RenderResult]> = [
       requirePreviewLabel: true,
     }),
   ],
-  ["action", "action", renderActionWorkflow({ workspaceName: "my-app" })],
-  [
-    "action with build-site slot",
-    "action",
-    renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true }),
-  ],
-  [
-    "coordinate branch",
-    "workflow",
-    renderCoordinateWorkflow({
-      coordinatorName: "main",
-      kind: "branch",
-      branch: "main",
-      environment: "main",
-      packageManager: "pnpm",
-      restrictDispatch: true,
-      actionGroups: [
-        { id: "api", apps: [{ name: "api", dir: "apps/api" }] },
-        {
-          id: "web-admin",
-          apps: [
-            { name: "web", dir: "apps/web", hasStaticWebsites: true },
-            { name: "admin", dir: "apps/admin" },
-          ],
-        },
-      ],
-    }),
-  ],
-  [
-    "coordinate tag",
-    "workflow",
-    renderCoordinateWorkflow({
-      coordinatorName: "main",
-      kind: "tag",
-      branch: "main",
-      tagPattern: "v*",
-      environment: "main",
-      packageManager: "pnpm",
-      restrictDispatch: true,
-      actionGroups: [{ id: "api", apps: [{ name: "api", dir: "apps/api" }] }],
-    }),
-  ],
 ];
 
-function idsIn(content: string, layout: Layout): string[] {
+function idsIn(content: string): string[] {
   const doc = parseDocument(content).toJS() as Record<string, unknown>;
   const stepIds = (steps: unknown, prefix: string): string[] =>
     (steps as Array<{ id?: string }>).map((s) => `${prefix}${String(s.id)}`);
-  if (layout === "action") {
-    return stepIds((doc["runs"] as { steps: unknown }).steps, "");
-  }
   return Object.entries(doc["jobs"] as Record<string, { steps: unknown }>).flatMap(
     ([jobId, job]) => [jobId, ...stepIds(job.steps, `${jobId}/`)],
   );
 }
 
-describe.each(variants)("%s template", (_name, layout, render) => {
+describe.each(variants)("%s template", (_name, render) => {
   test("round-trips through the merge unchanged when there is nothing to keep", () => {
     const result = mergeUserContent({
       current: render.content,
       rendered: render.content,
-      layout,
       previousIds: render.generatedIds,
       renderedIds: render.generatedIds,
       force: false,
@@ -151,13 +97,13 @@ describe.each(variants)("%s template", (_name, layout, render) => {
   });
 
   test("gives every job and step it emits an id with the reserved tailor- prefix", () => {
-    for (const id of idsIn(render.content, layout)) {
+    for (const id of idsIn(render.content)) {
       expect(id.slice(id.lastIndexOf("/") + 1)).toMatch(/^tailor-/);
     }
   });
 
   test("declares exactly the job and step ids it emits", () => {
-    const emitted = idsIn(render.content, layout);
+    const emitted = idsIn(render.content);
     expect(new Set(emitted).size).toBe(emitted.length);
     expect(new Set(render.generatedIds).size).toBe(render.generatedIds.length);
     expect(emitted.toSorted()).toEqual(render.generatedIds.toSorted());
@@ -168,8 +114,7 @@ describe("ENVIRONMENT_EDITABLE_JOBS", () => {
   const jobsOf = (environment: boolean): Set<string> =>
     new Set(
       variants
-        .filter(([, layout]) => layout === "workflow")
-        .flatMap(([, , { content }]) =>
+        .flatMap(([, { content }]) =>
           Object.entries(
             (parseDocument(content).toJS() as { jobs: Record<string, Record<string, unknown>> })
               .jobs,
@@ -189,25 +134,8 @@ describe("ENVIRONMENT_EDITABLE_JOBS", () => {
 });
 
 const render = renderBranchWorkflow(branchBase);
-const lockHash = computeManagedHash(render.content, "workflow", render.generatedIds);
-const hashOf = (content: string): string =>
-  computeManagedHash(content, "workflow", render.generatedIds);
-
-const legacyBuildSiteAction = (): { content: string; ids: string[]; inputs: LockInputs } => {
-  const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
-  return {
-    content: action.content.replace("- id: tailor-build-site\n", "- id: build-site\n"),
-    ids: action.generatedIds.filter((id) => id !== "tailor-build-site"),
-    inputs: {
-      branch: null,
-      tagPattern: null,
-      environment: "my-app",
-      dir: ".",
-      packageManager: "pnpm",
-      hasStaticWebsites: true,
-    },
-  };
-};
+const lockHash = computeManagedHash(render.content, render.generatedIds);
+const hashOf = (content: string): string => computeManagedHash(content, render.generatedIds);
 
 const addStepAfterInstall = (content: string, job: string, step: string): string =>
   content.replace(
@@ -320,55 +248,6 @@ describe("computeManagedHash", () => {
     expect(recursive).not.toBe(render.content);
     expect(() => hashOf(recursive)).toThrow(ManagedMergeError);
   });
-
-  test("ignores user-mapping on a coordinator step that calls an app action", () => {
-    const coordinate = variants.find(([name]) => name === "coordinate branch")?.[2];
-    if (!coordinate) throw new Error("missing coordinate variant");
-    const hash = (c: string) => computeManagedHash(c, "workflow", coordinate.generatedIds);
-    const edited = coordinate.content.replace(
-      /( {6}- id: tailor-deploy-api\n(?:        .*\n)*? {8}with:\n)/,
-      "$1          user-mapping: ${{ vars.TAILOR_SLACK_USER_MAPPING }}\n",
-    );
-    expect(edited).not.toBe(coordinate.content);
-    expect(hash(edited)).toBe(hash(coordinate.content));
-
-    const { content } = mergeUserContent({
-      current: edited,
-      rendered: coordinate.content,
-      layout: "workflow",
-      previousIds: coordinate.generatedIds,
-      renderedIds: coordinate.generatedIds,
-      force: true,
-    });
-    expect(content).toBe(edited);
-  });
-
-  test("ignores the tailor-build-site run command but not its removal", () => {
-    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
-    const hash = (c: string) => computeManagedHash(c, "action", action.generatedIds);
-    const edited = action.content.replace(
-      /(run: \|\n)(?:        #.*\n)+ {8}true\n/,
-      "$1        pnpm build\n",
-    );
-    expect(edited).not.toBe(action.content);
-    expect(hash(edited)).toBe(hash(action.content));
-    const removed = action.content.replace(/ {4}- id: tailor-build-site\n(?:      .*\n)+/, "");
-    expect(hash(removed)).not.toBe(hash(action.content));
-  });
-
-  test("hashes a build-site step an older template wrote like the slot it became", () => {
-    const { content, ids, inputs } = legacyBuildSiteAction();
-    const hash = (c: string) => computeManagedHash(c, "action", ids, inputs);
-    const editedRun = content.replace(
-      /(run: \|\n)(?:        #.*\n)+ {8}true\n/,
-      "$1        pnpm build\n",
-    );
-    expect(editedRun).not.toBe(content);
-    expect(hash(editedRun)).toBe(hash(content));
-    const editedIf = content.replace("if: inputs.build-site == 'true'", "if: always()");
-    expect(editedIf).not.toBe(content);
-    expect(hash(editedIf)).not.toBe(hash(content));
-  });
 });
 
 describe("computeManagedHash for a non-prefixed id the lock records", () => {
@@ -380,31 +259,16 @@ describe("computeManagedHash for a non-prefixed id the lock records", () => {
         `      - id: registry-auth\n        run: ${run}\n`,
       );
     const ids = [...render.generatedIds, "tailor-deploy/registry-auth"];
-    expect(computeManagedHash(withStep("echo edited"), "workflow", ids)).toBe(
-      computeManagedHash(withStep("echo auth"), "workflow", ids),
+    expect(computeManagedHash(withStep("echo edited"), ids)).toBe(
+      computeManagedHash(withStep("echo auth"), ids),
     );
-  });
-});
-
-describe("computeManagedHash for a tailor-build-site step the lock does not record", () => {
-  test("ignores the step, so only the reserved prefix reports it", () => {
-    const action = renderActionWorkflow({ workspaceName: "my-app" });
-    const edited = action.content.replace(
-      /( {4}- id: tailor-apply\n)/,
-      "    - id: tailor-build-site\n      shell: bash\n      run: pnpm run build:docs\n$1",
-    );
-    expect(edited).not.toBe(action.content);
-    expect(computeManagedHash(edited, "action", action.generatedIds)).toBe(
-      computeManagedHash(action.content, "action", action.generatedIds),
-    );
-    expect(findReservedIds(edited, "action", action.generatedIds)).toEqual(["tailor-build-site"]);
   });
 });
 
 describe("findEditedParts", () => {
-  const recorded = computeManagedParts(render.content, "workflow", render.generatedIds);
+  const recorded = computeManagedParts(render.content, render.generatedIds);
   const edited = (content: string) =>
-    findEditedParts(recorded, computeManagedParts(content, "workflow", render.generatedIds));
+    findEditedParts(recorded, computeManagedParts(content, render.generatedIds));
 
   test.each([
     ["nothing for an untouched file", (c: string) => c, []],
@@ -450,13 +314,6 @@ describe("findEditedParts", () => {
     expect(reordered).not.toBe(render.content);
     expect(edited(reordered)).toEqual(["tailor-plan"]);
   });
-
-  test("names a changed condition on the composite action's tailor-build-site step", () => {
-    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
-    const parts = (c: string) => computeManagedParts(c, "action", action.generatedIds);
-    const changed = action.content.replace("if: inputs.build-site == 'true'", "if: always()");
-    expect(findEditedParts(parts(action.content), parts(changed))).toEqual(["tailor-build-site"]);
-  });
 });
 
 describe("describeReservedId", () => {
@@ -481,24 +338,15 @@ describe("findReservedIds", () => {
       "tailor-deploy",
       "      - id: tailor-build-frontend\n        run: echo build\n",
     )}  tailor-lint:\n    runs-on: ubuntu-latest\n    steps:\n      - id: tailor-checkout\n        run: echo lint\n`;
-    expect(findReservedIds(edited, "workflow", render.generatedIds)).toEqual([
+    expect(findReservedIds(edited, render.generatedIds)).toEqual([
       "tailor-deploy/tailor-build-frontend",
       "tailor-lint",
       "tailor-lint/tailor-checkout",
     ]);
   });
 
-  test("lists a composite action step whose id uses the tailor- prefix", () => {
-    const action = renderActionWorkflow({ workspaceName: "my-app" });
-    const edited = action.content.replace(
-      /( {4}- id: tailor-apply\n)/,
-      "    - id: tailor-upload\n      shell: bash\n      run: echo up\n$1",
-    );
-    expect(findReservedIds(edited, "action", action.generatedIds)).toEqual(["tailor-upload"]);
-  });
-
   test("lists nothing for a freshly generated file", () => {
-    expect(findReservedIds(render.content, "workflow", render.generatedIds)).toEqual([]);
+    expect(findReservedIds(render.content, render.generatedIds)).toEqual([]);
   });
 });
 
@@ -507,7 +355,6 @@ describe("mergeUserContent", () => {
     mergeUserContent({
       current,
       rendered: next.content,
-      layout: "workflow",
       previousIds: render.generatedIds,
       renderedIds: next.generatedIds,
       force,
@@ -532,8 +379,8 @@ describe("mergeUserContent", () => {
     const { content, dropped } = merge(edited, next);
 
     expect(dropped).toEqual([]);
-    expect(computeManagedHash(content, "workflow", next.generatedIds)).toBe(
-      computeManagedHash(next.content, "workflow", next.generatedIds),
+    expect(computeManagedHash(content, next.generatedIds)).toBe(
+      computeManagedHash(next.content, next.generatedIds),
     );
     const doc = parseDocument(content).toJS() as {
       env: unknown;
@@ -559,6 +406,73 @@ describe("mergeUserContent", () => {
     expect(content).toContain("# Authenticate the private registry.\n      - name: Registry auth");
   });
 
+  describe("an unmanaged top-level key the template writes", () => {
+    const preview = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const mergePreview = (current: string) =>
+      mergeUserContent({
+        current,
+        rendered: preview.content,
+        previousIds: preview.generatedIds,
+        renderedIds: preview.generatedIds,
+        force: false,
+      });
+    const concurrency = /^concurrency:\n(?: {2}.*\n)+/m;
+
+    test("keeps the user's version instead of the template's", () => {
+      const edited = preview.content.replace(
+        concurrency,
+        "concurrency:\n  group: mine-${{ github.ref }}\n",
+      );
+      expect(edited).not.toBe(preview.content);
+
+      const { content } = mergePreview(edited);
+
+      expect(content).toBe(edited);
+      expect(computeManagedHash(content, preview.generatedIds)).toBe(
+        computeManagedHash(preview.content, preview.generatedIds),
+      );
+    });
+
+    test("adds the template's version when the file has none", () => {
+      const without = preview.content.replace(concurrency, "");
+      expect(without).not.toBe(preview.content);
+
+      expect(mergePreview(without).content).toBe(preview.content);
+    });
+
+    const topLevelKeys = ({ content, generatedIds }: RenderResult) => {
+      const hash = computeManagedHash(content, generatedIds);
+      const isHashed = (key: string) => {
+        const edited = parseDocument(content);
+        edited.set(key, "edited");
+        return computeManagedHash(edited.toString(), generatedIds) !== hash;
+      };
+      const keys = Object.keys(parseDocument(content).toJS() as Record<string, unknown>);
+      return { hashed: keys.filter(isHashed), unhashed: keys.filter((key) => !isHashed(key)) };
+    };
+
+    test("is only the preview workflow's concurrency", () => {
+      const unhashed = variants.flatMap(([name, render]) =>
+        topLevelKeys(render).unhashed.map((key) => `${name}: ${key}`),
+      );
+
+      expect(unhashed).toEqual(["preview: concurrency"]);
+    });
+
+    test.each(variants)("leaves the %s header naming exactly the hashed ones", (_name, render) => {
+      const hashed = topLevelKeys(render).hashed.filter((key) => key !== "jobs");
+      const listed = new Intl.ListFormat("en", { type: "conjunction" }).format(hashed);
+
+      expect(render.content).toContain(`top-level ${listed}.`);
+    });
+  });
+
   test("puts a user step before every managed step at the start of the job", () => {
     const edited = render.content.replace(
       /( {2}tailor-deploy:[\s\S]*? {4}steps:\n)/,
@@ -576,7 +490,6 @@ describe("mergeUserContent", () => {
     const { content } = mergeUserContent({
       current: legacy,
       rendered: render.content,
-      layout: "workflow",
       previousIds: render.generatedIds.filter((id) => id !== "tailor-deploy/tailor-slack-prereq"),
       renderedIds: render.generatedIds,
       force: false,
@@ -593,7 +506,6 @@ describe("mergeUserContent", () => {
     const args = {
       current: edited,
       rendered: next.content,
-      layout: "workflow" as const,
       previousIds: render.generatedIds,
       renderedIds: next.generatedIds,
     };
@@ -645,7 +557,6 @@ describe("mergeUserContent", () => {
     const { content } = mergeUserContent({
       current: edited,
       rendered: render.content,
-      layout: "workflow",
       previousIds: [...render.generatedIds, "tailor-deploy/build-frontend"],
       renderedIds: render.generatedIds,
       force: true,
@@ -662,7 +573,6 @@ describe("mergeUserContent", () => {
     const args = {
       current: edited,
       rendered: render.content,
-      layout: "workflow" as const,
       previousIds: erd.generatedIds,
       renderedIds: render.generatedIds,
     };
@@ -680,7 +590,6 @@ describe("mergeUserContent", () => {
       mergeUserContent({
         current: edited,
         rendered: render.content,
-        layout: "workflow",
         previousIds: erd.generatedIds,
         renderedIds: render.generatedIds,
         force: true,
@@ -688,100 +597,9 @@ describe("mergeUserContent", () => {
     ).toThrow(/after-erd.*tailor-erd-preview/);
   });
 
-  test("keeps a user-edited tailor-build-site run command and user steps in a composite action", () => {
-    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
-    const edited = action.content
-      .replace(/(run: \|\n)(?:        #.*\n)+ {8}true\n/, "$1        pnpm build\n")
-      .replace(
-        /( {4}- id: tailor-apply\n)/,
-        "    - name: Upload\n      shell: bash\n      run: echo up\n$1",
-      );
-    const { content } = mergeUserContent({
-      current: edited,
-      rendered: action.content,
-      layout: "action",
-      previousIds: action.generatedIds,
-      renderedIds: action.generatedIds,
-      force: false,
-    });
-    const doc = parseDocument(content).toJS() as {
-      runs: { steps: Array<Record<string, unknown>> };
-    };
-    expect(doc.runs.steps.map((s) => s["id"] ?? s["name"])).toEqual([
-      "tailor-build-site",
-      "Upload",
-      "tailor-apply",
-      "tailor-notify",
-    ]);
-    expect(doc.runs.steps[0]?.["run"]).toBe("pnpm build\n");
-  });
-
-  test("moves the run command of a build-site step an older template wrote into tailor-build-site", () => {
-    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
-    const legacy = legacyBuildSiteAction();
-    const edited = legacy.content.replace(
-      /(run: \|\n)(?:        #.*\n)+ {8}true\n/,
-      "$1        pnpm build\n",
-    );
-    const { content } = mergeUserContent({
-      current: edited,
-      rendered: action.content,
-      layout: "action",
-      previousIds: legacy.ids,
-      previousInputs: legacy.inputs,
-      renderedIds: action.generatedIds,
-      force: false,
-    });
-    const doc = parseDocument(content).toJS() as {
-      runs: { steps: Array<Record<string, unknown>> };
-    };
-    expect(doc.runs.steps.map((s) => s["id"])).toEqual([
-      "tailor-build-site",
-      "tailor-apply",
-      "tailor-notify",
-    ]);
-    expect(doc.runs.steps[0]?.["run"]).toBe("pnpm build\n");
-  });
-
-  test("keeps a user step right after the build-site step an older template wrote", () => {
-    const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
-    const legacy = legacyBuildSiteAction();
-    const edited = legacy.content.replace(
-      /( {4}- id: tailor-apply\n)/,
-      "    - name: Upload\n      shell: bash\n      run: echo up\n$1",
-    );
-    const { content } = mergeUserContent({
-      current: edited,
-      rendered: action.content,
-      layout: "action",
-      previousIds: legacy.ids,
-      previousInputs: legacy.inputs,
-      renderedIds: action.generatedIds,
-      force: false,
-    });
-    const doc = parseDocument(content).toJS() as {
-      runs: { steps: Array<Record<string, unknown>> };
-    };
-    expect(doc.runs.steps.map((s) => s["id"] ?? s["name"])).toEqual([
-      "tailor-build-site",
-      "Upload",
-      "tailor-apply",
-      "tailor-notify",
-    ]);
-  });
-
   test("keeps user nodes whose ids are Object.prototype keys", () => {
     const edited = `${render.content}  constructor:\n    runs-on: ubuntu-latest\n    steps:\n      - id: toString\n        run: echo hi\n`;
     expect(merge(edited, render).content).toBe(edited);
-
-    const action = renderActionWorkflow({ workspaceName: "my-app" });
-    const editedAction = action.content.replace(
-      /( {4}- id: tailor-apply\n)/,
-      "    - id: constructor\n      shell: bash\n      run: echo hi\n$1",
-    );
-    expect(computeManagedHash(editedAction, "action", action.generatedIds)).toBe(
-      computeManagedHash(action.content, "action", action.generatedIds),
-    );
   });
 
   test("throws on invalid YAML", () => {
@@ -848,14 +666,13 @@ describe("environment on a managed job", () => {
       "$1    environment: registry\n",
     );
     expect(edited).not.toBe(render.content);
-    expect(computeManagedHash(edited, "workflow", render.generatedIds)).toBe(
-      computeManagedHash(render.content, "workflow", render.generatedIds),
+    expect(computeManagedHash(edited, render.generatedIds)).toBe(
+      computeManagedHash(render.content, render.generatedIds),
     );
     expect(
       mergeUserContent({
         current: edited,
         rendered: render.content,
-        layout: "workflow",
         previousIds: render.generatedIds,
         renderedIds: render.generatedIds,
         force: false,
@@ -870,8 +687,7 @@ describe("environment on a managed job", () => {
     environment: "my-app",
     packageManager: "npm",
   });
-  const tagHashOf = (content: string): string =>
-    computeManagedHash(content, "workflow", tag.generatedIds);
+  const tagHashOf = (content: string): string => computeManagedHash(content, tag.generatedIds);
   const withGuardEnvironment = (content: string): string =>
     content.replace(/( {2}tailor-tag-guard:\n {4}runs-on: .*\n)/, "$1    environment: registry\n");
 
@@ -896,7 +712,6 @@ describe("environment on a managed job", () => {
     const { content } = mergeUserContent({
       current: edited,
       rendered: tag.content,
-      layout: "workflow",
       previousIds: tag.generatedIds,
       renderedIds: tag.generatedIds,
       force: false,

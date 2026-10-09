@@ -3,6 +3,7 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { protoEnumName } from "#/cli/shared/proto-enum";
 import type {
   Workflow,
   WorkflowExecution,
@@ -49,26 +50,7 @@ export interface WorkflowExecutionInfo {
  * @returns String representation of the status
  */
 function workflowExecutionStatusToString(status: WorkflowExecution_Status): string {
-  switch (status) {
-    case WorkflowExecution_Status.PENDING:
-      return "PENDING";
-    case WorkflowExecution_Status.PENDING_RESUME:
-      return "PENDING_RESUME";
-    case WorkflowExecution_Status.RUNNING:
-      return "RUNNING";
-    case WorkflowExecution_Status.SUCCESS:
-      return "SUCCESS";
-    case WorkflowExecution_Status.FAILED:
-      return "FAILED";
-    case WorkflowExecution_Status.PENDING_RETRY:
-      return "PENDING_RETRY";
-    case WorkflowExecution_Status.WAITING:
-      return "WAITING";
-    case WorkflowExecution_Status.CANCELED:
-      return "CANCELED";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumName(WorkflowExecution_Status, status) ?? "UNSPECIFIED";
 }
 
 /**
@@ -77,22 +59,7 @@ function workflowExecutionStatusToString(status: WorkflowExecution_Status): stri
  * @returns String representation of the status
  */
 function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status): string {
-  switch (status) {
-    case WorkflowJobExecution_Status.RUNNING:
-      return "RUNNING";
-    case WorkflowJobExecution_Status.SUSPEND:
-      return "SUSPEND";
-    case WorkflowJobExecution_Status.SUCCESS:
-      return "SUCCESS";
-    case WorkflowJobExecution_Status.FAILED:
-      return "FAILED";
-    case WorkflowJobExecution_Status.WAITING:
-      return "WAITING";
-    case WorkflowJobExecution_Status.CANCELED:
-      return "CANCELED";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumName(WorkflowJobExecution_Status, status) ?? "UNSPECIFIED";
 }
 
 /**

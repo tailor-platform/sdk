@@ -12,6 +12,13 @@ permissions:
   contents: read
   pull-requests: write
 
+# A new run for a pull request cancels the one in progress, including your jobs.
+# Events on a pull request that stays closed get a group of their own, so they
+# cannot cancel the cleanup run.
+concurrency:
+  group: tailor-preview-__WORKSPACE_NAME__-${{ (github.event.action == 'closed' || github.event.pull_request.state == 'open') && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: true
+
 jobs:
   # __CHANGES_JOB__
   tailor-preview-deploy:
@@ -22,9 +29,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    concurrency:
-      group: tailor-preview-__WORKSPACE_NAME__-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
     outputs:
       workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
       workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
@@ -66,7 +70,7 @@ jobs:
           folder-id: ${{ vars.TAILOR_PLATFORM_FOLDER_ID }}
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
-          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - id: tailor-preview-comment
@@ -106,6 +110,6 @@ jobs:
           workspace-name-prefix: __WORKSPACE_NAME__
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
-          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
           github-token: ${{ secrets.GITHUB_TOKEN }}

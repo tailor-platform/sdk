@@ -8,12 +8,7 @@ import {
   targetRequirements,
 } from "./env";
 import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind, writeLock } from "./lock";
-import {
-  renderBranchWorkflow,
-  renderCoordinateWorkflow,
-  renderPreviewWorkflow,
-  renderTagWorkflow,
-} from "./templates";
+import { renderBranchWorkflow, renderPreviewWorkflow, renderTagWorkflow } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
 
 const target = (kind: TargetKind, workspaceName: string, environment: string): LockTarget => ({
@@ -35,13 +30,14 @@ function referencedNames(content: string): string[] {
     if (comment && !line.trimStart().startsWith("# editable:")) continue;
     for (const match of line.matchAll(/\b(secrets|vars)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
       const type = match[1] === "secrets" ? "secret" : "variable";
+      if (type === "secret" && line.includes(`vars.${match[2]!} ||`)) continue;
       if (match[2] !== "GITHUB_TOKEN") names.add(`${type} ${match[2]!}`);
     }
   }
   return [...names].toSorted();
 }
 
-const namesOf = (kind: Exclude<TargetKind, "action">) =>
+const namesOf = (kind: TargetKind) =>
   targetRequirements(kind)
     .map((r) => `${r.type} ${r.name}`)
     .toSorted();
@@ -52,7 +48,6 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     environment: "my-app",
     packageManager: "pnpm" as const,
   };
-  const app = { name: "ims", dir: "apps/ims" };
 
   test.each([
     ["branch", renderBranchWorkflow({ ...common, branch: "main", erdPreview: null })],
@@ -69,42 +64,13 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     ["tag", renderTagWorkflow({ ...common, tagPattern: "v*" })],
     ["tag", renderTagWorkflow({ ...common, tagPattern: "v*", branch: "main" })],
     ["preview", renderPreviewWorkflow({ ...common, branch: "main", region: "us-west" })],
-    [
-      "coordinate",
-      renderCoordinateWorkflow({
-        coordinatorName: "all",
-        kind: "branch",
-        branch: "main",
-        actionGroups: [{ id: "ims", apps: [app] }],
-        environment: "all",
-        packageManager: "pnpm",
-      }),
-    ],
-    [
-      "coordinate",
-      renderCoordinateWorkflow({
-        coordinatorName: "all",
-        kind: "tag",
-        actionGroups: [
-          {
-            id: "ims-oms",
-            apps: [
-              { ...app, hasStaticWebsites: true },
-              { name: "oms", dir: "apps/oms" },
-            ],
-          },
-        ],
-        environment: "all",
-        packageManager: "pnpm",
-      }),
-    ],
   ] as const)("%s", (kind, render) => {
     expect(referencedNames(render.content)).toEqual(namesOf(kind));
   });
 });
 
 describe("how to get each value", () => {
-  test.each(["branch", "tag", "coordinate", "preview"] as const)(
+  test.each(["branch", "tag", "preview"] as const)(
     "is described for every entry a %s target needs",
     (kind) => {
       expect(targetRequirements(kind).filter((r) => r.howTo.trim() === "")).toEqual([]);
@@ -136,7 +102,7 @@ describe("collectEnvironmentRequirements", () => {
 
     expect(env?.environment).toBe("stg");
     expect(env?.requirements.filter((r) => r.required).map((r) => [r.type, r.name])).toEqual([
-      ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID"],
+      ["variable", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID"],
       ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET"],
       ["variable", "TAILOR_PLATFORM_WORKSPACE_ID"],
     ]);
@@ -200,14 +166,6 @@ describe("collectEnvironmentRequirements", () => {
     expect(envs.map((e) => e.environment)).toEqual(["production", "stg"]);
   });
 
-  test("skips composite action targets, which read no secrets or variables", () => {
-    const envs = collectEnvironmentRequirements(
-      lockOf(target("action", "ims", "ims"), target("coordinate", "all", "production")),
-    );
-
-    expect(envs.map((e) => e.environment)).toEqual(["production"]);
-  });
-
   test("treats environment names differing only in case as one environment, as GitHub does", () => {
     const envs = collectEnvironmentRequirements(
       lockOf(target("branch", "my-app", "production"), target("tag", "my-app", "Production")),
@@ -247,7 +205,7 @@ describe("renderGhCommands", () => {
   test("sets required entries without embedding any value", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
-    expect(lines).toContain("gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=stg/eu");
+    expect(lines).toContain("gh variable set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=stg/eu");
     expect(lines).toContain(
       "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env=stg/eu",
     );
@@ -299,7 +257,7 @@ describe("when the repository is known from the origin remote", () => {
         'gh api -X PUT "repos/tailor-platform/sdk/environments/production" --silent; fi',
     );
     expect(lines).toContain(
-      "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=production --repo=tailor-platform/sdk",
+      "gh variable set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=production --repo=tailor-platform/sdk",
     );
   });
 
@@ -422,7 +380,7 @@ describe("renderTerraform", () => {
     expect(hcl).toContain(
       "#   export TF_VAR_production_tailor_platform_machine_user_client_secret=",
     );
-    expect(hcl).toContain("#   export TF_VAR_stg_eu_tailor_platform_machine_user_client_id=");
+    expect(hcl).toContain("#   export TF_VAR_stg_eu_tailor_platform_machine_user_client_secret=");
   });
 
   test("links to the Tailor Platform docs that explain organizations, folders, and machine users", () => {
@@ -478,13 +436,6 @@ describe("setupEnv", () => {
     using tmp = tempDir("setup-env-");
 
     expect(() => setupEnv({ outputDir: tmp.dir, format: "gh" })).toThrow(/tailor\.lock/);
-  });
-
-  test("points to `setup ci coordinate` when the lock only has composite actions", () => {
-    using tmp = tempDir("setup-env-");
-    writeLock(tmp.dir, lockOf(target("action", "ims", "ims")));
-
-    expect(() => setupEnv({ outputDir: tmp.dir, format: "gh" })).toThrow(/setup ci coordinate/);
   });
 
   test.each([

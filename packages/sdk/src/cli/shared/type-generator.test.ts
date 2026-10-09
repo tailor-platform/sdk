@@ -565,3 +565,48 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain("interface SecretVaultNameRegistry {}");
   });
 });
+
+describe("generateTypeDefinition DateRepresentationRegistry", () => {
+  const base = [
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  ] as const;
+
+  test("keys the app's setting by value and name", () => {
+    const result = generateTypeDefinition(...base, {
+      appName: "example",
+      defaultDateRepresentation: "temporal",
+    });
+    expect(result).toContain("interface DateRepresentationRegistry {");
+    expect(result).toContain('    example: "temporal";');
+  });
+
+  test("records an unset app under the unset key so it follows the SDK default", () => {
+    const result = generateTypeDefinition(...base, {
+      appName: "example",
+      defaultDateRepresentation: undefined,
+    });
+    expect(result).toContain('    example: "unset";');
+  });
+
+  test("keeps the app name verbatim inside the key", () => {
+    const result = generateTypeDefinition(...base, {
+      appName: "my-app",
+      defaultDateRepresentation: "temporal",
+    });
+    expect(result).toContain('    "my-app": "temporal";');
+  });
+
+  test("emits an empty registry when the app is unknown", () => {
+    expect(generateTypeDefinition(undefined, undefined)).toContain(
+      "interface DateRepresentationRegistry {}",
+    );
+  });
+});

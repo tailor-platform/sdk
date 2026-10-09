@@ -2,6 +2,7 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { protoEnumLookup } from "#/cli/shared/proto-enum";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 export type WorkflowWaitUntil = "success" | "suspended" | "terminal";
@@ -13,14 +14,32 @@ export interface WorkflowExecutionStatusClassification {
   status: WorkflowExecution_Status;
 }
 
-/**
- * Check if workflow execution status is successful.
- * @param status - Workflow execution status enum value
- * @returns True if status is success
- */
-function isWorkflowExecutionSuccessStatus(status: WorkflowExecution_Status): boolean {
-  return status === WorkflowExecution_Status.SUCCESS;
+const WORKFLOW_EXECUTION_STATUS_CLASS = {
+  [WorkflowExecution_Status.UNSPECIFIED]: "transient",
+  [WorkflowExecution_Status.PENDING]: "transient",
+  [WorkflowExecution_Status.PENDING_RESUME]: "suspended",
+  [WorkflowExecution_Status.RUNNING]: "transient",
+  [WorkflowExecution_Status.SUCCESS]: "success",
+  [WorkflowExecution_Status.FAILED]: "failure",
+  [WorkflowExecution_Status.PENDING_RETRY]: "transient",
+  [WorkflowExecution_Status.WAITING]: "suspended",
+  [WorkflowExecution_Status.CANCELED]: "failure",
+} satisfies Record<WorkflowExecution_Status, WorkflowExecutionStatusClass>;
+
+function classifyStatus(status: WorkflowExecution_Status): WorkflowExecutionStatusClass {
+  // A status newer than the stubs is treated as transient, so waiting continues until the timeout.
+  return protoEnumLookup(WORKFLOW_EXECUTION_STATUS_CLASS, status, "transient");
 }
+
+const WORKFLOW_JOB_EXECUTION_SUSPENDED = {
+  [WorkflowJobExecution_Status.UNSPECIFIED]: false,
+  [WorkflowJobExecution_Status.RUNNING]: false,
+  [WorkflowJobExecution_Status.SUSPEND]: true,
+  [WorkflowJobExecution_Status.SUCCESS]: false,
+  [WorkflowJobExecution_Status.FAILED]: false,
+  [WorkflowJobExecution_Status.WAITING]: true,
+  [WorkflowJobExecution_Status.CANCELED]: false,
+} satisfies Record<WorkflowJobExecution_Status, boolean>;
 
 /**
  * Check if workflow job execution status is suspended or waiting.
@@ -28,9 +47,7 @@ function isWorkflowExecutionSuccessStatus(status: WorkflowExecution_Status): boo
  * @returns True if status represents a wait point
  */
 function isWorkflowJobExecutionSuspendedStatus(status: WorkflowJobExecution_Status): boolean {
-  return (
-    status === WorkflowJobExecution_Status.SUSPEND || status === WorkflowJobExecution_Status.WAITING
-  );
+  return protoEnumLookup(WORKFLOW_JOB_EXECUTION_SUSPENDED, status, false);
 }
 
 /**
@@ -39,10 +56,7 @@ function isWorkflowJobExecutionSuspendedStatus(status: WorkflowJobExecution_Stat
  * @returns True if status represents a suspended execution
  */
 export function isWorkflowExecutionSuspendedStatus(status: WorkflowExecution_Status): boolean {
-  return (
-    status === WorkflowExecution_Status.PENDING_RESUME ||
-    status === WorkflowExecution_Status.WAITING
-  );
+  return classifyStatus(status) === "suspended";
 }
 
 /**
@@ -51,34 +65,7 @@ export function isWorkflowExecutionSuspendedStatus(status: WorkflowExecution_Sta
  * @returns True if status represents failure
  */
 export function isWorkflowExecutionFailureStatus(status: WorkflowExecution_Status): boolean {
-  return status === WorkflowExecution_Status.FAILED || status === WorkflowExecution_Status.CANCELED;
-}
-
-/**
- * Check if workflow execution status can still progress without user action.
- * @param status - Workflow execution status enum value
- * @returns True if status is transient
- */
-function isWorkflowExecutionTransientStatus(status: WorkflowExecution_Status): boolean {
-  return (
-    status === WorkflowExecution_Status.UNSPECIFIED ||
-    status === WorkflowExecution_Status.PENDING ||
-    status === WorkflowExecution_Status.RUNNING ||
-    status === WorkflowExecution_Status.PENDING_RETRY
-  );
-}
-
-/**
- * Check if workflow execution status is terminal.
- * @param status - Workflow execution status enum value
- * @returns True if status is terminal
- */
-function isWorkflowExecutionTerminalStatus(status: WorkflowExecution_Status): boolean {
-  return (
-    isWorkflowExecutionSuccessStatus(status) ||
-    isWorkflowExecutionFailureStatus(status) ||
-    isWorkflowExecutionSuspendedStatus(status)
-  );
+  return classifyStatus(status) === "failure";
 }
 
 /**
@@ -89,22 +76,13 @@ function isWorkflowExecutionTerminalStatus(status: WorkflowExecution_Status): bo
 export function classifyWorkflowExecutionStatus(
   execution: WorkflowExecution,
 ): WorkflowExecutionStatusClassification {
-  if (isWorkflowExecutionTerminalStatus(execution.status)) {
-    if (isWorkflowExecutionSuccessStatus(execution.status)) {
-      return { statusClass: "success", status: execution.status };
-    }
-    if (isWorkflowExecutionFailureStatus(execution.status)) {
-      return { statusClass: "failure", status: execution.status };
-    }
-    return { statusClass: "suspended", status: execution.status };
+  const statusClass = classifyStatus(execution.status);
+  if (statusClass !== "transient") {
+    return { statusClass, status: execution.status };
   }
   if (execution.jobExecutions.some((job) => isWorkflowJobExecutionSuspendedStatus(job.status))) {
     return { statusClass: "suspended", status: execution.status };
   }
-  if (isWorkflowExecutionTransientStatus(execution.status)) {
-    return { statusClass: "transient", status: execution.status };
-  }
-  // Safety net: unknown future statuses are treated as transient
   return { statusClass: "transient", status: execution.status };
 }
 

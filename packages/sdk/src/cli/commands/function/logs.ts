@@ -35,6 +35,7 @@ import {
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { protoEnumName } from "#/cli/shared/proto-enum";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 
@@ -66,14 +67,7 @@ interface FunctionExecutionDetailInfo extends FunctionExecutionListInfo {
  * @returns Type string representation
  */
 function functionExecutionTypeToString(type: FunctionExecution_Type): string {
-  switch (type) {
-    case FunctionExecution_Type.STANDARD:
-      return "STANDARD";
-    case FunctionExecution_Type.JOB:
-      return "JOB";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumName(FunctionExecution_Type, type) ?? "UNSPECIFIED";
 }
 
 /**

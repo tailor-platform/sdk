@@ -7,26 +7,20 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
-  printCoordinateNextSteps,
   printTargetNextSteps,
-  setupCoordinate,
   setupTarget,
   type BranchSetupOptions,
-  type CoordinateSetupOptions,
 } from "./generate";
 import { detectDefaultBranch } from "./git";
-import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
-import { computeManagedHash, isManagedHash, normalizeActionContent } from "./managed";
+import { hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
+import { computeManagedHash, isManagedHash } from "./managed";
 import {
   ACTIONS_SHA,
   ACTIONS_VERSION,
   TEMPLATE_VERSION,
   detectPackageManager,
-  renderActionWorkflow,
   renderBranchWorkflow,
-  renderCoordinateWorkflow,
   renderPreviewWorkflow,
-  renderTailorSetupAction,
   renderTagWorkflow,
   type RenderBranchParams,
   type RenderTagParams,
@@ -123,7 +117,7 @@ describe("renderBranchWorkflow", () => {
   test("uses the unified secret names and targets the workspace-id variable", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain(
-      "platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
+      "platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
     );
     expect(content).toContain(
       "platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
@@ -798,7 +792,7 @@ describe("change detection", () => {
     expect(workflow.on.push?.paths).toBeUndefined();
   });
 
-  test("detects changes under every app directory and the additional paths, in order", () => {
+  test("detects changes under every app directory, to the workflow file itself, and to the additional paths, in order", () => {
     const workflow = parseYAML(
       renderBranchWorkflow({
         ...branchBase,
@@ -810,8 +804,50 @@ describe("change detection", () => {
     expect(patternsOf(workflow)).toEqual([
       "apps/a/**",
       "apps/b/**",
+      ".github/workflows/tailor-my-app.yml",
       "modules/**",
       "!apps/a/**/*.md",
+    ]);
+  });
+
+  test("runs the jobs when only the branch workflow file changes", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toContain(".github/workflows/tailor-my-app.yml");
+  });
+
+  test("places the workflow file before the additional paths, so a later exclusion can drop it", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/a",
+        extraPaths: ["!.github/workflows/tailor-my-app.yml"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app.yml",
+      "!.github/workflows/tailor-my-app.yml",
+    ]);
+  });
+
+  test("keeps an additional path that re-includes the workflow file after excluding it", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/a",
+        extraPaths: ["!.github/workflows/tailor-my-app.yml", ".github/workflows/tailor-my-app.yml"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app.yml",
+      "!.github/workflows/tailor-my-app.yml",
+      ".github/workflows/tailor-my-app.yml",
     ]);
   });
 
@@ -838,6 +874,22 @@ describe("change detection", () => {
 
     expect(gated(jobs["tailor-preview-deploy"])).toBe(true);
     expect(jobs["tailor-preview-cleanup"]?.needs).toBeUndefined();
+  });
+
+  test("runs the preview deploy when only the preview workflow file changes", () => {
+    const workflow = parseYAML(
+      renderPreviewWorkflow({
+        ...previewBase,
+        workingDirectory: "apps/a",
+        extraPaths: ["modules/**"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app-preview.yml",
+      "modules/**",
+    ]);
   });
 
   test("generates no change detection for an app at the repository root", () => {
@@ -983,6 +1035,43 @@ describe("renderPreviewWorkflow", () => {
       "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
     });
   });
+
+  test.each([false, true])(
+    "cancels a superseded run as a whole, except from an event on a closed pull request (requirePreviewLabel: %s)",
+    (requirePreviewLabel) => {
+      const { content } = renderPreviewWorkflow({
+        workspaceName: "my-app",
+        branch: "main",
+        environment: "my-app",
+        packageManager: "pnpm",
+        region: "us-west",
+        requirePreviewLabel,
+      });
+      const workflow = parseYAML(content) as {
+        concurrency?: { group?: string; "cancel-in-progress"?: boolean };
+        jobs: Record<string, Record<string, unknown>>;
+      };
+      const groupOn = (action: string, state: "open" | "closed") =>
+        String(workflow.concurrency?.group).replace(/\$\{\{(.*?)\}\}/g, (_match, expression) =>
+          String(
+            vm.runInNewContext(expression, {
+              format: (template: string, ...args: unknown[]) =>
+                template.replace(/\{(\d+)\}/g, (_m, index) => String(args[Number(index)])),
+              github: { run_id: 9001, event: { action, pull_request: { number: 42, state } } },
+            }),
+          ),
+        );
+
+      expect(workflow.concurrency?.["cancel-in-progress"]).toBe(true);
+      expect(groupOn("synchronize", "open")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("reopened", "open")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("closed", "closed")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("labeled", "closed")).toBe("tailor-preview-my-app-run-9001");
+      for (const job of Object.values(workflow.jobs)) {
+        expect(job).not.toHaveProperty("concurrency");
+      }
+    },
+  );
 });
 
 describe("Tailor Platform action pins", () => {
@@ -1000,16 +1089,6 @@ describe("Tailor Platform action pins", () => {
         packageManager: "pnpm",
         region: "us-west",
       }).content,
-      renderCoordinateWorkflow({
-        coordinatorName: "main",
-        kind: "tag",
-        actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
-        branch: "main",
-        environment: "main",
-        packageManager: "pnpm",
-      }).content,
-      renderActionWorkflow({ workspaceName: "my-app" }).content,
-      renderTailorSetupAction({ packageManager: "pnpm" }),
     ];
 
     for (const content of contents) {
@@ -1061,17 +1140,6 @@ describe("drift check failure policy", () => {
         }).content,
         "tailor-preview-deploy",
       ],
-      [
-        renderCoordinateWorkflow({
-          coordinatorName: "main",
-          kind: "branch",
-          actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
-          branch: "main",
-          environment: "main",
-          packageManager: "pnpm",
-        }).content,
-        "tailor-plan",
-      ],
     ] as const;
 
     for (const [content, jobId] of workflows) {
@@ -1084,13 +1152,6 @@ describe("drift check failure policy", () => {
         "fail-on-drift": "${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}",
       });
     }
-  });
-
-  test("does not add a drift-check action to an action target", () => {
-    const { content } = renderActionWorkflow({ workspaceName: "my-app" });
-
-    expect(content).not.toContain("tailor-drift-check");
-    expect(content).not.toContain("TAILOR_PLATFORM_FAIL_ON_DRIFT");
   });
 });
 
@@ -1162,7 +1223,7 @@ describe("decideAction", () => {
     templateVersion: 1,
     inputs: {} as never,
     generatedIds: rendered.generatedIds,
-    contentHash: computeManagedHash(rendered.content, "workflow", rendered.generatedIds),
+    contentHash: computeManagedHash(rendered.content, rendered.generatedIds),
   };
   const legacyTarget = { ...target, contentHash: hashContent("name: managed\n") };
   const withUserStep = rendered.content.replace(
@@ -1238,43 +1299,6 @@ describe("decideAction", () => {
       decideAction({ existing, fileExists: true, currentContent: managedEdit, force: false }),
     ).toEqual({ action: "conflict", reason: expect.stringMatching(reason) });
   });
-
-  test("legacy action entries compare the normalized build-site body", () => {
-    const original =
-      "runs:\n  steps:\n    - id: build-site\n      shell: bash\n      run: |\n        true\n    - id: tailor-apply\n";
-    const edited = original.replace("        true", "        pnpm build");
-    const existing = {
-      ...target,
-      kind: "action" as const,
-      generatedIds: ["tailor-apply"],
-      contentHash: hashContent(normalizeActionContent(original)),
-    };
-    expect(
-      decideAction({ existing, fileExists: true, currentContent: edited, force: false }).action,
-    ).toBe("regenerate");
-  });
-});
-
-describe("normalizeActionContent", () => {
-  const BASE = [
-    "    - id: build-site",
-    "      shell: bash",
-    "      run: |",
-    "        # user build command here",
-    "    - id: tailor-apply",
-  ].join("\n");
-
-  test("replaces run body with placeholder", () => {
-    const result = normalizeActionContent(BASE);
-    expect(result).toContain("- id: build-site");
-    expect(result).not.toContain("# user build command here");
-    expect(result).toContain("        true");
-  });
-
-  test("no-op when build-site step is absent", () => {
-    const content = "    - id: tailor-apply\n      uses: tailor-platform/actions/deploy@abc";
-    expect(normalizeActionContent(content)).toBe(content);
-  });
 });
 
 describe("setupTarget (integration)", () => {
@@ -1319,7 +1343,7 @@ describe("setupTarget (integration)", () => {
     expect(lock?.targets[0]).toMatchObject({ kind: "branch", workspaceName: "cfg-app" });
     const target = lock?.targets[0];
     expect(target?.contentHash).toBe(
-      computeManagedHash(fs.readFileSync(wf, "utf-8"), "workflow", target?.generatedIds ?? []),
+      computeManagedHash(fs.readFileSync(wf, "utf-8"), target?.generatedIds ?? []),
     );
   });
 
@@ -1833,7 +1857,7 @@ export default defineConfig({
         {
           ...target,
           templateVersion: TEMPLATE_VERSION - 1,
-          contentHash: computeManagedHash(legacy, "workflow", target.generatedIds),
+          contentHash: computeManagedHash(legacy, target.generatedIds),
         },
       ],
     });
@@ -1841,6 +1865,73 @@ export default defineConfig({
     await setupTarget(opts);
 
     expect(fs.readFileSync(wf, "utf-8")).toBe(generated.concat(userJob));
+  });
+
+  describe("preview: re-running on a workflow whose concurrency was on the deploy job", () => {
+    const opts = {
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+    } as const;
+    const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+    const topLevelConcurrency = /^concurrency:\n(?: {2}.*\n)+\n/m;
+    const jobConcurrency =
+      "    concurrency:\n" +
+      "      group: tailor-preview-my-app-${{ github.event.pull_request.number }}\n" +
+      "      cancel-in-progress: true\n";
+    const userConcurrency =
+      "concurrency:\n" +
+      "  group: mine-${{ github.workflow }}-${{ github.event.pull_request.number }}\n" +
+      "  cancel-in-progress: true\n\n";
+    const writeLegacy = (generated: string, topLevel: string) => {
+      expect(generated).toMatch(topLevelConcurrency);
+      const legacy = generated
+        .replace(topLevelConcurrency, topLevel)
+        .replace("    outputs:\n", `${jobConcurrency}    outputs:\n`);
+      expect(legacy).toContain(jobConcurrency);
+      fs.writeFileSync(wf, legacy);
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, {
+        ...lock,
+        targets: [
+          {
+            ...target,
+            templateVersion: TEMPLATE_VERSION - 1,
+            contentHash: computeManagedHash(legacy, target.generatedIds),
+          },
+        ],
+      });
+    };
+
+    test("moves it to the top level", async () => {
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wf, "utf-8");
+      writeLegacy(generated, "");
+
+      await setupTarget(opts);
+
+      expect(fs.readFileSync(wf, "utf-8")).toBe(generated);
+    });
+
+    test("keeps a top-level concurrency the user added", async () => {
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wf, "utf-8");
+      writeLegacy(generated, userConcurrency);
+
+      await setupTarget(opts);
+
+      expect(fs.readFileSync(wf, "utf-8")).toBe(
+        generated.replace(topLevelConcurrency, userConcurrency),
+      );
+    });
   });
 
   test("preview: require-preview-label variant adds label filter to trigger", async () => {
@@ -1922,7 +2013,7 @@ export default defineConfig({
 
       const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-erp.yml"), "utf-8");
       expect(wf).toContain(
-        "path-patterns: |\n            apps/erp/backend/**\n            apps/erp/frontend/**\n            pnpm-lock.yaml\n",
+        "path-patterns: |\n            apps/erp/backend/**\n            .github/workflows/tailor-erp.yml\n            apps/erp/frontend/**\n            pnpm-lock.yaml\n",
       );
       expect(readLock(testDir)?.targets[0]?.inputs.paths).toEqual([
         "apps/erp/frontend/**",
@@ -2165,325 +2256,5 @@ export default defineConfig({
         "apps/users/backend/tailor.config.ts",
       ]);
     });
-  });
-
-  test("action: preserves user-edited tailor-build-site run body on rerun without --force", async () => {
-    const actionOpts = (): Parameters<typeof setupTarget>[0] => ({
-      kind: "action",
-      workspaceName: "my-app",
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
-      loadHasStaticWebsites: async () => true,
-    });
-    // First run: generate the composite action
-    await setupTarget(actionOpts());
-    const actionFile = path.join(testDir, ".github/actions/tailor-my-app/action.yml");
-    // Simulate user customizing the build command
-    const generated = fs.readFileSync(actionFile, "utf-8");
-    const edited = generated.replace(
-      /(\s*- id: tailor-build-site[\s\S]*?run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/,
-      (_, header, _body, tail) => `${header}\n        pnpm run build:static${tail}`,
-    );
-    fs.writeFileSync(actionFile, edited, "utf-8");
-    // Second run: should preserve the custom build command
-    await setupTarget(actionOpts());
-    expect(fs.readFileSync(actionFile, "utf-8")).not.toBe(generated);
-    const afterRerun = fs.readFileSync(actionFile, "utf-8");
-    expect(afterRerun).toContain("pnpm run build:static");
-  });
-
-  test("action: stops on a user step named tailor-build-site when the action has no static website, even with --force", async () => {
-    const opts: Parameters<typeof setupTarget>[0] = {
-      kind: "action",
-      workspaceName: "my-app",
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
-      loadHasStaticWebsites: async () => false,
-    };
-    await setupTarget(opts);
-    const actionFile = path.join(testDir, ".github/actions/tailor-my-app/action.yml");
-    const edited = fs
-      .readFileSync(actionFile, "utf-8")
-      .replace(
-        /( {4}- id: tailor-apply\n)/,
-        "    - id: tailor-build-site\n      shell: bash\n      run: pnpm run build:docs\n$1",
-      );
-    fs.writeFileSync(actionFile, edited, "utf-8");
-
-    await expect(setupTarget({ ...opts, force: true })).rejects.toThrow(
-      /"tailor-build-site" uses the tailor- prefix/,
-    );
-
-    expect(fs.readFileSync(actionFile, "utf-8")).toBe(edited);
-  });
-
-  test("action: keeps a user step named build-site when the action has no static website", async () => {
-    const opts: Parameters<typeof setupTarget>[0] = {
-      kind: "action",
-      workspaceName: "my-app",
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
-      loadHasStaticWebsites: async () => false,
-    };
-    await setupTarget(opts);
-    const actionFile = path.join(testDir, ".github/actions/tailor-my-app/action.yml");
-    const edited = fs
-      .readFileSync(actionFile, "utf-8")
-      .replace(
-        /( {4}- id: tailor-apply\n)/,
-        "    - id: build-site\n      shell: bash\n      run: pnpm run build:docs\n$1",
-      );
-    fs.writeFileSync(actionFile, edited, "utf-8");
-
-    await setupTarget(opts);
-
-    expect(fs.readFileSync(actionFile, "utf-8")).toBe(edited);
-  });
-});
-
-describe("setupCoordinate", () => {
-  const testDir = path.join(
-    "/tmp",
-    `setup-coordinate-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-  const writeConfig = (content: string) =>
-    fs.writeFileSync(path.join(testDir, "tailor.config.ts"), content);
-  const writeAppConfig = (name: string, dir: string) => {
-    const absDir = path.join(testDir, dir);
-    fs.mkdirSync(absDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(absDir, "tailor.config.ts"),
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "${name}" });\n`,
-    );
-  };
-
-  const actionOpts = (
-    name: string,
-    dir = ".",
-    hasStaticWebsites = false,
-  ): Parameters<typeof setupTarget>[0] => ({
-    kind: "action",
-    workspaceName: name,
-    dir,
-    force: false,
-    outputDir: testDir,
-    gitRunner: () => "origin/main",
-    loadConfigName: async () => name,
-    loadConfigId: async () => undefined,
-    loadHasStaticWebsites: async () => hasStaticWebsites,
-  });
-
-  const coordinateOpts = (
-    overrides: Partial<CoordinateSetupOptions> = {},
-  ): CoordinateSetupOptions => ({
-    coordinatorName: "main",
-    coordinateKind: "branch",
-    actions: ["api"],
-    branch: "main",
-    force: false,
-    outputDir: testDir,
-    gitRunner: () => "origin/main",
-    ...overrides,
-  });
-
-  aroundEach(async (runTest) => {
-    fs.mkdirSync(testDir, { recursive: true });
-    fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
-    writeConfig(
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
-    );
-    await runTest();
-    fs.rmSync(testDir, { recursive: true, force: true });
-  });
-
-  test("happy path: generates coordinator workflow and tailor-setup action", async () => {
-    await setupTarget(actionOpts("api"));
-    await setupCoordinate(coordinateOpts());
-
-    const wf = path.join(testDir, ".github/workflows/tailor-coordinate-main.yml");
-    const setupAction = path.join(testDir, ".github/actions/tailor-setup/action.yml");
-    expect(fs.existsSync(wf)).toBe(true);
-    expect(fs.existsSync(setupAction)).toBe(true);
-
-    const wfContent = fs.readFileSync(wf, "utf-8");
-    expect(() => parseYAML(wfContent)).not.toThrow();
-    expect(wfContent).toContain("tailor-deploy-api");
-    expect(wfContent).toContain("working-directory: .");
-
-    const lock = readLock(testDir);
-    expect(lock?.targets.some((t) => t.kind === "coordinate" && t.workspaceName === "main")).toBe(
-      true,
-    );
-  });
-
-  test("next steps point to `tailor setup ci env` for the environment's secrets and variables", async () => {
-    await setupTarget(actionOpts("api"));
-    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
-    printCoordinateNextSteps(await setupCoordinate(coordinateOpts({ environment: "production" })));
-    const output = log.mock.calls.map(([line]) => line).join("\n");
-
-    expect(output).toContain("tailor setup ci env --environment production");
-    expect(output).not.toContain("gh secret set");
-  });
-
-  test("groups comma-separated --action values into one multi-config plan and deploy step", async () => {
-    writeAppConfig("api", "apps/api");
-    writeAppConfig("worker", "apps/worker");
-    await setupTarget(actionOpts("api", "apps/api"));
-    await setupTarget(actionOpts("worker", "apps/worker"));
-
-    await setupCoordinate(coordinateOpts({ actions: ["api,worker"] }));
-
-    const wf = path.join(testDir, ".github/workflows/tailor-coordinate-main.yml");
-    const wfContent = fs.readFileSync(wf, "utf-8");
-    expect(() => parseYAML(wfContent)).not.toThrow();
-    expect(wfContent).toContain("tailor-generate-check-api");
-    expect(wfContent).toContain("tailor-generate-check-worker");
-    expect(wfContent).toContain("tailor-plan-api-worker");
-    expect(wfContent).not.toContain("tailor-plan-api\n");
-    expect(wfContent).not.toContain("tailor-plan-worker\n");
-    expect(wfContent).toContain("tailor-deploy-api-worker");
-    expect(wfContent).not.toContain("tailor-deploy-api\n");
-    expect(wfContent).not.toContain("tailor-deploy-worker\n");
-    expect(wfContent).toContain(
-      "TAILOR_PLATFORM_SDK_CONFIG_PATH: apps/api/tailor.config.ts,apps/worker/tailor.config.ts",
-    );
-    expect(wfContent).toContain("label: main/api-worker");
-
-    const lock = readLock(testDir);
-    const target = lock?.targets.find((t) => t.kind === "coordinate" && t.workspaceName === "main");
-    expect(target?.inputs.actionDirs).toEqual(["apps/api", "apps/worker"]);
-  });
-
-  test("records the --action grouping in the lock so the coordinator can be regenerated", async () => {
-    writeAppConfig("api", "apps/api");
-    writeAppConfig("worker", "apps/worker");
-    writeAppConfig("web", "apps/web");
-    await setupTarget(actionOpts("api", "apps/api"));
-    await setupTarget(actionOpts("worker", "apps/worker"));
-    await setupTarget(actionOpts("web", "apps/web"));
-
-    await setupCoordinate(coordinateOpts({ actions: ["api, worker", "web"] }));
-
-    const target = findTarget(readLock(testDir), "coordinate", "main");
-    expect(target?.inputs.actionGroups).toEqual([["api", "worker"], ["web"]]);
-  });
-
-  test("builds static websites before a multi-config deploy", async () => {
-    writeAppConfig("api", "apps/api");
-    writeAppConfig("worker", "apps/worker");
-    await setupTarget(actionOpts("api", "apps/api", true));
-    await setupTarget(actionOpts("worker", "apps/worker"));
-
-    await setupCoordinate(coordinateOpts({ actions: ["api,worker"] }));
-
-    const wf = path.join(testDir, ".github/workflows/tailor-coordinate-main.yml");
-    const wfContent = fs.readFileSync(wf, "utf-8");
-    expect(() => parseYAML(wfContent)).not.toThrow();
-    expect(wfContent).toContain("tailor-build-site-api");
-    expect(wfContent).not.toContain("tailor-build-site-worker");
-    expect(wfContent).toContain('deploy: "false"');
-    expect(wfContent).toContain('build-site: "false"');
-    expect(wfContent).toContain("tailor-deploy-api-worker");
-  });
-
-  test("keeps plan labels unique when group ids collide", async () => {
-    writeAppConfig("api", "apps/api");
-    writeAppConfig("worker", "apps/worker");
-    writeAppConfig("api-worker", "apps/api-worker");
-    await setupTarget(actionOpts("api", "apps/api"));
-    await setupTarget(actionOpts("worker", "apps/worker"));
-    await setupTarget(actionOpts("api-worker", "apps/api-worker"));
-
-    await setupCoordinate(coordinateOpts({ actions: ["api,worker", "api-worker"] }));
-
-    const wf = path.join(testDir, ".github/workflows/tailor-coordinate-main.yml");
-    const wfContent = fs.readFileSync(wf, "utf-8");
-    expect(() => parseYAML(wfContent)).not.toThrow();
-    expect(wfContent).toContain("tailor-plan-api-worker");
-    expect(wfContent).toContain("tailor-plan-api-worker-2");
-    expect([...wfContent.matchAll(/^\s+label: main\/api-worker$/gm)]).toHaveLength(1);
-    expect([...wfContent.matchAll(/^\s+label: main\/api-worker-2$/gm)]).toHaveLength(1);
-  });
-
-  test("errors when a multi-config group includes an older action template", async () => {
-    writeAppConfig("api", "apps/api");
-    writeAppConfig("worker", "apps/worker");
-    await setupTarget(actionOpts("api", "apps/api"));
-    await setupTarget(actionOpts("worker", "apps/worker"));
-
-    const lock = readLock(testDir);
-    if (!lock) {
-      throw new Error("Expected setup action to create a lock file.");
-    }
-    writeLock(testDir, {
-      ...lock,
-      targets: lock.targets.map((target) =>
-        target.kind === "action" && target.workspaceName === "api"
-          ? { ...target, templateVersion: TEMPLATE_VERSION - 1 }
-          : target,
-      ),
-    });
-
-    await expect(setupCoordinate(coordinateOpts({ actions: ["api,worker"] }))).rejects.toThrow(
-      /older setup template/,
-    );
-  });
-
-  test("errors when lock file is missing", async () => {
-    await expect(setupCoordinate(coordinateOpts())).rejects.toThrow(/tailor\.lock not found/);
-  });
-
-  test("errors when an action target is not in the lock", async () => {
-    await setupTarget(actionOpts("api"));
-    await expect(setupCoordinate(coordinateOpts({ actions: ["missing-app"] }))).rejects.toThrow(
-      /not found in .github\/tailor\.lock/,
-    );
-  });
-
-  test("takes an --action value as the exact action name, even one starting with tailor-", async () => {
-    writeAppConfig("tailor-crm", "apps/crm");
-    await setupTarget(actionOpts("tailor-crm", "apps/crm"));
-
-    await setupCoordinate(coordinateOpts({ actions: ["tailor-crm"] }));
-
-    const target = findTarget(readLock(testDir), "coordinate", "main");
-    expect(target?.inputs.actionGroups).toEqual([["tailor-crm"]]);
-  });
-
-  test("suggests the name without tailor- when no action has the given name", async () => {
-    await setupTarget(actionOpts("api"));
-
-    await expect(setupCoordinate(coordinateOpts({ actions: ["tailor-api"] }))).rejects.toThrow(
-      /Action target "tailor-api" not found[\s\S]*--action api/,
-    );
-  });
-
-  test("errors on duplicate --action names", async () => {
-    await setupTarget(actionOpts("api"));
-    await expect(setupCoordinate(coordinateOpts({ actions: ["api", "api"] }))).rejects.toThrow(
-      /Duplicate --action/,
-    );
-  });
-
-  test("does not overwrite an existing tailor-setup action", async () => {
-    await setupTarget(actionOpts("api"));
-    await setupCoordinate(coordinateOpts());
-    const setupAction = path.join(testDir, ".github/actions/tailor-setup/action.yml");
-    fs.writeFileSync(setupAction, "# hand edited\n");
-    await setupCoordinate(coordinateOpts({ force: true }));
-    expect(fs.readFileSync(setupAction, "utf-8")).toBe("# hand edited\n");
   });
 });

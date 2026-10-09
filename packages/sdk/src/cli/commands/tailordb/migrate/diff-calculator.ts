@@ -22,7 +22,7 @@ import type {
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 7 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 8 as const;
 
 /** Oldest migration file format this SDK can replay. */
 export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
@@ -333,6 +333,12 @@ export interface MigrationDiff {
    * means `false`.
    */
   temporal?: boolean;
+  /**
+   * The `defaultDateRepresentation` in effect when this migration's script was
+   * generated. The script keeps running with it, whatever the config says later.
+   * Absent means string values.
+   */
+  dateRepresentation?: "temporal" | "date";
 }
 
 /**

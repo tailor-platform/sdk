@@ -22,6 +22,9 @@ declare module "@tailor-platform/sdk" {
     "my-auth": true;
   }
   interface SecretVaultNameRegistry {}
+  interface DateRepresentationRegistry {
+    "static-web-site": "unset";
+  }
 }
 
 export {};

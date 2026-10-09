@@ -932,3 +932,27 @@ describe("TailorField clone-on-write / no aliasing", () => {
     expect(failed.issues).toBeDefined();
   });
 });
+
+describe("date representation metadata", () => {
+  test("a date field without `as` records that it follows the configured default", () => {
+    expect(t.date().metadata.as).toBe("default");
+    expect(t.datetime().metadata.as).toBe("default");
+    expect(t.time().metadata.as).toBe("default");
+  });
+
+  test('an explicit `as: "string"` is recorded so it can override the configured default', () => {
+    expect(t.date({ as: "string" }).metadata.as).toBe("string");
+    expect(t.datetime({ as: "string" }).metadata.as).toBe("string");
+    expect(t.time({ as: "string" }).metadata.as).toBe("string");
+  });
+
+  test("an explicit Date or Temporal `as` is recorded as written", () => {
+    expect(t.date({ as: "date" }).metadata.as).toBe("date");
+    expect(t.datetime({ as: "temporal" }).metadata.as).toBe("temporal");
+  });
+
+  test("fields of other types never record `as`", () => {
+    expect(t.string().metadata.as).toBeUndefined();
+    expect(t.object({ a: t.date() }).metadata.as).toBeUndefined();
+  });
+});
