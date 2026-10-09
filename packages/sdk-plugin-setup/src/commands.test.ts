@@ -63,6 +63,20 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
+  test("ci preview skips drafts unless --include-drafts is given", async () => {
+    await runCommand(setupCommand, ["ci", "preview", "--region", "us-west"]);
+    await runCommand(setupCommand, ["ci", "preview", "--region", "us-west", "--include-drafts"]);
+
+    expect(setupTarget).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ includeDrafts: false }),
+    );
+    expect(setupTarget).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ includeDrafts: true }),
+    );
+  });
+
   test.each(["action", "coordinate"])("ci %s is no longer a subcommand", async (subcommand) => {
     const result = await runCommand(setupCommand, ["ci", subcommand]);
 

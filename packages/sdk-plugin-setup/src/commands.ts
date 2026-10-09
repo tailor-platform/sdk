@@ -159,6 +159,10 @@ const previewCommand = defineAppCommand({
     "require-preview-label": arg(z.boolean().default(false), {
       description: "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.",
     }),
+    "include-drafts": arg(z.boolean().default(false), {
+      description:
+        "Also deploy preview for draft PRs. By default drafts are skipped and the preview deploys when the PR is marked ready for review.",
+    }),
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the preview jobs (defaults to the workspace name)",
     }),
@@ -184,6 +188,7 @@ const previewCommand = defineAppCommand({
       branch: args.branch,
       region: args.region,
       requirePreviewLabel: args["require-preview-label"],
+      includeDrafts: args["include-drafts"],
       environment: args.environment,
       dir: args.dir,
       extraPaths: args.paths,

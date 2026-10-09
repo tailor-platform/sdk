@@ -96,6 +96,11 @@ type PreviewSetupOptions = CommonSetupOptions & {
    * Default false: preview deploys on every PR.
    */
   requirePreviewLabel?: boolean;
+  /**
+   * When true, draft PRs get a preview too.
+   * Default false: drafts are skipped and the preview deploys once the PR is ready for review.
+   */
+  includeDrafts?: boolean;
 };
 
 export type SetupTargetOptions = BranchSetupOptions | TagSetupOptions | PreviewSetupOptions;
@@ -545,6 +550,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       packageManager,
       region: options.region,
       requirePreviewLabel: options.requirePreviewLabel ?? false,
+      includeDrafts: options.includeDrafts ?? false,
     });
   }
 
@@ -562,6 +568,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     packageManager,
     region: kind === "preview" ? options.region : undefined,
     requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
+    includeDrafts: kind === "preview" ? (options.includeDrafts ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
     erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
     apps:

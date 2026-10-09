@@ -306,6 +306,11 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewWorkflow", () =>
       params: { requirePreviewLabel: true },
     },
     {
+      name: "preview / pnpm / including drafts",
+      fileName: "preview-pnpm-drafts",
+      params: { includeDrafts: true },
+    },
+    {
       name: "preview / pnpm / with workingDirectory",
       fileName: "preview-pnpm-dir",
       params: { workingDirectory: "apps/backend" },

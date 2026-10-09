@@ -53,6 +53,11 @@ export type LockInputs = {
    */
   requirePreviewLabel?: boolean;
   /**
+   * For `preview` kind: when true, draft PRs get a preview too. False (default) means drafts
+   * are skipped and the preview deploys once the PR is marked ready for review.
+   */
+  includeDrafts?: boolean;
+  /**
    * For branch/tag/preview targets given several `--dir`: each app deployed in the one
    * multi-config run, in order. `dir` is then ".".
    */
