@@ -47,6 +47,7 @@ import {
   rollbackSingleMigrationAfterFailure,
   warnTablesLeftRestricted,
   type MigrationRestrictionState,
+  type RestrictedTables,
 } from "./migration-execution";
 import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import {
@@ -943,6 +944,7 @@ export async function applyTailorDB(
         );
       }
 
+      let unrestored: readonly RestrictedTables[] = [];
       try {
         await restoreMigrationRestrictions(
           client,
@@ -954,20 +956,28 @@ export async function applyTailorDB(
         );
       } catch (restorationError) {
         if (!migrationFailure) throw restorationError;
+        unrestored = readUnrestoredTables(restorationError);
         warnTablesLeftRestricted(
           `Could not restore every TailorDB table after the migration failed: ${
             restorationError instanceof Error ? restorationError.message : String(restorationError)
           }.`,
-          readUnrestoredTables(restorationError),
+          unrestored,
         );
         logger.log("The original migration error is reported below.");
         if (restorationError instanceof Error) restorationFailures.restoration = restorationError;
       }
       for (const { migration, tables } of unrolledBack) {
-        const lifted = new Set([
-          ...Object.keys(restorationSnapshots.get(migration.namespace)?.tables ?? {}),
-          ...(restorationSettings.get(migration.namespace)?.keys() ?? []),
-        ]);
+        const failedRestoration = unrestored.find(
+          (entry) => entry.namespace === migration.namespace,
+        );
+        const lifted = new Set(
+          failedRestoration?.tables.length === 0
+            ? []
+            : [
+                ...Object.keys(restorationSnapshots.get(migration.namespace)?.tables ?? {}),
+                ...(restorationSettings.get(migration.namespace)?.keys() ?? []),
+              ].filter((tableName) => !failedRestoration?.tables.includes(tableName)),
+        );
         const remaining = tables.filter((tableName) => !lifted.has(tableName));
         if (remaining.length === 0) continue;
         warnTablesLeftRestricted(
