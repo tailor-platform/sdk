@@ -1,4 +1,3 @@
-import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
@@ -6,10 +5,9 @@ import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
-import { fetchAll, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -33,14 +31,8 @@ import {
   formatMigrationNumber,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import {
-  compareSnapshotWithRemote,
-  generateAllTypeManifestsFromSnapshot,
-  protoGqlPermission,
-  type GenerateAllManifestsOptions,
-} from "./snapshot-manifest";
-import { handleOptionalToRequiredError } from "./types";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import { applySnapshotPlan, planSnapshotApply } from "./snapshot-apply";
+import type { GenerateAllManifestsOptions } from "./snapshot-manifest";
 
 interface SyncOptions {
   configPath?: string;
@@ -49,54 +41,6 @@ interface SyncOptions {
   yes?: boolean;
   workspaceId?: string;
   profile?: string;
-}
-
-type RemoteGqlPermission = Awaited<
-  ReturnType<OperatorClient["listTailorDBGQLPermissions"]>
->["permissions"][number];
-
-async function fetchRemoteGqlPermissions(
-  client: OperatorClient,
-  workspaceId: string,
-  namespace: string,
-): Promise<RemoteGqlPermission[]> {
-  return fetchAllTolerant(async (pageToken, maxPageSize) => {
-    const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
-      workspaceId,
-      namespaceName: namespace,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [permissions, nextPageToken];
-  });
-}
-
-async function fetchRemoteTypes(
-  client: OperatorClient,
-  workspaceId: string,
-  namespace: string,
-): Promise<ProtoTailorDBType[]> {
-  return fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
-        workspaceId,
-        namespaceName: namespace,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [tailordbTypes, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw CLIError({
-          code: "MIGRATION_NAMESPACE_NOT_DEPLOYED",
-          message: `Cannot sync: TailorDB namespace "${namespace}" has not been deployed yet.`,
-          suggestion: "Deploy the namespace before syncing its migration history.",
-          cause: error,
-        });
-      }
-      throw error;
-    }
-  });
 }
 
 /**
@@ -274,30 +218,13 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
   const currentState = await fetchRemoteMigrationState(client, trn);
   assertNoMigrationInProgress(currentState, target.namespace);
   const current = currentState.number;
-  const remoteTypes = await fetchRemoteTypes(client, workspaceId, target.namespace);
-  const existingTypeNames = new Set(remoteTypes.map((t) => t.name));
-  const { creates, updates, deletes } = compareSnapshotWithRemote(snapshot, existingTypeNames);
-
-  // GQL permissions are reconciled alongside tables: upsert the ones defined
-  // in the snapshot, delete remote ones with no snapshot counterpart
-  // (including those of deleted tables — an orphaned permission can block
-  // the table deletion).
-  const remoteGqlPermissions = await fetchRemoteGqlPermissions(
+  const plan = await planSnapshotApply({
     client,
     workspaceId,
-    target.namespace,
-  );
-  const remoteGqlPermissionTypes = new Set(remoteGqlPermissions.map((p) => p.typeName));
-  const desiredGqlPermissions = Object.entries(snapshot.tables).flatMap(
-    ([typeName, snapshotType]) =>
-      snapshotType.permissions?.gql
-        ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]
-        : [],
-  );
-  const desiredGqlPermissionTypes = new Set(desiredGqlPermissions.map((p) => p.typeName));
-  const gqlPermissionDeletes = remoteGqlPermissions.filter(
-    (p) => !desiredGqlPermissionTypes.has(p.typeName),
-  );
+    namespace: target.namespace,
+    snapshot,
+  });
+  const { creates, updates, deletes, desiredGqlPermissions, gqlPermissionDeletes } = plan;
 
   logger.newline();
   logger.info(`Namespace: ${styles.bold(target.namespace)}`);
@@ -366,72 +293,14 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     logger.newline();
   }
 
-  const manifests = generateAllTypeManifestsFromSnapshot(snapshot, manifestOptions);
-
-  // Resolve all manifests before issuing any RPC: a missing manifest
-  // indicates an internal inconsistency, and skipping or failing midway
-  // would leave the remote schema partially synced.
-  const manifestFor = (tableName: string) => {
-    const manifest = manifests.get(tableName);
-    if (!manifest) {
-      throw internalError(
-        `Internal error: no manifest generated for table "${tableName}". No changes were applied.`,
-      );
-    }
-    return manifest;
-  };
-  const createManifests = creates.map((tableName) => manifestFor(tableName));
-  const updateManifests = updates.map((tableName) => manifestFor(tableName));
-
-  try {
-    await Promise.all([
-      ...createManifests.map((tailordbType) =>
-        client.createTailorDBType({
-          workspaceId,
-          namespaceName: target.namespace,
-          tailordbType,
-        }),
-      ),
-      ...updateManifests.map((tailordbType) =>
-        client.updateTailorDBType({
-          workspaceId,
-          namespaceName: target.namespace,
-          tailordbType,
-        }),
-      ),
-    ]);
-  } catch (error) {
-    handleOptionalToRequiredError(error, [
-      "The target snapshot marks a field as required, but existing remote records have no value for it.",
-      "Populate those records first (e.g. with a migration script applied via 'tailor deploy'), then re-run the sync.",
-    ]);
-  }
-  await Promise.all(
-    desiredGqlPermissions.map(({ typeName, permission }) => {
-      const request = { workspaceId, namespaceName: target.namespace, typeName, permission };
-      return remoteGqlPermissionTypes.has(typeName)
-        ? client.updateTailorDBGQLPermission(request)
-        : client.createTailorDBGQLPermission(request);
-    }),
-  );
-  await Promise.all(
-    gqlPermissionDeletes.map((p) =>
-      client.deleteTailorDBGQLPermission({
-        workspaceId,
-        namespaceName: target.namespace,
-        typeName: p.typeName,
-      }),
-    ),
-  );
-  await Promise.all(
-    deletes.map((tableName) =>
-      client.deleteTailorDBType({
-        workspaceId,
-        namespaceName: target.namespace,
-        tailordbTypeName: tableName,
-      }),
-    ),
-  );
+  await applySnapshotPlan({
+    client,
+    workspaceId,
+    namespace: target.namespace,
+    snapshot,
+    manifestOptions,
+    plan,
+  });
 
   const historyId = snapshot.rebaseline?.historyId;
   const labelChanged = await updateMigrationLabel(
