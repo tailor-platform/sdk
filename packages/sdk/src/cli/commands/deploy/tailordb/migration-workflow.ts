@@ -22,6 +22,7 @@ import {
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
+import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
 import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
@@ -497,14 +498,11 @@ function prefixLines(text: string, prefix: string): string {
 /** Label recording which step plan a temporary migration workflow was created for. */
 const MIGRATION_PLAN_LABEL_KEY = "sdk-migration-plan";
 
-const TERMINAL_EXECUTION_STATUSES: ReadonlySet<WorkflowExecution_Status> = new Set([
-  WorkflowExecution_Status.SUCCESS,
-  WorkflowExecution_Status.FAILED,
-  WorkflowExecution_Status.CANCELED,
-]);
-
 function isExecutionActive(execution: WorkflowExecution): boolean {
-  return !TERMINAL_EXECUTION_STATUSES.has(execution.status);
+  return (
+    execution.status !== WorkflowExecution_Status.SUCCESS &&
+    !isWorkflowExecutionFailureStatus(execution.status)
+  );
 }
 
 /** Codes the platform returns for a start before it creates the execution. */
