@@ -98,6 +98,7 @@ tailor tailordb migration <command>
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`tailordb migration generate`](#tailordb-migration-generate)     | Generate migration files by detecting schema differences between current local tables and the previous migration snapshot.                                                                                                                                                                                                |
 | [`tailordb migration rebaseline`](#tailordb-migration-rebaseline) | Collapse the full migration history into a new 0000 baseline.                                                                                                                                                                                                                                                             |
+| [`tailordb migration resolve`](#tailordb-migration-resolve)       | Settle a migration that a failed deploy left partially applied.                                                                                                                                                                                                                                                           |
 | [`tailordb migration script`](#tailordb-migration-script)         | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                                                      |
 | [`tailordb migration set`](#tailordb-migration-set)               | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                                                            |
 | [`tailordb migration status`](#tailordb-migration-status)         | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                                                      |
@@ -158,6 +159,39 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Notes**
 
 Re-baselining removes migrations after 0000 from the working tree, records a new migration history ID, and resets the connected workspace checkpoint without changing its schema or data. Every environment must already have applied the latest migration before you run this command.
+
+#### tailordb migration resolve
+
+Settle a migration that a failed deploy left partially applied.
+
+**Usage**
+
+```
+tailor tailordb migration resolve [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description                                                            | Required | Default              | Env                            |
+| ------------------------------- | ----- | ---------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                           | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                      | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                             | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                              | No       | `false`              | -                              |
+| `--rollback`                    | -     | Return the namespace to the schema before the in-progress migration    | No       | `false`              | -                              |
+| `--complete`                    | -     | Apply the schema of the in-progress migration and mark it as completed | No       | `false`              | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)      | No       | -                    | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Use this after a deploy failed partway through a migration whose `migrate.ts` exports `steps`. The failed migration stays in progress: the tables of its namespace keep GraphQL operations disabled and record events unpublished, and `sync`, `set`, and `rebaseline` are refused.
+
+- `--rollback` sends the schema of the migration before the failed one. The next deploy runs the failed migration again from its first step. Data changes made by steps that already completed are not undone.
+- `--complete` sends the schema of the failed migration itself and records it as completed, without running its `migrate.ts` again. Fix the data first (for example with `tailor query`), and make sure no record lacks a value for a field that becomes required.
+
+Both options remove the in-progress record and the temporary resources of the failed run, so `deploy` and the other migration commands work again. As with `tailordb migration sync`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.
 
 #### tailordb migration script
 

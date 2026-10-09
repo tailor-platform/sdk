@@ -61,7 +61,7 @@ interface SyncOptions {
  * @param target - Namespace whose migration history is being synced
  * @returns Options for `generateAllTypeManifestsFromSnapshot`
  */
-async function assertMigrationsReproduceLocalTypes(
+export async function assertMigrationsReproduceLocalTypes(
   loaded: Awaited<ReturnType<typeof loadConfig>>,
   target: NamespaceWithMigrations,
 ): Promise<GenerateAllManifestsOptions> {

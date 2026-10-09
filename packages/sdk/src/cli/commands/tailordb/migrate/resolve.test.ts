@@ -1,0 +1,323 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import { runCommand } from "@politty/zod";
+import * as path from "pathe";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { prompt } from "#/cli/shared/prompt";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { resolveCommand } from "./resolve";
+import {
+  parsedType,
+  snapshotType,
+  writeDiff,
+  writeInitialSchema,
+} from "./test-helpers/schema-fixtures";
+
+const state = vi.hoisted(() => ({
+  migrationsDir: "",
+  localTypes: {} as Record<string, unknown>,
+  listTailorDBTypes: vi.fn(),
+  createTailorDBType: vi.fn(),
+  updateTailorDBType: vi.fn(),
+  deleteTailorDBType: vi.fn(),
+  listTailorDBGQLPermissions: vi.fn(),
+  createTailorDBGQLPermission: vi.fn(),
+  updateTailorDBGQLPermission: vi.fn(),
+  deleteTailorDBGQLPermission: vi.fn(),
+  getMetadata: vi.fn(),
+  setMetadata: vi.fn(),
+  removeMigrationWorkflowResources: vi.fn(),
+  stderr: [] as string[],
+}));
+
+vi.mock("#/cli/shared/config-loader", () => ({
+  loadConfig: vi.fn(),
+}));
+
+vi.mock("#/cli/shared/context", () => ({
+  loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
+  loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
+}));
+
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal()),
+  initOperatorClient: vi.fn(),
+}));
+
+vi.mock("#/cli/shared/readonly-guard", () => ({
+  assertWritable: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("#/cli/shared/prompt", () => ({
+  prompt: { confirm: vi.fn() },
+}));
+
+vi.mock("#/cli/commands/deploy/tailordb/migration-workflow", async (importOriginal) => ({
+  ...(await importOriginal()),
+  removeMigrationWorkflowResources: state.removeMigrationWorkflowResources,
+}));
+
+vi.mock("#/cli/services/application", () => ({
+  defineApplication: vi.fn(() => ({
+    tailorDBServices: [
+      {
+        namespace: "tailordb",
+        config: {},
+        loadTypes: vi.fn().mockResolvedValue(undefined),
+        processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+        get types() {
+          return state.localTypes;
+        },
+      },
+    ],
+    executorService: {
+      loadExecutors: vi.fn(() => Promise.resolve({})),
+      loadPluginExecutorFiles: vi.fn(() => Promise.resolve(undefined)),
+      get executors() {
+        return {};
+      },
+    },
+  })),
+  generatePluginFilesIfNeeded: vi.fn(() => []),
+}));
+
+function remoteLabels(labels: Record<string, string>): void {
+  state.getMetadata.mockResolvedValue({
+    metadata: { labels: { "sdk-name": "my-app", ...labels } },
+  });
+}
+
+describe("tailordb migration resolve", () => {
+  aroundEach(async (runTest) => {
+    state.stderr = [];
+    vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      state.stderr.push(String(chunk));
+      return true;
+    });
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-resolve-test-"));
+    state.migrationsDir = path.join(tmpDir, "migrations");
+
+    writeInitialSchema(state.migrationsDir, { User: snapshotType("User") });
+    writeDiff(state.migrationsDir, 1, [
+      { kind: "table_added", typeName: "Post", after: snapshotType("Post") },
+    ]);
+    writeDiff(state.migrationsDir, 2, [
+      { kind: "table_added", typeName: "Comment", after: snapshotType("Comment") },
+    ]);
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        path: path.join(tmpDir, "tailor.config.ts"),
+        db: { tailordb: { migration: { directory: state.migrationsDir } } },
+      },
+      plugins: [],
+    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    state.localTypes = {
+      User: parsedType("User"),
+      Post: parsedType("Post"),
+      Comment: parsedType("Comment"),
+    };
+
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [{ name: "User" }, { name: "Post" }, { name: "Comment" }],
+      nextPageToken: "",
+    });
+    state.createTailorDBType.mockResolvedValue({});
+    state.updateTailorDBType.mockResolvedValue({});
+    state.deleteTailorDBType.mockResolvedValue({});
+    state.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
+    state.createTailorDBGQLPermission.mockResolvedValue({});
+    state.updateTailorDBGQLPermission.mockResolvedValue({});
+    state.deleteTailorDBGQLPermission.mockResolvedValue({});
+    state.setMetadata.mockResolvedValue({});
+    state.removeMigrationWorkflowResources.mockResolvedValue(undefined);
+    remoteLabels({ "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" });
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listTailorDBTypes: state.listTailorDBTypes,
+      createTailorDBType: state.createTailorDBType,
+      updateTailorDBType: state.updateTailorDBType,
+      deleteTailorDBType: state.deleteTailorDBType,
+      listTailorDBGQLPermissions: state.listTailorDBGQLPermissions,
+      createTailorDBGQLPermission: state.createTailorDBGQLPermission,
+      updateTailorDBGQLPermission: state.updateTailorDBGQLPermission,
+      deleteTailorDBGQLPermission: state.deleteTailorDBGQLPermission,
+      getMetadata: state.getMetadata,
+      setMetadata: state.setMetadata,
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+
+    await runTest();
+
+    vi.restoreAllMocks();
+    for (const mock of Object.values(state)) {
+      if (typeof mock === "function") mock.mockReset();
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function expectNothingWritten(): void {
+    expect(state.createTailorDBType).not.toHaveBeenCalled();
+    expect(state.updateTailorDBType).not.toHaveBeenCalled();
+    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(state.removeMigrationWorkflowResources).not.toHaveBeenCalled();
+  }
+
+  test("requires either --rollback or --complete", async () => {
+    const result = await runCommand(resolveCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/--rollback or --complete/);
+    expectNothingWritten();
+  });
+
+  test("rejects --rollback and --complete together", async () => {
+    const result = await runCommand(resolveCommand, ["--rollback", "--complete", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/--rollback or --complete/);
+    expectNothingWritten();
+  });
+
+  test("refuses when no migration is in progress", async () => {
+    remoteLabels({ "sdk-migration": "m0002" });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/No migration is in progress/);
+    expectNothingWritten();
+  });
+
+  test("refuses an in-progress record the checkpoint already covers", async () => {
+    remoteLabels({ "sdk-migration": "m0002", "sdk-migration-in-progress": "m0002" });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/No migration is in progress/);
+    expectNothingWritten();
+  });
+
+  test("--rollback sends the schema of the migration before the in-progress one", async () => {
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(
+      state.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType.name).toSorted(),
+    ).toEqual(["Post", "User"]);
+    expect(state.createTailorDBType).not.toHaveBeenCalled();
+    expect(state.deleteTailorDBType).toHaveBeenCalledTimes(1);
+    expect(state.deleteTailorDBType.mock.calls[0]![0]).toMatchObject({
+      namespaceName: "tailordb",
+      tailordbTypeName: "Comment",
+    });
+  });
+
+  test("--rollback keeps the checkpoint and drops the in-progress record", async () => {
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
+    );
+  });
+
+  test("--complete sends the schema of the in-progress migration", async () => {
+    const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(
+      state.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType.name).toSorted(),
+    ).toEqual(["Comment", "Post", "User"]);
+    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
+  });
+
+  test("--complete moves the checkpoint to the in-progress migration and drops its record", async () => {
+    const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ labels: { "sdk-migration": "m0002", "sdk-name": "my-app" } }),
+    );
+  });
+
+  test.each(["--rollback", "--complete"])(
+    "%s removes the temporary resources of the in-progress migration",
+    async (flag) => {
+      const result = await runCommand(resolveCommand, [flag, "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(state.removeMigrationWorkflowResources).toHaveBeenCalledWith(
+        expect.anything(),
+        "12345678-1234-4abc-8def-123456789012",
+        "tailordb",
+        2,
+      );
+    },
+  );
+
+  test("a failed cleanup of the temporary resources does not fail the command", async () => {
+    state.removeMigrationWorkflowResources.mockRejectedValue(new Error("cleanup failed"));
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(true);
+  });
+
+  test("keeps the in-progress record when sending the schema fails", async () => {
+    state.updateTailorDBType.mockRejectedValue(new Error("update failed"));
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/update failed/);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(state.removeMigrationWorkflowResources).not.toHaveBeenCalled();
+  });
+
+  test("prints where the namespace ended up under JSON output", async () => {
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: true,
+      workspaceId: "12345678-1234-4abc-8def-123456789012",
+      namespace: "tailordb",
+      resolution: "rollback",
+      migrationNumber: 2,
+      checkpoint: 1,
+      tables: { created: [], updated: ["User", "Post"], deleted: ["Comment"] },
+      gqlPermissions: { set: [], deleted: [] },
+    });
+  });
+
+  test("--rollback warns that data written by completed steps stays and steps run again", async () => {
+    await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    const output = state.stderr.join("");
+    expect(output).toMatch(/does not undo the data changes/);
+    expect(output).toMatch(/run again from the first step/);
+    expect(output).toMatch(/Existing data in deleted tables will be lost/);
+  });
+
+  test("--complete warns that records without a value make a required field unreadable", async () => {
+    await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+    expect(state.stderr.join("")).toMatch(/no value for a field that becomes required/);
+  });
+
+  test("declining the confirmation writes nothing", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    const result = await runCommand(resolveCommand, ["--rollback"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/cancelled/);
+    expectNothingWritten();
+  });
+});
