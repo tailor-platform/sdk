@@ -1,10 +1,15 @@
 import * as fs from "node:fs";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { z } from "zod";
+import { commonArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { createCommand, createWorkspace } from "./create";
@@ -439,5 +444,308 @@ describe("workspace create --ttl", () => {
     expect(result.success).toBe(false);
     const config = await readPlatformConfig();
     expect(config.profiles.bootstrap?.workspace_id).toBe(validUUID);
+  });
+});
+
+describe("workspace create with user defaults", () => {
+  const defaultOrganizationId = "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa";
+  const defaultFolderId = "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb";
+  const otherOrganizationId = "cccccccc-3333-4ccc-8ccc-cccccccccccc";
+  const profileOrganizationId = "dddddddd-4444-4ddd-8ddd-dddddddddddd";
+  const envFilePath = path.join(xdgTempDir, "workspace-create.env");
+
+  function seedUserDefaults(defaults: Record<string, string>) {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          token_expires_at: "2099-12-31T00:00:00Z",
+          access_token: "mock-token",
+          ...defaults,
+        },
+        "p@example.com": {
+          storage: "file",
+          token_expires_at: "2099-12-31T00:00:00Z",
+          access_token: "profile-token",
+          default_organization_id: profileOrganizationId,
+        },
+      },
+      profiles: { dev: { user: "p@example.com", workspace_id: validUUID } },
+      current_user: "u@example.com",
+    });
+  }
+
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    for (const name of [
+      "TAILOR_PLATFORM_PROFILE",
+      "TAILOR_PLATFORM_TOKEN",
+      "TAILOR_TOKEN",
+      "TAILOR_PLATFORM_URL",
+      "TAILOR_PLATFORM_ORGANIZATION_ID",
+      "TAILOR_PLATFORM_FOLDER_ID",
+    ]) {
+      vi.stubEnv(name, undefined);
+    }
+    seedUserDefaults({
+      default_organization_id: defaultOrganizationId,
+      default_folder_id: defaultFolderId,
+    });
+    await runTest();
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+    if (fs.existsSync(envFilePath)) fs.rmSync(envFilePath);
+  });
+
+  async function runCreateWithDefaults(...extraArgs: string[]) {
+    using _logger = silenceLogger("out", "success", "warn", "info", "error");
+    return await runCommand(
+      createCommand,
+      ["--name", "test-ws", "--region", "us-west", ...extraArgs],
+      {
+        // strip unknown keys
+        globalArgs: z.object(commonArgs),
+      },
+    );
+  }
+
+  test("creates the workspace in the user's default organization and folder", async () => {
+    const client = stubClient();
+
+    const result = await runCreateWithDefaults();
+
+    expect(result.success).toBe(true);
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: defaultOrganizationId,
+        folderId: defaultFolderId,
+      }),
+    );
+  });
+
+  test("creates the workspace directly under the default organization when no default folder is set", async () => {
+    seedUserDefaults({ default_organization_id: defaultOrganizationId });
+    const client = stubClient();
+
+    await runCreateWithDefaults();
+
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: defaultOrganizationId, folderId: undefined }),
+    );
+  });
+
+  test("reports the default location it creates the workspace in", async () => {
+    stubClient();
+    using _logger = silenceLogger("out", "success", "warn", "error");
+    using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west"]);
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `folder ${defaultFolderId} in organization ${defaultOrganizationId}, the default set by \`tailor user update\``,
+      ),
+    );
+  });
+
+  test.each([
+    { source: "--organization-id", setUp: () => ["--organization-id", otherOrganizationId] },
+    {
+      source: "TAILOR_PLATFORM_ORGANIZATION_ID",
+      setUp: () => {
+        vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", otherOrganizationId);
+        return [];
+      },
+    },
+  ])("ignores both defaults when the organization comes from $source", async ({ setUp }) => {
+    const client = stubClient();
+
+    const result = await runCreateWithDefaults(...setUp());
+
+    expect(result.success).toBe(true);
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: otherOrganizationId, folderId: undefined }),
+    );
+  });
+
+  test.each([
+    { source: "--folder-id", setUp: () => ["--folder-id", defaultFolderId] },
+    {
+      source: "TAILOR_PLATFORM_FOLDER_ID",
+      setUp: () => {
+        vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", defaultFolderId);
+        return [];
+      },
+    },
+  ])(
+    "rejects a folder from $source without an organization instead of pairing it with the default organization",
+    async ({ setUp }) => {
+      stubClient();
+
+      const result = await runCreateWithDefaults(...setUp());
+
+      expect(result.success).toBe(false);
+      const error = result.success ? undefined : result.error;
+      expect(isCLIError(error) && error.code).toBe("WORKSPACE_FOLDER_WITHOUT_ORGANIZATION");
+      expect(initOperatorClient).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
+    { name: "organization", line: `TAILOR_PLATFORM_ORGANIZATION_ID=${otherOrganizationId}` },
+    { name: "folder", line: `TAILOR_PLATFORM_FOLDER_ID=${defaultFolderId}` },
+  ])("does not use the defaults when the $name comes from an --env-file", async ({ line }) => {
+    fs.writeFileSync(envFilePath, `${line}\n`);
+    const client = stubClient();
+
+    const result = await runCreateWithDefaults("--env-file", envFilePath);
+
+    expect(result.success).toBe(true);
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: undefined, folderId: undefined }),
+    );
+  });
+
+  test.each(["TAILOR_PLATFORM_TOKEN", "TAILOR_TOKEN"])(
+    "does not use the defaults when %s is set",
+    async (name) => {
+      vi.stubEnv(name, "mock-token");
+      const client = stubClient();
+
+      await runCreateWithDefaults();
+
+      expect(client.createWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: undefined, folderId: undefined }),
+      );
+    },
+  );
+
+  test.each([
+    {
+      name: "folder",
+      line: "TAILOR_PLATFORM_FOLDER_ID=",
+      args: ["--organization-id", otherOrganizationId],
+      expected: { organizationId: otherOrganizationId, folderId: undefined },
+    },
+    {
+      name: "organization",
+      line: "TAILOR_PLATFORM_ORGANIZATION_ID=",
+      args: [],
+      expected: { organizationId: defaultOrganizationId, folderId: defaultFolderId },
+    },
+  ])(
+    "treats an empty $name line in an --env-file as not given",
+    async ({ line, args, expected }) => {
+      fs.writeFileSync(envFilePath, `${line}\n`);
+      const client = stubClient();
+
+      const result = await runCreateWithDefaults("--env-file", envFilePath, ...args);
+
+      expect(result.success).toBe(true);
+      expect(client.createWorkspace).toHaveBeenCalledWith(expect.objectContaining(expected));
+    },
+  );
+
+  test("does not use defaults stored on a legacy user key shared with the default platform", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    const client = stubClient();
+
+    const result = await runCreateWithDefaults();
+
+    expect(result.success).toBe(true);
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: undefined, folderId: undefined }),
+    );
+  });
+
+  test.each([
+    { source: "--profile", setUp: () => ["--profile", "dev"] },
+    {
+      source: "an --env-file",
+      setUp: () => {
+        fs.writeFileSync(envFilePath, "TAILOR_PLATFORM_PROFILE=dev\n");
+        return ["--env-file", envFilePath];
+      },
+    },
+  ])("uses the defaults of the profile user selected by $source", async ({ setUp }) => {
+    const client = stubClient();
+
+    await runCreateWithDefaults(...setUp());
+
+    expect(initOperatorClient).toHaveBeenCalledWith("profile-token", undefined);
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: profileOrganizationId, folderId: undefined }),
+    );
+  });
+
+  test.each([
+    { name: "NotFound", code: Code.NotFound },
+    { name: "PermissionDenied", code: Code.PermissionDenied },
+  ])("points at the defaults when creating in them fails with $name", async ({ code }) => {
+    const client = stubClient();
+    client.createWorkspace.mockRejectedValue(
+      withErrorDiagnostics(new ConnectError("not accessible", code), {
+        context: { method: "CreateWorkspace" },
+      }),
+    );
+
+    const result = await runCreateWithDefaults();
+
+    expect(result.success).toBe(false);
+    const error = result.success ? undefined : result.error;
+    expect(error).toBeInstanceOf(ConnectError);
+    const diagnostics = getErrorDiagnostics(error as Error);
+    expect(diagnostics.suggestion).toContain("tailor user update");
+    expect(diagnostics.context).toEqual({
+      method: "CreateWorkspace",
+      defaultOrganizationId,
+      defaultFolderId,
+    });
+  });
+
+  test("leaves a region lookup failure alone even when the defaults are in use", async () => {
+    const client = stubClient();
+    client.listAvailableWorkspaceRegions.mockRejectedValue(
+      new ConnectError("denied", Code.PermissionDenied),
+    );
+
+    const result = await runCreateWithDefaults();
+
+    expect(result.success).toBe(false);
+    const error = result.success ? undefined : result.error;
+    expect(getErrorDiagnostics(error as Error).suggestion ?? "").not.toContain("user update");
+    expect(client.createWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("leaves a failure with an explicit organization alone", async () => {
+    const client = stubClient();
+    client.createWorkspace.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const result = await runCreateWithDefaults("--organization-id", otherOrganizationId);
+
+    expect(result.success).toBe(false);
+    const error = result.success ? undefined : result.error;
+    expect(getErrorDiagnostics(error as Error).suggestion ?? "").not.toContain("user update");
+  });
+
+  test("keeps programmatic createWorkspace() independent of the defaults", async () => {
+    const client = stubClient();
+
+    await createWorkspace({ name: "test-ws", region: "us-west" });
+
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: undefined, folderId: undefined }),
+    );
+  });
+
+  test("rejects a programmatic folder without an organization before contacting the Platform", async () => {
+    await expect(
+      createWorkspace({ name: "test-ws", region: "us-west", folderId: defaultFolderId }),
+    ).rejects.toMatchObject({ code: "WORKSPACE_FOLDER_WITHOUT_ORGANIZATION" });
+    expect(initOperatorClient).not.toHaveBeenCalled();
   });
 });

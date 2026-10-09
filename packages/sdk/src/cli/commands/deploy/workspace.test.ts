@@ -774,6 +774,22 @@ describe("resolveDeployWorkspace", () => {
     expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
   });
 
+  test("rejects a folder without an organization before the create RPC", async () => {
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: "example-workspace",
+        workspaceRegion: "us-west",
+        folderId: "44444444-4444-4444-8444-444444444444",
+      }),
+    ).rejects.toMatchObject({
+      name: "CLIError",
+      code: "WORKSPACE_CREATE_OPTIONS_INVALID",
+      details: "A folder ID requires an organization ID.",
+    });
+    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+  });
+
   test("rejects an invalid region before resolving an existing workspace", async () => {
     mocks.listWorkspacesWithClient.mockResolvedValue([
       workspace("56565656-5656-4656-8656-565656565656"),
