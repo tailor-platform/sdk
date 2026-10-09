@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Keep the GraphQL `read` operation of a table as it is while `tailor deploy` applies a TailorDB migration, instead of disabling it: create, update, delete, and bulk upsert are still disabled and record events are still not published, but a table that can be read before the migration can still be read during it
+Stop disabling the GraphQL `read` operation of a table while `tailor deploy` applies a TailorDB migration. Create, update, delete, and bulk upsert are still disabled and record events are still not published. `read` keeps the table's live setting when the restrictions begin, and then follows the schema of each migration, so a migration that changes `read` changes it before its script runs
