@@ -118,12 +118,12 @@ export class ScriptRunTimer {
   }
 
   /** @param at - When no job of the run was seen running the script any more */
-  waiting(at = performance.now()): void {
+  waiting(at: number): void {
     this.#enter("waitingToStart", at);
   }
 
   /** @param at - When a job of the run was seen running the script */
-  running(at = performance.now()): void {
+  running(at: number): void {
     this.#enter("running", at);
   }
 
@@ -131,7 +131,7 @@ export class ScriptRunTimer {
    * @param at - When the run reached a terminal state
    * @param scriptStarted - Whether its script was seen running, possibly only in its final logs
    */
-  finished(at = performance.now(), scriptStarted = false): void {
+  finished(at: number, scriptStarted: boolean): void {
     if (scriptStarted && !this.#runSeenRunning()) this.#enter("running", at);
     this.#enter("jobCleanup", at);
   }
@@ -221,7 +221,7 @@ export class MaintenanceTimeline {
    * @returns Durations by phase, rounded to milliseconds so they add up to the total
    */
   report(namespaces: readonly string[]): MaintenanceReport {
-    const end = this.#end ?? performance.now();
+    const end = assertDefined(this.#end, "A maintenance window is reported once it has finished.");
     const durations = sumDurations(this.#marks, end);
     const phases = Object.fromEntries(
       MAINTENANCE_PHASES.map((phase) => [phase, Math.round(durations.get(phase) ?? 0)]),

@@ -32,7 +32,7 @@ describe("MaintenanceTimeline", () => {
     const run = new ScriptRunTimer("tailordb", 1, 3_000);
     run.waiting(5_000);
     run.running(905_000);
-    run.finished(1_006_000);
+    run.finished(1_006_000, true);
     timeline.recordScript(run, 1_007_000);
     timeline.enter("postMigration", 1_007_000);
     timeline.enter("restore", 1_009_000);
@@ -107,7 +107,7 @@ describe("ScriptRunTimer", () => {
     run.running(40);
     run.waiting(50);
     run.running(90);
-    run.finished(100);
+    run.finished(100, true);
     timeline.recordScript(run, 105);
     timeline.finish(105);
 
@@ -130,7 +130,7 @@ describe("ScriptRunTimer", () => {
     timeline.enter("preMigration", 0);
     const run = new ScriptRunTimer("tailordb", 1, 0);
     run.waiting(10);
-    run.finished(70);
+    run.finished(70, false);
     timeline.recordScript(run, 75);
     timeline.finish(75);
 
@@ -215,7 +215,7 @@ describe("formatMaintenanceSummary", () => {
     const run = new ScriptRunTimer("tailordb", 1, 4_600);
     run.waiting(6_700);
     run.running(908_700);
-    run.finished(1_009_700);
+    run.finished(1_009_700, true);
     timeline.recordScript(run, 1_010_500);
     timeline.enter("postMigration", 1_010_500);
     timeline.enter("restore", 1_014_500);

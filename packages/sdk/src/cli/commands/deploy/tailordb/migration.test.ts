@@ -1359,6 +1359,7 @@ describe("migration", () => {
         timeline.enter("preMigration", 0);
 
         await executeMigrations(createMockContext(), [createMockMigration()], {}, timeline);
+        timeline.finish(6_000);
 
         expect(logger.info).not.toHaveBeenCalledWith(
           expect.stringContaining("started running"),

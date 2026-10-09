@@ -489,12 +489,10 @@ async function observeRun(
   const finishedAt = performance.now();
 
   let outcomes = await collectJobOutcomes(client, workspaceId, execution, params);
-  // A start found only in the final logs is timed at the end of the run, which is only close
-  // when every running job's logs were read while it ran.
-  const finalLogsCount = unreadRunningJobs.size === 0;
+  const everyRunningJobWasRead = unreadRunningJobs.size === 0;
   const startLogPending = () =>
     started.size === 0 &&
-    finalLogsCount &&
+    everyRunningJobWasRead &&
     !outcomes.scriptStarted &&
     execution.status === WorkflowExecution_Status.SUCCESS;
   for (let reread = 0; reread < START_LOG_REREADS && startLogPending(); reread++) {
@@ -504,7 +502,7 @@ async function observeRun(
   onRunEvent?.({
     type: "finished",
     at: finishedAt,
-    scriptStarted: started.size > 0 || (finalLogsCount && outcomes.scriptStarted),
+    scriptStarted: started.size > 0 || (everyRunningJobWasRead && outcomes.scriptStarted),
   });
   return { execution, outcomes };
 }
