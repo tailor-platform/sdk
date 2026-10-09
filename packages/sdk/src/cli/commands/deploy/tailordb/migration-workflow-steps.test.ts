@@ -8,6 +8,7 @@ import { logger } from "#/cli/shared/logger";
 import { writeMetadataLabelsDirect } from "../label";
 import {
   executeMigrationStepsAsWorkflow,
+  MIGRATION_SCRIPT_STARTED_LOG,
   migrationPlanFingerprint,
   removeMigrationWorkflowResources,
   type MigrationStepsWorkflowOptions,
@@ -487,6 +488,53 @@ describe("executeMigrationStepsAsWorkflow", () => {
     ]);
   });
 
+  test("counts only a running step, not the orchestrator, as running the script", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [
+          { status: WorkflowJobExecution_Status.RUNNING, logs: [MIGRATION_SCRIPT_STARTED_LOG] },
+        ],
+      },
+    });
+    const events: string[] = [];
+
+    await run(client, {
+      onRunEvent: (event) => {
+        if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
+        else if (event.type !== "polled") events.push(event.type);
+      },
+    });
+
+    expect(events).toEqual(["waiting", "finished:false"]);
+  });
+
+  test("reports a step job that logged its start as running the script", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [
+          { status: WorkflowJobExecution_Status.SUSPEND, logs: [MIGRATION_SCRIPT_STARTED_LOG] },
+          runnerJob(0, WorkflowJobExecution_Status.RUNNING, [
+            MIGRATION_SCRIPT_STARTED_LOG,
+            "backfilled 10 users",
+          ]),
+        ],
+      },
+    });
+    const events: string[] = [];
+
+    const result = await run(client, {
+      onRunEvent: (event) => {
+        if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
+        else if (event.type !== "polled") events.push(event.type);
+      },
+    });
+
+    expect(events).toEqual(["waiting", "running", "finished:true"]);
+    expect(result.logs).toBe("[backfillUser] backfilled 10 users");
+  });
+
   test("treats a run that disappears while polling as possibly committed", async () => {
     const { client, raw } = createStepsClient({
       run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
@@ -575,6 +623,27 @@ describe("executeMigrationStepsAsWorkflow", () => {
       expect(raw.createWorkflow).not.toHaveBeenCalled();
       expect(raw.startWorkflow).not.toHaveBeenCalled();
       expect(raw.deleteWorkflow).not.toHaveBeenCalled();
+    });
+
+    test("uploads the resumed script behind the log line that marks its start", async () => {
+      const { client, raw } = createStepsClient({
+        existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+        listed: [failedRun],
+        run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+      });
+
+      await run(client, { inProgress: { executionId: "exec-old" } });
+
+      const [stream] = raw.updateFunctionRegistry.mock.calls[0] as unknown as [
+        AsyncIterable<{ payload: { case: string; value: unknown } }>,
+      ];
+      const chunks: Uint8Array[] = [];
+      for await (const message of stream) {
+        if (message.payload.case === "chunk") chunks.push(message.payload.value as Uint8Array);
+      }
+      expect(Buffer.concat(chunks).toString("utf-8")).toBe(
+        `console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n// bundled steps`,
+      );
     });
 
     test("finds the run by name when its execution id was never recorded", async () => {
