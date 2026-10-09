@@ -567,7 +567,7 @@ db.table("User", {
 
 Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a table. All operations are enabled by default.
 
-While a `deploy` applies pending migrations with [maintenance mode](./tailordb-migration.md#maintenance-mode) on, every GraphQL operation — `create`, `update`, `delete`, `read`, and bulk upsert — is switched off across the migrating namespace, so nothing reads or writes an intermediate schema. Without maintenance mode (the default), the configured operations stay available throughout the deploy.
+While a `deploy` applies pending migrations with [maintenance mode](./tailordb-migration.md#maintenance-mode) on, the GraphQL `create`, `update`, and `delete` operations and bulk upsert are switched off across the migrating namespace, so nothing writes an intermediate schema. The `read` operation is not switched off: it keeps the setting the table has when maintenance mode begins. With or without maintenance mode, a table that a migration touches follows that migration's schema from its first phase on, so a migration that changes `read` changes it before its script runs, and a table the migration creates uses its configured `read` setting from the start.
 
 ```typescript
 db.table("Order", {

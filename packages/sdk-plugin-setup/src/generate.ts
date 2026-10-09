@@ -42,6 +42,7 @@ import {
   renderPreviewWorkflow,
   renderTagWorkflow,
   TEMPLATE_VERSION,
+  workflowFilePath,
   type PackageManager,
   type RenderApp,
   type RenderResult,
@@ -548,10 +549,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     });
   }
 
-  // File name encodes the target kind so branch + tag + preview can coexist
-  // under the same workspace name without colliding.
-  const kindSuffix = kind === "tag" ? "-tag" : kind === "preview" ? "-preview" : "";
-  const file = `.github/workflows/tailor-${workspaceName}${kindSuffix}.yml`;
+  const file = workflowFilePath(kind, workspaceName);
 
   const inputs: LockInputs = {
     branch,

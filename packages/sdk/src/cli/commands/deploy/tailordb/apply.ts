@@ -5,6 +5,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import { fetchRemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
+import { usesStepRunner } from "#/cli/commands/tailordb/migrate/script-form";
 import {
   reconstructSnapshotFromMigrations,
   formatMigrationNumber,
@@ -22,6 +23,7 @@ import { resourceTrn, writeMetadataLabels } from "../label";
 import {
   clearMigrationInProgress,
   executeMigrations,
+  isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
   updateMigrationLabel,
   type MigrationContext,
@@ -650,7 +652,7 @@ export async function applyTailorDB(
           reachedMigrations.add(migration);
           const attemptedTables = new Set<string>();
           const inProgress = inProgressMigrations[migration.namespace]?.number === migration.number;
-          const runsSteps = migration.scriptForm?.kind === "steps";
+          const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
           try {
             // Pre-migration phase: Create/update tables with breaking fields as optional
             await withSpan("apply.tailorDB.migration.prePhase", () =>
@@ -670,8 +672,9 @@ export async function applyTailorDB(
               );
             }
           } catch (error) {
-            const shouldKeepMigrationInProgress = inProgress || isMigrationPartiallyApplied(error);
-            if (shouldKeepMigrationInProgress) {
+            const shouldKeepPreMigrationSchema =
+              inProgress || isMigrationPartiallyApplied(error) || isMigrationOutcomeUnknown(error);
+            if (shouldKeepPreMigrationSchema) {
               partialMigrations.set(migration.namespace, migration);
               throw error;
             }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import ml from "#/utils/multiline";
-import { analyzeMigrationScriptSource } from "./script-form";
+import { analyzeMigrationScriptSource, countUnresolvedTodos, usesStepRunner } from "./script-form";
 
 const analyze = (source: string) => analyzeMigrationScriptSource(source, "0003/migrate.ts");
 
@@ -173,5 +173,108 @@ describe("analyzeMigrationScriptSource", () => {
 
   test("reports syntax errors with the script path", () => {
     expect(() => analyze("export const steps = {")).toThrow("Failed to parse 0003/migrate.ts");
+  });
+});
+
+describe("usesStepRunner", () => {
+  test.each([
+    { name: "no script", form: null, resumed: false, expected: false },
+    { name: "a main script", form: { kind: "main" as const }, resumed: false, expected: false },
+    {
+      name: "a main script that an earlier deploy left in progress",
+      form: { kind: "main" as const },
+      resumed: true,
+      expected: false,
+    },
+    {
+      name: "several steps",
+      form: { kind: "steps" as const, order: ["a", "b"] },
+      resumed: false,
+      expected: true,
+    },
+    {
+      name: "a single step",
+      form: { kind: "steps" as const, order: ["a"] },
+      resumed: false,
+      expected: false,
+    },
+    {
+      name: "a single step that an earlier deploy left in progress",
+      form: { kind: "steps" as const, order: ["a"] },
+      resumed: true,
+      expected: true,
+    },
+  ])("is $expected for $name", ({ form, resumed, expected }) => {
+    expect(usesStepRunner(form, resumed)).toBe(expected);
+  });
+});
+
+describe("countUnresolvedTodos", () => {
+  const count = (source: string) => countUnresolvedTodos(source, "0003/migrate.ts");
+
+  test("counts every TODO call the script still makes", () => {
+    expect(
+      count(ml`
+        import { TODO } from "./db";
+        export async function main(trx) {
+          await trx.updateTable("User").set({ email: TODO("fill email") }).execute();
+          void TODO("resolve nulls");
+        }
+      `),
+    ).toBe(2);
+  });
+
+  test("does not count the import or a TODO that is only mentioned", () => {
+    expect(
+      count(ml`
+        import { TODO } from "./db";
+        // TODO: Add observability
+        export async function main(trx) {
+          const label = "TODO(fill email)";
+        }
+      `),
+    ).toBe(0);
+  });
+
+  test("counts a call through an alias or a namespace import of ./db", () => {
+    expect(
+      count(ml`
+        import { TODO as pending } from "./db";
+        import * as db from "./db";
+        export async function main(trx) {
+          pending("fill email");
+          db.TODO("resolve nulls");
+        }
+      `),
+    ).toBe(2);
+  });
+
+  test.each([
+    ["a helper the script declares itself", "function TODO(message) {}\nTODO('later');"],
+    ["a TODO imported from another module", 'import { TODO } from "untodo";\nTODO("later");'],
+    ["a call without any import", 'TODO("later");'],
+  ])("does not count a call to %s", (_label, body) => {
+    expect(count(`${body}\nexport async function main(trx) {}`)).toBe(0);
+  });
+
+  test("does not count the review marker text inside a string or template literal", () => {
+    expect(
+      count(ml`
+        export async function main(trx) {
+          const a = "TODO(tailor-migration-review)";
+          const b = \`TODO(tailor-migration-review)\`;
+        }
+      `),
+    ).toBe(0);
+  });
+
+  test("counts the review marker that earlier versions generated", () => {
+    expect(
+      count(ml`
+        export async function main(trx) {
+          // TODO(tailor-migration-review): Remove this marker and the \`never\` annotation after reviewing the conversion.
+        }
+      `),
+    ).toBe(1);
   });
 });

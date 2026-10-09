@@ -223,9 +223,9 @@ export interface AppConfig<
   /**
    * Whether `deploy` puts the TailorDB namespaces that have pending migrations
    * into maintenance mode while it applies them. In maintenance mode, the
-   * generated GraphQL create, update, delete, read, and bulk upsert operations
-   * of every table in those namespaces are disabled and record events are not
-   * published.
+   * generated GraphQL create, update, delete, and bulk upsert operations of
+   * every table in those namespaces are disabled and record events are not
+   * published; `read` keeps its setting.
    *
    * - `false` (default): no maintenance mode. While migrations run, the SDK does
    *   not guarantee what concurrent requests observe: tables can be in an

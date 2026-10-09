@@ -460,7 +460,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const operationWrites = gqlOperationWrites(client).filter(([name]) => name === "Order");
     expect(operationWrites.length).toBeGreaterThan(0);
     for (const [, operations] of operationWrites.slice(0, -1)) {
-      expect(operations).toEqual({ create: true, update: true, delete: true, read: true });
+      expect(operations).toEqual({ create: true, update: true, delete: true, read: false });
     }
     expect(operationWrites.at(-1)?.[1]).toBeUndefined();
   });
@@ -511,7 +511,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       "Order",
       expect.objectContaining({
         publishRecordEvents: false,
-        disableGqlOperations: { create: true, update: true, delete: true, read: true },
+        disableGqlOperations: { create: true, update: true, delete: true, read: false },
       }),
     ]);
   });
@@ -622,7 +622,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     expect(futureWrite?.[1]).toMatchObject({
       bulkUpsert: false,
       publishRecordEvents: false,
-      disableGqlOperations: { create: true, update: true, delete: true, read: true },
+      disableGqlOperations: { create: true, update: true, delete: true, read: false },
     });
   });
 
@@ -792,7 +792,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
     const writes = gqlOperationWrites(client);
     expect(writes.filter(([name]) => name === "Order").map(([, operations]) => operations)).toEqual(
-      [{ create: true, update: true, delete: true, read: true }, undefined],
+      [{ create: true, update: true, delete: true, read: false }, undefined],
     );
     expect(
       writes.filter(([name]) => name === "PrivateLog").map(([, operations]) => operations),
@@ -1133,7 +1133,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         create: true,
         update: true,
         delete: true,
-        read: true,
+        read: false,
       })),
     );
     expect(operationWrites.at(-1)).toBeUndefined();
@@ -1152,7 +1152,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         Order: snapshotTable(
           "Order",
           { status: { type: "string", required: true } },
-          { bulkUpsert: true },
+          { bulkUpsert: true, gqlOperations: { read: false } },
         ),
       },
       1: {
@@ -1162,7 +1162,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             status: { type: "string", required: true },
             requiredLater: { type: "string", required: true },
           },
-          { bulkUpsert: true },
+          { bulkUpsert: true, gqlOperations: { read: false } },
         ),
       },
     };
@@ -1193,6 +1193,96 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       });
     }
     expect(writes.at(-1)?.[1]).toMatchObject(originalSettings);
+  });
+
+  test("keeps a table readable when its live settings do not list any disabled operation, even if the snapshot disables read", async () => {
+    const client = createMockClient({
+      existingSettings: {
+        Order: { bulkUpsert: true, publishRecordEvents: true, disableGqlOperations: undefined },
+      },
+    });
+    const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
+    const driftedSnapshot = (fields: Parameters<typeof snapshotTable>[1]) =>
+      snapshotTable("Order", fields, { bulkUpsert: true, gqlOperations: { read: false } });
+    snapshotState.tablesByVersion = {
+      0: { Order: driftedSnapshot({ status: { type: "string", required: true } }) },
+      1: {
+        Order: driftedSnapshot({
+          status: { type: "string", required: true },
+          requiredLater: { type: "string", required: true },
+        }),
+      },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        {
+          kind: "field_added",
+          tableName: "Order",
+          fieldName: "requiredLater",
+          after: { type: "string", required: true },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ]),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(new Error("script failed"));
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /script failed/,
+    );
+
+    const firstWrite = typeSettingWrites(client).find(([name]) => name === "Order");
+    expect(firstWrite?.[1]).toMatchObject({
+      disableGqlOperations: { create: true, update: true, delete: true, read: false },
+    });
+  });
+
+  test("does not write the live read setting back over what an earlier migration in the same run committed", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
+    const fields = {
+      status: { type: "string", required: true },
+      first: { type: "string", required: true },
+      second: { type: "string", required: true },
+    } as const;
+    snapshotState.tablesByVersion = {
+      0: { Order: snapshotTable("Order", { status: fields.status }) },
+      1: {
+        Order: snapshotTable(
+          "Order",
+          { status: fields.status, first: fields.first },
+          { gqlOperations: { read: false } },
+        ),
+      },
+      2: {
+        Order: snapshotTable("Order", fields, { gqlOperations: { read: false } }),
+      },
+    };
+    const added = (fieldName: "first" | "second") =>
+      ({
+        kind: "field_added",
+        tableName: "Order",
+        fieldName,
+        after: { type: "string", required: true },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      }) as any;
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([added("first")], { number: 1 }),
+      mkPendingMigration([added("second")], { number: 2 }),
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const operations = gqlOperationWrites(client)
+      .filter(([name]) => name === "Order")
+      .map(([, ops]) => ops);
+    expect(operations[0]).toEqual({ create: true, update: true, delete: true, read: false });
+    expect(operations.slice(1, -1).length).toBeGreaterThan(1);
+    expect(operations.slice(1, -1).at(-1)).toEqual({
+      create: true,
+      update: true,
+      delete: true,
+      read: true,
+    });
   });
 
   test("does not restrict a historical table that is absent from the workspace", async () => {
@@ -1441,7 +1531,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
     const restricted = {
       publishRecordEvents: false,
-      disableGqlOperations: { create: true, update: true, delete: true, read: true },
+      disableGqlOperations: { create: true, update: true, delete: true, read: false },
     };
     const released = { publishRecordEvents: true, disableGqlOperations: undefined };
 

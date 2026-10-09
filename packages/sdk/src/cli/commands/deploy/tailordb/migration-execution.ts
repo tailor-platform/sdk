@@ -202,7 +202,7 @@ export function generateMigrationPhaseManifest(
     // Overrides a declared `publishEvents: true`, which `subscribed` cannot.
     return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
       suppressRecordEvents: true,
-      suppressGqlOperations: true,
+      suppressGqlMutations: true,
       namespaceGqlOperations,
     });
   }
@@ -595,7 +595,7 @@ async function rewriteRestrictedTables(
           create: true,
           update: true,
           delete: true,
-          read: true,
+          read: activeSettings?.disableGqlOperations?.read ?? false,
         };
       }
       if (!restricted && activeSettings) {
