@@ -344,6 +344,19 @@ function keepMigrationTablesRestricted(
   return [...migrationTables].toSorted();
 }
 
+function skippedRestorationTables(
+  namespaceName: string,
+  restorationSnapshots: ReadonlyMap<string, SchemaSnapshot>,
+  restorationSettings: MigrationRestrictionState,
+): string[] {
+  return [
+    ...new Set([
+      ...Object.keys(restorationSnapshots.get(namespaceName)?.tables ?? {}),
+      ...(restorationSettings.get(namespaceName)?.keys() ?? []),
+    ]),
+  ].toSorted();
+}
+
 function describeMigrationCheckpoint(number: number | null | undefined): string {
   return number == null ? "<unset>" : formatMigrationNumber(number);
 }
@@ -796,6 +809,11 @@ export async function applyTailorDB(
             remoteState.historyId === expectedCheckpoint.historyId;
           if (checkpointStillOwned) continue;
 
+          const tables = skippedRestorationTables(
+            namespaceName,
+            restorationSnapshots,
+            restorationSettings,
+          );
           restorationSnapshots.delete(namespaceName);
           const concurrencyError = CLIError({
             code: "MIGRATION_CHECKPOINT_CONFLICT",
@@ -809,6 +827,7 @@ export async function applyTailorDB(
               namespace: namespaceName,
               expectedCheckpoint: expectedCheckpoint.number,
               remoteCheckpoint: remoteState.number,
+              tables,
             },
           });
           if (migrationFailure) {
@@ -820,6 +839,11 @@ export async function applyTailorDB(
             migrationFailure = { error: concurrencyError };
           }
         } catch (checkpointReadError) {
+          const tables = skippedRestorationTables(
+            namespaceName,
+            restorationSnapshots,
+            restorationSettings,
+          );
           restorationSnapshots.delete(namespaceName);
           const ownershipError = CLIError({
             code: "MIGRATION_CHECKPOINT_UNVERIFIED",
@@ -830,7 +854,11 @@ export async function applyTailorDB(
             suggestion:
               `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). ` +
               `Run \`tailor tailordb migration status --namespace ${namespaceName}\` to check the checkpoint, restore connectivity if it fails, then deploy again.`,
-            context: { namespace: namespaceName, expectedCheckpoint: expectedCheckpoint.number },
+            context: {
+              namespace: namespaceName,
+              expectedCheckpoint: expectedCheckpoint.number,
+              tables,
+            },
           });
           if (migrationFailure) {
             logger.warn(

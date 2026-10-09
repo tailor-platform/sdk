@@ -1198,7 +1198,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       ).rejects.toMatchObject({
         code: "MIGRATION_CHECKPOINT_UNVERIFIED",
         suggestion: expect.stringContaining("tailor tailordb migration status --namespace test-ns"),
-        context: { namespace: "test-ns" },
+        context: { namespace: "test-ns", tables: expect.arrayContaining(["GoodsReceipt"]) },
       });
     });
 
@@ -1213,7 +1213,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       ).rejects.toMatchObject({
         code: "MIGRATION_CHECKPOINT_CONFLICT",
         suggestion: expect.stringContaining("tailor tailordb migration status --namespace test-ns"),
-        context: { namespace: "test-ns", expectedCheckpoint: 1, remoteCheckpoint: 2 },
+        context: {
+          namespace: "test-ns",
+          expectedCheckpoint: 1,
+          remoteCheckpoint: 2,
+          tables: expect.arrayContaining(["GoodsReceipt"]),
+        },
       });
     });
 
