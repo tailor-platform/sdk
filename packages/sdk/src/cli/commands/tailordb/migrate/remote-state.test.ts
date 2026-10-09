@@ -61,12 +61,24 @@ describe("fetchRemoteMigrationState", () => {
     expect(state).toMatchObject({ inProgress: null, inProgressInvalid: true });
   });
 
+  test.each([
+    ["m0002", 2],
+    ["two", null],
+  ])("reads the maintenance-mode checkpoint %s", async (label, checkpoint) => {
+    const state = await fetchRemoteMigrationState(
+      clientWithLabels({ "sdk-migration": "m0002", "sdk-maintenance-mode": label }),
+      "trn",
+    );
+    expect(state.maintenanceModeCheckpoint).toBe(checkpoint);
+  });
+
   test("reports nothing in progress for a namespace that was never deployed", async () => {
     const state = await fetchRemoteMigrationState(clientWithLabels(undefined), "trn");
     expect(state).toMatchObject({
       metadataExists: false,
       inProgress: null,
       inProgressInvalid: false,
+      maintenanceModeCheckpoint: null,
     });
   });
 });
@@ -79,6 +91,7 @@ describe("isStaleMigrationInProgress", () => {
     historyIdInvalid: false,
     inProgress: inProgress === null ? null : { number: inProgress },
     inProgressInvalid: false,
+    maintenanceModeCheckpoint: null,
   });
 
   test.each([

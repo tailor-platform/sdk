@@ -989,8 +989,8 @@ describe("migration", () => {
         code: "MIGRATION_PARTIALLY_APPLIED",
         message:
           "Migration tailordb/0003 failed before any step completed: [unavailable] unavailable",
-        suggestion: expect.stringContaining(
-          "tailor tailordb migration sync 0002 --namespace tailordb",
+        suggestion: expect.stringMatching(
+          /tailor tailordb migration sync 0002 --namespace tailordb.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/,
         ),
       });
     });

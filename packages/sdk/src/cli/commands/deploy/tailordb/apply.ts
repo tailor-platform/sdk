@@ -21,11 +21,13 @@ import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { resourceTrn, writeMetadataLabels } from "../label";
 import {
+  clearMaintenanceModeRecord,
   clearMigrationInProgress,
   executeMigrations,
   isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
   updateMigrationLabel,
+  writeMaintenanceModeRecord,
   type MigrationContext,
 } from "./migration";
 import {
@@ -188,6 +190,7 @@ async function validateTailorDBMigrationState(
       migrationHistoryIds: {},
       inProgressMigrations: {},
       staleInProgress: [],
+      maintenanceModeNamespaces: [],
     };
   }
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
@@ -343,6 +346,20 @@ function keepMigrationTablesRestricted(
   );
 }
 
+async function clearRecordAfterRelease(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+): Promise<void> {
+  try {
+    await clearMaintenanceModeRecord(client, workspaceId, namespaceName);
+  } catch (error) {
+    logger.warn(
+      `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toError(error).message}. The next deploy that migrates it removes the record.`,
+    );
+  }
+}
+
 function describeMigrationCheckpoint(number: number | null | undefined): string {
   return number == null ? "<unset>" : formatMigrationNumber(number);
 }
@@ -445,6 +462,7 @@ export async function applyTailorDB(
       migrationHistoryIds,
       inProgressMigrations,
       staleInProgress,
+      maintenanceModeNamespaces,
     } = await validateTailorDBMigrationState(client, result);
 
     // Resolved before any mutation below -- including the checkpoint-repair
@@ -484,6 +502,14 @@ export async function applyTailorDB(
         stale.namespace,
         stale.migrationNumber,
       );
+    }
+
+    // A migration that fails or stops must leave no record behind, or the
+    // next deploy would accept its restricted tables instead of reporting drift.
+    const migratingNamespaceNames = new Set(pendingMigrations.map((m) => m.namespace));
+    for (const namespaceName of maintenanceModeNamespaces) {
+      if (!migratingNamespaceNames.has(namespaceName)) continue;
+      await clearMaintenanceModeRecord(client, migrationContext.workspaceId, namespaceName);
     }
 
     if (pendingMigrations.length > 0) {
@@ -874,8 +900,28 @@ export async function applyTailorDB(
         );
       }
 
-      const restore = (restoreClient: OperatorClient) =>
-        restoreMigrationRestrictions(
+      const recordedNamespaces: string[] = [];
+      if (phaseSettings.restricted && !migrationFailure) {
+        for (const namespaceName of restorationSnapshots.keys()) {
+          const checkpoint = restorationCheckpoints.get(namespaceName)?.number;
+          if (checkpoint == null) continue;
+          try {
+            await writeMaintenanceModeRecord(
+              client,
+              migrationContext.workspaceId,
+              namespaceName,
+              checkpoint,
+            );
+            recordedNamespaces.push(namespaceName);
+          } catch (error) {
+            logger.warn(
+              `Could not record that namespace '${namespaceName}' is in maintenance mode: ${toError(error).message}.`,
+            );
+          }
+        }
+      }
+      const restore = async (restoreClient: OperatorClient) => {
+        await restoreMigrationRestrictions(
           restoreClient,
           restorationSnapshots,
           restorationSettings,
@@ -883,38 +929,43 @@ export async function applyTailorDB(
           migrationContext.executorUsedTables,
           migrationContext.workspaceId,
         );
-      try {
-        if (maintenanceMode === "deploy" && options.holdMaintenanceMode && !migrationFailure) {
-          options.holdMaintenanceMode(async (releaseClient) => {
-            const unowned = await findUnownedMigrationCheckpoints(
-              releaseClient,
-              migrationContext.workspaceId,
-              restorationCheckpoints,
-              "Leaving its table settings unchanged.",
-            );
-            for (const namespaceName of unowned.keys()) restorationSnapshots.delete(namespaceName);
-            const [ownershipError, ...otherErrors] = unowned.values();
-            for (const error of otherErrors) logger.warn(error.message);
-            try {
-              await restore(releaseClient);
-            } catch (restorationError) {
-              if (!ownershipError) throw restorationError;
-              logger.warn(
-                `Could not restore every TailorDB table: ${toError(restorationError).message}.`,
-              );
-            }
-            if (ownershipError) throw ownershipError;
-          });
-        } else {
-          await restore(client);
+        for (const namespaceName of recordedNamespaces) {
+          if (!restorationSnapshots.has(namespaceName)) continue;
+          await clearRecordAfterRelease(restoreClient, migrationContext.workspaceId, namespaceName);
         }
-      } catch (restorationError) {
-        if (!migrationFailure) throw restorationError;
-        logger.warn(
-          `Could not restore every TailorDB table after the migration failed: ${
-            restorationError instanceof Error ? restorationError.message : String(restorationError)
-          }. The original migration error is reported below.`,
-        );
+      };
+      if (maintenanceMode === "deploy" && options.holdMaintenanceMode && !migrationFailure) {
+        options.holdMaintenanceMode(async (releaseClient) => {
+          const unowned = await findUnownedMigrationCheckpoints(
+            releaseClient,
+            migrationContext.workspaceId,
+            restorationCheckpoints,
+            "Leaving its table settings unchanged.",
+          );
+          for (const namespaceName of unowned.keys()) restorationSnapshots.delete(namespaceName);
+          const [ownershipError, ...otherErrors] = unowned.values();
+          for (const error of otherErrors) logger.warn(error.message);
+          try {
+            await restore(releaseClient);
+          } catch (restorationError) {
+            if (!ownershipError) throw restorationError;
+            logger.warn(
+              `Could not restore every TailorDB table: ${toError(restorationError).message}.`,
+            );
+          }
+          if (ownershipError) throw ownershipError;
+        });
+      } else {
+        try {
+          await restore(client);
+        } catch (restorationError) {
+          if (!migrationFailure) throw restorationError;
+          logger.warn(
+            `Could not restore every TailorDB table after the migration failed: ${
+              toError(restorationError).message
+            }. The original migration error is reported below.`,
+          );
+        }
       }
       if (migrationFailure) throw migrationFailure.error;
 
@@ -1047,6 +1098,11 @@ export async function applyTailorDB(
         namespacesWithMigrations,
         migrationHistoryIds,
       );
+    }
+
+    for (const namespaceName of maintenanceModeNamespaces) {
+      if (migratingNamespaceNames.has(namespaceName)) continue;
+      await clearRecordAfterRelease(client, migrationContext.workspaceId, namespaceName);
     }
   } else if (phase === "delete-resources") {
     // Delete GQL permissions first, then tables

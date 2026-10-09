@@ -1169,6 +1169,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
             historyIdInvalid: false,
             inProgress: null,
             inProgressInvalid: false,
+            maintenanceModeCheckpoint: null,
             ...state,
           });
           return state.number === 1 ? [] : [mkStepsMigration()];

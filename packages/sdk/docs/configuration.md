@@ -90,7 +90,7 @@ The default applies wherever the SDK parses or serializes `t` fields on your beh
 
 The setting is per `tailor.config.ts`, but the field types are declared through `tailor.d.ts`, which TypeScript merges across every file in a program. If one `tsconfig.json` includes the `tailor.d.ts` of several applications, they must agree on `defaultDateRepresentation`. When they differ, `t.date()`, `t.datetime()`, and `t.time()` called without `as` fail to type-check in that program until the configs are aligned or each application gets its own `tsconfig.json`.
 
-**Maintenance Mode** (`maintenanceMode`): Whether `deploy` restricts the TailorDB namespaces it migrates while it applies pending migrations: `false` (the default) leaves them as configured, `"migration"` restricts them until the migrations complete, and `"deploy"` until the whole deploy completes. See [Maintenance mode](./services/tailordb-migration.md#maintenance-mode) for what is restricted and what concurrent requests can observe without it.
+**Maintenance Mode** (`maintenanceMode`): Whether `deploy` restricts the TailorDB namespaces it migrates while it applies pending migrations: `false` (the default) does not restrict them, `"migration"` restricts them until the migrations complete, and `"deploy"` until the whole deploy completes. See [Maintenance mode](./services/tailordb-migration.md#maintenance-mode) for what is restricted and what concurrent requests can observe without it.
 
 ```typescript
 export default defineConfig({

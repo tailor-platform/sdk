@@ -2526,8 +2526,32 @@ describe("applyTailorDB migration label reconciliation", () => {
       ...(unchangedRemoteSettings() as object),
       disableGqlOperations: { create: true, update: true, delete: true, read: true },
     });
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0000", "sdk-maintenance-mode": "m0000" } },
+    } as never);
 
     await expect(runValidation(client, planResult)).resolves.toBeDefined();
+  });
+
+  test.each([
+    ["no maintenance-mode record", { "sdk-migration": "m0000" }],
+    [
+      "a maintenance-mode record of another checkpoint",
+      { "sdk-migration": "m0000", "sdk-maintenance-mode": "m0001" },
+    ],
+  ])("rejects a table in maintenance mode with %s", async (_label, labels) => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient({
+      ...(unchangedRemoteSettings() as object),
+      disableGqlOperations: { create: true, update: true, delete: true, read: true },
+    });
+    vi.mocked(client.getMetadata).mockResolvedValue({ metadata: { labels } } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote schema verification failed",
+    );
   });
 
   test("rejects a table whose GraphQL writes are only partly disabled", async () => {

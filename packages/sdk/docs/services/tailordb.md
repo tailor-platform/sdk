@@ -522,7 +522,7 @@ db.table("User", {
 - When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this table with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
 - When explicitly set to `false` while an executor taking part in the same run uses this table, `deploy` fails
 - An executor declared with `disabled: true` never runs, so it does not count as using the table
-- While a `deploy` applies pending migrations with [maintenance mode](./tailordb-migration.md#maintenance-mode) on, record event publishing is switched off on every table in the migrating namespace, so a migration script's writes do not reach executors from the previous deploy. Without maintenance mode (the default), publishing follows the rules above throughout the deploy
+- While a `deploy` applies pending migrations with [maintenance mode](./tailordb-migration.md#maintenance-mode) on, record event publishing is switched off on every table in the migrating namespace, so a migration script's writes do not reach executors from the previous deploy. Without maintenance mode (the default), publishing is not switched off for the migration
 
 **Use cases:**
 

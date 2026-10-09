@@ -456,8 +456,9 @@ export async function verifyRemoteSchema(
       continue;
     }
 
-    // A deploy interrupted while holding maintenance mode leaves its tables
-    // restricted after the checkpoint committed; the next deploy lifts it.
+    const leftInMaintenanceMode =
+      inProgressNumber === undefined &&
+      remoteState.maintenanceModeCheckpoint === remoteMigrationNumber;
     const drifts = await compareRemoteSchemaWithSnapshot(
       client,
       workspaceId,
@@ -465,8 +466,8 @@ export async function verifyRemoteSchema(
       expectedSnapshot,
       config,
       tailorDBInputs,
-      MIGRATION_RESTRICTION_SETTINGS,
-      inProgressNumber === undefined ? "maintenance-mode" : "all",
+      inProgressNumber !== undefined || leftInMaintenanceMode ? MIGRATION_RESTRICTION_SETTINGS : [],
+      leftInMaintenanceMode ? "maintenance-mode" : "all",
     );
 
     results.push({

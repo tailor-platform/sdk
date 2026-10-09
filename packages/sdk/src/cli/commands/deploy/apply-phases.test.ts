@@ -431,7 +431,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     mocks.applyTailorDB.mockImplementation(async (_client, result, phase) => {
       mocks.calls.push(`tailordb:${(result as { marker: string }).marker}:${String(phase)}`);
     });
-    mocks.applyExecutor.mockClear();
+    mocks.applyExecutor.mockReset();
   });
 
   test("asks TailorDB to hold its maintenance mode", async () => {

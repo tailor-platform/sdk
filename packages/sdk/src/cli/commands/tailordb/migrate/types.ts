@@ -41,6 +41,13 @@ export const MIGRATION_IN_PROGRESS_LABEL_KEY = "sdk-migration-in-progress";
 /** Label key holding the execution of the migration named by the in-progress label. */
 export const MIGRATION_EXECUTION_LABEL_KEY = "sdk-migration-execution";
 
+/**
+ * Label key naming the checkpoint whose migrations committed while their
+ * tables are still in maintenance mode, so the next deploy releases those
+ * tables instead of treating their settings as drift.
+ */
+export const MAINTENANCE_MODE_LABEL_KEY = "sdk-maintenance-mode";
+
 /** Valid migration history ID syntax for metadata label values. */
 export const MIGRATION_HISTORY_ID_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
 

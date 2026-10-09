@@ -16,6 +16,8 @@ import type { LoadedConfig } from "#/cli/shared/config-loader";
 const remoteCheckpoint = vi.hoisted(() => ({
   number: 0 as number | null,
   historyId: null as string | null,
+  maintenanceMode: null as string | null,
+  maintenanceModeChanges: [] as Array<string | null>,
 }));
 
 // Mock label.ts to suppress real metadata building
@@ -143,7 +145,17 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   ) {
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn(async (request: { trn: string; labels: Record<string, string> }) => {
+        const maintenanceMode = request.labels["sdk-maintenance-mode"] ?? null;
+        if (
+          request.trn.endsWith(":tailordb:test-ns") &&
+          maintenanceMode !== remoteCheckpoint.maintenanceMode
+        ) {
+          remoteCheckpoint.maintenanceMode = maintenanceMode;
+          remoteCheckpoint.maintenanceModeChanges.push(maintenanceMode);
+        }
+        return {};
+      }),
       getMetadata: vi.fn().mockImplementation(async () => ({
         metadata: {
           labels: {
@@ -152,6 +164,9 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             }),
             ...(remoteCheckpoint.historyId && {
               "sdk-migration-history": remoteCheckpoint.historyId,
+            }),
+            ...(remoteCheckpoint.maintenanceMode && {
+              "sdk-maintenance-mode": remoteCheckpoint.maintenanceMode,
             }),
           },
         },
@@ -412,6 +427,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     snapshotState.historyId = null;
     remoteCheckpoint.number = 0;
     remoteCheckpoint.historyId = null;
+    remoteCheckpoint.maintenanceMode = null;
+    remoteCheckpoint.maintenanceModeChanges = [];
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
       async (_client, _workspaceId, _namespace, number, historyId) => {
         remoteCheckpoint.number = number;
@@ -1645,6 +1662,100 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect(lastOrderSettings(client)).toEqual(expect.objectContaining(restricted));
       },
     );
+
+    test('"migration" records its checkpoint until it lifts maintenance mode', async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "migration",
+      });
+      mockAddedOrderMigration();
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+    });
+
+    test('"deploy" keeps its checkpoint recorded until the held release runs', async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "deploy",
+      });
+      mockAddedOrderMigration();
+
+      const releases: MaintenanceModeRelease[] = [];
+      await applyTailorDB(client, planResult, "create-update", {
+        holdMaintenanceMode: (release) => releases.push(release),
+      });
+
+      expect(remoteCheckpoint.maintenanceMode).toBe("m0001");
+
+      await releases[0]?.(client);
+
+      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+    });
+
+    test("does not record a checkpoint for a migration that failed", async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "migration",
+      });
+      mockAddedOrderMigration();
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
+        new Error("script failed"),
+      );
+
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        /script failed/,
+      );
+
+      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([]);
+    });
+
+    test("clears a checkpoint an earlier deploy recorded before running migrations", async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "migration",
+      });
+      mockAddedOrderMigration();
+      const pending = await migrationModule.detectPendingMigrations(
+        client,
+        "test-workspace",
+        [],
+        "/test/tailor.config.ts",
+      );
+      vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
+        async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
+          remoteStates?.set("test-ns", {
+            metadataExists: true,
+            number: 0,
+            historyId: null,
+            historyIdInvalid: false,
+            inProgress: null,
+            inProgressInvalid: false,
+            maintenanceModeCheckpoint: 0,
+          });
+          return pending;
+        },
+      );
+      remoteCheckpoint.maintenanceMode = "m0000";
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
+        new Error("script failed"),
+      );
+
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        /script failed/,
+      );
+
+      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([null]);
+    });
 
     test.each([
       ['"deploy" without holding', "deploy", false],

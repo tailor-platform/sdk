@@ -40,6 +40,7 @@ import {
 import {
   type PendingMigration,
   executionIdToLabel,
+  MAINTENANCE_MODE_LABEL_KEY,
   MIGRATION_EXECUTION_LABEL_KEY,
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_IN_PROGRESS_LABEL_KEY,
@@ -386,6 +387,45 @@ export async function clearMigrationInProgress(
 }
 
 /**
+ * Record that a namespace's migrations committed up to a checkpoint while its
+ * tables are still in maintenance mode, so a deploy interrupted before lifting
+ * it leaves the next deploy able to release them.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ * @param migrationNumber - The namespace's committed checkpoint
+ */
+export async function writeMaintenanceModeRecord(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  migrationNumber: number,
+): Promise<void> {
+  await writeMetadataLabelsDirect(client, {
+    trn: resourceTrn(workspaceId, "tailordb", namespace),
+    labels: { [MAINTENANCE_MODE_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
+  });
+}
+
+/**
+ * Remove the record of a maintenance mode that has been lifted.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ */
+export async function clearMaintenanceModeRecord(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<void> {
+  await writeMetadataLabelsDirect(client, {
+    trn: resourceTrn(workspaceId, "tailordb", namespace),
+    labels: {},
+    remove: [MAINTENANCE_MODE_LABEL_KEY],
+  });
+}
+
+/**
  * Whether a migration failure left steps committed, so its schema changes
  * must stay in place for the next deploy to resume.
  * @param error - Failure raised while executing migrations
@@ -409,9 +449,10 @@ function withMaintenanceModeNote(
   suggestion: string | undefined,
   namespace: string,
   maintenanceMode: boolean,
+  until = "Until the migration completes",
 ): string | undefined {
   if (!maintenanceMode) return suggestion;
-  const note = `Until the migration completes, the tables of namespace '${namespace}' stay in maintenance mode, as during the migration.`;
+  const note = `${until}, the tables of namespace '${namespace}' stay in maintenance mode, as during the migration.`;
   return suggestion ? `${suggestion} ${note}` : note;
 }
 
@@ -469,7 +510,7 @@ function unreleasedRecordError(
     message: `Migration ${namespace}/${number} failed before any step completed: ${
       cause instanceof Error ? cause.message : String(cause)
     }`,
-    suggestion: withMaintenanceModeNote(next, namespace, maintenanceMode),
+    suggestion: withMaintenanceModeNote(next, namespace, maintenanceMode, "Until then"),
     context: { namespace, migrationNumber: migration.number, completedSteps: [], failedSteps: [] },
     cause,
   });

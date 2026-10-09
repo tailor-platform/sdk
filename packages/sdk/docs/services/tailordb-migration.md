@@ -662,7 +662,7 @@ This split is what allows existing rows to be backfilled before the database sta
 
 | Value             | Maintenance mode                                                                                                                                                                       |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `false` (default) | None. Tables keep their configured settings throughout the deploy.                                                                                                                     |
+| `false` (default) | None. Nothing is restricted while migrations run.                                                                                                                                      |
 | `"migration"`     | From before the first pending migration runs until the last one completes.                                                                                                             |
 | `"deploy"`        | From before the first pending migration runs until the deploy has applied every other change, including resolvers, executors, and workflows, and has removed the resources it deletes. |
 
@@ -686,7 +686,7 @@ Maintenance mode restricts GraphQL writes and record events only. Resolvers, exe
 - If a migration fails, the tables leave maintenance mode before the error is reported: they return to the settings of the last checkpoint that completed. A migration that did not reach its checkpoint returns existing tables to their previous settings and keeps the tables it created in maintenance mode until a later deploy applies it. The settings are not restored if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion also stays in maintenance mode for manual recovery.
 - A [multi-step migration](#splitting-a-migration-into-steps) left in progress keeps its tables in maintenance mode until a deploy completes it.
 - With `"deploy"`, if a later part of the deploy fails, the tables leave maintenance mode before the error is reported. When the deploy ends maintenance mode, it leaves the tables of a namespace unchanged if that namespace's checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified, and reports it.
-- If the deploy process is interrupted after its migrations completed but before maintenance mode ended, the tables stay in maintenance mode until a later `tailor deploy` completes and releases them.
+- If the deploy process is interrupted after its migrations completed but before maintenance mode ended, the tables stay in maintenance mode until a later `tailor deploy` completes and releases them. A deploy that stops before its migrations complete does not leave tables that a later deploy releases this way; the next deploy reports remote schema drift instead (see [Failure Recovery](#failure-recovery)).
 
 #### Keeping maintenance mode short
 
