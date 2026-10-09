@@ -322,6 +322,22 @@ describe("executeMigrationAsWorkflow", () => {
     expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(4);
   });
 
+  test.each([
+    ["a deadline", new ConnectError("slow", Code.DeadlineExceeded)],
+    ["an internal error", new ConnectError("broken", Code.Internal)],
+    ["a dropped connection", new TypeError("fetch failed")],
+  ])("looks for the execution again when the lookup fails with %s", async (_label, failure) => {
+    const { client, raw } = createMockClient({
+      startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: true },
+      listFailuresAfterStart: [failure],
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(true);
+    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(3);
+  });
+
   test("gives up on the lookup after five transient failures", async () => {
     const lookupError = new ConnectError("busy", Code.Unavailable);
     const { client, raw, calls } = createMockClient({

@@ -543,7 +543,7 @@ async function listExecutionsAfterAmbiguousStart(
     try {
       return await listMigrationExecutions(client, workspaceId, name);
     } catch (error) {
-      if (attempt >= START_LOOKUP_ATTEMPTS || !isRetryableWaitError(error)) throw error;
+      if (attempt >= START_LOOKUP_ATTEMPTS || isStartRefused(error)) throw error;
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
     }
   }

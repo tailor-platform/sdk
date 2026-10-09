@@ -363,11 +363,18 @@ function describeChange(change: DiffChange): { preferredName: string; touches: F
         ],
       };
     case "field_modified":
-    case "field_type_modified":
+    case "field_type_modified": {
+      const target = change.after.foreignKeyType;
       return {
         preferredName: `update${table}${capitalize(change.fieldName)}`,
-        touches: [{ table: change.tableName, field: change.fieldName }],
+        touches: [
+          { table: change.tableName, field: change.fieldName },
+          ...(target && target !== change.before.foreignKeyType
+            ? [{ table: target, field: "id" }]
+            : []),
+        ],
       };
+    }
     case "index_added":
     case "index_modified":
       return {

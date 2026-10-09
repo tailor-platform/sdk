@@ -370,6 +370,21 @@ describe("template-generator", () => {
       expect(stepsScript).not.toContain('"not in"');
     });
 
+    test("orders the retarget of a foreign key after the copy of the table it points to", () => {
+      const script = generateMigrationScript(
+        stepsDiff(renamedTable("User", "Person"), {
+          kind: "field_modified",
+          tableName: "Order",
+          fieldName: "ownerId",
+          before: { type: "uuid", required: false, foreignKeyType: "Account" },
+          after: { type: "uuid", required: false, foreignKeyType: "Person" },
+        }),
+      );
+
+      expect(order(script)).toEqual(["copyUserToPerson", "updateOrderOwnerId"]);
+      expect(script).toContain('updateOrderOwnerId: { dependsOn: ["copyUserToPerson"]');
+    });
+
     test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
       const script = generateMigrationScript(
         stepsDiff(addedRequired("User", "name"), {
