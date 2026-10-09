@@ -213,8 +213,8 @@ for what you can edit.
 ### Customizing the generated workflow
 
 The SDK owns the jobs and steps whose `id` starts with `tailor-`, and the
-top-level keys it writes (`name:`, `on:`, and `permissions:`). Do not edit or
-rename them. Everything else is yours, and re-running `setup` keeps it:
+top-level `name:`, `on:`, and `permissions:`. Do not edit or rename them.
+Everything else is yours, and re-running `setup` keeps it:
 
 - **Your own jobs and steps.** Add them anywhere, with an `id` (if any) that
   does not start with `tailor-`: the prefix is reserved for the SDK, even in a
@@ -224,6 +224,9 @@ rename them. Everything else is yours, and re-running `setup` keeps it:
   (such as `playwright install`) _after_ it. A job of your own can depend on a
   managed job with `needs: tailor-deploy`.
 - **Your own top-level keys**, such as a workflow-level `env:` or `defaults:`.
+- **The top-level `concurrency:` of a preview workflow.** The SDK writes a
+  default, and re-running `setup` keeps your edits to it. If you delete it,
+  re-running `setup` adds the default back.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
   `container`, and `env`. On a managed job generated without an
   `environment:` (such as `tailor-tag-guard` or `tailor-erd-preview`), you can
@@ -262,6 +265,14 @@ that only uses `app-url`, such as end-to-end tests, does not.
 The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
 request is closed, for draft and fork pull requests, and for unlabeled ones with
 `--require-preview-label`.
+
+Each new preview workflow run for a pull request, such as after a push or when
+the pull request is closed, cancels the run still in progress for it, including
+your jobs, so they do not keep running against a workspace that the new run
+may redeploy or delete. Events on a pull request that stays closed, such as a
+label added after merging, do not cancel anything. A job with `if: always()`
+still runs when its run is cancelled, and the new run waits for it to finish;
+use `if: ${{ !cancelled() }}` instead so it stops with the run.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
 deployed workspace as the outputs `workspace-id` and `app-url` to a job with
@@ -499,12 +510,13 @@ tailor setup ci branch --name my-app --dir apps/backend
 ```
 
 The `working-directory` for SDK commands is set accordingly, and the workflow
-only plans and deploys when that subdirectory changes. The workflow itself
-starts on every pull request and push: a `tailor-changes` job checks whether
-the change touches `apps/backend/**`, and the plan, deploy, and ERD preview jobs
-are skipped when it does not. A skipped job reports success, so you can make
-these checks required in branch protection; a workflow that a `paths` trigger
-filter never started would leave them pending instead. If the `tailor-changes` job
+only plans and deploys when that subdirectory or the generated workflow file
+changes. The workflow itself starts on every pull request and push: a
+`tailor-changes` job checks whether the change touches `apps/backend/**` or the
+generated workflow file itself, and the plan, deploy, and ERD preview jobs are
+skipped when it does not. A skipped job reports success, so you can make these
+checks required in branch protection; a workflow that a `paths` trigger filter
+never started would leave them pending instead. If the `tailor-changes` job
 itself fails (for example, on a GitHub API error), the plan, deploy, and ERD
 preview jobs fail too instead of being skipped, so a required check blocks
 merging and nothing is deployed. Re-run the failed jobs once the cause is gone.
@@ -545,8 +557,13 @@ tailor setup ci preview --name erp --region asia-northeast \
   --paths "apps/*/frontend/**" --paths "modules/**" --paths pnpm-lock.yaml
 ```
 
-The patterns are checked after the app directories, in order, and the last
-pattern that matches a changed file decides whether it counts. `*` matches
+The patterns are checked after the app directories and the generated workflow
+file, in order, and the last pattern that matches a changed file decides whether
+it counts. A change to the workflow file alone runs the generated plan, deploy,
+and preview jobs, and with them any job of yours that needs them, in the pull
+request or push that makes the change; to skip the jobs for such a change,
+exclude the file, for example `--paths '!.github/workflows/tailor-erp.yml'`
+(`tailor-erp-preview.yml` for the preview workflow). `*` matches
 within one path segment, `**` matches any number of segments, and a pattern
 starting with `!` excludes matching paths, so it can also exclude files inside
 an app directory, for example `--paths '!apps/erp/backend/**/*.md'`. Other glob

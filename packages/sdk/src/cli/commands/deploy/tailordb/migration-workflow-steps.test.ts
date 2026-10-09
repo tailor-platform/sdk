@@ -592,7 +592,23 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
     await expect(run(client, { onBeforeStart })).rejects.toMatchObject({
       code: "MIGRATION_EXECUTION_ACTIVE",
+      message: "Migration tailordb/0003 has an execution that is still running (exec-old).",
+      suggestion:
+        "Wait for it to finish, or check that no other deploy is running against this workspace, then deploy again.",
+      context: { executionId: "exec-old" },
     });
+    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
+    expect(raw.startWorkflow).not.toHaveBeenCalled();
+    expect(onBeforeStart).not.toHaveBeenCalled();
+  });
+
+  test("fails with the listing's own error when the leftovers' executions cannot be listed", async () => {
+    const onBeforeStart = vi.fn(async () => {});
+    const { client, raw } = createStepsClient({ existingWorkflow: { id: "wf-old" } });
+    const lost = new ConnectError("lost", Code.Unavailable);
+    raw.listWorkflowExecutions.mockRejectedValueOnce(lost);
+
+    await expect(run(client, { onBeforeStart })).rejects.toBe(lost);
     expect(raw.deleteWorkflow).not.toHaveBeenCalled();
     expect(raw.startWorkflow).not.toHaveBeenCalled();
     expect(onBeforeStart).not.toHaveBeenCalled();
