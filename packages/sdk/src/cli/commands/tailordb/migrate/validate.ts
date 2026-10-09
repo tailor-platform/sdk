@@ -36,6 +36,7 @@ import {
   analyzeMigrationScript,
   countUnresolvedTodosInFile,
   ignoredStepsWarning,
+  UNRESOLVED_TODO_SUGGESTION,
 } from "./script-form";
 import {
   assertValidMigrationFiles,
@@ -202,9 +203,8 @@ function assertMigrationScriptsReady(
   if (unreviewed.length > 0) {
     throw CLIError({
       code: "MIGRATION_SCRIPT_REVIEW_REQUIRED",
-      message: `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" still call TODO() in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
-      suggestion:
-        "Replace each TODO() call with the value or logic it asks for, then remove the TODO import from ./db.",
+      message: `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" still have a TODO() call or review marker in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
+      suggestion: UNRESOLVED_TODO_SUGGESTION,
     });
   }
   for (const [migrationNumber, scriptPath] of scriptPaths) {

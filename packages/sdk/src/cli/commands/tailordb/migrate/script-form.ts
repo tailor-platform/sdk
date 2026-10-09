@@ -236,8 +236,13 @@ export function analyzeMigrationScript(filePath: string): MigrationScriptForm {
   return analyzeMigrationScriptSource(fs.readFileSync(filePath, "utf-8"), filePath);
 }
 
-// Scripts generated before `TODO()` marked what still needs a decision carry this comment instead.
+// Earlier versions generated this comment, instead of a `TODO()` call, to mark what still needs a decision.
 const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
+
+/** How to resolve what {@link countUnresolvedTodos} counts, for the error that reports it. */
+export const UNRESOLVED_TODO_SUGGESTION =
+  "Replace each TODO() call with the value or logic it asks for, then remove the TODO import from ./db. " +
+  `For the ${LEGACY_REVIEW_MARKER} comment that earlier versions generated, review the code it marks, then remove the comment and the \`never\` annotation next to it.`;
 
 /**
  * Count the placeholders a migration script still contains: the `TODO()` calls

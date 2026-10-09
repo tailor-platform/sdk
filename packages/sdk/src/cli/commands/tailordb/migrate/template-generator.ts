@@ -118,6 +118,7 @@ export async function generateSchemaFile(
  * column types instead of their `Date`/`string` defaults. Should match whatever
  * `kyselyTypePlugin` was configured with. Defaults to `false`.
  * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back; every row already holds a value there
  * @returns {Promise<GenerateDiffResult>} Generated file info
  */
 export async function generateDiffFiles(
@@ -129,6 +130,7 @@ export async function generateDiffFiles(
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
   dateDefault: EffectiveDateDefault = "legacy",
+  finishedExpansions: readonly ExpandContractPlan[] = [],
 ): Promise<GenerateDiffResult> {
   // Create migration directory
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
@@ -162,7 +164,11 @@ export async function generateDiffFiles(
   };
 
   if (writeScript) {
-    const scriptContent = generateMigrationScript(diffWithDescription, expandPlans);
+    const scriptContent = generateMigrationScript(
+      diffWithDescription,
+      expandPlans,
+      finishedExpansions,
+    );
     await fs.writeFile(migrateFilePath, scriptContent);
     result.migrateFilePath = migrateFilePath;
 
@@ -417,14 +423,21 @@ const touchesOverlap = (a: readonly FieldTouch[], b: readonly FieldTouch[]): boo
  * The statements of one change, in the order they must run.
  * @param change - Diff change to generate statements for
  * @param typeRenameTargets - Confirmed type renames (old name → new name)
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back
  * @returns Statements, or an empty array when the change needs no data migration
  */
 function generateChangeStatements(
   change: DiffChange,
   typeRenameTargets: ReadonlyMap<string, string>,
+  finishedExpansions: readonly ExpandContractPlan[],
 ): string[] {
   const decimalScaleScript = generateDecimalScaleChangeScript(change);
-  const statements = generateChangeScripts(change, decimalScaleScript !== null, typeRenameTargets);
+  const statements = generateChangeScripts(
+    change,
+    decimalScaleScript !== null,
+    typeRenameTargets,
+    finishedExpansions,
+  );
   if (decimalScaleScript) {
     statements.push(decimalScaleScript);
 
@@ -444,12 +457,14 @@ function generateChangeStatements(
  * @param diff - Migration diff
  * @param expandPlans - Field changes carried through temporary fields
  * @param typeRenameTargets - Confirmed type renames (old name → new name)
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back
  * @returns Steps in the order of the changes
  */
 function buildScriptSteps(
   diff: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[],
   typeRenameTargets: ReadonlyMap<string, string>,
+  finishedExpansions: readonly ExpandContractPlan[],
 ): ScriptStep[] {
   interface Draft {
     preferredName: string;
@@ -469,7 +484,7 @@ function buildScriptSteps(
     ],
   }));
   diff.changes.forEach((change, index) => {
-    const statements = generateChangeStatements(change, typeRenameTargets);
+    const statements = generateChangeStatements(change, typeRenameTargets, finishedExpansions);
     if (statements.length === 0) return;
     const { preferredName, touches } = describeChange(change);
     drafts.push({
@@ -545,11 +560,13 @@ ${entries}
  * Generate migration script content based on diff
  * @param {MigrationDiff} diff - Migration diff
  * @param expandPlans - Field changes carried through temporary fields
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back
  * @returns {string} Migration script content
  */
 export function generateMigrationScript(
   diff: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
+  finishedExpansions: readonly ExpandContractPlan[] = [],
 ): string {
   const typeRenameTargets = new Map(
     diff.changes
@@ -557,7 +574,7 @@ export function generateMigrationScript(
       .map((change) => [change.previousTableName, change.tableName]),
   );
 
-  const steps = buildScriptSteps(diff, expandPlans, typeRenameTargets);
+  const steps = buildScriptSteps(diff, expandPlans, typeRenameTargets, finishedExpansions);
 
   const helpers = diff.changes.some(
     (change) => change.kind === "field_modified" && change.memberRenames?.length,
@@ -736,12 +753,14 @@ ${
  * @param {DiffChange} change - Diff change to generate script for
  * @param {boolean} deferUniqueConstraint - Generate the unique check after decimal re-serialization
  * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
+ * @param finishedExpansions - Conversions whose temporary field this migration renames back
  * @returns {string[]} Script contents, or an empty array if no script is needed
  */
 function generateChangeScripts(
   change: DiffChange,
   deferUniqueConstraint = false,
   typeRenameTargets?: ReadonlyMap<string, string>,
+  finishedExpansions: readonly ExpandContractPlan[] = [],
 ): string[] {
   if (change.kind === "index_added" || change.kind === "index_modified") {
     const before = change.kind === "index_modified" ? change.before : undefined;
@@ -796,7 +815,14 @@ function generateChangeScripts(
   }
 
   if (change.kind === "field_renamed") {
-    const scripts = [generateFieldRenameCopyScript(change)];
+    const everyRowFilled = finishedExpansions.some(
+      (plan) =>
+        plan.tableName === change.tableName &&
+        plan.tempFieldName === change.previousFieldName &&
+        plan.fieldName === change.fieldName &&
+        (plan.before.required || !plan.after.required),
+    );
+    const scripts = [generateFieldRenameCopyScript(change, everyRowFilled)];
     // The unique constraint is deferred to the post-migration phase, so
     // duplicates in the copied values must be resolved before it is enforced.
     // A previously unique source still needs the check when the copy itself
@@ -902,10 +928,13 @@ function renameCopyCanCollapseValues(change: FieldRenamedChange): boolean {
   return (after.scale ?? DEFAULT_DECIMAL_SCALE) < (before.scale ?? DEFAULT_DECIMAL_SCALE);
 }
 
-function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
+function generateFieldRenameCopyScript(
+  change: FieldRenamedChange,
+  everyRowFilled: boolean,
+): string {
   const { tableName, fieldName, previousFieldName, before, after } = change;
   const requiredTodo =
-    !before.required && after.required
+    !before.required && after.required && !everyRowFilled
       ? `
   // ${previousFieldName} is optional but ${fieldName} is required: resolve its null values,
   // or the post-migration phase will fail.

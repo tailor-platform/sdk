@@ -28,6 +28,7 @@ import {
   analyzeMigrationScript,
   countUnresolvedTodosInFile,
   ignoredStepsWarning,
+  UNRESOLVED_TODO_SUGGESTION,
   usesStepRunner,
 } from "#/cli/commands/tailordb/migrate/script-form";
 import {
@@ -204,9 +205,8 @@ export async function detectPendingMigrations(
       if (hasScript && countUnresolvedTodosInFile(scriptPath) > 0) {
         throw CLIError({
           code: "MIGRATION_SCRIPT_REVIEW_REQUIRED",
-          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} still calls TODO() in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
-          suggestion:
-            "Replace each TODO() call with the value or logic it asks for, then remove the TODO import from ./db.",
+          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} still has a TODO() call or review marker in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
+          suggestion: UNRESOLVED_TODO_SUGGESTION,
         });
       }
 

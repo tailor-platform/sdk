@@ -532,6 +532,7 @@ describe("migration", () => {
       expect(error).toMatchObject({ code: "MIGRATION_SCRIPT_REVIEW_REQUIRED" });
       expect(error!.message).toContain("tailordb/0001");
       expect((error as CLIError).suggestion).toContain("Replace each TODO() call");
+      expect((error as CLIError).suggestion).toContain("TODO(tailor-migration-review)");
     });
 
     test("accepts a pending migration script that no longer calls TODO", async () => {

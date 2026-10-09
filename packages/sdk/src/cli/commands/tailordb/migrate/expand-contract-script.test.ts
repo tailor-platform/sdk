@@ -254,3 +254,41 @@ describe("db.ts for an expand migration", () => {
     expect(content).toContain("price: ColumnType<number | null, number | null, number | null>;");
   });
 });
+
+describe("rename that finishes a conversion", () => {
+  const contractScript = (before: { required: boolean }, after: { required: boolean }) => {
+    const finished: ExpandContractPlan = {
+      ...plan,
+      before: snapshotField("integer", before),
+      after: snapshotField("string", after),
+    };
+    return generateMigrationScript(
+      createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            tableName: "User",
+            previousFieldName: "priceMigrate",
+            fieldName: "price",
+            before: snapshotField("string", { required: false }),
+            after: snapshotField("string", after),
+          },
+        ],
+      }),
+      [],
+      [finished],
+    );
+  };
+
+  test("leaves nothing to resolve when the converted field was required all along", () => {
+    expect(
+      countUnresolvedTodos(contractScript({ required: true }, { required: true }), "migrate.ts"),
+    ).toBe(0);
+  });
+
+  test("still asks to resolve null values when the original field was optional and becomes required", () => {
+    expect(
+      countUnresolvedTodos(contractScript({ required: false }, { required: true }), "migrate.ts"),
+    ).toBe(1);
+  });
+});

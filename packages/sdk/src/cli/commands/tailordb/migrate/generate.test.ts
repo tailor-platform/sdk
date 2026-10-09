@@ -390,6 +390,23 @@ describe("tailordb migration generate with an unsupported field type change", ()
     expect(replayed?.tables.User?.fields.nameMigrate).toBeUndefined();
   });
 
+  test("scaffolds the rename that finishes a conversion without anything left to decide", async () => {
+    const parsed = parsedType("User");
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, array: true } };
+    const ns = addNamespace(tmpDir, "tailordb", "User", parsed);
+
+    const result = await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    expect(result.success).toBe(true);
+    const contractScript = fs.readFileSync(
+      path.join(ns.migrationsDir, "0002", "migrate.ts"),
+      "utf8",
+    );
+    expect(contractScript).toContain('eb.ref("nameMigrate")');
+    expect(countUnresolvedTodos(contractScript, "migrate.ts")).toBe(0);
+  });
+
   test("offers the conversion interactively for a single value becoming an array", async () => {
     const parsed = parsedType("User");
     const field = parsed.fields.name!;

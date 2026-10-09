@@ -1254,7 +1254,8 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           applyTailorDB(client, withInputs(createUpdatePlanResult()), "create-update"),
         ).rejects.toThrow("post-phase constraint violation");
 
-        // A multi-step script writes the Pre-phase schema again to stay resumable.
+        // The schema goes back to the state before the migration, as for a main script;
+        // the Pre-phase schema is not written again, which only a resumable run needs.
         expect(goodsReceiptWrites[3]).not.toEqual(goodsReceiptWrites[1]);
         expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
       });
