@@ -47,6 +47,15 @@ type GeneratedWorkflow = {
   jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
 };
 
+const ROOT_LOCKFILES = [
+  ["pnpm-lock.yaml", "pnpm"],
+  ["yarn.lock", "yarn"],
+  ["bun.lock", "bun"],
+  ["bun.lockb", "bun"],
+  ["package-lock.json", "npm"],
+  ["npm-shrinkwrap.json", "npm"],
+] as const;
+
 describe("detectPackageManager", () => {
   const testDir = path.join(
     "/tmp",
@@ -62,14 +71,7 @@ describe("detectPackageManager", () => {
     fs.writeFileSync(path.join(testDir, "package.json"), JSON.stringify(manifest));
   };
 
-  test.each([
-    ["pnpm-lock.yaml", "pnpm"],
-    ["yarn.lock", "yarn"],
-    ["bun.lock", "bun"],
-    ["bun.lockb", "bun"],
-    ["package-lock.json", "npm"],
-    ["npm-shrinkwrap.json", "npm"],
-  ] as const)("detects %s from %s", (lockfile, expected) => {
+  test.each(ROOT_LOCKFILES)("detects %s from %s", (lockfile, expected) => {
     fs.writeFileSync(path.join(testDir, lockfile), "");
     expect(detectPackageManager(testDir)).toBe(expected);
   });
@@ -649,7 +651,7 @@ describe("multi-directory branch workflow", () => {
   });
 });
 
-describe("ERD preview matrix", () => {
+describe("ERD preview steps", () => {
   const workDir = path.join(
     "/tmp",
     `erd-matrix-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -674,15 +676,15 @@ describe("ERD preview matrix", () => {
     );
   };
 
-  const runMatrix = (): Record<string, string> => {
-    const { content } = renderBranchWorkflow({
-      ...branchBase,
-      workspaceName: "erp",
-      erdPreview: { namespaces: ["erp"] },
-    });
-    const step = (parseYAML(content) as GeneratedWorkflow).jobs[
-      "tailor-erd-preview-matrix"
-    ]?.steps.find((candidate) => candidate.id === "tailor-erd-preview-matrix");
+  const runStep = (
+    params: RenderBranchParams,
+    jobId: string,
+    stepId: string,
+  ): Record<string, string> => {
+    const { content } = renderBranchWorkflow(params);
+    const step = (parseYAML(content) as GeneratedWorkflow).jobs[jobId]?.steps.find(
+      (candidate) => candidate.id === stepId,
+    );
     const outputFile = path.join(workDir, "github-output");
     fs.writeFileSync(outputFile, "");
     execFileSync("bash", ["-c", String(step?.run)], {
@@ -701,6 +703,13 @@ describe("ERD preview matrix", () => {
         .map((entry) => [entry.slice(0, entry.indexOf("=")), entry.slice(entry.indexOf("=") + 1)]),
     );
   };
+
+  const runMatrix = (): Record<string, string> =>
+    runStep(
+      { ...branchBase, workspaceName: "erp", erdPreview: { namespaces: ["erp"] } },
+      "tailor-erd-preview-matrix",
+      "tailor-erd-preview-matrix",
+    );
 
   test("maps each namespace to the app directory that owns it on each side", () => {
     writeLockAt(".", {
@@ -759,6 +768,26 @@ describe("ERD preview matrix", () => {
       main: "backend",
     });
   });
+
+  test.each(ROOT_LOCKFILES)(
+    "detects the base package manager from %s over a different head",
+    (lockfile, expected) => {
+      fs.mkdirSync(path.join(workDir, ".tailor-erd-base"), { recursive: true });
+      fs.writeFileSync(path.join(workDir, ".tailor-erd-base", lockfile), "");
+
+      const outputs = runStep(
+        {
+          ...branchBase,
+          packageManager: expected === "npm" ? "pnpm" : "npm",
+          erdPreview: { namespaces: ["main"] },
+        },
+        "tailor-erd-preview",
+        "tailor-detect-base-package-manager",
+      );
+
+      expect(outputs["package-manager"]).toBe(expected);
+    },
+  );
 });
 
 describe("change detection", () => {
