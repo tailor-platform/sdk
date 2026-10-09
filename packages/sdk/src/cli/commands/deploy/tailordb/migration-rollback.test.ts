@@ -1673,6 +1673,35 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       });
     });
 
+    test("names a table an earlier deploy already restricted when the retry stops again", async () => {
+      const client = createMockClient();
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [
+          {
+            name: "GoodsReceipt",
+            schema: {
+              settings: {
+                bulkUpsert: false,
+                publishRecordEvents: false,
+                disableGqlOperations: { create: true, update: true, delete: true, read: true },
+              },
+            },
+          },
+        ],
+      } as never);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(partiallyApplied());
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(
+        applyTailorDB(client, withInputs(createMockPlanResult()), "create-update"),
+      ).rejects.toThrow("failed at recompute");
+
+      expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain("GoodsReceipt");
+      warn.mockRestore();
+    });
+
     test("passes the recorded run to the migration and never rolls back while it is in progress", async () => {
       const client = createMockClient();
       remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });

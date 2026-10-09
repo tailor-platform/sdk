@@ -369,6 +369,8 @@ interface RestrictionHistory {
   captured: MigrationRestrictionState;
   /** Tables that migration phases rewrote, which also disables their read. */
   touched: ReadonlySet<string>;
+  /** Whether an earlier deploy left this namespace's migration in progress, so its captured settings are already restricted. */
+  resumed: boolean;
 }
 
 function restrictedByDeploy(
@@ -379,7 +381,12 @@ function restrictedByDeploy(
   return [...new Set(tableNames)]
     .filter((tableName) => {
       const captured = history.captured.get(namespaceName)?.get(tableName);
-      return !captured || acceptsMigrationWrites(captured) || history.touched.has(tableName);
+      return (
+        history.resumed ||
+        !captured ||
+        acceptsMigrationWrites(captured) ||
+        history.touched.has(tableName)
+      );
     })
     .toSorted();
 }
@@ -630,6 +637,7 @@ export async function applyTailorDB(
       const touchedTables: { namespace: string; tables: ReadonlySet<string> }[] = [];
       const restrictionHistory = (namespace: string): RestrictionHistory => ({
         captured: restrictionState,
+        resumed: inProgressMigrations[namespace] !== undefined,
         touched: new Set(
           touchedTables.flatMap((entry) =>
             entry.namespace === namespace ? [...entry.tables] : [],
