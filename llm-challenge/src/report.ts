@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { toPosix } from "./utils";
+import { pathExists, toPosix } from "./utils";
 import type { ChallengeReport, ChallengeRunReport, Problem, SdkProfile } from "./types";
 
 export type RunArtifactPaths = {
@@ -21,7 +21,10 @@ export function buildRunArtifactPaths(
   problem: Pick<Problem, "group" | "id">,
   runIndex: number,
 ): RunArtifactPaths {
-  const artifactDir = path.join(outputDir, problem.group, problem.id, `run-${runIndex}`);
+  return artifactPathsIn(path.join(outputDir, problem.group, problem.id, `run-${runIndex}`));
+}
+
+export function artifactPathsIn(artifactDir: string): RunArtifactPaths {
   return {
     artifactDir,
     promptPath: path.join(artifactDir, "prompt.md"),
@@ -46,6 +49,7 @@ export function createRunReport(options: {
   durationMs?: number;
   timedOut?: boolean;
   failureKind?: ChallengeRunReport["failureKind"];
+  agentResult?: ChallengeRunReport["agentResult"];
   replaces?: ChallengeRunReport["replaces"];
 }): ChallengeRunReport {
   return {
@@ -67,6 +71,7 @@ export function createRunReport(options: {
     durationMs: options.durationMs,
     timedOut: options.timedOut,
     failureKind: options.failureKind,
+    agentResult: options.agentResult,
     replaces: options.replaces,
   };
 }
@@ -78,4 +83,19 @@ export async function writeReport(reportPath: string, report: ChallengeReport): 
 
 export function reportPath(packageRoot: string, targetPath: string): string {
   return toPosix(path.relative(packageRoot, targetPath));
+}
+
+export async function resolveExistingReportPath(
+  packageRoot: string,
+  reportFilePath: string,
+): Promise<string> {
+  const candidates = path.isAbsolute(reportFilePath)
+    ? [reportFilePath]
+    : [path.resolve(packageRoot, reportFilePath), path.resolve(packageRoot, "..", reportFilePath)];
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`Report not found: ${reportFilePath}`);
 }

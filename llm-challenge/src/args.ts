@@ -1,28 +1,47 @@
 import {
   PROBLEM_GROUPS,
   SDK_PROFILES,
+  SOLVER_AGENTS,
   type RequestedGroup,
   type RunOptions,
   type SdkProfile,
+  type SolverAgent,
 } from "./types";
 
-const DEFAULTS: Omit<RunOptions, "output" | "problemFilters" | "profileExplicit"> = {
+const AGENT_DEFAULTS: Record<SolverAgent, { model: string; effort: string }> = {
+  claude: { model: "claude-opus-5-5", effort: "xhigh" },
+  codex: { model: "gpt-5.5", effort: "xhigh" },
+};
+
+const DEFAULTS: Omit<
+  RunOptions,
+  | "output"
+  | "problemFilters"
+  | "agentExplicit"
+  | "profileExplicit"
+  | "model"
+  | "modelExplicit"
+  | "effort"
+  | "effortExplicit"
+> = {
+  agent: "claude",
   sdkRef: "HEAD",
   profile: "no-docs" satisfies SdkProfile,
   group: "all" satisfies RequestedGroup,
-  model: "gpt-5.5",
-  effort: "xhigh",
   runs: 3,
   concurrency: 1,
   maxSeconds: 1800,
   preflight: true,
   pruneWorkspaceDeps: true,
+  installSkills: false,
 };
 
 export function parseRunCommand(argv: string[]): RunOptions {
   const [command, ...rest] = argv;
   if (command !== "run") {
-    throw new Error("Usage: pnpm -C llm-challenge challenge run [options]");
+    throw new Error(
+      "Usage: pnpm -C llm-challenge challenge run [options] | pnpm -C llm-challenge challenge grade --report <report.json> [options]",
+    );
   }
   return parseRunArgs(rest);
 }
@@ -30,7 +49,12 @@ export function parseRunCommand(argv: string[]): RunOptions {
 export function parseRunArgs(argv: string[]): RunOptions {
   const options: RunOptions = {
     ...DEFAULTS,
+    agentExplicit: false,
     profileExplicit: false,
+    model: "",
+    modelExplicit: false,
+    effort: "",
+    effortExplicit: false,
     problemFilters: [],
   };
 
@@ -50,6 +74,10 @@ export function parseRunArgs(argv: string[]): RunOptions {
         rejectInlineValue(name, inlineValue);
         options.pruneWorkspaceDeps = false;
         continue;
+      case "--install-skills":
+        rejectInlineValue(name, inlineValue);
+        options.installSkills = true;
+        continue;
       default:
         break;
     }
@@ -63,6 +91,10 @@ export function parseRunArgs(argv: string[]): RunOptions {
     }
 
     switch (name) {
+      case "--agent":
+        options.agent = parseAgent(value);
+        options.agentExplicit = true;
+        break;
       case "--sdk-ref":
         options.sdkRef = value;
         break;
@@ -75,9 +107,11 @@ export function parseRunArgs(argv: string[]): RunOptions {
         break;
       case "--model":
         options.model = value;
+        options.modelExplicit = true;
         break;
       case "--effort":
         options.effort = value;
+        options.effortExplicit = true;
         break;
       case "--runs":
         options.runs = parsePositiveInteger(name, value);
@@ -116,16 +150,32 @@ export function parseRunArgs(argv: string[]): RunOptions {
   if (options.group === "cli" && options.profileExplicit) {
     throw new Error("--profile cannot be used with --group cli");
   }
+  if (options.installSkills && options.group !== "cli" && options.profile !== "full") {
+    throw new Error("--install-skills requires --profile full");
+  }
 
+  if (!options.modelExplicit) {
+    options.model = AGENT_DEFAULTS[options.agent].model;
+  }
+  if (!options.effortExplicit) {
+    options.effort = AGENT_DEFAULTS[options.agent].effort;
+  }
   return options;
 }
 
-function splitOption(token: string): [string, string | undefined] {
+export function splitOption(token: string): [string, string | undefined] {
   const equalsIndex = token.indexOf("=");
   if (equalsIndex === -1) {
     return [token, undefined];
   }
   return [token.slice(0, equalsIndex), token.slice(equalsIndex + 1)];
+}
+
+function parseAgent(value: string): SolverAgent {
+  if ((SOLVER_AGENTS as readonly string[]).includes(value)) {
+    return value as SolverAgent;
+  }
+  throw new Error(`Unknown agent: ${value}`);
 }
 
 function parseProfile(value: string): SdkProfile {
@@ -142,7 +192,7 @@ function parseGroup(value: string): RequestedGroup {
   throw new Error(`Unknown group: ${value}`);
 }
 
-function parsePositiveInteger(name: string, value: string): number {
+export function parsePositiveInteger(name: string, value: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new Error(`${name} must be a positive integer`);
@@ -150,7 +200,7 @@ function parsePositiveInteger(name: string, value: string): number {
   return parsed;
 }
 
-function rejectInlineValue(name: string, inlineValue: string | undefined): void {
+export function rejectInlineValue(name: string, inlineValue: string | undefined): void {
   if (inlineValue !== undefined) {
     throw new Error(`${name} does not accept a value`);
   }

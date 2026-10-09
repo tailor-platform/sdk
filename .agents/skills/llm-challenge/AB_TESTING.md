@@ -10,7 +10,7 @@ Use this workflow when the user asks whether an SDK/API change improves `llm-cha
   - `baselineRef`: a clean ref before the affordance, often the parent/base commit.
   - `afterRef`: a commit in the disposable A/B worktree containing the affordance. Do not use an uncommitted worktree as the after source.
 - Choose the problem set from the evidence behind the proposal. If several proposals are being tested, run each affected problem against both refs. Keep problem selection identical for baseline and after.
-- Keep non-tested variables identical: `profile`, `runs`, `concurrency`, `model`, `effort`, `max-seconds`, and solver image.
+- Keep non-tested variables identical: `agent`, `profile`, `runs`, `concurrency`, `model`, `effort`, `max-seconds`, and solver image.
 - Create a temp JSONL summary file before starting, for example `/tmp/sdk-llm-ab-<stamp>.jsonl`.
 
 ## Run Variants
@@ -36,9 +36,21 @@ pnpm -C llm-challenge challenge run \
 
 Use `--no-preflight` only after one successful preflight in the same environment. Give each variant a unique output directory.
 
+After both variants finish, grade them together so they share one judge and rubric version. The judge model must differ from the solver model:
+
+```bash
+pnpm -C llm-challenge challenge grade \
+  --report results/ab-<problem>-baseline-<stamp>/report.json \
+  --report results/ab-<problem>-after-<stamp>/report.json \
+  --judge-model <model other than the solver's> \
+  --output results/ab-<problem>-grades-<stamp>
+```
+
+`summary.json` lists each variant under `variants`, identified by its `sdkRef`.
+
 ## Record Progress
 
-After each run completes, append one JSON object to the temp file:
+After the combined grade finishes, append one JSON object per run to the temp file:
 
 ```json
 {
@@ -58,24 +70,24 @@ After each run completes, append one JSON object to the temp file:
 
 Definitions:
 
-- `success`: a derived pass/fail for the run, not a score label. `report.json` has no `success` field — compute it per run: successful when the solver completed (`solverExitCode = 0` and `timedOut = false` in `report.json`) **and** no check in that run's `verification-summary.json` has `outcome` of `unsatisfied` or `error`. This is why a run can have `solverExitCode = 0` yet `success = false`.
+- `success`: the run's `metrics.pass` in the combined `grades.jsonl` (`status` must be `ok`). Do not derive it from exit codes or `verify.json` outcomes.
 - `duration`: use `durationMs`/`durationSec` from `report.json`.
-- `steps`: count `trace.jsonl` records where `type === "item.completed"`. This is the agent interaction/action count. Command count is narrower and should not replace steps unless the user asks for commands specifically.
-- `usageLimitCount`: count runs that failed before meaningful agent work, usually non-zero solver exit, very short duration, and `steps = 0` with usage-limit evidence in solver logs or trace.
+- `steps`: the agent's tool-call count. For Claude Code, use `agentResult.toolCalls` from `report.json`. For Codex, count `trace.jsonl` records where `type === "item.completed"`. Command count is narrower and should not replace steps unless the user asks for commands specifically.
+- `usageLimitCount`: count runs whose `failureKind` is `usage-limit` (grades mark them `excluded`).
 
-Append a `variant-summary` after each variant and a `final-all-summary` after all variants. Summaries should include `runCount`, valid run count, usage-limit count, success count, average duration, and average steps.
+Then append a `variant-summary` per variant and a `final-all-summary`. Summaries should include `runCount`, valid run count, usage-limit count, success count, average duration, and average steps.
 
 ## Handle Interrupted Or Limited Runs
 
-- If usage limits appear, stop after repeated zero-step failures. Append an `aborted` event with the reason and leave all already-written run rows intact.
-- When limits clear, resume into new output directories with a new output stamp. In final comparison, prefer the resumed complete summaries and exclude earlier usage-limit rows from averages.
+- A run stops on its own after a `usage-limit` or `auth` failure. Append an `aborted` event with the reason and leave all already-written run rows intact.
+- When limits clear, resume each stopped variant with `--rerun-nonzero-from <its report.json>` and the same `--sdk-ref`, `--profile`, and `--max-seconds` into a new output directory, then pass every report of both variants to one `challenge grade`. Runs that a rerun replaced have no `grades.jsonl` row; leave them out of averages.
 - Do not hide invalid runs. Keep them in the JSONL with `usageLimitCount` so the user can audit why they were excluded.
 
 ## Analyze Artifacts
 
 - Read `report.json` first, then inspect `trace.jsonl`, `verification-summary.json`, and `work/` only as needed.
 - For after variants, verify that solvers actually used the new affordance by searching `work/` for the new public API. If adoption is partial, say so.
-- Treat a run with `solverExitCode = 0` but `success = false` as an unsuccessful run; inspect verification artifacts before explaining why.
+- Treat a run with `solverExitCode = 0` but `success = false` as an unsuccessful run; read its failing claims in `grade.json` and the verification artifacts before explaining why.
 - Keep SDK/API conclusions separate from challenge-side or infrastructure issues.
 
 ## Report
@@ -88,4 +100,4 @@ Problem | Baseline success, avg duration, avg steps | After success, avg duratio
 
 Use deltas for success count, duration seconds, and steps.
 
-Include A/B-specific context needed to interpret the table: baseline/after refs, the `steps` counting rule, usage-limit exclusions, and partial adoption of the tested API.
+Include A/B-specific context needed to interpret the table: baseline/after refs, the judge model, each variant's pass-rate confidence interval from `variants` in the grade summary, the `steps` counting rule, excluded and error runs, and partial adoption of the tested API. Call a difference an improvement or regression only when the intervals do not overlap; otherwise report it as inconclusive at this run count.

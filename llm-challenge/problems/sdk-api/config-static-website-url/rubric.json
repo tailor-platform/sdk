@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "website-registered",
+      "claim": "A `defineStaticWebSite(name, options)` result is listed in defineConfig's `staticWebsites`."
+    },
+    {
+      "id": "url-via-sdk",
+      "claim": "The public URL is expressed through the SDK: the website object's `url` property is used in configuration (for example in `cors`, `env`, or an OAuth2 `redirectURIs` entry), or `customDomains` lists the public host. No invented URL option is passed to defineStaticWebSite."
+    },
+    {
+      "id": "html-entry-in-source-dir",
+      "claim": "An HTML entry point such as `index.html` exists inside a dedicated website source directory rather than the workspace root."
+    },
+    {
+      "id": "source-location-visible",
+      "claim": "A reviewer can find the website source directory from the project: a package.json script or note that runs `tailor staticwebsite deploy` against that directory, or a comment or note next to the website definition naming it."
+    }
+  ]
+}

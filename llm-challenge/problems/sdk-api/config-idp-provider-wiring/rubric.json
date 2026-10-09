@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "auth-passed-to-config",
+      "claim": "A `defineAuth(...)` result is passed to defineConfig's `auth`."
+    },
+    {
+      "id": "single-sign-in-provider",
+      "claim": "The auth config's `idProvider` is set to exactly one provider: either an external provider object with a `kind` of OIDC, IDToken, or SAML, or `idp.provider(name, client)` on a `defineIdp(...)` instance that is listed in defineConfig's `idp`."
+    },
+    {
+      "id": "issuer-and-client-settings",
+      "claim": "The provider's issuer and client are configured with the SDK's field names and obvious placeholder values: for OIDC/IDToken, `providerURL` and/or `issuerURL` plus `clientID`; for SAML, `metadataURL` or `rawMetadata`; for the built-in IdP, a `clients` entry on defineIdp that `idp.provider` references."
+    },
+    {
+      "id": "callback-settings",
+      "claim": "A callback-style URL is configured where the SDK accepts one: an `oauth2Clients` entry's `redirectURIs` on the same auth config, or a SAML `defaultRedirectURL`."
+    },
+    {
+      "id": "no-plaintext-client-secret",
+      "claim": "No client secret appears as a plaintext literal; an OIDC `clientSecret` is a secret manager reference object (`{ vaultName, secretKey }`)."
+    },
+    {
+      "id": "employee-sign-in-naming",
+      "claim": "Names in the auth or provider configuration make it clear the provider is for employee sign-in."
+    }
+  ]
+}

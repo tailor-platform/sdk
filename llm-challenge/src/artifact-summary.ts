@@ -1,8 +1,9 @@
 import { promises as fs } from "node:fs";
+import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace";
 import { runCommand } from "./process";
-import { isObject, tailText } from "./utils";
+import { isObject, readJsonLines, tailText } from "./utils";
 import { listWorkspaceFiles } from "./workspace-files";
-import type { Problem, SolverFailureKind } from "./types";
+import type { AgentResultSummary, Problem, SolverAgent, SolverFailureKind } from "./types";
 
 export type ArtifactSummary = {
   schemaVersion: 1;
@@ -27,6 +28,7 @@ export type ArtifactSummary = {
     outputTail?: string;
   }>;
   errors: string[];
+  agentResult?: AgentResultSummary;
 };
 
 export async function writeArtifactSummary(options: {
@@ -37,12 +39,17 @@ export async function writeArtifactSummary(options: {
   solverStdoutPath: string;
   solverStderrPath: string;
   artifactSummaryPath: string;
+  agent: SolverAgent;
   solverExitCode?: number;
   timedOut?: boolean;
   failureKind: SolverFailureKind;
-}): Promise<void> {
-  const traceEvents = await readTraceEvents(options.tracePath);
-  const terminalCommands = extractTerminalCommands(traceEvents);
+}): Promise<ArtifactSummary> {
+  const traceEvents = await readJsonLines(options.tracePath);
+  const claudeTrace = options.agent === "claude" ? summarizeClaudeTrace(traceEvents) : undefined;
+  const terminalCommands: CommandEvent[] =
+    claudeTrace === undefined
+      ? extractTerminalCommands(traceEvents)
+      : claudeTrace.commands.map((command) => ({ ...command, terminal: true }));
   const commands = terminalCommands.map((command) => ({
     command: command.command,
     exitCode: command.exitCode,
@@ -56,7 +63,12 @@ export async function writeArtifactSummary(options: {
       status: command.status,
       outputTail: command.output === undefined ? undefined : tailText(command.output),
     }));
-  const errors = extractErrors(traceEvents);
+  const errors =
+    claudeTrace === undefined
+      ? extractErrors(traceEvents)
+      : claudeTrace.result?.errorText === undefined
+        ? []
+        : [claudeTrace.result.errorText];
   const summary: ArtifactSummary = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
@@ -71,11 +83,30 @@ export async function writeArtifactSummary(options: {
     commands,
     failedCommands,
     errors,
+    agentResult:
+      claudeTrace === undefined
+        ? undefined
+        : {
+            toolCalls: claudeTrace.toolCalls,
+            servedModels: claudeTrace.servedModels,
+            availableSkills: claudeTrace.skills,
+            skillInvocations: claudeTrace.skillInvocations,
+            subtype: claudeTrace.result?.subtype,
+            isError: claudeTrace.result?.isError,
+            numTurns: claudeTrace.result?.numTurns,
+            durationMs: claudeTrace.result?.durationMs,
+            totalCostUsd: claudeTrace.result?.totalCostUsd,
+            apiErrorStatus: claudeTrace.result?.apiErrorStatus,
+            usage: claudeTrace.result?.usage,
+          },
   };
   await fs.writeFile(options.artifactSummaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+  return summary;
 }
 
 export async function classifySolverFailure(options: {
+  agent: SolverAgent;
+  requestedModel: string;
   timedOut: boolean;
   solverExitCode?: number;
   tracePath: string;
@@ -84,6 +115,13 @@ export async function classifySolverFailure(options: {
 }): Promise<SolverFailureKind> {
   if (options.timedOut) {
     return "timeout";
+  }
+  if (options.agent === "claude") {
+    return classifyClaudeRun(
+      summarizeClaudeTrace(await readJsonLines(options.tracePath)),
+      options.requestedModel,
+      options.solverExitCode,
+    );
   }
   if (options.solverExitCode === 0) {
     return "none";
@@ -98,6 +136,13 @@ export async function classifySolverFailure(options: {
     return "usage-limit";
   }
   if (
+    /\b401 unauthorized\b|not logged in|codex login/i.test(
+      await readAvailableText([options.solverStderrPath]),
+    )
+  ) {
+    return "auth";
+  }
+  if (
     /cannot execute binary file|codex CLI is not installed|Cannot connect to Podman|unable to connect to Podman|auth\.json|npm is unavailable/i.test(
       text,
     )
@@ -108,6 +153,33 @@ export async function classifySolverFailure(options: {
     return "solver-nonzero";
   }
   return "unknown";
+}
+
+function classifyClaudeRun(
+  trace: ReturnType<typeof summarizeClaudeTrace>,
+  requestedModel: string,
+  solverExitCode: number | undefined,
+): SolverFailureKind {
+  if (findServedModelMismatches(requestedModel, trace.servedModels).length > 0) {
+    return "model-mismatch";
+  }
+  if (solverExitCode === 0 && trace.result !== undefined && trace.result.isError !== true) {
+    return "none";
+  }
+  const apiErrorStatus = trace.result?.apiErrorStatus;
+  if (trace.rateLimitRejected || apiErrorStatus === 429) {
+    return "usage-limit";
+  }
+  if (apiErrorStatus === 401 || apiErrorStatus === 403) {
+    return "auth";
+  }
+  if (typeof apiErrorStatus === "number" && apiErrorStatus >= 500) {
+    return "api-error";
+  }
+  if (trace.result === undefined) {
+    return solverExitCode === 0 ? "unknown" : "runner-startup";
+  }
+  return "solver-nonzero";
 }
 
 async function readGitStatus(worktreePath: string): Promise<string[]> {
@@ -121,25 +193,7 @@ async function readGitStatus(worktreePath: string): Promise<string[]> {
   }
 }
 
-async function readTraceEvents(tracePath: string): Promise<unknown[]> {
-  try {
-    const text = await fs.readFile(tracePath, "utf8");
-    return text
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .flatMap((line) => {
-        try {
-          return [JSON.parse(line) as unknown];
-        } catch {
-          return [];
-        }
-      });
-  } catch {
-    return [];
-  }
-}
-
-function extractTerminalCommands(events: unknown[]): CommandEvent[] {
+export function extractTerminalCommands(events: unknown[]): CommandEvent[] {
   return events.flatMap((event) => {
     const commandEvent = getCommandEvent(event);
     return commandEvent !== undefined && commandEvent.terminal ? [commandEvent] : [];

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "migration-configured",
+      "claim": "tailor.config.ts sets `migration.directory` on the `db` namespace that holds the inventory item table."
+    },
+    {
+      "id": "schema-evolution",
+      "claim": "An inventory item table exists with a schema change after the initial snapshot that needs or allows a data migration script."
+    },
+    {
+      "id": "local-cli-generated-script",
+      "claim": "The command history shows the local `tailor` binary producing the script (`tailordb migration generate` for a breaking change, or `tailordb migration script <number>`), and its output or the files it wrote show that it succeeded."
+    },
+    {
+      "id": "executable-script-present",
+      "claim": "A numbered migration directory contains `migrate.ts` exporting `main(trx)` alongside `db.ts` and `diff.json`."
+    }
+  ]
+}

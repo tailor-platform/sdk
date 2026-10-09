@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "env-defined-in-config",
+      "claim": "defineConfig sets an `env` object containing a non-secret setting whose value is a string, number, or boolean."
+    },
+    {
+      "id": "resolver-reads-config-env",
+      "claim": "A `createResolver` body reads that setting from the body argument's `env` (for example `({ env }) => env.KEY` or `context.env.KEY`)."
+    },
+    {
+      "id": "executor-reads-config-env",
+      "claim": "A `createExecutor` operation body reads that setting from its argument's `env`."
+    },
+    {
+      "id": "workflow-job-reads-config-env",
+      "claim": "A `createWorkflowJob` body reads that setting from the `env` of its second (context) argument."
+    },
+    {
+      "id": "auth-hook-reads-config-env",
+      "claim": "A `defineAuth` config sets `hooks.beforeLogin.handler`, the handler reads that setting from its argument's `env`, the hook's `invoker` names a machine user defined in the same auth config, and the auth is passed to defineConfig's `auth`."
+    },
+    {
+      "id": "no-process-env-in-runtime-code",
+      "claim": "None of the resolver, executor, workflow job, or before-login hook bodies read `process.env`; only tailor.config.ts may read process.env."
+    },
+    {
+      "id": "note-explains-definition-and-reads",
+      "claim": "A Markdown note in the workspace states that the setting is defined in tailor.config.ts `env` and names each runtime file (or service) that reads it."
+    }
+  ]
+}

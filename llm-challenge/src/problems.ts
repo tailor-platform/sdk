@@ -24,6 +24,7 @@ export async function discoverProblems(packageRoot: string): Promise<Problem[]> 
       const promptPath = path.join(problemRoot, "prompt.md");
       const scaffoldPath = path.join(problemRoot, "scaffold");
       const verifyPath = path.join(problemRoot, "verify.json");
+      const rubricPath = path.join(problemRoot, "rubric.json");
       const meta = JSON.parse(await fs.readFile(metaPath, "utf8")) as ProblemMeta;
       validateMeta(meta, metaPath);
       if (meta.id !== entry.name) {
@@ -41,6 +42,7 @@ export async function discoverProblems(packageRoot: string): Promise<Problem[]> 
         promptPath,
         scaffoldPath,
         verifyPath: (await pathExists(verifyPath)) ? verifyPath : undefined,
+        rubricPath: (await pathExists(rubricPath)) ? rubricPath : undefined,
       });
     }
   }

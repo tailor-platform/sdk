@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "handle-unique",
+      "claim": "The profile's `handle` field is a string field marked unique (`.unique()`)."
+    },
+    {
+      "id": "tags-ordinary-array",
+      "claim": "`tags` remains a string array field (`{ array: true }`) and is not marked unique or indexed as a unique lookup."
+    },
+    {
+      "id": "display-name-kept",
+      "claim": "A display name string field remains on the profile."
+    },
+    {
+      "id": "avatar-label-regular-field",
+      "claim": "`avatarLabel` remains a regular string field on the table, not a files entry."
+    },
+    {
+      "id": "avatar-image-file",
+      "claim": "The uploaded avatar image is declared with the table's `.files({ ... })` modifier (for example `avatarImage`)."
+    }
+  ]
+}

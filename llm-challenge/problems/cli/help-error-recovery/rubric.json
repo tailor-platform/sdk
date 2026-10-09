@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "help-or-error-consulted",
+      "claim": "The command history shows the local `tailor` binary's help output (`--help`) or an error message being read before the maintenance command was run."
+    },
+    {
+      "id": "corrected-command-succeeded",
+      "claim": "A local `tailor` maintenance command that needs no Tailor cloud credentials ran afterwards and succeeded, as shown by its output or the files it changed."
+    },
+    {
+      "id": "note-describes-command",
+      "claim": "A Markdown note in the workspace names the command that was run and explains why it was chosen."
+    },
+    {
+      "id": "note-matches-history",
+      "claim": "The command named in the note matches a successful command in the command history."
+    }
+  ]
+}

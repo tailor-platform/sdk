@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "resolver-defined-and-wired",
+      "claim": "A resolver is default-exported with `createResolver(...)` and matched by a `resolver` namespace `files` glob in defineConfig."
+    },
+    {
+      "id": "trigger-references-resolver",
+      "claim": "A default-exported `createExecutor` uses `resolverExecutedTrigger({ resolver: <that resolver> })`, referencing the imported resolver object rather than a string name."
+    },
+    {
+      "id": "executor-files-wired",
+      "claim": "defineConfig's `executor.files` globs match the executor file."
+    },
+    {
+      "id": "audit-payload-name-and-time",
+      "claim": "The executor's operation records an audit payload that includes the operation name (for example `args.resolverName` or the resolver's name) and a timestamp."
+    }
+  ]
+}

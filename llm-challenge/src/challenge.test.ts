@@ -6,9 +6,10 @@ import { fileURLToPath } from "node:url";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
+import { createRerunPlan, inheritSolverSettings } from "./cli";
 import { discoverProblems, selectProblems } from "./problems";
 import { runCommand } from "./process";
-import { applyNoDocsProfile, stripJsDocBlocks } from "./profile";
+import { applyNoDocsProfile, extractAgentSkills, stripJsDocBlocks } from "./profile";
 import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from "./report";
 import {
   CONTAINER_PNPM_STORE,
@@ -21,9 +22,10 @@ import {
 } from "./runner";
 import { writeVerificationSummary } from "./verification";
 import { prepareWorkspace, profileForProblem, pruneWorkspaceDeps } from "./workspace";
-import type { Problem } from "./types";
+import type { Problem, StoredChallengeReport } from "./types";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const fixturesDir = path.join(packageRoot, "src", "fixtures");
 const tempDirs: string[] = [];
 
 aroundEach(async (runTest) => {
@@ -37,11 +39,12 @@ aroundEach(async (runTest) => {
 describe("argument parsing", () => {
   test("parses run defaults", () => {
     expect(parseRunCommand(["run"])).toMatchObject({
+      agent: "claude",
       sdkRef: "HEAD",
       profile: "no-docs",
       profileExplicit: false,
       group: "all",
-      model: "gpt-5.5",
+      model: "claude-opus-5-5",
       effort: "xhigh",
       runs: 3,
       concurrency: 1,
@@ -50,6 +53,38 @@ describe("argument parsing", () => {
       pruneWorkspaceDeps: true,
       problemFilters: [],
     });
+  });
+
+  test("resolves model and effort defaults from the selected agent", () => {
+    expect(parseRunArgs(["--agent", "codex"])).toMatchObject({
+      agent: "codex",
+      model: "gpt-5.5",
+      effort: "xhigh",
+    });
+    expect(parseRunArgs(["--model", "claude-sonnet-5-5", "--agent=claude"])).toMatchObject({
+      agent: "claude",
+      model: "claude-sonnet-5-5",
+      modelExplicit: true,
+      effortExplicit: false,
+    });
+    expect(() => parseRunArgs(["--agent", "gemini"])).toThrow("Unknown agent: gemini");
+  });
+
+  test("installs SDK agent skills only with the full profile", () => {
+    expect(parseRunArgs(["--install-skills", "--profile", "full"])).toMatchObject({
+      installSkills: true,
+      profile: "full",
+    });
+    expect(parseRunArgs(["--install-skills", "--group", "cli"])).toMatchObject({
+      installSkills: true,
+    });
+    expect(parseRunArgs([])).toMatchObject({ installSkills: false });
+    expect(() => parseRunArgs(["--install-skills"])).toThrow(
+      "--install-skills requires --profile full",
+    );
+    expect(() => parseRunArgs(["--install-skills=true", "--profile", "full"])).toThrow(
+      "--install-skills does not accept a value",
+    );
   });
 
   test("allows implicit profile with cli group", () => {
@@ -103,6 +138,144 @@ describe("argument parsing", () => {
     expect(() => parseRunArgs(["--problems=, ,"])).toThrow(
       "--problems must contain at least one problem",
     );
+  });
+});
+
+describe("rerun plan", () => {
+  async function writeSourceReport(report: Partial<StoredChallengeReport>): Promise<string> {
+    const reportFilePath = path.join(await makeTempDir(), "report.json");
+    await fs.writeFile(reportFilePath, JSON.stringify({ runId: "source", ...report }));
+    return reportFilePath;
+  }
+
+  test("reruns failed runs and runs that never started before a stop", async () => {
+    const problems = await discoverProblems(packageRoot);
+    const [problem] = problems;
+    const run = (runIndex: number, solverExitCode: number, failureKind: string) => ({
+      problemId: problem.id,
+      group: problem.group,
+      runIndex,
+      artifactDir: `results/source/run-${runIndex}`,
+      solverExitCode,
+      failureKind,
+    });
+    const reportFilePath = await writeSourceReport({
+      runsPerProblem: 3,
+      problems: [problem],
+      runs: [run(0, 0, "none"), run(1, 1, "usage-limit")] as StoredChallengeReport["runs"],
+    });
+
+    const plan = await createRerunPlan({
+      packageRoot,
+      reportFilePath,
+      allProblems: problems,
+      selectedProblems: [problem],
+    });
+
+    expect(plan.tasks.map((task) => [task.runIndex, task.replaces?.artifactDir])).toEqual([
+      [1, "results/source/run-1"],
+      [2, undefined],
+    ]);
+    expect(plan.reportRerunOf.runs.map((rerun) => rerun.runIndex)).toEqual([1, 2]);
+  });
+
+  test("reruns only runs that were not scored", async () => {
+    const problems = await discoverProblems(packageRoot);
+    const [problem] = problems;
+    const run = (runIndex: number, solverExitCode: number, failureKind?: string) => ({
+      problemId: problem.id,
+      group: problem.group,
+      runIndex,
+      artifactDir: `results/source/run-${runIndex}`,
+      solverExitCode,
+      timedOut: failureKind === "timeout",
+      failureKind,
+    });
+    const reportFilePath = await writeSourceReport({
+      runsPerProblem: 6,
+      problems: [problem],
+      runs: [
+        run(0, 1, "solver-nonzero"),
+        run(1, 0, "solver-nonzero"),
+        run(2, 0, "model-mismatch"),
+        run(3, 1, "api-error"),
+        run(4, 1),
+        run(5, 143, "timeout"),
+      ] as StoredChallengeReport["runs"],
+    });
+
+    const plan = await createRerunPlan({
+      packageRoot,
+      reportFilePath,
+      allProblems: problems,
+      selectedProblems: [problem],
+    });
+
+    expect(plan.tasks.map((task) => task.runIndex)).toEqual([2, 3, 4, 5]);
+  });
+
+  test("resumes a stopped rerun against the runs it was replacing", async () => {
+    const problems = await discoverProblems(packageRoot);
+    const [problem] = problems;
+    const original = (runIndex: number) => ({
+      problemId: problem.id,
+      group: problem.group,
+      runIndex,
+      artifactDir: `results/original/run-${runIndex}`,
+      solverExitCode: 1,
+    });
+    const reportFilePath = await writeSourceReport({
+      runsPerProblem: 3,
+      problems: [problem],
+      rerunOf: {
+        sourceReportPath: "results/original/report.json",
+        runs: [original(1), original(2)],
+      },
+      runs: [
+        {
+          problemId: problem.id,
+          group: problem.group,
+          runIndex: 1,
+          artifactDir: "results/source/run-1",
+          solverExitCode: 0,
+          failureKind: "none",
+        },
+      ] as StoredChallengeReport["runs"],
+    });
+
+    const plan = await createRerunPlan({
+      packageRoot,
+      reportFilePath,
+      allProblems: problems,
+      selectedProblems: [problem],
+    });
+
+    expect(plan.tasks.map((task) => [task.runIndex, task.replaces?.artifactDir])).toEqual([
+      [2, "results/original/run-2"],
+    ]);
+  });
+
+  test("inherits the source solver settings and rejects conflicting overrides", () => {
+    const source = { model: "gpt-5.5", effort: "xhigh" } as StoredChallengeReport;
+
+    expect(inheritSolverSettings(parseRunArgs([]), source)).toEqual({
+      agent: "codex",
+      model: "gpt-5.5",
+      effort: "xhigh",
+      installSkills: false,
+    });
+    expect(() => inheritSolverSettings(parseRunArgs(["--agent", "claude"]), source)).toThrow(
+      "remove --agent claude",
+    );
+    expect(
+      inheritSolverSettings(parseRunArgs(["--profile", "full"]), {
+        ...source,
+        installSkills: true,
+      }),
+    ).toMatchObject({ installSkills: true });
+    expect(() =>
+      inheritSolverSettings(parseRunArgs(["--install-skills", "--profile", "full"]), source),
+    ).toThrow("remove --install-skills");
   });
 });
 
@@ -262,12 +435,13 @@ describe("report and artifact paths", () => {
     });
 
     await writeReport(reportFile, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       runId: "run",
       timestamp: "2026-05-24T00:00:00.000Z",
+      agent: "claude",
       sdkRef: "abc123",
       requestedProfile: "no-docs",
-      model: "gpt-5.5",
+      model: "claude-opus-5-5",
       effort: "xhigh",
       runsPerProblem: 1,
       problems: [],
@@ -361,6 +535,7 @@ describe("artifact summary", () => {
       solverStdoutPath,
       solverStderrPath,
       artifactSummaryPath,
+      agent: "codex",
       solverExitCode: 1,
       timedOut: false,
       failureKind: "solver-nonzero",
@@ -392,7 +567,7 @@ describe("artifact summary", () => {
     expect(summary.errors).toEqual(["solver error"]);
   });
 
-  test("classifies timeout, successful, usage-limit, and runner-startup failures", async () => {
+  test("classifies Codex timeout, success, usage-limit, auth, solver, and runner-startup outcomes", async () => {
     const dir = await makeTempDir();
     const tracePath = path.join(dir, "trace.jsonl");
     const solverStdoutPath = path.join(dir, "solver.stdout.log");
@@ -403,6 +578,8 @@ describe("artifact summary", () => {
 
     await expect(
       classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.5",
         timedOut: true,
         solverExitCode: undefined,
         tracePath,
@@ -412,6 +589,8 @@ describe("artifact summary", () => {
     ).resolves.toBe("timeout");
     await expect(
       classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.5",
         timedOut: false,
         solverExitCode: 0,
         tracePath,
@@ -423,6 +602,8 @@ describe("artifact summary", () => {
     await fs.writeFile(solverStderrPath, "Usage limit reached. Try again at 10:00.\n");
     await expect(
       classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.5",
         timedOut: false,
         solverExitCode: 1,
         tracePath,
@@ -431,9 +612,40 @@ describe("artifact summary", () => {
       }),
     ).resolves.toBe("usage-limit");
 
+    await fs.writeFile(
+      solverStderrPath,
+      "warning: processed 401 files\nerror: unauthorized edit\n",
+    );
+    await expect(
+      classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.5",
+        timedOut: false,
+        solverExitCode: 1,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      }),
+    ).resolves.toBe("solver-nonzero");
+
+    await fs.writeFile(solverStderrPath, "Error: unexpected status 401 Unauthorized\n");
+    await expect(
+      classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.5",
+        timedOut: false,
+        solverExitCode: 1,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      }),
+    ).resolves.toBe("auth");
+
     await fs.writeFile(solverStderrPath, "codex CLI is not installed\n");
     await expect(
       classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.5",
         timedOut: false,
         solverExitCode: 127,
         tracePath,
@@ -441,6 +653,131 @@ describe("artifact summary", () => {
         solverStderrPath,
       }),
     ).resolves.toBe("runner-startup");
+  });
+});
+
+describe("claude artifact summary", () => {
+  test("summarizes Claude commands, tool calls, and the result event", async () => {
+    const dir = await makeTempDir();
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(worktreePath, { recursive: true });
+    const tracePath = path.join(dir, "trace.jsonl");
+    const artifactSummaryPath = path.join(dir, "artifact-summary.json");
+    await fs.copyFile(path.join(fixturesDir, "claude-stream-failing-command.jsonl"), tracePath);
+    await fs.writeFile(path.join(dir, "solver.stdout.log"), "");
+    await fs.writeFile(path.join(dir, "solver.stderr.log"), "");
+
+    const summary = await writeArtifactSummary({
+      problem: makeProblem(),
+      runIndex: 0,
+      worktreePath,
+      tracePath,
+      solverStdoutPath: path.join(dir, "solver.stdout.log"),
+      solverStderrPath: path.join(dir, "solver.stderr.log"),
+      artifactSummaryPath,
+      agent: "claude",
+      solverExitCode: 0,
+      timedOut: false,
+      failureKind: "none",
+    });
+
+    expect(summary.commands).toEqual([
+      { command: 'sh -c "echo out; echo err >&2; exit 3"', exitCode: 3, status: "failed" },
+      { command: "echo fine", exitCode: 0, status: "completed" },
+    ]);
+    expect(summary.failedCommands).toEqual([
+      {
+        command: 'sh -c "echo out; echo err >&2; exit 3"',
+        exitCode: 3,
+        status: "failed",
+        outputTail: "Exit code 3\nout\nerr",
+      },
+    ]);
+    expect(summary.agentResult).toMatchObject({
+      toolCalls: 2,
+      servedModels: ["claude-haiku-4-5-20251001"],
+      numTurns: 3,
+      isError: false,
+    });
+    expect(JSON.parse(await fs.readFile(artifactSummaryPath, "utf8"))).toEqual(summary);
+  });
+
+  test("classifies Claude runs from structured trace fields", async () => {
+    const dir = await makeTempDir();
+    const tracePath = path.join(dir, "trace.jsonl");
+    const solverStdoutPath = path.join(dir, "solver.stdout.log");
+    const solverStderrPath = path.join(dir, "solver.stderr.log");
+    await fs.writeFile(solverStdoutPath, "");
+    await fs.writeFile(solverStderrPath, "");
+    const classify = (
+      trace: unknown[],
+      solverExitCode: number | undefined,
+      requestedModel = "claude-haiku-4-5",
+    ) =>
+      fs.writeFile(tracePath, trace.map((event) => JSON.stringify(event)).join("\n")).then(() =>
+        classifySolverFailure({
+          agent: "claude",
+          requestedModel,
+          timedOut: false,
+          solverExitCode,
+          tracePath,
+          solverStdoutPath,
+          solverStderrPath,
+        }),
+      );
+    const fixture = (
+      await fs.readFile(path.join(fixturesDir, "claude-stream-failing-command.jsonl"), "utf8")
+    )
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as unknown);
+
+    await expect(classify(fixture, 0)).resolves.toBe("none");
+    await expect(classify(fixture, 0, "claude-opus-5-5")).resolves.toBe("model-mismatch");
+    await expect(
+      classify(
+        [
+          { type: "rate_limit_event", rate_limit_info: { status: "rejected" } },
+          { type: "result", subtype: "success", is_error: true, api_error_status: 429 },
+        ],
+        1,
+      ),
+    ).resolves.toBe("usage-limit");
+    await expect(
+      classify(
+        [
+          {
+            type: "assistant",
+            parent_tool_use_id: null,
+            message: { model: "<synthetic>", content: [{ type: "text", text: "API Error" }] },
+          },
+          { type: "result", subtype: "success", is_error: true, api_error_status: 429 },
+        ],
+        1,
+      ),
+    ).resolves.toBe("usage-limit");
+    await expect(
+      classify([{ type: "result", subtype: "success", is_error: true, api_error_status: 401 }], 1),
+    ).resolves.toBe("auth");
+    await expect(
+      classify([{ type: "result", subtype: "success", is_error: true, api_error_status: 529 }], 1),
+    ).resolves.toBe("api-error");
+    await expect(classify([], 1)).resolves.toBe("runner-startup");
+    await expect(classify([], 0)).resolves.toBe("unknown");
+    await expect(classify(fixture.slice(0, 3), 0)).resolves.toBe("unknown");
+    await expect(
+      classify(
+        [
+          {
+            type: "result",
+            subtype: "error_max_budget_usd",
+            is_error: true,
+            api_error_status: null,
+          },
+        ],
+        1,
+      ),
+    ).resolves.toBe("solver-nonzero");
   });
 });
 
@@ -805,6 +1142,40 @@ describe("verification summary", () => {
     );
   });
 
+  test("records verifier infrastructure failures as errors instead of unsatisfied checks", async () => {
+    const dir = await makeTempDir();
+    const worktreePath = path.join(dir, "work");
+    const fakeBinPath = path.join(dir, "bin");
+    await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
+    await fs.mkdir(fakeBinPath, { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    await fs.writeFile(path.join(worktreePath, "src/app.ts"), "export {};\n");
+    const verify = () =>
+      writeVerificationSummary({
+        problem: makeProblem({ group: "cli" }),
+        runIndex: 0,
+        worktreePath,
+        verificationSummaryPath: path.join(dir, "verification-summary.json"),
+        verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+        verificationStderrPath: path.join(dir, "verification.stderr.log"),
+      }).then((summary) => summary.checks.find((check) => check.id === "typescript-no-emit"));
+
+    vi.stubEnv("PATH", fakeBinPath);
+    await expect(verify()).resolves.toMatchObject({ outcome: "error" });
+
+    const fakePodmanPath = path.join(fakeBinPath, "podman");
+    await fs.writeFile(fakePodmanPath, "#!/bin/sh\necho 'Error: image not known' >&2\nexit 125\n");
+    await fs.chmod(fakePodmanPath, 0o755);
+    vi.stubEnv("PATH", `${fakeBinPath}${path.delimiter}${process.env.PATH ?? ""}`);
+    await expect(verify()).resolves.toMatchObject({ outcome: "error", exitCode: 125 });
+
+    await fs.writeFile(
+      fakePodmanPath,
+      "#!/bin/sh\necho 'src/app.ts(1,1): error TS1005' \nexit 2\n",
+    );
+    await expect(verify()).resolves.toMatchObject({ outcome: "unsatisfied", exitCode: 2 });
+  });
+
   test("rejects oversized content evidence without reading it in full", async () => {
     const dir = await makeTempDir();
     const problemRoot = path.join(dir, "problem");
@@ -1072,6 +1443,36 @@ describe("verification summary", () => {
 });
 
 describe("workspace preparation", () => {
+  test("installs SDK agent skills where tailor skills add puts them", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const scaffoldPath = path.join(problemRoot, "scaffold");
+    const skillsSourceDir = path.join(dir, "agent-skills");
+    await fs.mkdir(scaffoldPath, { recursive: true });
+    await fs.mkdir(path.join(skillsSourceDir, "tailor", "references"), { recursive: true });
+    await fs.writeFile(path.join(problemRoot, "prompt.md"), "Do the task.\n");
+    await fs.writeFile(path.join(skillsSourceDir, "tailor", "SKILL.md"), "# Tailor\n");
+    await fs.writeFile(path.join(skillsSourceDir, "tailor", "references", "a.md"), "ref\n");
+    await fs.writeFile(path.join(dir, "sdk.tgz"), "tarball");
+
+    const paths = await prepareWorkspace({
+      outputDir: path.join(dir, "results/run"),
+      problem: makeProblem({ promptPath: path.join(problemRoot, "prompt.md"), scaffoldPath }),
+      runIndex: 0,
+      sdkTarballPath: path.join(dir, "sdk.tgz"),
+      skillsSourceDir,
+    });
+
+    for (const root of [".claude/skills", ".agents/skills"]) {
+      await expect(
+        fs.readFile(path.join(paths.worktreePath, root, "tailor", "SKILL.md"), "utf8"),
+      ).resolves.toBe("# Tailor\n");
+      await expect(
+        fs.readFile(path.join(paths.worktreePath, root, "tailor", "references", "a.md"), "utf8"),
+      ).resolves.toBe("ref\n");
+    }
+  });
+
   test("copies scaffold, prompt, and the selected SDK tarball", async () => {
     const dir = await makeTempDir();
     const problemRoot = path.join(dir, "problem");
@@ -1281,3 +1682,33 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     ...overrides,
   };
 }
+
+describe("agent skill extraction", () => {
+  test("extracts agent-skills from a packed SDK tarball", async () => {
+    const dir = await makeTempDir();
+    const packageDir = path.join(dir, "src", "package");
+    await fs.mkdir(path.join(packageDir, "agent-skills", "tailor"), { recursive: true });
+    await fs.writeFile(path.join(packageDir, "agent-skills", "tailor", "SKILL.md"), "# Tailor\n");
+    await fs.writeFile(path.join(packageDir, "package.json"), "{}\n");
+    const tarballPath = path.join(dir, "sdk.tgz");
+    await runCommand("tar", ["-czf", tarballPath, "-C", path.join(dir, "src"), "package"]);
+
+    const skillsDir = await extractAgentSkills(tarballPath, path.join(dir, "out"));
+
+    await expect(fs.readFile(path.join(skillsDir, "tailor", "SKILL.md"), "utf8")).resolves.toBe(
+      "# Tailor\n",
+    );
+  });
+
+  test("rejects a tarball without agent skills", async () => {
+    const dir = await makeTempDir();
+    await fs.mkdir(path.join(dir, "src", "package"), { recursive: true });
+    await fs.writeFile(path.join(dir, "src", "package", "package.json"), "{}\n");
+    const tarballPath = path.join(dir, "sdk.tgz");
+    await runCommand("tar", ["-czf", tarballPath, "-C", path.join(dir, "src"), "package"]);
+
+    await expect(extractAgentSkills(tarballPath, path.join(dir, "out"))).rejects.toThrow(
+      "has no agent-skills",
+    );
+  });
+});
