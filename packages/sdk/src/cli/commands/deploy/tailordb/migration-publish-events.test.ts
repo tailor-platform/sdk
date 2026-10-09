@@ -1194,6 +1194,55 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
   });
 
+  test("does not write the live read setting back over what an earlier migration in the same run committed", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
+    const fields = {
+      status: { type: "string", required: true },
+      first: { type: "string", required: true },
+      second: { type: "string", required: true },
+    } as const;
+    snapshotState.tablesByVersion = {
+      0: { Order: snapshotTable("Order", { status: fields.status }) },
+      1: {
+        Order: snapshotTable(
+          "Order",
+          { status: fields.status, first: fields.first },
+          { gqlOperations: { read: false } },
+        ),
+      },
+      2: {
+        Order: snapshotTable("Order", fields, { gqlOperations: { read: false } }),
+      },
+    };
+    const added = (fieldName: "first" | "second") =>
+      ({
+        kind: "field_added",
+        tableName: "Order",
+        fieldName,
+        after: { type: "string", required: true },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      }) as any;
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([added("first")], { number: 1 }),
+      mkPendingMigration([added("second")], { number: 2 }),
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const operations = gqlOperationWrites(client)
+      .filter(([name]) => name === "Order")
+      .map(([, ops]) => ops);
+    expect(operations[0]).toEqual({ create: true, update: true, delete: true, read: false });
+    expect(operations.slice(1, -1).length).toBeGreaterThan(1);
+    expect(operations.slice(1, -1).at(-1)).toEqual({
+      create: true,
+      update: true,
+      delete: true,
+      read: true,
+    });
+  });
+
   test("does not restrict a historical table that is absent from the workspace", async () => {
     const client = createMockClient({ existingTableNames: [] });
     const planResult = createMockPlanResult({ creates: ["Current"] });
