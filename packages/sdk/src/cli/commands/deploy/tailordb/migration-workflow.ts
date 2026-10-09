@@ -339,6 +339,7 @@ export async function executeMigrationAsWorkflow(
   const { client, workspaceId, code, namespace, migrationNumber, invoker, appName, appId } =
     options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
+  const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
   const created: CreatedMigrationWorkflow = {};
   try {
@@ -349,10 +350,13 @@ export async function executeMigrationAsWorkflow(
       created,
     );
 
-    const { executionId } = await client.startWorkflow({
+    const executionId = await startMigrationExecution({
+      client,
       workspaceId,
+      name,
       workflowId,
-      authInvoker: invoker,
+      invoker,
+      pollInterval,
     });
 
     return await waitForMigrationWorkflow(options, executionId);
@@ -648,6 +652,67 @@ const START_REFUSED_CODES: ReadonlySet<Code> = new Set([
 
 function isStartRefused(error: unknown): boolean {
   return error instanceof ConnectError && START_REFUSED_CODES.has(error.code);
+}
+
+interface StartMigrationExecutionParams {
+  client: OperatorClient;
+  workspaceId: string;
+  name: string;
+  workflowId: string;
+  invoker: LongRunningMigrationOptions["invoker"];
+  pollInterval: number;
+}
+
+const START_LOOKUP_ATTEMPTS = 5;
+
+async function listExecutionsAfterAmbiguousStart(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+  pollInterval: number,
+): Promise<WorkflowExecution[]> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await listMigrationExecutions(client, workspaceId, name);
+    } catch (error) {
+      if (attempt >= START_LOOKUP_ATTEMPTS || isStartRefused(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+  }
+}
+
+/**
+ * Start the migration workflow. A start whose response is lost may still have
+ * created its execution, so the executions that did not exist before the start
+ * are checked before the failure is reported. The check is a read, so it is
+ * retried through transient errors before it gives up.
+ * @param params - Workflow to start and the executions to compare against
+ * @returns Id of the execution that runs the migration
+ */
+async function startMigrationExecution(params: StartMigrationExecutionParams): Promise<string> {
+  const { client, workspaceId, name, workflowId, invoker, pollInterval } = params;
+  const known = new Set(
+    (await listMigrationExecutions(client, workspaceId, name)).map((execution) => execution.id),
+  );
+  try {
+    const { executionId } = await client.startWorkflow({
+      workspaceId,
+      workflowId,
+      authInvoker: invoker,
+    });
+    return executionId;
+  } catch (error) {
+    if (isStartRefused(error)) throw error;
+    const started = (
+      await listExecutionsAfterAmbiguousStart(client, workspaceId, name, pollInterval)
+    ).find((execution) => !known.has(execution.id));
+    if (!started) throw error;
+    logger.debug(
+      `Start of migration workflow '${name}' failed (${error instanceof Error ? error.message : String(error)}), ` +
+        `but execution '${started.id}' was created; waiting for it.`,
+    );
+    return started.id;
+  }
 }
 
 /**

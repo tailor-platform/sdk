@@ -258,7 +258,7 @@ function generateDbTypesFromSnapshot(
   return lines.join("\n") + "\n";
 }
 
-/** Script-facing types every generated db.ts declares after `Transaction`. */
+/** Script-facing types and helpers every generated db.ts declares after `Transaction`. */
 const MIGRATION_SCRIPT_TYPE_LINES = [
   "/** Context passed as the second argument to the migration's `main` function and to each step. */",
   "export type MigrationContext = {",
@@ -274,6 +274,15 @@ const MIGRATION_SCRIPT_TYPE_LINES = [
   "",
   "/** Steps a migration exports as `steps` instead of `main`, keyed by step name. */",
   "export type MigrationSteps = Record<string, MigrationStep>;",
+  "",
+  "/**",
+  " * Marks a value or a step the migration script still needs. The generated script calls it",
+  " * where a decision is yours to make, so the migration fails, and `tailor tailordb migration",
+  " * validate` and `tailor deploy` reject it, until you replace every call.",
+  " */",
+  "export function TODO(message: string): never {",
+  "  throw new Error(`TODO: ${message}`);",
+  "}",
 ];
 
 /**

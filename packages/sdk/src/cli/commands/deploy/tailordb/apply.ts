@@ -5,6 +5,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import { fetchRemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
+import { usesStepRunner } from "#/cli/commands/tailordb/migrate/script-form";
 import {
   reconstructSnapshotFromMigrations,
   formatMigrationNumber,
@@ -586,7 +587,7 @@ export async function applyTailorDB(
           reachedMigrations.add(migration);
           const attemptedTables = new Set<string>();
           const inProgress = inProgressMigrations[migration.namespace]?.number === migration.number;
-          const runsSteps = migration.scriptForm?.kind === "steps";
+          const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
           timeline.enter("preMigration");
           try {
             // Pre-migration phase: Create/update tables with breaking fields as optional

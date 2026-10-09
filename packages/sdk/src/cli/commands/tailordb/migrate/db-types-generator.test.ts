@@ -111,6 +111,18 @@ describe("db-types-generator", () => {
   test.each([
     ["an empty schema", {}],
     ["a schema with tables", { User: { fields: { name: { type: "string", required: true } } } }],
+  ])("exports the TODO placeholder for %s", async (_label, tables) => {
+    const snapshot = createMockSnapshot(tables, "tailordb");
+
+    const { content } = await generateContent(snapshot);
+
+    expect(content).toContain("export function TODO(message: string): never {");
+    expect(content).toContain("throw new Error(`TODO: ${message}`);");
+  });
+
+  test.each([
+    ["an empty schema", {}],
+    ["a schema with tables", { User: { fields: { name: { type: "string", required: true } } } }],
   ])("declares the multi-step script types for %s", async (_label, tables) => {
     const snapshot = createMockSnapshot(tables, "tailordb");
 

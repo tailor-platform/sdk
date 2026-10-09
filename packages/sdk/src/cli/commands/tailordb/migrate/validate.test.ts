@@ -9,7 +9,6 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { MIGRATION_REVIEW_REQUIRED_MARKER } from "./template-generator";
 import {
   parsedType,
   snapshotType,
@@ -18,6 +17,8 @@ import {
 } from "./test-helpers/schema-fixtures";
 import { validateCommand } from "./validate";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+
+const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
@@ -543,14 +544,14 @@ describe("tailordb migration validate", () => {
     );
   });
 
-  test("fails when a migration script still contains a generated review marker", async () => {
+  test("fails when a migration script still calls TODO", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
     writeMigrationFile(
       1,
       "migrate.ts",
-      `// ${MIGRATION_REVIEW_REQUIRED_MARKER}\nexport async function main() {}`,
+      'import { TODO } from "./db";\nexport async function main() { TODO("fill email"); }',
     );
 
     const result = await runCommand(validateCommand, []);
@@ -560,11 +561,28 @@ describe("tailordb migration validate", () => {
     expect(report.valid).toBe(false);
     expect(report.migrationFiles.valid).toBe(false);
     expect(report.migrationFiles.error).toContain("0001");
-    expect(report.migrationFiles.error).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(report.migrationFiles.error).toContain("TODO()");
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
-  test("accepts a migration script after its generated review marker is removed", async () => {
+  test("fails when a migration script still has the review marker earlier versions generated", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(
+      1,
+      "migrate.ts",
+      `// ${LEGACY_REVIEW_MARKER}\nexport async function main() {}`,
+    );
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles.error).toContain("0001");
+  });
+
+  test("accepts a migration script once every TODO call is replaced", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
@@ -644,12 +662,12 @@ describe("tailordb migration validate", () => {
     expect(report.migrationFiles).toEqual({ valid: true });
   });
 
-  test("ignores generated review markers outside migrate.ts", async () => {
+  test("ignores TODO placeholders outside migrate.ts", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
     writeMigrationFile(1, "migrate.ts", "export async function main() {}");
-    writeMigrationFile(1, "db.ts", `// ${MIGRATION_REVIEW_REQUIRED_MARKER}`);
+    writeMigrationFile(1, "db.ts", `// ${LEGACY_REVIEW_MARKER}`);
 
     const result = await runCommand(validateCommand, []);
 

@@ -1333,6 +1333,52 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
     });
 
+    describe("a script with a single step", () => {
+      const singleStep: MigrationScriptForm = { kind: "steps", order: ["backfill"] };
+
+      test("leaves no step-run resources to remove once it completes", async () => {
+        const client = createMockClient();
+        setPendingMigrations([{ ...mkStepsMigration(), scriptForm: singleStep }]);
+        vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+
+        await applyTailorDB(client, createMockPlanResult(), "create-update");
+
+        expect(migrationModule.updateMigrationLabel).toHaveBeenCalledWith(
+          client,
+          "test-workspace",
+          "test-ns",
+          1,
+          undefined,
+        );
+        expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
+      });
+
+      test("is rolled back like a main script when the post-phase fails", async () => {
+        const client = createMockClient();
+        setPendingMigrations([
+          { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: singleStep },
+        ]);
+        vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+        const goodsReceiptWrites: unknown[] = [];
+        vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+          goodsReceiptWrites.push(structuredClone(request));
+          if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
+          return {} as never;
+        });
+
+        await expect(
+          applyTailorDB(client, withInputs(createUpdatePlanResult()), "create-update"),
+        ).rejects.toThrow("post-phase constraint violation");
+
+        // The schema goes back to the state before the migration, as for a main script;
+        // the Pre-phase schema is not written again, which only a resumable run needs.
+        expect(goodsReceiptWrites[3]).not.toEqual(goodsReceiptWrites[1]);
+        expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+      });
+    });
+
     test("advances the checkpoint and removes the run's resources once the steps complete", async () => {
       const client = createMockClient();
       setPendingMigrations([mkStepsMigration()]);

@@ -117,7 +117,7 @@ describe("renderBranchWorkflow", () => {
   test("uses the unified secret names and targets the workspace-id variable", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain(
-      "platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
+      "platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
     );
     expect(content).toContain(
       "platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
