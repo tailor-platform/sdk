@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.27.0
+
+### Patch Changes
+
+- [#2550](https://github.com/tailor-platform/sdk/pull/2550) [`18e4dfb`](https://github.com/tailor-platform/sdk/commit/18e4dfbc042582663124d4d70c286ef33e72ee45) Thanks [@toiroakr](https://github.com/toiroakr)! - Restrict the `defineIdp` permission examples in the docs, the `IdPPermission` JSDoc, the `example` project and the `static-web-site` template to an administrator role, and warn in the IdP docs that a `_loggedIn` policy lets every authenticated user read and change other users' login information and send password reset emails
+
 ## 2.26.0
 
 No changes in this release.

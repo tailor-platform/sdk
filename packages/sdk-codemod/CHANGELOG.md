@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.9.1
+
+### Patch Changes
+
+- [#2509](https://github.com/tailor-platform/sdk/pull/2509) [`54f95b9`](https://github.com/tailor-platform/sdk/commit/54f95b91dc1aad1561b93ab9f57a1f7c4a7342c2) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.19.1
+
 ## 0.9.0
 
 ### Minor Changes
