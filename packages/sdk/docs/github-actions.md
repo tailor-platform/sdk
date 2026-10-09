@@ -111,6 +111,84 @@ all-added or all-removed viewer artifacts. Re-run `setup ci branch` after adding
 removing TailorDB namespaces. `setup check` reports drift when the recorded ERD
 preview namespaces no longer match the current config.
 
+#### Migration test on a labeled pull request
+
+Pass `--migration-test` on a branch target to add a job that runs
+[`tailor tailordb migration test`](./cli/tailordb.md) against a pull request on
+demand. It is opt-in and requires a config with TailorDB migrations.
+
+```bash
+tailor setup ci branch --name my-app-stg --migration-test
+```
+
+The job runs only when someone adds the `tailor:migration-test` label to a pull
+request from the same repository (change the label with
+`--migration-test-label`). It runs the pending migrations in a temporary
+workspace created next to the source workspace, writes the `--json` result to
+the job summary, and removes the label as its last step, whether the test
+succeeded, failed, or was cancelled while running. To run it again, add the label
+again. If a run is cancelled before the job starts (for example, a reviewer
+rejects the environment's approval), the label stays on the pull request: remove
+it and add it again.
+Anyone who can label pull requests in your repository can start the job, and
+each run creates and deletes a workspace. Runs for one pull request never
+cancel each other.
+
+The generated workflow also lists `labeled` in its `pull_request` types. The
+plan and ERD preview jobs skip label events, so adding an unrelated label does
+not re-run them.
+
+The job clones the source workspace's TailorDB records and passes
+`--clone-timeout 30m`, which bounds only the wait for the data clone. If the clone takes longer, the command
+fails with the clone's operation ID in the error and removes its temporary
+workspace, while the clone itself keeps running on the platform.
+
+The migration test step is limited to 50 minutes and the job to 60, so the label
+is still removed when the step times out. A step that is stopped at its limit
+(or a job cancelled at the job limit) gives the command no chance to clean up:
+delete the leftover temporary workspace with `tailor workspace delete`.
+
+##### Choosing the source workspace
+
+`migration test` reads the source workspace (it is not modified), builds a
+temporary workspace from it in the same organization and folder, and deletes
+that workspace afterwards. Because the machine user creates and deletes that
+workspace, it needs an editor or admin role on the organization or folder that
+holds the source workspace; a viewer role is not enough. The clone also needs the
+same role on the source side. The clone copies TailorDB records only: IdP users
+and file blobs are not copied.
+
+Two setups are supported:
+
+- **Source is the plan/deploy workspace (default).** The job uses the same GitHub
+  Environment as the plan and deploy jobs, so it reads the same
+  `TAILOR_PLATFORM_WORKSPACE_ID` variable and machine-user credentials. Nothing
+  extra to configure. If that workspace holds too little data to be a useful
+  test, point the job at a workspace that does with the next setup.
+- **Source is a different workspace, such as production.** Pass
+  `--migration-test-environment <env>`. The job then uses that GitHub
+  Environment and reads the source workspace from its
+  `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID` variable, together with the
+  machine-user credentials set on that same environment. Give this environment a
+  machine user whose role you are willing to hold on the source workspace's
+  organization or folder, since it needs the editor-or-admin role described
+  above. Pending migrations run from the source workspace's migration number up
+  to the latest, so a source that is behind the deploy target replays more
+  migrations, which is closer to what a production deploy will do.
+
+A job can declare only one GitHub Environment, and a repository secret or
+variable is read from that environment, which is why a different source needs its
+own environment. `tailor setup ci env` prints what each environment needs,
+including the dedicated one. Keep the dedicated environment separate from your
+production deploy environment: a pull request job runs on the pull request merge
+ref (`refs/pull/<number>/merge`), so if an environment restricts which branches
+may deploy or requires reviewers, check how that affects the pull request job
+before pointing the migration test at it. A required-reviewers rule makes the
+job wait for approval before it can read the environment's secrets.
+
+Fork pull requests cannot read secrets, so the job is skipped for them.
+`--migration-test` is not available together with several `--dir` values.
+
 ### Tag target (recommended for production)
 
 The tag target fires when a tag matching `--tag-pattern` (default `v*`) is
@@ -408,17 +486,18 @@ tailor setup ci env --environment my-app-stg # only one environment (repeat for 
 
 The list follows what each generated workflow actually reads:
 
-| Name                                         | Kind     | Targets     | Required | Where the value comes from                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------------------------- | -------- | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | variable | all         | yes      | Client ID of the platform machine user CI signs in as (an existing secret of the same name still works as a deprecated fallback); it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all         | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                                                                                            |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                                                                                            |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview     | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                                                                                              |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview     | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                                                                                                       |
-| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all         | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                                                                                                         |
-| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                                                                                               |
-| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                                                                                                       |
-| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                                       |
+| Name                                                 | Kind     | Targets                             | Required | Where the value comes from                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------- | -------- | ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`             | variable | all                                 | yes      | Client ID of the platform machine user CI signs in as (an existing secret of the same name still works as a deprecated fallback); it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET`         | secret   | all                                 | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                                                                                            |
+| `TAILOR_PLATFORM_WORKSPACE_ID`                       | variable | branch, tag                         | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                                                                                            |
+| `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID` | variable | branch (migration test environment) | yes      | ID of the workspace the migration test starts from, set on the environment passed to `--migration-test-environment`; it is only read to build the temporary workspace. Needs the machine user's editor or admin role on that workspace's organization or folder                                                                                                                            |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`                    | variable | preview                             | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                                                                                              |
+| `TAILOR_PLATFORM_FOLDER_ID`                          | variable | preview                             | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                                                                                                       |
+| `TAILOR_PLATFORM_FAIL_ON_DRIFT`                      | variable | all                                 | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                                                                                                         |
+| `TAILOR_SLACK_BOT_TOKEN`                             | secret   | branch, tag                         | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                                                                                               |
+| `TAILOR_SLACK_CHANNEL_ID`                            | variable | branch, tag                         | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                                                                                                       |
+| `TAILOR_SLACK_USER_MAPPING`                          | variable | branch, tag                         | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                                       |
 
 See [Account management](https://docs.tailor.tech/administration/account-management)
 for how organizations, folders, workspaces, and machine users relate.

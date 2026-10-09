@@ -50,6 +50,23 @@ const WORKSPACE_ID: EnvRequirement = {
   description: "ID of the workspace this environment deploys to",
   howTo: "the id printed by `tailor workspace create`, or listed by `tailor workspace list`",
 };
+const MIGRATION_TEST_CLIENT_ID: EnvRequirement = {
+  ...CLIENT_ID,
+  description:
+    "Client ID of the platform machine user the migration test signs in as; it needs an editor " +
+    "or admin role on the organization or folder that holds the source workspace, because the " +
+    "test creates a temporary workspace there, copies data into it, and deletes it afterwards " +
+    "(a viewer role is not enough)",
+};
+const MIGRATION_TEST_SOURCE_WORKSPACE_ID: EnvRequirement = {
+  name: "TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID",
+  type: "variable",
+  required: true,
+  description:
+    "ID of the workspace whose migrations and data the migration test starts from; it is only " +
+    "read to build the temporary workspace and is not modified",
+  howTo: "the id printed by `tailor workspace create`, or listed by `tailor workspace list`",
+};
 const ORGANIZATION_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_ORGANIZATION_ID",
   type: "variable",
@@ -132,24 +149,40 @@ export function targetRequirements(kind: TargetKind): EnvRequirement[] {
  */
 export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequirements[] {
   const byEnvironment = new Map<string, EnvironmentRequirements>();
-  for (const target of lock.targets) {
-    const { environment } = target.inputs;
-    validateEnvironment(environment);
-    validateWorkspaceName(target.workspaceName);
+  const add = (
+    environment: string,
+    targetLabel: string,
+    requirements: readonly EnvRequirement[],
+  ) => {
     const key = environment.toLowerCase();
     let entry = byEnvironment.get(key);
     if (!entry) {
       entry = { environment, targets: [], requirements: [] };
       byEnvironment.set(key, entry);
     }
-    entry.targets.push(`${target.kind} ${target.workspaceName}`);
-    for (const requirement of targetRequirements(target.kind)) {
+    entry.targets.push(targetLabel);
+    for (const requirement of requirements) {
       const existing = entry.requirements.findIndex((r) => r.name === requirement.name);
       if (existing === -1) {
         entry.requirements.push(requirement);
-      } else if (requirement.required) {
+      } else if (requirement.required && !entry.requirements[existing]?.required) {
         entry.requirements[existing] = requirement;
       }
+    }
+  };
+  for (const target of lock.targets) {
+    const { environment, migrationTest, migrationTestEnvironment } = target.inputs;
+    validateEnvironment(environment);
+    validateWorkspaceName(target.workspaceName);
+    const label = `${target.kind} ${target.workspaceName}`;
+    add(environment, label, targetRequirements(target.kind));
+    if (target.kind === "branch" && migrationTest && migrationTestEnvironment !== undefined) {
+      validateEnvironment(migrationTestEnvironment);
+      add(migrationTestEnvironment, `${label} (migration test)`, [
+        MIGRATION_TEST_CLIENT_ID,
+        CLIENT_SECRET,
+        MIGRATION_TEST_SOURCE_WORKSPACE_ID,
+      ]);
     }
   }
   for (const entry of byEnvironment.values()) {

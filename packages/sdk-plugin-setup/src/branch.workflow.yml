@@ -5,6 +5,7 @@ on:
   # __PULL_REQUEST_START__
   pull_request:
     branches: ["__BRANCH__"]
+    # __PR_TYPES__
   # __PULL_REQUEST_END__
   push:
     branches: ["__BRANCH__"]
@@ -619,6 +620,77 @@ jobs:
           fi
 
   # __ERD_PREVIEW_COMMENT_JOB_END__
+  # __MIGRATION_TEST_JOB_START__
+  tailor-migration-test:
+    if: |-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == '__MIGRATION_TEST_LABEL__' &&
+      !github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: __MIGRATION_TEST_ENVIRONMENT__
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: tailor-migration-test-__WORKSPACE_NAME__-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-install
+        uses: tailor-platform/actions/install@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-migration-test-login
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+        run: |
+          echo "::add-mask::$TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID"
+          echo "::add-mask::$TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET"
+          __TAILOR_CLI__ login --machine-user
+        # __WORKING_DIRECTORY__
+      - id: tailor-migration-test
+        timeout-minutes: 50
+        env:
+          TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.__MIGRATION_TEST_SOURCE_VARIABLE__ }}
+        run: |
+          status=0
+          __TAILOR_CLI__ tailordb migration test --data clone --yes --clone-timeout 30m --json > "$RUNNER_TEMP/migration-test.json" || status=$?
+          {
+            echo "### Migration test (__WORKSPACE_NAME__)"
+            if [ -s "$RUNNER_TEMP/migration-test.json" ]; then
+              echo '```json'
+              cat "$RUNNER_TEMP/migration-test.json"
+              echo '```'
+            else
+              echo "Failed before producing a result. See the job log for the error."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+        # __WORKING_DIRECTORY__
+      - id: tailor-migration-test-unlabel
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          LABEL: "__MIGRATION_TEST_LABEL__"
+        run: |
+          encoded_label="$(jq -rn --arg label "$LABEL" '$label | @uri')"
+          gh api --method DELETE "repos/$REPO/issues/$PR_NUMBER/labels/$encoded_label" --silent \
+            || echo "::warning::Could not remove the '$LABEL' label; remove it manually before re-running."
+
+  # __MIGRATION_TEST_JOB_END__
   tailor-deploy:
     # __DEPLOY_IF__
     runs-on: ubuntu-latest

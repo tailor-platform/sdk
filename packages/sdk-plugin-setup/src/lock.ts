@@ -61,6 +61,12 @@ export type LockInputs = {
   paths?: string[];
   erdPreview?: boolean;
   erdNamespaces?: string[];
+  /** For branch targets: whether the label-triggered migration test job was generated. */
+  migrationTest?: boolean;
+  /** For branch targets with a migration test: the PR label that triggers it. */
+  migrationTestLabel?: string;
+  /** For branch targets with a migration test: its dedicated GitHub Environment, if any. */
+  migrationTestEnvironment?: string;
   /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */
   migrationDriftCheck?: boolean;
   /** Whether tailor-seed-validate was generated (config used seedPlugin). */

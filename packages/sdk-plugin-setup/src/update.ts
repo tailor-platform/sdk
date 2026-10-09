@@ -29,6 +29,9 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         branch: recordedBranchUnlessDetected(inputs),
         extraPaths: inputs.paths,
         erdPreview: inputs.erdPreview ?? false,
+        migrationTest: inputs.migrationTest,
+        migrationTestLabel: inputs.migrationTestLabel,
+        migrationTestEnvironment: inputs.migrationTestEnvironment,
         restrictDispatch: inputs.restrictDispatch ?? false,
       };
     case "tag":

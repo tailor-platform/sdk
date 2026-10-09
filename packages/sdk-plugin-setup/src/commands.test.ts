@@ -37,6 +37,52 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
+  test("ci branch passes the migration test options to setupTarget", async () => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      "branch",
+      "--migration-test",
+      "--migration-test-label",
+      "run-migration-test",
+      "--migration-test-environment",
+      "prod-source",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "branch",
+        migrationTest: true,
+        migrationTestLabel: "run-migration-test",
+        migrationTestEnvironment: "prod-source",
+      }),
+    );
+  });
+
+  test("ci branch leaves the migration test options unset by default", async () => {
+    await runCommand(setupCommand, ["ci", "branch"]);
+
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        migrationTest: false,
+        migrationTestLabel: undefined,
+        migrationTestEnvironment: undefined,
+      }),
+    );
+  });
+
+  test("ci branch no longer accepts --migration-test-data", async () => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      "branch",
+      "--migration-test",
+      "--migration-test-data",
+      "seed",
+    ]);
+
+    expect(result.success).toBe(false);
+  });
+
   test("ci branch rejects the removed --branch alias", async () => {
     const result = await runCommand(setupCommand, ["ci", "branch", "--branch", "release"]);
 

@@ -12,6 +12,7 @@ export interface MigrationTestOptions {
   data: MigrationTestDataMode;
   targetWorkspaceId?: string;
   keep?: boolean;
+  cloneTimeout?: number;
   assertionPath?: string;
   assertionNamespace?: string;
   machineUser?: string;

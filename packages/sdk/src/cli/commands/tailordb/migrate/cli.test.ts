@@ -133,5 +133,12 @@ describe("migration CLI commands", () => {
       expect(shape).toHaveProperty("machine-user");
       expect(shape).toHaveProperty("yes");
     });
+
+    test("accepts --clone-timeout as a duration, defaulting to 30 minutes", () => {
+      const shape = testCommand.args.shape;
+      expect(shape["clone-timeout"].parse(undefined)).toBe("30m");
+      expect(shape["clone-timeout"].parse("45m")).toBe("45m");
+      expect(() => shape["clone-timeout"].parse("soon")).toThrow(/Invalid duration format/);
+    });
   });
 });
