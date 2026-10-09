@@ -1153,6 +1153,47 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     expect(writes.at(-1)?.[1]).toMatchObject(originalSettings);
   });
 
+  test("keeps a table readable when its live settings do not list any disabled operation, even if the snapshot disables read", async () => {
+    const client = createMockClient({
+      existingSettings: {
+        Order: { bulkUpsert: true, publishRecordEvents: true, disableGqlOperations: undefined },
+      },
+    });
+    const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
+    const driftedSnapshot = (fields: Parameters<typeof snapshotTable>[1]) =>
+      snapshotTable("Order", fields, { bulkUpsert: true, gqlOperations: { read: false } });
+    snapshotState.tablesByVersion = {
+      0: { Order: driftedSnapshot({ status: { type: "string", required: true } }) },
+      1: {
+        Order: driftedSnapshot({
+          status: { type: "string", required: true },
+          requiredLater: { type: "string", required: true },
+        }),
+      },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        {
+          kind: "field_added",
+          tableName: "Order",
+          fieldName: "requiredLater",
+          after: { type: "string", required: true },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ]),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(new Error("script failed"));
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /script failed/,
+    );
+
+    const firstWrite = typeSettingWrites(client).find(([name]) => name === "Order");
+    expect(firstWrite?.[1]).toMatchObject({
+      disableGqlOperations: { create: true, update: true, delete: true, read: false },
+    });
+  });
+
   test("does not restrict a historical table that is absent from the workspace", async () => {
     const client = createMockClient({ existingTableNames: [] });
     const planResult = createMockPlanResult({ creates: ["Current"] });

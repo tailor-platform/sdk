@@ -575,10 +575,7 @@ async function rewriteRestrictedTables(
           create: true,
           update: true,
           delete: true,
-          read:
-            activeSettings?.disableGqlOperations?.read ??
-            settings.disableGqlOperations?.read ??
-            false,
+          read: activeSettings?.disableGqlOperations?.read ?? false,
         };
       }
       if (!restricted && activeSettings) {
