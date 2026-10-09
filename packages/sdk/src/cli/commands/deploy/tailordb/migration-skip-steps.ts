@@ -32,6 +32,20 @@ export function parseMigrationSkipSteps(value: string | undefined): Map<string, 
   return byNamespace;
 }
 
+/**
+ * Write skipped steps back as the `--migration-skip-steps` value.
+ * @param steps - Steps to skip, keyed by namespace
+ * @returns The option value, or undefined when there is nothing to skip
+ */
+export function formatMigrationSkipSteps(
+  steps: ReadonlyMap<string, readonly string[]> | undefined,
+): string | undefined {
+  const entries = [...(steps ?? [])].flatMap(([namespace, names]) =>
+    names.map((name) => `${namespace}/${name}`),
+  );
+  return entries.length > 0 ? entries.join(",") : undefined;
+}
+
 export interface MigrationSkipStepsCheck {
   client: OperatorClient;
   workspaceId: string;

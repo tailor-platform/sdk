@@ -798,6 +798,40 @@ describe("executeMigrationStepsAsWorkflow", () => {
         );
       });
 
+      test("builds the suggested option only from steps that still exist, while listing every succeeded step", async () => {
+        const { notify, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { order: ["backfillUser", "renamedTotals"] },
+        );
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).toContain("backfillUser, backfillInvoice");
+        expect(suggestion).toContain("--migration-skip-steps tailordb/backfillUser.");
+        expect(suggestion).not.toContain("backfillInvoice");
+      });
+
+      test("does not offer skipping when none of the succeeded steps still exist", async () => {
+        const { notify, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { order: ["renamedUser", "renamedTotals"] },
+        );
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).toContain("backfillUser, backfillInvoice");
+        expect(suggestion).not.toContain("--migration-skip-steps");
+        expect(suggestion).toContain("safe to run twice");
+      });
+
       test("does not offer skipping when the earlier run can no longer be read", async () => {
         const { notify, result } = runKeeping({});
 

@@ -703,9 +703,10 @@ function describeRerun(params: {
   namespace: string;
   reason: string;
   succeeded: readonly string[];
+  order: readonly string[];
   skipped: readonly string[];
 }): { message: string; suggestion: string } {
-  const { migrationLabel, namespace, reason, succeeded, skipped } = params;
+  const { migrationLabel, namespace, reason, succeeded, order, skipped } = params;
   const base = `Migration ${migrationLabel} cannot be resumed because ${reason}`;
   if (skipped.length > 0) {
     return {
@@ -713,18 +714,23 @@ function describeRerun(params: {
       suggestion: "Every other step runs again, so each must be safe to run twice.",
     };
   }
-  if (succeeded.length === 0) {
+  const skippable = succeeded.filter((step) => order.includes(step));
+  const message =
+    succeeded.length === 0
+      ? `${base}; every step runs again.`
+      : `${base}; every step runs again, including ${succeeded.join(", ")}, which already succeeded.`;
+  if (skippable.length === 0) {
     return {
-      message: `${base}; every step runs again.`,
+      message,
       suggestion:
         "A step that had already committed would run a second time, so each step must be safe to run twice.",
     };
   }
   return {
-    message: `${base}; every step runs again, including ${succeeded.join(", ")}, which already succeeded.`,
+    message,
     suggestion:
       "A step that is not safe to run twice breaks on its second run. If any of them is not, " +
-      `interrupt this deploy and deploy again with --migration-skip-steps ${succeeded.map((step) => `${namespace}/${step}`).join(",")}. ` +
+      `interrupt this deploy and deploy again with --migration-skip-steps ${skippable.map((step) => `${namespace}/${step}`).join(",")}. ` +
       "A renamed step cannot be skipped.",
   };
 }
@@ -930,6 +936,7 @@ export async function executeMigrationStepsAsWorkflow(
       namespace,
       reason,
       succeeded,
+      order,
       skipped: options.skipSteps ?? [],
     });
     notify("warn", message, suggestion);

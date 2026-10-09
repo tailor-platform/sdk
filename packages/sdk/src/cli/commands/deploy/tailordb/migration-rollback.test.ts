@@ -458,8 +458,8 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function withRestorableGoodsReceipt(): any {
-    const planResult = createMockPlanResult();
+  function withRestorableGoodsReceipt(plan = createMockPlanResult()): any {
+    const planResult = plan;
     planResult.context.tailorDBInputs = [{ namespace: "test-ns", config: {}, types: {} }];
     return planResult;
   }
@@ -1270,6 +1270,40 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(log).toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
       warn.mockRestore();
       log.mockRestore();
+    });
+
+    test("does not call an existing table restricted when only its rollback write failed and restoration can still lift it", async () => {
+      const client = createMockClient();
+      let migrationFailed = false;
+      const original = vi.mocked(client.updateTailorDBType).getMockImplementation();
+      vi.mocked(client.updateTailorDBType).mockImplementation(async (request, ...rest) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const type = (request as any)?.tailordbType;
+        if (migrationFailed && type?.name === "GoodsReceipt" && restrictedWrite([request])) {
+          throw new Error("transient rollback failure");
+        }
+        return original ? original(request, ...rest) : ({} as never);
+      });
+      setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+      vi.mocked(migrationModule.executeMigrations).mockImplementation(async () => {
+        migrationFailed = true;
+        throw new Error("original migration failure");
+      });
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(
+        applyTailorDB(
+          client,
+          withRestorableGoodsReceipt(createUpdatePlanResult()),
+          "create-update",
+        ),
+      ).rejects.toThrow("original migration failure");
+
+      const lines = warn.mock.calls.map(([line]) => line).join("\n");
+      expect(lines).toContain("Failed to roll back table 'GoodsReceipt'");
+      expect(lines).not.toContain("not rolled back completely");
+      warn.mockRestore();
     });
 
     test("names the tables a partially applied migration keeps restricted", async () => {

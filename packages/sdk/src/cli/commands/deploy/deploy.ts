@@ -89,7 +89,10 @@ import { planPipeline } from "./resolver";
 import { planSecretManager } from "./secret-manager";
 import { planStaticWebsite } from "./staticwebsite";
 import { planTailorDB } from "./tailordb";
-import { assertSkipNamespacesKnown } from "./tailordb/migration-skip-steps";
+import {
+  assertSkipNamespacesKnown,
+  formatMigrationSkipSteps,
+} from "./tailordb/migration-skip-steps";
 import { validatePlan } from "./validate-plan";
 import {
   collectVisibleIdpNames,
@@ -331,6 +334,11 @@ function recoveryOutputArgs(cliContext?: DeployCLIContext): readonly string[] {
   ];
 }
 
+function migrationSkipStepsArgs(options: DeployOptions | undefined): readonly string[] {
+  const value = formatMigrationSkipSteps(options?.migrationSkipSteps);
+  return value === undefined ? [] : ["--migration-skip-steps", value];
+}
+
 function retryDeployArgs(
   options: DeployOptions | undefined,
   configPaths: readonly string[],
@@ -344,6 +352,7 @@ function retryDeployArgs(
     ...(options?.dryRun ? ["--dry-run"] : []),
     ...(options?.yes ? ["--yes"] : []),
     ...(options?.noSchemaCheck ? ["--no-schema-check"] : []),
+    ...migrationSkipStepsArgs(options),
     ...(options?.noValidate ? ["--no-validate"] : []),
     ...(options?.noCache ? ["--no-cache"] : []),
     ...(options?.cleanCache ? ["--clean-cache"] : []),
@@ -951,14 +960,6 @@ async function deployInternal(
     };
 
     const { planTargets, metadataClient, runInputs, deployments } = await plan(targets);
-    assertSkipNamespacesKnown(
-      options?.migrationSkipSteps ?? new Map(),
-      new Set(
-        deployments.flatMap((deployment) =>
-          deployment.tailorDB.context.tailorDBInputs.map((input) => input.namespace),
-        ),
-      ),
-    );
     assertSkipNamespacesKnown(
       options?.migrationSkipSteps ?? new Map(),
       new Set(

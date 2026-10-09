@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   assertMigrationSkipSteps,
   assertSkipNamespacesKnown,
+  formatMigrationSkipSteps,
   parseMigrationSkipSteps,
 } from "./migration-skip-steps";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
@@ -126,5 +127,24 @@ describe("assertSkipNamespacesKnown", () => {
         context: { namespace: "mian", requested: ["a"], namespaces: ["main", "audit"] },
       }),
     );
+  });
+});
+
+describe("formatMigrationSkipSteps", () => {
+  test("writes the steps as the option value that parses back to the same steps", () => {
+    const steps = new Map([
+      ["main", ["backfillUser", "backfillInvoice"]],
+      ["audit", ["copy"]],
+    ]);
+
+    expect(formatMigrationSkipSteps(steps)).toBe(
+      "main/backfillUser,main/backfillInvoice,audit/copy",
+    );
+    expect(parseMigrationSkipSteps(formatMigrationSkipSteps(steps))).toEqual(steps);
+  });
+
+  test("returns nothing when there are no steps to skip", () => {
+    expect(formatMigrationSkipSteps(new Map())).toBeUndefined();
+    expect(formatMigrationSkipSteps(undefined)).toBeUndefined();
   });
 });

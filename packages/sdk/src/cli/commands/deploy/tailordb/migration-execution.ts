@@ -883,7 +883,6 @@ async function rollbackSingleMigrationPrePhase(
         tailordbType: manifest,
       });
     } catch (rollbackError) {
-      leftRestricted.push(tableName);
       logger.warn(
         `Failed to roll back table '${tableName}' in namespace '${migration.namespace}': ` +
           `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
