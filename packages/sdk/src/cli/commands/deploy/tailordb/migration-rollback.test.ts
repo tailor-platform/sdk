@@ -5,6 +5,7 @@
 
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { errorToJson } from "#/cli/shared/error-json";
 import { logger } from "#/cli/shared/logger";
 import { applyTailorDB, captureMigrationFileState, preflightTailorDB } from "./index";
 import type { SchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-types";
@@ -1199,6 +1200,79 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         code: "MIGRATION_CHECKPOINT_UNVERIFIED",
         suggestion: expect.stringContaining("tailor tailordb migration status --namespace test-ns"),
         context: { namespace: "test-ns", tables: expect.arrayContaining(["GoodsReceipt"]) },
+      });
+    });
+
+    test("names the restricted tables in the text of the skipped-restoration suggestion", async () => {
+      const client = createMockClient();
+      checkpointReadsAfterCommit(client, () => new Error("metadata unavailable"));
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+
+      const error = await applyTailorDB(
+        client,
+        withRestorableGoodsReceipt(),
+        "create-update",
+      ).catch((thrown: Error) => thrown);
+
+      expect(errorToJson(error).error.suggestion).toContain("GoodsReceipt");
+    });
+
+    test("keeps the skipped restoration as structured context of the original failure", async () => {
+      const client = createMockClient();
+      checkpointReadsAfterCommit(client, () => new Error("metadata unavailable"));
+      setPendingMigrations([
+        mkAddFieldMigration(1, "GoodsReceipt", "note"),
+        mkAddFieldMigration(2, "GoodsReceipt", "extra"),
+      ]);
+      vi.mocked(migrationModule.executeMigrations).mockImplementation(
+        (_ctx: unknown, migrations: PendingMigration[]) =>
+          migrations.some((m) => m.number === 2)
+            ? Promise.reject(new Error("migration 2 failed"))
+            : Promise.resolve(undefined),
+      );
+      vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      const error = await applyTailorDB(client, createUpdatePlanResult(), "create-update").catch(
+        (thrown: Error) => thrown,
+      );
+
+      expect(errorToJson(error).error).toMatchObject({
+        message: "migration 2 failed",
+        context: {
+          "restorationSkipped:test-ns": {
+            code: "MIGRATION_CHECKPOINT_UNVERIFIED",
+            context: { namespace: "test-ns", tables: expect.arrayContaining(["GoodsReceipt"]) },
+          },
+        },
+      });
+    });
+
+    test("keeps a failed restoration as structured context of the original failure", async () => {
+      const client = createMockClient();
+      failRestoringGoodsReceipt(client);
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        new Error("original migration failure"),
+      );
+      vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      const error = await applyTailorDB(
+        client,
+        withRestorableGoodsReceipt(),
+        "create-update",
+      ).catch((thrown: Error) => thrown);
+
+      expect(errorToJson(error).error).toMatchObject({
+        message: "original migration failure",
+        context: {
+          restoration: {
+            code: "MIGRATION_RESTORE_FAILED",
+            context: { unrestored: [{ namespace: "test-ns", tables: ["GoodsReceipt"] }] },
+          },
+        },
       });
     });
 

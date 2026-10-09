@@ -698,14 +698,16 @@ export async function assertSkippableSteps(options: SkippableStepsOptions): Prom
   });
 }
 
-function describeRerun(params: {
+interface RerunDescriptionParams {
   migrationLabel: string;
   namespace: string;
   reason: string;
   succeeded: readonly string[];
   order: readonly string[];
   skipped: readonly string[];
-}): { message: string; suggestion: string } {
+}
+
+function describeRerun(params: RerunDescriptionParams): { message: string; suggestion: string } {
   const { migrationLabel, namespace, reason, succeeded, order, skipped } = params;
   const base = `Migration ${migrationLabel} cannot be resumed because ${reason}`;
   if (skipped.length > 0) {
