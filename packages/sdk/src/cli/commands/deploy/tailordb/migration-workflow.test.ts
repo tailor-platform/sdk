@@ -349,27 +349,74 @@ describe("executeMigrationAsWorkflow", () => {
   });
 
   test.each([
-    { name: "no execution is listed", options: {} },
+    {
+      name: "no execution is listed",
+      options: {},
+      message: "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
+    },
     {
       name: "the executions cannot be listed",
-      options: { listFailureAfterCreate: new ConnectError("lost", Code.Internal) },
+      options: { listFailureAfterCreate: new ConnectError("denied", Code.PermissionDenied) },
+      message:
+        "Could not confirm whether migration tailordb/0003 started: [unavailable] lost\nListing its executions failed: [permission_denied] denied",
     },
-  ])("keeps the workflow when a start fails ambiguously and $name", async ({ options }) => {
+  ])(
+    "keeps the workflow when a start fails ambiguously and $name",
+    async ({ options, message }) => {
+      const lost = new ConnectError("lost", Code.Unavailable);
+      const { client, calls } = createMockClient({
+        ...options,
+        startFailure: { error: lost, afterCreating: false },
+      });
+
+      await expect(run(client)).rejects.toMatchObject({
+        code: "MIGRATION_OUTCOME_UNKNOWN",
+        message,
+        suggestion: expect.stringContaining(
+          "Run `tailor workflow executions --workflow-name tailordb-migration--tailordb--0003` until",
+        ),
+        cause: lost,
+      });
+      expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
+    },
+  );
+
+  test("reports the last lookup failure when looking up a started execution keeps failing", async () => {
     const lost = new ConnectError("lost", Code.Unavailable);
-    const { client, calls } = createMockClient({
-      ...options,
+    const { client, raw } = createMockClient({
       startFailure: { error: lost, afterCreating: false },
     });
+    const list = raw.listWorkflowExecutions.getMockImplementation()!;
+    raw.listWorkflowExecutions
+      .mockImplementationOnce(list)
+      .mockRejectedValueOnce(new ConnectError("first", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("second", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("third", Code.Unavailable));
 
     await expect(run(client)).rejects.toMatchObject({
       code: "MIGRATION_OUTCOME_UNKNOWN",
-      message: "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
-      suggestion: expect.stringContaining(
-        "Run `tailor workflow executions --workflow-name tailordb-migration--tailordb--0003` until",
-      ),
+      message:
+        "Could not confirm whether migration tailordb/0003 started: [unavailable] lost\nListing its executions failed: [unavailable] third",
       cause: lost,
     });
-    expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
+    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(4);
+  });
+
+  test("leaves out a lookup failure that a later lookup superseded", async () => {
+    const lost = new ConnectError("lost", Code.Unavailable);
+    const { client, raw } = createMockClient({
+      startFailure: { error: lost, afterCreating: false },
+    });
+    const list = raw.listWorkflowExecutions.getMockImplementation()!;
+    raw.listWorkflowExecutions
+      .mockImplementationOnce(list)
+      .mockRejectedValueOnce(new ConnectError("first", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("second", Code.Unavailable));
+
+    await expect(run(client)).rejects.toMatchObject({
+      message: "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
+    });
+    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(4);
   });
 
   test("names both checkpoints to sync to once the outcome is known", async () => {

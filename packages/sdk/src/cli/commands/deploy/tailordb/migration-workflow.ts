@@ -363,13 +363,17 @@ export async function executeMigrationAsWorkflow(
       await teardown(client, workspaceId, name, workflowId);
       throw error;
     }
-    const started = await findStartedExecution(client, workspaceId, name, pollInterval).catch(
-      () => undefined,
-    );
+    let started: WorkflowExecution | undefined;
+    let lookupFailure = "";
+    try {
+      started = await findStartedExecution(client, workspaceId, name, pollInterval);
+    } catch (lookupError) {
+      lookupFailure = `\nListing its executions failed: ${formatWaitError(lookupError)}`;
+    }
     if (!started) {
       throw outcomeUnknownError(
         options,
-        `Could not confirm whether migration ${migrationLabel} started: ${formatWaitError(error)}`,
+        `Could not confirm whether migration ${migrationLabel} started: ${formatWaitError(error)}${lookupFailure}`,
         { cause: error },
       );
     }
@@ -412,7 +416,7 @@ async function findStartedExecution(
       const [execution] = await listMigrationExecutions(client, workspaceId, name);
       if (execution) return execution;
     } catch (error) {
-      if (!isRetryableWaitError(error)) throw error;
+      if (!isRetryableWaitError(error) || attempt === START_LOOKUP_ATTEMPTS - 1) throw error;
     }
   }
   return undefined;
