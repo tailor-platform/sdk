@@ -245,8 +245,34 @@ export const UNRESOLVED_TODO_SUGGESTION =
   `For the ${LEGACY_REVIEW_MARKER} comment that earlier versions generated, review the code it marks, then remove the comment and the \`never\` annotation next to it.`;
 
 /**
- * Count the placeholders a migration script still contains: the `TODO()` calls
- * its generator left for a decision, and the review marker that earlier
+ * The local names a script binds the `TODO` export of `./db` to, by name and by
+ * namespace import. A `TODO` from another module, or one the script declares itself, is the author's own.
+ * @param program - Parsed migrate.ts
+ * @returns Local names of the import and of namespace imports
+ */
+function collectTodoBindings(program: Program): { names: Set<string>; namespaces: Set<string> } {
+  const names = new Set<string>();
+  const namespaces = new Set<string>();
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration" || statement.source.value !== "./db") continue;
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaces.add(specifier.local.name);
+      } else if (specifier.type === "ImportSpecifier") {
+        const imported =
+          specifier.imported.type === "Identifier"
+            ? specifier.imported.name
+            : String(specifier.imported.value);
+        if (imported === "TODO") names.add(specifier.local.name);
+      }
+    }
+  }
+  return { names, namespaces };
+}
+
+/**
+ * Count the placeholders a migration script still contains: the calls to the `TODO`
+ * of `./db` its generator left for a decision, and the review marker that earlier
  * versions left in a comment.
  * @param source - Source of migrate.ts
  * @param filePath - Path used in the parse error
@@ -260,10 +286,22 @@ export function countUnresolvedTodos(source: string, filePath: string): number {
       message: `Failed to parse ${filePath}: ${errors.map((error) => error.message).join("; ")}`,
     });
   }
+  const { names, namespaces } = collectTodoBindings(program);
   let calls = 0;
   new Visitor({
     CallExpression(node) {
-      if (node.callee.type === "Identifier" && node.callee.name === "TODO") calls++;
+      const { callee } = node;
+      if (callee.type === "Identifier" && names.has(callee.name)) calls++;
+      else if (
+        callee.type === "MemberExpression" &&
+        !callee.computed &&
+        callee.object.type === "Identifier" &&
+        namespaces.has(callee.object.name) &&
+        callee.property.type === "Identifier" &&
+        callee.property.name === "TODO"
+      ) {
+        calls++;
+      }
     },
   }).visit(program);
   return calls + source.split(LEGACY_REVIEW_MARKER).length - 1;

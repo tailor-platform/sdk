@@ -236,6 +236,27 @@ describe("countUnresolvedTodos", () => {
     ).toBe(0);
   });
 
+  test("counts a call through an alias or a namespace import of ./db", () => {
+    expect(
+      count(ml`
+        import { TODO as pending } from "./db";
+        import * as db from "./db";
+        export async function main(trx) {
+          pending("fill email");
+          db.TODO("resolve nulls");
+        }
+      `),
+    ).toBe(2);
+  });
+
+  test.each([
+    ["a helper the script declares itself", "function TODO(message) {}\nTODO('later');"],
+    ["a TODO imported from another module", 'import { TODO } from "untodo";\nTODO("later");'],
+    ["a call without any import", 'TODO("later");'],
+  ])("does not count a call to %s", (_label, body) => {
+    expect(count(`${body}\nexport async function main(trx) {}`)).toBe(0);
+  });
+
   test("counts the review marker that earlier versions generated", () => {
     expect(
       count(ml`
