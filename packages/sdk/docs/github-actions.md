@@ -190,6 +190,26 @@ the `plan` job as well as `deploy`, because `plan` must enter the environment to
 read the variable. (A token-based read that lets `plan` run without entering the
 environment is planned.)
 
+## Package manager
+
+The generated workflow sets up your package manager, installs dependencies with
+it, and runs `tailor` through it. `setup ci` detects the package manager from the
+lockfile at the repository root (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`,
+`bun.lockb`, `package-lock.json`, or `npm-shrinkwrap.json`), or, when there is
+none, from the `packageManager` or `devEngines.packageManager` field of the root
+`package.json`. When neither names one, `setup ci` stops instead of guessing.
+
+Pass `--package-manager` (`pnpm`, `npm`, `yarn`, or `bun`) to choose it
+yourself, for example to generate the workflow before the lockfile exists:
+
+```bash
+tailor setup ci branch --name my-app-stg --package-manager pnpm
+```
+
+The workflow installs dependencies at the repository root, so commit the
+lockfile there before it runs. `tailor setup update` keeps a package manager
+chosen with `--package-manager` and detects it again otherwise.
+
 ## Generated files
 
 Running a workflow setup subcommand creates or updates:
@@ -728,10 +748,11 @@ It regenerates every workflow recorded in
 have to re-type `setup ci branch`, `setup ci tag`, and the rest one by one.
 Your own jobs, steps, and settings are kept (see
 [Customizing the generated workflow](#customizing-the-generated-workflow)). A
-branch that was detected from the repository default branch is detected again,
-and the parts that follow your config — the migration drift check, seed
-validation, and ERD preview namespaces — are derived
-from the current `tailor.config.ts`.
+branch that was detected from the repository default branch and a
+[package manager](#package-manager) that was detected from the repository root
+are detected again, and the parts that follow your config — the migration drift
+check, seed validation, and ERD preview namespaces — are derived from the
+current `tailor.config.ts`.
 
 A target that cannot be regenerated, for example because you edited a managed
 part, does not stop the others: `update` regenerates the rest, then lists the

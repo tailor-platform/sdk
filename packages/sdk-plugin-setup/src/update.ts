@@ -1,6 +1,7 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { setupTarget, type SetupTargetOptions } from "./generate";
 import { readLock, type LockInputs, type LockTarget } from "./lock";
+import { isPackageManager, type PackageManager } from "./templates";
 
 type UpdateCommon = { force: boolean; outputDir: string };
 
@@ -8,6 +9,18 @@ type UpdateCommon = { force: boolean; outputDir: string };
 // branch, and re-detecting it would silently move the deploy trigger.
 function recordedBranchUnlessDetected(inputs: LockInputs): string | undefined {
   return inputs.branchAutoDetected === true ? undefined : (inputs.branch ?? undefined);
+}
+
+function recordedPackageManagerUnlessDetected(inputs: LockInputs): PackageManager | undefined {
+  if (inputs.packageManagerAutoDetected !== false) return undefined;
+  if (!isPackageManager(inputs.packageManager)) {
+    throw new Error(
+      `.github/tailor.lock records the unsupported package manager ` +
+        `${JSON.stringify(inputs.packageManager)}. Re-run its \`tailor setup ci\` subcommand ` +
+        "with --package-manager.",
+    );
+  }
+  return inputs.packageManager;
 }
 
 /**
@@ -19,7 +32,13 @@ function recordedBranchUnlessDetected(inputs: LockInputs): string | undefined {
 export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTargetOptions {
   const { kind, workspaceName, inputs } = target;
   const dir = inputs.apps ? inputs.apps.map((app) => app.dir) : inputs.dir;
-  const base = { workspaceName, dir, environment: inputs.environment, ...common };
+  const base = {
+    workspaceName,
+    dir,
+    environment: inputs.environment,
+    packageManager: recordedPackageManagerUnlessDetected(inputs),
+    ...common,
+  };
 
   switch (kind) {
     case "branch":

@@ -7,6 +7,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
+  detectPackageManager,
   printTargetNextSteps,
   setupTarget,
   type BranchSetupOptions,
@@ -18,7 +19,6 @@ import {
   ACTIONS_SHA,
   ACTIONS_VERSION,
   TEMPLATE_VERSION,
-  detectPackageManager,
   renderBranchWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
@@ -47,6 +47,15 @@ type GeneratedWorkflow = {
   jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
 };
 
+const ROOT_LOCKFILES = [
+  ["pnpm-lock.yaml", "pnpm"],
+  ["yarn.lock", "yarn"],
+  ["bun.lock", "bun"],
+  ["bun.lockb", "bun"],
+  ["package-lock.json", "npm"],
+  ["npm-shrinkwrap.json", "npm"],
+] as const;
+
 describe("detectPackageManager", () => {
   const testDir = path.join(
     "/tmp",
@@ -58,17 +67,85 @@ describe("detectPackageManager", () => {
     fs.rmSync(testDir, { recursive: true, force: true });
   });
 
-  test.each([
-    ["pnpm-lock.yaml", "pnpm"],
-    ["yarn.lock", "yarn"],
-    ["bun.lock", "bun"],
-  ] as const)("detects %s from %s", (lockfile, expected) => {
+  const writeManifest = (manifest: unknown): void => {
+    fs.writeFileSync(path.join(testDir, "package.json"), JSON.stringify(manifest));
+  };
+
+  test.each(ROOT_LOCKFILES)("detects %s from %s", (lockfile, expected) => {
     fs.writeFileSync(path.join(testDir, lockfile), "");
     expect(detectPackageManager(testDir)).toBe(expected);
   });
 
-  test("defaults to npm", () => {
-    expect(detectPackageManager(testDir)).toBe("npm");
+  test.each([
+    [{ packageManager: "pnpm@10.12.1+sha512.abc" }, "pnpm"],
+    [{ packageManager: "yarn@4.9.2" }, "yarn"],
+    [{ devEngines: { packageManager: { name: "bun", version: "1.2.0" } } }, "bun"],
+    [
+      {
+        packageManager: "npm@11.0.0",
+        devEngines: { packageManager: { name: "npm", version: "^11" } },
+      },
+      "npm",
+    ],
+    [{ packageManager: "", devEngines: { packageManager: { name: "pnpm" } } }, "pnpm"],
+    [{ packageManager: "yarn@4.9.2", devEngines: { packageManager: { name: "" } } }, "yarn"],
+    [{ devEngines: { packageManager: [{ name: "pnpm" }] } }, "pnpm"],
+    [{ devEngines: { packageManager: [{ name: "cnpm" }, { name: "yarn" }] } }, "yarn"],
+    [{ devEngines: { packageManager: [null, "npm", {}, { name: "bun" }] } }, "bun"],
+    [
+      {
+        packageManager: "pnpm@10.12.1",
+        devEngines: { packageManager: [{ name: "npm" }, { name: "pnpm" }] },
+      },
+      "pnpm",
+    ],
+    [{ packageManager: "yarn@4.9.2", devEngines: { packageManager: [] } }, "yarn"],
+  ] as const)("detects the package manager %j declares", (manifest, expected) => {
+    writeManifest(manifest);
+    expect(detectPackageManager(testDir)).toBe(expected);
+  });
+
+  test("prefers the root lockfile over package.json", () => {
+    fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
+    writeManifest({ packageManager: "yarn@4.9.2" });
+    expect(detectPackageManager(testDir)).toBe("pnpm");
+  });
+
+  test("rejects package.json fields that name different package managers", () => {
+    writeManifest({
+      packageManager: "pnpm@10.12.1",
+      devEngines: { packageManager: { name: "yarn", version: "4.9.2" } },
+    });
+    expect(() => detectPackageManager(testDir)).toThrow(
+      /package\.json at the repository root declares pnpm in packageManager but yarn in devEngines\.packageManager/,
+    );
+  });
+
+  test("rejects a packageManager field missing from a devEngines.packageManager array", () => {
+    writeManifest({
+      packageManager: "pnpm@10.12.1",
+      devEngines: { packageManager: [{ name: "npm" }, { name: "yarn" }] },
+    });
+    expect(() => detectPackageManager(testDir)).toThrow(
+      /declares pnpm in packageManager but npm or yarn in devEngines\.packageManager/,
+    );
+  });
+
+  test("rejects a root package.json that is not valid JSON", () => {
+    fs.writeFileSync(path.join(testDir, "package.json"), "{");
+    expect(() => detectPackageManager(testDir)).toThrow(
+      /package\.json at the repository root is not valid JSON/,
+    );
+  });
+
+  test.each([
+    ["no lockfile or package.json", undefined],
+    ["a package.json without a package manager", { private: true }],
+    ["an unsupported package manager", { packageManager: "cnpm@9.0.0" }],
+    ["an empty devEngines.packageManager array", { devEngines: { packageManager: [] } }],
+  ])("detects nothing from %s", (_label, manifest) => {
+    if (manifest !== undefined) writeManifest(manifest);
+    expect(detectPackageManager(testDir)).toBeUndefined();
   });
 });
 
@@ -574,7 +651,7 @@ describe("multi-directory branch workflow", () => {
   });
 });
 
-describe("ERD preview matrix", () => {
+describe("ERD preview steps", () => {
   const workDir = path.join(
     "/tmp",
     `erd-matrix-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -599,15 +676,15 @@ describe("ERD preview matrix", () => {
     );
   };
 
-  const runMatrix = (): Record<string, string> => {
-    const { content } = renderBranchWorkflow({
-      ...branchBase,
-      workspaceName: "erp",
-      erdPreview: { namespaces: ["erp"] },
-    });
-    const step = (parseYAML(content) as GeneratedWorkflow).jobs[
-      "tailor-erd-preview-matrix"
-    ]?.steps.find((candidate) => candidate.id === "tailor-erd-preview-matrix");
+  const runStep = (
+    params: RenderBranchParams,
+    jobId: string,
+    stepId: string,
+  ): Record<string, string> => {
+    const { content } = renderBranchWorkflow(params);
+    const step = (parseYAML(content) as GeneratedWorkflow).jobs[jobId]?.steps.find(
+      (candidate) => candidate.id === stepId,
+    );
     const outputFile = path.join(workDir, "github-output");
     fs.writeFileSync(outputFile, "");
     execFileSync("bash", ["-c", String(step?.run)], {
@@ -626,6 +703,13 @@ describe("ERD preview matrix", () => {
         .map((entry) => [entry.slice(0, entry.indexOf("=")), entry.slice(entry.indexOf("=") + 1)]),
     );
   };
+
+  const runMatrix = (): Record<string, string> =>
+    runStep(
+      { ...branchBase, workspaceName: "erp", erdPreview: { namespaces: ["erp"] } },
+      "tailor-erd-preview-matrix",
+      "tailor-erd-preview-matrix",
+    );
 
   test("maps each namespace to the app directory that owns it on each side", () => {
     writeLockAt(".", {
@@ -684,6 +768,26 @@ describe("ERD preview matrix", () => {
       main: "backend",
     });
   });
+
+  test.each(ROOT_LOCKFILES)(
+    "detects the base package manager from %s over a different head",
+    (lockfile, expected) => {
+      fs.mkdirSync(path.join(workDir, ".tailor-erd-base"), { recursive: true });
+      fs.writeFileSync(path.join(workDir, ".tailor-erd-base", lockfile), "");
+
+      const outputs = runStep(
+        {
+          ...branchBase,
+          packageManager: expected === "npm" ? "pnpm" : "npm",
+          erdPreview: { namespaces: ["main"] },
+        },
+        "tailor-erd-preview",
+        "tailor-detect-base-package-manager",
+      );
+
+      expect(outputs["package-manager"]).toBe(expected);
+    },
+  );
 });
 
 describe("change detection", () => {
@@ -1359,6 +1463,38 @@ describe("setupTarget (integration)", () => {
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
     expect(wf).toContain("environment: production");
     expect(readLock(testDir)?.targets[0]?.inputs.environment).toBe("production");
+  });
+
+  test("records a package manager detected from the root lockfile as auto-detected", async () => {
+    await setupTarget(baseOptions({ workspaceName: "my-app" }));
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    expect(wf).toContain("package-manager: pnpm");
+    expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({
+      packageManager: "pnpm",
+      packageManagerAutoDetected: true,
+    });
+  });
+
+  test("uses an explicit --package-manager over the root lockfile", async () => {
+    await setupTarget(baseOptions({ workspaceName: "my-app", packageManager: "yarn" }));
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    expect(wf).toContain("package-manager: yarn");
+    expect(wf).not.toContain("package-manager: pnpm");
+    expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({
+      packageManager: "yarn",
+      packageManagerAutoDetected: false,
+    });
+  });
+
+  test("stops before loading the config, without writing anything, when no package manager can be detected", async () => {
+    fs.rmSync(path.join(testDir, "pnpm-lock.yaml"));
+    const loadConfigName = vi.fn(async () => "cfg-app");
+
+    await expect(setupTarget(baseOptions({ loadConfigName }))).rejects.toThrow(
+      /Could not detect the package manager[\s\S]*--package-manager/,
+    );
+    expect(loadConfigName).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(testDir, ".github"))).toBe(false);
   });
 
   test("records ERD preview namespaces in the generated workflow and lock", async () => {
