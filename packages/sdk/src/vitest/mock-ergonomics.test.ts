@@ -322,6 +322,7 @@ describe("ergonomic runtime mocks", () => {
       disabled: false,
       mfaEnrolled: false,
       mfaFactorIds: [],
+      passwordUpdatedAt: null,
     });
     namespace.deleteUser.mockResolvedValue(true);
 
@@ -457,6 +458,7 @@ describe("ergonomic runtime mocks", () => {
       disabled: false,
       mfaEnrolled: false,
       mfaFactorIds: [],
+      passwordUpdatedAt: null,
     };
 
     file.download.mockImplementation(async function (this: unknown) {
@@ -523,6 +525,7 @@ describe("ergonomic runtime mocks", () => {
       disabled: false,
       mfaEnrolled: false,
       mfaFactorIds: [],
+      passwordUpdatedAt: null,
     });
 
     using file = mockFile();

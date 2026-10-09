@@ -22,6 +22,7 @@ import {
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
+import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
@@ -878,6 +879,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         state.loaded.config.env ?? {},
         path.dirname(state.loaded.config.path),
         resolvePluginConfig(state.loaded.plugins, KyselyGeneratorID)?.temporal ?? false,
+        effectiveDateDefault(state.loaded.config),
       );
       const execution = await executeScript({
         client: state.client,

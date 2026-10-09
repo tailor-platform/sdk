@@ -29,6 +29,7 @@ import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
 import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
 
 interface ResolverInfo {
@@ -60,6 +61,8 @@ export interface BundleResolversOptions {
   tsconfigCache?: TsconfigLookupCache;
   /** Globals each installed package may reference */
   allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+  /** Representation applied to `t` date fields that omit `as` */
+  dateDefault?: EffectiveDateDefault;
 }
 
 /**
@@ -86,6 +89,7 @@ export async function bundleResolvers(
     bundleLogLevel = "DEBUG",
     tsconfigCache,
     allowedRuntimeGlobals,
+    dateDefault,
   } = options;
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config, baseDir);
@@ -134,6 +138,7 @@ export async function bundleResolvers(
       bundleLogLevel,
       tsconfigCache,
       allowedRuntimeGlobals,
+      dateDefault,
     }),
   );
 
@@ -165,16 +170,18 @@ async function bundleSingleResolver(
     bundleLogLevel = "DEBUG",
     tsconfigCache,
     allowedRuntimeGlobals,
+    dateDefault = "legacy",
   } = options;
   const serializedStartContext = serializeStartContext(startContext);
 
   const contextHash = computeBundlerContextHash({
     sourceFile: resolver.sourceFile,
-    // The namespace default is part of the generated guard but lives in the
-    // config file, not in any resolver source, so a cached bundle would
-    // otherwise survive a change to it. Encoded as a pair rather than joined,
-    // so no separator has to be a character neither value can contain.
-    extraContext: JSON.stringify([serializedStartContext, defaultPermission ?? null]),
+    // The namespace default and the date default are part of the generated
+    // entry but live in the config file, not in any resolver source, so a
+    // cached bundle would otherwise survive a change to them. Encoded as a
+    // tuple rather than joined, so no separator has to be a character neither
+    // value can contain.
+    extraContext: JSON.stringify([serializedStartContext, defaultPermission ?? null, dateDefault]),
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -193,7 +200,10 @@ async function bundleSingleResolver(
         permission: resolver.permission,
         defaultPermission,
       });
-      const { importStatement, resultExpr } = buildResolverResultSerialization(resolver.output);
+      const { importStatement, resultExpr } = buildResolverResultSerialization(
+        resolver.output,
+        dateDefault,
+      );
 
       const entryContent = ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
@@ -223,7 +233,10 @@ async function bundleSingleResolver(
       }
       plugins.push(
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(resolverDateRepresentations(resolver)),
+        createPlatformBundleDefinePlugin(
+          resolverDateRepresentations(resolver, dateDefault),
+          dateDefault,
+        ),
         ...cachePlugins,
       );
 

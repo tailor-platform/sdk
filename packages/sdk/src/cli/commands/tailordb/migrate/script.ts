@@ -17,6 +17,7 @@ import { configArg } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
@@ -44,6 +45,7 @@ import {
   generateMigrationScript,
   generateMigrationTestScript,
 } from "./template-generator";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { ScriptSkippedInfo } from "./diff-calculator";
 
 interface ScriptOptions {
@@ -73,6 +75,8 @@ export interface AddMigrationScriptFilesOptions {
    * was configured with. Defaults to `false`.
    */
   temporal?: boolean;
+  /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
+  dateDefault?: EffectiveDateDefault;
 }
 
 export interface AddMigrationScriptFilesResult {
@@ -187,6 +191,7 @@ export async function addMigrationScriptFiles(
     withTest = false,
     pgliteAvailable = false,
     temporal = false,
+    dateDefault = "legacy",
   } = options;
   const label = formatMigrationNumber(migrationNumber);
 
@@ -269,6 +274,7 @@ export async function addMigrationScriptFiles(
       migrationsDir,
       migrationNumber,
       temporal,
+      dateDefault,
     });
     result.dbTypesPath = typeFiles.dbTypesPath;
     result.pgliteSchemaPath = typeFiles.pgliteSchemaPath;
@@ -284,7 +290,11 @@ export async function addMigrationScriptFiles(
   }
 
   if (writeUnitTest) {
-    await fsPromises.writeFile(testPath, generateMigrationTestScript(diff, scriptKind));
+    // Re-read: writeMigrationTypeFiles may have just recorded the runtime modes.
+    await fsPromises.writeFile(
+      testPath,
+      generateMigrationTestScript(loadDiff(diffPath), scriptKind),
+    );
     result.testPath = testPath;
   }
   result.pgliteTestRequested = pgliteTestRequested;
@@ -337,6 +347,7 @@ async function script(options: ScriptOptions): Promise<void> {
   const { config, plugins } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
   const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
+  const dateDefault = effectiveDateDefault(config);
 
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   if (namespacesWithMigrations.length === 0) {
@@ -400,6 +411,7 @@ async function script(options: ScriptOptions): Promise<void> {
     withTest: options.withTest,
     pgliteAvailable,
     temporal,
+    dateDefault,
   });
   printMutationResult({
     changed: Boolean(

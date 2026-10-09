@@ -190,6 +190,23 @@ export async function main(trx: Transaction): Promise<void> {
 
       expect(result.bundledCode).toContain("temporal: true");
     });
+
+    test("folds the configured date default into the migration bundle", async () => {
+      const scriptPath = writeMigration(
+        '  await trx.updateTable("User").set({ stage: globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT }).execute();',
+      );
+      const result = await bundleMigrationScript(
+        scriptPath,
+        "tailordb",
+        11,
+        {},
+        undefined,
+        false,
+        "temporal",
+      );
+
+      expect(result.bundledCode).toMatch(/["'`]temporal["'`]/);
+    });
   });
 });
 
@@ -331,6 +348,28 @@ describe("bundleMigrationSteps", () => {
     expect(record.clientOptions).toEqual([{ namespace: "main-db", temporal: true }]);
   });
 
+  test("folds the recorded date default into the steps bundle", async () => {
+    const scriptPath = path.join(testDir, "migrate.ts");
+    fs.writeFileSync(
+      scriptPath,
+      `import type { Transaction } from "./db";\nexport const steps = { first: { run: async (trx: Transaction) => { await trx.updateTable("User").set({ stage: globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT }).execute(); } } };\n`,
+    );
+    fs.writeFileSync(path.join(testDir, "db.ts"), DB_TS_WITH_CONTEXT);
+
+    const result = await bundleMigrationSteps({
+      sourceFile: scriptPath,
+      namespace: "main-db",
+      migrationNumber: 3,
+      env: {},
+      order: ["first"],
+      runnerJobFunctionName: "runner-job",
+      dateDefault: "temporal",
+    });
+
+    expect(result.bundledCode).not.toContain("__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT");
+    expect(result.bundledCode).toMatch(/["'`]temporal["'`]/);
+  });
+
   test("rolls back the step's transaction when it throws", async () => {
     const { main, record } = await loadStepsBundle(`{
       first: { run: async () => { throw new Error("boom"); } },
@@ -430,6 +469,27 @@ export const steps = {
     };
     return { main: module.main, record };
   }
+
+  test("folds the recorded date default into the bundle", async () => {
+    const scriptPath = path.join(testDir, "migrate.ts");
+    fs.writeFileSync(
+      scriptPath,
+      `import type { Transaction } from "./db";\nexport const steps = { backfill: { run: async (trx: Transaction) => { await trx.updateTable("User").set({ stage: globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT }).execute(); } } };\n`,
+    );
+    fs.writeFileSync(path.join(testDir, "db.ts"), DB_TS_WITH_CONTEXT);
+
+    const result = await bundleSingleStepMigration({
+      sourceFile: scriptPath,
+      namespace: "main-db",
+      migrationNumber: 3,
+      env: {},
+      step: "backfill",
+      dateDefault: "temporal",
+    });
+
+    expect(result.bundledCode).not.toContain("__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT");
+    expect(result.bundledCode).toMatch(/["'`]temporal["'`]/);
+  });
 
   test("runs the step in one transaction with the injected env, without starting a runner job", async () => {
     const { main, record } = await loadBundle(`

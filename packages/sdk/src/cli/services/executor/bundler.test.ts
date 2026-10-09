@@ -129,3 +129,39 @@ describe("bundleExecutors", () => {
     expect(result.get("fetcher")).toBeDefined();
   });
 });
+
+describe("bundleExecutors date default", () => {
+  function writeGateExecutor(projectDir: string): void {
+    const executorDir = path.join(projectDir, "src/backend/dates/executor");
+    fs.mkdirSync(executorDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(executorDir, "mode.ts"),
+      `export default {\n` +
+        `  name: "mode",\n` +
+        `  trigger: { kind: "schedule", cron: "0 12 * * *" },\n` +
+        `  operation: { kind: "function", body: async () => globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT },\n` +
+        `};\n`,
+    );
+  }
+
+  test("folds the configured date default into executor bundles", async () => {
+    using tmp = tempCwd("sdk-bundler-executor-date-default-");
+    writeGateExecutor(tmp.dir);
+    const result = await bundleExecutors({
+      config: { files: ["./src/backend/dates/executor/*.ts"] },
+      baseDir: tmp.dir,
+      dateDefault: "temporal",
+    });
+    expect(result.get("mode")).toMatch(/["'`]temporal["'`]/);
+  });
+
+  test("leaves the gate unset under the legacy default", async () => {
+    using tmp = tempCwd("sdk-bundler-executor-date-legacy-");
+    writeGateExecutor(tmp.dir);
+    const result = await bundleExecutors({
+      config: { files: ["./src/backend/dates/executor/*.ts"] },
+      baseDir: tmp.dir,
+    });
+    expect(result.get("mode")).not.toMatch(/["'`]temporal["'`]/);
+  });
+});

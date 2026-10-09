@@ -526,6 +526,26 @@ hooks: {
 }
 ```
 
+### Password age claim
+
+For a user with a Built-in IdP password, `claims.password_updated_at` holds when the password was last set, in seconds since the Unix epoch. It is `undefined` for users without a password. Throw from the handler to reject a sign-in whose password is older than your policy allows.
+
+```typescript
+const MAX_PASSWORD_AGE_SECONDS = 90 * 24 * 60 * 60;
+
+hooks: {
+  beforeLogin: {
+    handler: async ({ claims }) => {
+      const updatedAt = claims.password_updated_at;
+      if (updatedAt !== undefined && Date.now() / 1000 - updatedAt > MAX_PASSWORD_AGE_SECONDS) {
+        throw new Error("Password expired");
+      }
+    },
+    invoker: "hook-invoker",
+  },
+}
+```
+
 ## CLI Commands
 
 Manage Auth resources using the CLI:

@@ -24,6 +24,7 @@ import { buildOptionsOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
+import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
@@ -55,6 +56,7 @@ import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
+import type { EffectiveDateDefault } from "#/runtime/types";
 import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
 import type { IdP } from "#/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";
@@ -122,6 +124,7 @@ type DefineTailorDBResult = {
 function defineTailorDB(
   config: TailorDBServiceInput | undefined,
   baseDir: string,
+  dateDefault: EffectiveDateDefault,
   pluginManager?: PluginManager,
 ): DefineTailorDBResult {
   const tailorDBServices: TailorDBService[] = [];
@@ -143,6 +146,7 @@ function defineTailorDB(
         config: parsedConfig,
         pluginManager,
         baseDir,
+        dateDefault,
       });
       tailorDBServices.push(tailorDB);
     }
@@ -378,7 +382,12 @@ function defineServices(
   baseDir: string,
   pluginManager?: PluginManager,
 ): DefineServicesResult {
-  const tailordbResult = defineTailorDB(config.db, baseDir, pluginManager);
+  const tailordbResult = defineTailorDB(
+    config.db,
+    baseDir,
+    effectiveDateDefault(config),
+    pluginManager,
+  );
   const resolverResult = defineResolver(config.resolver, baseDir);
   const idpResult = defineIdp(config.idp);
   const authResult = defineAuth(
@@ -668,6 +677,7 @@ export async function loadApplication(
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
+  const dateDefault = effectiveDateDefault(config);
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -690,6 +700,7 @@ export async function loadApplication(
       bundleLogLevel,
       tsconfigCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -708,6 +719,7 @@ export async function loadApplication(
       baseDir,
       tsconfigCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault,
     });
   }
 
@@ -727,6 +739,7 @@ export async function loadApplication(
       tsconfigCache,
       undefined,
       buildOptions.allowedRuntimeGlobals,
+      dateDefault,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -762,6 +775,7 @@ export async function loadApplication(
       bundleLogLevel,
       baseDir,
       tsconfigCache,
+      dateDefault,
     });
   }
 
@@ -868,6 +882,7 @@ async function reloadEnvDependentBundles(params: {
       tsconfigCache,
       previous.workflowBuildResult,
       buildOptionsOf(config).allowedRuntimeGlobals,
+      effectiveDateDefault(config),
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -885,6 +900,7 @@ async function reloadEnvDependentBundles(params: {
       bundleLogLevel,
       baseDir,
       tsconfigCache,
+      dateDefault: effectiveDateDefault(config),
     });
   }
 

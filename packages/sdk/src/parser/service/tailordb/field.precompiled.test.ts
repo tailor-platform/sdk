@@ -35,6 +35,30 @@ describe("parseFieldConfig precompiled expressions", () => {
     expect(field.validate?.[0]?.script.expr).toBe("PRECOMPILED_VALIDATE_EXPR");
   });
 
+  test("an expression compiled under one date default is not reused under another", () => {
+    const createHook = ({ input }: { input: string | null }) => input ?? "fallback";
+    setPrecompiledScriptExpr(createHook, "hooks.create", "LEGACY_EXPR", "legacy");
+    setPrecompiledScriptExpr(createHook, "hooks.create", "TEMPORAL_EXPR", "temporal");
+
+    const type = db.table("User", {
+      email: db.string().hooks({ create: createHook }),
+    });
+    const schema = toSchemaOutputs({ User: type });
+    const context = { tableName: "User", fieldPath: ["email"] };
+
+    expect(
+      parseFieldConfig(schema.User!.fields.email!, { ...context, dateDefault: "legacy" }).hooks
+        ?.create?.expr,
+    ).toBe("LEGACY_EXPR");
+    expect(
+      parseFieldConfig(schema.User!.fields.email!, { ...context, dateDefault: "temporal" }).hooks
+        ?.create?.expr,
+    ).toBe("TEMPORAL_EXPR");
+    expect(parseFieldConfig(schema.User!.fields.email!, context).hooks?.create?.expr).toBe(
+      "LEGACY_EXPR",
+    );
+  });
+
   // `db.fields.timestamps()`'s `updatedAt` hook pins this exact expr (see
   // configure/services/tailordb/schema.ts) so that `Function.prototype.toString()`
   // of the built-in hook - which changes across SDK builds (e.g. minification) -

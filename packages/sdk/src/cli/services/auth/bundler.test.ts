@@ -142,3 +142,29 @@ export default {
     }
   });
 });
+
+describe("bundleAuthHooks date default", () => {
+  test("folds the configured date default into the hook bundle", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-date-default-")));
+    const configFile = path.join(tmpDir, "tailor.config.ts");
+    fs.writeFileSync(
+      configFile,
+      `
+const handler = async () => globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT;
+export default { auth: { hooks: { beforeLogin: { handler } } } };
+`,
+    );
+    try {
+      const bundled = await bundleAuthHooks({
+        configPath: configFile,
+        authName: "my-auth",
+        handlerAccessPath: "auth.hooks.beforeLogin.handler",
+        baseDir: tmpDir,
+        dateDefault: "temporal",
+      });
+      expect(bundled.get("auth-hook--my-auth--before-login")).toMatch(/["'`]temporal["'`]/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});

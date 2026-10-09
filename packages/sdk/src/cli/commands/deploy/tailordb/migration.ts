@@ -252,6 +252,7 @@ async function executeSingleMigration(
 
   // Bundle the migration script
   const temporal = migration.diff.temporal ?? false;
+  const dateDefault = migration.diff.dateRepresentation ?? "legacy";
   const bundleResult =
     form?.kind === "steps"
       ? await bundleSingleStepMigration({
@@ -262,6 +263,7 @@ async function executeSingleMigration(
           baseDir: configDir,
           step: assertDefined(form.order[0], "a steps script has at least one step"),
           temporal,
+          dateDefault,
         })
       : await bundleMigrationScript(
           migration.scriptPath,
@@ -270,6 +272,7 @@ async function executeSingleMigration(
           env,
           configDir,
           temporal,
+          dateDefault,
         );
 
   const result = await executeMigrationAsWorkflow({
@@ -524,6 +527,7 @@ async function executeStepsMigration(
       migrationWorkflowResourceName(migration.namespace, migration.number),
     ),
     temporal: migration.diff.temporal ?? false,
+    dateDefault: migration.diff.dateRepresentation ?? "legacy",
   });
 
   const notify = (level: "info" | "warn", message: string) => {

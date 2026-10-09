@@ -127,6 +127,8 @@ The values are read from the schema files `seedPlugin` generates next to the dat
 ./seed/data/Customer.schema.ts does not export `hook`. Run `tailor generate` to regenerate the seed schema files.
 ```
 
+If a file was changed by another tool after the fill read it, the fill writes nothing and names the file; run it again to fill from the current content.
+
 Naming a single `.jsonl` file limits the run to that file, so a referenced table can be filled on its own before the rows that reference it are written.
 
 Without `--upsert`, a row whose id already exists in a target table fails the seed run. With `--upsert`, every row must supply an `id` (and any field the table requires) — run `tailor seed fill` first if some rows have none — and a matching row is updated in place instead. Because the update goes through the same write path as any other update, it runs update hooks and validation and updates fields such as `updatedAt`, and it publishes a record-updated event — so an executor using `recordUpdatedTrigger` fires for each existing row that gets updated.

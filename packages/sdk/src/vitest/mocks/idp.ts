@@ -39,6 +39,7 @@ const IDP_USER_DEFAULT = {
   disabled: false,
   mfaEnrolled: false,
   mfaFactorIds: [],
+  passwordUpdatedAt: null,
 };
 
 const IDP_DEFAULTS: Record<IdpMethod, unknown> = {
@@ -68,6 +69,7 @@ const IDP_DEFAULTS: Record<IdpMethod, unknown> = {
  *     disabled: false,
  *     mfaEnrolled: false,
  *     mfaFactorIds: [],
+ *     passwordUpdatedAt: null,
  *   });
  *   // …
  * });

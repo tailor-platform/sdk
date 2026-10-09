@@ -16,7 +16,6 @@ import {
   editedPartsOf,
   findReservedIds,
   isManagedHash,
-  layoutOf,
   ManagedMergeError,
 } from "./managed";
 import { TEMPLATE_VERSION } from "./templates";
@@ -36,8 +35,7 @@ type DriftRule =
   | "default-branch"
   | "erd-namespaces"
   | "migration-drift"
-  | "seed-validate"
-  | "static-websites";
+  | "seed-validate";
 
 export type DriftFinding = {
   /** Human label for the target: `<kind> <workspaceName>`. */
@@ -70,8 +68,6 @@ export type TargetState = {
   hasMigrations?: boolean;
   /** Whether the current config uses the seed plugin (branch/tag only). */
   hasSeeds?: boolean;
-  /** Whether the current config has staticWebsites configured (action only). */
-  hasStaticWebsites?: boolean;
   /** Current state of each app of a multi-directory target, in the order the lock records them. */
   apps?: AppState[];
 };
@@ -207,7 +203,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
   }
 
   if (
-    (target.kind === "branch" || target.kind === "coordinate" || target.kind === "preview") &&
+    target.kind !== "tag" &&
     target.inputs.branchAutoDetected !== false &&
     state.defaultBranch !== null &&
     target.inputs.branch !== null &&
@@ -270,26 +266,12 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     });
   }
 
-  if (
-    target.kind === "action" &&
-    target.inputs.hasStaticWebsites === false &&
-    state.hasStaticWebsites === true
-  ) {
-    findings.push({
-      target: id,
-      rule: "static-websites",
-      message:
-        "Static websites were added to the config. " +
-        "Re-run setup so the tailor-build-site step is included in the composite action.",
-    });
-  }
-
   return findings;
 }
 
 function reservedIdsIn(target: LockTarget, content: string): string[] {
   try {
-    return findReservedIds(content, layoutOf(target.kind), target.generatedIds);
+    return findReservedIds(content, target.generatedIds);
   } catch (error) {
     if (error instanceof ManagedMergeError) return [];
     throw error;
@@ -350,8 +332,6 @@ export type CheckGitHubOptions = {
   loadHasMigrations?: (configPath: string) => Promise<boolean> | boolean;
   /** Injectable seed plugin detector, for testing. Defaults to loading the config. */
   loadHasSeeds?: (configPath: string) => Promise<boolean> | boolean;
-  /** Injectable static website detector, for testing. Defaults to loading the config. */
-  loadHasStaticWebsites?: (configPath: string) => Promise<boolean> | boolean;
 };
 
 async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
@@ -367,11 +347,6 @@ async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
 async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
   const { plugins } = await loadConfig(configPath);
   return plugins.some((p) => p.id === "@tailor-platform/seed");
-}
-
-async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean> {
-  const { config } = await loadConfig(configPath);
-  return (config.staticWebsites?.length ?? 0) > 0;
 }
 
 /**
@@ -398,7 +373,6 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
   const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
   const loadHasSeeds = options.loadHasSeeds ?? defaultLoadHasSeeds;
-  const loadHasStaticWebsites = options.loadHasStaticWebsites ?? defaultLoadHasStaticWebsites;
 
   const findings: DriftFinding[] = [];
   for (const target of lock.targets) {
@@ -410,8 +384,8 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
       content !== null && currentHash !== null && currentHash !== target.contentHash
         ? editedPartsOf(target, content)
         : undefined;
-    // Coordinator targets have no config, and multi-directory targets are audited per app below.
-    const noRootConfig = target.kind === "coordinate" || target.inputs.apps !== undefined;
+    // Multi-directory targets are audited per app below.
+    const noRootConfig = target.inputs.apps !== undefined;
     const configAbs = noRootConfig
       ? null
       : resolveWithinRoot(outputDir, path.join(target.inputs.dir, "tailor.config.ts"));
@@ -433,13 +407,6 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
       configAbs !== null &&
       configExists
         ? await loadHasSeeds(configAbs)
-        : undefined;
-    const hasStaticWebsites =
-      target.kind === "action" &&
-      target.inputs.hasStaticWebsites !== undefined &&
-      configAbs !== null &&
-      configExists
-        ? await loadHasStaticWebsites(configAbs)
         : undefined;
     const planKind = target.kind === "branch" || target.kind === "tag";
     const apps =
@@ -482,7 +449,6 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
         erdNamespaces,
         hasMigrations,
         hasSeeds,
-        hasStaticWebsites,
         apps,
       }),
     );

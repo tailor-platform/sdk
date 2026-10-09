@@ -23,6 +23,7 @@ import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
+import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -208,6 +209,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
         env: config.env ?? {},
         inlineSourcemap: buildOptions.inlineSourcemap,
         logLevel: buildOptions.logLevel,
+        dateDefault: effectiveDateDefault(config),
         machineUser,
         workspaceId,
       }));

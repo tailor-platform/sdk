@@ -284,6 +284,11 @@ export type FederatedIdentity = {
 export type BeforeLoginClaims = JsonObject & {
   /** Present only for federated (Google/Microsoft) logins; `undefined` for password logins. */
   federated_identity?: FederatedIdentity;
+  /**
+   * When the user's Built-in IdP password was last set, in seconds since the
+   * Unix epoch. `undefined` when the user has no password.
+   */
+  password_updated_at?: number;
 };
 
 export type BeforeLoginHookArgs = {

@@ -9,6 +9,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { statusCommand } from "./status";
 import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
@@ -217,7 +218,7 @@ describe("tailordb migration status --json", () => {
   test("reports unsupported pending migration file versions", async () => {
     fs.writeFileSync(
       path.join(state.migrationsDir, "0002", "diff.json"),
-      JSON.stringify({ version: 8 }),
+      JSON.stringify({ version: SCHEMA_SNAPSHOT_VERSION + 1 }),
     );
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -230,7 +231,9 @@ describe("tailordb migration status --json", () => {
       {
         status: "error",
         namespace: "tailordb",
-        error: expect.stringContaining("This SDK supports migration file format versions 1-7"),
+        error: expect.stringContaining(
+          `This SDK supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`,
+        ),
       },
     ]);
   });
@@ -238,7 +241,7 @@ describe("tailordb migration status --json", () => {
   test("reports unsupported local versions before loading credentials", async () => {
     fs.writeFileSync(
       path.join(state.migrationsDir, "0002", "diff.json"),
-      JSON.stringify({ version: 8 }),
+      JSON.stringify({ version: SCHEMA_SNAPSHOT_VERSION + 1 }),
     );
     vi.mocked(loadAccessToken).mockRejectedValueOnce(new Error("authentication unavailable"));
     using stdout = captureStdout();
@@ -252,7 +255,9 @@ describe("tailordb migration status --json", () => {
       {
         status: "error",
         namespace: "tailordb",
-        error: expect.stringContaining("This SDK supports migration file format versions 1-7"),
+        error: expect.stringContaining(
+          `This SDK supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`,
+        ),
       },
     ]);
     expect(loadAccessToken).not.toHaveBeenCalled();
@@ -265,7 +270,10 @@ describe("tailordb migration status --json", () => {
   ])("reports unsupported versions in the %s", async (_description, relativePath) => {
     const filePath = path.join(state.migrationsDir, relativePath);
     const contents = JSON.parse(fs.readFileSync(filePath, "utf-8")) as Record<string, unknown>;
-    fs.writeFileSync(filePath, JSON.stringify({ ...contents, version: 8 }));
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({ ...contents, version: SCHEMA_SNAPSHOT_VERSION + 1 }),
+    );
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0002" } },
     });
@@ -280,7 +288,9 @@ describe("tailordb migration status --json", () => {
       {
         status: "error",
         namespace: "tailordb",
-        error: expect.stringContaining("This SDK supports migration file format versions 1-7"),
+        error: expect.stringContaining(
+          `This SDK supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`,
+        ),
       },
     ]);
   });

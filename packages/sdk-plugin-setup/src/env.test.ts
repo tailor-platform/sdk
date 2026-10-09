@@ -8,12 +8,7 @@ import {
   targetRequirements,
 } from "./env";
 import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind, writeLock } from "./lock";
-import {
-  renderBranchWorkflow,
-  renderCoordinateWorkflow,
-  renderPreviewWorkflow,
-  renderTagWorkflow,
-} from "./templates";
+import { renderBranchWorkflow, renderPreviewWorkflow, renderTagWorkflow } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
 
 const target = (kind: TargetKind, workspaceName: string, environment: string): LockTarget => ({
@@ -41,7 +36,7 @@ function referencedNames(content: string): string[] {
   return [...names].toSorted();
 }
 
-const namesOf = (kind: Exclude<TargetKind, "action">) =>
+const namesOf = (kind: TargetKind) =>
   targetRequirements(kind)
     .map((r) => `${r.type} ${r.name}`)
     .toSorted();
@@ -52,7 +47,6 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     environment: "my-app",
     packageManager: "pnpm" as const,
   };
-  const app = { name: "ims", dir: "apps/ims" };
 
   test.each([
     ["branch", renderBranchWorkflow({ ...common, branch: "main", erdPreview: null })],
@@ -69,53 +63,35 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     ["tag", renderTagWorkflow({ ...common, tagPattern: "v*" })],
     ["tag", renderTagWorkflow({ ...common, tagPattern: "v*", branch: "main" })],
     ["preview", renderPreviewWorkflow({ ...common, branch: "main", region: "us-west" })],
-    [
-      "coordinate",
-      renderCoordinateWorkflow({
-        coordinatorName: "all",
-        kind: "branch",
-        branch: "main",
-        actionGroups: [{ id: "ims", apps: [app] }],
-        environment: "all",
-        packageManager: "pnpm",
-      }),
-    ],
-    [
-      "coordinate",
-      renderCoordinateWorkflow({
-        coordinatorName: "all",
-        kind: "tag",
-        actionGroups: [
-          {
-            id: "ims-oms",
-            apps: [
-              { ...app, hasStaticWebsites: true },
-              { name: "oms", dir: "apps/oms" },
-            ],
-          },
-        ],
-        environment: "all",
-        packageManager: "pnpm",
-      }),
-    ],
   ] as const)("%s", (kind, render) => {
     expect(referencedNames(render.content)).toEqual(namesOf(kind));
   });
 });
 
 describe("how to get each value", () => {
-  test.each(["branch", "tag", "coordinate", "preview"] as const)(
+  test.each(["branch", "tag", "preview"] as const)(
     "is described for every entry a %s target needs",
     (kind) => {
       expect(targetRequirements(kind).filter((r) => r.howTo.trim() === "")).toEqual([]);
     },
   );
 
-  test("asks the user to contact Tailor support for the machine user credentials", () => {
+  test("points to the Console and an organization or folder admin for the machine user credentials, not to Tailor support", () => {
     const [clientId, clientSecret] = targetRequirements("branch");
 
-    expect(clientId?.howTo).toContain("https://docs.tailor.tech/administration/support");
-    expect(clientSecret?.howTo).toContain("https://docs.tailor.tech/administration/support");
+    for (const requirement of [clientId, clientSecret]) {
+      expect(requirement?.howTo).toContain("organization or folder admin");
+      expect(requirement?.howTo).toContain("Tailor Console");
+      expect(requirement?.howTo).not.toContain("support");
+    }
+  });
+
+  test("says that without the required permission machine users can be neither viewed nor created", () => {
+    const [clientId] = targetRequirements("branch");
+
+    expect(clientId?.howTo).toContain("without the required permission");
+    expect(clientId?.howTo).toContain("cannot view or create machine users");
+    expect(clientId?.howTo).not.toContain("admin role");
   });
 });
 
@@ -187,14 +163,6 @@ describe("collectEnvironmentRequirements", () => {
     );
 
     expect(envs.map((e) => e.environment)).toEqual(["production", "stg"]);
-  });
-
-  test("skips composite action targets, which read no secrets or variables", () => {
-    const envs = collectEnvironmentRequirements(
-      lockOf(target("action", "ims", "ims"), target("coordinate", "all", "production")),
-    );
-
-    expect(envs.map((e) => e.environment)).toEqual(["production"]);
   });
 
   test("treats environment names differing only in case as one environment, as GitHub does", () => {
@@ -467,13 +435,6 @@ describe("setupEnv", () => {
     using tmp = tempDir("setup-env-");
 
     expect(() => setupEnv({ outputDir: tmp.dir, format: "gh" })).toThrow(/tailor\.lock/);
-  });
-
-  test("points to `setup ci coordinate` when the lock only has composite actions", () => {
-    using tmp = tempDir("setup-env-");
-    writeLock(tmp.dir, lockOf(target("action", "ims", "ims")));
-
-    expect(() => setupEnv({ outputDir: tmp.dir, format: "gh" })).toThrow(/setup ci coordinate/);
   });
 
   test.each([
