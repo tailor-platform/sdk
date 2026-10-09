@@ -577,7 +577,7 @@ Some changes are still rejected and need a temporary field you add yourself — 
 The command performs the following sequence:
 
 1. Reads each migration-enabled namespace's `sdk-migration` checkpoint from the source workspace and reconstructs that exact snapshot from local migration history. A deployed namespace that has no checkpoint is treated as migration 0, as `tailor deploy` does, but only when its schema matches the `0000` snapshot; otherwise the command fails and lists the differences. A namespace that was never deployed also fails.
-2. Creates a temporary workspace in the same region, organization, and folder as the source, unless `--target-workspace-id` names an existing throwaway workspace.
+2. Creates a temporary workspace in the same region as the source, unless `--target-workspace-id` names an existing throwaway workspace. By default it is created in the source's organization and folder. `--organization-id` places it at the root of that organization, and `--folder-id` places it in that folder (together with `--organization-id` when the folder is in another organization or the source is not in an organization). With `--target-workspace-id`, the given values must match where that workspace already is.
 3. Deploys the checkpoint snapshots and writes their checkpoint labels.
 4. Loads fixture data or clones source records.
 5. Runs the normal deployment pipeline, including every pending pre-migration, `migrate.ts`, and post-migration phase.

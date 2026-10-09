@@ -462,12 +462,17 @@ describe("migration test runtime", () => {
       });
     });
 
-    test("leaves the folder to the platform when the source has no organization", async () => {
+    test("requires --organization-id with --folder-id when the source has no organization", async () => {
       const client = folderClient();
 
       await expect(
         resolveTemporaryWorkspaceLocation(client, {}, { folderId: otherFolder }),
-      ).resolves.toEqual({ folderId: otherFolder });
+      ).rejects.toMatchObject({
+        code: "MIGRATION_TEST_OPTIONS_INVALID",
+        message: expect.stringContaining(
+          "--folder-id requires --organization-id because the source workspace is not in an organization",
+        ),
+      });
       expect(client.getOrganizationFolder).not.toHaveBeenCalled();
     });
   });
@@ -487,6 +492,21 @@ describe("migration test runtime", () => {
 
     test("accepts a target when no organization or folder is specified", () => {
       expect(() => assertTargetMatchesLocation(target, {})).not.toThrow();
+    });
+
+    test("compares organization and folder IDs regardless of letter case", () => {
+      const hexTarget = {
+        id: "target-id",
+        organizationId: "abcdefab-cdef-4bcd-8efa-bcdefabcdefa",
+        folderId: "fedcbafe-dcba-4edc-8baf-edcbafedcbaf",
+      };
+
+      expect(() =>
+        assertTargetMatchesLocation(hexTarget, {
+          organizationId: hexTarget.organizationId.toUpperCase(),
+          folderId: hexTarget.folderId.toUpperCase(),
+        }),
+      ).not.toThrow();
     });
 
     test("rejects a specified organization that differs from the target's", () => {

@@ -433,6 +433,14 @@ export async function resolveTemporaryWorkspaceLocation(
   }
   const { folderId } = options;
   const organizationId = options.organizationId ?? (source.organizationId || undefined);
+  if (folderId && !organizationId) {
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message:
+        "--folder-id requires --organization-id because the source workspace is not in an organization.",
+      suggestion: "Pass --organization-id together with --folder-id.",
+    });
+  }
   if (folderId && organizationId) {
     const folder = await getOrNull(async () => {
       const { folder } = await client.getOrganizationFolder({ organizationId, folderId });
@@ -476,7 +484,7 @@ export function assertTargetMatchesLocation(
     { flag: "--folder-id", kind: "folder", wanted: options.folderId, actual: target.folderId },
   ];
   for (const { flag, kind, wanted, actual } of checks) {
-    if (wanted === undefined || wanted === (actual || undefined)) continue;
+    if (wanted === undefined || wanted.toLowerCase() === actual?.toLowerCase()) continue;
     throw CLIError({
       code: "MIGRATION_TEST_OPTIONS_INVALID",
       message: `${flag} "${wanted}" does not match the designated target workspace "${target.id}", which ${

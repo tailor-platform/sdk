@@ -191,7 +191,7 @@ export const testCommand = defineAppCommand({
     }),
     "folder-id": arg(z.uuid().optional(), {
       description:
-        "Folder to create the temporary workspace in (default: the source workspace's folder). With --target-workspace-id, must match the target's folder",
+        "Folder to create the temporary workspace in (default: the source workspace's folder). Requires --organization-id when the source workspace is not in an organization. With --target-workspace-id, must match the target's folder",
       env: "TAILOR_PLATFORM_FOLDER_ID",
     }),
     assert: arg(z.string().optional(), {
