@@ -39,7 +39,7 @@ export const deployCommand = defineAppCommand({
     }),
     "migration-skip-steps": arg(z.string().optional(), {
       description:
-        "Skip steps of a partially applied multi-step migration that already succeeded (comma-separated <namespace>/<step>)",
+        "Skip steps of a partially applied multi-step migration that already succeeded (comma-separated namespace/step entries)",
     }),
     "no-validate": arg(z.boolean().optional(), {
       description: "Skip client-side validation against platform resource constraints",

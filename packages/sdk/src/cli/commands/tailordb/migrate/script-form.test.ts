@@ -140,9 +140,7 @@ describe("analyzeMigrationScriptSource", () => {
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_SCRIPT_INVALID",
-        message: expect.stringContaining(
-          "start with a letter and contain only letters, digits, and underscores, up to 64 characters",
-        ),
+        message: expect.stringContaining("is invalid: use a letter followed by up to 63 letters"),
       }),
     );
   });

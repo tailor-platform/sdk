@@ -29,8 +29,6 @@ export type MigrationScriptForm =
 
 const STEP_KEYS = new Set(["run", "dependsOn"]);
 
-const STEP_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
-
 function invalidScript(filePath: string, problem: string): Error {
   return CLIError({
     code: "MIGRATION_SCRIPT_INVALID",
@@ -132,12 +130,6 @@ function readSteps(filePath: string, object: ObjectExpression): MigrationStepNod
     const name = property.computed ? undefined : propertyName(property.key);
     if (name === undefined) {
       throw invalidScript(filePath, "step names must be written literally in `steps`.");
-    }
-    if (!STEP_NAME_PATTERN.test(name)) {
-      throw invalidScript(
-        filePath,
-        `Step name "${name}" is not valid: step names must start with a letter and contain only letters, digits, and underscores, up to 64 characters.`,
-      );
     }
     const value = unwrapExpression(property.value);
     if (property.method || property.kind !== "init" || value.type !== "ObjectExpression") {
