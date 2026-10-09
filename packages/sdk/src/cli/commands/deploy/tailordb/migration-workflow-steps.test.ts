@@ -11,6 +11,7 @@ import {
   MIGRATION_SCRIPT_STARTED_LOG,
   migrationPlanFingerprint,
   removeMigrationWorkflowResources,
+  type MigrationRunEvent,
   type MigrationStepsWorkflowOptions,
 } from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -199,6 +200,15 @@ function run(
     notify: (level, message) => logger[level](message),
     ...overrides,
   });
+}
+
+function recordRunEvents() {
+  const events: string[] = [];
+  const onRunEvent = (event: MigrationRunEvent) => {
+    if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
+    else if (event.type !== "polled") events.push(event.type);
+  };
+  return { events, onRunEvent };
 }
 
 const ALL_STEPS_SUCCEEDED = [
@@ -497,14 +507,9 @@ describe("executeMigrationStepsAsWorkflow", () => {
         ],
       },
     });
-    const events: string[] = [];
+    const { events, onRunEvent } = recordRunEvents();
 
-    await run(client, {
-      onRunEvent: (event) => {
-        if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
-        else if (event.type !== "polled") events.push(event.type);
-      },
-    });
+    await run(client, { onRunEvent });
 
     expect(events).toEqual(["waiting", "finished:false"]);
   });
@@ -522,14 +527,9 @@ describe("executeMigrationStepsAsWorkflow", () => {
         ],
       },
     });
-    const events: string[] = [];
+    const { events, onRunEvent } = recordRunEvents();
 
-    const result = await run(client, {
-      onRunEvent: (event) => {
-        if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
-        else if (event.type !== "polled") events.push(event.type);
-      },
-    });
+    const result = await run(client, { onRunEvent });
 
     expect(events).toEqual(["waiting", "running", "finished:true"]);
     expect(result.logs).toBe("[backfillUser] backfilled 10 users");
