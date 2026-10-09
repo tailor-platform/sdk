@@ -354,24 +354,28 @@ function foreignKeyTargets(
 }
 
 /**
- * The renamed table a renamed table references whose copy runs after its own, which happens
+ * The renamed tables a renamed table references whose copies run after its own, which happens
  * when the renamed tables reference each other and no order lets every copy find its parents.
  * @param change - Table rename to check
  * @param later - Changes that run after it
- * @returns The referenced table that is copied later, if any
+ * @returns The referenced tables that are copied later
  */
-function copiedLater(change: TableRenamedChange, later: readonly DiffChange[]): string | undefined {
+function copiedLater(change: TableRenamedChange, later: readonly DiffChange[]): string[] {
   const names = new Set(
     later.flatMap((candidate) => (candidate.kind === "table_renamed" ? [candidate.tableName] : [])),
   );
-  return foreignKeyTargets(change.after.fields, change.tableName).find((target) =>
+  return foreignKeyTargets(change.after.fields, change.tableName).filter((target) =>
     names.has(target),
   );
 }
 
-function cycleCopyTodo(change: TableRenamedChange, parent: string): string {
-  const message = `copy ${change.tableName} with the foreign key to ${parent} set to null, then fill it in after the copy of ${parent}`;
-  return `  // ${change.tableName} and ${parent} reference each other, so neither copy can find the rows its foreign key points to.
+function cycleCopyTodo(change: TableRenamedChange, parents: readonly string[]): string {
+  const list = parents.join(", ");
+  const message =
+    parents.length === 1
+      ? `copy ${change.tableName} with the foreign key to ${list} set to null, then fill it in after the copy of ${list}`
+      : `copy ${change.tableName} with its foreign keys to ${list} set to null, then fill them in after the copies of ${list}`;
+  return `  // ${change.tableName} and ${list} reference each other, so neither copy can find the rows its foreign key points to.
   void TODO(${JSON.stringify(message)});`;
 }
 
@@ -565,7 +569,7 @@ function buildScriptSteps(
     if (statements.length === 0) return;
     if (change.kind === "table_renamed") {
       const cycle = copiedLater(change, orderedChanges.slice(index + 1));
-      if (cycle) statements.unshift(cycleCopyTodo(change, cycle));
+      if (cycle.length > 0) statements.unshift(cycleCopyTodo(change, cycle));
     }
     const { preferredName, touches } = describeChange(change);
     drafts.push({

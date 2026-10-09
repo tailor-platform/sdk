@@ -469,6 +469,36 @@ describe("template-generator", () => {
         );
       });
 
+      test("names every table a cycle copy has to wait for", () => {
+        const renamedWith = (previous: string, name: string, targets: string[]) =>
+          ({
+            ...renamedTable(previous, name),
+            after: {
+              name,
+              pluralForm: `${name}s`,
+              fields: Object.fromEntries(
+                targets.map((target) => [
+                  `${target.toLowerCase()}Id`,
+                  { type: "uuid", required: false, foreignKeyType: target },
+                ]),
+              ),
+            },
+          }) as const;
+
+        const script = generateMigrationScript(
+          stepsDiff(
+            renamedWith("OldA", "Alpha", ["Beta", "Gamma"]),
+            renamedWith("OldB", "Beta", ["Alpha"]),
+            renamedWith("OldC", "Gamma", ["Alpha"]),
+          ),
+        );
+
+        expect(countUnresolvedTodos(script, "migrate.ts")).toBe(1);
+        expect(script).toContain(
+          'void TODO("copy Alpha with its foreign keys to Beta, Gamma set to null, then fill them in after the copies of Beta, Gamma");',
+        );
+      });
+
       test("keeps the listed order for tables that do not reference each other", () => {
         const script = generateMigrationScript(
           stepsDiff(renamedTable("User", "Person"), renamedTable("Team", "Group")),
