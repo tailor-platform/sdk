@@ -335,6 +335,56 @@ const OVERWRITE_NOTE = `// Overwrites existing values. Once this step commits it
 const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 
 /**
+ * The tables other than itself that the fields of a table point to.
+ * @param fields - Fields of the table
+ * @param tableName - Name of the table, whose self-references are not a dependency
+ * @returns Names of the referenced tables
+ */
+function foreignKeyTargets(
+  fields: Readonly<Record<string, { foreignKeyType?: string }>>,
+  tableName: string,
+): string[] {
+  return [
+    ...new Set(
+      Object.values(fields)
+        .map((field) => field.foreignKeyType)
+        .filter((target): target is string => target !== undefined && target !== tableName),
+    ),
+  ];
+}
+
+/**
+ * Put the renamed tables a renamed table references before it, so its copy finds the
+ * rows its foreign keys point to. The renames keep their slots among the other changes
+ * and the order they were listed in, apart from that; a cycle keeps the listed order.
+ * @param changes - Changes in the order they were listed
+ * @returns The same changes with the table renames ordered by their references
+ */
+function orderTableRenames(changes: readonly DiffChange[]): DiffChange[] {
+  const remaining = changes.filter(
+    (change): change is TableRenamedChange => change.kind === "table_renamed",
+  );
+  const parentsOf = (rename: TableRenamedChange): Set<string> =>
+    new Set(
+      foreignKeyTargets(rename.after.fields, rename.tableName).filter((target) =>
+        remaining.some((candidate) => candidate.tableName === target),
+      ),
+    );
+  const ordered: TableRenamedChange[] = [];
+  while (remaining.length > 0) {
+    const copied = new Set(ordered.map((rename) => rename.tableName));
+    const index = remaining.findIndex((rename) =>
+      [...parentsOf(rename)].every((p) => copied.has(p)),
+    );
+    ordered.push(...remaining.splice(Math.max(index, 0), 1));
+  }
+  let next = 0;
+  return changes.map((change) =>
+    change.kind === "table_renamed" ? (ordered[next++] ?? change) : change,
+  );
+}
+
+/**
  * Name the step for a change and list the fields it reads or writes. Two steps
  * that touch the same field must run in the order the changes are listed; steps that
  * touch different fields do not depend on each other.
@@ -363,6 +413,10 @@ function describeChange(change: DiffChange): { preferredName: string; touches: F
         touches: [
           { table: change.previousTableName, field: ALL_FIELDS },
           { table: change.tableName, field: ALL_FIELDS },
+          ...foreignKeyTargets(change.after.fields, change.tableName).map((target) => ({
+            table: target,
+            field: "id",
+          })),
         ],
       };
     case "field_modified":
@@ -483,7 +537,7 @@ function buildScriptSteps(
       { table: plan.tableName, field: plan.tempFieldName },
     ],
   }));
-  diff.changes.forEach((change, index) => {
+  orderTableRenames(diff.changes).forEach((change, index) => {
     const statements = generateChangeStatements(change, typeRenameTargets, finishedExpansions);
     if (statements.length === 0) return;
     const { preferredName, touches } = describeChange(change);

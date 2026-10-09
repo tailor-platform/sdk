@@ -388,6 +388,71 @@ describe("template-generator", () => {
       expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
     });
 
+    describe("copies of renamed tables that reference each other", () => {
+      const child = {
+        kind: "table_renamed",
+        tableName: "Purchase",
+        previousTableName: "Order",
+        before: {
+          name: "Order",
+          pluralForm: "Orders",
+          fields: { customerId: { type: "uuid", required: false, foreignKeyType: "Customer" } },
+        },
+        after: {
+          name: "Purchase",
+          pluralForm: "Purchases",
+          fields: { customerId: { type: "uuid", required: false, foreignKeyType: "Client" } },
+        },
+      } as const;
+      const parent = renamedTable("Customer", "Client");
+
+      test("copies the parent first even when the child is listed first", () => {
+        const script = generateMigrationScript(stepsDiff(child, parent));
+
+        expect(order(script)).toEqual(["copyCustomerToClient", "copyOrderToPurchase"]);
+        expect(script).toContain('copyOrderToPurchase: { dependsOn: ["copyCustomerToClient"]');
+      });
+
+      test("keeps the listed order when the parent is already first", () => {
+        const script = generateMigrationScript(stepsDiff(parent, child));
+
+        expect(order(script)).toEqual(["copyCustomerToClient", "copyOrderToPurchase"]);
+        expect(script).toContain('copyOrderToPurchase: { dependsOn: ["copyCustomerToClient"]');
+      });
+
+      test("keeps the listed order when two renamed tables reference each other", () => {
+        const first = {
+          ...child,
+          after: {
+            ...child.after,
+            fields: { peerId: { type: "uuid", required: false, foreignKeyType: "Client" } },
+          },
+        } as const;
+        const second = {
+          ...renamedTable("Customer", "Client"),
+          after: {
+            name: "Client",
+            pluralForm: "Clients",
+            fields: { peerId: { type: "uuid", required: false, foreignKeyType: "Purchase" } },
+          },
+        } as const;
+
+        expect(order(generateMigrationScript(stepsDiff(first, second)))).toEqual([
+          "copyOrderToPurchase",
+          "copyCustomerToClient",
+        ]);
+      });
+
+      test("keeps the listed order for tables that do not reference each other", () => {
+        const script = generateMigrationScript(
+          stepsDiff(renamedTable("User", "Person"), renamedTable("Team", "Group")),
+        );
+
+        expect(order(script)).toEqual(["copyUserToPerson", "copyTeamToGroup"]);
+        expect(script).not.toContain("dependsOn:");
+      });
+    });
+
     test("orders the retarget of a foreign key after the copy of the table it points to", () => {
       const script = generateMigrationScript(
         stepsDiff(renamedTable("User", "Person"), {
