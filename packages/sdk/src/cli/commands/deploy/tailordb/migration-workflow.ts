@@ -318,24 +318,15 @@ export async function executeMigrationAsWorkflow(
   const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
-  let earlierExecutions: WorkflowExecution[];
-  try {
-    earlierExecutions = await listMigrationExecutions(client, workspaceId, name);
-  } catch (error) {
-    throw outcomeUnknownError(
-      options,
-      `Could not check for an earlier run of migration ${migrationLabel}: ${formatWaitError(error)}`,
-      { cause: error },
-    );
-  }
-  const active = earlierExecutions.find(isExecutionActive);
-  if (active) {
-    throw outcomeUnknownError(
-      options,
-      `Migration ${migrationLabel} has an execution that is still running (${active.id}).`,
-      { executionId: active.id },
-    );
-  }
+  await assertNoActiveExecution(client, workspaceId, name, migrationLabel, {
+    active: (message, executionId) => outcomeUnknownError(options, message, { executionId }),
+    lookupFailed: (error) =>
+      outcomeUnknownError(
+        options,
+        `Could not check for an earlier run of migration ${migrationLabel}: ${formatWaitError(error)}`,
+        { cause: error },
+      ),
+  });
   await reclaimLeftovers(client, workspaceId, name);
 
   const created: CreatedMigrationWorkflow = {};
@@ -755,21 +746,43 @@ async function listMigrationExecutions(
   return response?.executions ?? [];
 }
 
+interface ActiveExecutionErrors {
+  /** Builds the error refusing an execution that is still running. */
+  active: (message: string, executionId: string) => Error;
+  /** Builds the error for a failed listing; the listing's own error is thrown when omitted. */
+  lookupFailed?: (error: unknown) => Error;
+}
+
+const EXECUTION_ACTIVE_ERRORS: ActiveExecutionErrors = {
+  active: (message, executionId) =>
+    CLIError({
+      code: "MIGRATION_EXECUTION_ACTIVE",
+      message,
+      suggestion:
+        "Wait for it to finish, or check that no other deploy is running against this workspace, then deploy again.",
+      context: { executionId },
+    }),
+};
+
 async function assertNoActiveExecution(
   client: OperatorClient,
   workspaceId: string,
   name: string,
   migrationLabel: string,
+  errors: ActiveExecutionErrors = EXECUTION_ACTIVE_ERRORS,
 ): Promise<void> {
-  const active = (await listMigrationExecutions(client, workspaceId, name)).find(isExecutionActive);
+  let executions: WorkflowExecution[];
+  try {
+    executions = await listMigrationExecutions(client, workspaceId, name);
+  } catch (error) {
+    throw errors.lookupFailed?.(error) ?? error;
+  }
+  const active = executions.find(isExecutionActive);
   if (active) {
-    throw CLIError({
-      code: "MIGRATION_EXECUTION_ACTIVE",
-      message: `Migration ${migrationLabel} has an execution that is still running (${active.id}).`,
-      suggestion:
-        "Wait for it to finish, or check that no other deploy is running against this workspace, then deploy again.",
-      context: { executionId: active.id },
-    });
+    throw errors.active(
+      `Migration ${migrationLabel} has an execution that is still running (${active.id}).`,
+      active.id,
+    );
   }
 }
 
