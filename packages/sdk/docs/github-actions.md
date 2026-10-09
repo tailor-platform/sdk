@@ -248,7 +248,7 @@ deploy-assets:
   environment: my-app
   env:
     TAILOR_PLATFORM_WORKSPACE_ID: ${{ needs.tailor-preview-deploy.outputs.workspace-id }}
-    TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+    TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
     TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
   steps:
     # checkout, dependency installation, and your tailor commands
@@ -351,15 +351,20 @@ the move.
 
 ## Secrets
 
-The generated workflow requires two secrets (the optional Slack token is listed in
+The generated workflow requires one secret (the optional Slack token is listed in
 [Setting secrets and variables](#setting-secrets-and-variables)):
 
 | Secret                                       | Description                |
 | -------------------------------------------- | -------------------------- |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Machine user client ID     |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Machine user client secret |
 
-Set them on the target GitHub Environment (the `--environment` value, or the
+The machine user client ID is a variable, not a secret: it cannot authenticate
+without the client secret. The generated workflow reads
+`vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` and falls back to
+`secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`, so a repository that already
+stores the client ID as a secret keeps working unchanged.
+
+Set it on the target GitHub Environment (the `--environment` value, or the
 workspace name when omitted); `tailor setup ci env` prints the commands (see
 [Setting secrets and variables](#setting-secrets-and-variables)).
 
@@ -387,17 +392,17 @@ tailor setup ci env --environment my-app-stg # only one environment (repeat for 
 
 The list follows what each generated workflow actually reads:
 
-| Name                                         | Kind     | Targets     | Required | Where the value comes from                                                                                                                                                                                                                                                                                      |
-| -------------------------------------------- | -------- | ----------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | secret   | all         | yes      | Client ID of the platform machine user CI signs in as; it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all         | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                 |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                 |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview     | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                   |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview     | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                            |
-| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all         | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                              |
-| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                    |
-| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                            |
-| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                            |
+| Name                                         | Kind     | Targets     | Required | Where the value comes from                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------- | -------- | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | variable | all         | yes      | Client ID of the platform machine user CI signs in as (an existing secret of the same name still works as a fallback); it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all         | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                                                                                 |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                                                                                 |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview     | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                                                                                   |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview     | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                                                                                            |
+| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all         | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                                                                                              |
+| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                                                                                    |
+| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                                                                                            |
+| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                            |
 
 See [Account management](https://docs.tailor.tech/administration/account-management)
 for how organizations, folders, workspaces, and machine users relate.
