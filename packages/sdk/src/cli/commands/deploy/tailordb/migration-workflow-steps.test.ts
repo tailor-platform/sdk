@@ -1,3 +1,4 @@
+import * as vm from "node:vm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
@@ -8,8 +9,10 @@ import { logger } from "#/cli/shared/logger";
 import { writeMetadataLabelsDirect } from "../label";
 import {
   executeMigrationStepsAsWorkflow,
+  MIGRATION_SCRIPT_STARTED_LOG,
   migrationPlanFingerprint,
   removeMigrationWorkflowResources,
+  type MigrationRunEvent,
   type MigrationStepsWorkflowOptions,
 } from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -198,6 +201,15 @@ function run(
     notify: (level, message) => logger[level](message),
     ...overrides,
   });
+}
+
+function recordRunEvents() {
+  const events: string[] = [];
+  const onRunEvent = (event: MigrationRunEvent) => {
+    if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
+    else if (event.type !== "polled") events.push(event.type);
+  };
+  return { events, onRunEvent };
 }
 
 const ALL_STEPS_SUCCEEDED = [
@@ -487,6 +499,60 @@ describe("executeMigrationStepsAsWorkflow", () => {
     ]);
   });
 
+  test("counts only a running step, not the orchestrator, as running the script", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [
+          { status: WorkflowJobExecution_Status.RUNNING, logs: [MIGRATION_SCRIPT_STARTED_LOG] },
+        ],
+      },
+    });
+    const { events, onRunEvent } = recordRunEvents();
+
+    await run(client, { onRunEvent });
+
+    expect(events).toEqual(["waiting", "finished:false"]);
+  });
+
+  test("reports a step job that logged its start as running the script", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [
+          { status: WorkflowJobExecution_Status.SUSPEND, logs: [MIGRATION_SCRIPT_STARTED_LOG] },
+          runnerJob(0, WorkflowJobExecution_Status.RUNNING, [
+            MIGRATION_SCRIPT_STARTED_LOG,
+            "backfilled 10 users",
+          ]),
+        ],
+      },
+    });
+    const { events, onRunEvent } = recordRunEvents();
+
+    const result = await run(client, { onRunEvent });
+
+    expect(events).toEqual(["waiting", "running", "finished:true"]);
+    expect(result.logs).toBe("[backfillUser] backfilled 10 users");
+  });
+
+  test("reports a poll of the run that failed as unknown", async () => {
+    const { client, raw } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [runnerJob(0, WorkflowJobExecution_Status.RUNNING, [MIGRATION_SCRIPT_STARTED_LOG])],
+      },
+    });
+    raw.getWorkflowExecution.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
+    const { events, onRunEvent } = recordRunEvents();
+
+    await run(client, { onRunEvent });
+
+    expect(events).toEqual(["waiting", "unknown", "running", "finished:true"]);
+  });
+
   test("treats a run that disappears while polling as possibly committed", async () => {
     const { client, raw } = createStepsClient({
       run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
@@ -591,6 +657,29 @@ describe("executeMigrationStepsAsWorkflow", () => {
       expect(raw.createWorkflow).not.toHaveBeenCalled();
       expect(raw.startWorkflow).not.toHaveBeenCalled();
       expect(raw.deleteWorkflow).not.toHaveBeenCalled();
+    });
+
+    test("uploads the resumed script behind the log line that marks its start", async () => {
+      const { client, raw } = createStepsClient({
+        existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+        listed: [failedRun],
+        run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+      });
+
+      await run(client, { inProgress: { executionId: "exec-old" } });
+
+      const [stream] = raw.updateFunctionRegistry.mock.calls[0] as unknown as [
+        AsyncIterable<{ payload: { case: string; value: unknown } }>,
+      ];
+      const chunks: Uint8Array[] = [];
+      for await (const message of stream) {
+        if (message.payload.case === "chunk") chunks.push(message.payload.value as Uint8Array);
+      }
+      const content = Buffer.concat(chunks).toString("utf-8");
+      const logged: string[] = [];
+      vm.runInNewContext(content, { console: { log: (message: string) => logged.push(message) } });
+      expect(content.endsWith("\n// bundled steps")).toBe(true);
+      expect(logged).toEqual([MIGRATION_SCRIPT_STARTED_LOG]);
     });
 
     test("finds the run by name when its execution id was never recorded", async () => {

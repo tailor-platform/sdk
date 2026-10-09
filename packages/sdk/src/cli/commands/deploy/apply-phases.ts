@@ -17,6 +17,12 @@ import {
 } from "./workflow-execution-policy";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { MaintenanceReport } from "./tailordb/migration-timing";
+
+/** How long one application's TailorDB migrations kept tables in maintenance mode. */
+export interface TailorDBMaintenance extends MaintenanceReport {
+  application: string;
+}
 
 export type PlannedDeployment = {
   readonly application: Readonly<Application>;
@@ -143,22 +149,25 @@ export async function applyPrerequisiteResources(
  * @param client - Operator client instance
  * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
+ * @returns Maintenance windows of the applications whose TailorDB migrations ran, in deploy order
  */
 export async function applyRemainingResources(
   client: OperatorClient,
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<void> {
+): Promise<TailorDBMaintenance[]> {
   const step = makeStep(deployments);
+  const maintenance: TailorDBMaintenance[] = [];
 
   await withMetadataWriteBatch(client, async (applyClient) => {
     await withSpan("apply.createUpdateServices", async () => {
       await step("apply.functionRegistry.createUpdate", (d) =>
         applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
       );
-      await step("apply.tailorDB.createUpdate", (d) =>
-        applyTailorDB(applyClient, d.tailorDB, "create-update"),
-      );
+      await step("apply.tailorDB.createUpdate", async (d) => {
+        const report = await applyTailorDB(applyClient, d.tailorDB, "create-update");
+        if (report) maintenance.push({ application: d.application.name, ...report });
+      });
       await step("apply.auth.createUpdateDependents", (d) =>
         applyAuth(applyClient, d.auth, "create-update-dependents"),
       );
@@ -237,6 +246,7 @@ export async function applyRemainingResources(
       applyFunctionRegistry(client, workspaceId, d.functionRegistry, "delete"),
     );
   });
+  return maintenance;
 }
 
 /**

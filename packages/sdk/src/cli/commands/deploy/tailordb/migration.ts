@@ -13,6 +13,11 @@ import {
   type AuthInvoker,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+  type WorkflowExecution,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
   bundleMigrationScript,
   bundleMigrationSteps,
   bundleSingleStepMigration,
@@ -49,14 +54,17 @@ import {
 import { type OperatorClient } from "#/cli/shared/client";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { assertDefined } from "#/utils/assert";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
+import { formatDuration, ScriptRunTimer, type MaintenanceTimeline } from "./migration-timing";
 import {
   executeMigrationAsWorkflow,
   executeMigrationStepsAsWorkflow,
   migrationStepRunnerName,
   migrationWorkflowResourceName,
+  type MigrationRunEvent,
   type MigrationStepsWorkflowResult,
 } from "./migration-workflow";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
@@ -240,12 +248,99 @@ export async function detectPendingMigrations(
 // Migration Execution
 // ============================================================================
 
+/** Receives a migration run's progress for display and timing. */
+interface MigrationRunDisplay {
+  onRunEvent: (event: MigrationRunEvent) => void;
+  onProgress: (completedSteps: number, totalSteps: number) => void;
+}
+
+function describeRunStatus(execution: WorkflowExecution): string {
+  const jobs = execution.jobExecutions.map((job) => {
+    const name = job.kind.case === "jobFunction" ? job.kind.value.name : (job.kind.case ?? "job");
+    return `${name}=${protoEnumName(WorkflowJobExecution_Status, job.status) ?? job.status}`;
+  });
+  const status = protoEnumName(WorkflowExecution_Status, execution.status) ?? execution.status;
+  return `workflow execution ${status}, ${jobs.length > 0 ? `jobs ${jobs.join(", ")}` : "no jobs yet"}`;
+}
+
+/**
+ * Time a migration run's phases and show what it is doing.
+ * @param migrationLabel - Migration shown in messages, e.g. `tailordb/0001`
+ * @param timer - Timer of the run
+ * @param sp - Spinner showing the run
+ * @returns Callbacks for the run's progress
+ */
+function displayMigrationRun(
+  migrationLabel: string,
+  timer: ScriptRunTimer,
+  sp: Spinner,
+): MigrationRunDisplay {
+  let steps = "";
+  let lastStatus: string | undefined;
+  const aside = (write: () => void) => {
+    sp.stop();
+    write();
+    sp.start();
+  };
+  const debug = (message: string) => {
+    if (logger.verbose) aside(() => logger.debug(message));
+  };
+  const render = (at: number) => {
+    const progress = `(${steps}${formatDuration(at - timer.phaseStartedAt)})`;
+    sp.text =
+      timer.phase === "running"
+        ? `Running migration ${migrationLabel} ${progress}...`
+        : timer.phase === "waitingOrRunning"
+          ? `Executing migration ${migrationLabel} ${progress}...`
+          : `Waiting for a job of migration ${migrationLabel} to start ${progress}...`;
+  };
+  return {
+    onRunEvent: (event) => {
+      if (event.type === "finished") {
+        timer.finished(event.at, event.scriptStarted);
+        if (!timer.startObserved) {
+          debug(
+            `Could not observe when migration ${migrationLabel} started running, so its run is not split into waiting and running.`,
+          );
+        }
+        return;
+      }
+      const firstStart = event.type === "running" && !timer.startObserved;
+      if (event.type === "waiting") timer.waiting(event.at);
+      if (event.type === "running") timer.running(event.at);
+      if (event.type === "unknown") timer.unknown(event.at);
+      render(event.at);
+      if (event.type === "unknown") {
+        debug(`Migration ${migrationLabel}: could not tell whether its script is running.`);
+      }
+      if (firstStart) {
+        aside(() =>
+          logger.info(
+            `Migration ${migrationLabel} started running after waiting ${formatDuration(timer.waitedMs)} for its job to start.`,
+            { mode: "stream" },
+          ),
+        );
+      }
+      if (event.type === "polled" && logger.verbose) {
+        const status = describeRunStatus(event.execution);
+        if (status !== lastStatus) debug(`Migration ${migrationLabel}: ${status}.`);
+        lastStatus = status;
+      }
+    },
+    onProgress: (completed, total) => {
+      steps = `${completed}/${total} steps completed, `;
+      render(performance.now());
+    },
+  };
+}
+
 /**
  * Execute a single migration script
  * @param {MigrationExecutionOptions} options - Execution options
  * @param {PendingMigration} migration - Migration to execute
  * @param inProgress - What an earlier deploy recorded for this migration, if anything
  * @param sp - Spinner showing progress
+ * @param display - Receives the run's progress
  * @returns {Promise<ExecutionResult>} Execution result
  */
 async function executeSingleMigration(
@@ -253,11 +348,12 @@ async function executeSingleMigration(
   migration: PendingMigration,
   inProgress: MigrationInProgress | undefined,
   sp: Spinner,
+  display: MigrationRunDisplay,
 ): Promise<ExecutionResult> {
   const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
   const form = migration.scriptForm;
   if (form?.kind === "steps" && usesStepRunner(form, inProgress !== undefined)) {
-    return executeStepsMigration(options, migration, form, inProgress, sp);
+    return executeStepsMigration(options, migration, form, inProgress, sp, display);
   }
 
   // Bundle the migration script
@@ -294,6 +390,7 @@ async function executeSingleMigration(
     invoker,
     appName,
     appId,
+    onRunEvent: display.onRunEvent,
   });
 
   return {
@@ -525,6 +622,7 @@ async function releaseMigrationInProgress(
  * @param form - The script's validated steps
  * @param inProgress - What an earlier deploy recorded for this migration, if anything
  * @param sp - Spinner showing step progress
+ * @param display - Receives the run's progress
  * @returns Execution result
  */
 async function executeStepsMigration(
@@ -533,9 +631,9 @@ async function executeStepsMigration(
   form: Extract<MigrationScriptForm, { kind: "steps" }>,
   inProgress: MigrationInProgress | undefined,
   sp: Spinner,
+  display: MigrationRunDisplay,
 ): Promise<ExecutionResult> {
   const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
-  const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
   const bundleResult = await bundleMigrationSteps({
     sourceFile: migration.scriptPath,
     namespace: migration.namespace,
@@ -585,9 +683,8 @@ async function executeStepsMigration(
           executionId,
         );
       },
-      onProgress: (completed, total) => {
-        sp.text = `Executing migration ${migrationLabel} (${completed}/${total} steps completed)...`;
-      },
+      onProgress: display.onProgress,
+      onRunEvent: display.onRunEvent,
     });
   } catch (error) {
     if (isCLIError(error) && error.code === "MIGRATION_START_UNCONFIRMED") {
@@ -638,12 +735,14 @@ async function executeStepsMigration(
  * @param {MigrationContext} context - Migration context with per-namespace configuration
  * @param {PendingMigration[]} migrations - Migrations to execute
  * @param inProgressByNamespace - Migrations an earlier deploy left in progress, by namespace
+ * @param timeline - Receives the phases of each migration run
  * @returns {Promise<void>}
  */
 export async function executeMigrations(
   context: MigrationContext,
   migrations: PendingMigration[],
   inProgressByNamespace: Readonly<Record<string, MigrationInProgress>> = {},
+  timeline?: MaintenanceTimeline,
 ): Promise<void> {
   // Run migrate.ts whenever the file exists on disk. Required for breaking changes,
   // optional for warning-tier changes (e.g. field_removed).
@@ -691,9 +790,8 @@ export async function executeMigrations(
 
     for (const migration of namespaceMigrations) {
       const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
-      const sp = spinner().start(
-        `Executing migration ${migrationLabel} (this can take a while)...`,
-      );
+      const timer = new ScriptRunTimer(migration.namespace, migration.number);
+      const sp = spinner().start(`Executing migration ${migrationLabel}...`);
 
       const recorded = inProgressByNamespace[migration.namespace];
       let result: ExecutionResult;
@@ -703,6 +801,7 @@ export async function executeMigrations(
           migration,
           recorded?.number === migration.number ? recorded : undefined,
           sp,
+          displayMigrationRun(migrationLabel, timer, sp),
         );
       } catch (error) {
         sp.fail(
@@ -711,10 +810,26 @@ export async function executeMigrations(
             : `Migration ${migrationLabel} failed`,
         );
         throw error;
+      } finally {
+        sp.stop();
+        timeline?.recordScript(timer);
       }
 
       if (result.success) {
-        sp.succeed(`Migration ${migrationLabel} completed successfully`);
+        const timing = [
+          ...(timer.startObserved
+            ? [
+                `waiting to start ${formatDuration(timer.waitedMs)}`,
+                `running ${formatDuration(timer.ranMs)}`,
+              ]
+            : []),
+          ...(timer.unobservedMs > 0
+            ? [`waiting to start or running ${formatDuration(timer.unobservedMs)}`]
+            : []),
+        ].join(", ");
+        sp.succeed(
+          `Migration ${migrationLabel} completed successfully${timing ? ` (${timing})` : ""}`,
+        );
 
         // Show logs if any
         if (result.logs && result.logs.trim()) {

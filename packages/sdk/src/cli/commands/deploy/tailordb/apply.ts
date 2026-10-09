@@ -45,6 +45,11 @@ import {
   type MigrationRestrictionState,
 } from "./migration-execution";
 import {
+  formatMaintenanceSummary,
+  MaintenanceTimeline,
+  type MaintenanceReport,
+} from "./migration-timing";
+import {
   migrationFileStatesEqual,
   validateAndDetectMigrations,
   type ValidateAndDetectResult,
@@ -348,13 +353,15 @@ function describeMigrationCheckpoint(number: number | null | undefined): string 
  * @param client - Operator client instance
  * @param result - Planned TailorDB changes
  * @param phase - Apply phase (defaults to "create-update")
+ * @returns How long migrations kept tables in maintenance mode, when any ran
  */
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
   phase: Exclude<ApplyPhase, "delete"> = "create-update",
-): Promise<void> {
+): Promise<MaintenanceReport | undefined> {
   const { changeSet, context: migrationContext } = result;
+  let maintenance: MaintenanceReport | undefined;
 
   if (phase === "create-update") {
     // Plan-time validation makes dry runs fail fast. Repeat the full validation
@@ -565,7 +572,9 @@ export async function applyTailorDB(
       let migrationFailure: { error: unknown } | undefined;
       const partialMigrations = new Map<string, PendingMigration>();
       const reachedMigrations = new Set<PendingMigration>();
+      const timeline = new MaintenanceTimeline();
       try {
+        timeline.enter("restrict");
         // A committed checkpoint drops its migration from the next run's pending set.
         await applyMigrationRestrictions(
           client,
@@ -580,6 +589,7 @@ export async function applyTailorDB(
           const attemptedTables = new Set<string>();
           const inProgress = inProgressMigrations[migration.namespace]?.number === migration.number;
           const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
+          timeline.enter("preMigration");
           try {
             // Pre-migration phase: Create/update tables with breaking fields as optional
             await withSpan("apply.tailorDB.migration.prePhase", () =>
@@ -595,7 +605,7 @@ export async function applyTailorDB(
             // Script execution (only if migrate.ts exists for this migration)
             if (migration.hasScript && migrationCtx) {
               await withSpan("apply.tailorDB.migration.script", () =>
-                executeMigrations(migrationCtx, [migration], inProgressMigrations),
+                executeMigrations(migrationCtx, [migration], inProgressMigrations, timeline),
               );
             }
           } catch (error) {
@@ -615,6 +625,7 @@ export async function applyTailorDB(
             throw error;
           }
 
+          timeline.enter("postMigration");
           try {
             await withSpan("apply.tailorDB.migration.postPhase", () =>
               executeSingleMigrationPostPhase(
@@ -768,6 +779,7 @@ export async function applyTailorDB(
         migrationFailure = { error };
       }
 
+      timeline.enter("restore");
       for (const [namespaceName, expectedCheckpoint] of restorationCheckpoints) {
         try {
           const remoteState = await fetchRemoteMigrationState(
@@ -845,7 +857,10 @@ export async function applyTailorDB(
           }. The original migration error is reported below.`,
         );
       }
+      timeline.finish();
       if (migrationFailure) throw migrationFailure.error;
+      maintenance = timeline.report([...migratingNamespaces]);
+      logger.info(formatMaintenanceSummary(maintenance));
 
       for (const create of changeSet.type.creates) {
         const namespaceName = create.request.namespaceName;
@@ -989,6 +1004,7 @@ export async function applyTailorDB(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
     );
   }
+  return maintenance;
 }
 
 /**

@@ -146,7 +146,9 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
 
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { CLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import * as migrationModule from "./migration";
+import { MaintenanceTimeline, ScriptRunTimer } from "./migration-timing";
 import { removeMigrationWorkflowResources } from "./migration-workflow";
 import type { RemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
@@ -695,6 +697,121 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
+  test("reports how long the migrating namespace stayed in maintenance mode", async () => {
+    const client = createMockClient();
+    setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+    let clock = 0;
+    vi.mocked(migrationModule.executeMigrations).mockImplementationOnce(
+      async (_ctx, migrations, _inProgress, timeline) => {
+        const run = new ScriptRunTimer("test-ns", migrations[0]!.number, clock);
+        clock += 2_000;
+        run.waiting(clock);
+        clock += 60_000;
+        run.running(clock);
+        clock += 9_000;
+        run.finished(clock, true);
+        clock += 1_000;
+        timeline?.recordScript(run, clock);
+      },
+    );
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+      async (_client, _workspaceId, _namespace, number, historyId) => {
+        clock += 4_000;
+        remoteCheckpoint.number = number;
+        remoteCheckpoint.historyId = historyId ?? null;
+        return true;
+      },
+    );
+    const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    const info = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    try {
+      const report = await applyTailorDB(client, createUpdatePlanResult(), "create-update");
+
+      expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]![3]).toBeInstanceOf(
+        MaintenanceTimeline,
+      );
+      expect(report).toEqual({
+        namespaces: ["test-ns"],
+        maintenanceMs: 76_000,
+        phases: {
+          restrict: 0,
+          preMigration: 0,
+          jobSetup: 2_000,
+          waitingToStart: 60_000,
+          running: 9_000,
+          waitingOrRunning: 0,
+          jobCleanup: 1_000,
+          postMigration: 4_000,
+          restore: 0,
+        },
+        migrations: [
+          {
+            namespace: "test-ns",
+            migrationNumber: 1,
+            startObserved: true,
+            waitingToStartMs: 60_000,
+            runningMs: 9_000,
+            waitingOrRunningMs: 0,
+          },
+        ],
+      });
+      expect(info).toHaveBeenCalledWith(
+        "Tables of namespace test-ns were in maintenance mode for 1m16s (job setup 2.0s, " +
+          "waiting to start 1m00s, running 9.0s, job cleanup 1.0s, post-migration 4.0s).",
+      );
+    } finally {
+      now.mockRestore();
+      info.mockRestore();
+    }
+  });
+
+  test("reports no maintenance window when the migration fails", async () => {
+    const client = createMockClient();
+    setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(new Error("script failed"));
+    const info = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    try {
+      await expect(
+        applyTailorDB(client, createUpdatePlanResult(), "create-update"),
+      ).rejects.toThrow("script failed");
+
+      expect(info).not.toHaveBeenCalledWith(expect.stringContaining("maintenance mode for"));
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  test("reports the maintenance window when a change applied after it fails", async () => {
+    const client = createMockClient();
+    const planResult = createUpdatePlanResult();
+    planResult.changeSet.type.deletes.push({
+      name: "Legacy",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "other-ns",
+        tailordbTypeName: "Legacy",
+      },
+    });
+    vi.mocked(client.deleteTailorDBType).mockRejectedValue(new Error("delete failed"));
+    setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+    vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+    const info = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    try {
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        "delete failed",
+      );
+
+      expect(info).toHaveBeenCalledWith(
+        expect.stringMatching(/^Tables of namespace test-ns were in maintenance mode for /),
+      );
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   test("in a multi-migration run, rolls back the failed migration to snapshot[N-1] and keeps the prior one committed", async () => {
     const client = createMockClient();
     const planResult = createUpdatePlanResult();
@@ -948,7 +1065,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     await withOverriddenSnapshot(
       (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
       async () => {
-        await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+        await expect(applyTailorDB(client, planResult, "create-update")).resolves.toMatchObject({
+          namespaces: ["test-ns"],
+        });
       },
     );
 
