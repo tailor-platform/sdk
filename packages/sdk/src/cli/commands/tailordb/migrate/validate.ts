@@ -32,7 +32,11 @@ import {
   verifyRemoteSchema,
   type MigrationCheckResult,
 } from "./schema-checks";
-import { analyzeMigrationScript, ignoredStepsWarning } from "./script-form";
+import {
+  analyzeMigrationScript,
+  countUnresolvedTodosInFile,
+  ignoredStepsWarning,
+} from "./script-form";
 import {
   assertValidMigrationFiles,
   formatMigrationNumber,
@@ -42,7 +46,6 @@ import {
   loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import { MIGRATION_REVIEW_REQUIRED_MARKER } from "./template-generator";
 import type {
   RebaselinePendingInfo,
   RemoteSchemaVerificationResult,
@@ -168,10 +171,7 @@ function assertMigrationScriptsReady(
     if (diff.scriptSkipped && hasScript) {
       conflicting.push(file.number);
     }
-    if (
-      hasScript &&
-      fs.readFileSync(migrateFilePath, "utf8").includes(MIGRATION_REVIEW_REQUIRED_MARKER)
-    ) {
+    if (hasScript && countUnresolvedTodosInFile(migrateFilePath) > 0) {
       unreviewed.push(file.number);
     }
     if (diff.hasWarnings && !diff.scriptSkipped && !hasScript) {
@@ -202,8 +202,9 @@ function assertMigrationScriptsReady(
   if (unreviewed.length > 0) {
     throw CLIError({
       code: "MIGRATION_SCRIPT_REVIEW_REQUIRED",
-      message: `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" contain generated normalization logic that still requires review in migrate.ts.`,
-      suggestion: `Review each ${MIGRATION_REVIEW_REQUIRED_MARKER} marker, then remove the marker and its associated \`never\` annotation.`,
+      message: `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" still call TODO() in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
+      suggestion:
+        "Replace each TODO() call with the value or logic it asks for, then remove the TODO import from ./db.",
     });
   }
   for (const [migrationNumber, scriptPath] of scriptPaths) {

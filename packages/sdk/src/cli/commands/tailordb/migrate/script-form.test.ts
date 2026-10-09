@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import ml from "#/utils/multiline";
-import { analyzeMigrationScriptSource, usesStepRunner } from "./script-form";
+import { analyzeMigrationScriptSource, countUnresolvedTodos, usesStepRunner } from "./script-form";
 
 const analyze = (source: string) => analyzeMigrationScriptSource(source, "0003/migrate.ts");
 
@@ -206,5 +206,43 @@ describe("usesStepRunner", () => {
     },
   ])("is $expected for $name", ({ form, resumed, expected }) => {
     expect(usesStepRunner(form, resumed)).toBe(expected);
+  });
+});
+
+describe("countUnresolvedTodos", () => {
+  const count = (source: string) => countUnresolvedTodos(source, "0003/migrate.ts");
+
+  test("counts every TODO call the script still makes", () => {
+    expect(
+      count(ml`
+        import { TODO } from "./db";
+        export async function main(trx) {
+          await trx.updateTable("User").set({ email: TODO("fill email") }).execute();
+          void TODO("resolve nulls");
+        }
+      `),
+    ).toBe(2);
+  });
+
+  test("does not count the import or a TODO that is only mentioned", () => {
+    expect(
+      count(ml`
+        import { TODO } from "./db";
+        // TODO: Add observability
+        export async function main(trx) {
+          const label = "TODO(fill email)";
+        }
+      `),
+    ).toBe(0);
+  });
+
+  test("counts the review marker that earlier versions generated", () => {
+    expect(
+      count(ml`
+        export async function main(trx) {
+          // TODO(tailor-migration-review): Remove this marker and the \`never\` annotation after reviewing the conversion.
+        }
+      `),
+    ).toBe(1);
   });
 });

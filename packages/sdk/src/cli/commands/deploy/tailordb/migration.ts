@@ -26,6 +26,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
   analyzeMigrationScript,
+  countUnresolvedTodosInFile,
   ignoredStepsWarning,
   usesStepRunner,
 } from "#/cli/commands/tailordb/migrate/script-form";
@@ -198,6 +199,15 @@ export async function detectPendingMigrations(
         logger.info(
           `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
         );
+      }
+
+      if (hasScript && countUnresolvedTodosInFile(scriptPath) > 0) {
+        throw CLIError({
+          code: "MIGRATION_SCRIPT_REVIEW_REQUIRED",
+          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} still calls TODO() in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
+          suggestion:
+            "Replace each TODO() call with the value or logic it asks for, then remove the TODO import from ./db.",
+        });
       }
 
       const scriptForm = hasScript ? analyzeMigrationScript(scriptPath) : null;

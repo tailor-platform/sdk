@@ -33,9 +33,6 @@ import type {
 import type { ExpandContractPlan } from "./expand-contract";
 import type { MigrationScriptForm } from "./script-form";
 
-/** Marker left in generated migration scripts until their normalization logic is reviewed. */
-export const MIGRATION_REVIEW_REQUIRED_MARKER = "TODO(tailor-migration-review)";
-
 /**
  * Check if a file exists
  * @param {string} filePath - Path to check
@@ -286,7 +283,7 @@ function generateDataOnlyMigrationScript(namespace: string): string {
 ${scriptNotes()}
  */
 
-${renderScript("  // TODO: Implement the data transformation for this migration", "")}`;
+${renderScript('  void TODO("implement the data transformation for this migration");', "")}`;
 }
 
 /**
@@ -531,7 +528,10 @@ ${unit.body}
       return `  ${unit.name}: { ${dependsOn}run: ${unit.name} },`;
     })
     .join("\n");
-  return `import type { MigrationSteps, Transaction } from "./db";
+  const dbImport = units.some((unit) => unit.body.includes("TODO("))
+    ? 'import { TODO, type MigrationSteps, type Transaction } from "./db";'
+    : 'import type { MigrationSteps, Transaction } from "./db";';
+  return `${dbImport}
 ${helpers}
 ${functions}
 
@@ -770,7 +770,7 @@ function generateChangeScripts(
       for (let i = 1; i < records.length; i++) {
         await trx
           .updateTable("${change.tableName}")
-          .set({ ${fields[0]}: null }) // TODO: Set appropriate unique value
+          .set({ ${fields[0]}: TODO("set a unique ${change.tableName}.${fields[0]} value for the duplicates") })
           .where("id", "=", records[i].id)
           .execute();
       }
@@ -787,7 +787,7 @@ function generateChangeScripts(
   await trx
     .updateTable("${change.tableName}")
     .set({
-      ${change.fieldName}: null, // TODO: Set appropriate default value
+      ${change.fieldName}: TODO("set the value ${change.tableName}.${change.fieldName} takes in existing records"),
     })
     .execute();`,
       ];
@@ -837,7 +837,7 @@ function generateChangeScripts(
   await trx
     .updateTable("${change.tableName}")
     .set({
-      ${change.fieldName}: null, // TODO: Set appropriate default value
+      ${change.fieldName}: TODO("set the value ${change.tableName}.${change.fieldName} takes where it is null"),
     })
     .where("${change.fieldName}", "is", null)
     .execute();`);
@@ -860,17 +860,11 @@ function generateChangeScripts(
     const afterValues = (after.allowedValues ?? []).map((v) => v.value);
     const removedValues = beforeValues.filter((v) => !afterValues.includes(v));
     if (removedValues.length > 0) {
-      const [firstValue] = afterValues;
-      const replacement =
-        firstValue !== undefined
-          ? JSON.stringify(firstValue)
-          : after.required
-            ? '"NEW_VALUE"'
-            : "null";
+      const choices = afterValues.length > 0 ? ` (${afterValues.join(", ")})` : "";
       scripts.push(`  // Migrate records with removed enum values: ${removedValues.join(", ")}
   await trx
     .updateTable("${change.tableName}")
-    .set({ ${change.fieldName}: ${replacement} }) // TODO: Set appropriate value
+    .set({ ${change.fieldName}: TODO(${JSON.stringify(`choose the ${change.tableName}.${change.fieldName} value that replaces ${removedValues.join(", ")}${choices}`)}) })
     .where("${change.fieldName}", "in", [${removedValues.map((v) => JSON.stringify(v)).join(", ")}])
     .execute();`);
     }
@@ -892,7 +886,7 @@ function generateChangeScripts(
     for (const record of orphanedRecords) {
       await trx
         .updateTable("${change.tableName}")
-        .set({ ${change.fieldName}: null }) // TODO: Set appropriate new reference
+        .set({ ${change.fieldName}: TODO("set the ${after.foreignKeyType} reference for ${change.tableName}.${change.fieldName}") })
         .where("id", "=", record.id)
         .execute();
     }
@@ -913,8 +907,9 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
   const requiredTodo =
     !before.required && after.required
       ? `
-  // TODO: ${previousFieldName} is optional but ${fieldName} is required.
-  // Resolve null values, or the post-migration phase will fail.`
+  // ${previousFieldName} is optional but ${fieldName} is required: resolve its null values,
+  // or the post-migration phase will fail.
+  void TODO("resolve the null values of ${tableName}.${previousFieldName} that ${fieldName} cannot hold");`
       : "";
   const roundingWarning = renameCopyCanCollapseValues(change)
     ? `
@@ -1102,11 +1097,9 @@ function generateFieldTypeChangeScript(
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.
-        // Keep the value accepted by the active ${change.before.type} type and castable to ${change.after.type}.
         const sourceValue = row.${change.fieldName};
         if (sourceValue === null) continue;
-        const normalizedValue: never = sourceValue;
+        const normalizedValue = TODO("normalize ${change.tableName}.${change.fieldName} to a value the active ${change.before.type} type accepts and the ${change.after.type} type can cast");
         if (Object.is(normalizedValue, sourceValue)) continue;
         await trx
           .updateTable("${change.tableName}")
@@ -1136,10 +1129,8 @@ function generateExpandConversionValue(plan: ExpandContractPlan): string {
   const target = plan.after.array
     ? `an element of the ${formatFieldShape(plan.after)} field`
     : `the ${plan.after.type} type`;
-  return `        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the conversion.
-        // Produce a value accepted by ${target} from the stored ${plan.before.type} value.
-        const sourceValue = row.${plan.fieldName};
-        const convertedValue: never = sourceValue;`;
+  return `        // Produce a value accepted by ${target} from the stored ${plan.before.type} value in row.${plan.fieldName}.
+        const convertedValue = TODO(${JSON.stringify(`convert ${plan.tableName}.${plan.fieldName} to a value accepted by ${target}`)});`;
 }
 
 function generateExpandConversionScript(plan: ExpandContractPlan): string {
@@ -1199,15 +1190,13 @@ function generateUniqueDedupeScript(
   const duplicateResolution =
     resolution === "throw"
       ? `      if (records.length > 1) {
-        throw new Error(
-          "TODO: Resolve duplicate ${tableName}.${fieldName} values before adding the unique constraint",
-        );
+        TODO("resolve the duplicate ${tableName}.${fieldName} values before the unique constraint is added");
       }`
-      : `      // Keep first record, add suffix to others
+      : `      // Keep the first record and give the others a new value
       for (let i = 1; i < records.length; i++) {
         await trx
           .updateTable("${tableName}")
-          .set({ ${fieldName}: \`\${records[i].${fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+          .set({ ${fieldName}: TODO("set a unique ${tableName}.${fieldName} value for the duplicates") })
           .where("id", "=", records[i].id)
           .execute();
       }`;

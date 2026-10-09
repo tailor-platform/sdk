@@ -508,6 +508,49 @@ describe("migration", () => {
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("no data yet"));
     });
 
+    test("throws before anything changes when a pending migration script still calls TODO", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+      writeMigrateFile(
+        testDir,
+        1,
+        'import { TODO } from "./db";\nexport async function main() { TODO("fill email"); }',
+      );
+
+      const error = await detectPendingMigrations(client, workspaceId, [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ]).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).toMatchObject({ code: "MIGRATION_SCRIPT_REVIEW_REQUIRED" });
+      expect(error!.message).toContain("tailordb/0001");
+      expect((error as CLIError).suggestion).toContain("Replace each TODO() call");
+    });
+
+    test("accepts a pending migration script that no longer calls TODO", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+      writeMigrateFile(testDir, 1, "export async function main() {}");
+
+      const pending = await detectPendingMigrations(client, workspaceId, [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ]);
+
+      expect(pending.map((migration) => migration.number)).toEqual([1]);
+    });
+
     test("throws when a migration has both a script skip acknowledgment and migrate.ts", async () => {
       const client = createMockClient({ tailordb: 0 });
 

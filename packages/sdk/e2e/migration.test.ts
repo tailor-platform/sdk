@@ -44,7 +44,6 @@ import {
   INITIAL_SCHEMA_NUMBER,
   getMigrationFilePath,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
-import { MIGRATION_REVIEW_REQUIRED_MARKER } from "../src/cli/commands/tailordb/migrate/template-generator";
 import {
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
@@ -321,7 +320,7 @@ export async function main(db: Kysely<any>): Promise<void> {
   }
 
   /**
-   * Edit migration script to replace null values with test values
+   * Edit migration script to replace its TODO placeholders with test values
    * @param {number} migrationNumber - Migration number
    * @param {Record<string, string>} replacements - Field name to value replacements
    */
@@ -337,10 +336,10 @@ export async function main(db: Kysely<any>): Promise<void> {
 
     let content = fs.readFileSync(migratePath, "utf-8");
 
-    // Replace null values with actual test values
+    // Replace TODO placeholders with actual test values
     for (const [fieldName, value] of Object.entries(replacements)) {
-      // Replace patterns like: fieldName: null,
-      const pattern = new RegExp(`(${fieldName}:\\s*)null(,?)`, "g");
+      // Replace patterns like: fieldName: TODO("..."),
+      const pattern = new RegExp(`(${fieldName}:\\s*)TODO\\("[^"]*"\\)(,?)`, "g");
       content = content.replace(pattern, `$1${value}$2`);
     }
 
@@ -1111,12 +1110,10 @@ export type user = typeof user;
 
         const migratePath = getMigrationFilePath(migrationsDir, 7, "migrate");
         const generatedScript = fs.readFileSync(migratePath, "utf-8");
-        const reviewedScript = generatedScript
-          .replaceAll(
-            `        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.\n`,
-            "",
-          )
-          .replaceAll("const normalizedValue: never", "const normalizedValue");
+        const reviewedScript = generatedScript.replaceAll(
+          /const normalizedValue = TODO\("[^"]*"\);/g,
+          "const normalizedValue = sourceValue;",
+        );
         const defaultNormalization = `        const sourceValue = row.sourceUuid;
         if (sourceValue === null) continue;
         const normalizedValue = sourceValue;`;
@@ -1128,7 +1125,7 @@ export type user = typeof user;
             : sourceValue;`;
         const editedScript = reviewedScript.replace(defaultNormalization, exercisedNormalization);
         expect(editedScript).not.toBe(reviewedScript);
-        expect(editedScript).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+        expect(editedScript).not.toMatch(/\bTODO\(/);
         fs.writeFileSync(migratePath, groupStepsIntoTwo(editedScript));
 
         runDeployCli(configPath, workspaceId, tempDir);

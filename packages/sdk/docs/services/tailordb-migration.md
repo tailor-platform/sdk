@@ -407,7 +407,7 @@ export const steps = {
 ```
 
 - A script exports either `main` or `steps`. If it exports both, `main` runs as before and `steps` is ignored with a warning from `tailor deploy` and `tailor tailordb migration validate`.
-- Generated scripts export `steps`. Each schema change that needs a data migration gets its own step, named for what it does: `populate<Table><Field>` for an added required field (for example `populateUserEmail`), `rename<Table><Field>` for a renamed field, `copy<Old>To<New>` for a renamed table, `update<Table><Field>` for a changed field, `resolve<Table><Index>` for a unique index, and `convert<Table><Field>` for a field type conversion. A name that cannot be a step name becomes `change<N>`, where N is the change's position in the migration. A step lists in `dependsOn` every earlier step that touches the same field (a foreign key that changes its target also touches `id` of the table it now points to), so steps that touch the same field run in the order the changes are listed and changes to different fields do not wait for each other. The copy of a renamed table's rows skips the rows whose ids the new table already has, so running it again does not insert them twice. A step that rewrites values that already exist (the duplicate resolution of a unique index or field, a field change, a conversion through a temporary field) has a comment above its function saying so: once it commits it cannot be undone, so check the values it writes before you deploy. A `--data-only` migration, and a migration with no data statements to scaffold, get a single `migrate` step; split it into several steps where the work divides.
+- Generated scripts export `steps`. Each schema change that needs a data migration gets its own step, named for what it does: `populate<Table><Field>` for an added required field (for example `populateUserEmail`), `rename<Table><Field>` for a renamed field, `copy<Old>To<New>` for a renamed table, `update<Table><Field>` for a changed field, `resolve<Table><Index>` for a unique index, and `convert<Table><Field>` for a field type conversion. A name that cannot be a step name becomes `change<N>`, where N is the change's position in the migration. A step lists in `dependsOn` every earlier step that touches the same field (a foreign key that changes its target also touches `id` of the table it now points to), so steps that touch the same field run in the order the changes are listed and changes to different fields do not wait for each other. The copy of a renamed table's rows skips the rows whose ids the new table already has, so running it again does not insert them twice. A step that rewrites values that already exist (the duplicate resolution of a unique index or field, a field change, a conversion through a temporary field) has a comment above its function saying so: once it commits it cannot be undone, so check the values it writes before you deploy. Where the scaffold cannot pick a value for you (what an added required field holds in existing records, the new value of duplicates, the value that replaces a removed enum value, the new reference of a retargeted foreign key), it calls `TODO(message)`, which `./db` exports. The migration fails at that call, and `tailordb migration validate` and `tailor deploy` reject a `migrate.ts` that still calls it before anything is changed. Replace each call with the value, then remove the `TODO` import. A `--data-only` migration, and a migration with no data statements to scaffold, get a single `migrate` step; split it into several steps where the work divides.
 - Each step is an object with a `run` function — it receives its own transaction and the same `MigrationContext` as `main` — and an optional `dependsOn` list naming the steps that must complete before it starts.
 - Steps with no dependency between them have no guaranteed order. Declaration order is not execution order, and a future SDK version may run independent steps concurrently, so declare `dependsOn` for every ordering your steps rely on.
 - Declare `steps` directly as `export const steps = { ... }`, with each step written inside it as an object literal with a literal name and `dependsOn` list. Step names start with a letter and contain only letters, digits, and underscores, up to 64 characters. `tailor tailordb migration validate` and `tailor deploy` reject unknown dependencies and cycles before anything is changed.
@@ -509,11 +509,11 @@ async function updateUserAge(trx: Transaction): Promise<void> {
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        // TODO(tailor-migration-review): Remove this marker and the `never` annotation after reviewing the normalization.
-        // Keep the value accepted by the active integer type and castable to float.
         const sourceValue = row.age;
         if (sourceValue === null) continue;
-        const normalizedValue: never = sourceValue;
+        const normalizedValue = TODO(
+          "normalize User.age to a value the active integer type accepts and the float type can cast",
+        );
         if (Object.is(normalizedValue, sourceValue)) continue;
         await trx
           .updateTable("User")
@@ -531,7 +531,7 @@ export const steps = {
 } satisfies MigrationSteps;
 ```
 
-The generated `never` annotation intentionally causes a TypeScript error until you review the normalization. If the existing values are already suitable for the target type, remove the annotation and review marker to accept the identity transformation; it does not write any rows. If values need application-specific normalization, replace the expression and remove the annotation and marker while keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
+The generated `TODO()` call stops the migration until you replace it, and `tailordb migration validate` and `tailor deploy` reject the migration while it is still there. If the existing values are already suitable for the target type, replace the call with `sourceValue` to accept the identity transformation; it does not write any rows. If values need application-specific normalization, replace it with your expression, keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
 
 ### Converting a field type
 
@@ -544,10 +544,10 @@ User.price changes from string to integer, which cannot be applied in one step.
 
 Confirming writes two migrations:
 
-1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there. When only the array-ness changes (`string` → `string[]`), the conversion stores each value as a one-element array and carries no review marker; when the element type changes as well (`integer` → `string[]`), you convert the element and the script wraps it.
+1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `TODO()` call fails the migration, and `tailordb migration validate` and `tailor deploy` reject it while the call is still there. When only the array-ness changes (`string` → `string[]`), the conversion stores each value as a one-element array and has no `TODO()` call; when the element type changes as well (`integer` → `string[]`), you convert the element and the script wraps it.
 2. **The rename.** Renames the temporary field back to `price`. Its copy script is complete, but this migration also carries every other schema change the same run picked up, so review it as you would any generated migration.
 
-If converting to an array also reduces a decimal field's `scale` or removes enum values, the conversion keeps the review marker. Edit the element conversion to satisfy the target field before deploying.
+If converting to an array also reduces a decimal field's `scale` or removes enum values, the conversion keeps the `TODO()` call. Edit the element conversion to satisfy the target field before deploying.
 
 `tailor deploy` applies both. Because the conversion only touches rows whose original value is still set, a re-run resumes where it stopped rather than converting a row twice.
 
@@ -676,7 +676,7 @@ Namespace: tailordb
 
 The error also points you at `migration status`, `migration generate`, `migration sync`, and `migration set` — see [Remote schema drift detected](#remote-schema-drift-detected) for which one applies.
 
-To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script, and no unresolved generated normalization review markers):
+To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script, and no `TODO()` call left in a `migrate.ts`):
 
 ```bash
 tailor tailordb migration validate

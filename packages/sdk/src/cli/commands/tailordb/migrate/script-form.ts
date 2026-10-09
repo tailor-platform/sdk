@@ -5,7 +5,7 @@
  */
 
 import * as fs from "node:fs";
-import { parseSync } from "oxc-parser";
+import { parseSync, Visitor } from "oxc-parser";
 import { CLIError } from "#/cli/shared/errors";
 import { orderMigrationSteps, type MigrationStepNode } from "#/utils/migration-steps";
 import type {
@@ -234,6 +234,43 @@ export function analyzeMigrationScriptSource(
  */
 export function analyzeMigrationScript(filePath: string): MigrationScriptForm {
   return analyzeMigrationScriptSource(fs.readFileSync(filePath, "utf-8"), filePath);
+}
+
+// Scripts generated before `TODO()` marked what still needs a decision carry this comment instead.
+const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
+
+/**
+ * Count the placeholders a migration script still contains: the `TODO()` calls
+ * its generator left for a decision, and the review marker that earlier
+ * versions left in a comment.
+ * @param source - Source of migrate.ts
+ * @param filePath - Path used in the parse error
+ * @returns Number of unresolved placeholders
+ */
+export function countUnresolvedTodos(source: string, filePath: string): number {
+  const { program, errors } = parseSync(filePath, source, { sourceType: "module", lang: "ts" });
+  if (errors.length > 0) {
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_INVALID",
+      message: `Failed to parse ${filePath}: ${errors.map((error) => error.message).join("; ")}`,
+    });
+  }
+  let calls = 0;
+  new Visitor({
+    CallExpression(node) {
+      if (node.callee.type === "Identifier" && node.callee.name === "TODO") calls++;
+    },
+  }).visit(program);
+  return calls + source.split(LEGACY_REVIEW_MARKER).length - 1;
+}
+
+/**
+ * Count the placeholders the migration script at a path still contains.
+ * @param filePath - Path to migrate.ts
+ * @returns Number of unresolved placeholders
+ */
+export function countUnresolvedTodosInFile(filePath: string): number {
+  return countUnresolvedTodos(fs.readFileSync(filePath, "utf-8"), filePath);
 }
 
 /**

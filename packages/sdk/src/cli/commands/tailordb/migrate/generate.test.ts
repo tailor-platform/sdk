@@ -8,7 +8,7 @@ import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { generateCommand } from "./generate";
-import { analyzeMigrationScriptSource } from "./script-form";
+import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
 import { loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
@@ -382,7 +382,7 @@ describe("tailordb migration generate with an unsupported field type change", ()
     expect(result.success).toBe(true);
     const expandScript = fs.readFileSync(path.join(ns.migrationsDir, "0001", "migrate.ts"), "utf8");
     expect(expandScript).toContain("const convertedValue = [sourceValue];");
-    expect(expandScript).not.toContain("TODO(tailor-migration-review)");
+    expect(countUnresolvedTodos(expandScript, "migrate.ts")).toBe(0);
     const replayed = reconstructSnapshotFromMigrations(ns.migrationsDir);
     expect(replayed?.tables.User?.fields.name).toEqual(
       expect.objectContaining({ type: "string", array: true }),

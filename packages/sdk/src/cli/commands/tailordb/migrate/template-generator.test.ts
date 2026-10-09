@@ -4,7 +4,7 @@ import * as path from "pathe";
 import ts from "typescript";
 import { describe, expect, test, aroundEach } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
-import { analyzeMigrationScriptSource } from "./script-form";
+import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
 import {
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
@@ -370,6 +370,24 @@ describe("template-generator", () => {
       expect(stepsScript).not.toContain('"not in"');
     });
 
+    test("fills a required field through a TODO call that the script imports from db.ts", () => {
+      const script = generateMigrationScript(stepsDiff(addedRequired("User", "email")));
+
+      expect(script).toContain(
+        'import { TODO, type MigrationSteps, type Transaction } from "./db";',
+      );
+      expect(script).toContain('email: TODO("');
+      expect(script).not.toContain("// TODO");
+      expect(countUnresolvedTodos(script, "migrate.ts")).toBe(1);
+    });
+
+    test("imports only the types when the script has nothing left to decide", () => {
+      const script = generateMigrationScript(stepsDiff(renamedTable("User", "Person")));
+
+      expect(script).toContain('import type { MigrationSteps, Transaction } from "./db";');
+      expect(countUnresolvedTodos(script, "migrate.ts")).toBe(0);
+    });
+
     test("orders the retarget of a foreign key after the copy of the table it points to", () => {
       const script = generateMigrationScript(
         stepsDiff(renamedTable("User", "Person"), {
@@ -632,15 +650,15 @@ describe("template-generator", () => {
       return getTypeScriptDiagnostics(result.migrateFilePath!).map(({ code }) => code);
     };
 
-    test("leaves only the placeholder of each added required field to fill in", async () => {
-      await expect(placeholderErrorCodes(breakingDiff, snapshot, 1)).resolves.toEqual([2322]);
+    test("typechecks the TODO call of each added required field, which fails the migration until it is replaced", async () => {
+      await expect(placeholderErrorCodes(breakingDiff, snapshot, 1)).resolves.toEqual([]);
       await expect(
         placeholderErrorCodes(
           stepsDiff(addedRequired("User", "email"), addedRequired("User", "phone")),
           snapshot,
           2,
         ),
-      ).resolves.toEqual([2322, 2322]);
+      ).resolves.toEqual([]);
     }, 30_000);
 
     test("typechecks the copy of a renamed table's rows that skips ids already copied", async () => {
@@ -1172,7 +1190,9 @@ describe("template-generator", () => {
       const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
-      expect(scriptContent).toContain("TODO: fullName is optional but displayName is required");
+      expect(scriptContent).toContain(
+        'void TODO("resolve the null values of User.fullName that displayName cannot hold");',
+      );
       expect(scriptContent).toContain('.set((eb) => ({ displayName: eb.ref("fullName") }))');
 
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
@@ -1440,27 +1460,18 @@ describe("template-generator", () => {
       expect(scriptContent).toContain(".limit(100)");
       expect(scriptContent).toContain("const sourceValue = row.age");
       expect(scriptContent).toContain("if (sourceValue === null) continue");
-      expect(scriptContent).toContain("const normalizedValue: never = sourceValue");
       expect(scriptContent).toContain(
-        "TODO(tailor-migration-review): Remove this marker and the `never` annotation after reviewing the normalization",
-      );
-      expect(scriptContent).toContain(
-        "Keep the value accepted by the active integer type and castable to float",
+        'const normalizedValue = TODO("normalize User.age to a value the active integer type accepts and the float type can cast");',
       );
       expect(scriptContent).toContain("if (Object.is(normalizedValue, sourceValue)) continue");
       expect(scriptContent).toContain('.set({ ["age"]: normalizedValue })');
 
-      const unresolvedDiagnostics = getTypeScriptDiagnostics(result.migrateFilePath!);
-      expect(unresolvedDiagnostics).toEqual([
-        expect.objectContaining({
-          code: 2322,
-          messageText: "Type 'number' is not assignable to type 'never'.",
-        }),
-      ]);
+      expect(countUnresolvedTodos(scriptContent, "migrate.ts")).toBe(1);
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
 
       await fs.writeFile(
         result.migrateFilePath!,
-        scriptContent.replace("const normalizedValue: never", "const normalizedValue"),
+        scriptContent.replace(/TODO\("[^"]*"\)/, "sourceValue"),
       );
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
@@ -1541,7 +1552,7 @@ describe("template-generator", () => {
 
       expect(scriptContent).toContain("Normalize User.age from integer to float");
       expect(scriptContent).toContain(
-        "TODO: Resolve duplicate User.age values before adding the unique constraint",
+        'TODO("resolve the duplicate User.age values before the unique constraint is added");',
       );
     });
 
@@ -1996,7 +2007,7 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("removed enum values");
     });
 
-    test("rejects the null placeholder when an enum value change also makes the field required", async () => {
+    test("leaves the replacement of removed enum values to a TODO call when the field also becomes required", async () => {
       const before = {
         type: "enum" as const,
         required: false,
@@ -2024,26 +2035,17 @@ describe("template-generator", () => {
       const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
 
-      expect(scriptContent).toContain("status: null, // TODO: Set appropriate default value");
-      expect(scriptContent).toContain('.set({ status: "ACTIVE" })');
-      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([
-        expect.objectContaining({
-          code: 2322,
-          messageText: expect.stringContaining("Type 'null' is not assignable to type"),
-        }),
-      ]);
-
-      await fs.writeFile(
-        result.migrateFilePath!,
-        scriptContent.replace(
-          "status: null, // TODO: Set appropriate default value",
-          'status: "ACTIVE",',
-        ),
+      expect(scriptContent).toContain(
+        'status: TODO("set the value Task.status takes where it is null"),',
       );
+      expect(scriptContent).toContain(
+        '.set({ status: TODO("choose the Task.status value that replaces DRAFT (ACTIVE, ARCHIVED)") })',
+      );
+      expect(countUnresolvedTodos(scriptContent, "migrate.ts")).toBe(2);
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
 
-    test("writes null for removed values when an emptied enum also becomes optional", async () => {
+    test("leaves the replacement of removed values to a TODO call when an emptied enum also becomes optional", async () => {
       const before = { type: "enum" as const, required: true, allowedValues: [{ value: "A" }] };
       const after = { type: "enum" as const, required: false };
       const snapshot = createTestSnapshot({
@@ -2061,7 +2063,9 @@ describe("template-generator", () => {
       const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
 
-      expect(scriptContent).toContain(".set({ kind: null })");
+      expect(scriptContent).toContain(
+        '.set({ kind: TODO("choose the Task.kind value that replaces A") })',
+      );
       expect(scriptContent).not.toContain("NEW_VALUE");
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
@@ -2114,15 +2118,14 @@ describe("template-generator", () => {
         );
         const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
 
-        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([
-          expect.objectContaining({ code: 2322 }),
-        ]);
+        expect(countUnresolvedTodos(scriptContent, "migrate.ts")).toBe(1);
+        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
 
         await fs.writeFile(
           result.migrateFilePath!,
           scriptContent.replace(
-            "const convertedValue: never = sourceValue;",
-            "const convertedValue = String(sourceValue);",
+            /const convertedValue = TODO\("[^"]*"\);/,
+            "const convertedValue = String(row.value);",
           ),
         );
         expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
