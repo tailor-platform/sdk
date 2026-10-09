@@ -544,6 +544,40 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     ]);
   });
 
+  test("does not validate the checkpoint's publishing setting while restoring it after a failure", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({
+      creates: [],
+      updates: ["Order"],
+      subscribedTables: ["Order"],
+    });
+    const before = snapshotTable(
+      "Order",
+      { status: { type: "string", required: true } },
+      { publishEvents: false },
+    );
+    const after = snapshotTable("Order", { status: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: before }, 1: { Order: after } };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { kind: "table_settings_modified", tableName: "Order" } as any,
+      ]),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(new Error("script failed"));
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /script failed/,
+    );
+
+    const finalSettings = typeSettingWrites(client)
+      .filter(([name]) => name === "Order")
+      .at(-1)?.[1];
+    expect(finalSettings).toEqual(
+      expect.objectContaining({ publishRecordEvents: false, disableGqlOperations: undefined }),
+    );
+  });
+
   test("does not create a later migration's permission table before that migration", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult({
@@ -1412,6 +1446,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       publishRecordEvents: false,
       disableGqlOperations: { create: true, update: true, delete: true, read: true },
     };
+    const released = { publishRecordEvents: true, disableGqlOperations: undefined };
 
     test.each([
       ["unset", undefined],
@@ -1484,9 +1519,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
       await releases[0]?.(client);
 
-      expect(lastOrderSettings(client)).toEqual(
-        expect.objectContaining({ publishRecordEvents: true, disableGqlOperations: undefined }),
-      );
+      expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
     });
 
     test.each([
@@ -1505,9 +1538,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       await applyTailorDB(client, planResult, "create-update", hold ? { holdMaintenanceMode } : {});
 
       expect(holdMaintenanceMode).not.toHaveBeenCalled();
-      expect(lastOrderSettings(client)).toEqual(
-        expect.objectContaining({ publishRecordEvents: true, disableGqlOperations: undefined }),
-      );
+      expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
     });
 
     test('"deploy" releases the namespace at once when a migration fails', async () => {
@@ -1534,9 +1565,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       ).rejects.toThrow(/checkpoint update failed/);
 
       expect(holdMaintenanceMode).not.toHaveBeenCalled();
-      expect(lastOrderSettings(client)).toEqual(
-        expect.objectContaining({ publishRecordEvents: true, disableGqlOperations: undefined }),
-      );
+      expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
     });
   });
 });

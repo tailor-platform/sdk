@@ -308,7 +308,7 @@ export function warnUnsetMaintenanceMode(
   if (config.maintenanceMode !== undefined || pendingMigrations.length === 0) return;
   const namespaces = [...new Set(pendingMigrations.map((migration) => migration.namespace))];
   logger.warn(
-    `Tables in ${namespaces.length === 1 ? "namespace" : "namespaces"} ${namespaces.join(", ")} stay writable and keep publishing record events while the pending migrations run, ` +
+    `GraphQL operations and record events of ${namespaces.length === 1 ? "namespace" : "namespaces"} ${namespaces.join(", ")} are not restricted while the pending migrations run, ` +
       `because maintenanceMode is not set in ${path.basename(config.path)}. ` +
       `Set it to "migration" or "deploy" to restrict them, or to false to hide this warning.`,
   );

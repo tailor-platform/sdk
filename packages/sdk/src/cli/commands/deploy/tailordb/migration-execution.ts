@@ -567,6 +567,11 @@ async function rewriteRestrictedTables(
     restricted,
     continueOnError = false,
   } = params;
+  const phaseSettings: MigrationPhaseSettings = {
+    tailorDBInputs: [input],
+    executorUsedTables,
+    restricted,
+  };
   let firstError: Error | undefined;
   const tableNames = new Set([...Object.keys(snapshot.tables), ...(settingsState?.keys() ?? [])]);
   for (const tableName of tableNames) {
@@ -576,16 +581,7 @@ async function rewriteRestrictedTables(
       if (settingsState && !activeSettings) continue;
       if (restricted && (!activeSettings || isMigrationRestricted(activeSettings))) continue;
       const tailordbType = snapshotType
-        ? restricted
-          ? generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-              suppressRecordEvents: true,
-              suppressGqlOperations: true,
-              namespaceGqlOperations: input.config.gqlOperations,
-            })
-          : generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-              subscribed: executorUsedTables.has(tableName),
-              namespaceGqlOperations: input.config.gqlOperations,
-            })
+        ? generateMigrationPhaseManifest(snapshotType, namespaceName, phaseSettings)
         : activeSettings?.tailordbType
           ? structuredClone(activeSettings.tailordbType)
           : undefined;
