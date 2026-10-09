@@ -349,7 +349,7 @@ type RootManifest = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   packageManager?: unknown;
-  devEngines?: { packageManager?: { name?: unknown } };
+  devEngines?: { packageManager?: unknown };
 };
 
 function readRootManifest(outputDir: string): RootManifest | undefined {
@@ -366,6 +366,16 @@ function readRootManifest(outputDir: string): RootManifest | undefined {
 
 function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function devEnginePackageManagerNames(value: unknown): string[] {
+  return [value].flat().flatMap((entry) => {
+    const name =
+      typeof entry === "object" && entry !== null && "name" in entry
+        ? nonEmptyString(entry.name)
+        : undefined;
+    return name === undefined ? [] : [name];
+  });
 }
 
 const LOCKFILES: ReadonlyArray<readonly [file: string, packageManager: PackageManager]> = [
@@ -388,15 +398,15 @@ export function detectPackageManager(outputDir: string): PackageManager | undefi
   if (lockfile) return lockfile[1];
   const manifest = readRootManifest(outputDir);
   const fromField = nonEmptyString(nonEmptyString(manifest?.packageManager)?.split("@")[0]);
-  const fromDevEngines = nonEmptyString(manifest?.devEngines?.packageManager?.name);
-  if (fromField !== undefined && fromDevEngines !== undefined && fromField !== fromDevEngines) {
+  const fromDevEngines = devEnginePackageManagerNames(manifest?.devEngines?.packageManager);
+  if (fromField !== undefined && fromDevEngines.length > 0 && !fromDevEngines.includes(fromField)) {
     throw new Error(
       `package.json at the repository root declares ${fromField} in packageManager but ` +
-        `${fromDevEngines} in devEngines.packageManager. Make them name the same package ` +
-        "manager, or pass --package-manager to `tailor setup ci`.",
+        `${fromDevEngines.join(" or ")} in devEngines.packageManager. Make them name the same ` +
+        "package manager, or pass --package-manager to `tailor setup ci`.",
     );
   }
-  const declared = fromField ?? fromDevEngines;
+  const declared = fromField ?? fromDevEngines.find(isPackageManager);
   return isPackageManager(declared) ? declared : undefined;
 }
 

@@ -87,6 +87,17 @@ describe("detectPackageManager", () => {
     ],
     [{ packageManager: "", devEngines: { packageManager: { name: "pnpm" } } }, "pnpm"],
     [{ packageManager: "yarn@4.9.2", devEngines: { packageManager: { name: "" } } }, "yarn"],
+    [{ devEngines: { packageManager: [{ name: "pnpm" }] } }, "pnpm"],
+    [{ devEngines: { packageManager: [{ name: "cnpm" }, { name: "yarn" }] } }, "yarn"],
+    [{ devEngines: { packageManager: [null, "npm", {}, { name: "bun" }] } }, "bun"],
+    [
+      {
+        packageManager: "pnpm@10.12.1",
+        devEngines: { packageManager: [{ name: "npm" }, { name: "pnpm" }] },
+      },
+      "pnpm",
+    ],
+    [{ packageManager: "yarn@4.9.2", devEngines: { packageManager: [] } }, "yarn"],
   ] as const)("detects the package manager %j declares", (manifest, expected) => {
     writeManifest(manifest);
     expect(detectPackageManager(testDir)).toBe(expected);
@@ -108,6 +119,16 @@ describe("detectPackageManager", () => {
     );
   });
 
+  test("rejects a packageManager field missing from a devEngines.packageManager array", () => {
+    writeManifest({
+      packageManager: "pnpm@10.12.1",
+      devEngines: { packageManager: [{ name: "npm" }, { name: "yarn" }] },
+    });
+    expect(() => detectPackageManager(testDir)).toThrow(
+      /declares pnpm in packageManager but npm or yarn in devEngines\.packageManager/,
+    );
+  });
+
   test("rejects a root package.json that is not valid JSON", () => {
     fs.writeFileSync(path.join(testDir, "package.json"), "{");
     expect(() => detectPackageManager(testDir)).toThrow(
@@ -119,6 +140,7 @@ describe("detectPackageManager", () => {
     ["no lockfile or package.json", undefined],
     ["a package.json without a package manager", { private: true }],
     ["an unsupported package manager", { packageManager: "cnpm@9.0.0" }],
+    ["an empty devEngines.packageManager array", { devEngines: { packageManager: [] } }],
   ])("detects nothing from %s", (_label, manifest) => {
     if (manifest !== undefined) writeManifest(manifest);
     expect(detectPackageManager(testDir)).toBeUndefined();
