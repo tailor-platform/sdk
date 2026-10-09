@@ -52,8 +52,6 @@ export type RenderApp = {
 export type RenderMigrationTestParams = {
   /** PR label that triggers the job; removed when the job ends. */
   label: string;
-  /** Data source passed to `--data`. */
-  data: "clone" | "seed";
   /**
    * Dedicated GitHub Environment holding the source workspace in
    * `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID`; omit to use the plan/deploy
@@ -491,10 +489,6 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   if (migrationTest) {
     out = out
       .replaceAll("__MIGRATION_TEST_LABEL__", () => migrationTest.label)
-      .replaceAll("__MIGRATION_TEST_DATA__", () => migrationTest.data)
-      .replaceAll("__MIGRATION_TEST_CLONE_TIMEOUT__", () =>
-        migrationTest.data === "clone" ? "--clone-timeout 30m " : "",
-      )
       .replaceAll(
         "__MIGRATION_TEST_ENVIRONMENT__",
         () => migrationTest.environment ?? params.environment,

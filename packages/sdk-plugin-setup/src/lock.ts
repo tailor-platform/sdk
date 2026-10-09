@@ -71,8 +71,6 @@ export type LockInputs = {
   migrationTestLabel?: string;
   /** For branch targets with a migration test: its dedicated GitHub Environment, if any. */
   migrationTestEnvironment?: string;
-  /** For branch targets with a migration test: the `--data` kind it runs with. */
-  migrationTestData?: "clone" | "seed";
   /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */
   migrationDriftCheck?: boolean;
   /** Whether tailor-seed-validate was generated (config used seedPlugin). */

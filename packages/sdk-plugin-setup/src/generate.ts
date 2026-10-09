@@ -91,8 +91,6 @@ export type BranchSetupOptions = CommonSetupOptions & {
   migrationTestLabel?: string;
   /** Dedicated GitHub Environment holding the migration test's source workspace. */
   migrationTestEnvironment?: string;
-  /** Data source of the migration test (default `clone`). */
-  migrationTestData?: "clone" | "seed";
 };
 
 type TagSetupOptions = CommonSetupOptions & {
@@ -471,18 +469,13 @@ function assertMultiDirTarget(options: SetupTargetOptions, dirs: readonly string
 
 function resolveMigrationTest(
   options: BranchSetupOptions,
-  detected: { multi: boolean; hasMigrations: boolean; hasSeeds: boolean },
+  detected: { multi: boolean; hasMigrations: boolean },
 ): RenderMigrationTestParams | undefined {
-  const { migrationTestLabel, migrationTestEnvironment, migrationTestData } = options;
+  const { migrationTestLabel, migrationTestEnvironment } = options;
   if (!options.migrationTest) {
-    if (
-      migrationTestLabel !== undefined ||
-      migrationTestEnvironment !== undefined ||
-      migrationTestData !== undefined
-    ) {
+    if (migrationTestLabel !== undefined || migrationTestEnvironment !== undefined) {
       throw new Error(
-        "--migration-test-label, --migration-test-environment, and --migration-test-data " +
-          "require --migration-test.",
+        "--migration-test-label and --migration-test-environment require --migration-test.",
       );
     }
     return undefined;
@@ -498,22 +491,12 @@ function resolveMigrationTest(
       "--migration-test requires TailorDB migrations, but tailor.config.ts has no namespace with a migrations directory.",
     );
   }
-  const data = migrationTestData ?? "clone";
-  if (data !== "clone" && data !== "seed") {
-    throw new Error(`Invalid --migration-test-data "${String(data)}". Use "clone" or "seed".`);
-  }
-  if (data === "seed" && !detected.hasSeeds) {
-    throw new Error(
-      "--migration-test-data seed requires the seed plugin, which tailor.config.ts does not use. " +
-        "Add the seed plugin or use --migration-test-data clone.",
-    );
-  }
   const label = migrationTestLabel ?? DEFAULT_MIGRATION_TEST_LABEL;
   validateMigrationTestLabel(label);
   if (migrationTestEnvironment !== undefined) {
     validateEnvironment(migrationTestEnvironment);
   }
-  return { label, data, environment: migrationTestEnvironment };
+  return { label, environment: migrationTestEnvironment };
 }
 
 /**
@@ -624,7 +607,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       hasMigrations = await loadHasMigrations(configPath);
       hasSeeds = await loadHasSeeds(configPath);
     }
-    migrationTest = resolveMigrationTest(options, { multi, hasMigrations, hasSeeds });
+    migrationTest = resolveMigrationTest(options, { multi, hasMigrations });
     render = renderBranchWorkflow({
       workspaceName,
       branch,
@@ -706,7 +689,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     migrationTest: migrationTest ? true : undefined,
     migrationTestLabel: migrationTest?.label,
     migrationTestEnvironment: migrationTest?.environment,
-    migrationTestData: migrationTest?.data,
     apps:
       apps && appErdNamespaces.size > 0
         ? apps.map((app) => ({ ...app, erdNamespaces: appErdNamespaces.get(app.dir) ?? [] }))

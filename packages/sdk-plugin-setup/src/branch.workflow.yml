@@ -665,7 +665,7 @@ jobs:
           TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.__MIGRATION_TEST_SOURCE_VARIABLE__ }}
         run: |
           status=0
-          __TAILOR_CLI__ tailordb migration test --data __MIGRATION_TEST_DATA__ --yes __MIGRATION_TEST_CLONE_TIMEOUT__--json > "$RUNNER_TEMP/migration-test.json" || status=$?
+          __TAILOR_CLI__ tailordb migration test --data clone --yes --clone-timeout 30m --json > "$RUNNER_TEMP/migration-test.json" || status=$?
           {
             echo "### Migration test (__WORKSPACE_NAME__)"
             if [ -s "$RUNNER_TEMP/migration-test.json" ]; then

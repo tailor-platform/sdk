@@ -138,8 +138,8 @@ The generated workflow also lists `labeled` in its `pull_request` types. The
 plan and ERD preview jobs skip label events, so adding an unrelated label does
 not re-run them.
 
-With `--migration-test-data clone`, the job passes `--clone-timeout 30m`, which
-bounds only the wait for the data clone. If the clone takes longer, the command
+The job clones the source workspace's TailorDB records and passes
+`--clone-timeout 30m`, which bounds only the wait for the data clone. If the clone takes longer, the command
 fails with the clone's operation ID in the error and removes its temporary
 workspace, while the clone itself keeps running on the platform.
 
@@ -148,14 +148,15 @@ is still removed when the step times out. A step that is stopped at its limit
 (or a job cancelled at the job limit) gives the command no chance to clean up:
 delete the leftover temporary workspace with `tailor workspace delete`.
 
-##### Choosing the source workspace and data
+##### Choosing the source workspace
 
 `migration test` reads the source workspace (it is not modified), builds a
 temporary workspace from it in the same organization and folder, and deletes
 that workspace afterwards. Because the machine user creates and deletes that
 workspace, it needs an editor or admin role on the organization or folder that
-holds the source workspace; a viewer role is not enough. A clone also needs the
-same role on the source side.
+holds the source workspace; a viewer role is not enough. The clone also needs the
+same role on the source side. The clone copies TailorDB records only: IdP users
+and file blobs are not copied.
 
 Two setups are supported:
 
@@ -163,8 +164,7 @@ Two setups are supported:
   Environment as the plan and deploy jobs, so it reads the same
   `TAILOR_PLATFORM_WORKSPACE_ID` variable and machine-user secrets. Nothing
   extra to configure. If that workspace holds too little data to be a useful
-  test, regenerate with `--migration-test-data seed`, which loads your seed
-  fixtures instead of cloning records (it requires the seed plugin).
+  test, point the job at a workspace that does with the next setup.
 - **Source is a different workspace, such as production.** Pass
   `--migration-test-environment <env>`. The job then uses that GitHub
   Environment and reads the source workspace from its

@@ -150,7 +150,7 @@ const branchCommand = defineAppCommand({
     }),
     "migration-test": arg(z.boolean().default(false), {
       description:
-        "Add a job that runs `tailordb migration test` when a PR gets the migration test label, then removes the label (requires TailorDB migrations)",
+        "Add a job that runs `tailordb migration test` against cloned data when a PR gets the migration test label, then removes the label (requires TailorDB migrations)",
     }),
     "migration-test-label": arg(z.string().optional(), {
       description: "PR label that triggers the migration test (defaults to tailor:migration-test)",
@@ -158,10 +158,6 @@ const branchCommand = defineAppCommand({
     "migration-test-environment": arg(z.string().min(1).optional(), {
       description:
         "GitHub Environment for the migration test job, holding its own credentials and TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID (defaults to the plan/deploy environment and its workspace)",
-    }),
-    "migration-test-data": arg(z.enum(["clone", "seed"]).optional(), {
-      description:
-        "Data the migration test runs against: clone the source workspace's records, or load seed fixtures (defaults to clone; seed requires the seed plugin)",
     }),
     paths: arg(z.array(z.string().min(1)).default([]), {
       description:
@@ -189,7 +185,6 @@ const branchCommand = defineAppCommand({
       migrationTest: args["migration-test"],
       migrationTestLabel: args["migration-test-label"],
       migrationTestEnvironment: args["migration-test-environment"],
-      migrationTestData: args["migration-test-data"],
       dir: args.dir,
       extraPaths: args.paths,
       force: args.force,

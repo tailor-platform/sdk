@@ -151,7 +151,6 @@ describe("collectEnvironmentRequirements", () => {
           ...branch.inputs,
           migrationTest: true,
           migrationTestLabel: "tailor:migration-test",
-          migrationTestData: "clone",
           ...inputs,
         },
       });
@@ -224,7 +223,7 @@ describe("collectEnvironmentRequirements", () => {
         packageManager: "pnpm",
         branch: "main",
         erdPreview: null,
-        migrationTest: { label: "x", data: "clone", environment: "prod-source" },
+        migrationTest: { label: "x", environment: "prod-source" },
       });
       const job = content.slice(
         content.indexOf("  tailor-migration-test:"),

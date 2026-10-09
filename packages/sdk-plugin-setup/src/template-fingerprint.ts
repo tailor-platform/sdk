@@ -107,17 +107,17 @@ function renderAll(): RenderedTemplate[] {
       branch: "main",
       migrationDriftCheck: true,
       erdPreview: { namespaces: ["main"] },
-      migrationTest: { label: "tailor:migration-test", data: "clone" },
+      migrationTest: { label: "tailor:migration-test" },
     }),
   );
   add(
-    "branch/migration-test-dedicated-seed",
+    "branch/migration-test-dedicated",
     renderBranchWorkflow({
       ...full,
       branch: "main",
       migrationDriftCheck: true,
       erdPreview: null,
-      migrationTest: { label: "tailor:migration-test", data: "seed", environment: "prod-source" },
+      migrationTest: { label: "tailor:migration-test", environment: "prod-source" },
     }),
   );
   add(
