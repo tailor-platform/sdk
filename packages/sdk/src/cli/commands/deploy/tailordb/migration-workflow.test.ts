@@ -148,7 +148,7 @@ function deletesAfter(calls: readonly string[], marker: string): string[] {
   return calls.slice(calls.indexOf(marker)).filter((call) => call.startsWith("delete"));
 }
 
-function run(client: OperatorClient) {
+function run(client: OperatorClient, maintenanceMode = true) {
   return executeMigrationAsWorkflow({
     client,
     workspaceId: "ws-1",
@@ -158,6 +158,7 @@ function run(client: OperatorClient) {
     invoker,
     appName: "my-app",
     appId: "app-1",
+    maintenanceMode,
     pollIntervalMs: 0,
   });
 }
@@ -230,6 +231,26 @@ describe("executeMigrationAsWorkflow", () => {
     });
     expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
   });
+
+  test.each([
+    [true, true],
+    [false, false],
+  ])(
+    "mentions maintenance mode when the outcome is unknown only if it is on (%s)",
+    async (maintenanceMode, mentioned) => {
+      const { client, raw } = createMockClient();
+      raw.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined } as never);
+
+      const error: unknown = await run(client, maintenanceMode).catch(
+        (rejection: unknown) => rejection,
+      );
+
+      expect(error).toMatchObject({ code: "MIGRATION_OUTCOME_UNKNOWN" });
+      expect((error as { suggestion?: string }).suggestion?.includes("maintenance mode")).toBe(
+        mentioned,
+      );
+    },
+  );
 
   test("keeps polling through a transient error", async () => {
     const { client, raw, calls } = createMockClient();

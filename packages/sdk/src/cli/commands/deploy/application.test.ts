@@ -2,7 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger, symbols } from "#/cli/shared/logger";
-import { diffHttpAdapterDisplay, planApplication } from "./application";
+import { diffHttpAdapterDisplay, planApplication, recomposeApplication } from "./application";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -809,5 +809,30 @@ describe("diffHttpAdapterDisplay", () => {
   test("returns no lines when adapters are unchanged", () => {
     const same = [adapter("a"), adapter("b")];
     expect(diffHttpAdapterDisplay(same, [...same])).toEqual([]);
+  });
+});
+
+describe("recomposeApplication", () => {
+  test("updates every application the deploy created, updated, or left unchanged", async () => {
+    const updateApplication = vi.fn().mockResolvedValue({});
+    const client = { updateApplication } as unknown as OperatorClient;
+    const entry = (applicationName: string) => ({
+      name: applicationName,
+      request: { workspaceId: "ws", applicationName },
+      metaRequest: { trn: `trn:${applicationName}`, labels: {} },
+    });
+
+    await recomposeApplication(client, {
+      creates: [entry("created")],
+      updates: [entry("updated")],
+      unchanged: [entry("unchanged")],
+      deletes: [entry("deleted")],
+    } as never);
+
+    expect(updateApplication.mock.calls.map(([request]) => request.applicationName)).toEqual([
+      "created",
+      "updated",
+      "unchanged",
+    ]);
   });
 });

@@ -2,6 +2,7 @@ import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { formatMigrationNumber } from "./migration-number";
 import {
+  MAINTENANCE_MODE_LABEL_KEY,
   MIGRATION_EXECUTION_LABEL_KEY,
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_IN_PROGRESS_LABEL_KEY,
@@ -26,6 +27,8 @@ export interface RemoteMigrationState {
   inProgress: MigrationInProgress | null;
   /** In-progress labels exist but cannot be read. */
   inProgressInvalid: boolean;
+  /** Checkpoint whose tables a deploy left in maintenance mode after committing it. */
+  maintenanceModeCheckpoint: number | null;
 }
 
 function parseInProgress(labels: Record<string, string>): {
@@ -72,10 +75,12 @@ export async function fetchRemoteMigrationState(
       historyIdInvalid: false,
       inProgress: null,
       inProgressInvalid: false,
+      maintenanceModeCheckpoint: null,
     };
   }
 
   const migrationLabel = metadata.labels[MIGRATION_LABEL_KEY];
+  const maintenanceModeLabel = metadata.labels[MAINTENANCE_MODE_LABEL_KEY];
   const historyLabel = metadata.labels[MIGRATION_HISTORY_LABEL_KEY];
   const historyId = historyLabel ? parseMigrationHistoryId(historyLabel) : null;
   return {
@@ -84,6 +89,9 @@ export async function fetchRemoteMigrationState(
     historyId,
     historyIdInvalid: historyLabel !== undefined && historyId === null,
     ...parseInProgress(metadata.labels),
+    maintenanceModeCheckpoint: maintenanceModeLabel
+      ? parseMigrationLabelNumber(maintenanceModeLabel)
+      : null,
   };
 }
 

@@ -787,6 +787,7 @@ describe("migration", () => {
         configDir: "/project",
         appName: "test-app",
         appId: "test-app-id",
+        maintenanceMode: true,
         ...overrides,
       };
     }
@@ -951,6 +952,32 @@ describe("migration", () => {
       expect(store.labels()).toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
     });
 
+    test("does not claim maintenance mode for tables it never restricted", async () => {
+      const store = createMetadataStore({});
+      const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: { onBeforeStart?: () => Promise<void> }) => {
+          await options.onBeforeStart?.();
+          throw CLIError({
+            code: "MIGRATION_START_UNCONFIRMED",
+            message:
+              "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
+            suggestion: "Deploy again.",
+          });
+        },
+      );
+
+      await expect(
+        executeMigrations(
+          { ...createMockContext({ maintenanceMode: false }), client: store.client },
+          [migration],
+        ),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        suggestion: "Deploy again.",
+      });
+    });
+
     test("asks to check the record when it can be neither cleared nor read", async () => {
       const store = createMetadataStore({ loseSetResponses: [0], failSets: [1], failGets: [2] });
       const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
@@ -962,8 +989,8 @@ describe("migration", () => {
         code: "MIGRATION_PARTIALLY_APPLIED",
         message:
           "Migration tailordb/0003 failed before any step completed: [unavailable] unavailable",
-        suggestion: expect.stringContaining(
-          "tailor tailordb migration sync 0002 --namespace tailordb",
+        suggestion: expect.stringMatching(
+          /tailor tailordb migration sync 0002 --namespace tailordb.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/,
         ),
       });
     });

@@ -57,6 +57,8 @@ export interface LongRunningMigrationOptions {
   invoker: AuthInvoker;
   appName: string;
   appId: string | undefined;
+  /** Whether the migrating namespace is in maintenance mode. */
+  maintenanceMode: boolean;
   pollIntervalMs?: number;
 }
 
@@ -477,8 +479,10 @@ function outcomeUnknownError(
       `Run ${executionsHint} until its execution has finished or none is listed. ` +
       `If the execution succeeded, run ${syncHint(migrationNumber)}; otherwise run ${syncHint(migrationNumber - 1)}. ` +
       "Then deploy again. Do not deploy before running sync, even with `--no-schema-check` to skip the drift check: " +
-      "the deploy may run the `main` script again even if the execution succeeded. " +
-      `Until then, the tables of namespace '${namespace}' stay in maintenance mode.`,
+      "the deploy may run the `main` script again even if the execution succeeded." +
+      (options.maintenanceMode
+        ? ` Until then, the tables of namespace '${namespace}' stay in maintenance mode.`
+        : ""),
     context: {
       namespace,
       migrationNumber,

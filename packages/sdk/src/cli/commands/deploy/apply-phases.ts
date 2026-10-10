@@ -1,6 +1,7 @@
+import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { applyAIGateway, type planAIGateway } from "./aigateway";
-import { applyApplication, type planApplication } from "./application";
+import { applyApplication, recomposeApplication, type planApplication } from "./application";
 import { applyAuth, type planAuth } from "./auth";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
@@ -9,7 +10,12 @@ import { withMetadataWriteBatch } from "./label";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
-import { applyTailorDB, preflightTailorDB, type planTailorDB } from "./tailordb";
+import {
+  applyTailorDB,
+  preflightTailorDB,
+  type MaintenanceModeRelease,
+  type planTailorDB,
+} from "./tailordb";
 import { applyWorkflow, type planWorkflow } from "./workflow";
 import {
   applyWorkflowJobFunctionExecutionPolicy,
@@ -138,6 +144,48 @@ export async function applyPrerequisiteResources(
   });
 }
 
+type HeldMaintenanceMode = {
+  deployment: PlannedDeployment;
+  release: MaintenanceModeRelease;
+};
+
+/**
+ * Lift every maintenance mode a TailorDB apply held, even when one fails.
+ * @param client - Operator client instance
+ * @param held - Maintenance modes held by the deployments' TailorDB applies
+ * @param applyFailed - Whether the deploy already failed, so its error wins
+ */
+async function releaseMaintenanceModes(
+  client: OperatorClient,
+  held: ReadonlyArray<HeldMaintenanceMode>,
+  applyFailed: boolean,
+): Promise<void> {
+  let firstError: { error: unknown } | undefined;
+  for (const { release } of held) {
+    try {
+      await release(client);
+    } catch (error) {
+      if (!applyFailed && !firstError) {
+        firstError = { error };
+        continue;
+      }
+      logger.warn(
+        `Could not lift the maintenance mode of TailorDB tables: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+  if (firstError) throw firstError.error;
+  if (applyFailed) return;
+  const recomposed = new Set<PlannedDeployment>();
+  for (const { deployment } of held) {
+    if (recomposed.has(deployment)) continue;
+    recomposed.add(deployment);
+    await recomposeApplication(client, deployment.app);
+  }
+}
+
 /**
  * Apply every resource kind not covered by {@link applyPrerequisiteResources}.
  * @param client - Operator client instance
@@ -149,6 +197,22 @@ export async function applyRemainingResources(
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<void> {
+  const held: HeldMaintenanceMode[] = [];
+  try {
+    await applyRemainingResourcesHoldingMaintenanceMode(client, workspaceId, deployments, held);
+  } catch (error) {
+    await releaseMaintenanceModes(client, held, true);
+    throw error;
+  }
+  await releaseMaintenanceModes(client, held, false);
+}
+
+async function applyRemainingResourcesHoldingMaintenanceMode(
+  client: OperatorClient,
+  workspaceId: string,
+  deployments: ReadonlyArray<PlannedDeployment>,
+  held: HeldMaintenanceMode[],
+): Promise<void> {
   const step = makeStep(deployments);
 
   await withMetadataWriteBatch(client, async (applyClient) => {
@@ -157,7 +221,9 @@ export async function applyRemainingResources(
         applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
       );
       await step("apply.tailorDB.createUpdate", (d) =>
-        applyTailorDB(applyClient, d.tailorDB, "create-update"),
+        applyTailorDB(applyClient, d.tailorDB, "create-update", {
+          holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
+        }),
       );
       await step("apply.auth.createUpdateDependents", (d) =>
         applyAuth(applyClient, d.auth, "create-update-dependents"),
