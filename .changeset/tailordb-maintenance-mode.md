@@ -7,3 +7,5 @@ Add `maintenanceMode` to `defineConfig()` to choose whether `tailor deploy` rest
 The default is now `false`: a deploy no longer restricts migrating namespaces unless the config sets `maintenanceMode`, and it warns when migrations are pending and the option is unset. Set `maintenanceMode: "migration"` to keep the previous behavior.
 
 Tables that a deploy left restricted after its migrations completed, for example because the deploy was interrupted, no longer make the next deploy stop with remote schema drift; that deploy releases them when it applies its TailorDB changes.
+
+Restoring table settings after a failed migration no longer fails for a table whose checkpoint sets `publishEvents: false` while an executor in the same deploy subscribes to it, which left that table restricted.
