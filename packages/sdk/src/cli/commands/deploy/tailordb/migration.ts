@@ -394,6 +394,16 @@ export function isMigrationPartiallyApplied(error: unknown): boolean {
   return isCLIError(error) && error.code === "MIGRATION_PARTIALLY_APPLIED";
 }
 
+/**
+ * Whether a migration run's outcome is unknown, so its schema changes must
+ * stay in place until the user settles the migration.
+ * @param error - Failure raised while executing migrations
+ * @returns True for a run whose outcome is unknown
+ */
+export function isMigrationOutcomeUnknown(error: unknown): boolean {
+  return isCLIError(error) && error.code === "MIGRATION_OUTCOME_UNKNOWN";
+}
+
 function partiallyAppliedError(
   migration: PendingMigration,
   result: Pick<MigrationStepsWorkflowResult, "completedSteps" | "failedSteps" | "executionId">,
@@ -703,7 +713,11 @@ export async function executeMigrations(
           sp,
         );
       } catch (error) {
-        sp.fail(`Migration ${migrationLabel} failed`);
+        sp.fail(
+          isMigrationOutcomeUnknown(error)
+            ? `Could not confirm the outcome of migration ${migrationLabel}`
+            : `Migration ${migrationLabel} failed`,
+        );
         throw error;
       }
 

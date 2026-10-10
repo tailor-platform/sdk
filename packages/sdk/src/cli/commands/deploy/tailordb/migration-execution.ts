@@ -196,7 +196,7 @@ function buildSnapshotTypeManifest(
     // `restoreMigrationRestrictions` turns it back on once they have settled.
     // Overrides a declared `publishEvents: true`, which `subscribed` cannot.
     suppressRecordEvents: true,
-    suppressGqlOperations: true,
+    suppressGqlMutations: true,
     namespaceGqlOperations: input?.config.gqlOperations,
   });
 }
@@ -551,7 +551,7 @@ type RestrictedTablesRewrite = { failedTables: string[]; firstError?: Error };
 export type RestrictedTables = { namespace: string; tables: string[] };
 
 export const RESTRICTION_EFFECT =
-  "the GraphQL create, update, delete, and read operations and bulk upsert are disabled, and record events are not published; a table that already refused writes keeps its own read setting";
+  "the GraphQL create, update, and delete operations and bulk upsert are disabled, and record events are not published";
 
 const RESTRICTED_TABLES_RECOVERY =
   "Deploy again: once it finishes, the deploy writes these tables' configured settings back.";
@@ -609,7 +609,7 @@ async function rewriteRestrictedTables(
         ? restricted
           ? generateTailorDBTypeManifestFromSnapshot(snapshotType, {
               suppressRecordEvents: true,
-              suppressGqlOperations: true,
+              suppressGqlMutations: true,
               namespaceGqlOperations: input.config.gqlOperations,
             })
           : generateTailorDBTypeManifestFromSnapshot(snapshotType, {
@@ -629,7 +629,7 @@ async function rewriteRestrictedTables(
           create: true,
           update: true,
           delete: true,
-          read: true,
+          read: activeSettings?.disableGqlOperations?.read ?? false,
         };
       }
       if (!restricted && activeSettings) {
@@ -886,7 +886,7 @@ async function rollbackSingleMigrationPrePhase(
     try {
       const manifest = generateTailorDBTypeManifestFromSnapshot(priorTable, {
         suppressRecordEvents: true,
-        suppressGqlOperations: true,
+        suppressGqlMutations: true,
         namespaceGqlOperations: input?.config.gqlOperations,
       });
       await client.updateTailorDBType({

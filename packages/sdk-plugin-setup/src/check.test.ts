@@ -463,6 +463,30 @@ describe("checkGitHub (integration)", () => {
       ).resolves.toBeUndefined();
     });
 
+    test("passes with a user job in the result job's needs, which regeneration keeps", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const generated = fs.readFileSync(wfPath(), "utf-8");
+      const withUserJob = generated
+        .replace(
+          "      - tailor-deploy\n    if: always()",
+          "      - tailor-deploy\n      - e2e\n    if: always()",
+        )
+        .replace(
+          "  tailor-result:\n",
+          "  e2e:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo e2e\n\n  tailor-result:\n",
+        );
+      expect(withUserJob).not.toBe(generated);
+      fs.writeFileSync(wfPath(), withUserJob);
+      await expect(check()).resolves.toBeUndefined();
+
+      await setupTarget(setupOptions({ workspaceName: "my-app", restrictDispatch: true }));
+
+      const regenerated = fs.readFileSync(wfPath(), "utf-8");
+      expect(regenerated).not.toBe(withUserJob);
+      expect(regenerated).toContain("      - tailor-deploy\n      - e2e\n    if: always()");
+      await expect(check()).resolves.toBeUndefined();
+    });
+
     test("passes after --force regeneration following a hand edit", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       editManagedPart();

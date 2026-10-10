@@ -2,6 +2,7 @@ import { setTimeout } from "node:timers/promises";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { arg } from "@politty/zod";
 import {
+  FunctionErrorKind,
   type FunctionExecution,
   type FunctionExecution_Status,
   FunctionExecution_Type,
@@ -46,6 +47,9 @@ interface FunctionExecutionListInfo {
   type: string;
   startedAt: Date | null;
   finishedAt: Date | null;
+  errorKind: string;
+  errorName: string | null;
+  errorMessage: string | null;
 }
 
 interface FunctionExecutionErrorDisplay {
@@ -71,6 +75,15 @@ function functionExecutionTypeToString(type: FunctionExecution_Type): string {
 }
 
 /**
+ * Convert function error kind enum to string.
+ * @param kind - Function error kind enum value
+ * @returns Error kind string representation
+ */
+function functionErrorKindToString(kind: FunctionErrorKind): string {
+  return protoEnumName(FunctionErrorKind, kind) ?? "UNSPECIFIED";
+}
+
+/**
  * Transform FunctionExecution to FunctionExecutionListInfo for list display.
  * @param execution - FunctionExecution from proto
  * @returns Function execution list info
@@ -83,6 +96,9 @@ function toFunctionExecutionListInfo(execution: FunctionExecution): FunctionExec
     type: functionExecutionTypeToString(execution.type),
     startedAt: execution.startedAt ? timestampDate(execution.startedAt) : null,
     finishedAt: execution.finishedAt ? timestampDate(execution.finishedAt) : null,
+    errorKind: functionErrorKindToString(execution.errorKind),
+    errorName: execution.error?.name || null,
+    errorMessage: execution.error?.message || null,
   };
 }
 
@@ -179,6 +195,7 @@ function printFunctionExecutionSummary(info: FunctionExecutionListInfo): void {
     ["type", info.type],
     ["startedAt", formatDate(info.startedAt)],
     ["finishedAt", formatDate(info.finishedAt)],
+    ["errorKind", info.errorKind],
   ];
   logger.out(formatKeyValueTable(summaryData));
 }
@@ -443,7 +460,9 @@ export async function downloadScriptForMapping(
 export const logsCommand = defineAppCommand({
   name: "logs",
   description: "List or get function execution logs.",
-  notes: `Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running. The \`logs\` string joins their messages with newlines.
+  notes: `Each execution includes \`errorKind\`, which tells you where a failure came from: \`USER_RUNTIME\` (your code threw while running, or exceeded its time, memory, or CPU limit), \`USER_NON_RUNTIME\` (your script failed while loading, before your function was called, such as when its top-level code threw), \`PLATFORM\` (a failure on the Platform side, or the Platform aborting the run because of its own deadline or cancellation), \`NONE\` (no error), or \`UNSPECIFIED\` (not recorded, or a kind this CLI version does not recognize). A workflow job waiting on another job also reports \`USER_NON_RUNTIME\` when that job fails or is canceled. \`errorName\` and \`errorMessage\` hold the error's name and message, or \`null\` when none was recorded. The list table omits \`errorMessage\`; use \`--json\` or the execution details to read it.
+
+Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running. The \`logs\` string joins their messages with newlines.
 
 Use \`--follow\` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless \`--timeout\` is set. With \`--json\`, \`--follow\` waits for completion and then emits the final execution details once.
 
@@ -573,7 +592,7 @@ Stack traces are mapped only when the execution includes a content hash for the 
         logger.info("No function execution logs found.");
         return;
       }
-      logger.out(logs);
+      logger.out(logs, { display: { errorMessage: null } });
       await reportTruncation(listed, args.limit);
     }
   },

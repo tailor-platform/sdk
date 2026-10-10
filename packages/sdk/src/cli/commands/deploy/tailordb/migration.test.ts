@@ -1095,6 +1095,22 @@ describe("migration", () => {
       });
     });
 
+    test("reports a migration whose outcome is unknown as unconfirmed rather than failed", async () => {
+      const unknown = CLIError({
+        code: "MIGRATION_OUTCOME_UNKNOWN",
+        message: "Could not confirm whether migration tailordb/0001 started: [unavailable] lost",
+      });
+      executeMigrationAsWorkflowMock.mockRejectedValueOnce(unknown);
+      spinnerMock.fail.mockClear();
+
+      await expect(
+        executeMigrations(createMockContext(), [createMockMigration({ number: 1 })]),
+      ).rejects.toBe(unknown);
+      expect(spinnerMock.fail).toHaveBeenCalledWith(
+        "Could not confirm the outcome of migration tailordb/0001",
+      );
+    });
+
     test("runs a migration as a workflow rather than a synchronous script execution", async () => {
       const migrations = [createMockMigration({ number: 1, hasScript: true })];
 

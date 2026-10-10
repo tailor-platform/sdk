@@ -14,7 +14,7 @@ export { logger, styles, type LogMode, type LogOptions, type OutOptions } from "
 export { defineAppCommand } from "./shared/command";
 export { logBetaWarning } from "./shared/beta";
 export { prompt } from "./shared/prompt";
-export { workspaceNameSchema } from "./shared/workspace-name";
+export { WORKSPACE_NAME_MAX_LENGTH, workspaceNameSchema } from "./shared/workspace-name";
 export {
   createCommonArgs,
   workspaceArgs,

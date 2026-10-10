@@ -10,6 +10,7 @@ import {
   printTargetNextSteps,
   setupTarget,
   type BranchSetupOptions,
+  type SetupTargetOptions,
 } from "./generate";
 import { detectDefaultBranch } from "./git";
 import { hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
@@ -169,14 +170,14 @@ describe("renderBranchWorkflow", () => {
   test("includes generate + generate-check in plan only (deploy delegates)", () => {
     const { content } = renderBranchWorkflow(branchBase);
     const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
-    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
+    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy", "tailor-result"]);
     expect(content.match(/id: tailor-generate-check/g)).toHaveLength(1);
   });
 
   test("omits ERD preview jobs by default", () => {
     const { content, generatedIds } = renderBranchWorkflow(branchBase);
     const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
-    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
+    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy", "tailor-result"]);
     expect(content).not.toContain("tailor-erd-preview");
     expect(generatedIds).not.toContain("tailor-erd-preview");
   });
@@ -209,6 +210,7 @@ describe("renderBranchWorkflow", () => {
       "tailor-erd-preview",
       "tailor-erd-preview-comment",
       "tailor-deploy",
+      "tailor-result",
     ]);
     expect(content).toContain(
       "namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}",
@@ -792,7 +794,7 @@ describe("change detection", () => {
     expect(workflow.on.push?.paths).toBeUndefined();
   });
 
-  test("detects changes under every app directory and the additional paths, in order", () => {
+  test("detects changes under every app directory, to the workflow file itself, and to the additional paths, in order", () => {
     const workflow = parseYAML(
       renderBranchWorkflow({
         ...branchBase,
@@ -804,8 +806,50 @@ describe("change detection", () => {
     expect(patternsOf(workflow)).toEqual([
       "apps/a/**",
       "apps/b/**",
+      ".github/workflows/tailor-my-app.yml",
       "modules/**",
       "!apps/a/**/*.md",
+    ]);
+  });
+
+  test("runs the jobs when only the branch workflow file changes", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a" }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toContain(".github/workflows/tailor-my-app.yml");
+  });
+
+  test("places the workflow file before the additional paths, so a later exclusion can drop it", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/a",
+        extraPaths: ["!.github/workflows/tailor-my-app.yml"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app.yml",
+      "!.github/workflows/tailor-my-app.yml",
+    ]);
+  });
+
+  test("keeps an additional path that re-includes the workflow file after excluding it", () => {
+    const workflow = parseYAML(
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/a",
+        extraPaths: ["!.github/workflows/tailor-my-app.yml", ".github/workflows/tailor-my-app.yml"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app.yml",
+      "!.github/workflows/tailor-my-app.yml",
+      ".github/workflows/tailor-my-app.yml",
     ]);
   });
 
@@ -832,6 +876,22 @@ describe("change detection", () => {
 
     expect(gated(jobs["tailor-preview-deploy"])).toBe(true);
     expect(jobs["tailor-preview-cleanup"]?.needs).toBeUndefined();
+  });
+
+  test("runs the preview deploy when only the preview workflow file changes", () => {
+    const workflow = parseYAML(
+      renderPreviewWorkflow({
+        ...previewBase,
+        workingDirectory: "apps/a",
+        extraPaths: ["modules/**"],
+      }).content,
+    ) as Workflow;
+
+    expect(patternsOf(workflow)).toEqual([
+      "apps/a/**",
+      ".github/workflows/tailor-my-app-preview.yml",
+      "modules/**",
+    ]);
   });
 
   test("generates no change detection for an app at the repository root", () => {
@@ -976,6 +1036,150 @@ describe("renderPreviewWorkflow", () => {
       "workspace-name": "${{ steps.tailor-preview-deploy.outputs.workspace-name }}",
       "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
     });
+  });
+
+  test.each([false, true])(
+    "cancels a superseded run as a whole, except from an event on a closed pull request (requirePreviewLabel: %s)",
+    (requirePreviewLabel) => {
+      const { content } = renderPreviewWorkflow({
+        workspaceName: "my-app",
+        branch: "main",
+        environment: "my-app",
+        packageManager: "pnpm",
+        region: "us-west",
+        requirePreviewLabel,
+      });
+      const workflow = parseYAML(content) as {
+        concurrency?: { group?: string; "cancel-in-progress"?: boolean };
+        jobs: Record<string, Record<string, unknown>>;
+      };
+      const groupOn = (action: string, state: "open" | "closed") =>
+        String(workflow.concurrency?.group).replace(/\$\{\{(.*?)\}\}/g, (_match, expression) =>
+          String(
+            vm.runInNewContext(expression, {
+              format: (template: string, ...args: unknown[]) =>
+                template.replace(/\{(\d+)\}/g, (_m, index) => String(args[Number(index)])),
+              github: { run_id: 9001, event: { action, pull_request: { number: 42, state } } },
+            }),
+          ),
+        );
+
+      expect(workflow.concurrency?.["cancel-in-progress"]).toBe(true);
+      expect(groupOn("synchronize", "open")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("reopened", "open")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("closed", "closed")).toBe("tailor-preview-my-app-pr-42");
+      expect(groupOn("labeled", "closed")).toBe("tailor-preview-my-app-run-9001");
+      for (const job of Object.values(workflow.jobs)) {
+        expect(job).not.toHaveProperty("concurrency");
+      }
+    },
+  );
+});
+
+describe("workflow result job", () => {
+  type Job = {
+    name?: string;
+    needs?: string[];
+    if?: string;
+    permissions?: Record<string, string>;
+    steps?: Array<Record<string, unknown>>;
+  };
+  const jobsOf = (content: string) => (parseYAML(content) as { jobs: Record<string, Job> }).jobs;
+  const previewBase = {
+    workspaceName: "my-app",
+    branch: "main",
+    environment: "my-app",
+    packageManager: "pnpm",
+    region: "us-west",
+  } as const;
+  const variants = [
+    ["branch", renderBranchWorkflow(branchBase), "tailor-result", ["tailor-plan", "tailor-deploy"]],
+    [
+      "branch with change detection and ERD preview",
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/a",
+        erdPreview: { namespaces: ["main"] },
+      }),
+      "tailor-result",
+      [
+        "tailor-changes",
+        "tailor-plan",
+        "tailor-erd-preview-matrix",
+        "tailor-erd-preview",
+        "tailor-erd-preview-comment",
+        "tailor-deploy",
+      ],
+    ],
+    [
+      "preview",
+      renderPreviewWorkflow(previewBase),
+      "tailor-preview-result",
+      ["tailor-preview-deploy", "tailor-preview-cleanup"],
+    ],
+    [
+      "preview with change detection",
+      renderPreviewWorkflow({ ...previewBase, workingDirectory: "apps/a" }),
+      "tailor-preview-result",
+      ["tailor-changes", "tailor-preview-deploy", "tailor-preview-cleanup"],
+    ],
+  ] as const;
+
+  test.each(variants)(
+    "%s workflow ends with a result job that always runs after every other managed job",
+    (_name, render, resultJob, needs) => {
+      const jobs = jobsOf(render.content);
+
+      expect(Object.keys(jobs).at(-1)).toBe(resultJob);
+      expect(jobs[resultJob]).toMatchObject({ needs, if: "always()", permissions: {} });
+      expect(render.generatedIds).toEqual(
+        expect.arrayContaining([resultJob, `${resultJob}/${resultJob}`]),
+      );
+    },
+  );
+
+  test("names the check after the workspace so several workflows can each be required", () => {
+    expect(jobsOf(renderBranchWorkflow(branchBase).content)["tailor-result"]?.name).toBe(
+      "tailor-result (my-app)",
+    );
+    expect(jobsOf(renderPreviewWorkflow(previewBase).content)["tailor-preview-result"]?.name).toBe(
+      "tailor-preview-result (my-app)",
+    );
+  });
+
+  // Evaluates the result step's `if:`, mapping the GitHub expression syntax it
+  // uses onto JavaScript; the step fails the job whenever it runs.
+  const failsOn = (results: readonly string[]) =>
+    variants.map(([, render, resultJob]) => {
+      const step = jobsOf(render.content)[resultJob]?.steps?.[0];
+      expect(step?.run).toContain("exit 1");
+      return Boolean(
+        vm.runInNewContext(String(step?.if).replaceAll("needs.*.result", "results"), {
+          always: () => true,
+          contains: (values: readonly string[], value: string) => values.includes(value),
+          results,
+        }),
+      );
+    });
+
+  test.each([
+    [["success", "success"], false],
+    [["success", "skipped"], false],
+    [["skipped", "skipped"], false],
+    [["success", "failure"], true],
+    [["skipped", "cancelled"], true],
+  ] as const)("fails when the needed jobs end in %j: %s", (results, fails) => {
+    expect(failsOn(results)).toEqual(variants.map(() => fails));
+  });
+
+  test("is not mentioned in a tag workflow, which has none", () => {
+    expect(renderTagWorkflow(tagBase).content).not.toMatch(/tailor-(preview-)?result/);
+  });
+
+  test("checks the results even when the workflow run is cancelled", () => {
+    for (const [, render, resultJob] of variants) {
+      expect(jobsOf(render.content)[resultJob]?.steps?.[0]?.if).toMatch(/^always\(\) && /);
+    }
   });
 });
 
@@ -1579,6 +1783,50 @@ export default defineConfig({
     );
   });
 
+  describe("preview name length", () => {
+    type PreviewOptions = Extract<SetupTargetOptions, { kind: "preview" }>;
+    const previewOptions = (overrides: Partial<PreviewOptions> = {}): PreviewOptions => ({
+      kind: "preview",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "cfg-app",
+      loadConfigId: async () => undefined,
+      ...overrides,
+    });
+
+    test("accepts a 50-character preview name", async () => {
+      const name = "a".repeat(50);
+      await setupTarget(previewOptions({ workspaceName: name }));
+      expect(readLock(testDir)?.targets[0]).toMatchObject({ kind: "preview", workspaceName: name });
+    });
+
+    test.each([
+      ["--name", { workspaceName: "a".repeat(51) }],
+      ["the config name", { loadConfigName: async () => "a".repeat(51) }],
+    ] as const)(
+      "rejects a 51-character preview name from %s before writing anything",
+      async (_label, overrides) => {
+        await expect(setupTarget(previewOptions(overrides))).rejects.toThrow(
+          /at most 50 characters[\s\S]*-pr-<number>/,
+        );
+        expect(fs.existsSync(path.join(testDir, ".github"))).toBe(false);
+      },
+    );
+
+    test("branch and tag targets still accept a 63-character name", async () => {
+      const name = "a".repeat(63);
+      await setupTarget(baseOptions({ workspaceName: name }));
+      await setupTarget({ ...baseOptions({ workspaceName: name }), kind: "tag", tagPattern: "v*" });
+      expect(readLock(testDir)?.targets.map((t) => [t.kind, t.workspaceName])).toEqual([
+        ["branch", name],
+        ["tag", name],
+      ]);
+    });
+  });
+
   test.each([
     ["branch name", { branch: "feat,bar" }, /Invalid branch name/],
     ["environment name", { environment: "prod: evil" }, /Invalid environment name/],
@@ -1772,6 +2020,73 @@ export default defineConfig({
     expect(fs.readFileSync(wf, "utf-8")).toBe(generated.concat(userJob));
   });
 
+  describe("preview: re-running on a workflow whose concurrency was on the deploy job", () => {
+    const opts = {
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+    } as const;
+    const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+    const topLevelConcurrency = /^concurrency:\n(?: {2}.*\n)+\n/m;
+    const jobConcurrency =
+      "    concurrency:\n" +
+      "      group: tailor-preview-my-app-${{ github.event.pull_request.number }}\n" +
+      "      cancel-in-progress: true\n";
+    const userConcurrency =
+      "concurrency:\n" +
+      "  group: mine-${{ github.workflow }}-${{ github.event.pull_request.number }}\n" +
+      "  cancel-in-progress: true\n\n";
+    const writeLegacy = (generated: string, topLevel: string) => {
+      expect(generated).toMatch(topLevelConcurrency);
+      const legacy = generated
+        .replace(topLevelConcurrency, topLevel)
+        .replace("    outputs:\n", `${jobConcurrency}    outputs:\n`);
+      expect(legacy).toContain(jobConcurrency);
+      fs.writeFileSync(wf, legacy);
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, {
+        ...lock,
+        targets: [
+          {
+            ...target,
+            templateVersion: TEMPLATE_VERSION - 1,
+            contentHash: computeManagedHash(legacy, target.generatedIds),
+          },
+        ],
+      });
+    };
+
+    test("moves it to the top level", async () => {
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wf, "utf-8");
+      writeLegacy(generated, "");
+
+      await setupTarget(opts);
+
+      expect(fs.readFileSync(wf, "utf-8")).toBe(generated);
+    });
+
+    test("keeps a top-level concurrency the user added", async () => {
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wf, "utf-8");
+      writeLegacy(generated, userConcurrency);
+
+      await setupTarget(opts);
+
+      expect(fs.readFileSync(wf, "utf-8")).toBe(
+        generated.replace(topLevelConcurrency, userConcurrency),
+      );
+    });
+  });
+
   test("preview: require-preview-label variant adds label filter to trigger", async () => {
     await setupTarget({
       kind: "preview",
@@ -1851,7 +2166,7 @@ export default defineConfig({
 
       const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-erp.yml"), "utf-8");
       expect(wf).toContain(
-        "path-patterns: |\n            apps/erp/backend/**\n            apps/erp/frontend/**\n            pnpm-lock.yaml\n",
+        "path-patterns: |\n            apps/erp/backend/**\n            .github/workflows/tailor-erp.yml\n            apps/erp/frontend/**\n            pnpm-lock.yaml\n",
       );
       expect(readLock(testDir)?.targets[0]?.inputs.paths).toEqual([
         "apps/erp/frontend/**",
