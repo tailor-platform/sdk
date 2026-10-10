@@ -1,0 +1,25 @@
+import { sql, type RowOf } from "./sql";
+
+const minimumAge = 18;
+export const query = sql`
+  SELECT "id", "email", "nickname", "age", "active", "score",
+         "balance", "birthday", "createdAt", "role"
+  FROM "Account"
+  WHERE "age" >= ${minimumAge}
+`;
+
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends
+  (<T>() => T extends B ? 1 : 2) ? true : false;
+type Assert<T extends true> = T;
+export type VerifyRow = Assert<Equal<RowOf<typeof query>, {
+  id: string;
+  email: string;
+  nickname: string | null;
+  age: number;
+  active: boolean;
+  score: number;
+  balance: string;
+  birthday: Date | null;
+  createdAt: Date;
+  role: "ADMIN" | "MEMBER";
+}>>;

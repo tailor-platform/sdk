@@ -1,0 +1,11 @@
+import { sql, type RowOf } from "./sql";
+
+export const query = sql`
+  SELECT a."email", p."title"
+  FROM "Account" AS a
+  LEFT JOIN "Project" AS p ON p."ownerId" = a."id"
+`;
+
+export function consume(row: RowOf<typeof query>): string {
+  return row.title.toUpperCase();
+}

@@ -1,0 +1,5 @@
+import { sql } from "./sql";
+export const query = sql`
+  WITH accounts AS (SELECT "email" FROM "Account")
+  SELECT "email" FROM accounts
+`;
