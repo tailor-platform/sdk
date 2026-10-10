@@ -180,6 +180,10 @@ A plugin can implement hooks from any combination of phases.
 
 See [Frontend Plugin](./frontend.md) to build frontends and upload them to static websites as part of `tailor deploy`.
 
+## Checking SQL
+
+See [SafeQL Plugin](./safeql.md) to type-check raw SQL against your TailorDB tables.
+
 ## Creating Custom Plugins
 
 See [Custom Plugins](./custom.md) for the full hook reference and examples.

@@ -13,6 +13,10 @@ trustPolicy: no-downgrade
 trustPolicyExclude:
   # Pre-existing transitive version without provenance attestation.
   - "@swc/core@1.12.11"
+  # SafeQL's dependencies; the published versions lack the provenance
+  # attestation earlier versions had.
+  - chokidar@4.0.3
+  - synckit@0.10.4
 
 packages:
   - packages/*

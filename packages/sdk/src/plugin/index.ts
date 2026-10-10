@@ -16,3 +16,6 @@ export {
 export { getExtendedTable, getGeneratedTable } from "./get-generated-table";
 
 export type { PluginConfigRegistry } from "./types";
+
+export { generateSchemaDDL, type DDLFieldConfig, type DDLTableConfig } from "#/utils/tailordb-ddl";
+export { toDDLTables } from "./builtin/kysely-type/pglite-schema";
