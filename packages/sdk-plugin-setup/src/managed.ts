@@ -506,8 +506,7 @@ function sharedValue(values: readonly unknown[]): unknown {
   return values.every((value) => canonicalJson(value) === canonicalJson(first)) ? first : undefined;
 }
 
-// Only a runner every kept job shares is carried; mixed runners are not guessed between.
-function carryRunsOnToAddedJobs(params: {
+function carrySharedRunsOnToAddedJobs(params: {
   doc: Document;
   currentJobs: YAMLMap;
   renderedJobs: YAMLMap;
@@ -625,7 +624,7 @@ export function mergeUserContent(params: {
       }
       mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
     }
-    carryRunsOnToAddedJobs({
+    carrySharedRunsOnToAddedJobs({
       doc: renderedDoc,
       currentJobs,
       renderedJobs,
