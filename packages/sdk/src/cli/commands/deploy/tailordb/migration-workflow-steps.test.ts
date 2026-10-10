@@ -878,6 +878,51 @@ describe("executeMigrationStepsAsWorkflow", () => {
         expect(suggestion).not.toContain("--migration-skip-steps");
       });
 
+      test("does not tell the user to interrupt a deploy whose run starts without waiting", async () => {
+        const { notify, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+        });
+
+        await result();
+
+        const [, , suggestion] = notify.mock.calls[0]!;
+        expect(suggestion).not.toContain("interrupt");
+        expect(suggestion).toContain("starts the run without waiting");
+      });
+
+      test("says when the results of some succeeded steps could not be read, so the list may be incomplete", async () => {
+        const { notify, raw, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+        });
+        raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+
+        await result();
+
+        const [, message] = notify.mock.calls[0]!;
+        expect(message).toContain("could not be read");
+      });
+
+      test("names the succeeded steps that still run again when only some of them are skipped", async () => {
+        const { notify, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { skipSteps: ["backfillUser"] },
+        );
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).toContain("skipping backfillUser");
+        expect(message).toContain("backfillInvoice already succeeded but runs again");
+        expect(suggestion).toContain(
+          "--migration-skip-steps tailordb/backfillUser,tailordb/backfillInvoice",
+        );
+      });
+
       test("starts a new run that skips the requested steps even though the plan changed", async () => {
         const { raw, result } = runKeeping(
           {
@@ -975,6 +1020,32 @@ describe("assertSkippableSteps", () => {
       ),
       context: { succeededSteps: ["backfillUser"] },
     });
+  });
+
+  test("does not call a step unsuccessful when the earlier run's step results could not be read", async () => {
+    const { client, raw } = createStepsClient({
+      existingWorkflow: { id: "wf-old" },
+      listed: [succeededRun],
+    });
+    raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+
+    const error = await assertSkippableSteps({
+      client,
+      workspaceId: "ws-1",
+      namespace: "tailordb",
+      migrationNumber: 3,
+      order: ORDER,
+      inProgress: { executionId: "exec-old" },
+      requested: ["backfillUser"],
+    }).catch((thrown: Error) => thrown);
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_UNVERIFIED",
+      context: { invalid: [{ step: "backfillUser", reason: "unverified" }] },
+    });
+    expect((error as { suggestion?: string }).suggestion).not.toContain(
+      "Remove --migration-skip-steps",
+    );
   });
 
   test("rejects a step that the migration does not define", async () => {

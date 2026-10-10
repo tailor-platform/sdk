@@ -445,7 +445,7 @@ tailor deploy --migration-skip-steps main-db/backfillUser,main-db/backfillInvoic
 ```
 
 - A skipped step is reported as completed and is not run. Only steps that succeeded in the migration's earlier run can be skipped, so a step you renamed cannot be.
-- The option applies to the migration an earlier deploy left in progress. Deploy fails before changing anything when an entry names a step that did not succeed, a step the migration does not define, a namespace without a migration in progress, or a namespace that no deployed config defines.
+- The option applies to the migration an earlier deploy left in progress. Deploy fails before changing anything when an entry names a step that did not succeed, a step the migration does not define, a namespace without a migration in progress, or a namespace that no deployed config defines. It also fails when the earlier run's step results cannot be read, because then it cannot confirm which steps succeeded; deploy again to retry.
 - It takes effect for the deploy you pass it to. If that run fails, the next `tailor deploy` resumes it as usual, and the skipped steps stay completed without passing the option again.
 
 Write every step so that running it again is safe: besides the cases above, a step can run a second time when a deploy is interrupted right after it commits. Use `where` clauses that skip rows a step already migrated, as in the example. Maintenance mode blocks GraphQL writes, not the writes your resolvers, executors, or workflows make through Kysely; rows they write while a migration is in progress are not seen by steps that already completed, so stop such writers until the migration finishes or write steps that tolerate them.
