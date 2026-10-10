@@ -529,7 +529,10 @@ function carryRunsOnToAddedJobs(params: {
     const jobId = keyOf(pair) ?? "";
     if (kept.includes(jobId) || !isMap(pair.value)) continue;
     if (canonicalJson(templateOf(jobId)) !== canonicalJson(template)) continue;
-    pair.value.set("runs-on", params.doc.createNode(runsOn, { flow }));
+    pair.value.set(
+      "runs-on",
+      params.doc.createNode(runsOn, { flow, aliasDuplicateObjects: false }),
+    );
   }
 }
 

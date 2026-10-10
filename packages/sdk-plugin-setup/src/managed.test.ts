@@ -1014,4 +1014,24 @@ describe("runs-on of a managed job the merge adds", () => {
     expect(jobsOf(content)["tailor-changes"]?.["runs-on"]).toEqual(["self-hosted", "linux"]);
     expect(content.match(/&runner/g)).toHaveLength(1);
   });
+
+  test("writes no anchor that an alias in the user's jobs could resolve to", () => {
+    const edited = ["tailor-plan", "tailor-deploy", "tailor-result"]
+      .reduce(
+        (c, job) => setRunsOn(c, [job], `runs-on: {group: g, labels: &${job} [a], other: *${job}}`),
+        render.content,
+      )
+      .replace(
+        "  tailor-deploy:\n",
+        "  build:\n    runs-on: &a1 [mine]\n    steps:\n      - run: echo build\n\n  tailor-deploy:\n",
+      )
+      .concat("  e2e:\n    runs-on: *a1\n    steps:\n      - run: echo e2e\n");
+    const jobs = jobsOf(merge(edited, render, erd));
+    expect(jobs["tailor-erd-preview"]?.["runs-on"]).toEqual({
+      group: "g",
+      labels: ["a"],
+      other: ["a"],
+    });
+    expect(jobs["e2e"]?.["runs-on"]).toEqual(["mine"]);
+  });
 });
