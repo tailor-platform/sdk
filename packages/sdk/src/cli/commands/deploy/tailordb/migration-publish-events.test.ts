@@ -1608,7 +1608,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       expect(flags.at(-1)).toBe(true);
     });
 
-    test('"deploy" keeps the namespace restricted until the returned release runs', async () => {
+    test('"deploy" keeps the namespace restricted until the held release runs', async () => {
       const client = createMockClient();
       const planResult = createMockPlanResult({
         creates: ["Order"],

@@ -504,8 +504,6 @@ export async function applyTailorDB(
       );
     }
 
-    // A migration that fails or stops must leave no record behind, or the
-    // next deploy would accept its restricted tables instead of reporting drift.
     const migratingNamespaceNames = new Set(pendingMigrations.map((m) => m.namespace));
     for (const namespaceName of Object.keys(maintenanceModeCheckpoints)) {
       if (!migratingNamespaceNames.has(namespaceName)) continue;
