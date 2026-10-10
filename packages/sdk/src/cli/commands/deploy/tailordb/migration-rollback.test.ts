@@ -1262,6 +1262,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           "test-ns",
           1,
           undefined,
+          true,
         );
         expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
       });
@@ -1305,6 +1306,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         "test-ns",
         1,
         undefined,
+        true,
       );
       expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
         client,

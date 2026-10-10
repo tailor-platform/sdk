@@ -317,6 +317,7 @@ async function executeSingleMigration(
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number to set
  * @param historyId - Optional migration history ID to set atomically with the checkpoint
+ * @param recordMaintenanceMode - Whether to record, atomically with the checkpoint, that the namespace's tables are still in maintenance mode
  * @returns Whether the labels changed
  */
 export async function updateMigrationLabel(
@@ -325,6 +326,7 @@ export async function updateMigrationLabel(
   namespace: string,
   migrationNumber: number,
   historyId?: string,
+  recordMaintenanceMode = false,
 ): Promise<boolean> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
@@ -333,6 +335,9 @@ export async function updateMigrationLabel(
     labels: {
       [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
       ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
+      ...(recordMaintenanceMode
+        ? { [MAINTENANCE_MODE_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) }
+        : {}),
     },
     remove: [
       ...(historyId ? [] : [MIGRATION_HISTORY_LABEL_KEY]),
@@ -383,27 +388,6 @@ export async function clearMigrationInProgress(
     trn: resourceTrn(workspaceId, "tailordb", namespace),
     labels: {},
     remove: [MIGRATION_IN_PROGRESS_LABEL_KEY, MIGRATION_EXECUTION_LABEL_KEY],
-  });
-}
-
-/**
- * Record that a namespace's migrations committed up to a checkpoint while its
- * tables are still in maintenance mode, so a deploy interrupted before lifting
- * it leaves the next deploy able to release them.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param namespace - TailorDB namespace
- * @param migrationNumber - The namespace's committed checkpoint
- */
-export async function writeMaintenanceModeRecord(
-  client: OperatorClient,
-  workspaceId: string,
-  namespace: string,
-  migrationNumber: number,
-): Promise<void> {
-  await writeMetadataLabelsDirect(client, {
-    trn: resourceTrn(workspaceId, "tailordb", namespace),
-    labels: { [MAINTENANCE_MODE_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
   });
 }
 

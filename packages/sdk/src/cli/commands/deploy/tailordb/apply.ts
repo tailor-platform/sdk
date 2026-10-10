@@ -27,7 +27,6 @@ import {
   isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
   updateMigrationLabel,
-  writeMaintenanceModeRecord,
   type MigrationContext,
 } from "./migration";
 import {
@@ -42,6 +41,7 @@ import {
   getDeletedTableNames,
   migrationSnapshotCache,
   processedTables,
+  releaseRecordedMaintenanceMode,
   resolveMigrationSnapshotSettings,
   rollbackSingleMigrationAfterFailure,
   type MigrationPhaseSettings,
@@ -190,7 +190,7 @@ async function validateTailorDBMigrationState(
       migrationHistoryIds: {},
       inProgressMigrations: {},
       staleInProgress: [],
-      maintenanceModeNamespaces: [],
+      maintenanceModeCheckpoints: {},
     };
   }
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
@@ -355,7 +355,7 @@ async function clearRecordAfterRelease(
     await clearMaintenanceModeRecord(client, workspaceId, namespaceName);
   } catch (error) {
     logger.warn(
-      `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toError(error).message}. The next deploy that migrates it removes the record.`,
+      `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toError(error).message}. A later deploy removes it.`,
     );
   }
 }
@@ -462,7 +462,7 @@ export async function applyTailorDB(
       migrationHistoryIds,
       inProgressMigrations,
       staleInProgress,
-      maintenanceModeNamespaces,
+      maintenanceModeCheckpoints,
     } = await validateTailorDBMigrationState(client, result);
 
     // Resolved before any mutation below -- including the checkpoint-repair
@@ -507,7 +507,7 @@ export async function applyTailorDB(
     // A migration that fails or stops must leave no record behind, or the
     // next deploy would accept its restricted tables instead of reporting drift.
     const migratingNamespaceNames = new Set(pendingMigrations.map((m) => m.namespace));
-    for (const namespaceName of maintenanceModeNamespaces) {
+    for (const namespaceName of Object.keys(maintenanceModeCheckpoints)) {
       if (!migratingNamespaceNames.has(namespaceName)) continue;
       await clearMaintenanceModeRecord(client, migrationContext.workspaceId, namespaceName);
     }
@@ -549,12 +549,18 @@ export async function applyTailorDB(
       const isOutsideMigrations = (namespaceName: string | undefined) =>
         namespaceName !== undefined && !migratingNamespaces.has(namespaceName);
       const firstPendingByNamespace = new Map<string, PendingMigration>();
+      const lastPendingByNamespace = new Map<string, PendingMigration>();
+      const recordedNamespaces = new Set<string>();
       const pendingDeletedTables = new Map<string, Set<string>>();
       const pendingSnapshotTableKeys = new Set<string>();
       for (const migration of pendingMigrations) {
         const first = firstPendingByNamespace.get(migration.namespace);
         if (!first || migration.number < first.number) {
           firstPendingByNamespace.set(migration.namespace, migration);
+        }
+        const last = lastPendingByNamespace.get(migration.namespace);
+        if (!last || migration.number > last.number) {
+          lastPendingByNamespace.set(migration.namespace, migration);
         }
         const deleted = pendingDeletedTables.get(migration.namespace) ?? new Set<string>();
         for (const tableName of getDeletedTableNames(migration)) deleted.add(tableName);
@@ -573,6 +579,25 @@ export async function applyTailorDB(
           });
         }
         preMigrationSnapshots.set(namespace, snapshot);
+        const input = migrationContext.tailorDBInputs.find(
+          (entry) => entry.namespace === namespace,
+        );
+        const capturedSettings = restrictionState.get(namespace);
+        if (
+          maintenanceModeCheckpoints[namespace] === first.number - 1 &&
+          input &&
+          capturedSettings
+        ) {
+          restrictionState.set(
+            namespace,
+            releaseRecordedMaintenanceMode(
+              capturedSettings,
+              snapshot,
+              input,
+              migrationContext.executorUsedTables,
+            ),
+          );
+        }
       }
 
       const deferredTypeKeys = new Set<string>();
@@ -751,6 +776,9 @@ export async function applyTailorDB(
           const postMigrationSnapshot = migrationSnapshotCache.load(migration);
           restorationSnapshots.set(migration.namespace, postMigrationSnapshot);
           const expectedHistoryId = migrationHistoryIds[migration.namespace] ?? null;
+          const recordsMaintenanceMode =
+            phaseSettings.restricted &&
+            lastPendingByNamespace.get(migration.namespace) === migration;
           const capturedSettingsAreEarlierRestrictions = inProgress;
           const settleRestorationSettings = () => {
             const input = migrationContext.tailorDBInputs.find(
@@ -780,6 +808,7 @@ export async function applyTailorDB(
               migration.namespace,
               migration.number,
               expectedHistoryId ?? undefined,
+              recordsMaintenanceMode,
             );
           } catch (error) {
             let remoteState: Awaited<ReturnType<typeof fetchRemoteMigrationState>>;
@@ -837,6 +866,7 @@ export async function applyTailorDB(
             number: migration.number,
             historyId: expectedHistoryId,
           });
+          if (recordsMaintenanceMode) recordedNamespaces.add(migration.namespace);
           if (runsSteps) {
             await removeRunResources(
               client,
@@ -900,26 +930,6 @@ export async function applyTailorDB(
         );
       }
 
-      const recordedNamespaces: string[] = [];
-      if (phaseSettings.restricted && !migrationFailure) {
-        for (const namespaceName of restorationSnapshots.keys()) {
-          const checkpoint = restorationCheckpoints.get(namespaceName)?.number;
-          if (checkpoint == null) continue;
-          try {
-            await writeMaintenanceModeRecord(
-              client,
-              migrationContext.workspaceId,
-              namespaceName,
-              checkpoint,
-            );
-            recordedNamespaces.push(namespaceName);
-          } catch (error) {
-            logger.warn(
-              `Could not record that namespace '${namespaceName}' is in maintenance mode: ${toError(error).message}.`,
-            );
-          }
-        }
-      }
       const restore = async (restoreClient: OperatorClient) => {
         await restoreMigrationRestrictions(
           restoreClient,
@@ -1100,7 +1110,7 @@ export async function applyTailorDB(
       );
     }
 
-    for (const namespaceName of maintenanceModeNamespaces) {
+    for (const namespaceName of Object.keys(maintenanceModeCheckpoints)) {
       if (migratingNamespaceNames.has(namespaceName)) continue;
       await clearRecordAfterRelease(client, migrationContext.workspaceId, namespaceName);
     }

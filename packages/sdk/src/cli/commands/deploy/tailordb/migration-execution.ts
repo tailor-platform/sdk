@@ -656,6 +656,31 @@ export function resolveMigrationSnapshotSettings(
 }
 
 /**
+ * Replace the captured settings of checkpoint tables that an interrupted
+ * deploy left in maintenance mode with the checkpoint's own settings, so this
+ * deploy releases them even if its migrations fail.
+ * @param capturedSettings - Settings captured before this deploy's migrations, keyed by table name
+ * @param snapshot - Schema of the checkpoint the maintenance-mode record names
+ * @param input - TailorDB deploy input for the namespace
+ * @param executorUsedTables - Tables an enabled executor in this deploy subscribes to
+ * @returns Settings keyed by table name
+ */
+export function releaseRecordedMaintenanceMode(
+  capturedSettings: ReadonlyMap<string, MigrationTableSettings>,
+  snapshot: SchemaSnapshot,
+  input: TailorDBDeployInput,
+  executorUsedTables: ReadonlySet<string>,
+): Map<string, MigrationTableSettings> {
+  const checkpointSettings = resolveMigrationSnapshotSettings(snapshot, input, executorUsedTables);
+  return new Map(
+    [...capturedSettings].map(([tableName, settings]) => {
+      const released = checkpointSettings.get(tableName);
+      return [tableName, released && isMigrationRestricted(settings) ? released : settings];
+    }),
+  );
+}
+
+/**
  * Stop record event publishing and GraphQL mutations across each migrating namespace.
  *
  * The per-migration phases only rewrite tables some pending diff names, so a

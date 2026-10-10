@@ -46,6 +46,9 @@ const mocks = vi.hoisted(() => {
       calls.push(`application:${marker(result)}:${String(phase)}`);
       if (phase === "create-update") await state.onApplicationApply?.(client);
     }),
+    recomposeApplication: vi.fn(async (_client, result) => {
+      calls.push(`recompose:${marker(result)}`);
+    }),
     applyExecutor: vi.fn(async (_client, result, phase) => {
       calls.push(`executor:${marker(result)}:${String(phase)}`);
     }),
@@ -73,7 +76,10 @@ vi.mock("./tailordb", () => ({
 }));
 vi.mock("./auth", () => ({ applyAuth: mocks.applyAuth }));
 vi.mock("./resolver", () => ({ applyPipeline: mocks.applyPipeline }));
-vi.mock("./application", () => ({ applyApplication: mocks.applyApplication }));
+vi.mock("./application", () => ({
+  applyApplication: mocks.applyApplication,
+  recomposeApplication: mocks.recomposeApplication,
+}));
 vi.mock("./executor", () => ({ applyExecutor: mocks.applyExecutor }));
 vi.mock("./workflow", () => ({ applyWorkflow: mocks.applyWorkflow }));
 vi.mock("./workflow-execution-policy", () => ({
@@ -432,6 +438,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
       mocks.calls.push(`tailordb:${(result as { marker: string }).marker}:${String(phase)}`);
     });
     mocks.applyExecutor.mockReset();
+    mocks.recomposeApplication.mockClear();
   });
 
   test("asks TailorDB to hold its maintenance mode", async () => {
@@ -470,12 +477,22 @@ describe("applyRemainingResources with a held maintenance mode", () => {
       deployment("buyer"),
     ]);
 
-    expect(mocks.calls.slice(-3)).toEqual([
+    expect(mocks.calls.slice(-5)).toEqual([
       "function:buyer-function:delete",
       "release:supplier-tailordb",
       "release:buyer-tailordb",
+      "recompose:supplier-application",
+      "recompose:buyer-application",
     ]);
     expect(release).toHaveBeenCalledWith(client);
+  });
+
+  test("does not recompose an application whose deploy held nothing", async () => {
+    mocks.calls.length = 0;
+
+    await applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]);
+
+    expect(mocks.calls.filter((call) => call.startsWith("recompose:"))).toEqual([]);
   });
 
   test("lifts it before reporting a later failure", async () => {
@@ -488,6 +505,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     ).rejects.toThrow("executor apply failed");
 
     expect(mocks.calls.at(-1)).toBe("release:supplier-tailordb");
+    expect(mocks.recomposeApplication).not.toHaveBeenCalled();
   });
 
   test("keeps the later failure when lifting it fails too", async () => {

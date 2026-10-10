@@ -44,8 +44,8 @@ export type ValidateAndDetectResult = {
   inProgressMigrations: Record<string, MigrationInProgress>;
   /** In-progress records naming a migration whose checkpoint is already committed. */
   staleInProgress: StaleMigrationInProgress[];
-  /** Namespaces carrying a record of a maintenance mode a deploy has not lifted. */
-  maintenanceModeNamespaces: string[];
+  /** Checkpoint named by each namespace's record of a maintenance mode a deploy has not lifted. */
+  maintenanceModeCheckpoints: Record<string, number>;
 };
 
 interface StaleMigrationInProgress {
@@ -163,7 +163,7 @@ export async function validateAndDetectMigrations(
   let inProgress: InProgressValidation = { inProgressMigrations: {}, staleInProgress: [] };
   let repairedInProgress: string[] = [];
   const migrationHistoryIds = Object.create(null) as Record<string, string | null>;
-  const maintenanceModeNamespaces: string[] = [];
+  const maintenanceModeCheckpoints = Object.create(null) as Record<string, number>;
 
   if (namespacesWithMigrations.length > 0) {
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
@@ -265,7 +265,8 @@ export async function validateAndDetectMigrations(
     );
     inProgress = validateMigrationsInProgress(remoteStates, repairedInProgress, pendingMigrations);
     for (const [namespace, state] of remoteStates) {
-      if (state.maintenanceModeCheckpoint !== null) maintenanceModeNamespaces.push(namespace);
+      if (state.maintenanceModeCheckpoint === null) continue;
+      maintenanceModeCheckpoints[namespace] = state.maintenanceModeCheckpoint;
     }
 
     if (pendingMigrations.length > 0) {
@@ -298,7 +299,7 @@ export async function validateAndDetectMigrations(
     migrationFileState: captureMigrationFileState(namespacesWithMigrations),
     migrationHistoryIds,
     ...inProgress,
-    maintenanceModeNamespaces,
+    maintenanceModeCheckpoints,
   };
 }
 

@@ -1,7 +1,7 @@
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { applyAIGateway, type planAIGateway } from "./aigateway";
-import { applyApplication, type planApplication } from "./application";
+import { applyApplication, recomposeApplication, type planApplication } from "./application";
 import { applyAuth, type planAuth } from "./auth";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
@@ -144,19 +144,24 @@ export async function applyPrerequisiteResources(
   });
 }
 
+type HeldMaintenanceMode = {
+  deployment: PlannedDeployment;
+  release: MaintenanceModeRelease;
+};
+
 /**
  * Lift every maintenance mode a TailorDB apply held, even when one fails.
  * @param client - Operator client instance
- * @param releases - Releases to run
+ * @param held - Maintenance modes held by the deployments' TailorDB applies
  * @param applyFailed - Whether the deploy already failed, so its error wins
  */
 async function releaseMaintenanceModes(
   client: OperatorClient,
-  releases: ReadonlyArray<MaintenanceModeRelease>,
+  held: ReadonlyArray<HeldMaintenanceMode>,
   applyFailed: boolean,
 ): Promise<void> {
   let firstError: { error: unknown } | undefined;
-  for (const release of releases) {
+  for (const { release } of held) {
     try {
       await release(client);
     } catch (error) {
@@ -172,6 +177,13 @@ async function releaseMaintenanceModes(
     }
   }
   if (firstError) throw firstError.error;
+  if (applyFailed) return;
+  const recomposed = new Set<PlannedDeployment>();
+  for (const { deployment } of held) {
+    if (recomposed.has(deployment)) continue;
+    recomposed.add(deployment);
+    await recomposeApplication(client, deployment.app);
+  }
 }
 
 /**
@@ -185,21 +197,21 @@ export async function applyRemainingResources(
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<void> {
-  const releases: MaintenanceModeRelease[] = [];
+  const held: HeldMaintenanceMode[] = [];
   try {
-    await applyRemainingResourcesHoldingMaintenanceMode(client, workspaceId, deployments, releases);
+    await applyRemainingResourcesHoldingMaintenanceMode(client, workspaceId, deployments, held);
   } catch (error) {
-    await releaseMaintenanceModes(client, releases, true);
+    await releaseMaintenanceModes(client, held, true);
     throw error;
   }
-  await releaseMaintenanceModes(client, releases, false);
+  await releaseMaintenanceModes(client, held, false);
 }
 
 async function applyRemainingResourcesHoldingMaintenanceMode(
   client: OperatorClient,
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
-  releases: MaintenanceModeRelease[],
+  held: HeldMaintenanceMode[],
 ): Promise<void> {
   const step = makeStep(deployments);
 
@@ -210,7 +222,7 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
       );
       await step("apply.tailorDB.createUpdate", (d) =>
         applyTailorDB(applyClient, d.tailorDB, "create-update", {
-          holdMaintenanceMode: (release) => releases.push(release),
+          holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
         }),
       );
       await step("apply.auth.createUpdateDependents", (d) =>
