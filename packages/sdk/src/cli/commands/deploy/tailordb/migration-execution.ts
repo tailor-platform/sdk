@@ -14,7 +14,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -776,10 +776,16 @@ export async function restoreMigrationRestrictions(
     }
   }
   if (firstError !== undefined) {
+    const carried = getErrorDiagnostics(firstError);
     throw withErrorDiagnostics(firstError, {
       code: "MIGRATION_RESTORE_FAILED",
-      suggestion: `${RESTRICTED_TABLES_RECOVERY} Tables that stay restricted: ${describeUnrestored(unrestored)}.`,
-      context: { unrestored },
+      suggestion: [
+        `${RESTRICTED_TABLES_RECOVERY} Tables that stay restricted: ${describeUnrestored(unrestored)}.`,
+        carried.suggestion,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      context: { ...carried.context, unrestored },
     });
   }
 }
@@ -920,6 +926,7 @@ async function rollbackSingleMigrationPrePhase(
         tailordbTypeName: tableName,
       });
     } catch (rollbackError) {
+      if (isNotFoundError(rollbackError)) continue;
       leftRestricted.push(tableName);
       logger.warn(
         `Failed to roll back table '${tableName}' in namespace '${migration.namespace}': ` +

@@ -3,8 +3,9 @@
  * and prior schema whenever the schema operations are reversible.
  */
 
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, aroundEach } from "vitest";
-import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { errorToJson } from "#/cli/shared/error-json";
 import { logger } from "#/cli/shared/logger";
 import { applyTailorDB, captureMigrationFileState, preflightTailorDB } from "./index";
@@ -1574,6 +1575,109 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(log).toHaveBeenCalledWith(expect.stringContaining("remote schema drift"));
       warn.mockRestore();
       log.mockRestore();
+    });
+
+    test("keeps an existing table in the manual-repair warning when its rollback write failed and the checkpoint changed so restoration was skipped", async () => {
+      const client = createMockClient();
+      checkpointReadsAfterCommit(client, () => ({ number: 5 }));
+      let migrationFailed = false;
+      const original = vi.mocked(client.updateTailorDBType).getMockImplementation();
+      vi.mocked(client.updateTailorDBType).mockImplementation(async (request, ...rest) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const type = (request as any)?.tailordbType;
+        if (migrationFailed && type?.name === "GoodsReceipt") {
+          throw new Error("write refused");
+        }
+        return original ? original(request, ...rest) : ({} as never);
+      });
+      setPendingMigrations([
+        mkAddFieldMigration(1, "GoodsReceipt", "note"),
+        mkAddFieldMigration(2, "GoodsReceipt", "extra"),
+      ]);
+      vi.mocked(migrationModule.executeMigrations).mockImplementation(
+        async (_ctx: unknown, migrations: PendingMigration[]) => {
+          if (!migrations.some((m) => m.number === 2)) return;
+          migrationFailed = true;
+          throw new Error("migration 2 failed");
+        },
+      );
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(
+        applyTailorDB(client, createUpdatePlanResult(), "create-update"),
+      ).rejects.toThrow("migration 2 failed");
+
+      const lines = warn.mock.calls.map(([line]) => line).join("\n");
+      expect(lines).toContain("Skipping restoration");
+      expect(lines).toContain("was not rolled back completely");
+      warn.mockRestore();
+    });
+
+    test("does not call a new table restricted when it was never created and its delete finds nothing", async () => {
+      const client = createMockClient();
+      vi.mocked(client.deleteTailorDBType).mockRejectedValue(
+        new ConnectError("table not found", Code.NotFound),
+      );
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        new Error("original migration failure"),
+      );
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(applyTailorDB(client, createMockPlanResult(), "create-update")).rejects.toThrow(
+        "original migration failure",
+      );
+
+      const lines = warn.mock.calls.map(([line]) => line).join("\n");
+      expect(lines).not.toContain("not rolled back completely");
+      expect(lines).not.toContain("Failed to roll back table 'StockReservation'");
+      expect(log).not.toHaveBeenCalledWith(expect.stringContaining("remote schema drift"));
+      warn.mockRestore();
+      log.mockRestore();
+    });
+
+    test("keeps the request details and suggestion a failed restoration write already carried", async () => {
+      const client = createMockClient();
+      const original = vi.mocked(client.updateTailorDBType).getMockImplementation();
+      vi.mocked(client.updateTailorDBType).mockImplementation(async (request, ...rest) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const type = (request as any)?.tailordbType;
+        if (type?.name === "GoodsReceipt" && !restrictedWrite([request])) {
+          throw withErrorDiagnostics(new Error("settings write refused"), {
+            suggestion: "Check the platform status.",
+            context: { method: "UpdateTailorDBType", identifiers: { typeName: "GoodsReceipt" } },
+          });
+        }
+        return original ? original(request, ...rest) : ({} as never);
+      });
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        new Error("original migration failure"),
+      );
+      vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      const error = await applyTailorDB(
+        client,
+        withRestorableGoodsReceipt(),
+        "create-update",
+      ).catch((thrown: Error) => thrown);
+
+      expect(errorToJson(error).error).toMatchObject({
+        context: {
+          restoration: {
+            code: "MIGRATION_RESTORE_FAILED",
+            suggestion: expect.stringContaining("Check the platform status."),
+            context: {
+              method: "UpdateTailorDBType",
+              identifiers: { typeName: "GoodsReceipt" },
+              unrestored: [{ namespace: "test-ns", tables: ["GoodsReceipt"] }],
+            },
+          },
+        },
+      });
     });
 
     test("names a write-disabled table that the migration itself rewrote", async () => {

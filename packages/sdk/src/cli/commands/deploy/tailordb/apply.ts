@@ -619,6 +619,7 @@ export async function applyTailorDB(
       }
 
       const restorationSnapshots = new Map(preMigrationSnapshots);
+      const restorationSkipped = new Set<string>();
       const restorationSettings = new Map(restrictionState);
       const restorationCheckpoints = new Map<
         string,
@@ -876,6 +877,7 @@ export async function applyTailorDB(
             restrictionHistory(namespaceName),
           );
           restorationSnapshots.delete(namespaceName);
+          restorationSkipped.add(namespaceName);
           const concurrencyError = CLIError({
             code: "MIGRATION_CHECKPOINT_CONFLICT",
             message:
@@ -908,6 +910,7 @@ export async function applyTailorDB(
             restrictionHistory(namespaceName),
           );
           restorationSnapshots.delete(namespaceName);
+          restorationSkipped.add(namespaceName);
           const ownershipError = CLIError({
             code: "MIGRATION_CHECKPOINT_UNVERIFIED",
             message:
@@ -982,7 +985,7 @@ export async function applyTailorDB(
           (entry) => entry.namespace === migration.namespace,
         );
         const lifted = new Set(
-          failedRestoration?.tables.length === 0
+          restorationSkipped.has(migration.namespace) || failedRestoration?.tables.length === 0
             ? []
             : [
                 ...Object.keys(restorationSnapshots.get(migration.namespace)?.tables ?? {}),
