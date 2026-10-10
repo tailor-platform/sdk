@@ -47,6 +47,33 @@ describe("deploy workspace resolution", () => {
     );
   });
 
+  test("keeps the steps to skip in the suggested retry", async () => {
+    const workspaceError = new Error("workspace resolution stopped deploy");
+    mocks.resolveDeployWorkspace.mockRejectedValue(workspaceError);
+    const configPath = "src/cli/commands/deploy/__test_fixtures__/tailor.config.ts";
+
+    await expect(
+      deploy({
+        configPath,
+        migrationSkipSteps: new Map([
+          ["main-db", ["backfillUser", "backfillInvoice"]],
+          ["audit", ["copy"]],
+        ]),
+      }),
+    ).rejects.toBe(workspaceError);
+    expect(mocks.resolveDeployWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deployArgs: [
+          "deploy",
+          "--config",
+          expect.stringContaining("tailor.config.ts"),
+          "--migration-skip-steps",
+          "main-db/backfillUser,main-db/backfillInvoice,audit/copy",
+        ],
+      }),
+    );
+  });
+
   test("preserves global environment and output options in the suggested retry", async () => {
     const workspaceError = new Error("workspace resolution stopped deploy");
     mocks.resolveDeployWorkspace.mockRejectedValue(workspaceError);

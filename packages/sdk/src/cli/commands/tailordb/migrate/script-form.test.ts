@@ -127,6 +127,33 @@ describe("analyzeMigrationScriptSource", () => {
     ).toThrow("step names must be written literally");
   });
 
+  test.each([
+    ["contains a comma", "back,fill"],
+    ["contains a slash", "back/fill"],
+    ["contains a hyphen", "back-fill"],
+    ["is empty", ""],
+    ["starts with a digit", "1backfill"],
+    ["is longer than 64 characters", "a".repeat(65)],
+  ])("rejects a step name that %s", (_label, name) => {
+    expect(() =>
+      analyze(`export const steps = { ${JSON.stringify(name)}: { run: async (trx) => {} } };`),
+    ).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_SCRIPT_INVALID",
+        message: expect.stringContaining("is invalid: use a letter followed by up to 63 letters"),
+      }),
+    );
+  });
+
+  test.each(["backfill", "Backfill_2", "a", `a${"b".repeat(63)}`])(
+    "accepts the step name %s",
+    (name) => {
+      expect(
+        analyze(`export const steps = { ${name}: { run: async (trx) => {} } };`),
+      ).toMatchObject({ kind: "steps", order: [name] });
+    },
+  );
+
   test("asks for a step defined elsewhere to be written inside steps", () => {
     expect(() =>
       analyze(ml`

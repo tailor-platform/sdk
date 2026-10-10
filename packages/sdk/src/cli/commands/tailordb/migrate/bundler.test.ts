@@ -241,11 +241,13 @@ describe("bundleMigrationSteps", () => {
    * Bundle a steps script and import it with stand-ins for the platform globals.
    * @param stepsSource - Source of the `steps` object literal
    * @param temporal - Temporal mode to bundle the steps with
+   * @param skipSteps - Steps the bundle's runner reports as skipped
    * @returns The bundle's `main` and what it did against the stand-ins
    */
   async function loadStepsBundle(
     stepsSource: string,
     temporal?: boolean,
+    skipSteps?: readonly string[],
   ): Promise<{ main: BundledMain; record: RuntimeRecord }> {
     const scriptPath = path.join(testDir, "migrate.ts");
     fs.writeFileSync(
@@ -262,6 +264,7 @@ describe("bundleMigrationSteps", () => {
       order: ["first", "second"],
       runnerJobFunctionName: "runner-job",
       temporal,
+      skipSteps,
     });
 
     const record: RuntimeRecord = { sql: [], jobs: [], clientOptions: [] };
@@ -378,6 +381,34 @@ describe("bundleMigrationSteps", () => {
 
     await expect(main({ step: "first" })).rejects.toThrow("boom");
     expect(record.sql).toEqual(["begin", "rollback"]);
+  });
+
+  test("reports a skipped step as skipped without opening a transaction or running it", async () => {
+    const { main, record } = await loadStepsBundle(STEPS, undefined, ["first"]);
+
+    await expect(main({ step: "first" })).resolves.toEqual({ step: "first", skipped: true });
+
+    expect((globalThis as Record<string, unknown>).__migrationEvents).toEqual([]);
+    expect(record.sql).toEqual([]);
+  });
+
+  test("still runs the steps that are not skipped", async () => {
+    const { main, record } = await loadStepsBundle(STEPS, undefined, ["first"]);
+
+    await expect(main({ step: "second" })).resolves.toEqual({ step: "second" });
+
+    expect(record.sql).toEqual(["begin", 'select * from "User"', "commit"]);
+  });
+
+  test("keeps starting a runner job for every planned step when some are skipped", async () => {
+    const { main, record } = await loadStepsBundle(STEPS, undefined, ["first"]);
+
+    await main({});
+
+    expect(record.jobs).toEqual([
+      { name: "runner-job", args: { step: "first" } },
+      { name: "runner-job", args: { step: "second" } },
+    ]);
   });
 
   test("rejects a step name outside the planned order", async () => {

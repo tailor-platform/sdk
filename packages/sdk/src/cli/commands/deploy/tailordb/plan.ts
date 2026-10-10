@@ -51,6 +51,7 @@ import {
   normalizeComparableGqlPermission,
   normalizeComparableTailorDBType,
 } from "./compare";
+import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import { validateAndDetectMigrations } from "./migration-validation";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { PlanContext } from "../types";
@@ -72,6 +73,7 @@ export async function planTailorDB(context: PlanContext) {
     forRemoval,
     config,
     noSchemaCheck,
+    migrationSkipSteps,
     forceApplyAll = false,
   } = context;
   const tailordbs: TailorDBDeployInput[] = [];
@@ -135,14 +137,9 @@ export async function planTailorDB(context: PlanContext) {
     }
   }
   const migrationConfig = getNamespacesWithMigrations(config, path.dirname(config.path));
-  const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = forRemoval
-    ? { namespacesWithMigrations: [], migrationFileState: {}, checkpointRepairs: [] }
-    : migrationTestBaselines
-      ? {
-          namespacesWithMigrations: migrationConfig,
-          migrationFileState: captureMigrationFileState(migrationConfig),
-          checkpointRepairs: [],
-        }
+  const detected =
+    forRemoval || migrationTestBaselines
+      ? undefined
       : await validateAndDetectMigrations(
           client,
           workspaceId,
@@ -151,6 +148,23 @@ export async function planTailorDB(context: PlanContext) {
           noSchemaCheck ?? false,
           tailordbs,
         );
+  if (detected) {
+    await assertMigrationSkipSteps({
+      client,
+      workspaceId,
+      requested: selectSkipStepsOfNamespaces(
+        migrationSkipSteps,
+        tailordbs.map((tailordb) => tailordb.namespace),
+      ),
+      pendingMigrations: detected.pendingMigrations,
+      inProgressByNamespace: detected.inProgressMigrations,
+    });
+  }
+  const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = detected ?? {
+    namespacesWithMigrations: forRemoval ? [] : migrationConfig,
+    migrationFileState: forRemoval ? {} : captureMigrationFileState(migrationConfig),
+    checkpointRepairs: [],
+  };
 
   const {
     changeSet: serviceChangeSet,
@@ -200,6 +214,7 @@ export async function planTailorDB(context: PlanContext) {
       executorUsedTables,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
+      ...(migrationSkipSteps ? { migrationSkipSteps } : {}),
       ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
       namespacesWithMigrations,
       migrationFileState,
