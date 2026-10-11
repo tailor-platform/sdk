@@ -277,7 +277,10 @@ export const seedDumpCommand = defineAppCommand({
       if (existing.length > 0) {
         throw new Error(
           `${String(existing.length)} JSONL file(s) already exist in ${dataDir}: ` +
-            `${existing.join(", ")}. Pass --force to overwrite them, or --out to write elsewhere.`,
+            `${existing.join(", ")}. Pass --force to overwrite them, or ` +
+            (args.dataset !== undefined
+              ? "--dataset with another name."
+              : "--out to write elsewhere."),
         );
       }
     }

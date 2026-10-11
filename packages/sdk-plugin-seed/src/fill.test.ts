@@ -410,6 +410,10 @@ describe("seedFillCommand", () => {
     const result = await runFill(["--dataset", "preview", "--json"]);
 
     expect(result.exitCode).toBe(0);
+    expect(logger.info.mock.calls.map(([message]) => message)).toEqual([
+      "Filling dataset cogs",
+      "Filling dataset shipments",
+    ]);
     await expect(readFile(baseFile, "utf-8")).resolves.toBe('{"name":"base"}\n');
     for (const file of datasetFiles) {
       const [row] = await readRows(file);

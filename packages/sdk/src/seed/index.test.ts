@@ -140,6 +140,18 @@ describe("validateSeedData", () => {
       }
     });
 
+    test("warns only about the named file of a dataset", async () => {
+      writeLines(join(cogs, "Itme.jsonl"), [{ id: "i2" }]);
+      const file = writeLines(join(cogs, "ItemValuation.jsonl"), [
+        { id: "v1", name: "base", itemId: "i1" },
+      ]);
+
+      const result = await validateSeedData({ path: file });
+
+      expect(result).toMatchObject({ valid: true });
+      expect(result.output).not.toContain("Itme.jsonl");
+    });
+
     test("checks a dataset directory named on its own against the base schema files", async () => {
       const file = writeLines(join(cogs, "Item.jsonl"), [{ id: "i2" }]);
 

@@ -7,7 +7,8 @@ import {
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
-import { datasetArg, selectDatasets } from "./datasets";
+import { selectDatasets } from "./datasets";
+import type { DatasetSelection } from "./datasets";
 
 export const seedFillCommand = defineAppCommand({
   name: "fill",
@@ -20,7 +21,11 @@ export const seedFillCommand = defineAppCommand({
     "directory. With --dataset, only the files of the selected datasets are filled.",
   args: z.strictObject({
     ...configArg,
-    ...datasetArg,
+    dataset: arg(z.array(z.string()).default([]), {
+      description:
+        "Dataset whose files to fill instead of the base seed data: a directory under the seed data directory, or a name from the seedPlugin datasets option (repeatable)",
+      completion: { type: "none" },
+    }),
     fields: arg(z.string().default("id"), {
       alias: "f",
       description: "Comma-separated fields to fill",
@@ -47,33 +52,41 @@ export const seedFillCommand = defineAppCommand({
       throw new Error("--dataset cannot be combined with a path.");
     }
 
-    if (args.path || args.dataset.length === 0) {
-      const targetPath = args.path
-        ? path.resolve(process.cwd(), args.path)
-        : path.join((await loadSeedContext({ configPath: args.config })).distPath, "data");
-      const result = await fillSeedData({ path: targetPath, fields });
-      if (result.output) {
-        logger.log(result.output);
-      }
-      if (args.json) {
-        logger.out({ path: targetPath, filled: result.filled });
-      }
-      return;
+    let targetPath: string;
+    let datasets: DatasetSelection = { names: [], dirs: [] };
+    if (args.path) {
+      targetPath = path.resolve(process.cwd(), args.path);
+    } else {
+      const context = await loadSeedContext({ configPath: args.config });
+      targetPath = path.join(context.distPath, "data");
+      datasets = selectDatasets(context, args.dataset);
     }
 
-    const context = await loadSeedContext({ configPath: args.config });
-    const dataDir = path.join(context.distPath, "data");
-    const datasets = selectDatasets(context, args.dataset);
+    const targets =
+      datasets.dirs.length > 0
+        ? datasets.dirs.map((dir, index) => ({ path: dir, dataset: datasets.names[index] }))
+        : [{ path: targetPath, dataset: undefined }];
     const filled = [];
-    for (const dir of datasets.dirs) {
-      const result = await fillSeedData({ path: dir, fields, schemaDir: dataDir });
+    for (const target of targets) {
+      if (target.dataset) {
+        logger.info(`Filling dataset ${target.dataset}`);
+      }
+      const result = await fillSeedData({
+        path: target.path,
+        fields,
+        ...(target.dataset ? { schemaDir: targetPath } : {}),
+      });
       if (result.output) {
         logger.log(result.output);
       }
       filled.push(...result.filled);
     }
     if (args.json) {
-      logger.out({ path: dataDir, datasets: datasets.names, filled });
+      logger.out({
+        path: targetPath,
+        ...(datasets.names.length > 0 ? { datasets: datasets.names } : {}),
+        filled,
+      });
     }
   },
 });

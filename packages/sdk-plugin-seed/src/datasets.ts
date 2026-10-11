@@ -2,6 +2,7 @@ import { readdirSync, realpathSync, statSync } from "node:fs";
 import { arg } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
+import { seedableEntities } from "./entities";
 import { assertSeedDataDirectory } from "./jsonl";
 import type { SeedContext } from "@tailor-platform/sdk/cli";
 
@@ -69,11 +70,12 @@ function listDatasetDirectories(dataDir: string): string[] {
 }
 
 function seededTables(context: SeedContext): Set<string> {
-  const tables = new Set(context.namespaces.flatMap((namespace) => namespace.types));
-  if (context.idpUser) {
-    tables.add("_User");
-  }
-  return tables;
+  return new Set(
+    seedableEntities(
+      context.namespaces.flatMap((namespace) => namespace.types),
+      context.idpUser !== null,
+    ),
+  );
 }
 
 function assertDatasetTables(dirs: readonly string[], tables: Set<string>): void {

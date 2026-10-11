@@ -229,6 +229,18 @@ describe("seedDumpCommand", () => {
     );
   });
 
+  test("suggests another dataset when the dataset already holds the files", async () => {
+    jsonl.existingSeedDataFiles.mockReturnValue(["User"]);
+
+    const result = await runDumpCommand(["--machine-user", "manager", "--dataset", "snapshot"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain(
+      "Pass --force to overwrite them, or --dataset with another name.",
+    );
+    expect(sdk.show).not.toHaveBeenCalled();
+  });
+
   test("rejects --dataset together with --out before remote operations", async () => {
     const result = await runDumpCommand([
       "--machine-user",

@@ -159,10 +159,12 @@ async function resolveValidationConfig(
 async function findFilesWithoutSchema(
   dirs: readonly string[],
   schemaDir: string,
+  tableName: string | undefined,
 ): Promise<string[]> {
   const warnings: string[] = [];
   for (const dir of dirs) {
-    for (const table of await listSeedTables(dir)) {
+    const tables = (await listSeedTables(dir)).filter((table) => !tableName || table === tableName);
+    for (const table of tables) {
       if (!(await findSchemaFile(schemaDir, table))) {
         warnings.push(
           `${join(dir, `${table}.jsonl`)} has no schema file in ${schemaDir}, so its rows are not checked`,
@@ -258,7 +260,7 @@ export async function validateSeedData(
   const { verbose = false, excludeBase = false } = options;
   const { tableName, datasetDirs, ...config } = await resolveValidationConfig(options);
   const schemaWarnings = config.schemaDir
-    ? await findFilesWithoutSchema(datasetDirs, config.schemaDir)
+    ? await findFilesWithoutSchema(datasetDirs, config.schemaDir, tableName)
     : [];
 
   const db = LinesDB.create(config);
