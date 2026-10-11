@@ -28,6 +28,7 @@ export type CodexPreflightResult = {
 export const DEFAULT_CODEX_IMAGE =
   "ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304";
 export const DEFAULT_CODEX_NPM_PACKAGE = "@openai/codex@0.133.0";
+export const CONTAINER_WORKSPACE_DIR = "/workspace";
 export const CONTAINER_PNPM_STORE = "/pnpm-store";
 export const PNPM_STORE_ENV = "PNPM_CONFIG_STORE_DIR";
 
@@ -70,6 +71,7 @@ export async function preflightCodexRunner(
 }
 
 export async function runCodexInPodman(options: {
+  containerName: string;
   worktreePath: string;
   promptPath: string;
   solverStdoutPath: string;
@@ -83,26 +85,50 @@ export async function runCodexInPodman(options: {
 }): Promise<SolverResult> {
   const runtime = options.runtime ?? getCodexRuntimeConfig();
   await fs.access(runtime.authFile);
-  await Promise.all([
-    fs.writeFile(options.solverStdoutPath, ""),
-    fs.writeFile(options.solverStderrPath, ""),
-    fs.writeFile(options.tracePath, ""),
-  ]);
-
   const codexArgs = buildCodexExecArgs({
     model: options.model,
     effort: options.effort,
   });
-  const script = buildCodexBootstrapScript(codexArgs, runtime.codexPackage);
-  const prompt = await fs.readFile(options.promptPath, "utf8");
-  const podmanArgs = [
+  return await runAgentContainer({
+    podmanArgs: buildAgentContainerArgs({
+      containerName: options.containerName,
+      image: runtime.image,
+      worktreePath: options.worktreePath,
+      sharedPnpmStorePath: options.sharedPnpmStorePath,
+      mounts: [`${runtime.authFile}:/tmp/codex-auth.json:ro,Z`],
+      envNames: [],
+      script: buildCodexBootstrapScript(codexArgs, runtime.codexPackage),
+    }),
+    containerName: options.containerName,
+    prompt: await fs.readFile(options.promptPath, "utf8"),
+    solverStdoutPath: options.solverStdoutPath,
+    solverStderrPath: options.solverStderrPath,
+    tracePath: options.tracePath,
+    maxSeconds: options.maxSeconds,
+  });
+}
+
+export function buildAgentContainerArgs(options: {
+  containerName: string;
+  image: string;
+  worktreePath: string;
+  worktreeAccess?: "rw" | "ro";
+  sharedPnpmStorePath?: string;
+  mounts: string[];
+  envNames: string[];
+  script: string;
+}): string[] {
+  return [
     "run",
     "--rm",
     "-i",
+    "--init",
+    "--name",
+    options.containerName,
     "--entrypoint",
     "/bin/bash",
     "-v",
-    `${options.worktreePath}:/workspace:rw,Z`,
+    `${options.worktreePath}:${CONTAINER_WORKSPACE_DIR}:${options.worktreeAccess ?? "rw"},Z`,
     ...(options.sharedPnpmStorePath === undefined
       ? []
       : [
@@ -111,18 +137,36 @@ export async function runCodexInPodman(options: {
           "-e",
           `${PNPM_STORE_ENV}=${CONTAINER_PNPM_STORE}`,
         ]),
-    "-v",
-    `${runtime.authFile}:/tmp/codex-auth.json:ro,Z`,
+    ...options.mounts.flatMap((mount) => ["-v", mount]),
+    ...options.envNames.flatMap((name) => ["--env", name]),
     "-w",
-    "/workspace",
-    runtime.image,
+    CONTAINER_WORKSPACE_DIR,
+    options.image,
     "-lc",
-    script,
+    options.script,
   ];
+}
+
+export async function runAgentContainer(options: {
+  podmanArgs: string[];
+  containerName: string;
+  prompt: string;
+  solverStdoutPath: string;
+  solverStderrPath: string;
+  tracePath: string;
+  maxSeconds: number;
+  env?: Record<string, string>;
+}): Promise<SolverResult> {
+  await Promise.all([
+    fs.writeFile(options.solverStdoutPath, ""),
+    fs.writeFile(options.solverStderrPath, ""),
+    fs.writeFile(options.tracePath, ""),
+  ]);
 
   const startedAt = Date.now();
-  return await new Promise((resolve, reject) => {
-    const child = spawn("podman", podmanArgs, {
+  const result = await new Promise<SolverResult>((resolve, reject) => {
+    const child = spawn("podman", options.podmanArgs, {
+      env: options.env === undefined ? undefined : { ...process.env, ...options.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
     const stdout = createWriteStream(options.solverStdoutPath, { flags: "a" });
@@ -169,8 +213,14 @@ export async function runCodexInPodman(options: {
         reject,
       );
     });
-    child.stdin.end(prompt);
+    child.stdin.end(options.prompt);
   });
+  if (result.timedOut) {
+    await runCommand("podman", ["rm", "-f", options.containerName], {
+      rejectOnNonZero: false,
+    }).catch(() => undefined);
+  }
+  return result;
 }
 
 export function buildCodexExecArgs(options: { model: string; effort: string }): string[] {
@@ -227,7 +277,7 @@ export function buildCodexPreflightScript(codexPackage: string): string {
   ].join("\n");
 }
 
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
