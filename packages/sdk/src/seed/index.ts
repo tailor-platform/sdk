@@ -16,7 +16,6 @@ import { LinesDB, ErrorFormatter, fillFields, unwrap } from "@toiroakr/lines-db"
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join, normalize } from "pathe";
-import { readPackageJSON, resolvePackageJSON } from "pkg-types";
 import { isNativeTypeScriptRuntime } from "#/cli/shared/runtime";
 import { firstErrorLocation } from "./record-lines";
 import type { JsonlParseError, RowFiller, ValidationErrorDetail } from "@toiroakr/lines-db";
@@ -319,6 +318,8 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
 }
 
 async function resolveLinesDbCli(): Promise<string> {
+  // Loaded on demand: every generated seed schema file imports this module.
+  const { readPackageJSON, resolvePackageJSON } = await import("pkg-types");
   const packageJsonPath = await resolvePackageJSON(
     fileURLToPath(import.meta.resolve("@toiroakr/lines-db")),
   );
@@ -386,7 +387,7 @@ export async function startSeedStudio(options: SeedStudioOptions): Promise<SeedS
   const url = await new Promise<string>((resolve, reject) => {
     createInterface({ input: child.stdout }).on("line", (line) => {
       process.stderr.write(`${line}\n`);
-      const found = /https?:\/\/\S+/.exec(stripVTControlCharacters(line));
+      const found = /(?<=running at )https?:\/\/\S+/.exec(stripVTControlCharacters(line));
       if (found) resolve(found[0]);
     });
     exited.then(

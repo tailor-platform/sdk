@@ -67,16 +67,15 @@ export const seedStudioCommand = defineAppCommand({
     } else {
       const context = await loadSeedContext({ configPath: args.config });
       dataDir = path.join(context.distPath, "data");
+      assertSeedDataDirectory(dataDir);
     }
-    assertSeedDataDirectory(dataDir);
 
     studioStart = startSeedStudio({ dataDir, port: args.port, open: args.open });
     const studio = await studioStart;
-    if (args.json) {
-      logger.out({ url: studio.url, dataDir });
-    }
     const tablesWithoutRows = await listTablesWithoutRows(dataDir);
-    if (tablesWithoutRows.length > 0) {
+    if (args.json) {
+      logger.out({ url: studio.url, dataDir, tablesWithoutRows });
+    } else if (tablesWithoutRows.length > 0) {
       logger.info(`Not shown until their JSONL file has a row: ${tablesWithoutRows.join(", ")}`);
     }
     await studio.closed;

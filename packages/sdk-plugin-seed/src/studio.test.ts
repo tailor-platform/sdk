@@ -175,17 +175,32 @@ describe("tailor seed studio", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  test("reports where it serves as JSON", () => {
+  test("reports where it serves, and the tables it does not show, as JSON", () => {
     expect(JSON.parse(studio.stdout().split("\n")[0] ?? "")).toEqual({
       url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+$/),
       dataDir,
+      tablesWithoutRows: ["Gadget"],
     });
   });
 
-  test("names the tables it does not show for lack of rows", async () => {
-    await waitFor(() => studio.stderr().includes("Not shown"), studio);
-    expect(studio.stderr()).toContain("Not shown until their JSONL file has a row: Gadget");
-  });
+  test(
+    "reports its own address when a table module prints another one",
+    async () => {
+      const dir = await writeDataDir();
+      try {
+        await writeFile(
+          path.join(dir, "widget-table.ts"),
+          `console.log("Docs: https://example.com/widgets");\n${tableSource}`,
+        );
+        const other = startStudio([dir, "--port", "0", "--json"]);
+
+        expect(await waitForUrl(other)).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+    STUDIO_TEST_TIMEOUT_MS,
+  );
 
   test(
     "serves the tables of the data directory",
@@ -272,10 +287,12 @@ describe("stopping tailor seed studio", () => {
   );
 
   test(
-    "stops the studio before exiting on Ctrl+C",
+    "names the tables it does not show, and stops before exiting on Ctrl+C",
     async () => {
-      const studio = startStudio([dataDir, "--port", "0", "--json"]);
-      const url = await waitForUrl(studio);
+      const studio = startStudio([dataDir, "--port", "0"]);
+      await waitFor(() => studio.stderr().includes("Not shown"), studio);
+      expect(studio.stderr()).toContain("Not shown until their JSONL file has a row: Gadget");
+      const url = /running at (http:\/\/\S+)/.exec(studio.stderr())?.[1] ?? "";
       const pid = studio.process.pid;
       if (pid === undefined) throw new Error("studio has no pid");
 
@@ -299,7 +316,23 @@ describe("tailor seed studio arguments", () => {
       const result = runCli(["studio", file]);
 
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain(`Seed data path is not a directory: ${file}`);
+      expect(result.stderr).toContain(`${file} is not a directory.`);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("does not suggest `tailor generate` for a path it was given", async () => {
+    assertBuilt();
+    const dir = await mkdtemp(path.join(os.tmpdir(), "seed-studio-missing-"));
+    try {
+      const missing = path.join(dir, "missing");
+
+      const result = runCli(["studio", missing]);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(missing);
+      expect(result.stderr).not.toContain("tailor generate");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
