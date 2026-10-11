@@ -9,7 +9,6 @@
 import { spawn } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import { LinesDB, ErrorFormatter, fillFields, unwrap } from "@toiroakr/lines-db";
@@ -83,6 +82,8 @@ type SeedStudioOptions = {
   port?: number;
   /** Open the studio in the default browser */
   open?: boolean;
+  /** Stops the studio when aborted, also while it is still starting */
+  signal?: AbortSignal;
 };
 
 /**
@@ -91,18 +92,13 @@ type SeedStudioOptions = {
 type SeedStudio = {
   /** Address the studio serves on */
   url: string;
-  /** Settles when the studio stops: resolves after `stop()`, and rejects when it stops on its own with an error */
+  /** Settles once the studio has stopped: resolves when `signal` stopped it, and rejects when it stopped on its own with an error */
   closed: Promise<void>;
-  /** Stop the studio, resolving once it has stopped */
-  stop: () => Promise<void>;
 };
 
 // Computed here rather than in a helper so the URL stays relative to this entry
 // file wherever the bundler places shared code.
 const TS_HOOK_REGISTER_URL = new URL("../cli/ts-hook-register.mjs", import.meta.url);
-
-/** How long `stop()` lets the studio finish stopping on a signal it already got before sending one. */
-const STUDIO_STOP_GRACE_MS = 2000;
 
 async function resolveSeedDataTarget(resolvedPath: string): Promise<SeedDataTarget> {
   const stats = await stat(resolvedPath);
@@ -340,14 +336,15 @@ async function resolveLinesDbCli(): Promise<string> {
  * and a generated primary key, and leaves the other values the table fills in
  * on create, such as `createdAt`, out of the file.
  *
- * The studio's messages go to stderr. It keeps running until `stop()` is
- * called or it stops on its own; a signal that reaches it, such as Ctrl+C in
- * a terminal, stops it too.
+ * The studio's messages go to stderr. It keeps running until `signal` is
+ * aborted, it stops on its own, or this process exits; a signal that reaches
+ * it, such as Ctrl+C in a terminal, stops it too.
  * @param options - Studio options including the data directory
  * @returns The running studio, once it serves
  */
 export async function startSeedStudio(options: SeedStudioOptions): Promise<SeedStudio> {
-  const { dataDir, port, open = false } = options;
+  const { dataDir, port, open = false, signal } = options;
+  signal?.throwIfAborted();
   if (!(await stat(dataDir)).isDirectory()) {
     throw new Error(`${dataDir} is not a directory.`);
   }
@@ -371,10 +368,23 @@ export async function startSeedStudio(options: SeedStudioOptions): Promise<SeedS
   );
 
   let stopRequested = false;
+  const stop = (): void => {
+    stopRequested = true;
+    child.kill("SIGTERM");
+  };
+  const stopWithHost = (): void => {
+    child.kill("SIGTERM");
+  };
+  signal?.addEventListener("abort", stop, { once: true });
+  process.once("exit", stopWithHost);
   const exited = new Promise<string | undefined>((resolve, reject) => {
     child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      resolve(code === 0 ? undefined : signal ? `signal ${signal}` : `exit code ${String(code)}`);
+    child.once("exit", (code, exitSignal) => {
+      signal?.removeEventListener("abort", stop);
+      process.off("exit", stopWithHost);
+      resolve(
+        code === 0 ? undefined : exitSignal ? `signal ${exitSignal}` : `exit code ${String(code)}`,
+      );
     });
   });
   const closed = exited.then((failure) => {
@@ -399,17 +409,5 @@ export async function startSeedStudio(options: SeedStudioOptions): Promise<SeedS
     );
   });
 
-  const stop = async (): Promise<void> => {
-    stopRequested = true;
-    if (child.exitCode === null && child.signalCode === null) {
-      const exitedInTime = await Promise.race([
-        exited.then(() => true),
-        delay(STUDIO_STOP_GRACE_MS, false, { ref: false }),
-      ]);
-      if (!exitedInTime) child.kill("SIGTERM");
-    }
-    await exited.catch(() => {});
-  };
-
-  return { url, closed, stop };
+  return { url, closed };
 }

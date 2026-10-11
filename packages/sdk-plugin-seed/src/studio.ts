@@ -13,6 +13,7 @@ import { assertSeedDataDirectory } from "./jsonl";
 type SeedModule = typeof import("@tailor-platform/sdk/seed");
 type SeedStudio = Awaited<ReturnType<SeedModule["startSeedStudio"]>>;
 
+const stopStudio = new AbortController();
 let studioStart: Promise<SeedStudio> | undefined;
 
 async function listTablesWithoutRows(dataDir: string): Promise<string[]> {
@@ -70,7 +71,12 @@ export const seedStudioCommand = defineAppCommand({
       assertSeedDataDirectory(dataDir);
     }
 
-    studioStart = startSeedStudio({ dataDir, port: args.port, open: args.open });
+    studioStart = startSeedStudio({
+      dataDir,
+      port: args.port,
+      open: args.open,
+      signal: stopStudio.signal,
+    });
     const studio = await studioStart;
     const tablesWithoutRows = await listTablesWithoutRows(dataDir);
     if (args.json) {
@@ -81,7 +87,7 @@ export const seedStudioCommand = defineAppCommand({
     await studio.closed;
   },
   cleanup: async () => {
-    const studio = await studioStart?.catch(() => undefined);
-    await studio?.stop();
+    stopStudio.abort();
+    await studioStart?.then((studio) => studio.closed).catch(() => {});
   },
 });

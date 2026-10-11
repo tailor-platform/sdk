@@ -119,6 +119,20 @@ async function waitForExit(child: ChildProcess): Promise<number | null> {
   });
 }
 
+async function waitForGroupToEnd(pid: number): Promise<void> {
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try {
+      process.kill(-pid, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+      throw error;
+    }
+    if (Date.now() > deadline) throw new Error("a process the studio started is still running");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 async function readToken(url: string): Promise<string> {
   const page = await (await fetch(url)).text();
   const token = /<meta name="studio-token" content="([^"]+)">/.exec(page)?.[1];
@@ -267,6 +281,14 @@ describe("tailor seed studio", () => {
 describe("stopping tailor seed studio", () => {
   let dataDir: string;
 
+  async function stopsWith(studio: Studio, stop: (pid: number) => Promise<void>): Promise<void> {
+    const pid = studio.process.pid;
+    if (pid === undefined) throw new Error("studio has no pid");
+    await stop(pid);
+    await waitForExit(studio.process);
+    await waitForGroupToEnd(pid);
+  }
+
   beforeAll(async () => {
     assertBuilt();
     dataDir = await writeDataDir();
@@ -277,15 +299,14 @@ describe("stopping tailor seed studio", () => {
   });
 
   test(
-    "stops the studio before exiting on SIGTERM",
+    "stops the studio on SIGTERM",
     async () => {
       const studio = startStudio([dataDir, "--port", "0", "--json"]);
       const url = await waitForUrl(studio);
-      const pid = studio.process.pid;
-      if (pid === undefined) throw new Error("studio has no pid");
 
-      process.kill(pid, "SIGTERM");
-      await waitForExit(studio.process);
+      await stopsWith(studio, async (pid) => {
+        process.kill(pid, "SIGTERM");
+      });
 
       await expect(fetch(url)).rejects.toThrow("fetch failed");
     },
@@ -293,19 +314,59 @@ describe("stopping tailor seed studio", () => {
   );
 
   test(
-    "names the tables it does not show, and stops before exiting on Ctrl+C",
+    "stops the studio when SIGTERM arrives twice",
+    async () => {
+      const studio = startStudio([dataDir, "--port", "0", "--json"]);
+      await waitForUrl(studio);
+
+      await expect(
+        stopsWith(studio, async (pid) => {
+          process.kill(pid, "SIGTERM");
+          try {
+            process.kill(pid, "SIGTERM");
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+          }
+        }),
+      ).resolves.toBeUndefined();
+    },
+    STUDIO_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "names the tables it does not show, and stops on Ctrl+C",
     async () => {
       const studio = startStudio([dataDir, "--port", "0"]);
       await waitFor(() => studio.stderr().includes("Not shown"), studio);
       expect(studio.stderr()).toContain("Not shown until their JSONL file has a row: Gadget");
-      const url = /running at (http:\/\/\S+)/.exec(studio.stderr())?.[1] ?? "";
-      const pid = studio.process.pid;
-      if (pid === undefined) throw new Error("studio has no pid");
 
-      process.kill(-pid, "SIGINT");
-      await waitForExit(studio.process);
+      await stopsWith(studio, async (pid) => {
+        process.kill(-pid, "SIGINT");
+      });
+    },
+    STUDIO_TEST_TIMEOUT_MS,
+  );
 
-      await expect(fetch(url)).rejects.toThrow("fetch failed");
+  test(
+    "stops a studio that is still starting",
+    async () => {
+      const dir = await writeDataDir();
+      try {
+        await writeFile(
+          path.join(dir, "widget-table.ts"),
+          `console.log("loading widgets");\nawait new Promise((resolve) => setTimeout(resolve, 600_000));\n${tableSource("Widget")}`,
+        );
+        const studio = startStudio([dir, "--port", "0"]);
+        await waitFor(() => studio.stderr().includes("loading widgets"), studio);
+
+        await expect(
+          stopsWith(studio, async (pid) => {
+            process.kill(pid, "SIGTERM");
+          }),
+        ).resolves.toBeUndefined();
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
     },
     STUDIO_TEST_TIMEOUT_MS,
   );
