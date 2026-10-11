@@ -976,6 +976,7 @@ export async function applyTailorDB(
             restorationError instanceof Error ? restorationError.message : String(restorationError)
           }.`,
           unrestored,
+          { namesUnknown: unrestored.every((entry) => entry.tables.length === 0) },
         );
         logger.log("The original migration error is reported below.");
         if (restorationError instanceof Error) restorationFailures.restoration = restorationError;
@@ -997,7 +998,7 @@ export async function applyTailorDB(
         warnTablesLeftRestricted(
           `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely.`,
           [{ namespace: migration.namespace, tables: remaining }],
-          ROLLBACK_LEFTOVER_RECOVERY,
+          { recovery: ROLLBACK_LEFTOVER_RECOVERY },
         );
       }
       if (migrationFailure) {

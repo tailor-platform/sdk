@@ -8,6 +8,7 @@ import { describe, test, expect, vi, aroundEach } from "vitest";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { errorToJson } from "#/cli/shared/error-json";
 import { logger } from "#/cli/shared/logger";
+import { warnTablesLeftRestricted } from "./migration-execution";
 import { applyTailorDB, captureMigrationFileState, preflightTailorDB } from "./index";
 import type { SchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
@@ -1678,6 +1679,36 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           },
         },
       });
+    });
+
+    test("keeps the way to release the tables when none of them can be named", () => {
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      warnTablesLeftRestricted(
+        "Could not restore every TailorDB table after the migration failed.",
+        [{ namespace: "test-ns", tables: [] }],
+        { namesUnknown: true },
+      );
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Could not restore"));
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
+      warn.mockRestore();
+      log.mockRestore();
+    });
+
+    test("does not offer a release when no table is restricted at all", () => {
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      warnTablesLeftRestricted("Migration test-ns/0001 is partially applied.", [
+        { namespace: "test-ns", tables: [] },
+      ]);
+
+      expect(warn).toHaveBeenCalledOnce();
+      expect(log).not.toHaveBeenCalled();
+      warn.mockRestore();
+      log.mockRestore();
     });
 
     test("names a write-disabled table that the migration itself rewrote", async () => {

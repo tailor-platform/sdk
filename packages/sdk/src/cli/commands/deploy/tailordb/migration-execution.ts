@@ -554,25 +554,34 @@ export const RESTRICTION_EFFECT =
   "the GraphQL create, update, and delete operations and bulk upsert are disabled, and record events are not published";
 
 const RESTRICTED_TABLES_RECOVERY =
-  "Deploy again: once it finishes, the deploy writes these tables' configured settings back.";
+  "Deploy again: once it finishes, the deploy writes the tables' configured settings back.";
 
 export const ROLLBACK_LEFTOVER_RECOVERY =
   "Check these tables in the workspace and delete or repair them by hand. A deploy that finds a table the migration history does not know stops with remote schema drift, so deploying again does not release them.";
+
+interface LeftRestrictedOptions {
+  /** How the tables are released. */
+  recovery?: string;
+  /** Whether tables stay restricted although none of them can be named. */
+  namesUnknown?: boolean;
+}
 
 /**
  * Warn about tables that keep their migration restrictions, and how they are released.
  * @param reason - What left the tables restricted
  * @param restricted - The tables, by namespace
- * @param recovery - How the tables are released
+ * @param options - How the tables are released, and whether their names are unknown
  */
 export function warnTablesLeftRestricted(
   reason: string,
   restricted: readonly RestrictedTables[],
-  recovery: string = RESTRICTED_TABLES_RECOVERY,
+  options: LeftRestrictedOptions = {},
 ): void {
+  const { recovery = RESTRICTED_TABLES_RECOVERY, namesUnknown = false } = options;
   const tables = restricted.filter((entry) => entry.tables.length > 0);
   if (tables.length === 0) {
     logger.warn(reason);
+    if (namesUnknown) logger.log(recovery);
     return;
   }
   logger.warn(
