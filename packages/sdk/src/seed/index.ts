@@ -6,11 +6,18 @@
  * seed-specific utility functions used by the code generator.
  */
 
+import { spawn } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
+import { createInterface } from "node:readline";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import { LinesDB, ErrorFormatter, fillFields, unwrap } from "@toiroakr/lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
-import { basename, dirname, normalize } from "pathe";
+import { basename, dirname, join, normalize } from "pathe";
+import { readPackageJSON, resolvePackageJSON } from "pkg-types";
+import { isNativeTypeScriptRuntime } from "#/cli/shared/runtime";
 import { firstErrorLocation } from "./record-lines";
 import type { JsonlParseError, RowFiller, ValidationErrorDetail } from "@toiroakr/lines-db";
 
@@ -69,6 +76,34 @@ type FillSeedDataResult = {
   output: string;
   filled: FilledSeedFile[];
 };
+
+type SeedStudioOptions = {
+  /** Resolved absolute path to the seed data directory */
+  dataDir: string;
+  /** Port to serve the studio on; `0` picks a free one. Defaults to 4848. */
+  port?: number;
+  /** Open the studio in the default browser */
+  open?: boolean;
+};
+
+/**
+ * A running seed studio.
+ */
+type SeedStudio = {
+  /** Address the studio serves on */
+  url: string;
+  /** Settles when the studio stops: resolves after `stop()`, and rejects when it stops on its own with an error */
+  closed: Promise<void>;
+  /** Stop the studio, resolving once it has stopped */
+  stop: () => Promise<void>;
+};
+
+// Computed here rather than in a helper so the URL stays relative to this entry
+// file wherever the bundler places shared code.
+const TS_HOOK_REGISTER_URL = new URL("../cli/ts-hook-register.mjs", import.meta.url);
+
+/** How long `stop()` lets the studio finish stopping on a signal it already got before sending one. */
+const STUDIO_STOP_GRACE_MS = 2000;
 
 async function resolveSeedDataTarget(resolvedPath: string): Promise<SeedDataTarget> {
   const stats = await stat(resolvedPath);
@@ -281,4 +316,97 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
   );
 
   return { output: outputLines.join("\n"), filled };
+}
+
+async function resolveLinesDbCli(): Promise<string> {
+  const packageJsonPath = await resolvePackageJSON(
+    fileURLToPath(import.meta.resolve("@toiroakr/lines-db")),
+  );
+  const { bin } = await readPackageJSON(packageJsonPath);
+  const cli = typeof bin === "string" ? bin : bin?.["lines-db"];
+  if (!cli) {
+    throw new Error(`${packageJsonPath} declares no lines-db executable.`);
+  }
+  return join(dirname(packageJsonPath), cli);
+}
+
+/**
+ * Start lines-db studio, a local web UI for browsing and editing seed rows, on
+ * a seed data directory.
+ *
+ * Edits are saved through the schema files generated next to the data, so a
+ * value they reject is not written. A save writes the fields the user entered
+ * and a generated primary key, and leaves the other values the table fills in
+ * on create, such as `createdAt`, out of the file.
+ *
+ * The studio's messages go to stderr. It keeps running until `stop()` is
+ * called or it stops on its own; a signal that reaches it, such as Ctrl+C in
+ * a terminal, stops it too.
+ * @param options - Studio options including the data directory
+ * @returns The running studio, once it serves
+ */
+export async function startSeedStudio(options: SeedStudioOptions): Promise<SeedStudio> {
+  const { dataDir, port, open = false } = options;
+  if (!(await stat(dataDir)).isDirectory()) {
+    throw new Error(`${dataDir} is not a directory.`);
+  }
+  const cli = await resolveLinesDbCli();
+  const nodeArgs = isNativeTypeScriptRuntime()
+    ? []
+    : ["--import", TS_HOOK_REGISTER_URL.href, "--disable-warning=DEP0205", "--enable-source-maps"];
+  const child = spawn(
+    process.execPath,
+    [
+      ...nodeArgs,
+      cli,
+      "studio",
+      dataDir,
+      "--write-filled-values",
+      "primaryKey",
+      ...(port === undefined ? [] : ["--port", String(port)]),
+      ...(open ? ["--open"] : []),
+    ],
+    { stdio: ["ignore", "pipe", "inherit"] },
+  );
+
+  let stopRequested = false;
+  const exited = new Promise<string | undefined>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      resolve(code === 0 ? undefined : signal ? `signal ${signal}` : `exit code ${String(code)}`);
+    });
+  });
+  const closed = exited.then((failure) => {
+    if (failure && !stopRequested) {
+      throw new Error(`The studio stopped with ${failure}.`);
+    }
+  });
+  closed.catch(() => {});
+
+  const url = await new Promise<string>((resolve, reject) => {
+    createInterface({ input: child.stdout }).on("line", (line) => {
+      process.stderr.write(`${line}\n`);
+      const found = /https?:\/\/\S+/.exec(stripVTControlCharacters(line));
+      if (found) resolve(found[0]);
+    });
+    exited.then(
+      (failure) =>
+        reject(new Error(`The studio stopped with ${failure ?? "exit code 0"} before serving.`)),
+      reject,
+    );
+  });
+
+  const stop = async (): Promise<void> => {
+    stopRequested = true;
+    if (child.exitCode === null && child.signalCode === null) {
+      const exitedInTime = await Promise.race([
+        exited.then(() => true),
+        delay(STUDIO_STOP_GRACE_MS, false, { ref: false }),
+      ]);
+      if (!exitedInTime) child.kill("SIGTERM");
+    }
+    await exited.catch(() => {});
+  };
+
+  return { url, closed, stop };
 }
