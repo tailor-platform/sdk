@@ -75,8 +75,8 @@ async function fetchRemoteTypes(target: SnapshotApplyTarget): Promise<ProtoTailo
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         throw CLIError({
           code: "MIGRATION_NAMESPACE_NOT_DEPLOYED",
-          message: `Cannot sync: TailorDB namespace "${namespace}" has not been deployed yet.`,
-          suggestion: "Deploy the namespace before syncing its migration history.",
+          message: `Cannot apply the snapshot: TailorDB namespace "${namespace}" has not been deployed yet.`,
+          suggestion: "Deploy the namespace first.",
           cause: error,
         });
       }

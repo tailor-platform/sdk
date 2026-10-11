@@ -151,7 +151,7 @@ export async function assertMigrationsReproduceLocalTypes(
   throw CLIError({
     code: "MIGRATION_HISTORY_MISMATCH",
     message:
-      "Refusing to sync: the migration history must reproduce the current local schema before it can be applied to the remote.",
+      "Refusing to continue: the migration history must reproduce the current local schema before it can be applied to the remote.",
     suggestion: "Generate a migration for the pending schema changes first.",
   });
 }

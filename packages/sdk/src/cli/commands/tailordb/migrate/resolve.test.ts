@@ -5,6 +5,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -30,6 +31,7 @@ const state = vi.hoisted(() => ({
   getMetadata: vi.fn(),
   setMetadata: vi.fn(),
   removeMigrationWorkflowResources: vi.fn(),
+  assertNoActiveMigrationExecution: vi.fn(),
   stderr: [] as string[],
 }));
 
@@ -58,6 +60,7 @@ vi.mock("#/cli/shared/prompt", () => ({
 vi.mock("#/cli/commands/deploy/tailordb/migration-workflow", async (importOriginal) => ({
   ...(await importOriginal()),
   removeMigrationWorkflowResources: state.removeMigrationWorkflowResources,
+  assertNoActiveMigrationExecution: state.assertNoActiveMigrationExecution,
 }));
 
 vi.mock("#/cli/services/application", () => ({
@@ -133,6 +136,7 @@ describe("tailordb migration resolve", () => {
     state.deleteTailorDBGQLPermission.mockResolvedValue({});
     state.setMetadata.mockResolvedValue({});
     state.removeMigrationWorkflowResources.mockResolvedValue(undefined);
+    state.assertNoActiveMigrationExecution.mockResolvedValue(undefined);
     remoteLabels({ "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" });
     vi.mocked(initOperatorClient).mockResolvedValue({
       listTailorDBTypes: state.listTailorDBTypes,
@@ -305,10 +309,45 @@ describe("tailordb migration resolve", () => {
     expect(output).toMatch(/Existing data in deleted tables will be lost/);
   });
 
+  test("--complete warns when tables that exist only on the remote will be deleted", async () => {
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [{ name: "User" }, { name: "Post" }, { name: "Comment" }, { name: "Legacy" }],
+      nextPageToken: "",
+    });
+
+    await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+    expect(state.stderr.join("")).toMatch(/Existing data in deleted tables will be lost/);
+    expect(state.deleteTailorDBType.mock.calls.map(([call]) => call.tailordbTypeName)).toEqual([
+      "Legacy",
+    ]);
+  });
+
   test("--complete warns that records without a value make a required field unreadable", async () => {
     await runCommand(resolveCommand, ["--complete", "--yes"]);
 
     expect(state.stderr.join("")).toMatch(/no value for a field that becomes required/);
+  });
+
+  test("refuses while an execution of the in-progress migration is still running", async () => {
+    state.assertNoActiveMigrationExecution.mockRejectedValue(
+      CLIError({
+        code: "MIGRATION_EXECUTION_ACTIVE",
+        message: "Migration tailordb/0002 has an execution that is still running (exec-live).",
+      }),
+    );
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/still running/);
+    expect(state.assertNoActiveMigrationExecution).toHaveBeenCalledWith(
+      expect.anything(),
+      "12345678-1234-4abc-8def-123456789012",
+      "tailordb",
+      2,
+    );
+    expectNothingWritten();
   });
 
   test("declining the confirmation writes nothing", async () => {
