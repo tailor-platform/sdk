@@ -110,7 +110,7 @@ seedPlugin({
 
 ### Leaving the base data out
 
-`--no-base` applies or validates the selected datasets alone. The datasets then need a file — an empty one will do — for every table their tables' foreign keys point at, since the base data no longer provides them:
+`--no-base` applies or validates the selected datasets alone. The datasets then need a file — an empty one will do — for every table their tables reference through a foreign key, since the base data no longer provides them:
 
 ```bash
 tailor seed validate --no-base --dataset snapshot

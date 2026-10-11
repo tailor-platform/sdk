@@ -43,7 +43,7 @@ function assertDatasetName(name: string): void {
 
 function datasetCombinations(context: SeedContext): Record<string, readonly string[]> {
   // An @tailor-platform/sdk older than this plugin's peer range loads no `datasets`.
-  const { datasets } = context as Partial<SeedContext>;
+  const { datasets } = context;
   if (!datasets) {
     throw new Error(
       "The installed @tailor-platform/sdk does not support seed datasets. " +

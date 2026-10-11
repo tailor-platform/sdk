@@ -44,8 +44,11 @@ export interface SeedContext {
   distPath: string;
   /** Default machine user name from seedPlugin options, if configured. */
   machineUserName?: string | undefined;
-  /** Named combinations of dataset directory names from seedPlugin options. */
-  datasets: Record<string, readonly string[]>;
+  /**
+   * Named combinations of dataset directory names from seedPlugin options.
+   * Always set by {@link loadSeedContext}; optional so a context built elsewhere stays valid.
+   */
+  datasets?: Record<string, readonly string[]>;
   /** Seed ordering information per TailorDB namespace. */
   namespaces: SeedNamespaceConfig[];
   /** IdP `_User` seeding context, or null when not applicable. */
