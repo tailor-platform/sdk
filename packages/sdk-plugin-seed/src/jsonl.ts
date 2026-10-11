@@ -80,7 +80,7 @@ export function loadSeedData(
           } else if (first.file !== jsonlPath) {
             throw new Error(
               `${jsonlPath}:${index + 1}: ${keyField} ${keyText} is already defined at ${first.file}:${first.line}. ` +
-                "A row can be defined in only one of the base seed data and the selected datasets.",
+                "A row can be defined in only one of the data directories applied together.",
             );
           }
         }

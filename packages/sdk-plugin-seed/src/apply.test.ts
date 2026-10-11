@@ -217,6 +217,18 @@ describe("seedApplyCommand", () => {
     expect(sdk.executeScript).not.toHaveBeenCalled();
   });
 
+  test("rejects an unknown dataset even when nothing is left to seed", async () => {
+    datasets.selectDatasets.mockImplementation(() => {
+      throw new Error('Unknown dataset "typo".');
+    });
+
+    const result = await runApplyCommand(["--skip-idp", "_User", "--dataset", "typo"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain('Unknown dataset "typo".');
+    expect(logger.success).not.toHaveBeenCalled();
+  });
+
   test("succeeds without remote operations when the project has no seed targets", async () => {
     sdk.loadSeedContext.mockResolvedValueOnce({
       distPath: "/seed",

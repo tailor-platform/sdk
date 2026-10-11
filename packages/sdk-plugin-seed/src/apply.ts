@@ -484,6 +484,7 @@ export const seedApplyCommand = defineAppCommand({
       throw new Error("--no-base needs at least one --dataset to apply.");
     }
     const context = await loadSeedContext({ configPath: args.config });
+    const datasets = selectDatasets(context, args.dataset);
 
     const namespaceTables = Object.fromEntries(
       context.namespaces.map((ns) => [ns.namespace, ns.types]),
@@ -524,7 +525,6 @@ export const seedApplyCommand = defineAppCommand({
 
     const dataDir = path.join(context.distPath, "data");
     assertSeedDataDirectory(dataDir);
-    const datasets = selectDatasets(context, args.dataset);
     const dataDirs = [...(args["no-base"] ? [] : [dataDir]), ...datasets.dirs];
     if (datasets.names.length > 0) {
       logger.info(
