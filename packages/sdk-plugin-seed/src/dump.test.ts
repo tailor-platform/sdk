@@ -229,6 +229,21 @@ describe("seedDumpCommand", () => {
     );
   });
 
+  test("rejects an invalid dataset name even when there is nothing to dump", async () => {
+    sdk.loadSeedContext.mockResolvedValueOnce({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      datasets: {},
+      idpUser: null,
+      namespaces: [],
+    });
+
+    const result = await runDumpCommand(["--dataset", "bad.name"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain('"bad.name" is not a valid dataset name');
+  });
+
   test("suggests another dataset when the dataset already holds the files", async () => {
     jsonl.existingSeedDataFiles.mockReturnValue(["User"]);
 

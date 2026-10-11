@@ -32,8 +32,6 @@ type SeedHook = RowFiller;
 type SeedDataTarget = {
   dataDir: string;
   tableName?: string;
-  /** The data directory a dataset directory sits in, holding the schema files of its tables */
-  baseDir?: string;
 };
 
 type ValidateSeedDataOptions = {
@@ -80,10 +78,7 @@ type FillSeedDataOptions = {
   path: string;
   /** Fields to fill. Defaults to `id`. */
   fields?: readonly string[];
-  /**
-   * Directory the schema files are looked up in. Defaults to the directory of the data, or, for a
-   * dataset directory without schema files of its own, the data directory it sits in.
-   */
+  /** Directory the schema files are looked up in. Defaults to the directory of the data. */
   schemaDir?: string;
 };
 
@@ -100,34 +95,41 @@ async function hasSchemaFiles(dir: string): Promise<boolean> {
   }
 }
 
-async function findDatasetBaseDir(dataDir: string): Promise<string | undefined> {
-  if (await hasSchemaFiles(dataDir)) {
-    return undefined;
-  }
+/**
+ * Point at `--dataset` for a directory without schema files of its own inside one that has them:
+ * named as a path, it is checked on its own, not as a dataset on top of the seed data.
+ * @param dataDir - Directory of the data the command was pointed at
+ * @param command - The `tailor seed` command to suggest
+ * @returns The hint as a warning, or none when the directory does not look like a dataset
+ */
+async function datasetHint(dataDir: string, command: "validate" | "fill"): Promise<string[]> {
   const parent = dirname(dataDir);
-  return parent !== dataDir && (await hasSchemaFiles(parent)) ? parent : undefined;
+  if (parent === dataDir || (await hasSchemaFiles(dataDir)) || !(await hasSchemaFiles(parent))) {
+    return [];
+  }
+  return [
+    `${dataDir} has no schema files of its own. To ${command} it as a dataset with the schema files ` +
+      `in ${parent}, run \`tailor seed ${command} --dataset ${basename(dataDir)}\`.`,
+  ];
 }
 
 async function resolveSeedDataTarget(resolvedPath: string): Promise<SeedDataTarget> {
   const stats = await stat(resolvedPath);
-  let target: SeedDataTarget;
   if (stats.isDirectory()) {
-    target = { dataDir: resolvedPath };
-  } else if (stats.isFile() && resolvedPath.endsWith(".jsonl")) {
-    target = { dataDir: dirname(resolvedPath), tableName: basename(resolvedPath, ".jsonl") };
-  } else {
-    throw new Error(`Invalid path: ${resolvedPath}. Must be a directory or .jsonl file.`);
+    return { dataDir: resolvedPath };
   }
-  const baseDir = await findDatasetBaseDir(target.dataDir);
-  return baseDir ? { ...target, baseDir } : target;
+  if (stats.isFile() && resolvedPath.endsWith(".jsonl")) {
+    return { dataDir: dirname(resolvedPath), tableName: basename(resolvedPath, ".jsonl") };
+  }
+  throw new Error(`Invalid path: ${resolvedPath}. Must be a directory or .jsonl file.`);
 }
 
 type ValidationConfig = {
   dataDir: string | string[];
   schemaDir?: string;
   tableName?: string;
-  /** The directories validated against the schema files of `schemaDir` rather than their own */
-  datasetDirs: readonly string[];
+  /** Warnings about how the path was resolved */
+  warnings: string[];
 };
 
 async function resolveValidationConfig(
@@ -138,10 +140,8 @@ async function resolveValidationConfig(
     if (excludeBase) {
       throw new Error("Leaving the base data out needs at least one dataset to validate.");
     }
-    const { dataDir, tableName, baseDir } = await resolveSeedDataTarget(resolvedPath);
-    return baseDir
-      ? { dataDir: [baseDir, dataDir], schemaDir: baseDir, tableName, datasetDirs: [dataDir] }
-      : { dataDir, tableName, datasetDirs: [] };
+    const { dataDir, tableName } = await resolveSeedDataTarget(resolvedPath);
+    return { dataDir, tableName, warnings: await datasetHint(dataDir, "validate") };
   }
   if (!(await stat(resolvedPath)).isDirectory()) {
     throw new Error(
@@ -152,19 +152,17 @@ async function resolveValidationConfig(
   return {
     dataDir: dataDirs.length === 1 ? (dataDirs[0] as string) : dataDirs,
     schemaDir: resolvedPath,
-    datasetDirs,
+    warnings: await findFilesWithoutSchema(datasetDirs, resolvedPath),
   };
 }
 
 async function findFilesWithoutSchema(
   dirs: readonly string[],
   schemaDir: string,
-  tableName: string | undefined,
 ): Promise<string[]> {
   const warnings: string[] = [];
   for (const dir of dirs) {
-    const tables = (await listSeedTables(dir)).filter((table) => !tableName || table === tableName);
-    for (const table of tables) {
+    for (const table of await listSeedTables(dir)) {
       if (!(await findSchemaFile(schemaDir, table))) {
         warnings.push(
           `${join(dir, `${table}.jsonl`)} has no schema file in ${schemaDir}, so its rows are not checked`,
@@ -247,10 +245,9 @@ function formatValidationErrors(errors: ValidationErrorDetail[], verbose: boolea
 /**
  * Validate JSONL seed data against schema definitions.
  * Resolves the given path (directory or `.jsonl` file), validates the rows it
- * holds, and returns formatted output and error messages. A dataset directory
- * without schema files of its own — one inside the data directory — is
- * validated on top of the rows of the data directory it sits in, against that
- * directory's schema files.
+ * holds, and returns formatted output and error messages. With `datasetDirs`,
+ * the rows of those directories are validated on top of the rows in `path`,
+ * against the schema files in `path`.
  * @param options - Validation options including path, datasets, and verbose flag
  * @returns Validation result with output messages and optional error details
  */
@@ -258,10 +255,7 @@ export async function validateSeedData(
   options: ValidateSeedDataOptions,
 ): Promise<ValidateSeedResult> {
   const { verbose = false, excludeBase = false } = options;
-  const { tableName, datasetDirs, ...config } = await resolveValidationConfig(options);
-  const schemaWarnings = config.schemaDir
-    ? await findFilesWithoutSchema(datasetDirs, config.schemaDir, tableName)
-    : [];
+  const { tableName, warnings, ...config } = await resolveValidationConfig(options);
 
   const db = LinesDB.create(config);
   let initialized;
@@ -289,15 +283,15 @@ export async function validateSeedData(
     if (missingTable) {
       const [, referencedTable, table] = missingTable;
       throw new Error(
-        `${table} references ${referencedTable}, but none of the selected datasets has ${referencedTable}.jsonl. ` +
-          "Add it to one of them, or validate them on top of the base seed data.",
+        `${table} has a foreign key to ${referencedTable}, but none of the selected datasets has ${referencedTable}.jsonl. ` +
+          "Add the file to one of them, even an empty one, or validate them on top of the base seed data.",
         { cause: initialized.error },
       );
     }
   }
   const result = unwrap(initialized);
 
-  const outputLines = formatWarnings([...schemaWarnings, ...result.warnings]);
+  const outputLines = formatWarnings([...warnings, ...result.warnings]);
 
   if (result.valid) {
     outputLines.push("✓ All records are valid");
@@ -331,8 +325,8 @@ export async function validateSeedData(
  * value to — one it does not declare, or one the platform assigns such as a
  * serial field — is skipped, so one field list covers a whole data directory.
  *
- * The values are read from the schema files generated next to the data — for a
- * dataset directory, the ones in the data directory it sits in — and all
+ * The values are read from the schema files generated next to the data, or in
+ * `schemaDir` when it is given, and all
  * of them are read before anything is written: a file that predates the current
  * generator stops the run with nothing filled in anywhere. Likewise, a file that
  * another tool changed after the fill read it is not overwritten: the call
@@ -345,14 +339,14 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
   if (fields.length === 0) {
     throw new Error("No fields to fill. Name at least one field.");
   }
-  const { dataDir, tableName, baseDir } = await resolveSeedDataTarget(resolvedPath);
+  const { dataDir, tableName } = await resolveSeedDataTarget(resolvedPath);
   const tables = tableName ? [tableName] : await listSeedTables(dataDir);
 
   const result = unwrap(
     await fillFields({
       path: resolvedPath,
       fields,
-      schemaDir: options.schemaDir ?? baseDir,
+      schemaDir: options.schemaDir,
       loadFiller: (schemaModule, { schemaPath }) => {
         const hook = schemaModule.hook;
         if (typeof hook !== "function") {
@@ -372,6 +366,7 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
   }));
 
   const warnings = [
+    ...(options.schemaDir ? [] : await datasetHint(dataDir, "fill")),
     ...tablesWithoutSchema.map(
       (table) => `No schema file for ${table}, so nothing can be filled in there`,
     ),

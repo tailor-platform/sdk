@@ -147,6 +147,14 @@ describe("selectDatasets", () => {
     );
   });
 
+  test("rejects a dataset directory that is the seed data directory itself", () => {
+    symlinkSync(".", path.join(dataDir, "all"));
+
+    expect(() => selectDatasets(context(), ["all"])).toThrow(
+      `${path.join(dataDir, "all")} is the seed data directory itself, not a dataset.`,
+    );
+  });
+
   test("ignores a dangling symlink in the seed data directory", () => {
     const cogs = dataset("cogs");
     symlinkSync(path.join(distPath, "missing"), path.join(dataDir, "ghost"));

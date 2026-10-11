@@ -115,63 +115,41 @@ describe("validateSeedData", () => {
       ).resolves.toMatchObject({ valid: false, location: { file, line: 1 } });
     });
 
-    test("names the table a dataset references but no selected dataset holds with excludeBase", async () => {
+    test("names the table a dataset's foreign key needs with excludeBase", async () => {
       writeLines(join(cogs, "ItemValuation.jsonl"), [{ id: "v1", name: "v", itemId: "i1" }]);
 
       await expect(
         validateSeedData({ path: dir, datasetDirs: [cogs], excludeBase: true }),
       ).rejects.toThrow(
-        "ItemValuation references Item, but none of the selected datasets has Item.jsonl.",
+        "ItemValuation has a foreign key to Item, but none of the selected datasets has Item.jsonl.",
       );
     });
 
     test("warns about a dataset file without a schema file", async () => {
       writeLines(join(cogs, "Itme.jsonl"), [{ id: "i2" }]);
 
-      const results = [
-        await validateSeedData({ path: cogs }),
-        await validateSeedData({ path: dir, datasetDirs: [cogs] }),
-      ];
+      const result = await validateSeedData({ path: dir, datasetDirs: [cogs] });
 
-      for (const result of results) {
-        expect(result.output).toContain(
-          `${join(cogs, "Itme.jsonl")} has no schema file in ${dir}, so its rows are not checked`,
-        );
+      expect(result.output).toContain(
+        `${join(cogs, "Itme.jsonl")} has no schema file in ${dir}, so its rows are not checked`,
+      );
+    });
+
+    test("validates a dataset directory or file named on its own as before, pointing at --dataset", async () => {
+      const file = writeLines(join(cogs, "Item.jsonl"), [{ id: "i2" }]);
+
+      for (const path of [cogs, file]) {
+        const result = await validateSeedData({ path });
+
+        expect(result).toMatchObject({ valid: true });
+        expect(result.output).toContain("run `tailor seed validate --dataset cogs`");
       }
     });
 
-    test("warns only about the named file of a dataset", async () => {
-      writeLines(join(cogs, "Itme.jsonl"), [{ id: "i2" }]);
-      const file = writeLines(join(cogs, "ItemValuation.jsonl"), [
-        { id: "v1", name: "base", itemId: "i1" },
-      ]);
+    test("does not point the data directory itself at --dataset", async () => {
+      const result = await validateSeedData({ path: dir });
 
-      const result = await validateSeedData({ path: file });
-
-      expect(result).toMatchObject({ valid: true });
-      expect(result.output).not.toContain("Itme.jsonl");
-    });
-
-    test("checks a dataset directory named on its own against the base schema files", async () => {
-      const file = writeLines(join(cogs, "Item.jsonl"), [{ id: "i2" }]);
-
-      const result = await validateSeedData({ path: cogs });
-
-      expect(result).toMatchObject({ valid: false, location: { file, line: 1 } });
-    });
-
-    test("resolves a dataset file named on its own against the base data", async () => {
-      const file = writeLines(join(cogs, "ItemValuation.jsonl"), [
-        { id: "v1", name: "base", itemId: "i1" },
-      ]);
-
-      await expect(validateSeedData({ path: file })).resolves.toMatchObject({ valid: true });
-
-      writeLines(file, [{ id: "v1", name: "missing", itemId: "i9" }]);
-      await expect(validateSeedData({ path: file })).resolves.toMatchObject({
-        valid: false,
-        location: { file, line: 1 },
-      });
+      expect(result.output).not.toContain("--dataset");
     });
 
     test("rejects datasets combined with a single file", async () => {

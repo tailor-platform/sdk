@@ -66,7 +66,7 @@ describe("fillSeedData", () => {
       );
     });
 
-    test("looks schemas up in the data directory above a dataset directory", async () => {
+    test("fills a dataset directory or file named on its own as before, pointing at --dataset", async () => {
       fillFields.mockResolvedValue(emptyResult);
       writeFileSync(join(dir, "Item.schema.ts"), "");
       const cogs = join(dir, "cogs");
@@ -74,17 +74,14 @@ describe("fillSeedData", () => {
       const file = join(cogs, "Item.jsonl");
       writeFileSync(file, "");
 
-      await fillSeedData({ path: cogs });
-      await fillSeedData({ path: file });
+      for (const path of [cogs, file]) {
+        const result = await fillSeedData({ path });
 
-      expect(fillFields).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ path: cogs, schemaDir: dir }),
-      );
-      expect(fillFields).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({ path: file, schemaDir: dir }),
-      );
+        expect(fillFields).toHaveBeenLastCalledWith(
+          expect.objectContaining({ path, schemaDir: undefined }),
+        );
+        expect(result.output).toContain("run `tailor seed fill --dataset cogs`");
+      }
     });
 
     test("keeps looking schemas up next to the data of a data directory", async () => {

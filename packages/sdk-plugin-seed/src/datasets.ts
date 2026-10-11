@@ -144,10 +144,14 @@ export function selectDatasets(
   });
 
   const selection: DatasetSelection = { names: [], dirs: [] };
+  const realDataDir = realpathSync(dataDir);
   const seen = new Set<string>();
   for (const name of names) {
     const dir = path.join(dataDir, name);
     const realDir = realpathSync(dir);
+    if (realDir === realDataDir) {
+      throw new Error(`${dir} is the seed data directory itself, not a dataset.`);
+    }
     if (seen.has(realDir)) continue;
     seen.add(realDir);
     selection.names.push(name);

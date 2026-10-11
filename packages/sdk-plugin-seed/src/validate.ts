@@ -18,8 +18,7 @@ export const seedValidateCommand = defineAppCommand({
   description: "Validate JSONL seed data against generated schema definitions.",
   notes:
     "With --dataset, the rows of each dataset are validated on top of the base seed data, so " +
-    "foreign keys resolve across them and an id defined in two of them is reported. A path to a " +
-    "dataset directory, or to a file in one, is validated on top of the base seed data as well.",
+    "foreign keys resolve across them and an id defined in two of them is reported.",
   args: z.strictObject({
     ...configArg,
     ...datasetArg,

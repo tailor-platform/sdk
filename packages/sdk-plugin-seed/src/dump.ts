@@ -212,6 +212,8 @@ export const seedDumpCommand = defineAppCommand({
     }
 
     const context = await loadSeedContext({ configPath: args.config });
+    const datasetDir =
+      args.dataset !== undefined ? datasetDumpDirectory(context, args.dataset) : undefined;
 
     const namespaceTables = Object.fromEntries(
       context.namespaces.map((ns) => [ns.namespace, ns.types]),
@@ -250,9 +252,7 @@ export const seedDumpCommand = defineAppCommand({
 
     const dataDir = args.out
       ? path.resolve(process.cwd(), args.out)
-      : args.dataset !== undefined
-        ? datasetDumpDirectory(context, args.dataset)
-        : path.join(context.distPath, "data");
+      : (datasetDir ?? path.join(context.distPath, "data"));
 
     const namespacesToDump = args.namespace
       ? context.namespaces.filter((ns) => ns.namespace === args.namespace)

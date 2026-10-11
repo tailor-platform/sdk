@@ -110,7 +110,7 @@ seedPlugin({
 
 ### Leaving the base data out
 
-`--no-base` applies or validates the selected datasets alone. The datasets then need every table their rows reference, since the base data no longer provides them:
+`--no-base` applies or validates the selected datasets alone. The datasets then need a file — an empty one will do — for every table their tables' foreign keys point at, since the base data no longer provides them:
 
 ```bash
 tailor seed validate --no-base --dataset snapshot
@@ -119,7 +119,7 @@ tailor seed apply --no-base --dataset snapshot
 
 ### Filling and dumping datasets
 
-`tailor seed fill --dataset cogs` fills only the files of the selected datasets, using the schema files of the base data; the base files are left as they are. Naming a dataset directory or one of its files — `tailor seed fill ./seed/data/cogs/Item.jsonl` — works the same way, and so does `tailor seed validate ./seed/data/cogs`, which checks that dataset on top of the base data.
+`tailor seed fill --dataset cogs` fills only the files of the selected datasets, using the schema files of the base data; the base files are left as they are. Select datasets with `--dataset` rather than by path: a path is filled and validated on its own as before, and naming a dataset directory or one of its files points you at `--dataset`, since the directory holds no schema files of its own.
 
 `tailor seed dump --dataset snapshot` writes into `<distPath>/data/snapshot/`, creating it if needed. A dump holds every row of the tables it covers, base rows included, so it is restored on its own rather than on top of the base data:
 
