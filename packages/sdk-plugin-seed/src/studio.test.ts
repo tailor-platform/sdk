@@ -276,6 +276,45 @@ describe("tailor seed studio", () => {
     },
     STUDIO_TEST_TIMEOUT_MS,
   );
+
+  test(
+    "writes nothing for a value the schema rejects",
+    async () => {
+      const file = path.join(dataDir, "Widget.jsonl");
+      const before = await readFile(file, "utf8");
+
+      const response = await api("/api/tables/Widget/changes", {
+        inserts: [],
+        updates: [{ key: "0b6b6f5e-3b8a-4d0e-9a1f-2c7d8e5a4b31", changes: { name: 12_345 } }],
+        deletes: [],
+      });
+
+      expect(response.status).toBe(400);
+      expect(await readFile(file, "utf8")).toBe(before);
+    },
+    STUDIO_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "shows a table once its JSONL file gets a first row",
+    async () => {
+      await writeFile(
+        path.join(dataDir, "Gadget.jsonl"),
+        '{"id":"5a5a5a5a-0000-4000-8000-000000000001","name":"gadget"}\n',
+      );
+
+      const deadline = Date.now() + STUDIO_TEST_TIMEOUT_MS / 2;
+      let names: string[] = [];
+      while (!names.includes("Gadget") && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const body = (await (await api("/api/tables")).json()) as { tables: { name: string }[] };
+        names = body.tables.map((table) => table.name);
+      }
+
+      expect(names.toSorted()).toEqual(["Gadget", "Widget"]);
+    },
+    STUDIO_TEST_TIMEOUT_MS,
+  );
 });
 
 describe("stopping tailor seed studio", () => {
