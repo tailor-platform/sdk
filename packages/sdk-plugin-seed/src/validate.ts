@@ -2,6 +2,7 @@ import * as sdkCli from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
 import { datasetArg, noBaseArg, selectDatasets } from "./datasets";
+import type { DatasetSelection } from "./datasets";
 
 const { loadSeedContext, configArg, defineAppCommand, logger, arg } = sdkCli;
 
@@ -41,19 +42,18 @@ export const seedValidateCommand = defineAppCommand({
     }
 
     let targetPath: string;
-    let datasets: string[] = [];
-    let datasetDirs: string[] = [];
+    let datasets: DatasetSelection = { names: [], dirs: [] };
     if (args.path) {
       targetPath = path.resolve(process.cwd(), args.path);
     } else {
       const context = await loadSeedContext({ configPath: args.config });
       targetPath = path.join(context.distPath, "data");
-      ({ names: datasets, dirs: datasetDirs } = selectDatasets(context, args.dataset));
+      datasets = selectDatasets(context, args.dataset);
     }
 
     const result = await validateSeedData({
       path: targetPath,
-      datasetDirs,
+      datasetDirs: datasets.dirs,
       excludeBase: args["no-base"],
       verbose: args.verbose,
     });
@@ -64,7 +64,7 @@ export const seedValidateCommand = defineAppCommand({
       logger.out({
         valid: result.valid,
         path: targetPath,
-        ...(datasets.length > 0 ? { datasets } : {}),
+        ...(datasets.names.length > 0 ? { datasets: datasets.names } : {}),
       });
     }
     if (!result.valid) {
