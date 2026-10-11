@@ -129,6 +129,8 @@ tailor seed dump --dataset snapshot
 tailor seed apply --truncate --yes --skip-idp --no-base --dataset snapshot
 ```
 
+Restore with the same `--namespace` or table names the dump was taken with: `--truncate` empties every table otherwise, and with `--no-base` the tables the dump does not cover stay empty. A dump never holds `_User`, so validating it with `--no-base` in a project with IdP users also needs a dataset that holds `_User.jsonl`.
+
 ## Validating seed data
 
 `tailor seed validate` checks every row against the table it seeds: field types, required fields, the table's own `validate`, and the relations between files. A row is also rejected when it carries a field the table does not declare, at the top level or inside a nested object:

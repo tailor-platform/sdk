@@ -130,6 +130,30 @@ describe("selectDatasets", () => {
     );
   });
 
+  test("rejects a configured name shared with a directory whichever dataset is named", () => {
+    dataset("dev");
+    dataset("local");
+
+    expect(() =>
+      selectDatasets(context({ datasets: { dev: ["local"], preview: ["dev"] } }), ["preview"]),
+    ).toThrow(/"dev" names both a dataset in seedPlugin options and the directory/);
+  });
+
+  test("points at `tailor generate` when the seed data directory is missing", () => {
+    rmSync(dataDir, { recursive: true });
+
+    expect(() => selectDatasets(context(), ["cogs"])).toThrow(
+      `Seed data directory not found: ${dataDir}. Run \`tailor generate\``,
+    );
+  });
+
+  test("ignores a dangling symlink in the seed data directory", () => {
+    const cogs = dataset("cogs");
+    symlinkSync(path.join(distPath, "missing"), path.join(dataDir, "ghost"));
+
+    expect(selectDatasets(context(), ["cogs"])).toEqual({ names: ["cogs"], dirs: [cogs] });
+  });
+
   test("rejects a dataset file that does not match a table", () => {
     dataset("cogs", ["Item.jsonl", "Itme.jsonl", "Item.schema.ts"]);
 

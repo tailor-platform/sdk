@@ -115,6 +115,31 @@ describe("validateSeedData", () => {
       ).resolves.toMatchObject({ valid: false, location: { file, line: 1 } });
     });
 
+    test("names the table a dataset references but no selected dataset holds with excludeBase", async () => {
+      writeLines(join(cogs, "ItemValuation.jsonl"), [{ id: "v1", name: "v", itemId: "i1" }]);
+
+      await expect(
+        validateSeedData({ path: dir, datasetDirs: [cogs], excludeBase: true }),
+      ).rejects.toThrow(
+        "ItemValuation references Item, but none of the selected datasets has Item.jsonl.",
+      );
+    });
+
+    test("warns about a dataset file without a schema file", async () => {
+      writeLines(join(cogs, "Itme.jsonl"), [{ id: "i2" }]);
+
+      const results = [
+        await validateSeedData({ path: cogs }),
+        await validateSeedData({ path: dir, datasetDirs: [cogs] }),
+      ];
+
+      for (const result of results) {
+        expect(result.output).toContain(
+          `${join(cogs, "Itme.jsonl")} has no schema file in ${dir}, so its rows are not checked`,
+        );
+      }
+    });
+
     test("checks a dataset directory named on its own against the base schema files", async () => {
       const file = writeLines(join(cogs, "Item.jsonl"), [{ id: "i2" }]);
 

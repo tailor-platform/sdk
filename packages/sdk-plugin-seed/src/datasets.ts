@@ -2,6 +2,7 @@ import { readdirSync, realpathSync, statSync } from "node:fs";
 import { arg } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
+import { assertSeedDataDirectory } from "./jsonl";
 import type { SeedContext } from "@tailor-platform/sdk/cli";
 
 const DATASET_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
@@ -51,10 +52,19 @@ function datasetCombinations(context: SeedContext): Record<string, readonly stri
   return datasets;
 }
 
+function isDirectory(entryPath: string): boolean {
+  try {
+    return statSync(entryPath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 function listDatasetDirectories(dataDir: string): string[] {
+  assertSeedDataDirectory(dataDir);
   return readdirSync(dataDir)
     .filter((entry) => DATASET_NAME_PATTERN.test(entry))
-    .filter((entry) => statSync(path.join(dataDir, entry)).isDirectory())
+    .filter((entry) => isDirectory(path.join(dataDir, entry)))
     .toSorted();
 }
 
@@ -99,6 +109,13 @@ export function selectDatasets(
   const combinations = datasetCombinations(context);
   const dataDir = path.join(context.distPath, "data");
   const directories = listDatasetDirectories(dataDir);
+  const collision = Object.keys(combinations).find((name) => directories.includes(name));
+  if (collision) {
+    throw new Error(
+      `"${collision}" names both a dataset in seedPlugin options and the directory ` +
+        `${path.join(dataDir, collision)}. Rename one of them.`,
+    );
+  }
 
   const names = requested.flatMap((name) => {
     assertDatasetName(name);
@@ -111,12 +128,6 @@ export function selectDatasets(
         `Unknown dataset "${name}". ` +
           `Datasets in seedPlugin options: ${Object.keys(combinations).join(", ") || "(none)"}. ` +
           `Dataset directories in ${dataDir}: ${directories.join(", ") || "(none)"}.`,
-      );
-    }
-    if (directories.includes(name)) {
-      throw new Error(
-        `"${name}" names both a dataset in seedPlugin options and the directory ` +
-          `${path.join(dataDir, name)}. Rename one of them.`,
       );
     }
     for (const entry of combination) {

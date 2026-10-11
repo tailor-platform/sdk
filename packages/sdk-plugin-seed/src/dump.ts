@@ -149,7 +149,8 @@ export const seedDumpCommand = defineAppCommand({
     "`_User.jsonl` already has on disk, which is stale the moment real users have signed up since " +
     "that file was last written. " +
     "A dump written into a dataset with --dataset holds every row of the tables it covers, so it " +
-    "is restored on its own: `tailor seed apply --truncate --skip-idp --no-base --dataset <name>`. " +
+    "is restored on its own: `tailor seed apply --truncate --skip-idp --no-base --dataset <name>`, " +
+    "with the same `--namespace` or table names as the dump. " +
     "Fields the platform assigns rather than the row — `serial` fields — are left out, unless " +
     "another table's relation is keyed to that field: it is kept then, so the relation still " +
     "resolves instead of breaking once `apply --truncate` assigns the field a fresh value. " +

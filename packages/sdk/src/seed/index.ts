@@ -7,10 +7,17 @@
  */
 
 import { readdir, stat } from "node:fs/promises";
-import { LinesDB, ErrorFormatter, fillFields, isSchemaFile, unwrap } from "@toiroakr/lines-db";
+import {
+  LinesDB,
+  ErrorFormatter,
+  fillFields,
+  findSchemaFile,
+  isSchemaFile,
+  unwrap,
+} from "@toiroakr/lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
-import { basename, dirname, normalize } from "pathe";
+import { basename, dirname, join, normalize } from "pathe";
 import { firstErrorLocation } from "./record-lines";
 import type { JsonlParseError, RowFiller, ValidationErrorDetail } from "@toiroakr/lines-db";
 
@@ -115,9 +122,17 @@ async function resolveSeedDataTarget(resolvedPath: string): Promise<SeedDataTarg
   return baseDir ? { ...target, baseDir } : target;
 }
 
+type ValidationConfig = {
+  dataDir: string | string[];
+  schemaDir?: string;
+  tableName?: string;
+  /** The directories validated against the schema files of `schemaDir` rather than their own */
+  datasetDirs: readonly string[];
+};
+
 async function resolveValidationConfig(
   options: ValidateSeedDataOptions,
-): Promise<{ dataDir: string | string[]; schemaDir?: string; tableName?: string }> {
+): Promise<ValidationConfig> {
   const { path: resolvedPath, datasetDirs = [], excludeBase = false } = options;
   if (datasetDirs.length === 0) {
     if (excludeBase) {
@@ -125,8 +140,8 @@ async function resolveValidationConfig(
     }
     const { dataDir, tableName, baseDir } = await resolveSeedDataTarget(resolvedPath);
     return baseDir
-      ? { dataDir: [baseDir, dataDir], schemaDir: baseDir, tableName }
-      : { dataDir, tableName };
+      ? { dataDir: [baseDir, dataDir], schemaDir: baseDir, tableName, datasetDirs: [dataDir] }
+      : { dataDir, tableName, datasetDirs: [] };
   }
   if (!(await stat(resolvedPath)).isDirectory()) {
     throw new Error(
@@ -137,8 +152,29 @@ async function resolveValidationConfig(
   return {
     dataDir: dataDirs.length === 1 ? (dataDirs[0] as string) : dataDirs,
     schemaDir: resolvedPath,
+    datasetDirs,
   };
 }
+
+async function findFilesWithoutSchema(
+  dirs: readonly string[],
+  schemaDir: string,
+): Promise<string[]> {
+  const warnings: string[] = [];
+  for (const dir of dirs) {
+    for (const table of await listSeedTables(dir)) {
+      if (!(await findSchemaFile(schemaDir, table))) {
+        warnings.push(
+          `${join(dir, `${table}.jsonl`)} has no schema file in ${schemaDir}, so its rows are not checked`,
+        );
+      }
+    }
+  }
+  return warnings;
+}
+
+const MISSING_REFERENCED_TABLE =
+  /^Foreign key reference to non-existent table '(.+)' in table '(.+)'$/;
 
 async function listSeedTables(dataDir: string): Promise<string[]> {
   const entries = await readdir(dataDir);
@@ -219,8 +255,11 @@ function formatValidationErrors(errors: ValidationErrorDetail[], verbose: boolea
 export async function validateSeedData(
   options: ValidateSeedDataOptions,
 ): Promise<ValidateSeedResult> {
-  const { verbose = false } = options;
-  const { tableName, ...config } = await resolveValidationConfig(options);
+  const { verbose = false, excludeBase = false } = options;
+  const { tableName, datasetDirs, ...config } = await resolveValidationConfig(options);
+  const schemaWarnings = config.schemaDir
+    ? await findFilesWithoutSchema(datasetDirs, config.schemaDir)
+    : [];
 
   const db = LinesDB.create(config);
   let initialized;
@@ -243,9 +282,20 @@ export async function validateSeedData(
       location: { file, line },
     };
   }
+  if (excludeBase && !initialized.ok) {
+    const missingTable = MISSING_REFERENCED_TABLE.exec(initialized.error.message);
+    if (missingTable) {
+      const [, referencedTable, table] = missingTable;
+      throw new Error(
+        `${table} references ${referencedTable}, but none of the selected datasets has ${referencedTable}.jsonl. ` +
+          "Add it to one of them, or validate them on top of the base seed data.",
+        { cause: initialized.error },
+      );
+    }
+  }
   const result = unwrap(initialized);
 
-  const outputLines = formatWarnings(result.warnings);
+  const outputLines = formatWarnings([...schemaWarnings, ...result.warnings]);
 
   if (result.valid) {
     outputLines.push("✓ All records are valid");
