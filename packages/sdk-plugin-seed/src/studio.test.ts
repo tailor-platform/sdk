@@ -196,7 +196,7 @@ describe("tailor seed studio", () => {
       try {
         await writeFile(
           path.join(dir, "widget-table.ts"),
-          `console.log("Docs: https://example.com/widgets");\n${tableSource("Widget")}`,
+          `console.log("Mock API running at http://localhost:3000");\n${tableSource("Widget")}`,
         );
         const other = startStudio([dir, "--port", "0", "--json"]);
 

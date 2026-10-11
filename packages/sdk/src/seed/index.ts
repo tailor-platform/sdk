@@ -387,8 +387,10 @@ export async function startSeedStudio(options: SeedStudioOptions): Promise<SeedS
   const url = await new Promise<string>((resolve, reject) => {
     createInterface({ input: child.stdout }).on("line", (line) => {
       process.stderr.write(`${line}\n`);
-      const found = /(?<=running at )https?:\/\/\S+/.exec(stripVTControlCharacters(line));
-      if (found) resolve(found[0]);
+      const found = /^lines-db studio is running at (https?:\/\/\S+)/.exec(
+        stripVTControlCharacters(line),
+      );
+      if (found?.[1]) resolve(found[1]);
     });
     exited.then(
       (failure) =>
