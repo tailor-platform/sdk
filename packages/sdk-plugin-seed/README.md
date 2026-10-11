@@ -49,6 +49,84 @@ tailor seed apply --upsert
 tailor seed dump --out ./snapshot
 tailor seed dump --namespace my-db --out ./snapshot
 tailor seed dump --force User Order
+
+# Apply, validate, and fill datasets on top of the base seed data
+tailor seed apply --dataset cogs --dataset local
+tailor seed validate --dataset cogs
+tailor seed fill --dataset cogs
+```
+
+## Datasets
+
+The JSONL files in `<distPath>/data/` are the base seed data, applied to every environment. A **dataset** is a directory under it holding more rows for some of the tables — the rows only one scenario needs, or the rows that differ per environment — so they can sit next to the base data instead of being copied in and out of it:
+
+```
+seed/data/
+  Currency.jsonl  Item.jsonl  ...   # base seed data (and the *.schema.ts files)
+  cogs/                             # scenario: costing demo
+    Item.jsonl
+    ItemValuation.jsonl
+  shipments/                        # scenario: shipping demo
+    Shipment.jsonl
+  local/                            # per developer, gitignored
+    User.jsonl
+    _User.jsonl
+```
+
+A dataset file is named after the table it seeds, the same way as the base files, and holds only rows; the schema files stay in `<distPath>/data/`, generated once by `tailor generate`. A dataset needs a file only for the tables it adds rows to. `_User.jsonl` can live in a dataset too, which is how each developer keeps their own login out of the repository: add `seed/data/local/` to `.gitignore`.
+
+Select datasets with `--dataset`, repeated to combine several. They apply on top of the base seed data, in the order given:
+
+```bash
+tailor seed apply --dataset cogs --dataset local   # base, then cogs, then local
+tailor seed validate --dataset cogs                # base and cogs, checked together
+```
+
+A table's rows are the rows of its base file followed by the rows of its file in each selected dataset, and `apply` seeds the tables in dependency order as usual. `validate` checks the selected datasets together with the base data, so a row in `cogs/ItemValuation.jsonl` may reference an `Item` from the base `Item.jsonl`, and every error points at the file and line the row came from.
+
+**A row is defined in exactly one place.** An `id` (or a `_User` `name`) that appears in two of the selected files — the base data and a dataset, or two datasets — is an error in both `validate` and `apply`, never a silent override. A table whose rows differ per environment belongs in the per-environment datasets only, not in the base data.
+
+A file in a dataset selected with `--dataset` that does not match a seeded table is rejected, so a misspelled file name does not silently seed nothing.
+
+### Naming combinations
+
+Name the combinations you use in the `datasets` option of `seedPlugin`, so CI and scripts do not repeat the list:
+
+```ts
+seedPlugin({
+  distPath: "./seed",
+  datasets: {
+    preview: ["cogs", "shipments"],
+    dev: ["local"],
+  },
+});
+```
+
+`--dataset preview` then stands for `--dataset cogs --dataset shipments`. Any other name is a directory under `<distPath>/data/`. A name configured in `datasets` must not also be a directory there. A directory selected more than once is read once, where it is first selected.
+
+### Truncating and upserting with datasets
+
+`--truncate` empties the same tables with or without datasets: every table, or the namespace or tables named on the command line. `apply --truncate --dataset cogs` therefore leaves the workspace holding exactly the base data and `cogs` — what a disposable preview environment wants. To add a dataset to a workspace that keeps its other data, apply it with `--upsert` and without `--truncate`; the base rows are matched by id and updated in place.
+
+### Leaving the base data out
+
+`--no-base` applies or validates the selected datasets alone. The datasets then need every table their rows reference, since the base data no longer provides them:
+
+```bash
+tailor seed validate --no-base --dataset snapshot
+tailor seed apply --no-base --dataset snapshot
+```
+
+### Filling and dumping datasets
+
+`tailor seed fill --dataset cogs` fills only the files of the selected datasets, using the schema files of the base data; the base files are left as they are. Naming a dataset directory or one of its files — `tailor seed fill ./seed/data/cogs/Item.jsonl` — works the same way, and so does `tailor seed validate ./seed/data/cogs`, which checks that dataset on top of the base data.
+
+`tailor seed dump --dataset snapshot` writes into `<distPath>/data/snapshot/`, creating it if needed. A dump holds every row of the tables it covers, base rows included, so it is restored on its own rather than on top of the base data:
+
+```bash
+tailor seed dump --dataset snapshot
+# ... try the change ...
+tailor seed apply --truncate --yes --skip-idp --no-base --dataset snapshot
 ```
 
 ## Validating seed data

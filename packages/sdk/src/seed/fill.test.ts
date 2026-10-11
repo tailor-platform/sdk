@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ok } from "@toiroakr/lines-db";
@@ -44,5 +44,58 @@ describe("fillSeedData", () => {
       "C:/seed/data/Gadget.jsonl: line(s) 2 are not JSON objects, so nothing was filled in there",
     );
     expect(result.output).not.toContain("\\");
+  });
+
+  describe("schema directory", () => {
+    const emptyResult = ok({
+      filled: [],
+      tablesWithoutSchema: [],
+      unreadableLines: [],
+      unproducedFields: [],
+    });
+
+    test("looks schemas up in the directory it is given", async () => {
+      fillFields.mockResolvedValue(emptyResult);
+      const cogs = join(dir, "cogs");
+      mkdirSync(cogs);
+
+      await fillSeedData({ path: cogs, schemaDir: dir });
+
+      expect(fillFields).toHaveBeenCalledWith(
+        expect.objectContaining({ path: cogs, schemaDir: dir }),
+      );
+    });
+
+    test("looks schemas up in the data directory above a dataset directory", async () => {
+      fillFields.mockResolvedValue(emptyResult);
+      writeFileSync(join(dir, "Item.schema.ts"), "");
+      const cogs = join(dir, "cogs");
+      mkdirSync(cogs);
+      const file = join(cogs, "Item.jsonl");
+      writeFileSync(file, "");
+
+      await fillSeedData({ path: cogs });
+      await fillSeedData({ path: file });
+
+      expect(fillFields).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ path: cogs, schemaDir: dir }),
+      );
+      expect(fillFields).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ path: file, schemaDir: dir }),
+      );
+    });
+
+    test("keeps looking schemas up next to the data of a data directory", async () => {
+      fillFields.mockResolvedValue(emptyResult);
+      writeFileSync(join(dir, "Item.schema.ts"), "");
+
+      await fillSeedData({ path: dir });
+
+      expect(fillFields).toHaveBeenCalledWith(
+        expect.objectContaining({ path: dir, schemaDir: undefined }),
+      );
+    });
   });
 });

@@ -1,9 +1,30 @@
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import * as os from "node:os";
+import { createCommonArgs, runCommand } from "@tailor-platform/sdk/cli";
 import { fillSeedData } from "@tailor-platform/sdk/seed";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
+import { seedFillCommand } from "./fill";
+
+const sdk = vi.hoisted(() => ({ loadSeedContext: vi.fn() }));
+
+const logger = vi.hoisted(() => ({
+  debug: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  log: vi.fn(),
+  newline: vi.fn(),
+  out: vi.fn(),
+  success: vi.fn(),
+  warn: vi.fn(),
+}));
+
+vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tailor-platform/sdk/cli")>()),
+  ...sdk,
+  logger,
+}));
 
 const uuid = z.uuid();
 
@@ -334,5 +355,77 @@ export const hook = (row) => {
     expect(content.startsWith("\uFEFF")).toBe(true);
     expect(result.filled[0]?.count).toBe(2);
     expect(JSON.parse(content.slice(1).split("\n")[0]!)).toHaveProperty("id");
+  });
+});
+
+describe("seedFillCommand", () => {
+  let distPath: string;
+  let seedDataDir: string;
+
+  beforeEach(async () => {
+    distPath = await mkdtemp(path.join(os.tmpdir(), "fill-seed-command-"));
+    seedDataDir = path.join(distPath, "data");
+    await mkdir(seedDataDir);
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: path.join(distPath, "tailor.config.ts") },
+      distPath,
+      datasets: { preview: ["cogs", "shipments"] },
+      idpUser: null,
+      namespaces: [
+        {
+          namespace: "tailordb",
+          types: ["Widget"],
+          dependencies: { Widget: [] },
+          selfRefTypes: [],
+          requiredFields: { Widget: [] },
+        },
+      ],
+    });
+  });
+
+  afterEach(async () => {
+    vi.resetAllMocks();
+    await rm(distPath, { recursive: true, force: true });
+  });
+
+  function runFill(args: string[]) {
+    return runCommand(seedFillCommand, args, {
+      // Strip unknown global arguments like the plugin entrypoint.
+      globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
+    });
+  }
+
+  test("fills only the rows of the selected datasets, using the base schema files", async () => {
+    await writeFile(path.join(seedDataDir, "Widget.schema.ts"), schemaSource("Widget"));
+    const baseFile = path.join(seedDataDir, "Widget.jsonl");
+    await writeFile(baseFile, '{"name":"base"}\n');
+    const datasetFiles = [];
+    for (const name of ["cogs", "shipments"]) {
+      await mkdir(path.join(seedDataDir, name));
+      const file = path.join(seedDataDir, name, "Widget.jsonl");
+      await writeFile(file, `{"name":"${name}"}\n`);
+      datasetFiles.push(file);
+    }
+
+    const result = await runFill(["--dataset", "preview", "--json"]);
+
+    expect(result.exitCode).toBe(0);
+    await expect(readFile(baseFile, "utf-8")).resolves.toBe('{"name":"base"}\n');
+    for (const file of datasetFiles) {
+      const [row] = await readRows(file);
+      expect(uuid.safeParse(row?.id).success, `id: ${String(row?.id)}`).toBe(true);
+    }
+    expect(logger.out).toHaveBeenCalledWith({
+      path: seedDataDir,
+      datasets: ["cogs", "shipments"],
+      filled: datasetFiles.map((file) => ({ table: "Widget", file, fields: ["id"], count: 1 })),
+    });
+  });
+
+  test("rejects a dataset together with a path", async () => {
+    const result = await runFill(["--dataset", "cogs", seedDataDir]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("--dataset cannot be combined with a path");
   });
 });

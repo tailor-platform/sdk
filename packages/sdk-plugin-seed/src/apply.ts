@@ -18,31 +18,46 @@ import {
 import { renderFor } from "@tailor-platform/shared/color";
 import * as path from "pathe";
 import { z } from "zod";
+import { datasetArg, noBaseArg, selectDatasets } from "./datasets";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
-import type { OperatorClient, SeedData, SeedIdpUserContext } from "@tailor-platform/sdk/cli";
+import type {
+  OperatorClient,
+  SeedData,
+  SeedIdpUserContext,
+  SeedNamespaceConfig,
+} from "@tailor-platform/sdk/cli";
 
 interface SeedExecutionContext {
   operatorClient: OperatorClient;
   workspaceId: string;
   authNamespace: string;
   machineUserName: string;
-  dataDir: string;
+}
+
+interface NamespaceSeedPlan {
+  namespace: string;
+  sortedTypes: string[];
+  data: SeedData;
+  selfRefTypes: string[];
+  selfRefFields: Record<string, string[]>;
+  selfRefKeys: Record<string, Record<string, string>>;
 }
 
 interface SeedNamespaceParams {
   execution: SeedExecutionContext;
-  namespace: string;
-  typesToSeed: string[];
-  dependencies: Record<string, string[]>;
-  selfRefTypes: string[];
-  selfRefFields: Record<string, string[]>;
-  selfRefKeys: Record<string, Record<string, string>>;
-  requiredFields: Record<string, string[]>;
+  plan: NamespaceSeedPlan;
   upsert: boolean;
   configDir: string;
+}
+
+interface NamespaceSeedPlanParams {
+  nsConfig: SeedNamespaceConfig;
+  typesToSeed: string[];
+  dataDirs: string[];
+  upsert: boolean;
 }
 
 function promptConfirmation(question: string): Promise<boolean> {
@@ -78,34 +93,38 @@ function createChunkProgressLogger(
   };
 }
 
-async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
-  const {
-    execution,
-    namespace,
-    typesToSeed,
-    dependencies,
-    selfRefTypes,
-    selfRefFields,
-    selfRefKeys,
-    requiredFields,
-    upsert,
-    configDir,
-  } = params;
-  const sortedTypes = topologicalSort(typesToSeed, dependencies);
-  const data = loadSeedData(execution.dataDir, sortedTypes, {
+function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedPlan {
+  const { nsConfig, typesToSeed, dataDirs, upsert } = params;
+  const selfRefFields = nsConfig.selfRefFields ?? {};
+  const selfRefKeys = nsConfig.selfRefKeys ?? {};
+  const sortedTypes = topologicalSort(typesToSeed, nsConfig.dependencies);
+  const data = loadSeedData(dataDirs, sortedTypes, {
     requireId: upsert,
-    requiredFieldsByType: upsert ? requiredFields : {},
+    requiredFieldsByType: upsert ? nsConfig.requiredFields : {},
   });
   // Sort each self-referencing table's full record set before chunkSeedData
   // splits it by byte size, so a table split across script executions still
   // has its parents in the same or an earlier chunk than their children.
-  for (const type of selfRefTypes) {
+  for (const type of nsConfig.selfRefTypes) {
     const fields = selfRefFields[type];
     const records = data[type];
     if (records && fields && fields.length > 0) {
       data[type] = sortRecordsBySelfReference(records, fields, selfRefKeys[type]);
     }
   }
+  return {
+    namespace: nsConfig.namespace,
+    sortedTypes,
+    data,
+    selfRefTypes: nsConfig.selfRefTypes,
+    selfRefFields,
+    selfRefKeys,
+  };
+}
+
+async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
+  const { execution, plan, upsert, configDir } = params;
+  const { namespace, sortedTypes, data, selfRefTypes, selfRefFields, selfRefKeys } = plan;
   const processedTotals: Record<string, number> = {};
 
   const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
@@ -240,14 +259,19 @@ function readCount(result: Record<string, unknown>, key: string): number {
   return typeof value === "number" ? value : 0;
 }
 
+interface SeedIdpUserParams {
+  execution: SeedExecutionContext;
+  scriptCode: string;
+  rows: SeedData[string];
+  upsert: boolean;
+}
+
 async function seedIdpUser(
-  execution: SeedExecutionContext,
-  scriptCode: string,
-  upsert: boolean,
+  params: SeedIdpUserParams,
 ): Promise<{ success: boolean; processed: number; transportError?: unknown }> {
+  const { execution, scriptCode, rows, upsert } = params;
   logger.info("  Seeding _User via tailor.idp.Client...", { mode: "plain" });
 
-  const rows = loadSeedData(execution.dataDir, ["_User"])._User ?? [];
   if (rows.length === 0) {
     logger.log(styles.dim("    No _User data to seed"));
     return { success: true, processed: 0 };
@@ -448,12 +472,17 @@ export const seedApplyCommand = defineAppCommand({
       alias: "y",
       description: "Skip confirmation prompts (for --truncate)",
     }),
+    ...datasetArg,
+    ...noBaseArg,
     entities: arg(z.array(z.string()).default([]), {
       positional: true,
       description: "Entity names to seed, including _User (default: all)",
     }),
   }),
   run: async (args) => {
+    if (args["no-base"] && args.dataset.length === 0) {
+      throw new Error("--no-base needs at least one --dataset to apply.");
+    }
     const context = await loadSeedContext({ configPath: args.config });
 
     const namespaceTables = Object.fromEntries(
@@ -495,6 +524,34 @@ export const seedApplyCommand = defineAppCommand({
 
     const dataDir = path.join(context.distPath, "data");
     assertSeedDataDirectory(dataDir);
+    const datasets = selectDatasets(context, args.dataset);
+    const dataDirs = [...(args["no-base"] ? [] : [dataDir]), ...datasets.dirs];
+    if (datasets.names.length > 0) {
+      logger.info(
+        `Datasets: ${datasets.names.join(", ")}` +
+          (args["no-base"] ? " (without the base seed data)" : ""),
+      );
+    }
+
+    const namespacesToProcess = args.namespace
+      ? [args.namespace]
+      : context.namespaces.map((ns) => ns.namespace);
+    const plans = namespacesToProcess.flatMap((namespace) => {
+      const nsConfig = context.namespaces.find((ns) => ns.namespace === namespace);
+      if (!nsConfig) return [];
+      const typesToSeed = selection.entitiesToProcess
+        ? nsConfig.types.filter((type) => selection.entitiesToProcess?.includes(type))
+        : nsConfig.types;
+      if (typesToSeed.length === 0) return [];
+      return [buildNamespaceSeedPlan({ nsConfig, typesToSeed, dataDirs, upsert: args.upsert })];
+    });
+    const shouldSeedUser =
+      hasIdpUser &&
+      !args["skip-idp"] &&
+      (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
+    const idpUserRows = shouldSeedUser
+      ? (loadSeedData(dataDirs, ["_User"], { keyField: "name" })._User ?? [])
+      : [];
 
     const appInfo = await show({
       configPath: args.config,
@@ -509,7 +566,6 @@ export const seedApplyCommand = defineAppCommand({
       }),
       authNamespace: appInfo.auth,
       machineUserName,
-      dataDir,
     };
 
     if (args.truncate) {
@@ -577,27 +633,10 @@ export const seedApplyCommand = defineAppCommand({
     const allProcessed: Record<string, number> = {};
     let transportFailure: { error: unknown } | undefined;
 
-    const namespacesToProcess = args.namespace
-      ? [args.namespace]
-      : context.namespaces.map((ns) => ns.namespace);
-    for (const namespace of namespacesToProcess) {
-      const nsConfig = context.namespaces.find((ns) => ns.namespace === namespace);
-      if (!nsConfig) continue;
-
-      const typesToSeed = selection.entitiesToProcess
-        ? nsConfig.types.filter((type) => selection.entitiesToProcess?.includes(type))
-        : nsConfig.types;
-      if (typesToSeed.length === 0) continue;
-
+    for (const plan of plans) {
       const seeded = await seedNamespace({
         execution,
-        namespace,
-        typesToSeed,
-        dependencies: nsConfig.dependencies,
-        selfRefTypes: nsConfig.selfRefTypes,
-        selfRefFields: nsConfig.selfRefFields ?? {},
-        selfRefKeys: nsConfig.selfRefKeys ?? {},
-        requiredFields: nsConfig.requiredFields,
+        plan,
         upsert: args.upsert,
         configDir: path.dirname(context.config.path),
       });
@@ -609,12 +648,13 @@ export const seedApplyCommand = defineAppCommand({
       }
     }
 
-    const shouldSeedUser =
-      hasIdpUser &&
-      !args["skip-idp"] &&
-      (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
     if (shouldSeedUser && context.idpUser) {
-      const seeded = await seedIdpUser(execution, context.idpUser.seedScriptCode, args.upsert);
+      const seeded = await seedIdpUser({
+        execution,
+        scriptCode: context.idpUser.seedScriptCode,
+        rows: idpUserRows,
+        upsert: args.upsert,
+      });
       if (seeded.processed > 0) {
         allProcessed._User = seeded.processed;
       }
@@ -628,7 +668,11 @@ export const seedApplyCommand = defineAppCommand({
 
     logger.newline();
     if (args.json) {
-      logger.out({ success: allSuccess, processed: allProcessed });
+      logger.out({
+        success: allSuccess,
+        processed: allProcessed,
+        ...(datasets.names.length > 0 ? { datasets: datasets.names } : {}),
+      });
     }
     if (transportFailure) {
       throw transportFailure.error;

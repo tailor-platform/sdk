@@ -20,6 +20,10 @@ const jsonl = vi.hoisted(() => ({
   loadSeedData: vi.fn(),
 }));
 
+const datasets = vi.hoisted(() => ({
+  selectDatasets: vi.fn(),
+}));
+
 const logger = vi.hoisted(() => ({
   debug: vi.fn(),
   error: vi.fn(),
@@ -37,9 +41,14 @@ vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
   logger,
 }));
 vi.mock("./jsonl", () => jsonl);
+vi.mock("./datasets", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./datasets")>()),
+  ...datasets,
+}));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  datasets.selectDatasets.mockReturnValue({ names: [], dirs: [] });
   // Isolate the env-bound args so ambient shell exports cannot leak in.
   vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", undefined);
   vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
@@ -133,6 +142,77 @@ describe("seedApplyCommand", () => {
     expect(sdk.show).not.toHaveBeenCalled();
     expect(sdk.loadAccessToken).not.toHaveBeenCalled();
     expect(sdk.loadWorkspaceId).not.toHaveBeenCalled();
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(sdk.executeScript).not.toHaveBeenCalled();
+  });
+
+  test("reads the base data alone when no dataset is selected", async () => {
+    await runApply([]);
+
+    expect(datasets.selectDatasets).toHaveBeenCalledWith(expect.anything(), []);
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(["/seed/data"], ["User"], {
+      requireId: false,
+      requiredFieldsByType: {},
+    });
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(["/seed/data"], ["_User"], {
+      keyField: "name",
+    });
+  });
+
+  test("reads the selected datasets on top of the base data", async () => {
+    datasets.selectDatasets.mockReturnValue({
+      names: ["cogs", "local"],
+      dirs: ["/seed/data/cogs", "/seed/data/local"],
+    });
+
+    await runApply(["--dataset", "preview", "--dataset", "local", "--json"]);
+
+    expect(datasets.selectDatasets).toHaveBeenCalledWith(expect.anything(), ["preview", "local"]);
+    const dataDirs = ["/seed/data", "/seed/data/cogs", "/seed/data/local"];
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(dataDirs, ["User"], expect.anything());
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(dataDirs, ["_User"], { keyField: "name" });
+    expect(logger.out).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, datasets: ["cogs", "local"] }),
+    );
+  });
+
+  test("reads only the selected datasets with --no-base", async () => {
+    datasets.selectDatasets.mockReturnValue({
+      names: ["snapshot"],
+      dirs: ["/seed/data/snapshot"],
+    });
+
+    await runApply(["--dataset", "snapshot", "--no-base"]);
+
+    expect(jsonl.assertSeedDataDirectory).toHaveBeenCalledWith("/seed/data");
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(
+      ["/seed/data/snapshot"],
+      ["User"],
+      expect.anything(),
+    );
+  });
+
+  test("rejects --no-base without a dataset before remote operations", async () => {
+    const result = await runApplyCommand(["--machine-user", "manager", "--no-base"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("--no-base needs at least one --dataset");
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(jsonl.loadSeedData).not.toHaveBeenCalled();
+  });
+
+  test("reads every row before truncating, so unreadable data changes nothing", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDirs: string[], typeNames: string[]) => {
+      if (typeNames.includes("_User")) {
+        throw new Error("/seed/data/local/_User.jsonl:1: name is already defined");
+      }
+      return { User: [] };
+    });
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--truncate", "--yes"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(sdk.show).not.toHaveBeenCalled();
     expect(sdk.truncate).not.toHaveBeenCalled();
     expect(sdk.executeScript).not.toHaveBeenCalled();
   });

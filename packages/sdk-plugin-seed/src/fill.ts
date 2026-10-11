@@ -7,6 +7,7 @@ import {
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
+import { datasetArg, selectDatasets } from "./datasets";
 
 export const seedFillCommand = defineAppCommand({
   name: "fill",
@@ -16,9 +17,10 @@ export const seedFillCommand = defineAppCommand({
     "data around them is still incomplete — run `tailor seed validate` when it is ready. A value " +
     "already in the file is never replaced, and a line that gains nothing is left byte for byte as " +
     "it was. A field the table gives no value to is skipped, so one field list covers a whole data " +
-    "directory.",
+    "directory. With --dataset, only the files of the selected datasets are filled.",
   args: z.strictObject({
     ...configArg,
+    ...datasetArg,
     fields: arg(z.string().default("id"), {
       alias: "f",
       description: "Comma-separated fields to fill",
@@ -41,21 +43,37 @@ export const seedFillCommand = defineAppCommand({
     if (fields.length === 0) {
       throw new Error("--fields needs at least one field name.");
     }
-
-    let targetPath: string;
-    if (args.path) {
-      targetPath = path.resolve(process.cwd(), args.path);
-    } else {
-      const context = await loadSeedContext({ configPath: args.config });
-      targetPath = path.join(context.distPath, "data");
+    if (args.path && args.dataset.length > 0) {
+      throw new Error("--dataset cannot be combined with a path.");
     }
 
-    const result = await fillSeedData({ path: targetPath, fields });
-    if (result.output) {
-      logger.log(result.output);
+    if (args.path || args.dataset.length === 0) {
+      const targetPath = args.path
+        ? path.resolve(process.cwd(), args.path)
+        : path.join((await loadSeedContext({ configPath: args.config })).distPath, "data");
+      const result = await fillSeedData({ path: targetPath, fields });
+      if (result.output) {
+        logger.log(result.output);
+      }
+      if (args.json) {
+        logger.out({ path: targetPath, filled: result.filled });
+      }
+      return;
+    }
+
+    const context = await loadSeedContext({ configPath: args.config });
+    const dataDir = path.join(context.distPath, "data");
+    const datasets = selectDatasets(context, args.dataset);
+    const filled = [];
+    for (const dir of datasets.dirs) {
+      const result = await fillSeedData({ path: dir, fields, schemaDir: dataDir });
+      if (result.output) {
+        logger.log(result.output);
+      }
+      filled.push(...result.filled);
     }
     if (args.json) {
-      logger.out({ path: targetPath, filled: result.filled });
+      logger.out({ path: dataDir, datasets: datasets.names, filled });
     }
   },
 });

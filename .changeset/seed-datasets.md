@@ -1,0 +1,6 @@
+---
+"@tailor-platform/sdk": minor
+"@tailor-platform/sdk-plugin-seed": minor
+---
+
+Keep scenario and per-environment seed data side by side as datasets: directories under `<distPath>/data/` holding JSONL rows for some of the tables. `tailor seed apply`, `validate`, and `fill` take `--dataset <name>` (repeatable) to use datasets on top of the base seed data, and `tailor seed dump --dataset <name>` writes into one. `validate` checks foreign keys across the base data and the selected datasets and reports an id defined in more than one of them at its own file and line; `apply` rejects such an id before it changes anything. `--no-base` applies or validates the selected datasets alone, so a dump written with `--dataset` restores on its own. Name the combinations you use in the new `datasets` option of `seedPlugin` (for example `datasets: { preview: ["cogs", "shipments"] }`) to select them with one `--dataset`. Projects without datasets work as before, except that `tailor seed apply` now reads all seed rows before truncating or seeding anything, so a malformed file stops the run with the workspace untouched. Naming a dataset directory, or a file in one, as the path of `tailor seed validate` or `fill` now uses the schema files of the seed data directory above it instead of validating nothing.

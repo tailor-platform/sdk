@@ -97,6 +97,7 @@ beforeEach(() => {
   sdk.loadSeedContext.mockResolvedValue({
     config: { path: "/workspace/tailor.config.ts" },
     distPath: "/seed",
+    datasets: { preview: ["cogs"] },
     idpUser: null,
     machineUserName: undefined,
     namespaces: [
@@ -211,6 +212,45 @@ describe("seedDumpCommand", () => {
       false,
     );
     expect(appendedRowsFor("/tmp/snapshot", "User")).toEqual([]);
+  });
+
+  test("writes into a dataset directory under the seed data directory", async () => {
+    await runDump(["--dataset", "snapshot", "User", "--json"]);
+
+    expect(jsonl.existingSeedDataFiles).toHaveBeenCalledWith("/seed/data/snapshot", ["User"]);
+    expect(jsonl.commitSeedDataWrite).toHaveBeenCalledWith(
+      "/seed/data/snapshot",
+      "User",
+      tmpPathFor("/seed/data/snapshot", "User"),
+      false,
+    );
+    expect(logger.out).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/seed/data/snapshot", dataset: "snapshot" }),
+    );
+  });
+
+  test("rejects --dataset together with --out before remote operations", async () => {
+    const result = await runDumpCommand([
+      "--machine-user",
+      "manager",
+      "--dataset",
+      "snapshot",
+      "--out",
+      "/tmp/snapshot",
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("--dataset and --out cannot be combined");
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(jsonl.beginSeedDataWrite).not.toHaveBeenCalled();
+  });
+
+  test("rejects a dataset name the datasets option combines several directories under", async () => {
+    const result = await runDumpCommand(["--machine-user", "manager", "--dataset", "preview"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("names a dataset in seedPlugin options");
+    expect(jsonl.beginSeedDataWrite).not.toHaveBeenCalled();
   });
 
   test("refuses to overwrite existing files without --force", async () => {
