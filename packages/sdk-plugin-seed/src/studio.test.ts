@@ -20,29 +20,33 @@ const sdkUrls = {
 
 // The schema imports the table without an extension, the way the seedPlugin
 // output imports a project's TailorDB files.
-const tableSource = `
+function tableSource(name: string): string {
+  return `
 import { db } from "${sdkUrls.root}";
 
-export const widget = db.table("Widget", {
+export const table = db.table("${name}", {
   name: db.string(),
   ...db.fields.timestamps(),
 });
 `;
+}
 
-const schemaSource = `
+function schemaSource(tableModule: string): string {
+  return `
 import { t } from "${sdkUrls.root}";
 import { defineSchema } from "${sdkUrls.seed}";
 import { createStandardSchema, createTailorDBHook } from "${sdkUrls.test}";
-import { widget } from "./widget-table";
+import { table } from "./${tableModule}";
 
 const schemaType = t.object({
-  ...widget.pickFields(["id", "createdAt", "updatedAt"], { optional: true }),
-  ...widget.omitFields(["id", "createdAt", "updatedAt"]),
+  ...table.pickFields(["id", "createdAt", "updatedAt"], { optional: true }),
+  ...table.omitFields(["id", "createdAt", "updatedAt"]),
 });
 
-export const hook = createTailorDBHook(widget);
-export const schema = defineSchema(createStandardSchema(schemaType, hook, widget));
+export const hook = createTailorDBHook(table);
+export const schema = defineSchema(createStandardSchema(schemaType, hook, table));
 `;
+}
 
 type Studio = {
   process: ChildProcess;
@@ -124,12 +128,14 @@ async function readToken(url: string): Promise<string> {
 
 async function writeDataDir(): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "seed-studio-"));
-  await writeFile(path.join(dir, "widget-table.ts"), tableSource);
-  await writeFile(path.join(dir, "Widget.schema.ts"), schemaSource);
+  await writeFile(path.join(dir, "widget-table.ts"), tableSource("Widget"));
+  await writeFile(path.join(dir, "Widget.schema.ts"), schemaSource("widget-table"));
   await writeFile(
     path.join(dir, "Widget.jsonl"),
     '{"id":"0b6b6f5e-3b8a-4d0e-9a1f-2c7d8e5a4b31","name":"first"}\n',
   );
+  await writeFile(path.join(dir, "gadget-table.ts"), tableSource("Gadget"));
+  await writeFile(path.join(dir, "Gadget.schema.ts"), schemaSource("gadget-table"));
   await writeFile(path.join(dir, "Gadget.jsonl"), "");
   return dir;
 }
@@ -190,7 +196,7 @@ describe("tailor seed studio", () => {
       try {
         await writeFile(
           path.join(dir, "widget-table.ts"),
-          `console.log("Docs: https://example.com/widgets");\n${tableSource}`,
+          `console.log("Docs: https://example.com/widgets");\n${tableSource("Widget")}`,
         );
         const other = startStudio([dir, "--port", "0", "--json"]);
 
@@ -305,7 +311,7 @@ describe("stopping tailor seed studio", () => {
   );
 });
 
-describe("tailor seed studio arguments", () => {
+describe("tailor seed studio arguments", { timeout: STUDIO_TEST_TIMEOUT_MS }, () => {
   test("rejects a path that is not a directory", async () => {
     assertBuilt();
     const dir = await mkdtemp(path.join(os.tmpdir(), "seed-studio-file-"));
