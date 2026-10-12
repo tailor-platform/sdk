@@ -110,9 +110,9 @@ without reporting through the CLI's error path, such as one relaying a failed re
 writes no annotation.
 
 Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` (also `off`, `no`, or `0`) to turn annotations off.
-Passing `--json` or setting `TAILOR_JSON_OUTPUT` also suppresses them, so a workflow step that parses
-JSON output gets only the error envelope on stderr, even when the command fails during argument
-parsing.
+Passing `--json`, setting `TAILOR_JSON_OUTPUT`, or the JSON default under an AI coding agent also
+suppresses them, so a workflow step that parses JSON output gets only the error envelope on stderr,
+even when the command fails during argument parsing.
 
 An annotation does not by itself fail a step: the step still fails on the CLI's exit code, which
 is unchanged. Workflows that already echo their own `::error::` around the CLI keep working;
