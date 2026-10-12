@@ -296,6 +296,17 @@ describe("truncate command", () => {
           ],
         },
       ],
+      [
+        "tables given by option name",
+        ["--tables", "User", "--tables", "Order"],
+        {
+          namespaces: [],
+          tables: [
+            { namespace: "tailordb", name: "User" },
+            { namespace: "tailordb", name: "Order" },
+          ],
+        },
+      ],
     ])("prints what was truncated for %s", async (_, argv, truncated) => {
       const { initOperatorClient } = await import("#/cli/shared/client");
       const { logger } = await import("#/cli/shared/logger");

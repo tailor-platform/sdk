@@ -15,7 +15,10 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
 }));
 
 describe("secret vault create", () => {
-  test("prints the created vault under JSON output", async () => {
+  test.each([
+    ["positionally", ["api-keys"]],
+    ["by option name", ["--name", "api-keys"]],
+  ])("prints the created vault under JSON output when named %s", async (_, argv) => {
     vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
       client: { createSecretManagerVault: vi.fn().mockResolvedValue({}) },
       workspaceId: "workspace-1",
@@ -24,7 +27,7 @@ describe("secret vault create", () => {
     using _logger = silenceLogger("success");
     using stdout = captureStdout();
 
-    const result = await runCommand(createCommand, ["--name", "api-keys"]);
+    const result = await runCommand(createCommand, argv);
 
     expect(result.success).toBe(true);
     expect(JSON.parse(stdout.output)).toEqual({
