@@ -150,6 +150,78 @@ describe("argument errors under JSON output", () => {
   }, 20_000);
 });
 
+describe("output under an AI coding agent", () => {
+  test.each([
+    { name: "a detected agent", extraEnv: { AI_AGENT: "claude_code" }, args: [], json: true },
+    {
+      name: "a detected agent and TAILOR_JSON_OUTPUT=false",
+      extraEnv: { AI_AGENT: "claude_code", TAILOR_JSON_OUTPUT: "false" },
+      args: [],
+      json: false,
+    },
+    {
+      name: "a detected agent and --json=false",
+      extraEnv: { AI_AGENT: "claude_code" },
+      args: ["--json=false"],
+      json: false,
+    },
+    {
+      name: "agent detection turned off",
+      extraEnv: { AI_AGENT: "claude_code", POLITTY_NO_AGENT: "1" },
+      args: [],
+      json: false,
+    },
+    { name: "no agent", extraEnv: {}, args: [], json: false },
+  ])(
+    "prints JSON only by default with $name",
+    ({ extraEnv, args, json }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-agent-output-");
+
+      const result = runCli(["profile", "list", ...args], tmp.dir, extraEnv);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe(json ? "[]\n" : "");
+    },
+    20_000,
+  );
+
+  test("reports an argument error as a JSON envelope", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-agent-output-");
+
+    const result = runCli(["workspace", "list", "--bogus"], tmp.dir, { AI_AGENT: "claude_code" });
+
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stderr)).toEqual({
+      error: { code: "INVALID_ARGUMENTS", message: "Unknown flags: bogus" },
+    });
+  }, 20_000);
+
+  test.each([
+    { name: "a detected agent", extraEnv: { AI_AGENT: "claude_code" }, shown: true },
+    { name: "no agent", extraEnv: {}, shown: false },
+  ])(
+    "shows agent guidance in --help only for $name",
+    ({ extraEnv, shown }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-agent-help-");
+
+      const result = runCli(["workspace", "--help"], tmp.dir, extraEnv);
+
+      expect(result.status).toBe(0);
+      expect(result.stdout.includes("--help-json")).toBe(true);
+      expect(result.stdout.includes("docs/cli-reference.md")).toBe(shown);
+    },
+    20_000,
+  );
+});
+
 describe("parent command shortcuts", () => {
   test.each([
     { parent: ["workspace"], explicit: ["workspace", "list"] },

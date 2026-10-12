@@ -21,7 +21,7 @@ import { defineAppCommand } from "./command";
 import { getErrorDiagnostics } from "./error-diagnostics";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
-import { jsonMode } from "./test-helpers/json-mode";
+import { detectedAgent, jsonMode } from "./test-helpers/json-mode";
 import { tempCwd } from "./test-helpers/temp-cwd";
 
 describe("loadEnvFiles", () => {
@@ -308,6 +308,24 @@ describe("requestedJsonModeSource", () => {
     vi.stubEnv("TAILOR_JSON_OUTPUT", env);
     expect(requestedJsonModeSource(argv)).toBe(expected);
   });
+
+  test.each([
+    { argv: [], env: undefined, expected: "agent" },
+    { argv: ["workspace", "list", "--json"], env: undefined, expected: "flag" },
+    { argv: ["workspace", "list", "--json=false"], env: undefined, expected: undefined },
+    { argv: ["workspace", "list", "--json=yes"], env: undefined, expected: undefined },
+    { argv: ["workspace", "list"], env: "1", expected: "env" },
+    { argv: ["workspace", "list"], env: "false", expected: undefined },
+    { argv: ["workspace", "list"], env: "", expected: undefined },
+    { argv: ["function", "test-run", "--", "--json=false"], env: undefined, expected: "agent" },
+  ])(
+    "returns $expected for $argv with TAILOR_JSON_OUTPUT=$env under an AI coding agent",
+    ({ argv, env, expected }) => {
+      using _agent = detectedAgent("claude_code");
+      vi.stubEnv("TAILOR_JSON_OUTPUT", env);
+      expect(requestedJsonModeSource(argv)).toBe(expected);
+    },
+  );
 });
 
 describe("resolveEarlyFailure", () => {
@@ -322,6 +340,16 @@ describe("resolveEarlyFailure", () => {
       code: "INVALID_ARGUMENTS",
       jsonMode: true,
     });
+  });
+
+  test("names a plain argument error INVALID_ARGUMENTS under an AI coding agent", () => {
+    using _agent = detectedAgent("claude_code");
+    using setJsonMode = vi.spyOn(logger, "setJsonMode");
+    expect(resolve(new Error("Unknown flags: bogus"), [])).toEqual({
+      code: "INVALID_ARGUMENTS",
+      jsonMode: true,
+    });
+    expect(setJsonMode).toHaveBeenCalledWith(true, "agent");
   });
 
   test("leaves an argument error unnamed without JSON output", () => {
@@ -501,6 +529,60 @@ describe("createCommonArgs effects", () => {
     });
     expect(result.exitCode).toBe(0);
     expect(setJsonMode).toHaveBeenCalledWith(true, "both");
+  });
+
+  test.each([
+    { output: undefined, argv: [] as string[], expected: true },
+    { output: undefined, argv: ["--json"], expected: true },
+    { output: undefined, argv: ["--json=false"], expected: false },
+    { output: "true", argv: [] as string[], expected: true },
+    { output: "false", argv: [] as string[], expected: false },
+    { output: "true", argv: ["--json=false"], expected: false },
+  ])(
+    "defaults to JSON under an AI coding agent unless set explicitly ($output, $argv)",
+    async ({ output, argv, expected }) => {
+      using _agent = detectedAgent("claude_code");
+      vi.stubEnv("TAILOR_JSON_OUTPUT", output);
+      let seen: unknown;
+      const command = defineAppCommand({
+        name: "noop",
+        description: "noop",
+        run: (args) => {
+          seen = (args as { json?: boolean }).json;
+        },
+      });
+      const result = await runCommand(command, argv, {
+        // Strip unknown keys the same way the CLI entrypoint parses global args.
+        globalArgs: z.object(createCommonArgs()),
+      });
+      expect(result.exitCode).toBe(0);
+      expect(seen).toBe(expected);
+      expect(logger.jsonMode).toBe(expected);
+    },
+  );
+
+  test("records the AI coding agent as what selected JSON output", async () => {
+    using _agent = detectedAgent("claude_code");
+    using setJsonMode = vi.spyOn(logger, "setJsonMode");
+    const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
+    const result = await runCommand(command, [], {
+      // Strip unknown keys the same way the CLI entrypoint parses global args.
+      globalArgs: z.object(createCommonArgs()),
+    });
+    expect(result.exitCode).toBe(0);
+    expect(setJsonMode).toHaveBeenCalledWith(true, "agent");
+  });
+
+  test("keeps table output when only politty detects an agent", async () => {
+    vi.stubEnv("AI_AGENT", "claude_code");
+    vi.stubEnv("POLITTY_NO_AGENT", undefined);
+    const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
+    const result = await runCommand(command, [], {
+      // Strip unknown keys the same way the plugin entrypoints parse global args.
+      globalArgs: z.object(createCommonArgs()),
+    });
+    expect(result.exitCode).toBe(0);
+    expect(logger.jsonMode).toBe(false);
   });
 
   test("verboseAlias adds a short alias for --verbose", async () => {

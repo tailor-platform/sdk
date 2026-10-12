@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
-import { arg, parseArgv } from "@politty/zod";
+import { arg, parseArgv, type ArgSource } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import { withErrorDiagnostics } from "./error-diagnostics";
-import { JSON_OUTPUT_ENV_VAR, logger, type JsonModeSource } from "./logger";
+import { JSON_OUTPUT_ENV_VAR, jsonDefaultAgent, logger, type JsonModeSource } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -252,8 +252,8 @@ export function jsonFlagRequested(argv: readonly string[]): boolean {
 }
 
 /**
- * Report what requested JSON output, reading the command line and the environment
- * the same way the `--json` effect would.
+ * Report what requested JSON output, reading the command line, the environment,
+ * and the recorded AI coding agent the same way the `--json` argument would.
  * @param argv - Command-line arguments after the executable and script path
  * @returns What requested JSON output, or undefined when it is off
  */
@@ -263,7 +263,9 @@ export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource
   const envEnabled =
     env !== undefined && parseGlobalFlag([`--${JSON_ARG_NAME}=${env}`], JSON_ARG_NAME) === true;
   if (flag === true) return envEnabled ? "both" : "flag";
-  if (flag === undefined && envEnabled) return "env";
+  if (flag !== undefined) return undefined;
+  if (envEnabled) return "env";
+  if (env === undefined && jsonDefaultAgent() !== undefined) return "agent";
   return undefined;
 }
 
@@ -287,6 +289,20 @@ export function resolveEarlyFailure(error: unknown, argv: readonly string[]): vo
   ) {
     withErrorDiagnostics(error, { code: "INVALID_ARGUMENTS" });
   }
+}
+
+/**
+ * Name what set the `--json` value, the way the logger records it.
+ * @param source - Where the value was read from
+ * @returns What selected JSON output when the value is true
+ */
+function jsonArgSource(source: ArgSource | undefined): JsonModeSource {
+  if (source === "env") return "env";
+  // Only a recorded AI coding agent makes the default true.
+  if (source === "default") return "agent";
+  return source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true
+    ? "both"
+    : "flag";
 }
 
 interface CommonArgsOptions {
@@ -329,18 +345,18 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
         logger.verbose = value;
       },
     }),
-    [JSON_ARG_NAME]: arg(z.boolean().default(false), {
-      alias: JSON_ARG_ALIAS,
-      description: "Output as JSON",
-      env: JSON_OUTPUT_ENV_VAR,
-      effect: (value, { args }) => {
-        globalArgsWereApplied = true;
-        const source = args.$source?.(JSON_ARG_NAME);
-        const envAlsoEnabled =
-          source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;
-        logger.setJsonMode(value, source === "env" ? "env" : envAlsoEnabled ? "both" : "flag");
+    [JSON_ARG_NAME]: arg(
+      z.boolean().default(() => jsonDefaultAgent() !== undefined),
+      {
+        alias: JSON_ARG_ALIAS,
+        description: "Output as JSON",
+        env: JSON_OUTPUT_ENV_VAR,
+        effect: (value, { args }) => {
+          globalArgsWereApplied = true;
+          logger.setJsonMode(value, jsonArgSource(args.$source?.(JSON_ARG_NAME)));
+        },
       },
-    }),
+    ),
   } satisfies ArgsShape;
 }
 

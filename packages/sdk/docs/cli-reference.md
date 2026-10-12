@@ -50,6 +50,16 @@ keep table output. Other values are rejected. JSON mode also disables interactiv
 variable per invocation or per job rather than exporting it from a shell profile; a command that
 needed a prompt names what selected JSON when it refuses.
 
+When an AI coding agent such as Claude Code, Codex, Cursor, or Gemini CLI runs the CLI, every
+command defaults to JSON as if `TAILOR_JSON_OUTPUT=true` were set, and `--help` starts with a short
+guide for the agent. The CLI recognizes an agent by the environment variables it sets for the
+commands it runs; a non-empty `AI_AGENT` also counts as one. An explicit `--json` or
+`TAILOR_JSON_OUTPUT` still wins, so `--json=false` or `TAILOR_JSON_OUTPUT=false` keeps table output
+under an agent, and setting `POLITTY_NO_AGENT` to any non-empty value, such as `1`, turns agent
+detection off. Set these variables in the environment itself: values loaded with `--env-file` do not
+change the default. CLI plugins keep table output under an agent unless they receive `--json` or
+`TAILOR_JSON_OUTPUT`.
+
 Errors, warnings, progress, and diagnostic messages are written to stderr. A command failure under
 `--json` or `TAILOR_JSON_OUTPUT` emits a JSON error envelope to stderr, including a failure while
 parsing arguments: an unknown option or subcommand, or an option value that fails validation, is
