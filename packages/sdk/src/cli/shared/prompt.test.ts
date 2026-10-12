@@ -79,71 +79,54 @@ describe("prompt", () => {
     test.each([
       {
         label: "tells the user to drop the flag when it selected JSON",
+        agent: undefined,
         source: "flag" as const,
         expected: ["--json"],
         unexpected: ["TAILOR_JSON_OUTPUT"],
       },
       {
         label: "names TAILOR_JSON_OUTPUT when the environment selected JSON",
+        agent: undefined,
         source: "env" as const,
         expected: ["TAILOR_JSON_OUTPUT"],
         unexpected: ["--json"],
       },
       {
         label: "names both sources when both selected JSON",
+        agent: undefined,
         source: "both" as const,
         expected: ["--json", "TAILOR_JSON_OUTPUT"],
         unexpected: [],
       },
-    ])("$label", async ({ source, expected, unexpected }) => {
-      const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
-      const stdoutDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
-      Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
-      Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
-
-      try {
-        const [{ prompt }, { logger }] = await Promise.all([
-          import("./prompt"),
-          import("./logger"),
-        ]);
-        logger.setJsonMode(true, source);
-        const error = await prompt.confirm({ message: "proceed?" }).catch((e: unknown) => e);
-        logger.jsonMode = false;
-        const message = error instanceof Error ? error.message : String(error);
-        for (const text of expected) expect(message).toContain(text);
-        for (const text of unexpected) expect(message).not.toContain(text);
-      } finally {
-        if (stdinDescriptor) Object.defineProperty(process.stdin, "isTTY", stdinDescriptor);
-        if (stdoutDescriptor) Object.defineProperty(process.stdout, "isTTY", stdoutDescriptor);
-      }
-    });
-
-    test.each([
       {
         label: "names the detected agent when it selected JSON",
+        agent: "claude_code",
         source: "agent" as const,
         expected: ["claude_code", "--json=false", "TAILOR_JSON_OUTPUT=false"],
         unexpected: [],
       },
       {
         label: "tells the user to turn the flag off under an agent",
+        agent: "claude_code",
         source: "flag" as const,
         expected: ["--json=false"],
         unexpected: ["drop", "TAILOR_JSON_OUTPUT"],
       },
       {
         label: "tells the user to set TAILOR_JSON_OUTPUT to false under an agent",
+        agent: "claude_code",
         source: "env" as const,
         expected: ["TAILOR_JSON_OUTPUT", "to false"],
         unexpected: ["unset", "--json"],
       },
       {
         label: "tells the user to turn the flag off when both selected JSON under an agent",
+        agent: "claude_code",
         source: "both" as const,
         expected: ["--json=false"],
         unexpected: ["drop", "unset"],
       },
-    ])("$label", async ({ source, expected, unexpected }) => {
+    ])("$label", async ({ agent, source, expected, unexpected }) => {
       const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
       const stdoutDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
       Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
@@ -154,7 +137,7 @@ describe("prompt", () => {
           import("./prompt"),
           import("./logger"),
         ]);
-        setJsonDefaultAgent("claude_code");
+        setJsonDefaultAgent(agent);
         logger.setJsonMode(true, source);
         const error = await prompt.confirm({ message: "proceed?" }).catch((e: unknown) => e);
         logger.jsonMode = false;

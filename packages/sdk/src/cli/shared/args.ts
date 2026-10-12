@@ -272,8 +272,8 @@ export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource
 /**
  * Prepare a failure that ended the command before the global arguments were
  * applied (see {@link globalArgsApplied}): apply `--verbose`, and when the
- * command line or the environment asked for JSON output, turn it on and name a
- * plain argument-parsing error `INVALID_ARGUMENTS`.
+ * command line, the environment, or the recorded AI coding agent asked for JSON
+ * output, turn it on and name a plain argument-parsing error `INVALID_ARGUMENTS`.
  * @param error - Failure about to be rendered
  * @param argv - Command-line arguments after the executable and script path
  */

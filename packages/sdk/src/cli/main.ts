@@ -62,7 +62,7 @@ const cliReferencePath = resolve(dirname(packageJsonPath), "docs", "cli-referenc
 const agentHelp = `AI coding agent detected:
 
 - Commands print JSON to stdout by default. Parse it instead of the table output, which is formatted for humans and may change. \`--json=false\` or \`${JSON_OUTPUT_ENV_VAR}=false\` restores the table.
-- CLI plugin commands keep the table unless you pass \`--json\`.
+- CLI plugin commands keep the table unless you pass \`--json\` or set \`${JSON_OUTPUT_ENV_VAR}=true\`.
 - Pass \`--help-json\` to a command for machine-readable help.
 - Full command reference: \`${cliReferencePath}\``;
 
