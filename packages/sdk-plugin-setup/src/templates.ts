@@ -63,6 +63,8 @@ export type RenderBranchParams = {
   /** Include the migration-drift-check step in the plan job (default: false). */
   migrationDriftCheck?: boolean;
   erdPreview: { namespaces: string[] } | null;
+  /** Upload the ERD preview the way GitHub Enterprise Server supports (default: false). */
+  ghes?: boolean;
   /** Deploy on manual dispatch only from the target branch. */
   restrictDispatch?: boolean;
 };
@@ -423,11 +425,16 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   const seedValidate = !params.apps && (params.seedValidate ?? false);
   const migrationDriftCheck = !params.apps && (params.migrationDriftCheck ?? false);
   const erdPreview = params.erdPreview;
+  const ghes = params.ghes ?? false;
 
   let out = branchTemplate;
   out = block(out, "PLAN_JOB", true);
   out = block(out, "ERD_PREVIEW_JOB", erdPreview !== null);
   out = block(out, "ERD_PREVIEW_COMMENT_JOB", erdPreview !== null);
+  out = block(out, "ERD_GITHUB_COM_UPLOAD", !ghes);
+  out = block(out, "ERD_GHES_UPLOAD", ghes);
+  out = block(out, "ERD_GITHUB_COM_LINKS", !ghes);
+  out = block(out, "ERD_GHES_LINKS", ghes);
   out = block(out, "PULL_REQUEST", true);
   out = block(out, "DISPATCH_INPUTS", true);
   out = block(out, "SEED_VALIDATE", seedValidate);

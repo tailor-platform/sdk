@@ -58,6 +58,10 @@ const branchCommand = defineAppCommand({
     "erd-preview": arg(z.boolean().default(false), {
       description: "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
     }),
+    ghes: arg(z.boolean().default(false), {
+      description:
+        "Upload the ERD preview with upload-artifact v3, which GitHub Enterprise Server supports (requires --erd-preview)",
+    }),
     "restrict-dispatch": arg(z.boolean().default(false), {
       description:
         "Deploy on manual dispatch only from the target branch; dry runs stay unrestricted",
@@ -84,6 +88,7 @@ const branchCommand = defineAppCommand({
       branch: args.target,
       environment: args.environment,
       erdPreview: args["erd-preview"],
+      ghes: args.ghes,
       restrictDispatch: args["restrict-dispatch"],
       dir: args.dir,
       extraPaths: args.paths,

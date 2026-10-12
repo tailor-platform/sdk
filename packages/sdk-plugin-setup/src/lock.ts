@@ -61,6 +61,8 @@ export type LockInputs = {
   paths?: string[];
   erdPreview?: boolean;
   erdNamespaces?: string[];
+  /** For branch targets: whether `--ghes` was given. Absent means github.com. */
+  ghes?: boolean;
   /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */
   migrationDriftCheck?: boolean;
   /** Whether tailor-seed-validate was generated (config used seedPlugin). */

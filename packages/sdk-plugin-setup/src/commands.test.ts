@@ -38,6 +38,15 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
+  test("ci branch passes --ghes to setupTarget", async () => {
+    const result = await runCommand(setupCommand, ["ci", "branch", "--erd-preview", "--ghes"]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "branch", erdPreview: true, ghes: true }),
+    );
+  });
+
   test("ci branch rejects the removed --branch alias", async () => {
     const result = await runCommand(setupCommand, ["ci", "branch", "--branch", "release"]);
 

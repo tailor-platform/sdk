@@ -557,6 +557,7 @@ jobs:
             diff_args+=(--base-html "$base_html")
           fi
           run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
+      # __ERD_GITHUB_COM_UPLOAD_START__
       - id: tailor-upload-erd-viewer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -565,6 +566,17 @@ jobs:
           if-no-files-found: error
           archive: false
           retention-days: 7
+      # __ERD_GITHUB_COM_UPLOAD_END__
+      # __ERD_GHES_UPLOAD_START__
+      - id: tailor-upload-erd-viewer
+        # upload-artifact v3.2.2: GitHub Enterprise Server does not support v4 or later.
+        uses: actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf
+        with:
+          name: ${{ matrix.namespace }}-viewer.html
+          path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html
+          if-no-files-found: error
+          retention-days: 7
+      # __ERD_GHES_UPLOAD_END__
 
   # __ERD_PREVIEW_JOB_END__
   # __ERD_PREVIEW_COMMENT_JOB_START__
@@ -580,6 +592,7 @@ jobs:
       - id: tailor-comment-erd-preview
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_ENTERPRISE_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           SERVER: ${{ github.server_url }}
@@ -589,6 +602,7 @@ jobs:
           MARKER: "<!-- tailor-erd-preview: __WORKSPACE_NAME__ -->"
         run: |
           set -euo pipefail
+          export GH_HOST="${GITHUB_SERVER_URL#*://}"
 
           current_head=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.head.sha')
           if [ "$current_head" != "$HEAD_SHA" ]; then
@@ -597,7 +611,14 @@ jobs:
           fi
 
           body="$MARKER"$'\n'"### TailorDB ERD preview (__WORKSPACE_NAME__)"$'\n\n'
+          # __ERD_GITHUB_COM_LINKS_START__
           body+="Self-contained ERD viewer HTML artifacts for this pull request. Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
+          artifact_link() { printf '[%s](%s)' "$1" "$SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$2"; }
+          # __ERD_GITHUB_COM_LINKS_END__
+          # __ERD_GHES_LINKS_START__
+          body+="Self-contained ERD viewer HTML files for this pull request, each zipped as an artifact of [the workflow run]($SERVER/$REPO/actions/runs/$RUN_ID). Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
+          artifact_link() { printf '`%s`' "$1"; }
+          # __ERD_GHES_LINKS_END__
 
           while IFS=$'\t' read -r name id; do
             [ -z "$name" ] && continue
@@ -606,7 +627,7 @@ jobs:
             fi
             ns=${name%-viewer.html}
             label="$ns viewer"
-            body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
+            body+=$'\n'"- **$label**: $(artifact_link "$name" "$id")"
           done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
             --jq '.artifacts[] | select(.name | endswith("-viewer.html")) | [.name, (.id|tostring)] | @tsv' | sort)
 

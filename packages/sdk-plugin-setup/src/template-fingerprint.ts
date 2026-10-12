@@ -51,6 +51,15 @@ function renderAll(): RenderedTemplate[] {
     }),
   );
   add(
+    "branch/ghes",
+    renderBranchWorkflow({
+      ...full,
+      branch: "main",
+      erdPreview: { namespaces: ["main", "analytics"] },
+      ghes: true,
+    }),
+  );
+  add(
     "tag/full",
     renderTagWorkflow({
       ...full,
