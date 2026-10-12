@@ -24,6 +24,7 @@ function runCli(args: string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}) {
       TAILOR_CRASH_REPORTS_LOCAL: "off",
       TAILOR_CRASH_REPORTS_REMOTE: "off",
       NO_COLOR: "1",
+      POLITTY_NO_AGENT: "1",
       ...extraEnv,
     },
   });
@@ -151,17 +152,19 @@ describe("argument errors under JSON output", () => {
 });
 
 describe("output under an AI coding agent", () => {
+  const agentEnv = { AI_AGENT: "claude_code", POLITTY_NO_AGENT: undefined };
+
   test.each([
-    { name: "a detected agent", extraEnv: { AI_AGENT: "claude_code" }, args: [], json: true },
+    { name: "a detected agent", extraEnv: agentEnv, args: [], json: true },
     {
       name: "a detected agent and TAILOR_JSON_OUTPUT=false",
-      extraEnv: { AI_AGENT: "claude_code", TAILOR_JSON_OUTPUT: "false" },
+      extraEnv: { ...agentEnv, TAILOR_JSON_OUTPUT: "false" },
       args: [],
       json: false,
     },
     {
       name: "a detected agent and --json=false",
-      extraEnv: { AI_AGENT: "claude_code" },
+      extraEnv: agentEnv,
       args: ["--json=false"],
       json: false,
     },
@@ -193,7 +196,7 @@ describe("output under an AI coding agent", () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
     using tmp = tempCwd("cli-agent-output-");
 
-    const result = runCli(["workspace", "list", "--bogus"], tmp.dir, { AI_AGENT: "claude_code" });
+    const result = runCli(["workspace", "list", "--bogus"], tmp.dir, agentEnv);
 
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stderr)).toEqual({
@@ -202,7 +205,7 @@ describe("output under an AI coding agent", () => {
   }, 20_000);
 
   test.each([
-    { name: "a detected agent", extraEnv: { AI_AGENT: "claude_code" }, shown: true },
+    { name: "a detected agent", extraEnv: agentEnv, shown: true },
     { name: "no agent", extraEnv: {}, shown: false },
   ])(
     "shows agent guidance in --help only for $name",
