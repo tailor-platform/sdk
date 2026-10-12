@@ -313,7 +313,8 @@ interface CommonArgsOptions {
 /**
  * Build the common arguments for all CLI commands. CLI plugins call this so
  * their forwarded global flags parse identically to the host Tailor CLI and
- * feed the same logger state.
+ * feed the same logger state. Only the host CLI records a detected AI coding
+ * agent, so under an agent `--json` defaults to true there but not in plugins.
  *
  * NOTE: --env-file and --env-file-if-exists collide with Node.js flags due to a bug
  * (https://github.com/nodejs/node/issues/54232). Node.js parses these even after the
