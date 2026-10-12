@@ -576,15 +576,18 @@ Setup stops unless the config uses `seedPlugin` with `machineUserName`, which
 names the machine user that seeds, and every `--seed-dataset` names an entry of
 the `seedPlugin` `datasets` option or a directory under `<distPath>/data/`.
 Install `@tailor-platform/sdk-plugin-seed` so the `tailor seed` commands resolve
-in CI. For branch and tag targets, give every TailorDB seed row an `id`:
-`--upsert` matches rows by id, so run `tailor seed fill` and commit the result.
+in CI. For branch and tag targets, give every TailorDB seed row an `id` and
+every field its table requires: `--upsert` matches rows by id, so run
+`tailor seed fill` and commit the result.
 Seeding is available for a target that deploys one app.
 
 Before enabling it, note that:
 
 - Every branch or tag deploy writes the committed seed rows over the workspace,
   `_User` rows and their passwords included, so a seeded row edited in the
-  workspace is reset.
+  workspace is reset. Each row is updated like any other update: update hooks
+  and validation run, `updatedAt` changes, and executors with
+  `recordUpdatedTrigger` fire once per seeded row on every deploy.
 - Every preview push deletes the data reviewers added to the preview workspace.
 - A seed failure fails the deploy job and its notification, although the deploy
   itself went through.

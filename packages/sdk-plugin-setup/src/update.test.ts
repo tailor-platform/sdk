@@ -312,6 +312,48 @@ describe("setupUpdate", () => {
     expect(after?.[0]?.apps?.map((app) => app.dir)).toEqual(multi.dir);
   });
 
+  test("keeps seeding a target, and reports it once its dataset no longer resolves", async () => {
+    writeAppConfig("apps/api");
+    const settings = {
+      machineUserName: "admin",
+      datasets: { preview: ["cogs"] },
+      dataDir: path.join(testDir, "apps/api/seed/data"),
+    };
+    await generate({
+      kind: "branch",
+      workspaceName: "api",
+      dir: "apps/api",
+      erdPreview: false,
+      seed: { datasets: ["preview"] },
+      loadSeedSettings: async () => settings,
+    });
+    ageLock();
+
+    await setupUpdate({
+      force: false,
+      outputDir: testDir,
+      ...loaders,
+      loadSeedSettings: async () => settings,
+    });
+
+    expect(readLock(testDir)?.targets[0]).toMatchObject({
+      templateVersion: TEMPLATE_VERSION,
+      inputs: { seed: { datasets: ["preview"] } },
+    });
+    expect(
+      fs.readFileSync(path.join(testDir, ".github/workflows/tailor-api.yml"), "utf-8"),
+    ).toContain("seed apply --upsert --dataset preview");
+
+    await expect(
+      setupUpdate({
+        force: false,
+        outputDir: testDir,
+        ...loaders,
+        loadSeedSettings: async () => ({ ...settings, datasets: {} }),
+      }),
+    ).rejects.toThrow(/\[branch api\] Unknown seed dataset "preview"/);
+  });
+
   test("keeps going past a hand-edited target and lists it as not updated", async () => {
     await generateMonorepo();
     ageLock();

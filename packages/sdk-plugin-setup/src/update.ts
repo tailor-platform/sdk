@@ -60,7 +60,12 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
 export type UpdateOptions = UpdateCommon &
   Pick<
     SetupTargetOptions,
-    "gitRunner" | "loadConfigId" | "loadErdNamespaces" | "loadHasMigrations" | "loadHasSeeds"
+    | "gitRunner"
+    | "loadConfigId"
+    | "loadErdNamespaces"
+    | "loadHasMigrations"
+    | "loadHasSeeds"
+    | "loadSeedSettings"
   >;
 
 // Not the SDK's errorSummary: it is not exported from @tailor-platform/sdk/cli,

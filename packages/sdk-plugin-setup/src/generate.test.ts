@@ -2300,6 +2300,44 @@ export default defineConfig({
       );
     });
 
+    test("keeps a user step right after the deploy step as seeding is turned on and off", async () => {
+      const file = path.join(testDir, ".github/workflows/tailor-my-app.yml");
+      const deployStepIds = (): unknown[] =>
+        (parseYAML(fs.readFileSync(file, "utf-8")) as GeneratedWorkflow).jobs[
+          "tailor-deploy"
+        ]?.steps.map((step) => step.id) ?? [];
+      const seedOff = baseOptions({ workspaceName: "my-app" });
+      const seedOn = baseOptions({
+        workspaceName: "my-app",
+        seed: { datasets: [] },
+        loadSeedSettings: seedSettings(),
+      });
+
+      await setupTarget(seedOff);
+      fs.writeFileSync(
+        file,
+        fs
+          .readFileSync(file, "utf-8")
+          .replace(
+            "      - id: tailor-slack-prereq\n",
+            "      - id: smoke\n        run: echo smoke\n      - id: tailor-slack-prereq\n",
+          ),
+      );
+
+      await setupTarget(seedOn);
+      const ids = deployStepIds();
+      expect(ids.slice(ids.indexOf("tailor-apply"), ids.indexOf("tailor-apply") + 3)).toEqual([
+        "tailor-apply",
+        "smoke",
+        "tailor-seed",
+      ]);
+
+      await setupTarget(seedOff);
+      expect(deployStepIds()).not.toContain("tailor-seed");
+      expect(deployStepIds()).toContain("smoke");
+      expect(readLock(testDir)?.targets[0]?.inputs.seed).toBeUndefined();
+    });
+
     test("seeds the preview workspace of a preview target", async () => {
       await setupTarget({
         kind: "preview",

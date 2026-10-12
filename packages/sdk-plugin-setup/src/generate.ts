@@ -37,6 +37,12 @@ import {
   mergeUserContent,
 } from "./managed";
 import {
+  defaultLoadSeedSettings,
+  SEED_DATASET_NAME,
+  seedSettingsProblem,
+  type SeedSettings,
+} from "./seed-settings";
+import {
   appSlug,
   detectPackageManager,
   renderBranchWorkflow,
@@ -49,15 +55,6 @@ import {
   type RenderResult,
   type RenderSeed,
 } from "./templates";
-
-/** The seedPlugin settings a seeding workflow depends on. */
-type SeedSettings = {
-  machineUserName?: string;
-  /** Names of the dataset combinations in the seedPlugin `datasets` option. */
-  datasets: Record<string, unknown>;
-  /** Absolute path of `<distPath>/data`, resolved against the app directory. */
-  dataDir: string;
-};
 
 type CommonSetupOptions = {
   workspaceName?: string;
@@ -141,37 +138,6 @@ async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
   return plugins.some((p) => p.id === "@tailor-platform/seed");
 }
 
-async function defaultLoadSeedSettings(configPath: string): Promise<SeedSettings | null> {
-  const { plugins } = await loadConfig(configPath);
-  const seedPlugin = plugins.find((p) => p.id === "@tailor-platform/seed");
-  if (!seedPlugin) return null;
-  const options = (seedPlugin.pluginConfig ?? {}) as {
-    distPath?: unknown;
-    machineUserName?: unknown;
-    datasets?: unknown;
-  };
-  const distPath = typeof options.distPath === "string" ? options.distPath : "";
-  return {
-    machineUserName:
-      typeof options.machineUserName === "string" ? options.machineUserName : undefined,
-    datasets:
-      typeof options.datasets === "object" && options.datasets !== null
-        ? (options.datasets as Record<string, unknown>)
-        : {},
-    dataDir: path.resolve(path.dirname(configPath), distPath, "data"),
-  };
-}
-
-const SEED_DATASET_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
-
-function isDirectory(dirPath: string): boolean {
-  try {
-    return fs.statSync(dirPath).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
 async function assertSeedable(
   options: SetupTargetOptions,
   configPath: string,
@@ -194,27 +160,8 @@ async function assertSeedable(
     }
   }
   const loadSeedSettings = options.loadSeedSettings ?? defaultLoadSeedSettings;
-  const settings = await loadSeedSettings(configPath);
-  if (!settings) {
-    throw new Error(
-      "--seed needs seedPlugin from @tailor-platform/sdk/plugin/seed in tailor.config.ts.",
-    );
-  }
-  if (!settings.machineUserName) {
-    throw new Error(
-      "--seed needs the machineUserName option of seedPlugin to know which machine user " +
-        "seeds the workspace.",
-    );
-  }
-  for (const dataset of seed.datasets) {
-    if (Object.hasOwn(settings.datasets, dataset)) continue;
-    if (isDirectory(path.join(settings.dataDir, dataset))) continue;
-    throw new Error(
-      `Unknown seed dataset "${dataset}". ` +
-        `Datasets in seedPlugin options: ${Object.keys(settings.datasets).join(", ") || "(none)"}. ` +
-        `It is not a directory in ${settings.dataDir} either.`,
-    );
-  }
+  const problem = seedSettingsProblem(seed.datasets, await loadSeedSettings(configPath));
+  if (problem !== undefined) throw new Error(problem);
 }
 
 // The name is used as the plan label, the generated file name, and the default

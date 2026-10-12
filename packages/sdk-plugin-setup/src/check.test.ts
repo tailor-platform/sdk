@@ -218,21 +218,22 @@ describe("findTargetDrift", () => {
   });
 
   test.each(["branch", "tag", "preview"] as const)(
-    "reports seed when a %s target seeds but the config no longer uses seedPlugin",
+    "reports seed when a %s target seeds but its seedPlugin settings no longer allow it",
     (kind) => {
       const findings = findTargetDrift(
         baseTarget({ kind, inputs: { ...baseTarget().inputs, seed: { datasets: [] } } }),
-        cleanState({ hasSeeds: false }),
+        cleanState({ seedProblem: "--seed needs the machineUserName option of seedPlugin." }),
       );
       expect(findings.map((f) => f.rule)).toEqual(["seed"]);
+      expect(findings[0]?.message).toContain("--seed needs the machineUserName option");
       expect(findings[0]?.message).toContain("tailor-seed");
     },
   );
 
-  test("does not report seed while the config still uses seedPlugin", () => {
+  test("does not report seed while the seedPlugin settings still allow it", () => {
     const findings = findTargetDrift(
       baseTarget({ inputs: { ...baseTarget().inputs, seed: { datasets: [] } } }),
-      cleanState({ hasSeeds: true }),
+      cleanState(),
     );
     expect(findings).toEqual([]);
   });
@@ -530,7 +531,7 @@ describe("checkGitHub (integration)", () => {
         checkGitHub({
           outputDir: testDir,
           gitRunner: () => "origin/main",
-          loadHasSeeds: async () => false,
+          loadSeedSettings: async () => null,
         }),
       ).rejects.toThrow("Detected 1 drift finding(s)");
     });
