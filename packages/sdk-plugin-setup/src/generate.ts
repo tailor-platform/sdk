@@ -161,7 +161,9 @@ async function assertSeedable(
   }
   const loadSeedSettings = options.loadSeedSettings ?? defaultLoadSeedSettings;
   const problem = seedSettingsProblem(seed.datasets, await loadSeedSettings(configPath));
-  if (problem !== undefined) throw new Error(problem);
+  if (problem !== undefined) {
+    throw new Error(`${problem} Fix seedPlugin, or regenerate the workflow without --seed.`);
+  }
 }
 
 // The name is used as the plan label, the generated file name, and the default

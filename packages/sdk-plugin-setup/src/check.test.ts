@@ -509,6 +509,7 @@ describe("checkGitHub (integration)", () => {
     });
 
     test("reports a seeding preview target whose config dropped seedPlugin", async () => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       await setupTarget({
         kind: "preview",
         workspaceName: "my-app",
@@ -534,6 +535,9 @@ describe("checkGitHub (integration)", () => {
           loadSeedSettings: async () => null,
         }),
       ).rejects.toThrow("Detected 1 drift finding(s)");
+      expect(warnSpy.mock.calls.map(([message]) => String(message))).toContainEqual(
+        expect.stringContaining("(ignore key: seed)"),
+      );
     });
 
     test("passes after --force regeneration following a hand edit", async () => {

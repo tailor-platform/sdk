@@ -575,6 +575,8 @@ plan job's seed validation checks them too.
 Setup stops unless the config uses `seedPlugin` with `machineUserName`, which
 names the machine user that seeds, and every `--seed-dataset` names an entry of
 the `seedPlugin` `datasets` option or a directory under `<distPath>/data/`.
+Commit the dataset directories the workflow seeds: a gitignored dataset such as
+a per-developer `local/` is not in the CI checkout.
 Install `@tailor-platform/sdk-plugin-seed` so the `tailor seed` commands resolve
 in CI. For branch and tag targets, give every TailorDB seed row an `id` and
 every field its table requires: `--upsert` matches rows by id, so run

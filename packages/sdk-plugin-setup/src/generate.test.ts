@@ -2367,7 +2367,8 @@ export default defineConfig({
         loadSeedSettings: async () => null,
         datasets: [],
         message:
-          "--seed needs seedPlugin from @tailor-platform/sdk/plugin/seed in tailor.config.ts.",
+          "--seed needs seedPlugin from @tailor-platform/sdk/plugin/seed in tailor.config.ts. " +
+          "Fix seedPlugin, or regenerate the workflow without --seed.",
       },
       {
         name: "a seedPlugin without machineUserName",
