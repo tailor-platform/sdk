@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "wait-point-defined",
+      "claim": "A wait point is defined with `createWaitPoint<Payload, Result>(key)` or `createWaitPoints(...)` with a valid key."
+    },
+    {
+      "id": "wait-in-job-body",
+      "claim": "A workflow job body calls the wait point's `.wait(payload)` to pause for approval."
+    },
+    {
+      "id": "continues-after-approval",
+      "claim": "After `.wait()` returns, the workflow continues to a final notification job: the notification is started with `.start()` after the wait, or otherwise runs only once the wait resolves."
+    },
+    {
+      "id": "workflow-default-export",
+      "claim": "A `createWorkflow({ name, mainJob })` is the workflow file's default export, its jobs are exported by name, and defineConfig's `workflow.files` matches it."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "local-plugin-defined",
+      "claim": "A local plugin object with `id` and `description` is defined in a workspace file (not an SDK built-in plugin)."
+    },
+    {
+      "id": "plugin-registered",
+      "claim": "tailor.config.ts registers the local plugin with `export const plugins = definePlugins(...)` (a named export called exactly `plugins`)."
+    },
+    {
+      "id": "plugin-contributes-output",
+      "claim": "The plugin implements at least one hook that contributes an identifiable result: a generation-time hook that returns `files`, or a definition-time hook that returns tables or field extensions."
+    },
+    {
+      "id": "contribution-identifiable",
+      "claim": "A reviewer can tell from the plugin source what the contribution is (file path and content, or the generated table/field) without running the project."
+    }
+  ]
+}

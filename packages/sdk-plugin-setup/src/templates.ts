@@ -405,6 +405,14 @@ function tagDeployGate(
   };
 }
 
+function appendResultJob(rendered: RenderResult, resultJob: string): RenderResult {
+  const jobs = rendered.generatedIds.filter((id) => !id.includes("/"));
+  return {
+    content: line(rendered.content, "RESULT_NEEDS", jobs.map((job) => `- ${job}`).join("\n")),
+    generatedIds: [...rendered.generatedIds, resultJob, `${resultJob}/${resultJob}`],
+  };
+}
+
 /**
  * Render the branch-target deploy workflow.
  * @param params - Workspace and rendering configuration
@@ -502,7 +510,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     "tailor-deploy/tailor-notify",
   );
 
-  return { content: out, generatedIds };
+  return appendResultJob({ content: out, generatedIds }, "tailor-result");
 }
 
 /**
@@ -641,7 +649,7 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "tailor-preview-cleanup/tailor-preview-cleanup",
   ];
 
-  return { content: out, generatedIds };
+  return appendResultJob({ content: out, generatedIds }, "tailor-preview-result");
 }
 
 export const ACTIONS_SHA = "22543e223136ce9b67844bfc7e0b92e88efb5967";

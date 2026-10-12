@@ -56,22 +56,23 @@ tailor deploy [options]
 
 **Options**
 
-| Option                                  | Alias | Description                                                                          | Required | Default              | Env                               |
-| --------------------------------------- | ----- | ------------------------------------------------------------------------------------ | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>`         | `-w`  | Workspace ID                                                                         | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`                   | `-p`  | Workspace profile                                                                    | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`                     | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together. | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                                 | `-y`  | Skip confirmation prompts                                                            | No       | `false`              | -                                 |
-| `--create-workspace`                    | -     | Create a workspace when the account has none                                         | No       | -                    | -                                 |
-| `--workspace-name <WORKSPACE_NAME>`     | -     | Name for a workspace created during deploy                                           | No       | -                    | -                                 |
-| `--workspace-region <WORKSPACE_REGION>` | -     | Region for a workspace created during deploy                                         | No       | -                    | -                                 |
-| `--organization-id <ORGANIZATION_ID>`   | -     | Organization ID for a workspace created during deploy                                | No       | -                    | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`               | -     | Folder ID for a workspace created during deploy                                      | No       | -                    | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--dry-run`                             | `-d`  | Run the command without making any changes                                           | No       | -                    | -                                 |
-| `--no-schema-check`                     | -     | Skip schema diff check against migration snapshots                                   | No       | -                    | -                                 |
-| `--no-validate`                         | -     | Skip client-side validation against platform resource constraints                    | No       | -                    | -                                 |
-| `--no-cache`                            | -     | Disable bundle caching for this run                                                  | No       | -                    | -                                 |
-| `--clean-cache`                         | -     | Clean the bundle cache before building                                               | No       | -                    | -                                 |
+| Option                                          | Alias | Description                                                                                                            | Required | Default              | Env                               |
+| ----------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                           | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                      | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`                             | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together.                                   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                                         | `-y`  | Skip confirmation prompts                                                                                              | No       | `false`              | -                                 |
+| `--create-workspace`                            | -     | Create a workspace when the account has none                                                                           | No       | -                    | -                                 |
+| `--workspace-name <WORKSPACE_NAME>`             | -     | Name for a workspace created during deploy                                                                             | No       | -                    | -                                 |
+| `--workspace-region <WORKSPACE_REGION>`         | -     | Region for a workspace created during deploy                                                                           | No       | -                    | -                                 |
+| `--organization-id <ORGANIZATION_ID>`           | -     | Organization ID for a workspace created during deploy                                                                  | No       | -                    | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`                       | -     | Folder ID for a workspace created during deploy                                                                        | No       | -                    | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--dry-run`                                     | `-d`  | Run the command without making any changes                                                                             | No       | -                    | -                                 |
+| `--no-schema-check`                             | -     | Skip schema diff check against migration snapshots                                                                     | No       | -                    | -                                 |
+| `--migration-skip-steps <MIGRATION_SKIP_STEPS>` | -     | Skip steps of a partially applied multi-step migration that already succeeded (comma-separated namespace/step entries) | No       | -                    | -                                 |
+| `--no-validate`                                 | -     | Skip client-side validation against platform resource constraints                                                      | No       | -                    | -                                 |
+| `--no-cache`                                    | -     | Disable bundle caching for this run                                                                                    | No       | -                    | -                                 |
+| `--clean-cache`                                 | -     | Clean the bundle cache before building                                                                                 | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 **JSON result:**

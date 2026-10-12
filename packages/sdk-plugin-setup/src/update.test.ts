@@ -4,7 +4,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
 import { setupTarget, type SetupTargetOptions } from "./generate";
-import { readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
+import { LOCK_VERSION, readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
 import { planUpdate, setupUpdate } from "./update";
@@ -322,6 +322,29 @@ describe("setupUpdate", () => {
     expect(fs.readFileSync(path.join(testDir, ".github/workflows/tailor-front.yml"), "utf-8")).toBe(
       edited,
     );
+  });
+
+  test("regenerates a preview target recorded under a name longer than 50 characters, with a warning", async () => {
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    writeAppConfig("apps/front");
+    const name = "a".repeat(57);
+    const file = `.github/workflows/tailor-${name}-preview.yml`;
+    writeLock(testDir, {
+      version: LOCK_VERSION,
+      targets: [
+        {
+          ...lockTarget("preview", name, { branch: "main", dir: "apps/front", region: "us-west" }),
+          file,
+          templateVersion: TEMPLATE_VERSION - 1,
+        },
+      ],
+    });
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(readLock(testDir)?.targets[0]?.templateVersion).toBe(TEMPLATE_VERSION);
+    expect(fs.existsSync(path.join(testDir, file))).toBe(true);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/from pull request #100\b/));
   });
 
   test("lists a CLI error's suggestion under its target, labelled as in `setup ci`", async () => {

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "customer-table-defined",
+      "claim": "A customer table is defined with `db.table(...)`, exported by name, and matched by a `db` namespace `files` glob in defineConfig."
+    },
+    {
+      "id": "single-executor-multi-event",
+      "claim": "One default-exported `createExecutor` uses `recordTrigger({ type: <customer table>, events: [...] })` whose `events` includes both \"created\" and \"updated\"."
+    },
+    {
+      "id": "executor-files-wired",
+      "claim": "defineConfig's `executor.files` globs match the executor file."
+    },
+    {
+      "id": "handler-audits-both-events",
+      "claim": "The executor uses a `function` operation whose body writes or logs a compact audit message for both events, using the event name (`args.event`) or the record values available for that event."
+    }
+  ]
+}
