@@ -217,6 +217,26 @@ describe("findTargetDrift", () => {
     expect(findings[0]?.message).toMatch(/plan job/);
   });
 
+  test.each(["branch", "tag", "preview"] as const)(
+    "reports seed when a %s target seeds but the config no longer uses seedPlugin",
+    (kind) => {
+      const findings = findTargetDrift(
+        baseTarget({ kind, inputs: { ...baseTarget().inputs, seed: { datasets: [] } } }),
+        cleanState({ hasSeeds: false }),
+      );
+      expect(findings.map((f) => f.rule)).toEqual(["seed"]);
+      expect(findings[0]?.message).toContain("tailor-seed");
+    },
+  );
+
+  test("does not report seed while the config still uses seedPlugin", () => {
+    const findings = findTargetDrift(
+      baseTarget({ inputs: { ...baseTarget().inputs, seed: { datasets: [] } } }),
+      cleanState({ hasSeeds: true }),
+    );
+    expect(findings).toEqual([]);
+  });
+
   describe("multi-directory targets", () => {
     const multiTarget = baseTarget({
       inputs: {
@@ -485,6 +505,34 @@ describe("checkGitHub (integration)", () => {
       expect(regenerated).not.toBe(withUserJob);
       expect(regenerated).toContain("      - tailor-deploy\n      - e2e\n    if: always()");
       await expect(check()).resolves.toBeUndefined();
+    });
+
+    test("reports a seeding preview target whose config dropped seedPlugin", async () => {
+      await setupTarget({
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
+        seed: { datasets: [] },
+        loadSeedSettings: async () => ({
+          machineUserName: "admin",
+          datasets: {},
+          dataDir: path.join(testDir, "seed/data"),
+        }),
+      });
+
+      await expect(
+        checkGitHub({
+          outputDir: testDir,
+          gitRunner: () => "origin/main",
+          loadHasSeeds: async () => false,
+        }),
+      ).rejects.toThrow("Detected 1 drift finding(s)");
     });
 
     test("passes after --force regeneration following a hand edit", async () => {

@@ -19,7 +19,13 @@ function recordedBranchUnlessDetected(inputs: LockInputs): string | undefined {
 export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTargetOptions {
   const { kind, workspaceName, inputs } = target;
   const dir = inputs.apps ? inputs.apps.map((app) => app.dir) : inputs.dir;
-  const base = { workspaceName, dir, environment: inputs.environment, ...common };
+  const base = {
+    workspaceName,
+    dir,
+    environment: inputs.environment,
+    ...(inputs.seed ? { seed: inputs.seed } : {}),
+    ...common,
+  };
 
   switch (kind) {
     case "branch":

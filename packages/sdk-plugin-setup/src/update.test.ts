@@ -131,6 +131,24 @@ describe("planUpdate", () => {
     });
   });
 
+  test.each(["branch", "tag", "preview"] as const)(
+    "%s: regenerates with the recorded seed datasets",
+    (kind) => {
+      const plan = planUpdate(
+        lockTarget(kind, "my-app", { seed: { datasets: ["preview"] } }),
+        common,
+      );
+
+      expect(plan).toMatchObject({ kind, seed: { datasets: ["preview"] } });
+    },
+  );
+
+  test("leaves seeding off for a target recorded without it", () => {
+    const plan = planUpdate(lockTarget("branch", "my-app", {}), common);
+
+    expect(plan).not.toHaveProperty("seed");
+  });
+
   test("preview: re-detects the default branch when it was auto-detected", () => {
     const plan = planUpdate(
       lockTarget("preview", "my-app", {

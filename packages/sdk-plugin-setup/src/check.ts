@@ -35,7 +35,8 @@ type DriftRule =
   | "default-branch"
   | "erd-namespaces"
   | "migration-drift"
-  | "seed-validate";
+  | "seed-validate"
+  | "seed";
 
 export type DriftFinding = {
   /** Human label for the target: `<kind> <workspaceName>`. */
@@ -66,7 +67,7 @@ export type TargetState = {
   erdNamespaces: string[] | null;
   /** Whether the current config has TailorDB namespaces with migrations (branch/tag only). */
   hasMigrations?: boolean;
-  /** Whether the current config uses the seed plugin (branch/tag only). */
+  /** Whether the current config uses the seed plugin (branch/tag, and any target that seeds). */
   hasSeeds?: boolean;
   /** Current state of each app of a multi-directory target, in the order the lock records them. */
   apps?: AppState[];
@@ -266,6 +267,16 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     });
   }
 
+  if (target.inputs.seed !== undefined && state.hasSeeds === false) {
+    findings.push({
+      target: id,
+      rule: "seed",
+      message:
+        "The config no longer uses seedPlugin, but the deploy job still seeds the workspace " +
+        "(tailor-seed). Re-run setup without --seed, or add seedPlugin back.",
+    });
+  }
+
   return findings;
 }
 
@@ -402,8 +413,9 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
         ? await loadHasMigrations(configAbs)
         : undefined;
     const hasSeeds =
-      (target.kind === "branch" || target.kind === "tag") &&
-      target.inputs.seedValidate !== undefined &&
+      (((target.kind === "branch" || target.kind === "tag") &&
+        target.inputs.seedValidate !== undefined) ||
+        target.inputs.seed !== undefined) &&
       configAbs !== null &&
       configExists
         ? await loadHasSeeds(configAbs)
