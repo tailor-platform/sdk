@@ -73,18 +73,20 @@ vi.mock("#/cli/shared/spinner", () => ({
 // Mock the bundler and the workflow executor so executeMigrations can run
 // without touching the network or building real bundles.
 const bundleMigrationScriptMock = vi.fn();
-const bundleMigrationStepsMock = vi.fn(
-  async (_options: { temporal?: boolean; dateDefault?: "legacy" | "temporal" }) => ({
-    bundledCode: "// bundled steps",
-  }),
-);
+type BundleStepsOptions = {
+  temporal?: boolean;
+  dateDefault?: "legacy" | "temporal";
+  skipSteps?: readonly string[];
+};
+const bundleMigrationStepsMock = vi.fn(async (_options: BundleStepsOptions) => ({
+  bundledCode: "// bundled steps",
+}));
 const bundleSingleStepMigrationMock = vi.fn(async (_options: unknown) => ({
   bundledCode: "// bundled single step",
 }));
 vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
-  bundleMigrationSteps: (options: { temporal?: boolean; dateDefault?: "legacy" | "temporal" }) =>
-    bundleMigrationStepsMock(options),
+  bundleMigrationSteps: (options: BundleStepsOptions) => bundleMigrationStepsMock(options),
   bundleSingleStepMigration: (options: unknown) => bundleSingleStepMigrationMock(options),
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
@@ -813,6 +815,77 @@ describe("migration", () => {
         client: createMetadataClient({ labels: {} }, setMetadataMock),
       };
     }
+
+    test("hands the steps to skip to both the bundle and the run for the migration in progress", async () => {
+      bundleMigrationStepsMock.mockClear();
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: true,
+        logs: "",
+        completedSteps: [],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      });
+      const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
+      const skipSteps = new Map([["tailordb", ["backfill"]]]);
+
+      await executeMigrations({ ...stepsContext(vi.fn()), skipSteps }, [migration], {
+        tailordb: { number: 3 },
+      });
+
+      expect(bundleMigrationStepsMock.mock.calls[0]![0]).toMatchObject({ skipSteps: ["backfill"] });
+      expect(executeMigrationStepsAsWorkflowMock.mock.calls.at(-1)![0]).toMatchObject({
+        skipSteps: ["backfill"],
+      });
+    });
+
+    test("skips nothing in a migration that is not the one in progress", async () => {
+      bundleMigrationStepsMock.mockClear();
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: true,
+        logs: "",
+        completedSteps: [],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      });
+      const migration = createMockMigration({ number: 4, scriptForm: stepsForm });
+
+      await executeMigrations(
+        { ...stepsContext(vi.fn()), skipSteps: new Map([["tailordb", ["backfill"]]]) },
+        [migration],
+        { tailordb: { number: 3 } },
+      );
+
+      expect(bundleMigrationStepsMock.mock.calls[0]![0].skipSteps ?? []).toEqual([]);
+    });
+
+    test("shows what to do about a notice below the notice itself", async () => {
+      const migration = createMockMigration({ scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: {
+          notify?: (level: "info" | "warn", message: string, suggestion?: string) => void;
+        }) => {
+          options.notify?.(
+            "warn",
+            "every step runs again",
+            "skip them with --migration-skip-steps",
+          );
+          return {
+            success: true,
+            logs: "",
+            completedSteps: [],
+            failedSteps: [],
+            stepsMayHaveCommitted: true,
+          };
+        },
+      );
+      vi.mocked(logger.warn).mockClear();
+      vi.mocked(logger.log).mockClear();
+
+      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+
+      expect(logger.warn).toHaveBeenCalledWith("every step runs again");
+      expect(logger.log).toHaveBeenCalledWith("skip them with --migration-skip-steps");
+    });
 
     test("treats another deploy's active run as in progress without touching its records", async () => {
       const setMetadataMock = vi.fn();
