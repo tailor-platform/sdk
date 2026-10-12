@@ -29,6 +29,8 @@ import {
 import { tempDir } from "./test-helpers/temp-dir";
 
 const NO_MARKER = /__[A-Z_]+__/;
+const UPLOAD_ARTIFACT_V7 = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const UPLOAD_ARTIFACT_V3 = "actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf";
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -555,9 +557,7 @@ esac
   test("on github.com, uploads each viewer unzipped and links its artifact", () => {
     const { content } = renderBranchWorkflow({ ...branchBase, erdPreview });
 
-    expect(uploadOf(content)?.uses).toBe(
-      "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-    );
+    expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_V7);
     expect(uploadOf(content)?.with).toMatchObject({ archive: false });
 
     const { calls, body } = runComment(content, "https://github.com");
@@ -573,9 +573,7 @@ esac
     const { archive, ...v7Inputs } = (v7Upload?.with ?? {}) as Record<string, unknown>;
 
     expect(archive).toBe(false);
-    expect(uploadOf(content)?.uses).toBe(
-      "actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf",
-    );
+    expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_V3);
     expect(uploadOf(content)?.with).toEqual(v7Inputs);
 
     const { calls, body } = runComment(content, "https://ghes.example.com");
@@ -1883,8 +1881,6 @@ export default defineConfig({
   });
 
   describe("--ghes", () => {
-    const V3_PIN = "actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf";
-    const V7_PIN = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
     const wfPath = path.join(testDir, ".github/workflows/tailor-my-app.yml");
     const erdOptions = (ghes: boolean) =>
       baseOptions({
@@ -1897,14 +1893,14 @@ export default defineConfig({
     test("records the choice and uploads ERD viewers with upload-artifact v3", async () => {
       await setupTarget(erdOptions(true));
 
-      expect(fs.readFileSync(wfPath, "utf-8")).toContain(V3_PIN);
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V3);
       expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({ erdPreview: true, ghes: true });
     });
 
     test("is not recorded when off", async () => {
       await setupTarget(erdOptions(false));
 
-      expect(fs.readFileSync(wfPath, "utf-8")).toContain(V7_PIN);
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V7);
       expect(readLock(testDir)?.targets[0]?.inputs).not.toHaveProperty("ghes");
     });
 
@@ -1920,12 +1916,12 @@ export default defineConfig({
     test("switches an existing workflow to and from GitHub Enterprise Server without --force", async () => {
       await setupTarget(erdOptions(false));
       await setupTarget(erdOptions(true));
-      expect(fs.readFileSync(wfPath, "utf-8")).toContain(V3_PIN);
-      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(V7_PIN);
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V3);
+      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_V7);
 
       await setupTarget(erdOptions(false));
-      expect(fs.readFileSync(wfPath, "utf-8")).toContain(V7_PIN);
-      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(V3_PIN);
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V7);
+      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_V3);
       expect(readLock(testDir)?.targets[0]?.inputs).not.toHaveProperty("ghes");
     });
   });
