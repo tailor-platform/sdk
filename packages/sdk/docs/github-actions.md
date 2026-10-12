@@ -727,10 +727,10 @@ tailor setup ci branch --name my-app-stg --erd-preview --ghes
 ```
 
 GitHub Enterprise Server does not support `actions/upload-artifact` v4 or
-later, which uploads each ERD viewer unzipped. With `--ghes`, the workflow
-uploads it with v3 instead, so each viewer is a zip file, and the PR comment
-links to the workflow run, which lists the artifacts. `setup update` keeps
-`--ghes`.
+later, which the workflow uses to upload each ERD viewer unzipped. With
+`--ghes`, the workflow uploads it with v3 instead, so each viewer is a zip
+file, and the PR comment links to the workflow run, which lists the artifacts.
+`setup update` keeps `--ghes`.
 
 ## Keeping dependencies and actions updated
 

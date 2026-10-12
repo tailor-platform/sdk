@@ -511,11 +511,11 @@ case "$*" in
   *"--method POST"*)
     for arg; do case "$arg" in body=*) printf '%s' "\${arg#body=}" > "$FAKE_GH_DIR/body" ;; esac; done ;;
   *"/pulls/"*) printf 'head-sha\\n' ;;
-  *"/artifacts"*) printf 'tailordb-viewer.html\\t123\\n' ;;
+  *"/artifacts"*) printf '%s' "$FAKE_GH_ARTIFACTS" ;;
 esac
 `;
 
-  const runComment = (content: string, serverUrl: string) => {
+  const runComment = (content: string, serverUrl: string, listedArtifacts: string) => {
     using tmp = tempDir("erd-comment-");
     const bin = path.join(tmp.dir, "bin");
     fs.mkdirSync(bin);
@@ -528,12 +528,13 @@ esac
       "github.event.pull_request.number": "7",
       "github.event.pull_request.base.ref": "main",
       "github.event.pull_request.head.sha": "head-sha",
+      "needs.tailor-erd-preview-matrix.outputs.namespaces": JSON.stringify(erdPreview.namespaces),
     };
     const step = stepOf(content, "tailor-erd-preview-comment", "tailor-comment-erd-preview");
     const env = Object.fromEntries(
       Object.entries(step?.env as Record<string, string>).map(([key, value]) => [
         key,
-        value.replaceAll(/\$\{\{ ([\w.]+) \}\}/g, (_match, expression: string) => {
+        value.replaceAll(/\$\{\{ ([\w.-]+) \}\}/g, (_match, expression: string) => {
           const resolved = context[expression];
           if (resolved === undefined) throw new Error(`No test value for ${expression}`);
           return resolved;
@@ -545,6 +546,7 @@ esac
         PATH: `${bin}:${process.env.PATH ?? ""}`,
         GITHUB_SERVER_URL: serverUrl,
         FAKE_GH_DIR: tmp.dir,
+        FAKE_GH_ARTIFACTS: listedArtifacts,
         ...env,
       },
     });
@@ -560,14 +562,18 @@ esac
     expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_V7);
     expect(uploadOf(content)?.with).toMatchObject({ archive: false });
 
-    const { calls, body } = runComment(content, "https://github.com");
+    const { calls, body } = runComment(
+      content,
+      "https://github.com",
+      "tailordb-viewer.html\t123\n",
+    );
     expect(new Set(calls)).toEqual(new Set(["github.com test-token"]));
     expect(body).toContain(
       "[tailordb-viewer.html](https://github.com/acme/widgets/actions/runs/99/artifacts/123)",
     );
   });
 
-  test("on GitHub Enterprise Server, uploads with upload-artifact v3 and links the workflow run", () => {
+  test("on GitHub Enterprise Server, uploads with upload-artifact v3 and names the viewers before the run lists its artifacts", () => {
     const { content } = renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true });
     const v7Upload = uploadOf(renderBranchWorkflow({ ...branchBase, erdPreview }).content);
     const { archive, ...v7Inputs } = (v7Upload?.with ?? {}) as Record<string, unknown>;
@@ -576,10 +582,10 @@ esac
     expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_V3);
     expect(uploadOf(content)?.with).toEqual(v7Inputs);
 
-    const { calls, body } = runComment(content, "https://ghes.example.com");
+    const { calls, body } = runComment(content, "https://ghes.example.com", "");
     expect(new Set(calls)).toEqual(new Set(["ghes.example.com test-token"]));
     expect(body).toContain("https://ghes.example.com/acme/widgets/actions/runs/99)");
-    expect(body).toContain("tailordb-viewer.html");
+    expect(body).toContain("- **tailordb viewer**: `tailordb-viewer.html`");
     expect(body).not.toContain("/artifacts/");
   });
 

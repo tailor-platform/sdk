@@ -581,7 +581,12 @@ jobs:
   # __ERD_PREVIEW_JOB_END__
   # __ERD_PREVIEW_COMMENT_JOB_START__
   tailor-erd-preview-comment:
+    # __ERD_GITHUB_COM_COMMENT_NEEDS_START__
     needs: tailor-erd-preview
+    # __ERD_GITHUB_COM_COMMENT_NEEDS_END__
+    # __ERD_GHES_COMMENT_NEEDS_START__
+    needs: [tailor-erd-preview-matrix, tailor-erd-preview]
+    # __ERD_GHES_COMMENT_NEEDS_END__
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -596,6 +601,9 @@ jobs:
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           SERVER: ${{ github.server_url }}
+          # __ERD_GHES_NAMESPACES_START__
+          NAMESPACES: ${{ needs.tailor-erd-preview-matrix.outputs.namespaces }}
+          # __ERD_GHES_NAMESPACES_END__
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -613,10 +621,16 @@ jobs:
           body="$MARKER"$'\n'"### TailorDB ERD preview (__WORKSPACE_NAME__)"$'\n\n'
           # __ERD_GITHUB_COM_LINKS_START__
           body+="Self-contained ERD viewer HTML artifacts for this pull request. Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
+          viewer_artifacts() {
+            gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+              --jq '.artifacts[] | select(.name | endswith("-viewer.html")) | [.name, (.id|tostring)] | @tsv'
+          }
           artifact_link() { printf '[%s](%s)' "$1" "$SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$2"; }
           # __ERD_GITHUB_COM_LINKS_END__
           # __ERD_GHES_LINKS_START__
           body+="Self-contained ERD viewer HTML files for this pull request, each zipped as an artifact of [the workflow run]($SERVER/$REPO/actions/runs/$RUN_ID). Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
+          # upload-artifact v3 artifacts reach the REST API only after the run completes.
+          viewer_artifacts() { jq -r '.[] | "\(.)-viewer.html"' <<<"$NAMESPACES"; }
           artifact_link() { printf '`%s`' "$1"; }
           # __ERD_GHES_LINKS_END__
 
@@ -628,8 +642,7 @@ jobs:
             ns=${name%-viewer.html}
             label="$ns viewer"
             body+=$'\n'"- **$label**: $(artifact_link "$name" "$id")"
-          done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select(.name | endswith("-viewer.html")) | [.name, (.id|tostring)] | @tsv' | sort)
+          done < <(viewer_artifacts | sort)
 
           existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
             --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')

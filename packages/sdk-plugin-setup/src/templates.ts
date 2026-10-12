@@ -433,6 +433,9 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   out = block(out, "ERD_PREVIEW_COMMENT_JOB", erdPreview !== null);
   out = block(out, "ERD_GITHUB_COM_UPLOAD", !ghes);
   out = block(out, "ERD_GHES_UPLOAD", ghes);
+  out = block(out, "ERD_GITHUB_COM_COMMENT_NEEDS", !ghes);
+  out = block(out, "ERD_GHES_COMMENT_NEEDS", ghes);
+  out = block(out, "ERD_GHES_NAMESPACES", ghes);
   out = block(out, "ERD_GITHUB_COM_LINKS", !ghes);
   out = block(out, "ERD_GHES_LINKS", ghes);
   out = block(out, "PULL_REQUEST", true);
