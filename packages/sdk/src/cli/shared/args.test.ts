@@ -561,17 +561,25 @@ describe("createCommonArgs effects", () => {
     },
   );
 
-  test("records the AI coding agent as what selected JSON output", async () => {
-    using _agent = detectedAgent("claude_code");
-    using setJsonMode = vi.spyOn(logger, "setJsonMode");
-    const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
-    const result = await runCommand(command, [], {
-      // Strip unknown keys the same way the CLI entrypoint parses global args.
-      globalArgs: z.object(createCommonArgs()),
-    });
-    expect(result.exitCode).toBe(0);
-    expect(setJsonMode).toHaveBeenCalledWith(true, "agent");
-  });
+  test.each([
+    { output: undefined, argv: [] as string[], source: "agent" },
+    { output: undefined, argv: ["--json"], source: "flag" },
+    { output: "true", argv: [] as string[], source: "env" },
+  ])(
+    "records $source as what selected JSON output under an AI coding agent",
+    async ({ output, argv, source }) => {
+      using _agent = detectedAgent("claude_code");
+      using setJsonMode = vi.spyOn(logger, "setJsonMode");
+      vi.stubEnv("TAILOR_JSON_OUTPUT", output);
+      const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
+      const result = await runCommand(command, argv, {
+        // Strip unknown keys the same way the CLI entrypoint parses global args.
+        globalArgs: z.object(createCommonArgs()),
+      });
+      expect(result.exitCode).toBe(0);
+      expect(setJsonMode).toHaveBeenCalledWith(true, source);
+    },
+  );
 
   test("keeps table output when only politty detects an agent", async () => {
     vi.stubEnv("AI_AGENT", "claude_code");
