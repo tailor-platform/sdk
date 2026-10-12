@@ -75,6 +75,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       # __SEED_START__
       - id: tailor-seed
+        if: github.event.action != 'labeled' || github.event.label.name == 'tailor:preview'
         shell: bash
         # __WORKING_DIRECTORY__
         env:

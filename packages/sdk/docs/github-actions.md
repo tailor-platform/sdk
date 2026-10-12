@@ -591,6 +591,8 @@ Before enabling it, note that:
   and validation run, `updatedAt` changes, and executors with
   `recordUpdatedTrigger` fire once per seeded row on every deploy.
 - Every preview push deletes the data reviewers added to the preview workspace.
+  With `--require-preview-label`, adding the `tailor:preview` label reseeds too,
+  while another label redeploys without reseeding.
 - A seed failure fails the deploy job and its notification, although the deploy
   itself went through.
 - The step shares the deploy job's timeout. IdP users take about a second each.

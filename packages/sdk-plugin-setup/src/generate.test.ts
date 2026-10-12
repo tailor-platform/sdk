@@ -1352,6 +1352,7 @@ describe("seed step", () => {
     ]);
     expect(steps[index]).toEqual({
       id: "tailor-seed",
+      if: "github.event.action != 'labeled' || github.event.label.name == 'tailor:preview'",
       shell: "bash",
       env: {
         TAILOR_PLATFORM_WORKSPACE_ID: "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
