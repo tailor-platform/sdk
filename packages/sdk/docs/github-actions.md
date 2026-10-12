@@ -565,11 +565,12 @@ tailor setup ci preview --region us-west --seed-dataset preview
 
 The deploy job gains a `tailor-seed` step after the deploy step, which validates
 the seed data with the same datasets and then applies it. With datasets, the
-plan job's seed validation checks them too.
+plan job's seed validation checks them too; it does not check the `id` that
+`--upsert` needs, which fails only when the deploy job seeds.
 
 | Target      | Seeds with                           | Effect                                                                        |
 | ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
-| branch, tag | `tailor seed apply --upsert`         | Seeded rows are reset to the committed values; other rows are kept            |
+| branch, tag | `tailor seed apply --upsert`         | The fields of each committed seed row are written; other rows are kept        |
 | preview     | `tailor seed apply --truncate --yes` | The preview workspace is emptied, IdP users included, and seeded from scratch |
 
 Setup stops unless the config uses `seedPlugin` with `machineUserName`, which
@@ -585,19 +586,20 @@ Seeding is available for a target that deploys one app.
 
 Before enabling it, note that:
 
-- Every branch or tag deploy writes the committed seed rows over the workspace,
-  `_User` rows and their passwords included, so a seeded row edited in the
-  workspace is reset. Each row is updated like any other update: update hooks
+- Every branch or tag deploy writes the fields of the committed seed rows over
+  the workspace, `_User` rows and their passwords included, so an edit to one of
+  those fields in the workspace is undone. Each row is updated like any other update: update hooks
   and validation run, `updatedAt` changes, and executors with
   `recordUpdatedTrigger` fire once per seeded row on every deploy.
-- Every preview push deletes the data reviewers added to the preview workspace.
-  With `--require-preview-label`, adding the `tailor:preview` label reseeds too,
-  while another label redeploys without reseeding.
+- Every preview deploy deletes the data reviewers added to the preview
+  workspace. That is every push, and with `--require-preview-label` also every
+  label added to the pull request, since each one redeploys the preview.
 - A seed failure fails the deploy job and its notification, although the deploy
   itself went through.
 - The step shares the deploy job's timeout. IdP users take about a second each.
 - Steps you added after the deploy step stay right after it, so they run before
-  `tailor-seed`. Move a step below `tailor-seed` when it needs the seeded data.
+  `tailor-seed`. Move a step below `tailor-seed` when it needs the seeded data,
+  and move it again if you regenerate without `--seed` and then with it.
 - `tailor-seed` is an SDK-managed step. To seed another way (a different mode,
   `--skip-idp`, a condition), leave `--seed` off and add your own step.
 

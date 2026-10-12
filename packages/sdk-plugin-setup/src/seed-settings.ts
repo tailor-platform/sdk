@@ -7,8 +7,8 @@ export type SeedSettings = {
   machineUserName?: string;
   /** Names of the dataset combinations in the seedPlugin `datasets` option. */
   datasets: Record<string, unknown>;
-  /** Absolute path of `<distPath>/data`, resolved against the app directory. */
-  dataDir: string;
+  /** Absolute path of `<distPath>/data`, resolved against the app directory; unset without distPath. */
+  dataDir?: string;
 };
 
 /** Dataset names `--seed-dataset` accepts; they need no shell quoting in the generated step. */
@@ -28,7 +28,6 @@ export async function defaultLoadSeedSettings(configPath: string): Promise<SeedS
     machineUserName?: unknown;
     datasets?: unknown;
   };
-  const distPath = typeof options.distPath === "string" ? options.distPath : "";
   return {
     machineUserName:
       typeof options.machineUserName === "string" ? options.machineUserName : undefined,
@@ -36,7 +35,10 @@ export async function defaultLoadSeedSettings(configPath: string): Promise<SeedS
       typeof options.datasets === "object" && options.datasets !== null
         ? (options.datasets as Record<string, unknown>)
         : {},
-    dataDir: path.resolve(path.dirname(configPath), distPath, "data"),
+    dataDir:
+      typeof options.distPath === "string" && options.distPath !== ""
+        ? path.resolve(path.dirname(configPath), options.distPath, "data")
+        : undefined,
   };
 }
 
@@ -45,6 +47,17 @@ function isDirectory(dirPath: string): boolean {
     return fs.statSync(dirPath).isDirectory();
   } catch {
     return false;
+  }
+}
+
+// Exact names, as `tailor seed` matches them, so a case-insensitive file system cannot pass a misspelling.
+function datasetDirectories(dataDir: string): Set<string> {
+  try {
+    return new Set(
+      fs.readdirSync(dataDir).filter((entry) => isDirectory(path.join(dataDir, entry))),
+    );
+  } catch {
+    return new Set();
   }
 }
 
@@ -67,15 +80,30 @@ export function seedSettingsProblem(
       "seeds the workspace."
     );
   }
-  const unknown = datasets.find(
-    (dataset) =>
-      !Object.hasOwn(settings.datasets, dataset) &&
-      !isDirectory(path.join(settings.dataDir, dataset)),
-  );
-  if (unknown === undefined) return undefined;
-  return (
-    `Unknown seed dataset "${unknown}". ` +
-    `Datasets in seedPlugin options: ${Object.keys(settings.datasets).join(", ") || "(none)"}. ` +
-    `It is not a directory in ${settings.dataDir} either.`
-  );
+  const { dataDir } = settings;
+  if (dataDir === undefined) {
+    return "--seed needs the distPath option of seedPlugin to find the seed data.";
+  }
+  const directories = datasetDirectories(dataDir);
+  for (const dataset of datasets) {
+    if (!Object.hasOwn(settings.datasets, dataset)) {
+      if (directories.has(dataset)) continue;
+      return (
+        `Unknown seed dataset "${dataset}". ` +
+        `Datasets in seedPlugin options: ${Object.keys(settings.datasets).join(", ") || "(none)"}. ` +
+        `It is not a directory in ${dataDir} either.`
+      );
+    }
+    const entries = settings.datasets[dataset];
+    const missing = (Array.isArray(entries) ? entries : []).find(
+      (entry) => typeof entry !== "string" || !directories.has(entry),
+    );
+    if (missing !== undefined) {
+      return (
+        `Dataset "${dataset}" in seedPlugin options lists "${String(missing)}", ` +
+        `but ${path.join(dataDir, String(missing))} is not a directory.`
+      );
+    }
+  }
+  return undefined;
 }

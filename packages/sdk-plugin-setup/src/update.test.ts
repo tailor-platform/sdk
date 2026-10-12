@@ -314,6 +314,7 @@ describe("setupUpdate", () => {
 
   test("keeps seeding a target, and reports it once its dataset no longer resolves", async () => {
     writeAppConfig("apps/api");
+    fs.mkdirSync(path.join(testDir, "apps/api/seed/data/cogs"), { recursive: true });
     const settings = {
       machineUserName: "admin",
       datasets: { preview: ["cogs"] },

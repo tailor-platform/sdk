@@ -1352,7 +1352,6 @@ describe("seed step", () => {
     ]);
     expect(steps[index]).toEqual({
       id: "tailor-seed",
-      if: "github.event.action != 'labeled' || github.event.label.name == 'tailor:preview'",
       shell: "bash",
       env: {
         TAILOR_PLATFORM_WORKSPACE_ID: "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
@@ -2241,7 +2240,13 @@ export default defineConfig({
 
   describe("--seed", () => {
     const seedSettings =
-      (overrides: { machineUserName?: string; datasets?: Record<string, string[]> } = {}) =>
+      (
+        overrides: {
+          machineUserName?: string;
+          datasets?: Record<string, string[]>;
+          dataDir?: string;
+        } = {},
+      ) =>
       async () => ({
         machineUserName: "admin",
         datasets: {},
@@ -2251,6 +2256,7 @@ export default defineConfig({
 
     test("seeds after each deploy and records the datasets in the lock", async () => {
       fs.mkdirSync(path.join(testDir, "seed/data/cogs"), { recursive: true });
+      fs.mkdirSync(path.join(testDir, "seed/data/shipments"), { recursive: true });
 
       await setupTarget(
         baseOptions({
@@ -2389,14 +2395,44 @@ export default defineConfig({
         datasets: ["bad name"],
         message: '"bad name" is not a valid dataset name.',
       },
-    ])("rejects $name before writing anything", async ({ loadSeedSettings, datasets, message }) => {
-      await expect(
-        setupTarget(baseOptions({ workspaceName: "my-app", seed: { datasets }, loadSeedSettings })),
-      ).rejects.toThrow(message);
+      {
+        name: "a seedPlugin without distPath",
+        loadSeedSettings: seedSettings({ dataDir: undefined }),
+        datasets: [],
+        message: "--seed needs the distPath option of seedPlugin",
+      },
+      {
+        name: "a dataset directory spelled in another case",
+        loadSeedSettings: seedSettings(),
+        dirs: ["preview"],
+        datasets: ["Preview"],
+        message: 'Unknown seed dataset "Preview".',
+      },
+      {
+        name: "a configured dataset that lists a missing directory",
+        loadSeedSettings: seedSettings({ datasets: { preview: ["cogs", "missing"] } }),
+        dirs: ["cogs"],
+        datasets: ["preview"],
+        message: `Dataset "preview" in seedPlugin options lists "missing", but ${path.join(testDir, "seed/data/missing")} is not a directory`,
+      },
+    ])(
+      "rejects $name before writing anything",
+      async ({ loadSeedSettings, dirs, datasets, message }) => {
+        for (const dir of dirs ?? []) {
+          fs.mkdirSync(path.join(testDir, "seed/data", dir), { recursive: true });
+        }
+        await expect(
+          setupTarget(
+            baseOptions({ workspaceName: "my-app", seed: { datasets }, loadSeedSettings }),
+          ),
+        ).rejects.toThrow(message);
 
-      expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"))).toBe(false);
-      expect(readLock(testDir)).toBeNull();
-    });
+        expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"))).toBe(
+          false,
+        );
+        expect(readLock(testDir)).toBeNull();
+      },
+    );
 
     test("rejects seeding a target that deploys several apps", async () => {
       fs.writeFileSync(

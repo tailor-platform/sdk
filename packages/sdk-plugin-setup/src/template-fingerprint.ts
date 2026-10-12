@@ -52,6 +52,10 @@ function renderAll(): RenderedTemplate[] {
     }),
   );
   add(
+    "branch/seed-validate",
+    renderBranchWorkflow({ ...full, branch: "main", seedValidate: true, erdPreview: null }),
+  );
+  add(
     "tag/full",
     renderTagWorkflow({
       ...full,
