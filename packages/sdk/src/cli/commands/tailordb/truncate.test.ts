@@ -104,6 +104,16 @@ describe("truncate command", () => {
     ])("throws error when %s", async (_, options, message) => {
       await expect(truncate(options)).rejects.toThrow(message);
     });
+
+    test("rejects table names split between --tables and positional arguments", async () => {
+      const { initOperatorClient } = await import("#/cli/shared/client");
+
+      const result = await runCommand(truncateCommand, ["--tables", "User", "Order", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain("Order");
+      expect(initOperatorClient).not.toHaveBeenCalled();
+    });
   });
 
   describe("confirmation through the command", () => {
