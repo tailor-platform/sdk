@@ -165,7 +165,7 @@ defineIdp("my-idp", {
 
 - `allowedEmailDomains` - Restrict registration to these email domains. Each entry is a hostname (`example.com`), matched exactly and case-insensitively, so `example.com` does not cover `sub.example.com`. Up to 100 entries.
   - A lone `"*"` entry allows every email domain. It cannot be combined with any other entry, and it is the only way to enable `allowGoogleOauth` or `allowMicrosoftOauth` without enumerating domains.
-  - An empty list (the default) also allows every domain today, but that meaning is going away: a future release requires the all-domains state to be spelled out. `tailor deploy` warns while both forms still work, so set `["*"]` to keep allowing every domain, or list the domains you accept.
+  - An empty list (the default) also allows every domain today, but that meaning is going away: a future release requires the all-domains state to be spelled out. `tailor-sdk deploy` warns while both forms still work, so set `["*"]` to keep allowing every domain, or list the domains you accept.
 - `allowGoogleOauth` - Enable the "Sign in with Google" button. Default `false`.
 - `allowMicrosoftOauth` - Enable the "Sign in with Microsoft" button. Default `false`.
 
