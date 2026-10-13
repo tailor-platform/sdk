@@ -18,6 +18,7 @@ import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatKeyValueTable } from "#/cli/shared/format";
+import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { styles, logger } from "#/cli/shared/logger";
 import { waitArgs } from "./args";
 import { type WorkflowWaitUntil } from "./status";
@@ -260,7 +261,7 @@ export async function getWorkflowExecution(
             if (functionExecution) {
               return {
                 ...jobInfo,
-                logs: functionExecution.logs || undefined,
+                logs: joinFunctionLogMessages(functionExecution.logEntries) || undefined,
                 result: functionExecution.result || undefined,
               };
             }

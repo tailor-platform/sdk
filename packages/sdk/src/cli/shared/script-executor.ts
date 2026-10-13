@@ -6,6 +6,7 @@
  */
 
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
@@ -97,7 +98,7 @@ export async function waitForExecution(
     ) {
       return {
         status: execution.status,
-        logs: execution.logs,
+        logs: joinFunctionLogMessages(execution.logEntries),
         result: execution.result,
       };
     }
