@@ -574,7 +574,8 @@ plan job's seed validation checks them too; it does not check the `id` that
 | preview     | `tailor seed apply --truncate --yes` | The preview workspace is emptied, IdP users included, and seeded from scratch |
 
 Setup stops unless the config uses `seedPlugin` with `machineUserName`, which
-names the machine user that seeds, and every `--seed-dataset` names an entry of
+names the machine user that seeds, and an existing `<distPath>/data/` directory.
+Every `--seed-dataset` must name an entry of
 the `seedPlugin` `datasets` option or a directory under `<distPath>/data/`.
 Commit the dataset directories the workflow seeds: a gitignored dataset such as
 a per-developer `local/` is not in the CI checkout.

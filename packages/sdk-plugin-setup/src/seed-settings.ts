@@ -84,6 +84,9 @@ export function seedSettingsProblem(
   if (dataDir === undefined) {
     return "--seed needs the distPath option of seedPlugin to find the seed data.";
   }
+  if (!isDirectory(dataDir)) {
+    return `Seed data directory not found: ${dataDir}. Run \`tailor generate\` before enabling --seed.`;
+  }
   const directories = datasetDirectories(dataDir);
   for (const dataset of datasets) {
     if (!Object.hasOwn(settings.datasets, dataset)) {

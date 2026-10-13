@@ -2308,6 +2308,7 @@ export default defineConfig({
     });
 
     test("keeps a user step right after the deploy step as seeding is turned on and off", async () => {
+      fs.mkdirSync(path.join(testDir, "seed/data"), { recursive: true });
       const file = path.join(testDir, ".github/workflows/tailor-my-app.yml");
       const deployStepIds = (): unknown[] =>
         (parseYAML(fs.readFileSync(file, "utf-8")) as GeneratedWorkflow).jobs[
@@ -2346,6 +2347,7 @@ export default defineConfig({
     });
 
     test("seeds the preview workspace of a preview target", async () => {
+      fs.mkdirSync(path.join(testDir, "seed/data"), { recursive: true });
       await setupTarget({
         kind: "preview",
         workspaceName: "my-app",
@@ -2386,6 +2388,7 @@ export default defineConfig({
       {
         name: "an unknown dataset",
         loadSeedSettings: seedSettings({ datasets: { preview: ["cogs"] } }),
+        dirs: ["cogs"],
         datasets: ["typo"],
         message: 'Unknown seed dataset "typo". Datasets in seedPlugin options: preview.',
       },
@@ -2400,6 +2403,12 @@ export default defineConfig({
         loadSeedSettings: seedSettings({ dataDir: undefined }),
         datasets: [],
         message: "--seed needs the distPath option of seedPlugin",
+      },
+      {
+        name: "a missing seed data directory without datasets",
+        loadSeedSettings: seedSettings(),
+        datasets: [],
+        message: "Seed data directory not found:",
       },
       {
         name: "a dataset directory spelled in another case",

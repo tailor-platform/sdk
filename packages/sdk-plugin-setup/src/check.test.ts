@@ -508,8 +508,30 @@ describe("checkGitHub (integration)", () => {
       await expect(check()).resolves.toBeUndefined();
     });
 
+    test("reports a missing seed data directory without datasets", async () => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const dataDir = path.join(testDir, "seed/data");
+      fs.mkdirSync(dataDir, { recursive: true });
+      const loadSeedSettings = async () => ({ machineUserName: "admin", datasets: {}, dataDir });
+      await setupTarget(
+        setupOptions({ workspaceName: "my-app", seed: { datasets: [] }, loadSeedSettings }),
+      );
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", loadSeedSettings }),
+      ).resolves.toBeUndefined();
+      fs.rmdirSync(dataDir);
+
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", loadSeedSettings }),
+      ).rejects.toThrow("Detected 1 drift finding(s)");
+      expect(warnSpy.mock.calls.map(([message]) => String(message))).toContainEqual(
+        expect.stringContaining("Seed data directory not found:"),
+      );
+    });
+
     test("reports a seeding preview target whose config dropped seedPlugin", async () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      fs.mkdirSync(path.join(testDir, "seed/data"), { recursive: true });
       await setupTarget({
         kind: "preview",
         workspaceName: "my-app",

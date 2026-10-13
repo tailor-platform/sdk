@@ -134,8 +134,7 @@ async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
 }
 
 async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
-  const { plugins } = await loadConfig(configPath);
-  return plugins.some((p) => p.id === "@tailor-platform/seed");
+  return (await defaultLoadSeedSettings(configPath)) !== null;
 }
 
 async function assertSeedable(
