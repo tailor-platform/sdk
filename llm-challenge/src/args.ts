@@ -2,7 +2,9 @@ import {
   PROBLEM_GROUPS,
   SDK_PROFILES,
   SOLVER_AGENTS,
+  SOLVER_RUNTIMES,
   type RequestedGroup,
+  type SolverRuntimeKind,
   type RunOptions,
   type SdkProfile,
   type SolverAgent,
@@ -18,6 +20,7 @@ const DEFAULTS: Omit<
   | "output"
   | "problemFilters"
   | "agentExplicit"
+  | "runtimeExplicit"
   | "profileExplicit"
   | "model"
   | "modelExplicit"
@@ -25,6 +28,7 @@ const DEFAULTS: Omit<
   | "effortExplicit"
 > = {
   agent: "claude",
+  runtime: "podman",
   sdkRef: "HEAD",
   profile: "no-docs" satisfies SdkProfile,
   group: "all" satisfies RequestedGroup,
@@ -50,6 +54,7 @@ export function parseRunArgs(argv: string[]): RunOptions {
   const options: RunOptions = {
     ...DEFAULTS,
     agentExplicit: false,
+    runtimeExplicit: false,
     profileExplicit: false,
     model: "",
     modelExplicit: false,
@@ -94,6 +99,10 @@ export function parseRunArgs(argv: string[]): RunOptions {
       case "--agent":
         options.agent = parseAgent(value);
         options.agentExplicit = true;
+        break;
+      case "--runtime":
+        options.runtime = parseRuntime(value);
+        options.runtimeExplicit = true;
         break;
       case "--sdk-ref":
         options.sdkRef = value;
@@ -154,6 +163,13 @@ export function parseRunArgs(argv: string[]): RunOptions {
     throw new Error("--install-skills requires --profile full");
   }
 
+  if (options.runtime === "host" && options.agent !== "claude") {
+    throw new Error("--runtime host supports only --agent claude");
+  }
+  if (options.runtime === "host" && options.installSkills) {
+    throw new Error("--runtime host cannot be used with --install-skills");
+  }
+
   if (!options.modelExplicit) {
     options.model = AGENT_DEFAULTS[options.agent].model;
   }
@@ -176,6 +192,13 @@ function parseAgent(value: string): SolverAgent {
     return value as SolverAgent;
   }
   throw new Error(`Unknown agent: ${value}`);
+}
+
+function parseRuntime(value: string): SolverRuntimeKind {
+  if ((SOLVER_RUNTIMES as readonly string[]).includes(value)) {
+    return value as SolverRuntimeKind;
+  }
+  throw new Error(`Unknown runtime: ${value}`);
 }
 
 function parseProfile(value: string): SdkProfile {

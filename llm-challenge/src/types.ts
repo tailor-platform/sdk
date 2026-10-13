@@ -1,10 +1,12 @@
 export const PROBLEM_GROUPS = ["sdk-api", "cli"] as const;
 export const SDK_PROFILES = ["no-docs", "full"] as const;
 export const SOLVER_AGENTS = ["claude", "codex"] as const;
+export const SOLVER_RUNTIMES = ["podman", "host"] as const;
 
 export type ProblemGroup = (typeof PROBLEM_GROUPS)[number];
 export type SdkProfile = (typeof SDK_PROFILES)[number];
 export type SolverAgent = (typeof SOLVER_AGENTS)[number];
+export type SolverRuntimeKind = (typeof SOLVER_RUNTIMES)[number];
 export type RequestedGroup = ProblemGroup | "all";
 
 export type Problem = {
@@ -21,6 +23,8 @@ export type Problem = {
 export type RunOptions = {
   agent: SolverAgent;
   agentExplicit: boolean;
+  runtime: SolverRuntimeKind;
+  runtimeExplicit: boolean;
   sdkRef: string;
   profile: SdkProfile;
   profileExplicit: boolean;
@@ -53,6 +57,8 @@ export type ChallengeReport = {
   effort: string;
   runsPerProblem: number;
   runner?: {
+    /** Reports written before the host runtime have no kind and ran in Podman. */
+    kind?: SolverRuntimeKind;
     image: string;
     agentPackage: string;
     agentVersion?: string;

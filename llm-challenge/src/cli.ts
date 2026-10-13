@@ -20,6 +20,7 @@ import type {
   RunOptions,
   SolverAgent,
   SolverFailureKind,
+  SolverRuntimeKind,
   StoredChallengeReport,
 } from "./types";
 
@@ -264,9 +265,16 @@ const STOP_RUN_FAILURE_KINDS = new Set<SolverFailureKind>(["usage-limit", "auth"
 export function inheritSolverSettings(
   options: RunOptions,
   sourceReport: StoredChallengeReport,
-): { agent: SolverAgent; model: string; effort: string; installSkills: boolean } {
+): {
+  agent: SolverAgent;
+  model: string;
+  effort: string;
+  installSkills: boolean;
+  runtime: SolverRuntimeKind;
+} {
   const source = {
     agent: sourceReport.agent ?? "codex",
+    runtime: sourceReport.runner?.kind ?? "podman",
     model: sourceReport.model,
     effort: sourceReport.effort,
     installSkills: sourceReport.installSkills ?? false,
@@ -282,6 +290,9 @@ export function inheritSolverSettings(
       ? `--effort ${options.effort}`
       : undefined,
     options.installSkills && !source.installSkills ? "--install-skills" : undefined,
+    options.runtimeExplicit && options.runtime !== source.runtime
+      ? `--runtime ${options.runtime}`
+      : undefined,
   ].filter((conflict) => conflict !== undefined);
   if (conflicts.length > 0) {
     throw new Error(

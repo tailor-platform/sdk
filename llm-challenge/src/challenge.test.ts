@@ -87,6 +87,24 @@ describe("argument parsing", () => {
     );
   });
 
+  test("selects the runtime and defaults to Podman", () => {
+    expect(parseRunArgs([])).toMatchObject({ runtime: "podman", runtimeExplicit: false });
+    expect(parseRunArgs(["--runtime", "host"])).toMatchObject({
+      runtime: "host",
+      runtimeExplicit: true,
+    });
+    expect(() => parseRunArgs(["--runtime", "docker"])).toThrow("Unknown runtime: docker");
+  });
+
+  test("runs on the host only with Claude Code and without installed skills", () => {
+    expect(() => parseRunArgs(["--runtime", "host", "--agent", "codex"])).toThrow(
+      "--runtime host supports only --agent claude",
+    );
+    expect(() =>
+      parseRunArgs(["--runtime", "host", "--install-skills", "--profile", "full"]),
+    ).toThrow("--runtime host cannot be used with --install-skills");
+  });
+
   test("allows implicit profile with cli group", () => {
     expect(parseRunArgs(["--group", "cli"]).profileExplicit).toBe(false);
   });
@@ -263,7 +281,24 @@ describe("rerun plan", () => {
       model: "gpt-5.5",
       effort: "xhigh",
       installSkills: false,
+      runtime: "podman",
     });
+    expect(
+      inheritSolverSettings(parseRunArgs([]), {
+        agent: "claude",
+        model: "claude-opus-5-5",
+        effort: "xhigh",
+        runner: { kind: "host" },
+      } as StoredChallengeReport),
+    ).toMatchObject({ runtime: "host" });
+    expect(() =>
+      inheritSolverSettings(parseRunArgs(["--runtime", "podman"]), {
+        agent: "claude",
+        model: "claude-opus-5-5",
+        effort: "xhigh",
+        runner: { kind: "host" },
+      } as StoredChallengeReport),
+    ).toThrow("remove --runtime podman");
     expect(() => inheritSolverSettings(parseRunArgs(["--agent", "claude"]), source)).toThrow(
       "remove --agent claude",
     );
