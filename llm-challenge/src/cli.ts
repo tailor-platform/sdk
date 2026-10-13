@@ -153,7 +153,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       );
 
     printHeader();
-    await runWithConcurrency(tasks, options.concurrency, async (task) => {
+    await runWithConcurrency(tasks, options.concurrency, async (task, control) => {
       const profile = profileForProblem(task.problem, options.profile);
       const sdkTarballPath =
         profile === "no-docs"
@@ -190,6 +190,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
           solverStdoutPath: paths.solverStdoutPath,
           solverStderrPath: paths.solverStderrPath,
         });
+        if (STOP_RUN_FAILURE_KINDS.has(failureKind)) {
+          control.stop();
+        }
         const artifactSummary = await writeArtifactSummary({
           problem: task.problem,
           runIndex: task.runIndex,

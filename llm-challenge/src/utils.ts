@@ -31,19 +31,25 @@ export function createRunId(): string {
 export async function runWithConcurrency<T>(
   items: T[],
   concurrency: number,
-  worker: (item: T) => Promise<void>,
+  worker: (item: T, control: { stop: () => void }) => Promise<void>,
 ): Promise<void> {
   let nextIndex = 0;
   let firstError: unknown;
+  let stopped = false;
+  const control = {
+    stop: () => {
+      stopped = true;
+    },
+  };
   async function loop(): Promise<void> {
     while (nextIndex < items.length) {
-      if (firstError !== undefined) {
+      if (firstError !== undefined || stopped) {
         return;
       }
       const item = items[nextIndex];
       nextIndex += 1;
       try {
-        await worker(item);
+        await worker(item, control);
       } catch (error) {
         firstError ??= error;
       }
