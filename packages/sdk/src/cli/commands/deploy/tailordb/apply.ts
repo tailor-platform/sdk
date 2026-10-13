@@ -339,6 +339,30 @@ async function removeRunResources(
   }
 }
 
+function withholdTablesFromRestoration(
+  namespaceName: string,
+  tableNames: ReadonlySet<string>,
+  restorationSnapshots: Map<string, SchemaSnapshot>,
+  restorationSettings: MigrationRestrictionState,
+): void {
+  const committed = restorationSnapshots.get(namespaceName);
+  if (!committed) return;
+  restorationSnapshots.set(namespaceName, {
+    ...committed,
+    tables: Object.fromEntries(
+      Object.entries(committed.tables).filter(([tableName]) => !tableNames.has(tableName)),
+    ),
+  });
+  restorationSettings.set(
+    namespaceName,
+    new Map(
+      [...(restorationSettings.get(namespaceName) ?? [])].filter(
+        ([tableName]) => !tableNames.has(tableName),
+      ),
+    ),
+  );
+}
+
 /**
  * Leave a partially applied migration's tables in their Pre-phase shape and
  * restricted, restoring only the namespace's tables the migration never touched.
@@ -363,14 +387,11 @@ function keepMigrationTablesRestricted(
     ...getDeletedTableNames(migration),
   ]);
   if (!committed) return restrictedByDeploy(namespaceName, migrationTables, history);
-  restorationSnapshots.set(namespaceName, { ...committed, tables: {} });
-  restorationSettings.set(
+  withholdTablesFromRestoration(
     namespaceName,
-    new Map(
-      [...(restorationSettings.get(namespaceName) ?? [])].filter(
-        ([tableName]) => !migrationTables.has(tableName),
-      ),
-    ),
+    migrationTables,
+    restorationSnapshots,
+    restorationSettings,
   );
   return restrictedByDeploy(namespaceName, migrationTables, history);
 }
