@@ -1,14 +1,13 @@
 import { createHash } from "node:crypto";
 import {
+  PACKAGE_MANAGERS,
   renderBranchWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
-  type PackageManager,
 } from "./templates";
 
 type RenderedTemplate = { name: string; content: string; generatedIds: readonly string[] };
 
-const PACKAGE_MANAGERS: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const COMMON = { workspaceName: "my-app", environment: "production" } as const;
 
 /**

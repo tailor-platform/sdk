@@ -164,6 +164,42 @@ describe("planUpdate", () => {
     },
   );
 
+  test.each(["branch", "tag", "preview"] as const)(
+    "%s: keeps a package manager that was passed with --package-manager",
+    (kind) => {
+      const plan = planUpdate(
+        lockTarget(kind, "my-app", { packageManager: "yarn", packageManagerAutoDetected: false }),
+        common,
+      );
+
+      expect(plan).toMatchObject({ kind, packageManager: "yarn" });
+    },
+  );
+
+  test.each([
+    ["it was auto-detected", { packageManagerAutoDetected: true }],
+    ["the lock does not say how it was chosen", {}],
+  ])("re-detects the package manager when %s", (_label, inputs) => {
+    const plan = planUpdate(
+      lockTarget("branch", "my-app", { packageManager: "npm", ...inputs }),
+      common,
+    );
+
+    expect(plan.packageManager).toBeUndefined();
+  });
+
+  test("rejects an explicit package manager the lock records with an unsupported value", () => {
+    expect(() =>
+      planUpdate(
+        lockTarget("branch", "my-app", {
+          packageManager: "pnpm\nmalicious: true",
+          packageManagerAutoDetected: false,
+        }),
+        common,
+      ),
+    ).toThrow(/unsupported package manager "pnpm\\nmalicious: true"/);
+  });
+
   test("tag: regenerates a multi-directory target with every recorded app directory", () => {
     const plan = planUpdate(
       lockTarget("tag", "erp", {
@@ -292,6 +328,50 @@ describe("setupUpdate", () => {
       before?.map((inputs) => [inputs.apps, inputs.paths]),
     );
     expect(after?.[0]?.apps?.map((app) => app.dir)).toEqual(multi.dir);
+  });
+
+  test("keeps an explicit --package-manager and re-detects a detected one", async () => {
+    writeAppConfig("apps/front");
+    writeAppConfig("apps/api");
+    await generate({
+      kind: "branch",
+      workspaceName: "front",
+      dir: "apps/front",
+      erdPreview: false,
+      packageManager: "yarn",
+    });
+    await generate({ kind: "tag", workspaceName: "api", dir: "apps/api", tagPattern: "v*" });
+    fs.rmSync(path.join(testDir, "pnpm-lock.yaml"));
+    fs.writeFileSync(path.join(testDir, "bun.lock"), "");
+    ageLock();
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(
+      readLock(testDir)?.targets.map(({ inputs }) => [
+        inputs.packageManager,
+        inputs.packageManagerAutoDetected,
+      ]),
+    ).toEqual([
+      ["yarn", false],
+      ["bun", true],
+    ]);
+    const front = fs.readFileSync(
+      path.join(testDir, ".github/workflows/tailor-front.yml"),
+      "utf-8",
+    );
+    expect(front).toContain("package-manager: yarn");
+  });
+
+  test("lists a target whose package manager can no longer be detected", async () => {
+    writeAppConfig("apps/api");
+    await generate({ kind: "tag", workspaceName: "api", dir: "apps/api", tagPattern: "v*" });
+    fs.rmSync(path.join(testDir, "pnpm-lock.yaml"));
+    ageLock();
+
+    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
+      /\[tag api\] Could not detect the package manager/,
+    );
   });
 
   test("keeps going past a hand-edited target and lists it as not updated", async () => {

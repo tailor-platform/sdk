@@ -261,7 +261,7 @@ jobs:
               echo yarn
             elif [ -f bun.lockb ] || [ -f bun.lock ]; then
               echo bun
-            elif [ -f package-lock.json ]; then
+            elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
               echo npm
             else
               echo "__PACKAGE_MANAGER__"
