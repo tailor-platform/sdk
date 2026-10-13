@@ -11,6 +11,7 @@ import {
   detectReadableToolchainPaths,
   preflightClaudeOnHost,
   runClaudeOnHost,
+  runJudgeOnHost,
 } from "./claude-host-runner";
 
 const tempDirs: string[] = [];
@@ -288,5 +289,53 @@ describe("host runtime support", () => {
   test("needs macOS because the type check is confined with sandbox-exec", () => {
     expect(() => assertHostRuntimeSupported("darwin")).not.toThrow();
     expect(() => assertHostRuntimeSupported("linux")).toThrow("macOS");
+  });
+});
+
+describe("running the judge on the host", () => {
+  test("reads the workspace as its working directory and the evidence as an added directory", async () => {
+    const dir = await makeTempDir();
+    const installCacheDir = path.join(dir, "cache");
+    await fs.mkdir(path.join(installCacheDir, "bin"), { recursive: true });
+    const binary = path.join(installCacheDir, "bin", "claude");
+    await fs.writeFile(
+      binary,
+      `#!/bin/sh\npwd > "$0.cwd"; printf '%s\\n' "$@" > "$0.args"; env > "$0.env"; cat > /dev/null\n`,
+    );
+    await fs.chmod(binary, 0o755);
+    const workspaceDir = path.join(dir, "workspace");
+    const evidenceDir = path.join(dir, "evidence");
+    await fs.mkdir(workspaceDir);
+    await fs.mkdir(evidenceDir);
+    process.env.LLM_CHALLENGE_HOST_TEST_SECRET = "secret";
+
+    const result = await runJudgeOnHost({
+      workspaceDir,
+      evidenceDir,
+      prompt: "grade",
+      model: "claude-opus-5-5",
+      effort: "high",
+      schema: { type: "object" },
+      runtime: {
+        image: "",
+        claudePackage: "@anthropic-ai/claude-code@2.1.285",
+        tokenFile: "",
+        installCacheDir,
+      },
+      stdoutPath: path.join(dir, "stdout.log"),
+      stderrPath: path.join(dir, "stderr.log"),
+      tracePath: path.join(dir, "trace.jsonl"),
+      maxSeconds: 5,
+    });
+    delete process.env.LLM_CHALLENGE_HOST_TEST_SECRET;
+
+    expect(result).toMatchObject({ exitCode: 0, timedOut: false });
+    expect((await fs.readFile(`${binary}.cwd`, "utf8")).trim()).toBe(workspaceDir);
+    const args = (await fs.readFile(`${binary}.args`, "utf8")).split("\n");
+    expect(args[args.indexOf("--add-dir") + 1]).toBe(evidenceDir);
+    expect(args).toContain("--safe-mode");
+    expect(await fs.readFile(`${binary}.env`, "utf8")).not.toContain(
+      "LLM_CHALLENGE_HOST_TEST_SECRET",
+    );
   });
 });

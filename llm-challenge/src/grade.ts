@@ -1,7 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { parsePositiveInteger, rejectInlineValue, splitOption } from "./args";
+import { parsePositiveInteger, parseRuntime, rejectInlineValue, splitOption } from "./args";
 import { extractTerminalCommands } from "./artifact-summary";
+import {
+  assertHostRuntimeSupported,
+  preflightClaudeOnHost,
+  runJudgeOnHost,
+} from "./claude-host-runner";
 import {
   getClaudeRuntimeConfig,
   preflightClaudeRunner,
@@ -50,6 +55,7 @@ export type GradeOptions = {
   output?: string;
   preflight: boolean;
   allowSelfJudge: boolean;
+  runtime: SolverRuntimeKind;
 };
 
 export type RunGradeStatus = "ok" | "excluded" | "error";
@@ -136,6 +142,7 @@ export function parseGradeArgs(argv: string[]): GradeOptions {
     maxSeconds: 900,
     preflight: true,
     allowSelfJudge: false,
+    runtime: "podman",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -168,6 +175,9 @@ export function parseGradeArgs(argv: string[]): GradeOptions {
         break;
       case "--judge-model":
         options.judgeModel = value;
+        break;
+      case "--runtime":
+        options.runtime = parseRuntime(value);
         break;
       case "--judge-effort":
         options.judgeEffort = value;
@@ -437,11 +447,20 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
   }
 
   const runtime = getClaudeRuntimeConfig(packageRoot);
-  const token = await resolveClaudeOAuthToken({ env: process.env, tokenFile: runtime.tokenFile });
+  if (options.runtime === "host") {
+    assertHostRuntimeSupported();
+  }
+  const token =
+    options.runtime === "host"
+      ? ""
+      : await resolveClaudeOAuthToken({ env: process.env, tokenFile: runtime.tokenFile });
   let judgeVersion: string | undefined;
   if (options.preflight) {
     console.log(`Preflight judge ${options.judgeModel}`);
-    const preflight = await preflightClaudeRunner({ runtime, token, model: options.judgeModel });
+    const preflight =
+      options.runtime === "host"
+        ? await preflightClaudeOnHost({ runtime, model: options.judgeModel })
+        : await preflightClaudeRunner({ runtime, token, model: options.judgeModel });
     if (preflight.exitCode !== 0) {
       throw new Error(`Judge preflight failed\n${preflight.stderr ?? ""}`.trim());
     }
@@ -622,15 +641,22 @@ async function gradeRun(options: {
       )}\n`,
     );
     const claims = options.rubric.rubric.claims;
+    const hostPaths =
+      options.options.runtime === "host"
+        ? {
+            workspace: await fs.realpath(workspaceDir),
+            evidence: await fs.realpath(evidenceDir),
+          }
+        : undefined;
     const prompt = buildJudgePrompt({
       taskPrompt: await fs.readFile(artifactPaths.promptPath, "utf8"),
       claims,
       workspace,
+      paths: hostPaths,
     });
     await fs.writeFile(path.join(location.dir, "judge-prompt.md"), prompt);
     const tracePath = path.join(location.dir, "judge.trace.jsonl");
-    const result = await runJudgeInPodman({
-      containerName: location.containerName,
+    const judgeRun = {
       workspaceDir,
       evidenceDir,
       prompt,
@@ -638,12 +664,18 @@ async function gradeRun(options: {
       effort: options.options.judgeEffort,
       schema: buildJudgeOutputSchema(claims.map((claim) => claim.id)),
       runtime: options.runtime,
-      token: options.token,
       stdoutPath: path.join(location.dir, "judge.stdout.log"),
       stderrPath: path.join(location.dir, "judge.stderr.log"),
       tracePath,
       maxSeconds: options.options.maxSeconds,
-    });
+    };
+    const result = hostPaths
+      ? await runJudgeOnHost(judgeRun)
+      : await runJudgeInPodman({
+          ...judgeRun,
+          containerName: location.containerName,
+          token: options.token,
+        });
     const judge: JudgeEvaluation = result.timedOut
       ? { status: "error", error: "judge timed out" }
       : await evaluateJudgeOutput({
@@ -652,6 +684,7 @@ async function gradeRun(options: {
           judgeModel: options.options.judgeModel,
           workspaceDir,
           evidenceDir,
+          paths: hostPaths,
         });
     const decided = decideRunGrade({ failureKind: run.failureKind, checks, judge });
     const grade: RunGrade = {

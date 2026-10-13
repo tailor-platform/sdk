@@ -194,7 +194,7 @@ function parseAgent(value: string): SolverAgent {
   throw new Error(`Unknown agent: ${value}`);
 }
 
-function parseRuntime(value: string): SolverRuntimeKind {
+export function parseRuntime(value: string): SolverRuntimeKind {
   if ((SOLVER_RUNTIMES as readonly string[]).includes(value)) {
     return value as SolverRuntimeKind;
   }

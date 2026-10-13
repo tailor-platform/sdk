@@ -7,6 +7,7 @@ import {
   type ClaudePreflightResult,
   type ClaudeRuntimeConfig,
 } from "./claude-runner";
+import { buildClaudeJudgeArgs } from "./judge";
 import { runCommand } from "./process";
 import { runAgentProcess, type SolverResult } from "./runner";
 import { pathExists } from "./utils";
@@ -268,5 +269,46 @@ export async function preflightClaudeOnHost(options: {
     stdout: probe.stdout,
     stderr: `${version.stdout}\n${version.stderr}\n${probe.stderr}`,
     durationMs: Date.now() - startedAt,
+  });
+}
+
+export async function runJudgeOnHost(options: {
+  workspaceDir: string;
+  evidenceDir: string;
+  prompt: string;
+  model: string;
+  effort: string;
+  schema: Record<string, unknown>;
+  runtime: ClaudeRuntimeConfig;
+  stdoutPath: string;
+  stderrPath: string;
+  tracePath: string;
+  maxSeconds: number;
+}): Promise<SolverResult> {
+  await assertClaudeInstalled(options.runtime);
+  const evidenceDir = await fs.realpath(options.evidenceDir);
+  const workspaceDir = await fs.realpath(options.workspaceDir);
+  await Promise.all([
+    fs.writeFile(options.stdoutPath, ""),
+    fs.writeFile(options.stderrPath, ""),
+    fs.writeFile(options.tracePath, ""),
+  ]);
+  return await runAgentProcess({
+    command: path.join(options.runtime.installCacheDir, "bin", "claude"),
+    args: buildClaudeJudgeArgs({
+      model: options.model,
+      effort: options.effort,
+      schema: options.schema,
+      evidenceDir,
+    }),
+    prompt: options.prompt,
+    solverStdoutPath: options.stdoutPath,
+    solverStderrPath: options.stderrPath,
+    tracePath: options.tracePath,
+    maxSeconds: options.maxSeconds,
+    cwd: workspaceDir,
+    env: buildHostEnv(process.env),
+    replaceEnv: true,
+    killProcessGroup: true,
   });
 }

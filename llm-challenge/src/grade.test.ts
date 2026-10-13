@@ -19,6 +19,7 @@ import {
 import {
   buildClaudeJudgeArgs,
   buildJudgeOutputSchema,
+  buildJudgePrompt,
   evaluateJudgeOutput,
   prepareJudgeWorkspace,
 } from "./judge";
@@ -161,6 +162,92 @@ describe("judge command", () => {
     expect(schema.properties.claims.items.properties.id.enum).toEqual([
       "uses-wait",
       "has-resolver",
+    ]);
+  });
+});
+
+describe("judge paths on the host", () => {
+  test("names the real directories in the prompt instead of the container mounts", () => {
+    const prompt = buildJudgePrompt({
+      taskPrompt: "task",
+      claims,
+      workspace: { files: [], omitted: [] },
+      paths: { workspace: "/h/ws", evidence: "/h/ev" },
+    });
+
+    expect(prompt).toContain("`/h/ws`");
+    expect(prompt).toContain("`/h/ev/commands.json`");
+    expect(prompt).not.toContain("`/workspace`");
+  });
+
+  test("lets the judge read the evidence directory it was given", () => {
+    const args = buildClaudeJudgeArgs({
+      model: "claude-opus-5-5",
+      effort: "high",
+      schema: buildJudgeOutputSchema(claims.map((claim) => claim.id)),
+      evidenceDir: "/h/ev",
+    });
+
+    expect(args[args.indexOf("--add-dir") + 1]).toBe("/h/ev");
+  });
+
+  test("checks quotes cited with the host paths against the real files", async () => {
+    const dir = await makeTempDir();
+    const workspaceDir = path.join(dir, "workspace");
+    const evidenceDir = path.join(dir, "evidence");
+    await fs.mkdir(path.join(workspaceDir, "workflows"), { recursive: true });
+    await fs.mkdir(evidenceDir);
+    await fs.writeFile(
+      path.join(workspaceDir, "workflows/approval.ts"),
+      "const result = await approval.wait({\n  orderId,\n});\n",
+    );
+    await fs.writeFile(
+      path.join(evidenceDir, "commands.json"),
+      `${JSON.stringify([{ command: "tailor generate" }])}\n`,
+    );
+
+    const evaluation = await evaluateJudgeOutput({
+      events: [
+        {
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: { model: "claude-opus-5-5", content: [] },
+        },
+        {
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          structured_output: {
+            claims: [
+              {
+                id: "uses-wait",
+                verdict: "satisfied",
+                reason: "calls wait",
+                evidence: [
+                  { path: `${workspaceDir}/workflows/approval.ts`, quote: "await approval.wait({" },
+                ],
+              },
+              {
+                id: "has-resolver",
+                verdict: "satisfied",
+                reason: "ran generate",
+                evidence: [{ path: `${evidenceDir}/commands.json`, quote: "tailor generate" }],
+              },
+            ],
+          },
+        },
+      ],
+      claims,
+      judgeModel: "claude-opus-5-5",
+      workspaceDir,
+      evidenceDir,
+      paths: { workspace: workspaceDir, evidence: evidenceDir },
+    });
+
+    expect(evaluation).toMatchObject({ status: "ok" });
+    expect(evaluation.status === "ok" && evaluation.claims.map((claim) => claim.counted)).toEqual([
+      "satisfied",
+      "satisfied",
     ]);
   });
 });
@@ -886,6 +973,11 @@ describe("grade arguments", () => {
       concurrency: 2,
       allowSelfJudge: true,
     });
+    expect(parseGradeArgs(["--report", "a.json"]).runtime).toBe("podman");
+    expect(parseGradeArgs(["--report", "a.json", "--runtime", "host"]).runtime).toBe("host");
+    expect(() => parseGradeArgs(["--report", "a.json", "--runtime", "docker"])).toThrow(
+      "Unknown runtime: docker",
+    );
     expect(() => parseGradeArgs([])).toThrow("--report is required");
     expect(() => parseGradeArgs(["results/a/report.json"])).toThrow(
       "Unexpected argument: results/a/report.json",
