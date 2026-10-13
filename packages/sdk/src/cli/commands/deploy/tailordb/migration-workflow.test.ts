@@ -1,9 +1,18 @@
+import * as crypto from "node:crypto";
+import * as vm from "node:vm";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { writeMetadataLabelsDirect } from "../label";
-import { executeMigrationAsWorkflow, migrationWorkflowResourceName } from "./migration-workflow";
+import {
+  executeMigrationAsWorkflow,
+  MIGRATION_SCRIPT_STARTED_LOG,
+  migrationWorkflowResourceName,
+} from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
@@ -626,5 +635,368 @@ describe("executeMigrationAsWorkflow", () => {
       `trn:v1:workspace:ws-1:workflow_job_function:${name}`,
       `trn:v1:workspace:ws-1:workflow:${name}`,
     ]);
+  });
+});
+
+describe("observing when the migration script runs", () => {
+  interface PollSpec {
+    status: WorkflowExecution_Status;
+    jobs: { executionId: string; status: WorkflowJobExecution_Status }[];
+  }
+
+  function observedClient(polls: PollSpec[], logsByCall: Record<string, string[][]>) {
+    const { client, raw } = createMockClient();
+    let poll = 0;
+    raw.getWorkflowExecution.mockImplementation(() => {
+      const spec = polls[Math.min(poll, polls.length - 1)]!;
+      poll++;
+      return Promise.resolve({
+        execution: { status: spec.status, jobExecutions: spec.jobs },
+      });
+    });
+    const fetched = new Map<string, number>();
+    raw.getFunctionExecution.mockImplementation((({ executionId }: { executionId: string }) => {
+      const sequence = logsByCall[executionId] ?? [[]];
+      const index = fetched.get(executionId) ?? 0;
+      fetched.set(executionId, index + 1);
+      const messages = sequence[Math.min(index, sequence.length - 1)]!;
+      return Promise.resolve({
+        execution: { logEntries: messages.map((message) => ({ message })), result: "" },
+      });
+    }) as never);
+    return { client, raw };
+  }
+
+  function runObserved(client: OperatorClient) {
+    const events: string[] = [];
+    const result = executeMigrationAsWorkflow({
+      client,
+      workspaceId: "ws-1",
+      code: "// bundled",
+      namespace: "tailordb",
+      migrationNumber: 3,
+      invoker,
+      appName: "my-app",
+      appId: "app-1",
+      pollIntervalMs: 0,
+      onRunEvent: (event) => {
+        if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
+        else if (event.type !== "polled") events.push(event.type);
+      },
+    });
+    return { result, events };
+  }
+
+  const running = WorkflowJobExecution_Status.RUNNING;
+  const succeeded = WorkflowJobExecution_Status.SUCCESS;
+
+  async function upload(code: string) {
+    const { client, raw } = createMockClient();
+    await executeMigrationAsWorkflow({
+      client,
+      workspaceId: "ws-1",
+      code,
+      namespace: "tailordb",
+      migrationNumber: 3,
+      invoker,
+      appName: "my-app",
+      appId: "app-1",
+      pollIntervalMs: 0,
+    });
+    const [stream] = raw.createFunctionRegistry.mock.calls[0] as unknown as [
+      AsyncIterable<{ payload: { case: string; value: unknown } }>,
+    ];
+    let info: { sizeBytes: bigint; contentHash: string } | undefined;
+    const chunks: Uint8Array[] = [];
+    for await (const message of stream) {
+      if (message.payload.case === "info") info = message.payload.value as typeof info;
+      else chunks.push(message.payload.value as Uint8Array);
+    }
+    return { content: Buffer.concat(chunks).toString("utf-8"), info };
+  }
+
+  function evaluate(content: string): string[] {
+    const logged: string[] = [];
+    vm.runInNewContext(content, { console: { log: (message: string) => logged.push(message) } });
+    return logged;
+  }
+
+  test("uploads the script behind a log line that marks its start", async () => {
+    const { content, info } = await upload("// bundled");
+
+    expect(content.endsWith("\n// bundled")).toBe(true);
+    expect(evaluate(content)).toEqual([MIGRATION_SCRIPT_STARTED_LOG]);
+    expect(info).toMatchObject({
+      sizeBytes: BigInt(Buffer.byteLength(content)),
+      contentHash: crypto.createHash("sha256").update(content, "utf-8").digest("hex"),
+    });
+  });
+
+  test("logs the start of a script that declares its own console", async () => {
+    const { content } = await upload("const console = { log() {} };");
+
+    expect(evaluate(content)).toEqual([MIGRATION_SCRIPT_STARTED_LOG]);
+  });
+
+  test("reports waiting until a running job logs the start, then running", async () => {
+    const { client } = observedClient(
+      [
+        { status: WorkflowExecution_Status.PENDING, jobs: [] },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[], [MIGRATION_SCRIPT_STARTED_LOG, "INFO backfilled 3 rows"]] },
+    );
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: true, logs: "INFO backfilled 3 rows" });
+    expect(events).toEqual(["waiting", "running", "finished:true"]);
+  });
+
+  test("goes back to waiting while no job runs the script", async () => {
+    const { client } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [
+            { executionId: "fn-1", status: succeeded },
+            { executionId: "fn-2", status: running },
+          ],
+        },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [
+            { executionId: "fn-1", status: succeeded },
+            { executionId: "fn-2", status: running },
+          ],
+        },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [
+            { executionId: "fn-1", status: succeeded },
+            { executionId: "fn-2", status: succeeded },
+          ],
+        },
+      ],
+      {
+        "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG]],
+        "fn-2": [[], [MIGRATION_SCRIPT_STARTED_LOG]],
+      },
+    );
+
+    const { result, events } = runObserved(client);
+
+    await result;
+    expect(events).toEqual(["waiting", "running", "waiting", "running", "finished:true"]);
+  });
+
+  test("reads a job's logs only until it is seen running the script", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG]] },
+    );
+
+    await runObserved(client).result;
+
+    // One read while polling, one for the final logs.
+    expect(raw.getFunctionExecution).toHaveBeenCalledTimes(2);
+  });
+
+  test("notices a script that ran between two polls", async () => {
+    const { client } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
+    );
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: true, logs: "INFO done" });
+    expect(events).toEqual(["waiting", "finished:true"]);
+  });
+
+  test("rereads the logs of a finished run whose start has not arrived yet", async () => {
+    const { client } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [["INFO done"], [MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
+    );
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: true, logs: "INFO done" });
+    expect(events).toEqual(["waiting", "finished:true"]);
+  });
+
+  test("reports a finished run whose script was never seen starting", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [["INFO done"]] },
+    );
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: true, logs: "INFO done" });
+    expect(events).toEqual(["waiting", "finished:false"]);
+    expect(raw.getFunctionExecution).toHaveBeenCalledTimes(3);
+  });
+
+  test("does not reread the logs of a failed run", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.FAILED,
+          jobs: [{ executionId: "fn-1", status: WorkflowJobExecution_Status.FAILED }],
+        },
+      ],
+      { "fn-1": [["ERROR boom"]] },
+    );
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: false });
+    expect(events).toEqual(["waiting", "finished:false"]);
+    expect(raw.getFunctionExecution).toHaveBeenCalledTimes(1);
+  });
+
+  test("reports the polls that could not read a running job's logs as unknown", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
+    );
+    raw.getFunctionExecution
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable));
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: true, logs: "INFO done" });
+    expect(events).toEqual(["waiting", "unknown", "finished:true"]);
+  });
+
+  test("reports a poll that finds a running job without an execution as unknown", async () => {
+    const { client } = observedClient(
+      [
+        { status: WorkflowExecution_Status.RUNNING, jobs: [{ executionId: "", status: running }] },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
+    );
+
+    const { result, events } = runObserved(client);
+
+    await result;
+    expect(events).toEqual(["waiting", "unknown", "finished:true"]);
+  });
+
+  test("reports a poll whose job execution came back empty as unknown", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
+    );
+    raw.getFunctionExecution.mockResolvedValueOnce({ execution: undefined } as never);
+
+    const { result, events } = runObserved(client);
+
+    await result;
+    expect(events).toEqual(["waiting", "unknown", "finished:true"]);
+  });
+
+  test("keeps polling when a job's logs cannot be read", async () => {
+    const { client, raw } = observedClient(
+      [
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
+          status: WorkflowExecution_Status.SUCCESS,
+          jobs: [{ executionId: "fn-1", status: succeeded }],
+        },
+      ],
+      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG]] },
+    );
+    raw.getFunctionExecution.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
+
+    const { result, events } = runObserved(client);
+
+    expect(await result).toMatchObject({ success: true });
+    expect(events).toEqual(["waiting", "unknown", "running", "finished:true"]);
   });
 });

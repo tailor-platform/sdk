@@ -261,6 +261,25 @@ describe("applyDeploymentPlans", () => {
     ]);
   });
 
+  test("applyRemainingResources returns how long each application's migrations kept tables in maintenance mode", async () => {
+    const report = {
+      namespaces: ["tailordb"],
+      maintenanceMs: 5,
+      phases: {},
+      migrations: [],
+    };
+    mocks.applyTailorDB
+      .mockImplementationOnce(async () => undefined)
+      .mockImplementationOnce(async () => report as never);
+
+    const maintenance = await applyRemainingResources({} as never, "workspace-id", [
+      deployment("supplier"),
+      deployment("buyer"),
+    ]);
+
+    expect(maintenance).toEqual([{ application: "buyer", ...report }]);
+  });
+
   test("applyRemainingResources applies every kind except secretManager, staticWebsite, aiGateway, idp create-update, and auth prerequisites", async () => {
     mocks.calls.length = 0;
 

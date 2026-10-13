@@ -250,6 +250,7 @@ beforeEach(() => {
     },
   } as unknown as BuiltDeploymentTarget;
   mocks.results = emptyResults();
+  mocks.apply.mockResolvedValue([]);
   mocks.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
   mocks.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
   mocks.getAIGateway.mockResolvedValue({ aigateway: { name: "ai", url: "https://ai" } });
@@ -427,6 +428,25 @@ test("includes deployed application and website URLs in JSON without registering
       },
     ],
   });
+});
+
+test("includes how long TailorDB migrations kept tables in maintenance mode in JSON", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  const maintenance = {
+    application: "app",
+    namespaces: ["tailordb"],
+    maintenanceMs: 1_010_000,
+    phases: { waitingToStart: 902_000, running: 101_000 },
+    migrations: [],
+  };
+  mocks.apply.mockResolvedValueOnce([maintenance]);
+
+  await deploy({ yes: true, noValidate: true });
+
+  expect(logger.out).toHaveBeenLastCalledWith(
+    expect.objectContaining({ status: "applied", tailordbMaintenance: [maintenance] }),
+  );
 });
 
 test("includes a static website in JSON when the config has no application", async () => {

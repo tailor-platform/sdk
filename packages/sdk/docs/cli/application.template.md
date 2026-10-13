@@ -26,6 +26,14 @@ is registered or no resources changed.
 Plugins that return outputs add entries under `deployedHooks`. For example, the
 frontend plugin provides upload results in `deployedHooks[].outputs.frontends`.
 
+When the deploy applied TailorDB migrations, `tailordbMaintenance` has one entry per
+application whose migrations ran: its `application` name, `namespaces`, `maintenanceMs` (how
+long their tables were in maintenance mode, equal to the sum of `phases`), `phases` in milliseconds
+(`restrict`, `preMigration`, `jobSetup`, `waitingToStart`, `running`, `waitingOrRunning`,
+`jobCleanup`, `postMigration`, `restore`), and `migrations` with each script's `namespace`,
+`migrationNumber`, `startObserved`, `waitingToStartMs`, `runningMs`, and `waitingOrRunningMs`. See
+[Time spent in maintenance mode](../services/tailordb-migration.md#time-spent-in-maintenance-mode).
+
 ```sh
 tailor deploy --json > deploy-result.json
 jq '.applications[] | {name, url, staticWebsites, auth}' deploy-result.json
