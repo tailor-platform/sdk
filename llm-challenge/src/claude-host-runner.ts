@@ -50,7 +50,6 @@ const HOST_HIDDEN_HOME_PATHS = [
   "~/Library/Messages",
   "~/Library/Safari",
 ];
-const HOST_READABLE_HOME_PATHS = ["~/.config/mise"];
 
 export type HostSettings = {
   permissions: { allow: string[] };
@@ -63,6 +62,34 @@ export type HostSettings = {
     network: { allowedDomains: string[]; strictAllowlist: true };
   };
 };
+
+export function buildHostVerifierProfile(options: {
+  homeDir: string;
+  repoRoot: string;
+  worktreePath: string;
+  typescriptPath: string;
+}): string {
+  const deny = [
+    ...HOST_HIDDEN_HOME_PATHS.map((hidden) => hidden.replace(/^~/, options.homeDir)),
+    options.repoRoot,
+  ];
+  return [
+    "(version 1)",
+    "(allow default)",
+    "(deny file-write*)",
+    '(allow file-write* (literal "/dev/null"))',
+    ...deny.map((target) => `(deny file-read* (subpath ${JSON.stringify(target)}))`),
+    ...[options.worktreePath, options.typescriptPath].map(
+      (target) => `(allow file-read* (subpath ${JSON.stringify(target)}))`,
+    ),
+  ].join("\n");
+}
+
+export function detectReadableToolchainPaths(env: NodeJS.ProcessEnv): string[] {
+  return (env.PATH ?? "").split(path.delimiter).some((entry) => /[\\/]mise[\\/]shims$/.test(entry))
+    ? ["~/.config/mise"]
+    : [];
+}
 
 export function buildHostEnv(
   env: NodeJS.ProcessEnv,
@@ -82,6 +109,7 @@ export function buildHostSettings(options: {
   repoRoot: string;
   worktreePath: string;
   sharedPnpmStorePath?: string;
+  readableHomePaths?: string[];
 }): HostSettings {
   const store = options.sharedPnpmStorePath === undefined ? [] : [options.sharedPnpmStorePath];
   return {
@@ -95,7 +123,7 @@ export function buildHostSettings(options: {
       failIfUnavailable: true,
       filesystem: {
         denyRead: [options.repoRoot, ...HOST_HIDDEN_HOME_PATHS],
-        allowRead: [options.worktreePath, ...store, ...HOST_READABLE_HOME_PATHS],
+        allowRead: [options.worktreePath, ...store, ...(options.readableHomePaths ?? [])],
         allowWrite: store,
       },
       network: { allowedDomains: HOST_ALLOWED_DOMAINS, strictAllowlist: true },
@@ -142,6 +170,7 @@ export async function runClaudeOnHost(options: {
       options.sharedPnpmStorePath === undefined
         ? undefined
         : await fs.realpath(options.sharedPnpmStorePath),
+    readableHomePaths: detectReadableToolchainPaths(process.env),
   });
   await Promise.all([
     fs.writeFile(options.solverStdoutPath, ""),

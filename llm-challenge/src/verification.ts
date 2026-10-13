@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { constants as fsConstants, promises as fs, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
-import { buildHostEnv } from "./claude-host-runner";
+import { buildHostEnv, buildHostVerifierProfile } from "./claude-host-runner";
 import { DEFAULT_CODEX_IMAGE } from "./runner";
 import { tailText, toPosix } from "./utils";
 import {
@@ -50,7 +51,15 @@ const TYPESCRIPT_COMPILER_ARGS = [
   "false",
 ];
 const TYPESCRIPT_NO_EMIT_COMMAND = `podman run [isolated verifier] node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
-const TYPESCRIPT_HOST_COMPILER_ARGS = ["--noEmit", "--pretty", "false"];
+const TYPESCRIPT_HOST_COMPILER_ARGS = [
+  "--noEmit",
+  "--pretty",
+  "false",
+  "--incremental",
+  "false",
+  "--composite",
+  "false",
+];
 const TYPESCRIPT_HOST_COMMAND = `node [trusted typescript]/bin/tsc ${TYPESCRIPT_HOST_COMPILER_ARGS.join(" ")}`;
 const TYPESCRIPT_VERIFIER_SCRIPT = `exec node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
 const TYPECHECK_TIMEOUT_MS = 120_000;
@@ -84,6 +93,7 @@ export async function writeVerificationSummary(options: {
   worktreePath: string;
   verifierImage?: string;
   verifier?: "podman" | "host";
+  hostRepoRoot?: string;
   verificationSummaryPath: string;
   verificationStdoutPath: string;
   verificationStderrPath: string;
@@ -114,6 +124,7 @@ export async function writeVerificationSummary(options: {
             options.worktreePath,
             options.verifierImage,
             options.verifier,
+            options.hostRepoRoot,
             {
               stdoutPath: options.verificationStdoutPath,
               stderrPath: options.verificationStderrPath,
@@ -475,6 +486,7 @@ async function runCommandCheck(
   worktreePath: string,
   verifierImage: string | undefined,
   verifier: "podman" | "host" | undefined,
+  hostRepoRoot: string | undefined,
   logPaths: { stdoutPath: string; stderrPath: string },
 ): Promise<VerificationCheckResult> {
   if (check.command === undefined) {
@@ -483,10 +495,22 @@ async function runCommandCheck(
   const onHost = verifier === "host";
   const command = onHost ? TYPESCRIPT_HOST_COMMAND : check.command;
   const startedAt = Date.now();
+  const realWorktreePath = onHost ? await fs.realpath(worktreePath) : worktreePath;
   const result = onHost
     ? await runProcess(
-        process.execPath,
-        [path.join(TRUSTED_TYPESCRIPT_PATH, "bin", "tsc"), ...TYPESCRIPT_HOST_COMPILER_ARGS],
+        "sandbox-exec",
+        [
+          "-p",
+          buildHostVerifierProfile({
+            homeDir: os.homedir(),
+            repoRoot: await fs.realpath(hostRepoRoot ?? worktreePath),
+            worktreePath: realWorktreePath,
+            typescriptPath: TRUSTED_TYPESCRIPT_PATH,
+          }),
+          process.execPath,
+          path.join(TRUSTED_TYPESCRIPT_PATH, "bin", "tsc"),
+          ...TYPESCRIPT_HOST_COMPILER_ARGS,
+        ],
         worktreePath,
         TYPECHECK_TIMEOUT_MS,
         buildHostEnv(process.env),

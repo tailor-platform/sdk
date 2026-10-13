@@ -6,6 +6,8 @@ import {
   buildClaudeHostArgs,
   buildHostEnv,
   buildHostSettings,
+  buildHostVerifierProfile,
+  detectReadableToolchainPaths,
   runClaudeOnHost,
 } from "./claude-host-runner";
 
@@ -91,8 +93,11 @@ describe("host isolation settings", () => {
     expect(sandbox.filesystem.allowRead).toEqual([
       options.worktreePath,
       options.sharedPnpmStorePath,
-      "~/.config/mise",
     ]);
+    expect(
+      buildHostSettings({ ...options, readableHomePaths: ["~/.config/mise"] }).sandbox.filesystem
+        .allowRead,
+    ).toEqual([options.worktreePath, options.sharedPnpmStorePath, "~/.config/mise"]);
     expect(sandbox.filesystem.allowWrite).toEqual([options.sharedPnpmStorePath]);
   });
 
@@ -101,6 +106,45 @@ describe("host isolation settings", () => {
       allowedDomains: ["registry.npmjs.org"],
       strictAllowlist: true,
     });
+  });
+});
+
+describe("toolchain read access", () => {
+  test("opens the mise configuration only when mise shims are on PATH", () => {
+    expect(
+      detectReadableToolchainPaths({ PATH: "/home/me/.local/share/mise/shims:/usr/bin" }),
+    ).toEqual(["~/.config/mise"]);
+    expect(detectReadableToolchainPaths({ PATH: "/usr/local/bin:/usr/bin" })).toEqual([]);
+  });
+});
+
+describe("host verifier profile", () => {
+  const profile = buildHostVerifierProfile({
+    homeDir: "/home/me",
+    repoRoot: "/repo",
+    worktreePath: "/repo/llm-challenge/results/r/work",
+    typescriptPath: "/repo/node_modules/typescript",
+  });
+
+  test("forbids every file write except /dev/null", () => {
+    expect(profile).toContain("(deny file-write*)");
+    expect(profile).toContain('(allow file-write* (literal "/dev/null"))');
+  });
+
+  test("hides credentials and the repository from the compiler", () => {
+    expect(profile).toContain('(deny file-read* (subpath "/home/me/.ssh"))');
+    expect(profile).toContain('(deny file-read* (subpath "/repo"))');
+  });
+
+  test("re-allows the worktree and the trusted compiler after the repository is hidden", () => {
+    const repoDeny = profile.indexOf('(deny file-read* (subpath "/repo"))');
+
+    expect(
+      profile.indexOf('(allow file-read* (subpath "/repo/llm-challenge/results/r/work"))'),
+    ).toBeGreaterThan(repoDeny);
+    expect(
+      profile.indexOf('(allow file-read* (subpath "/repo/node_modules/typescript"))'),
+    ).toBeGreaterThan(repoDeny);
   });
 });
 
@@ -184,13 +228,23 @@ describe("running claude on the host", () => {
   test("kills the whole process group on timeout so no child outlives the run", async () => {
     const { dir, options } = await setUp(`sleep 30 & echo $! > "${"$"}0.pid"; wait`);
 
-    const result = await runClaudeOnHost({ ...options, maxSeconds: 1 });
+    const result = await runClaudeOnHost({ ...options, maxSeconds: 2 });
 
     expect(result.timedOut).toBe(true);
     const pid = Number(
       (await fs.readFile(path.join(dir, "cache", "bin", "claude.pid"), "utf8")).trim(),
     );
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(() => process.kill(pid, 0)).toThrow("ESRCH");
+    const isAlive = () => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    for (let attempt = 0; attempt < 30 && isAlive(); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    expect(isAlive()).toBe(false);
   });
 });
