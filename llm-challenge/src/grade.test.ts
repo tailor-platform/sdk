@@ -211,6 +211,23 @@ describe("judge output", () => {
     });
   }
 
+  test("errors when the judge trace names no served model", async () => {
+    const evaluation = await evaluateJudgeOutput({
+      events: [
+        { type: "result", subtype: "success", is_error: false, structured_output: { claims: [] } },
+      ],
+      claims,
+      judgeModel: "claude-opus-5-5",
+      workspaceDir: "/nonexistent",
+      evidenceDir: "/nonexistent",
+    });
+
+    expect(evaluation).toEqual({
+      status: "error",
+      error: "judge requested claude-opus-5-5 but the trace names no model that served it",
+    });
+  });
+
   test("needs evidence quotes long enough to identify the code", async () => {
     const evaluation = await evaluate({
       claims: [

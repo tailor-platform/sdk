@@ -1,7 +1,11 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace";
+import {
+  findServedModelMismatches,
+  isServedModelUnconfirmed,
+  summarizeClaudeTrace,
+} from "./claude-trace";
 import { runCommand } from "./process";
 import {
   DEFAULT_CODEX_IMAGE,
@@ -215,6 +219,9 @@ export async function preflightClaudeRunner(options: {
   const mismatches = findServedModelMismatches(options.model, trace.servedModels);
   if (mismatches.length > 0) {
     problems.push(`requested ${options.model} but the response came from ${mismatches.join(", ")}`);
+  }
+  if (trace.result !== undefined && isServedModelUnconfirmed(options.model, trace.servedModels)) {
+    problems.push(`requested ${options.model} but the trace names no model that served it`);
   }
   return {
     skipped: false,

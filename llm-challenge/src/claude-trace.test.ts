@@ -2,7 +2,12 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { findServedModelMismatches, isSameClaudeModel, summarizeClaudeTrace } from "./claude-trace";
+import {
+  findServedModelMismatches,
+  isSameClaudeModel,
+  isServedModelUnconfirmed,
+  summarizeClaudeTrace,
+} from "./claude-trace";
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -171,6 +176,17 @@ describe("served model check", () => {
 
   test("skips the check for aliases", () => {
     expect(findServedModelMismatches("opus", ["claude-opus-5-5"])).toEqual([]);
+  });
+});
+
+describe("unconfirmed served model check", () => {
+  test("flags a Claude model id requested when the trace names no served model", () => {
+    expect(isServedModelUnconfirmed("claude-opus-5-5", [])).toBe(true);
+    expect(isServedModelUnconfirmed("claude-opus-5-5", ["claude-opus-5-5"])).toBe(false);
+  });
+
+  test("skips aliases, which cannot be compared with a served model", () => {
+    expect(isServedModelUnconfirmed("opus", [])).toBe(false);
   });
 });
 

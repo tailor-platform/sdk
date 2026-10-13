@@ -1,5 +1,9 @@
 import { promises as fs } from "node:fs";
-import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace";
+import {
+  findServedModelMismatches,
+  isServedModelUnconfirmed,
+  summarizeClaudeTrace,
+} from "./claude-trace";
 import { runCommand } from "./process";
 import { isObject, readJsonLines, tailText } from "./utils";
 import { listWorkspaceFiles } from "./workspace-files";
@@ -186,7 +190,7 @@ function classifyClaudeRun(
     return "model-mismatch";
   }
   if (solverExitCode === 0 && trace.result !== undefined && trace.result.isError !== true) {
-    return "none";
+    return isServedModelUnconfirmed(requestedModel, trace.servedModels) ? "unknown" : "none";
   }
   const apiErrorStatus = trace.result?.apiErrorStatus;
   if (trace.rateLimitRejected || apiErrorStatus === 429) {

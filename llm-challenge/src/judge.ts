@@ -8,7 +8,11 @@ import {
   redactSecretInFiles,
   type ClaudeRuntimeConfig,
 } from "./claude-runner";
-import { findServedModelMismatches, summarizeClaudeTrace } from "./claude-trace";
+import {
+  findServedModelMismatches,
+  isServedModelUnconfirmed,
+  summarizeClaudeTrace,
+} from "./claude-trace";
 import {
   CONTAINER_WORKSPACE_DIR,
   buildAgentContainerArgs,
@@ -277,6 +281,12 @@ export async function evaluateJudgeOutput(options: {
   }
   if (trace.result === undefined) {
     return { status: "error", error: "judge produced no result event" };
+  }
+  if (isServedModelUnconfirmed(options.judgeModel, trace.servedModels)) {
+    return {
+      status: "error",
+      error: `judge requested ${options.judgeModel} but the trace names no model that served it`,
+    };
   }
   if (trace.result.isError === true) {
     return {

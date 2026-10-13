@@ -151,6 +151,10 @@ export function findServedModelMismatches(
   return servedModels.filter((served) => !isSameClaudeModel(requestedModel, served));
 }
 
+export function isServedModelUnconfirmed(requestedModel: string, servedModels: string[]): boolean {
+  return requestedModel.startsWith("claude-") && servedModels.length === 0;
+}
+
 export function isSameClaudeModel(left: string, right: string): boolean {
   return baseClaudeModel(left) === baseClaudeModel(right);
 }
