@@ -50,6 +50,12 @@ Located in `packages/sdk/e2e/`. CI runs these in the `sdk-e2e.yml` workflow (pul
 
 This is enforced by oxlint's local plugin (see `packages/sdk/oxlint-plugins/index.js` and `.oxlintrc.json`).
 
+### Behavior a Library Owns
+
+Do not write tests for behavior that a third-party library already guarantees in its own test suite, such as how `@politty/zod` binds a named positional argument, how `zod` parses a value or strips unknown keys, or how `kysely` builds a query. A test of that kind passes or fails with the library, not with SDK code.
+
+Test what the SDK adds on top: its own schema definitions, transformations, error messages, and the side effects of a command. A test that runs the whole command through `runCommand` and checks its output is fine even when a library does the parsing, because it also exercises the SDK's handler.
+
 ## Documentation Tests
 
 CLI reference docs are auto-generated from command definitions. When adding or modifying CLI commands:
