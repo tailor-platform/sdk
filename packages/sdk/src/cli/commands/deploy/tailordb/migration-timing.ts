@@ -10,6 +10,7 @@ const PHASE_LABELS = {
   waitingOrRunning: "waiting to start or running",
   jobCleanup: "job cleanup",
   postMigration: "post-migration",
+  remainingDeploy: "remaining deploy",
   restore: "restore",
 } as const;
 
@@ -225,6 +226,7 @@ export class MaintenanceTimeline {
 
   /** @param at - When the window ended */
   finish(at = performance.now()): void {
+    if (this.#end !== undefined) return;
     this.#logPrevious(at);
     this.#end = at;
   }

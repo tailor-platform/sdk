@@ -158,7 +158,10 @@ import { assertSkippableSteps, removeMigrationWorkflowResources } from "./migrat
 import type { RemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 
-const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
+const mockConfig = {
+  path: "/test/tailor.config.ts",
+  maintenanceMode: "migration",
+} as LoadedConfig;
 
 describe("applyTailorDB: rollback of migration schema after failures", () => {
   function createMockClient() {
@@ -755,6 +758,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           waitingOrRunning: 0,
           jobCleanup: 1_000,
           postMigration: 4_000,
+          remainingDeploy: 0,
           restore: 0,
         },
         migrations: [
@@ -1918,6 +1922,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
             historyIdInvalid: false,
             inProgress: null,
             inProgressInvalid: false,
+            maintenanceModeCheckpoint: null,
             ...state,
           });
           return state.number === 1 ? [] : [mkStepsMigration()];
@@ -2039,6 +2044,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           "test-ns",
           1,
           undefined,
+          true,
         );
         expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
       });
@@ -2082,6 +2088,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         "test-ns",
         1,
         undefined,
+        true,
       );
       expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
         client,

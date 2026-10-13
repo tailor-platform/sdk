@@ -201,6 +201,7 @@ function run(
     invoker,
     appName: "my-app",
     appId: "app-1",
+    maintenanceMode: true,
     pollIntervalMs: 0,
     order: ORDER,
     onBeforeStart: vi.fn(async () => {}),

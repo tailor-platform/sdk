@@ -418,6 +418,7 @@ describe("migration test runtime", () => {
       historyIdInvalid: false,
       inProgress: null,
       inProgressInvalid: false,
+      maintenanceModeCheckpoint: null,
       ...overrides,
     };
   }

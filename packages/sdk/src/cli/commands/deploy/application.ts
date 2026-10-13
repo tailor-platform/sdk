@@ -88,6 +88,26 @@ export async function applyApplication(
   }
 }
 
+/**
+ * Re-issue the application update after an earlier apply in the same deploy,
+ * so the gateway composes again with TailorDB settings that changed since.
+ * @param client - Operator client instance
+ * @param changeSet - Application changes already applied in this deploy
+ */
+export async function recomposeApplication(
+  client: OperatorClient,
+  changeSet: Awaited<ReturnType<typeof planApplication>>,
+): Promise<void> {
+  // planApplication builds a create and an update from the same request fields.
+  const requests = [
+    ...changeSet.creates.map(
+      (entry) => entry.request as MessageInitShape<typeof UpdateApplicationRequestSchema>,
+    ),
+    ...[...changeSet.updates, ...changeSet.unchanged].map((entry) => entry.request),
+  ];
+  await Promise.all(requests.map((request) => client.updateApplication(request)));
+}
+
 type CreateApplication = {
   name: string;
   request: MessageInitShape<typeof CreateApplicationRequestSchema>;

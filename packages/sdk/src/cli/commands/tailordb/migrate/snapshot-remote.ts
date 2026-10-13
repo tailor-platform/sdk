@@ -805,8 +805,8 @@ function compareFields(
 const SYSTEM_FIELDS = new Set(["id"]);
 
 /**
- * Table settings a running migration overrides on every table it restricts,
- * so they cannot be compared while a migration is in progress.
+ * Table settings a migration's maintenance mode overrides on every table it
+ * restricts, so they cannot be compared on a table in maintenance mode.
  */
 export const MIGRATION_RESTRICTION_SETTINGS = [
   "bulkUpsert",
@@ -814,14 +814,38 @@ export const MIGRATION_RESTRICTION_SETTINGS = [
   "publishEvents",
 ] as const satisfies readonly (keyof SnapshotSettings)[];
 
+type RestrictableTableSettings = {
+  bulkUpsert?: boolean;
+  publishRecordEvents?: boolean;
+  disableGqlOperations?: { create?: boolean; update?: boolean; delete?: boolean };
+};
+
+/**
+ * Whether table settings have the shape a migration's maintenance mode
+ * writes: no GraphQL writes, no bulk upsert, and no record events.
+ * @param settings - Table settings to inspect
+ * @returns Whether the table is in maintenance mode
+ */
+export function isMigrationRestricted(settings: RestrictableTableSettings | undefined): boolean {
+  const operations = settings?.disableGqlOperations;
+  return (
+    settings?.publishRecordEvents !== true &&
+    settings?.bulkUpsert !== true &&
+    operations?.create === true &&
+    operations.update === true &&
+    operations.delete === true
+  );
+}
+
 function withoutSettings(
   snapshot: SchemaSnapshot,
   ignored: readonly (keyof SnapshotSettings)[],
+  tableNames?: ReadonlySet<string>,
 ): SchemaSnapshot {
-  if (ignored.length === 0) return snapshot;
+  if (ignored.length === 0 || tableNames?.size === 0) return snapshot;
   const tables = createSnapshotRecord<TailorDBSnapshotType>();
   for (const [tableName, type] of Object.entries(snapshot.tables)) {
-    if (!type.settings) {
+    if (!type.settings || (tableNames && !tableNames.has(tableName))) {
       tables[tableName] = type;
       continue;
     }
@@ -839,6 +863,7 @@ function withoutSettings(
  * @param {SchemaSnapshot} snapshot - Local schema snapshot
  * @param {readonly RemoteGqlPermission[]} remoteGqlPermissions - Remote GQL permissions for the namespace
  * @param ignoredSettings - Table settings left out of the comparison on both sides
+ * @param ignoredSettingsTables - Tables `ignoredSettings` applies to; every table when omitted
  * @returns {SchemaDrift[]} List of drifts detected
  */
 export function compareRemoteWithSnapshot(
@@ -846,6 +871,7 @@ export function compareRemoteWithSnapshot(
   snapshot: SchemaSnapshot,
   remoteGqlPermissions: readonly RemoteGqlPermission[] = [],
   ignoredSettings: readonly (keyof SnapshotSettings)[] = [],
+  ignoredSettingsTables?: ReadonlySet<string>,
 ): SchemaDrift[] {
   const structuralDrifts = compareNormalizedRemoteWithSnapshot(
     createRemoteComparableSnapshot(
@@ -857,9 +883,12 @@ export function compareRemoteWithSnapshot(
           snapshot,
         ),
         ignoredSettings,
+        ignoredSettingsTables,
       ),
     ),
-    createRemoteComparableSnapshot(withoutSettings(snapshot, ignoredSettings)),
+    createRemoteComparableSnapshot(
+      withoutSettings(snapshot, ignoredSettings, ignoredSettingsTables),
+    ),
   );
 
   const scriptDrifts = compareScriptHashes(remoteTypes, snapshot);

@@ -45,6 +45,7 @@ import {
 import {
   type PendingMigration,
   executionIdToLabel,
+  MAINTENANCE_MODE_LABEL_KEY,
   MIGRATION_EXECUTION_LABEL_KEY,
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_IN_PROGRESS_LABEL_KEY,
@@ -83,6 +84,7 @@ interface MigrationExecutionOptions {
   configDir: string;
   appName: string;
   appId: string | undefined;
+  maintenanceMode: boolean;
   skipSteps?: ReadonlyMap<string, readonly string[]>;
 }
 
@@ -101,6 +103,8 @@ export interface MigrationContext {
   appName: string;
   /** Application id, used to label a migration's temporary resources. */
   appId: string | undefined;
+  /** Whether the migrating namespaces are in maintenance mode. */
+  maintenanceMode: boolean;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
   skipSteps?: ReadonlyMap<string, readonly string[]>;
 }
@@ -393,6 +397,7 @@ async function executeSingleMigration(
     invoker,
     appName,
     appId,
+    maintenanceMode: options.maintenanceMode,
     onRunEvent: display.onRunEvent,
   });
 
@@ -412,6 +417,7 @@ async function executeSingleMigration(
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number to set
  * @param historyId - Optional migration history ID to set atomically with the checkpoint
+ * @param recordMaintenanceMode - Whether to record, atomically with the checkpoint, that the namespace's tables are still in maintenance mode
  * @returns Whether the labels changed
  */
 export async function updateMigrationLabel(
@@ -420,6 +426,7 @@ export async function updateMigrationLabel(
   namespace: string,
   migrationNumber: number,
   historyId?: string,
+  recordMaintenanceMode = false,
 ): Promise<boolean> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
@@ -428,6 +435,9 @@ export async function updateMigrationLabel(
     labels: {
       [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
       ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
+      ...(recordMaintenanceMode
+        ? { [MAINTENANCE_MODE_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) }
+        : {}),
     },
     remove: [
       ...(historyId ? [] : [MIGRATION_HISTORY_LABEL_KEY]),
@@ -482,6 +492,24 @@ export async function clearMigrationInProgress(
 }
 
 /**
+ * Remove the record of a maintenance mode that has been lifted.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ */
+export async function clearMaintenanceModeRecord(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<void> {
+  await writeMetadataLabelsDirect(client, {
+    trn: resourceTrn(workspaceId, "tailordb", namespace),
+    labels: {},
+    remove: [MAINTENANCE_MODE_LABEL_KEY],
+  });
+}
+
+/**
  * Whether a migration failure left steps committed, so its schema changes
  * must stay in place for the next deploy to resume.
  * @param error - Failure raised while executing migrations
@@ -501,10 +529,22 @@ export function isMigrationOutcomeUnknown(error: unknown): boolean {
   return isCLIError(error) && error.code === "MIGRATION_OUTCOME_UNKNOWN";
 }
 
+function withMaintenanceModeNote(
+  suggestion: string | undefined,
+  namespace: string,
+  maintenanceMode: boolean,
+  until = "Until the migration completes",
+): string | undefined {
+  if (!maintenanceMode) return suggestion;
+  const note = `${until}, the tables of namespace '${namespace}' stay in maintenance mode, as during the migration.`;
+  return suggestion ? `${suggestion} ${note}` : note;
+}
+
 function partiallyAppliedError(
   migration: PendingMigration,
   result: Pick<MigrationStepsWorkflowResult, "completedSteps" | "failedSteps" | "executionId">,
   cause: unknown,
+  maintenanceMode: boolean,
 ): Error {
   const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
   const failed = result.failedSteps.length > 0 ? ` at ${result.failedSteps.join(", ")}` : "";
@@ -517,13 +557,13 @@ function partiallyAppliedError(
     message: `Migration ${migrationLabel} failed${failed}${completed}: ${
       cause instanceof Error ? cause.message : String(cause)
     }`,
-    suggestion:
-      `${
-        isCLIError(cause) && cause.suggestion
-          ? cause.suggestion
-          : "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again."
-      } ` +
-      `Until the migration completes, the tables of namespace '${migration.namespace}' stay in maintenance mode, as during the migration.`,
+    suggestion: withMaintenanceModeNote(
+      isCLIError(cause) && cause.suggestion
+        ? cause.suggestion
+        : "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again.",
+      migration.namespace,
+      maintenanceMode,
+    ),
     context: {
       namespace: migration.namespace,
       migrationNumber: migration.number,
@@ -539,6 +579,7 @@ function unreleasedRecordError(
   migration: PendingMigration,
   cause: unknown,
   recordConfirmed: boolean,
+  maintenanceMode: boolean,
 ): Error {
   const { namespace } = migration;
   const number = formatMigrationNumber(migration.number);
@@ -553,19 +594,21 @@ function unreleasedRecordError(
     message: `Migration ${namespace}/${number} failed before any step completed: ${
       cause instanceof Error ? cause.message : String(cause)
     }`,
-    suggestion: `${next} Until then, the tables of namespace '${namespace}' stay in maintenance mode, as during the migration.`,
+    suggestion: withMaintenanceModeNote(next, namespace, maintenanceMode, "Until then"),
     context: { namespace, migrationNumber: migration.number, completedSteps: [], failedSteps: [] },
     cause,
   });
 }
 
-function unconfirmedStartError(migration: PendingMigration, cause: CLIError): Error {
+function unconfirmedStartError(
+  migration: PendingMigration,
+  cause: CLIError,
+  maintenanceMode: boolean,
+): Error {
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
     message: cause.message,
-    suggestion:
-      `${cause.suggestion ? `${cause.suggestion} ` : ""}` +
-      `Until the migration completes, the tables of namespace '${migration.namespace}' stay in maintenance mode, as during the migration.`,
+    suggestion: withMaintenanceModeNote(cause.suggestion, migration.namespace, maintenanceMode),
     context: {
       namespace: migration.namespace,
       migrationNumber: migration.number,
@@ -603,7 +646,7 @@ async function releaseMigrationInProgress(
         resourceTrn(options.workspaceId, "tailordb", migration.namespace),
       );
     } catch {
-      return unreleasedRecordError(migration, cause, false);
+      return unreleasedRecordError(migration, cause, false, options.maintenanceMode);
     }
     if (!state.inProgressInvalid && state.inProgress?.number !== migration.number) {
       return undefined;
@@ -613,7 +656,7 @@ async function releaseMigrationInProgress(
       `Could not clear the in-progress record of migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
         `${error instanceof Error ? error.message : String(error)}.`,
     );
-    return unreleasedRecordError(migration, cause, true);
+    return unreleasedRecordError(migration, cause, true, options.maintenanceMode);
   }
 }
 
@@ -672,6 +715,7 @@ async function executeStepsMigration(
       invoker,
       appName,
       appId,
+      maintenanceMode: options.maintenanceMode,
       order: form.order,
       skipSteps,
       inProgress,
@@ -695,11 +739,16 @@ async function executeStepsMigration(
     });
   } catch (error) {
     if (isCLIError(error) && error.code === "MIGRATION_START_UNCONFIRMED") {
-      throw unconfirmedStartError(migration, error);
+      throw unconfirmedStartError(migration, error, options.maintenanceMode);
     }
     const anotherRunActive = isCLIError(error) && error.code === "MIGRATION_EXECUTION_ACTIVE";
     if (started || anotherRunActive) {
-      throw partiallyAppliedError(migration, { completedSteps: [], failedSteps: [] }, error);
+      throw partiallyAppliedError(
+        migration,
+        { completedSteps: [], failedSteps: [] },
+        error,
+        options.maintenanceMode,
+      );
     }
     const failure = mayBeRecorded
       ? await releaseMigrationInProgress(options, migration, error, notify)
@@ -725,7 +774,12 @@ async function executeStepsMigration(
   if (result.stepsMayHaveCommitted || inProgress) {
     return {
       ...failed,
-      failure: partiallyAppliedError(migration, result, result.error ?? "Migration failed"),
+      failure: partiallyAppliedError(
+        migration,
+        result,
+        result.error ?? "Migration failed",
+        options.maintenanceMode,
+      ),
     };
   }
   const failure = await releaseMigrationInProgress(
@@ -791,6 +845,7 @@ export async function executeMigrations(
       configDir: context.configDir,
       appName: context.appName,
       appId: context.appId,
+      maintenanceMode: context.maintenanceMode,
       skipSteps: context.skipSteps,
     };
 

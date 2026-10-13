@@ -7,6 +7,8 @@ import {
   type PlannedDeployment,
 } from "./apply-phases";
 import { writeMetadataLabels } from "./label";
+import { MaintenanceTimeline } from "./tailordb/migration-timing";
+import type { MaintenanceModeRelease } from "./tailordb";
 
 const mocks = vi.hoisted(() => {
   const calls: string[] = [];
@@ -46,6 +48,9 @@ const mocks = vi.hoisted(() => {
       calls.push(`application:${marker(result)}:${String(phase)}`);
       if (phase === "create-update") await state.onApplicationApply?.(client);
     }),
+    recomposeApplication: vi.fn(async (_client, result) => {
+      calls.push(`recompose:${marker(result)}`);
+    }),
     applyExecutor: vi.fn(async (_client, result, phase) => {
       calls.push(`executor:${marker(result)}:${String(phase)}`);
     }),
@@ -73,7 +78,10 @@ vi.mock("./tailordb", () => ({
 }));
 vi.mock("./auth", () => ({ applyAuth: mocks.applyAuth }));
 vi.mock("./resolver", () => ({ applyPipeline: mocks.applyPipeline }));
-vi.mock("./application", () => ({ applyApplication: mocks.applyApplication }));
+vi.mock("./application", () => ({
+  applyApplication: mocks.applyApplication,
+  recomposeApplication: mocks.recomposeApplication,
+}));
 vi.mock("./executor", () => ({ applyExecutor: mocks.applyExecutor }));
 vi.mock("./workflow", () => ({ applyWorkflow: mocks.applyWorkflow }));
 vi.mock("./workflow-execution-policy", () => ({
@@ -416,5 +424,160 @@ describe("applyDeploymentPlans", () => {
 
     expect(mocks.calls).toContain("workflow:supplier-workflow:create-update");
     expect(mocks.calls).not.toContain("workflow:supplier-workflow:delete");
+  });
+});
+
+describe("applyRemainingResources with a held maintenance mode", () => {
+  type HoldOptions = {
+    holdMaintenanceMode?: (release: MaintenanceModeRelease) => void;
+  };
+
+  test("returns held and immediate reports in deployment order", async () => {
+    const timeline = new MaintenanceTimeline();
+    timeline.enter("restrict", 0);
+    timeline.finish(5);
+    const report = timeline.report(["tailordb"]);
+    const immediate = timeline.report(["buyer-db"]);
+    mocks.applyTailorDB.mockImplementationOnce(
+      async (_client, _result, _phase, options?: HoldOptions) => {
+        options?.holdMaintenanceMode?.(async () => report);
+      },
+    );
+    mocks.applyTailorDB.mockImplementationOnce(async () => immediate as never);
+
+    const maintenance = await applyRemainingResources({} as never, "workspace-id", [
+      deployment("supplier"),
+      deployment("buyer"),
+    ]);
+
+    expect(maintenance).toEqual([
+      { application: "supplier", ...report },
+      { application: "buyer", ...immediate },
+    ]);
+  });
+
+  function holdMaintenanceMode(
+    onRelease: (name: string) => Promise<void> = async () => {},
+    afterHold: () => void = () => {},
+  ) {
+    const release = vi.fn(async (_client: unknown) => {});
+    mocks.applyTailorDB.mockImplementation(
+      async (_client, result, phase, options?: HoldOptions) => {
+        const name = (result as { marker: string }).marker;
+        mocks.calls.push(`tailordb:${name}:${String(phase)}`);
+        if (phase !== "create-update") return;
+        options?.holdMaintenanceMode?.(async (client) => {
+          mocks.calls.push(`release:${name}`);
+          await release(client);
+          await onRelease(name);
+        });
+        afterHold();
+      },
+    );
+    return release;
+  }
+
+  afterEach(() => {
+    mocks.applyTailorDB.mockReset();
+    mocks.applyTailorDB.mockImplementation(async (_client, result, phase) => {
+      mocks.calls.push(`tailordb:${(result as { marker: string }).marker}:${String(phase)}`);
+    });
+    mocks.applyExecutor.mockReset();
+    mocks.recomposeApplication.mockClear();
+  });
+
+  test("asks TailorDB to hold its maintenance mode", async () => {
+    mocks.calls.length = 0;
+
+    await applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]);
+
+    expect(mocks.applyTailorDB).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ marker: "supplier-tailordb" }),
+      "create-update",
+      { holdMaintenanceMode: expect.any(Function) },
+    );
+  });
+
+  test("lifts it when the TailorDB apply that held it fails afterwards", async () => {
+    mocks.calls.length = 0;
+    holdMaintenanceMode(undefined, () => {
+      throw new Error("table deletion failed");
+    });
+
+    await expect(
+      applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]),
+    ).rejects.toThrow("table deletion failed");
+
+    expect(mocks.calls.at(-1)).toBe("release:supplier-tailordb");
+  });
+
+  test("lifts it once every other change of the deploy is applied", async () => {
+    mocks.calls.length = 0;
+    const release = holdMaintenanceMode();
+    const client = {};
+
+    await applyRemainingResources(client as never, "workspace-id", [
+      deployment("supplier"),
+      deployment("buyer"),
+    ]);
+
+    expect(mocks.calls.slice(-5)).toEqual([
+      "function:buyer-function:delete",
+      "release:supplier-tailordb",
+      "release:buyer-tailordb",
+      "recompose:supplier-application",
+      "recompose:buyer-application",
+    ]);
+    expect(release).toHaveBeenCalledWith(client);
+  });
+
+  test("does not recompose an application whose deploy held nothing", async () => {
+    mocks.calls.length = 0;
+
+    await applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]);
+
+    expect(mocks.calls.filter((call) => call.startsWith("recompose:"))).toEqual([]);
+  });
+
+  test("lifts it before reporting a later failure", async () => {
+    mocks.calls.length = 0;
+    holdMaintenanceMode();
+    mocks.applyExecutor.mockRejectedValueOnce(new Error("executor apply failed"));
+
+    await expect(
+      applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]),
+    ).rejects.toThrow("executor apply failed");
+
+    expect(mocks.calls.at(-1)).toBe("release:supplier-tailordb");
+    expect(mocks.recomposeApplication).not.toHaveBeenCalled();
+  });
+
+  test("keeps the later failure when lifting it fails too", async () => {
+    mocks.calls.length = 0;
+    holdMaintenanceMode(async () => {
+      throw new Error("release failed");
+    });
+    mocks.applyExecutor.mockRejectedValueOnce(new Error("executor apply failed"));
+
+    await expect(
+      applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]),
+    ).rejects.toThrow("executor apply failed");
+  });
+
+  test("lifts every held maintenance mode when one release fails", async () => {
+    mocks.calls.length = 0;
+    holdMaintenanceMode(async (name) => {
+      if (name === "supplier-tailordb") throw new Error("release failed");
+    });
+
+    await expect(
+      applyRemainingResources({} as never, "workspace-id", [
+        deployment("supplier"),
+        deployment("buyer"),
+      ]),
+    ).rejects.toThrow("release failed");
+
+    expect(mocks.calls.slice(-2)).toEqual(["release:supplier-tailordb", "release:buyer-tailordb"]);
   });
 });

@@ -25,6 +25,14 @@ describe("formatDuration", () => {
 });
 
 describe("MaintenanceTimeline", () => {
+  test("keeps the first end when cleanup finishes the window again", () => {
+    const timeline = new MaintenanceTimeline();
+    timeline.enter("restore", 0);
+    timeline.finish(10);
+    timeline.finish(20);
+
+    expect(timeline.report(["tailordb"]).maintenanceMs).toBe(10);
+  });
   test("splits the window into phases that add up to its length", () => {
     const timeline = new MaintenanceTimeline();
     timeline.enter("restrict", 0);
@@ -52,6 +60,7 @@ describe("MaintenanceTimeline", () => {
         waitingOrRunning: 0,
         jobCleanup: 1_000,
         postMigration: 2_000,
+        remainingDeploy: 0,
         restore: 1_000,
       },
       migrations: [
