@@ -53,7 +53,7 @@ Grade one or more reports in a single invocation so every run shares the same ju
 pnpm -C llm-challenge challenge grade --report results/<run-id>/report.json [--report <another report.json>] [options]
 ```
 
-- `judge-model`: `claude-opus-5-5`. The judge must not be the solver model; grading Claude Opus runs needs another `--judge-model` (for example `claude-fable-5-1`) for every report in the comparison. `--allow-self-judge` overrides the check.
+- `judge-model`: `claude-fable-5-1`, which differs from the default Claude solver model. The judge must not be the solver model; grading Claude Fable runs needs another `--judge-model` (for example `claude-opus-5-5`) for every report in the comparison. `--allow-self-judge` overrides the check.
 - `judge-effort`: `high`.
 - `concurrency`: `1`; the Podman VM's memory bounds this.
 - `output`: `results/<run-id>/grades/<grade-id>/` next to the first report.

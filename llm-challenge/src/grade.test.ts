@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { aroundEach, describe, expect, test } from "vitest";
+import { parseRunArgs } from "./args";
 import {
   buildCommandEvidence,
   decideRunGrade,
@@ -732,6 +733,23 @@ describe("grade summary", () => {
 });
 
 describe("self-judge check", () => {
+  test("does not flag a Claude run made with the default solver model when grading with the default judge", () => {
+    const solverModel = parseRunArgs([]).model;
+    const { judgeModel } = parseGradeArgs(["--report", "results/a/report.json"]);
+
+    expect(
+      findSelfJudgedSources(
+        [
+          {
+            relativePath: "a.json",
+            report: { agent: "claude", model: solverModel } as StoredChallengeReport,
+          },
+        ],
+        judgeModel,
+      ),
+    ).toEqual([]);
+  });
+
   test("flags Claude reports whose solver is the judge model in any spelling", () => {
     const source = (relativePath: string, agent: "claude" | "codex", model: string) => ({
       relativePath,
@@ -780,7 +798,7 @@ describe("grade arguments", () => {
   test("parses reports, judge settings, and defaults", () => {
     expect(parseGradeArgs(["--report", "results/a/report.json"])).toMatchObject({
       reports: ["results/a/report.json"],
-      judgeModel: "claude-opus-5-5",
+      judgeModel: "claude-fable-5-1",
       judgeEffort: "high",
       concurrency: 1,
       allowSelfJudge: false,

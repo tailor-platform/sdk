@@ -117,7 +117,7 @@ type CommandEvidence = {
 
 const COMMAND_OUTPUT_TAIL = 2_000;
 
-const DEFAULT_JUDGE_MODEL = "claude-opus-5-5";
+const DEFAULT_JUDGE_MODEL = "claude-fable-5-1";
 const DEFAULT_JUDGE_EFFORT = "high";
 const BOOTSTRAP_ITERATIONS = 5_000;
 const BOOTSTRAP_SEED = 20_260_930;
