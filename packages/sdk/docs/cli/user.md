@@ -28,7 +28,7 @@ _no options_
 
 | Option                            | Alias | Description                       | Required | Default | Env                                          |
 | --------------------------------- | ----- | --------------------------------- | -------- | ------- | -------------------------------------------- |
-| `--machine-user <MACHINE_USER>`   | -     | Login as a platform machine user. | Yes      | -       | -                                            |
+| `--machine-user`                  | -     | Login as a platform machine user. | Yes      | -       | -                                            |
 | `--client-id <CLIENT_ID>`         | -     | Client ID                         | Yes      | -       | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     |
 | `--client-secret <CLIENT_SECRET>` | -     | Client secret                     | No       | -       | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` |
 

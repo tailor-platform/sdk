@@ -5,7 +5,7 @@ type ArgsShape = Record<string, z.ZodType>;
 
 export const nameArgs = {
   name: arg(z.string(), {
-    positional: true,
+    positional: { named: true },
     description: "Vault name",
   }),
 } satisfies ArgsShape;
