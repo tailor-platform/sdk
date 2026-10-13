@@ -45,7 +45,7 @@ const tagBase: RenderTagParams = {
 };
 
 type GeneratedWorkflow = {
-  jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
+  jobs: Record<string, { if?: string; steps: Array<Record<string, unknown>> }>;
 };
 
 describe("detectPackageManager", () => {
@@ -1310,6 +1310,37 @@ describe("seed step", () => {
   const stepsOf = (content: string, job: string): Array<Record<string, unknown>> =>
     (parseYAML(content) as GeneratedWorkflow).jobs[job]?.steps ?? [];
   const idsOf = (steps: Array<Record<string, unknown>>): unknown[] => steps.map((s) => s.id);
+
+  test("validates branch seed data before deploy when deploy events skip the plan job", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      workingDirectory: "apps/api",
+      seedValidate: true,
+      seed: { datasets: ["preview"] },
+    });
+    const workflow = parseYAML(content) as GeneratedWorkflow;
+    expect(workflow.jobs["tailor-plan"]?.if).toContain("github.event_name == 'pull_request'");
+    expect(workflow.jobs["tailor-deploy"]?.if).toContain("github.event_name == 'push'");
+    const steps = stepsOf(content, "tailor-deploy");
+    const ids = idsOf(steps);
+    const validationIndex = ids.indexOf("tailor-seed-validate");
+    expect(validationIndex).toBeGreaterThan(-1);
+    expect(validationIndex).toBeLessThan(ids.indexOf("tailor-apply"));
+    expect(steps[validationIndex]).toEqual({
+      id: "tailor-seed-validate",
+      run: "pnpm exec tailor seed validate --upsert --dataset preview",
+      "working-directory": "apps/api",
+    });
+    expect(generatedIds).toContain("tailor-deploy/tailor-seed-validate");
+
+    const tag = renderTagWorkflow({ ...tagBase, seedValidate: true, seed: { datasets: [] } });
+    expect(idsOf(stepsOf(tag.content, "tailor-deploy"))).not.toContain("tailor-seed-validate");
+    const withoutSeed = renderBranchWorkflow({ ...branchBase, seedValidate: true });
+    expect(idsOf(stepsOf(withoutSeed.content, "tailor-deploy"))).not.toContain(
+      "tailor-seed-validate",
+    );
+    expect(withoutSeed.generatedIds).not.toContain("tailor-deploy/tailor-seed-validate");
+  });
 
   test("branch and tag workflows seed after the apply step without repeating validation", () => {
     const rendered = [

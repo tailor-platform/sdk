@@ -343,7 +343,8 @@ function migrationDriftCheckIds(
 // Dataset names are restricted to `[A-Za-z0-9_-]`, so they need no shell quoting.
 function applySeed(content: string, seed: RenderSeed | undefined): string {
   const args = (seed?.datasets ?? []).map((dataset) => ` --dataset ${dataset}`).join("");
-  return block(content, "SEED", seed !== undefined)
+  const seeded = block(content, "SEED", seed !== undefined);
+  return block(seeded, "SEED_PREFLIGHT", seed !== undefined)
     .replaceAll("__SEED_ARGS__", () => args)
     .replaceAll("__SEED_VALIDATE_ARGS__", () => `${seed ? " --upsert" : ""}${args}`);
 }
@@ -529,6 +530,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     "tailor-deploy/tailor-checkout",
     "tailor-deploy/tailor-setup",
     "tailor-deploy/tailor-install",
+    ...seedValidateIds("tailor-deploy", seed !== undefined, undefined),
     "tailor-deploy/tailor-apply",
     ...seedIds("tailor-deploy", seed),
     "tailor-deploy/tailor-slack-prereq",

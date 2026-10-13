@@ -563,11 +563,12 @@ tailor setup ci branch --seed-dataset stg
 tailor setup ci preview --region us-west --seed-dataset preview
 ```
 
-The deploy job gains a `tailor-seed` step after the deploy step. Branch and tag
-targets validate the seed data in the plan job and apply it after deploy;
-preview targets validate and apply it after deploy. The plan job uses
+The deploy job gains a `tailor-seed` step after the deploy step. Branch targets
+validate seed data before deploy and also in the PR or dry-run plan job; tag
+targets validate it in the plan job before deploy. Both use
 `tailor seed validate --upsert` with the selected datasets to check the `id`
-and required fields that `seed apply --upsert` needs before deploy.
+and required fields that `seed apply --upsert` needs. Preview targets validate
+and apply the data after deploy.
 
 | Target      | Seeds with                           | Effect                                                                        |
 | ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
