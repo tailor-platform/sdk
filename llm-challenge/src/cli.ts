@@ -179,6 +179,10 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         skillsSourceDir,
       });
       try {
+        await runtime.prepareWorkspace?.({
+          worktreePath: paths.worktreePath,
+          sharedPnpmStorePath,
+        });
         const result = await runtime.run({
           containerName: toContainerName(runId, task.problem.group, task.problem.id, task.runIndex),
           worktreePath: paths.worktreePath,

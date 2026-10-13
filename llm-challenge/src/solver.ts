@@ -1,5 +1,9 @@
 import path from "node:path";
-import { preflightClaudeOnHost, runClaudeOnHost } from "./claude-host-runner";
+import {
+  installWorkspaceDepsOnHost,
+  preflightClaudeOnHost,
+  runClaudeOnHost,
+} from "./claude-host-runner";
 import {
   getClaudeRuntimeConfig,
   preflightClaudeRunner,
@@ -41,6 +45,11 @@ export type SolverRuntime = {
   verifier: SolverRuntimeKind;
   image: string;
   agentPackage: string;
+  /** Runs before each solver, outside any sandbox the solver itself runs in. */
+  prepareWorkspace?: (options: {
+    worktreePath: string;
+    sharedPnpmStorePath?: string;
+  }) => Promise<void>;
   preflight: (model: string) => Promise<SolverPreflight>;
   run: (options: SolverRunOptions) => Promise<SolverResult>;
 };
@@ -74,6 +83,7 @@ export async function createSolverRuntime(
       verifier: "host",
       image: "host",
       agentPackage: runtime.claudePackage,
+      prepareWorkspace: installWorkspaceDepsOnHost,
       preflight: async (model) => {
         const result = await preflightClaudeOnHost({ runtime, model });
         return { ...result, agentVersion: result.claudeVersion };

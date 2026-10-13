@@ -23,7 +23,6 @@ const HOST_ENV_KEYS = [
   "TERM",
   "TMPDIR",
 ];
-const HOST_ALLOWED_DOMAINS = ["registry.npmjs.org"];
 const HOST_HIDDEN_HOME_PATHS = [
   "~/.ssh",
   "~/.aws",
@@ -64,7 +63,7 @@ export type HostSettings = {
     allowUnsandboxedCommands: false;
     failIfUnavailable: true;
     filesystem: { denyRead: string[]; allowRead: string[]; allowWrite: string[] };
-    network: { allowedDomains: string[]; strictAllowlist: true };
+    network: { allowedDomains: never[]; strictAllowlist: true };
   };
 };
 
@@ -131,7 +130,7 @@ export function buildHostSettings(options: {
         allowRead: [options.worktreePath, ...store, ...(options.readableHomePaths ?? [])],
         allowWrite: store,
       },
-      network: { allowedDomains: HOST_ALLOWED_DOMAINS, strictAllowlist: true },
+      network: { allowedDomains: [], strictAllowlist: true },
     },
   };
 }
@@ -310,5 +309,20 @@ export async function runJudgeOnHost(options: {
     env: buildHostEnv(process.env),
     replaceEnv: true,
     killProcessGroup: true,
+  });
+}
+
+export async function installWorkspaceDepsOnHost(options: {
+  worktreePath: string;
+  sharedPnpmStorePath?: string;
+}): Promise<void> {
+  await runCommand("pnpm", ["install", "--ignore-scripts"], {
+    cwd: await fs.realpath(options.worktreePath),
+    env: buildHostEnv(
+      process.env,
+      options.sharedPnpmStorePath === undefined
+        ? {}
+        : { PNPM_CONFIG_STORE_DIR: options.sharedPnpmStorePath },
+    ),
   });
 }

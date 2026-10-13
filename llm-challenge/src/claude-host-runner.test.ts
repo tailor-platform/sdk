@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { aroundEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   buildClaudeHostArgs,
   buildHostEnv,
@@ -9,6 +9,7 @@ import {
   assertHostRuntimeSupported,
   buildHostVerifierProfile,
   detectReadableToolchainPaths,
+  installWorkspaceDepsOnHost,
   preflightClaudeOnHost,
   runClaudeOnHost,
   runJudgeOnHost,
@@ -18,6 +19,7 @@ const tempDirs: string[] = [];
 
 aroundEach(async (runTest) => {
   await runTest();
+  vi.unstubAllEnvs();
   const dirs = [...tempDirs];
   tempDirs.length = 0;
   await Promise.all(dirs.map((dir) => fs.rm(dir, { recursive: true, force: true })));
@@ -104,9 +106,9 @@ describe("host isolation settings", () => {
     expect(sandbox.filesystem.allowWrite).toEqual([options.sharedPnpmStorePath]);
   });
 
-  test("allows only the package registry over the network", () => {
+  test("blocks the network for shell commands, because any allowed host is a way to send data out", () => {
     expect(buildHostSettings(options).sandbox.network).toEqual({
-      allowedDomains: ["registry.npmjs.org"],
+      allowedDomains: [],
       strictAllowlist: true,
     });
   });
@@ -337,5 +339,40 @@ describe("running the judge on the host", () => {
     expect(await fs.readFile(`${binary}.env`, "utf8")).not.toContain(
       "LLM_CHALLENGE_HOST_TEST_SECRET",
     );
+  });
+});
+
+describe("installing workspace dependencies on the host", () => {
+  async function setUp(script: string) {
+    const dir = await makeTempDir();
+    const bin = path.join(dir, "bin");
+    await fs.mkdir(bin);
+    await fs.writeFile(path.join(bin, "pnpm"), `#!/bin/sh\n${script}\n`);
+    await fs.chmod(path.join(bin, "pnpm"), 0o755);
+    vi.stubEnv("PATH", `${bin}${path.delimiter}${process.env.PATH ?? ""}`);
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(worktreePath);
+    return { dir, worktreePath };
+  }
+
+  test("installs without lifecycle scripts, in the worktree, with the shared store", async () => {
+    const { dir, worktreePath } = await setUp(
+      `pwd > "${"$"}0.cwd"; echo "$@" > "${"$"}0.args"; echo "$PNPM_CONFIG_STORE_DIR" > "${"$"}0.store"`,
+    );
+
+    await installWorkspaceDepsOnHost({ worktreePath, sharedPnpmStorePath: "/the/store" });
+
+    const read = (name: string) => fs.readFile(path.join(dir, "bin", `pnpm.${name}`), "utf8");
+    expect((await read("cwd")).trim()).toBe(await fs.realpath(worktreePath));
+    expect((await read("args")).trim()).toBe("install --ignore-scripts");
+    expect((await read("store")).trim()).toBe("/the/store");
+  });
+
+  test("fails with the package manager's output when the install fails", async () => {
+    const { worktreePath } = await setUp('echo "registry unreachable" >&2; exit 1');
+
+    await expect(
+      installWorkspaceDepsOnHost({ worktreePath, sharedPnpmStorePath: "/the/store" }),
+    ).rejects.toThrow("registry unreachable");
   });
 });

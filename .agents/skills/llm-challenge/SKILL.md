@@ -24,6 +24,7 @@ Recommended defaults:
 - `agent`: `claude` - solver: `claude` (Claude Code) or `codex`.
 - `group`: `all` - problem group to run: `sdk-api`, `cli`, or `all`.
 - `profile`: `no-docs` - SDK package profile for `sdk-api`; omit when `group=cli`.
+- `runtime`: `podman` - where the solver runs: `podman` (a container) or `host` (Claude Code on this machine, `claude` agent only, macOS only, not with `install-skills`). See "Host Runtime".
 - `install-skills`: disabled - copy the SDK's agent skills into each workspace's `.claude/skills/` and `.agents/skills/`, as `tailor skills add` does, so the solver can load them; requires `profile: full` for `sdk-api`. Runs record the skills the solver saw and invoked (`agentResult.availableSkills`, `agentResult.skillInvocations`), and grades keep runs with and without skills in separate variants.
 - `runs`: `3` - independent runs per selected problem.
 - `concurrency`: same as `runs` - parallel task count.
@@ -79,10 +80,23 @@ When measuring a proposed SDK/API affordance, follow [AB_TESTING.md](AB_TESTING.
 Check setup before the run and complete only the safe, non-interactive steps yourself.
 
 - Run `pnpm install --frozen-lockfile` when dependencies are missing or stale. Do not pipe long-running commands through `tail` or `head`.
-- Verify Podman with `podman info`. If the machine is stopped on macOS, run `podman machine start`.
-- Claude Code (solver and judge) reads `CLAUDE_CODE_OAUTH_TOKEN`, or the token file at `LLM_CHALLENGE_CLAUDE_OAUTH_TOKEN_FILE` (default `~/.config/llm-challenge/claude-oauth-token`). If neither exists, ask the user to run `claude setup-token` in their own terminal and save the token to that file with owner-only permissions; never ask them to paste it into the conversation. The token is passed to containers by environment variable name; Claude Code does not pass it on to the solver's shell commands. It is redacted from solver and judge logs and from solver workspace files, except under `.git` and the dependency and cache directories that `--prune-workspace-deps` removes after each run; a solver that deliberately commits it would leave it in `work/.git`. The solver runs without web tools or tools that act on the Claude account (remote triggers, cron, messaging, workflows).
+- Verify Podman with `podman info` unless the run uses `--runtime host`. If the machine is stopped on macOS, run `podman machine start`.
+- Claude Code (solver and judge) reads `CLAUDE_CODE_OAUTH_TOKEN`, or the token file at `LLM_CHALLENGE_CLAUDE_OAUTH_TOKEN_FILE` (default `~/.config/llm-challenge/claude-oauth-token`). If neither exists, ask the user to run `claude setup-token` in their own terminal and save the token to that file with owner-only permissions; never ask them to paste it into the conversation. The token is passed to containers by environment variable name. Treat it as readable by the solver: in a measurement with Claude Code 2.1.296, a shell command run by the solver printed an arbitrary variable set on the `claude` process, and `CLAUDE_CODE_OAUTH_TOKEN` itself was not measured because that needs a real token. It is redacted from solver and judge logs and from solver workspace files, except files over 10 MiB (skipped, so a copy there stays in the file), `.git`, and the dependency and cache directories that `--prune-workspace-deps` removes after each run; a solver that deliberately commits it would leave it in `work/.git`. `--runtime host` does not use a token. The solver runs without web tools or tools that act on the Claude account (remote triggers, cron, messaging, workflows).
 - Codex reads the configured auth file, defaulting to `~/.codex/auth.json`. If missing, ask the user to run `codex login` and wait for completion.
 - Leave runner verification to the command preflight unless the user explicitly disables it with `--no-preflight`.
+
+## Host Runtime
+
+`--runtime host` runs the pinned Claude Code (installed into `llm-challenge/.cache/claude-code/`, checked by preflight like the Podman runtime) on this machine instead of in a container. It uses the host's own Claude Code login, so no OAuth token is set anywhere, and `--safe-mode` keeps the user's `CLAUDE.md`, skills, hooks and MCP servers out. The same options apply to `challenge grade --runtime host` for the judge. Reports record `runner.kind`, and a grade keeps host and Podman runs apart as separate variants.
+
+It is weaker than Podman. Use it for local work you trust, and read these limits before comparing it with a Podman run:
+
+- File tools (Read, Edit) are limited to the worktree by permission rules, with no `bypassPermissions`. Shell commands run in Claude Code's sandbox: they can write only inside the worktree and the shared pnpm store, cannot read the repository (problems, rubrics, other runs) or credential paths such as `~/.ssh`, `~/.config`, `~/.claude` and shell history, and have no network access, because any allowed host (the package registry included) is a way for a prompt-injected solver to send out what it can read. Anything else on the machine that is not in that hidden list stays readable. The solver cannot install packages that were not installed before it started.
+- A measurement showed Read, Write and Grep/Glob are outside the sandbox when permissions are bypassed, and that allowing `Glob` or `Grep` on their own lists directories outside the worktree. The runtime therefore allows only `Read` and `Edit` on the worktree. The sandbox hides the macOS Keychain from shell commands.
+- The sandbox always refuses writes to paths such as `.vscode`, so a solver's `pnpm install` fails on packages that ship them. The harness runs `pnpm install --ignore-scripts` in the worktree before each solver starts, outside the sandbox and with network access; dependency lifecycle scripts do not run.
+- The environment is an allowlist (PATH, HOME, locale and similar), so tokens in the parent shell do not reach the solver. A timeout signals the whole process group.
+- The TypeScript check runs the repository's trusted compiler under `sandbox-exec` with writes forbidden and the same hidden paths, with `--incremental false --composite false`; it has no network, memory or process limits. Because of `sandbox-exec`, `--runtime host` needs macOS.
+- The judge keeps its `dontAsk` mode and `Read`, `Glob` and `Grep` tools, which a measurement showed cannot read outside the workspace and evidence directories.
 
 ## Artifacts
 
