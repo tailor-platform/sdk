@@ -128,7 +128,7 @@ export function buildHostSettings(options: {
       filesystem: {
         denyRead: [options.repoRoot, ...HOST_HIDDEN_HOME_PATHS],
         allowRead: [options.worktreePath, ...store, ...(options.readableHomePaths ?? [])],
-        allowWrite: store,
+        allowWrite: [],
       },
       network: { allowedDomains: [], strictAllowlist: true },
     },
@@ -318,11 +318,11 @@ export async function installWorkspaceDepsOnHost(options: {
 }): Promise<void> {
   await runCommand("pnpm", ["install", "--ignore-scripts"], {
     cwd: await fs.realpath(options.worktreePath),
-    env: buildHostEnv(
-      process.env,
-      options.sharedPnpmStorePath === undefined
+    env: buildHostEnv(process.env, {
+      PNPM_CONFIG_PACKAGE_IMPORT_METHOD: "copy",
+      ...(options.sharedPnpmStorePath === undefined
         ? {}
-        : { PNPM_CONFIG_STORE_DIR: options.sharedPnpmStorePath },
-    ),
+        : { PNPM_CONFIG_STORE_DIR: options.sharedPnpmStorePath }),
+    }),
   });
 }

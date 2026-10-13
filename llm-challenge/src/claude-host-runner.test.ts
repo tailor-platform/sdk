@@ -103,7 +103,7 @@ describe("host isolation settings", () => {
       buildHostSettings({ ...options, readableHomePaths: ["~/.config/mise"] }).sandbox.filesystem
         .allowRead,
     ).toEqual([options.worktreePath, options.sharedPnpmStorePath, "~/.config/mise"]);
-    expect(sandbox.filesystem.allowWrite).toEqual([options.sharedPnpmStorePath]);
+    expect(sandbox.filesystem.allowWrite).toEqual([]);
   });
 
   test("blocks the network for shell commands, because any allowed host is a way to send data out", () => {
@@ -357,7 +357,7 @@ describe("installing workspace dependencies on the host", () => {
 
   test("installs without lifecycle scripts, in the worktree, with the shared store", async () => {
     const { dir, worktreePath } = await setUp(
-      `pwd > "${"$"}0.cwd"; echo "$@" > "${"$"}0.args"; echo "$PNPM_CONFIG_STORE_DIR" > "${"$"}0.store"`,
+      `pwd > "${"$"}0.cwd"; echo "$@" > "${"$"}0.args"; echo "$PNPM_CONFIG_STORE_DIR" > "${"$"}0.store"; echo "$PNPM_CONFIG_PACKAGE_IMPORT_METHOD" > "${"$"}0.method"`,
     );
 
     await installWorkspaceDepsOnHost({ worktreePath, sharedPnpmStorePath: "/the/store" });
@@ -366,6 +366,7 @@ describe("installing workspace dependencies on the host", () => {
     expect((await read("cwd")).trim()).toBe(await fs.realpath(worktreePath));
     expect((await read("args")).trim()).toBe("install --ignore-scripts");
     expect((await read("store")).trim()).toBe("/the/store");
+    expect((await read("method")).trim()).toBe("copy");
   });
 
   test("fails with the package manager's output when the install fails", async () => {
