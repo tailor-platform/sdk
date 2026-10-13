@@ -266,6 +266,36 @@ const validCases: Case<undefined>[] = [
     expected: undefined,
   },
   {
+    name: '(l4) IdP service with allowedEmailDomains ["*"] passes on create',
+    mutate: (input) => {
+      input.idp.changeSet.service.creates.push({
+        name: "my-idp",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-idp",
+          userAuthPolicy: { allowGoogleOauth: true, allowedEmailDomains: ["*"] },
+        },
+        metaRequest: METADATA,
+      } as never);
+    },
+    expected: undefined,
+  },
+  {
+    name: '(l5) IdP service with allowedEmailDomains ["*"] passes on update',
+    mutate: (input) => {
+      input.idp.changeSet.service.updates.push({
+        name: "my-idp",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-idp",
+          userAuthPolicy: { allowGoogleOauth: true, allowedEmailDomains: ["*"] },
+        },
+        metaRequest: METADATA,
+      } as never);
+    },
+    expected: undefined,
+  },
+  {
     name: "(m2) invalid name in unchangedWorkflowJobNames is NOT validated when there are no workflow creates/updates",
     mutate: (input) => {
       input.workflow.unchangedWorkflowJobNames.add("camelCaseJobFromUnchanged");
@@ -459,6 +489,21 @@ const invalidCases: Case<RegExp>[] = [
     // Both the Workflow (mainJobFunctionName) and the Workflow job function (jobFunctionName)
     // carry the invalid name, so 2 resources fail.
     expected: /\d+ validation error\(s\) found in 2 resource\(s\)/,
+  },
+  {
+    name: '(l6) IdP service with "*" alongside another allowedEmailDomains entry is rejected',
+    mutate: (input) => {
+      input.idp.changeSet.service.creates.push({
+        name: "my-idp",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-idp",
+          userAuthPolicy: { allowedEmailDomains: ["*", "example.com"] },
+        },
+        metaRequest: METADATA,
+      } as never);
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
   },
   {
     name: "(l) IdP client whose derived secret vault name exceeds 63 chars is rejected",
