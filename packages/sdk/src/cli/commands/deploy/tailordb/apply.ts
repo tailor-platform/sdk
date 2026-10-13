@@ -36,6 +36,7 @@ import {
   executeSingleMigrationPostPhase,
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
+  type GqlPermissionUndo,
   restoreMigrationRestrictions,
   getDeletedTableNames,
   migrationSnapshotCache,
@@ -267,6 +268,7 @@ function includeUndeletedTables(
  * @param migration - Migration whose Post-phase failed
  * @param tailorDBInputs - Deploy inputs
  * @param attemptedTables - Tables the migration's phases touched
+ * @param gqlPermissionUndo - Records how to undo each GraphQL permission the migration wrote
  */
 async function reapplyPrePhaseAfterPostPhaseFailure(
   client: OperatorClient,
@@ -274,6 +276,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   migration: PendingMigration,
   tailorDBInputs: Parameters<typeof executeSingleMigrationPrePhase>[3],
   attemptedTables: Set<string>,
+  gqlPermissionUndo: GqlPermissionUndo,
 ): Promise<void> {
   try {
     await executeSingleMigrationPrePhase(
@@ -282,6 +285,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
       migration,
       tailorDBInputs,
       attemptedTables,
+      gqlPermissionUndo,
     );
   } catch (error) {
     logger.warn(
@@ -619,6 +623,7 @@ export async function applyTailorDB(
         for (const migration of pendingMigrations) {
           reachedMigrations.add(migration);
           const attemptedTables = new Set<string>();
+          const gqlPermissionUndo: GqlPermissionUndo = new Map();
           const inProgress = inProgressMigrations[migration.namespace]?.number === migration.number;
           const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
           const rollsBackOnFailure =
@@ -632,6 +637,7 @@ export async function applyTailorDB(
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
               attemptedTables,
+              gqlPermissionUndo,
             );
             if (!rollsBackOnFailure) return error;
             const released = await releaseRolledBackRun(
@@ -662,6 +668,7 @@ export async function applyTailorDB(
                 migration,
                 migrationContext.tailorDBInputs,
                 attemptedTables,
+                gqlPermissionUndo,
               ),
             );
 
@@ -700,6 +707,7 @@ export async function applyTailorDB(
                 migration,
                 migrationContext.tailorDBInputs,
                 attemptedTables,
+                gqlPermissionUndo,
               );
               throw error;
             }

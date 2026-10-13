@@ -496,6 +496,9 @@ type CreateGqlPermission = {
 type UpdateGqlPermission = {
   name: string;
   request: MessageInitShape<typeof UpdateTailorDBGQLPermissionRequestSchema>;
+  previousPermission: MessageInitShape<
+    typeof UpdateTailorDBGQLPermissionRequestSchema
+  >["permission"];
 };
 
 type DeleteGqlPermission = {
@@ -561,6 +564,7 @@ async function planGqlPermissions(
               typeName: tableName,
               permission: desiredPermission,
             },
+            previousPermission: existingPermission?.permission,
             ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }
