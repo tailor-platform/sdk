@@ -60,11 +60,14 @@ describe("host isolation settings", () => {
 
     expect(permissions.allow).toEqual([
       "Bash",
-      "Glob",
-      "Grep",
       "Read(//repo/llm-challenge/results/r1/sdk-api/p/run-0/work/**)",
       "Edit(//repo/llm-challenge/results/r1/sdk-api/p/run-0/work/**)",
     ]);
+  });
+
+  test("does not allow Glob or Grep on their own, which would search outside the worktree", () => {
+    expect(buildHostSettings(options).permissions.allow).not.toContain("Glob");
+    expect(buildHostSettings(options).permissions.allow).not.toContain("Grep");
   });
 
   test("hides the repository and credentials from shell commands except the worktree and store", () => {
@@ -76,11 +79,19 @@ describe("host isolation settings", () => {
       failIfUnavailable: true,
     });
     expect(sandbox.filesystem.denyRead).toEqual(
-      expect.arrayContaining(["/repo", "~/.ssh", "~/.claude.json", "~/.config"]),
+      expect.arrayContaining([
+        "/repo",
+        "~/.ssh",
+        "~/.claude.json",
+        "~/.config",
+        "~/.zsh_history",
+        "~/.gitconfig",
+      ]),
     );
     expect(sandbox.filesystem.allowRead).toEqual([
       options.worktreePath,
       options.sharedPnpmStorePath,
+      "~/.config/mise",
     ]);
     expect(sandbox.filesystem.allowWrite).toEqual([options.sharedPnpmStorePath]);
   });
@@ -154,6 +165,20 @@ describe("running claude on the host", () => {
     expect(env).not.toContain("LLM_CHALLENGE_HOST_TEST_SECRET");
     expect(env).toContain("PATH=");
     expect(await fs.readFile(path.join(dir, "trace.jsonl"), "utf8")).toBe('{"type":"result"}\n');
+  });
+
+  test("writes the permission rules with the real worktree path even when given a symlink", async () => {
+    const { dir, worktreePath, options } = await setUp(
+      `printf '%s\\n' "$@" > "${"$"}0.args"; cat > /dev/null`,
+    );
+    const link = path.join(dir, "link-to-work");
+    await fs.symlink(worktreePath, link);
+
+    await runClaudeOnHost({ ...options, worktreePath: link });
+
+    const args = await fs.readFile(path.join(dir, "cache", "bin", "claude.args"), "utf8");
+    const settings = JSON.parse(args.split("\n")[args.split("\n").indexOf("--settings") + 1]);
+    expect(settings.permissions.allow).toContain(`Read(/${worktreePath}/**)`);
   });
 
   test("kills the whole process group on timeout so no child outlives the run", async () => {

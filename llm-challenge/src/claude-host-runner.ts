@@ -31,8 +31,26 @@ const HOST_HIDDEN_HOME_PATHS = [
   "~/.docker",
   "~/.npmrc",
   "~/.netrc",
+  "~/.zsh_history",
+  "~/.bash_history",
+  "~/.zshrc",
+  "~/.zshenv",
+  "~/.zprofile",
+  "~/.bashrc",
+  "~/.profile",
+  "~/.gitconfig",
+  "~/.git-credentials",
+  "~/Desktop",
+  "~/Documents",
+  "~/Downloads",
   "~/Library/Keychains",
+  "~/Library/Application Support",
+  "~/Library/Cookies",
+  "~/Library/Mail",
+  "~/Library/Messages",
+  "~/Library/Safari",
 ];
+const HOST_READABLE_HOME_PATHS = ["~/.config/mise"];
 
 export type HostSettings = {
   permissions: { allow: string[] };
@@ -68,13 +86,7 @@ export function buildHostSettings(options: {
   const store = options.sharedPnpmStorePath === undefined ? [] : [options.sharedPnpmStorePath];
   return {
     permissions: {
-      allow: [
-        "Bash",
-        "Glob",
-        "Grep",
-        `Read(/${options.worktreePath}/**)`,
-        `Edit(/${options.worktreePath}/**)`,
-      ],
+      allow: ["Bash", `Read(/${options.worktreePath}/**)`, `Edit(/${options.worktreePath}/**)`],
     },
     sandbox: {
       enabled: true,
@@ -83,7 +95,7 @@ export function buildHostSettings(options: {
       failIfUnavailable: true,
       filesystem: {
         denyRead: [options.repoRoot, ...HOST_HIDDEN_HOME_PATHS],
-        allowRead: [options.worktreePath, ...store],
+        allowRead: [options.worktreePath, ...store, ...HOST_READABLE_HOME_PATHS],
         allowWrite: store,
       },
       network: { allowedDomains: HOST_ALLOWED_DOMAINS, strictAllowlist: true },
@@ -122,10 +134,14 @@ export async function runClaudeOnHost(options: {
   runtime: ClaudeRuntimeConfig;
 }): Promise<SolverResult> {
   await assertClaudeInstalled(options.runtime);
+  const worktreePath = await fs.realpath(options.worktreePath);
   const settings = buildHostSettings({
-    repoRoot: options.repoRoot,
-    worktreePath: options.worktreePath,
-    sharedPnpmStorePath: options.sharedPnpmStorePath,
+    repoRoot: await fs.realpath(options.repoRoot),
+    worktreePath,
+    sharedPnpmStorePath:
+      options.sharedPnpmStorePath === undefined
+        ? undefined
+        : await fs.realpath(options.sharedPnpmStorePath),
   });
   await Promise.all([
     fs.writeFile(options.solverStdoutPath, ""),
@@ -140,7 +156,7 @@ export async function runClaudeOnHost(options: {
     solverStderrPath: options.solverStderrPath,
     tracePath: options.tracePath,
     maxSeconds: options.maxSeconds,
-    cwd: options.worktreePath,
+    cwd: worktreePath,
     env: buildHostEnv(
       process.env,
       options.sharedPnpmStorePath === undefined
