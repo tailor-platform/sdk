@@ -454,6 +454,24 @@ tailor deploy --migration-skip-steps main-db/backfillUser,main-db/backfillInvoic
 
 Write every step so that running it again is safe: besides the cases above, a step can run a second time when a deploy is interrupted right after it commits. Use `where` clauses that skip rows a step already migrated, as in the example. Rows written while a migration is in progress are not seen by steps that already completed. [Maintenance mode](#maintenance-mode) blocks GraphQL writes but not the writes your resolvers, executors, or workflows make through Kysely, and without it GraphQL clients can write too, so stop such writers until the migration finishes or write steps that tolerate them.
 
+#### Rolling back instead of resuming
+
+By default a failure after another step has completed leaves the migration in progress and the namespace's tables in maintenance mode until you fix the step and deploy again. When you would rather restore the tables first and fix the script afterwards, export `onFailure` next to `steps`:
+
+```typescript
+export const onFailure = "rollback";
+
+export const steps = {
+  // ...
+} satisfies MigrationSteps;
+```
+
+- `onFailure` is `"resume"` (the default, described above) or `"rollback"`. Write it as `export const onFailure = "rollback"` with one of those two string literals; `tailor tailordb migration validate` and `tailor deploy` reject anything else. A script that runs `main` ignores it.
+- With `"rollback"`, a failed step after another step has completed, and post-migration schema changes that fail after every step completed, roll back the pre-migration schema changes like a failing `main` script: tables that already existed are restored to their previous shape, and tables the migration newly introduced are dropped. The in-progress record is cleared, the tables leave maintenance mode, and the checkpoint is not advanced. A migration that an earlier deploy left in progress is rolled back the same way once its script exports `"rollback"`.
+- Steps that already completed stay committed. Their changes to existing fields remain in the database, and nothing is recorded as in progress, so the next deploy runs every step again from the beginning. Every step must be safe to run again, or a rolled-back run applies those changes twice. Do not rely on data a step wrote to a field or table that the rollback removed.
+- If `tailor deploy` cannot tell whether a step ran, it does not roll anything back even with `"rollback"`: the migration stays in progress as described for a `main` script below.
+- If the schema of some tables cannot be rolled back, `tailor deploy` still fails with the step's original error. It also warns `Migration <namespace>/<N> was not rolled back completely` and lists the tables that need manual repair. Check those tables in the workspace and delete or repair them by hand; deploying again does not release them.
+
 ### Settling a migration that stays in progress
 
 When you do not want to resume the migration with another deploy — you abandoned it, or you repaired the data by hand — settle it with `tailor tailordb migration resolve`. Pass exactly one of two options:
@@ -891,7 +909,7 @@ Use `tailor tailordb migration rebaseline` rather than combining `migration gene
 
 ## Failure Recovery
 
-A script that exports `steps` follows different rules once one of its steps has completed: the migration stays in progress and the next deploy resumes it. See [Splitting a migration into steps](#splitting-a-migration-into-steps). Otherwise, if the pre-migration phase or `migrate.ts` fails:
+A script that exports `steps` follows different rules once one of its steps has completed: the migration stays in progress and the next deploy resumes it, unless the script exports `onFailure = "rollback"`. See [Splitting a migration into steps](#splitting-a-migration-into-steps) and [Rolling back instead of resuming](#rolling-back-instead-of-resuming). Otherwise, if the pre-migration phase or `migrate.ts` fails:
 
 - **The transaction rolls back** for that migration's script. Database changes the script made are undone.
 - **The pre-migration schema changes are rolled back** to the prior checkpoint: tables that already existed are restored to their previous shape, and tables the migration newly introduced are dropped. The workspace is left at its prior checkpoint and prior schema — not half-applied.
