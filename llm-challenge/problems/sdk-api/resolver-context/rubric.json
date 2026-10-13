@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "resolver-defined-and-wired",
+      "claim": "A resolver is default-exported with `createResolver(...)` and matched by a `resolver` namespace `files` glob in defineConfig."
+    },
+    {
+      "id": "caller-identifier",
+      "claim": "The resolver body reads the caller identifier from the body argument's `caller` (or `invoker`), handling the anonymous case where it is null."
+    },
+    {
+      "id": "env-derived-value",
+      "claim": "The resolver body includes a value derived from the body argument's `env`, and defineConfig defines that `env` key."
+    },
+    {
+      "id": "declared-output-shape",
+      "claim": "The resolver declares an `output` schema with `t` fields that matches the returned structured summary."
+    },
+    {
+      "id": "deterministic",
+      "claim": "The resolver contacts no external services and its result depends only on the input, caller, and env."
+    }
+  ]
+}

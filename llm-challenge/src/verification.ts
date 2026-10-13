@@ -51,6 +51,7 @@ const TYPESCRIPT_COMPILER_ARGS = [
 const TYPESCRIPT_NO_EMIT_COMMAND = `podman run [isolated verifier] node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
 const TYPESCRIPT_VERIFIER_SCRIPT = `exec node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
 const TYPECHECK_TIMEOUT_MS = 120_000;
+const MIN_CONTAINER_RUNTIME_EXIT_CODE = 125;
 const PROCESS_OUTPUT_LIMIT_BYTES = 1024 * 1024;
 const CONTENT_FILE_LIMIT = 100;
 const CONTENT_FILE_BYTES_LIMIT = 1024 * 1024;
@@ -479,9 +480,11 @@ async function runCommandCheck(
     appendCommandLog(logPaths.stdoutPath, check.command, result.stdout),
     appendCommandLog(logPaths.stderrPath, check.command, result.stderr),
   ]);
+  const verifierFailed =
+    result.spawnFailed || result.timedOut || result.exitCode >= MIN_CONTAINER_RUNTIME_EXIT_CODE;
   return {
     ...check,
-    outcome: result.exitCode === 0 ? "satisfied" : "unsatisfied",
+    outcome: verifierFailed ? "error" : result.exitCode === 0 ? "satisfied" : "unsatisfied",
     exitCode: result.exitCode,
     durationMs: Date.now() - startedAt,
     outputTail: tailText(`${result.stdout}${result.stderr}`),
@@ -529,6 +532,7 @@ async function runProcess(
   stderr: string;
   exitCode: number;
   timedOut: boolean;
+  spawnFailed: boolean;
   outputTruncated: boolean;
 }> {
   return await new Promise((resolve) => {
@@ -579,6 +583,7 @@ async function runProcess(
         stderr: error.message,
         exitCode: 127,
         timedOut,
+        spawnFailed: true,
         outputTruncated,
       });
     });
@@ -593,6 +598,7 @@ async function runProcess(
         stderr: Buffer.concat(stderr).toString("utf8"),
         exitCode: exitCode ?? 1,
         timedOut,
+        spawnFailed: false,
         outputTruncated,
       });
     });

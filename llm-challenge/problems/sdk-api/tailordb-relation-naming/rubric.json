@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "customer-and-order-tables",
+      "claim": "Customer and sales order tables are defined with `db.table(...)`, exported by name, and matched by a `db` namespace `files` glob in defineConfig."
+    },
+    {
+      "id": "n-to-1-relation",
+      "claim": "The sales order table has a customer id field declared with `db.uuid().relation({ type: \"n-1\", toward: { table: <customer> } })` (or the deprecated `toward.type`)."
+    },
+    {
+      "id": "backward-name",
+      "claim": "The relation sets `backward` to a clear plural collection name for orders on the customer side (for example \"orders\" or \"salesOrders\")."
+    },
+    {
+      "id": "forward-name-clear",
+      "claim": "The forward relation name is clear: the field ends in `Id`/`ID`/`id` so the generated name is the customer, or `toward.as` sets an explicit name."
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import type { Problem, SdkProfile } from "./types";
 
 const WORKSPACE_SDK_TARBALL = ".challenge/tailor-platform-sdk.tgz";
 const WORKSPACE_PNPM_STORE = ".pnpm-store";
+const AGENT_SKILL_ROOTS = [".claude/skills", ".agents/skills"];
 const WORKSPACE_PROMPT_PREAMBLE = `You are working in an isolated challenge workspace.
 
 Workspace facts:
@@ -51,6 +52,7 @@ export async function prepareWorkspace(options: {
   problem: Problem;
   runIndex: number;
   sdkTarballPath: string;
+  skillsSourceDir?: string;
 }): Promise<RunArtifactPaths> {
   const paths = buildRunArtifactPaths(options.outputDir, options.problem, options.runIndex);
   await fs.rm(paths.artifactDir, { recursive: true, force: true });
@@ -68,6 +70,9 @@ export async function prepareWorkspace(options: {
   await ensureNpmrc(paths.worktreePath);
   await fs.mkdir(path.join(paths.worktreePath, WORKSPACE_PNPM_STORE), { recursive: true });
   await ensureTsconfig(paths.worktreePath);
+  if (options.skillsSourceDir !== undefined) {
+    await installAgentSkills(options.skillsSourceDir, paths.worktreePath);
+  }
   await ensureGitignore(paths.worktreePath);
   await initializeWorkspaceGit(paths.worktreePath);
   return paths;
@@ -86,6 +91,23 @@ export async function pruneWorkspaceDeps(worktreePath: string): Promise<void> {
       fs.rm(path.join(worktreePath, name), { recursive: true, force: true }),
     ),
   );
+}
+
+async function installAgentSkills(skillsSourceDir: string, worktreePath: string): Promise<void> {
+  const skills = (await fs.readdir(skillsSourceDir, { withFileTypes: true })).filter((entry) =>
+    entry.isDirectory(),
+  );
+  for (const root of AGENT_SKILL_ROOTS) {
+    for (const skill of skills) {
+      await fs.cp(
+        path.join(skillsSourceDir, skill.name),
+        path.join(worktreePath, root, skill.name),
+        {
+          recursive: true,
+        },
+      );
+    }
+  }
 }
 
 async function copyScaffold(scaffoldPath: string, worktreePath: string): Promise<void> {

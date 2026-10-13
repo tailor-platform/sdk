@@ -153,6 +153,10 @@ or end with a hyphen. It is used for the generated file name, the workflow
 select which workspace gets deployed (see
 [Targeting a workspace](#targeting-a-workspace)).
 
+For a preview target, the name can be at most 50 characters: each pull request
+gets its own workspace named `<name>-pr-<number>`, which must fit in 63
+characters.
+
 ## Targeting a workspace
 
 The generated `plan` and `deploy` jobs target a workspace by **id**, read from
@@ -228,12 +232,15 @@ Everything else is yours, and re-running `setup` keeps it:
   default, and re-running `setup` keeps your edits to it. If you delete it,
   re-running `setup` adds the default back.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
-  `container`, and `env`. On a managed job generated without an
-  `environment:` (such as `tailor-tag-guard` or `tailor-erd-preview`), you can
-  also add one, for example so a step you added there can read that GitHub
-  Environment's secrets. The `environment:` of `tailor-plan`, `tailor-deploy`,
-  and the preview jobs comes from `--environment`, so change it with that
-  option instead.
+  `container`, and `env`. If every managed job that re-running `setup` keeps
+  uses the same `runs-on` you set, such as self-hosted runners, a managed job
+  it adds (for example, the ERD preview jobs when you add `--erd-preview`)
+  uses it too; otherwise, set the new job's `runs-on` yourself. On a managed
+  job generated without an `environment:` (such as `tailor-tag-guard` or
+  `tailor-erd-preview`), you can also add one, for example so a step you added
+  there can read that GitHub Environment's secrets. The `environment:` of
+  `tailor-plan`, `tailor-deploy`, and the preview jobs comes from
+  `--environment`, so change it with that option instead.
 - **These inputs of managed steps:** `ignore` on `tailor-generate-check` and
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
