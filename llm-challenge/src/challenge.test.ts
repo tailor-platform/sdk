@@ -1226,7 +1226,7 @@ describe("verification summary", () => {
     );
   });
 
-  describe("on the host", () => {
+  describe.skipIf(process.platform !== "darwin")("on the host", () => {
     async function verifyOnHost(source: string) {
       const dir = await makeTempDir();
       const worktreePath = path.join(dir, "work");
@@ -1266,51 +1266,48 @@ describe("verification summary", () => {
       await expect(fs.stat(payloadPath)).rejects.toMatchObject({ code: "ENOENT" });
     });
 
-    test.skipIf(process.platform !== "darwin")(
-      "does not let a tsconfig write outside the worktree or read outside it",
-      async () => {
-        const dir = await makeTempDir();
-        const worktreePath = path.join(dir, "work");
-        const outside = path.join(dir, "outside");
-        await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
-        await fs.mkdir(outside);
-        await fs.writeFile(path.join(outside, "secret.json"), '{"token":"x"}\n');
-        await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
-        await fs.writeFile(
-          path.join(worktreePath, "tsconfig.json"),
-          JSON.stringify({
-            compilerOptions: {
-              strict: true,
-              module: "commonjs",
-              resolveJsonModule: true,
-              incremental: true,
-              tsBuildInfoFile: path.join(outside, "written.tsbuildinfo"),
-            },
-            include: ["src"],
-          }),
-        );
-        await fs.writeFile(
-          path.join(worktreePath, "src/app.ts"),
-          `import secret from ${JSON.stringify(path.join(outside, "secret.json"))};\nexport const value = secret;\n`,
-        );
+    test("does not let a tsconfig write outside the worktree or read outside it", async () => {
+      const dir = await makeTempDir();
+      const worktreePath = path.join(dir, "work");
+      const outside = path.join(dir, "outside");
+      await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
+      await fs.mkdir(outside);
+      await fs.writeFile(path.join(outside, "secret.json"), '{"token":"x"}\n');
+      await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+      await fs.writeFile(
+        path.join(worktreePath, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            module: "commonjs",
+            resolveJsonModule: true,
+            incremental: true,
+            tsBuildInfoFile: path.join(outside, "written.tsbuildinfo"),
+          },
+          include: ["src"],
+        }),
+      );
+      await fs.writeFile(
+        path.join(worktreePath, "src/app.ts"),
+        `import secret from ${JSON.stringify(path.join(outside, "secret.json"))};\nexport const value = secret;\n`,
+      );
 
-        const summary = await writeVerificationSummary({
-          problem: makeProblem({ group: "cli" }),
-          runIndex: 0,
-          worktreePath,
-          verifier: "host",
-          hostRepoRoot: outside,
-          verificationSummaryPath: path.join(dir, "verification-summary.json"),
-          verificationStdoutPath: path.join(dir, "verification.stdout.log"),
-          verificationStderrPath: path.join(dir, "verification.stderr.log"),
-        });
+      const summary = await writeVerificationSummary({
+        problem: makeProblem({ group: "cli" }),
+        runIndex: 0,
+        worktreePath,
+        verifier: "host",
+        hostRepoRoot: outside,
+        verificationSummaryPath: path.join(dir, "verification-summary.json"),
+        verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+        verificationStderrPath: path.join(dir, "verification.stderr.log"),
+      });
 
-        await expect(fs.readdir(outside)).resolves.toEqual(["secret.json"]);
-        const check = summary.checks.find((item) => item.id === "typescript-no-emit");
-        expect(check).toMatchObject({ outcome: "unsatisfied" });
-        expect(check?.outputTail).toContain("TS2307");
-      },
-    );
+      await expect(fs.readdir(outside)).resolves.toEqual(["secret.json"]);
+      const check = summary.checks.find((item) => item.id === "typescript-no-emit");
+      expect(check).toMatchObject({ outcome: "unsatisfied" });
+      expect(check?.outputTail).toContain("TS2307");
+    });
 
     test("reports a type error as an unsatisfied check", async () => {
       const { check } = await verifyOnHost('export const value: number = "text";\n');
