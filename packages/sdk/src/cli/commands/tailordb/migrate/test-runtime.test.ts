@@ -291,7 +291,10 @@ describe("migration test runtime", () => {
         pollInterval: 5_000,
         timeout: 50,
       }),
-    ).rejects.toMatchObject({ code: "MIGRATION_TEST_CLONE_TIMEOUT" });
+    ).rejects.toMatchObject({
+      code: "MIGRATION_TEST_CLONE_TIMEOUT",
+      message: "Application data clone timed out after 50 ms.",
+    });
     expect(Date.now() - startedAt).toBeLessThan(1_000);
   });
 
