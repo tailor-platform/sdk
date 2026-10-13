@@ -201,9 +201,27 @@ export async function preflightClaudeRunner(options: {
     ],
     { env: { [CLAUDE_OAUTH_TOKEN_ENV]: options.token }, rejectOnNonZero: false },
   );
-  const stderr = redactSecret(result.stderr, options.token);
+  return evaluateClaudePreflight({
+    runtime: options.runtime,
+    model: options.model,
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: redactSecret(result.stderr, options.token),
+    durationMs: Date.now() - startedAt,
+  });
+}
+
+export function evaluateClaudePreflight(options: {
+  runtime: ClaudeRuntimeConfig;
+  model: string;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+}): ClaudePreflightResult {
+  const { stderr } = options;
   const claudeVersion = /(\d+\.\d+\.\d+) \(Claude Code\)/.exec(stderr)?.[1];
-  const trace = summarizeClaudeTrace(parseJsonLines(result.stdout));
+  const trace = summarizeClaudeTrace(parseJsonLines(options.stdout));
   const problems: string[] = [];
   const pinnedVersion = parsePinnedVersion(options.runtime.claudePackage);
   if (pinnedVersion !== undefined && claudeVersion !== pinnedVersion) {
@@ -225,8 +243,8 @@ export async function preflightClaudeRunner(options: {
   }
   return {
     skipped: false,
-    exitCode: result.exitCode === 0 && problems.length > 0 ? 1 : (result.exitCode ?? undefined),
-    durationMs: Date.now() - startedAt,
+    exitCode: options.exitCode === 0 && problems.length > 0 ? 1 : (options.exitCode ?? undefined),
+    durationMs: options.durationMs,
     stderr: [...problems, stderr.trim()].filter(Boolean).join("\n"),
     claudeVersion,
   };
