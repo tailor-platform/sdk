@@ -104,6 +104,8 @@ export async function writeArtifactSummary(options: {
   return summary;
 }
 
+const KILLED_EXIT_CODES: ReadonlySet<number> = new Set([137, 143]);
+
 export async function classifySolverFailure(options: {
   agent: SolverAgent;
   requestedModel: string;
@@ -149,10 +151,30 @@ export async function classifySolverFailure(options: {
   ) {
     return "runner-startup";
   }
+  if (hasRejectedRequest(await readJsonLines(options.tracePath))) {
+    return "api-error";
+  }
+  if (options.solverExitCode !== undefined && KILLED_EXIT_CODES.has(options.solverExitCode)) {
+    return "killed";
+  }
   if (options.solverExitCode !== undefined) {
     return "solver-nonzero";
   }
   return "unknown";
+}
+
+function hasRejectedRequest(events: unknown[]): boolean {
+  return events.some((event) => {
+    if (!isObject(event) || event.type !== "turn.failed" || !isObject(event.error)) {
+      return false;
+    }
+    try {
+      const body = JSON.parse(String(event.error.message)) as unknown;
+      return isObject(body) && isObject(body.error) && body.error.type === "invalid_request_error";
+    } catch {
+      return false;
+    }
+  });
 }
 
 function classifyClaudeRun(
@@ -173,11 +195,16 @@ function classifyClaudeRun(
   if (apiErrorStatus === 401 || apiErrorStatus === 403) {
     return "auth";
   }
-  if (typeof apiErrorStatus === "number" && apiErrorStatus >= 500) {
+  if (typeof apiErrorStatus === "number" && apiErrorStatus >= 400) {
     return "api-error";
   }
   if (trace.result === undefined) {
-    return solverExitCode === 0 ? "unknown" : "runner-startup";
+    if (solverExitCode === 0) {
+      return "unknown";
+    }
+    return solverExitCode !== undefined && KILLED_EXIT_CODES.has(solverExitCode)
+      ? "killed"
+      : "runner-startup";
   }
   return "solver-nonzero";
 }

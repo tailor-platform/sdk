@@ -127,6 +127,7 @@ export type SolverFailureKind =
   | "model-mismatch"
   | "api-error"
   | "runner-startup"
+  | "killed"
   | "solver-nonzero"
   | "unknown";
 
@@ -137,6 +138,7 @@ export const INFRASTRUCTURE_FAILURE_KINDS: ReadonlySet<SolverFailureKind> = new 
   "model-mismatch",
   "api-error",
   "runner-startup",
+  "killed",
   "unknown",
 ]);
 

@@ -654,6 +654,48 @@ describe("artifact summary", () => {
       }),
     ).resolves.toBe("runner-startup");
   });
+
+  test("classifies Codex rejected requests and killed processes as environment failures", async () => {
+    const dir = await makeTempDir();
+    const tracePath = path.join(dir, "trace.jsonl");
+    const solverStdoutPath = path.join(dir, "solver.stdout.log");
+    const solverStderrPath = path.join(dir, "solver.stderr.log");
+    await fs.writeFile(solverStdoutPath, "");
+    await fs.writeFile(solverStderrPath, "");
+    const classify = (solverExitCode: number) =>
+      classifySolverFailure({
+        agent: "codex",
+        requestedModel: "gpt-5.6-luna",
+        timedOut: false,
+        solverExitCode,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      });
+
+    await fs.writeFile(
+      tracePath,
+      `${JSON.stringify({
+        type: "turn.failed",
+        error: {
+          message: JSON.stringify({
+            type: "error",
+            status: 400,
+            error: {
+              type: "invalid_request_error",
+              message: "The 'gpt-5.6-luna' model requires a newer version of Codex.",
+            },
+          }),
+        },
+      })}\n`,
+    );
+    await expect(classify(1)).resolves.toBe("api-error");
+
+    await fs.writeFile(tracePath, "");
+    await expect(classify(137)).resolves.toBe("killed");
+    await expect(classify(143)).resolves.toBe("killed");
+    await expect(classify(1)).resolves.toBe("solver-nonzero");
+  });
 });
 
 describe("claude artifact summary", () => {
@@ -762,6 +804,10 @@ describe("claude artifact summary", () => {
     await expect(
       classify([{ type: "result", subtype: "success", is_error: true, api_error_status: 529 }], 1),
     ).resolves.toBe("api-error");
+    await expect(
+      classify([{ type: "result", subtype: "success", is_error: true, api_error_status: 400 }], 1),
+    ).resolves.toBe("api-error");
+    await expect(classify([], 137)).resolves.toBe("killed");
     await expect(classify([], 1)).resolves.toBe("runner-startup");
     await expect(classify([], 0)).resolves.toBe("unknown");
     await expect(classify(fixture.slice(0, 3), 0)).resolves.toBe("unknown");
