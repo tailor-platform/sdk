@@ -13,6 +13,14 @@ Use this workflow when the user asks whether an SDK/API change improves `llm-cha
 - Keep non-tested variables identical: `agent`, `profile`, `runs`, `concurrency`, `model`, `effort`, `max-seconds`, and solver image.
 - Create a temp JSONL summary file before starting, for example `/tmp/sdk-llm-ab-<stamp>.jsonl`.
 
+## Leave Headroom Before Comparing
+
+A comparison needs a baseline that still fails sometimes. When every run passes (for example 66 of 66 runs, a pass rate of 100.0% with a 95% confidence interval of 100.0-100.0%), the interval sits on the ceiling, an improvement cannot show up, and the result is inconclusive by construction.
+
+- Grade the baseline alone first (`challenge grade --report <baseline report.json>`). If the interval's lower bound is above about 90%, the setup has no headroom for this comparison.
+- Create headroom with a weaker solver (for example `--model claude-haiku-5-5`) or with problems the baseline fails at least once, and keep that choice identical for both variants. Aim for a baseline pass rate well below 100% so the confidence intervals have room to separate.
+- A timeout is excluded, not scored as a failure. Read `excludedByReason` and `unscoredProblems` in `summary.json` before reading the pass rates: a variant that makes the solver time out can look better only because those problems left the denominator.
+
 ## Run Variants
 
 Run one variant at a time when usage limits are a risk; otherwise use the same confirmed concurrency for both variants.
@@ -89,6 +97,10 @@ Then append a `variant-summary` per variant and a `final-all-summary`. Summaries
 - For after variants, verify that solvers actually used the new affordance by searching `work/` for the new public API. If adoption is partial, say so.
 - Treat a run with `solverExitCode = 0` but `success = false` as an unsuccessful run; read its failing claims in `grade.json` and the verification artifacts before explaining why.
 - Keep SDK/API conclusions separate from challenge-side or infrastructure issues.
+
+## Where Results Live
+
+`llm-challenge/results/` is git-ignored, so run and grade outputs are not part of a PR's diff. Put what a reviewer needs to judge the comparison in the PR description instead: the exact `challenge run` and `challenge grade` commands, both `sdkRef` values, the solver and judge models, and the per-variant table from `summary.json` (pass rate, 95% confidence interval, scored, excluded and error counts, `unscoredProblems`). Keep the output directories until the PR is merged so a reviewer can ask for a trace or a `grade.json`.
 
 ## Report
 
