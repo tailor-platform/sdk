@@ -104,6 +104,7 @@ function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotF
       start: Number(remoteField.serial.start),
       ...(remoteField.serial.maxValue && { maxValue: Number(remoteField.serial.maxValue) }),
       ...(remoteField.serial.format && { format: remoteField.serial.format }),
+      ...(remoteField.serial.gapless && { gapless: true }),
     };
   }
 
@@ -684,6 +685,13 @@ function addSerialDifferences(
     "serial.format",
     remoteField.serial?.format ?? "",
     snapshotField.serial?.format ?? "",
+  );
+  addFieldDifference(
+    differences,
+    prefix,
+    "serial.gapless",
+    remoteField.serial?.gapless ?? false,
+    snapshotField.serial?.gapless ?? false,
   );
 }
 

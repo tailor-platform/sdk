@@ -441,6 +441,15 @@ db.string().serial({
 });
 ```
 
+Set `gapless: true` to number records without gaps. A number is used only by a create that commits, so a create that fails leaves no hole. Numbered creates of the table run one at a time, so use it only when contiguous numbering is required. See the [TailorDB Serial documentation](https://docs.tailor.tech/guides/tailordb/fields#serial) for what the gapless guarantee covers.
+
+```typescript
+db.int().serial({
+  start: 1,
+  gapless: true,
+});
+```
+
 ### Common Fields
 
 ```typescript

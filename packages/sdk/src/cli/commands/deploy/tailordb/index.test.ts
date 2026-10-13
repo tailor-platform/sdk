@@ -880,6 +880,77 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
 
+    test.each([
+      { local: true, remote: undefined, updates: 1 },
+      { local: undefined, remote: true, updates: 1 },
+      { local: true, remote: true, updates: 0 },
+      { local: false, remote: undefined, updates: 0 },
+    ])(
+      "compares gapless serial (local $local, remote $remote)",
+      async ({ local, remote, updates }) => {
+        const tailordbType: TailorDBType = {
+          name: "Invoice",
+          pluralForm: "Invoices",
+          description: "Invoice table",
+          fields: {
+            number: {
+              name: "number",
+              config: {
+                type: "integer",
+                required: true,
+                serial: { start: 1, ...(local !== undefined && { gapless: local }) },
+              },
+            },
+          },
+          forwardRelationships: {},
+          backwardRelationships: {},
+          settings: {},
+          permissions: {},
+          files: {},
+        };
+
+        const tailorDBService = createMockTailorDBService("test-tailordb");
+        Object.defineProperty(tailorDBService, "types", {
+          value: { [tailordbType.name]: tailordbType },
+        });
+
+        const client = createRemoteTypeClient("test-tailordb", {
+          name: "Invoice",
+          description: "Invoice table",
+          pluralForm: "invoices",
+          fields: {
+            number: {
+              type: "integer",
+              required: true,
+              allowedValues: [],
+              description: "",
+              validate: [],
+              array: false,
+              index: false,
+              unique: false,
+              foreignKey: false,
+              vector: false,
+              fields: {},
+              serial: { start: "1", ...(remote !== undefined && { gapless: remote }) },
+            },
+          },
+        });
+
+        const ctx: PlanContext = {
+          client,
+          workspaceId,
+          application: createMockApplication([tailorDBService]),
+          forRemoval: false,
+          config: mockConfig,
+          noSchemaCheck: true,
+        };
+
+        const result = await planTailorDB(ctx);
+
+        expect(result.changeSet.type.updates).toHaveLength(updates);
+      },
+    );
+
     test("treats permission policy order differences as unchanged", async () => {
       // Committed migration snapshots can carry the same permission policies in
       // a different array order than the current config parse; the platform
