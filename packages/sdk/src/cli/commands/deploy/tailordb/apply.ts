@@ -575,11 +575,6 @@ export async function applyTailorDB(
     }
 
     const migratingNamespaceNames = new Set(pendingMigrations.map((m) => m.namespace));
-    for (const namespaceName of Object.keys(maintenanceModeCheckpoints)) {
-      if (!migratingNamespaceNames.has(namespaceName)) continue;
-      await clearMaintenanceModeRecord(client, migrationContext.workspaceId, namespaceName);
-    }
-
     if (pendingMigrations.length > 0) {
       // Migration flow: Execute each migration sequentially (pre -> script -> post)
       // This ensures intermediate states are properly handled when scripts depend on them
@@ -1098,7 +1093,11 @@ export async function applyTailorDB(
           migrationContext.executorUsedTables,
           migrationContext.workspaceId,
         );
-        for (const namespaceName of recordedNamespaces) {
+        const namespacesWithRecords = new Set([
+          ...recordedNamespaces,
+          ...Object.keys(maintenanceModeCheckpoints),
+        ]);
+        for (const namespaceName of namespacesWithRecords) {
           if (!restorationSnapshots.has(namespaceName)) continue;
           await clearRecordAfterRelease(restoreClient, migrationContext.workspaceId, namespaceName);
         }

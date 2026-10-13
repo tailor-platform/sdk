@@ -1797,7 +1797,54 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       expect(remoteCheckpoint.maintenanceModeChanges).toEqual([]);
     });
 
-    test("clears a checkpoint an earlier deploy recorded before running migrations", async () => {
+    test("keeps an earlier maintenance record when listing tables fails", async () => {
+      const client = createMockClient({
+        existingSettings: { Order: { ...restricted, bulkUpsert: false } },
+      });
+      const planResult = createMockPlanResult({
+        creates: [],
+        updates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "migration",
+      });
+      snapshotState.tablesByVersion = { 0: { Order: orderTable() }, 1: { Order: orderTable() } };
+      vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
+        async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
+          remoteStates?.set("test-ns", {
+            metadataExists: true,
+            number: 0,
+            historyId: null,
+            historyIdInvalid: false,
+            inProgress: null,
+            inProgressInvalid: false,
+            maintenanceModeCheckpoint: 0,
+          });
+          return [mkPendingMigration([])];
+        },
+      );
+      remoteCheckpoint.maintenanceMode = "m0000";
+      vi.mocked(client.listTailorDBTypes).mockRejectedValueOnce(new Error("table lookup failed"));
+
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        "table lookup failed",
+      );
+
+      expect(client.listTailorDBTypes).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: "test-workspace", namespaceName: "test-ns" }),
+      );
+      expect(client.updateTailorDBType).not.toHaveBeenCalled();
+      expect(remoteCheckpoint.number).toBe(0);
+      expect(remoteCheckpoint.maintenanceMode).toBe("m0000");
+      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([]);
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      expect(remoteCheckpoint.number).toBe(1);
+      expect(remoteCheckpoint.maintenanceMode).toBeNull();
+      expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+    });
+
+    test("clears a checkpoint an earlier deploy recorded after restoring tables", async () => {
       const client = createMockClient();
       const planResult = createMockPlanResult({
         creates: ["Order"],
