@@ -374,6 +374,7 @@ function describeSkippedTables(tables: readonly string[]): string {
 }
 
 interface RestrictionHistory {
+  maintenanceMode: boolean;
   /** Settings captured before any restriction was applied. */
   captured: MigrationRestrictionState;
   /** Tables that migration phases rewrote, which also disables their read. */
@@ -387,6 +388,7 @@ function restrictedByDeploy(
   tableNames: Iterable<string>,
   history: RestrictionHistory,
 ): string[] {
+  if (!history.maintenanceMode) return [];
   return [...new Set(tableNames)]
     .filter((tableName) => {
       const captured = history.captured.get(namespaceName)?.get(tableName);
@@ -754,6 +756,7 @@ export async function applyTailorDB(
       const unrolledBack: { migration: PendingMigration; tables: string[] }[] = [];
       const touchedTables: { namespace: string; tables: ReadonlySet<string> }[] = [];
       const restrictionHistory = (namespace: string): RestrictionHistory => ({
+        maintenanceMode: phaseSettings.restricted,
         captured: restrictionState,
         resumed: inProgressMigrations[namespace] !== undefined,
         touched: new Set(
@@ -1009,8 +1012,10 @@ export async function applyTailorDB(
               `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
             suggestion:
-              `Another deploy changed the checkpoint, so the tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). ` +
-              `${describeSkippedTables(tables)}Wait for the other deploy to finish, run \`tailor tailordb migration status --namespace ${namespaceName}\` to see the checkpoint and any migration in progress, then deploy again if the tables are still restricted.`,
+              (phaseSettings.restricted
+                ? `Another deploy changed the checkpoint, so the tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
+                : `Another deploy changed the checkpoint, so the table settings of namespace '${namespaceName}' are left unchanged. `) +
+              `${describeSkippedTables(tables)}Wait for the other deploy to finish, run \`tailor tailordb migration status --namespace ${namespaceName}\` to see the checkpoint and any migration in progress, then check the tables before deploying again.`,
             context: {
               namespace: namespaceName,
               expectedCheckpoint: expectedCheckpoint.number,
@@ -1043,7 +1048,9 @@ export async function applyTailorDB(
               `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
             suggestion:
-              `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). ` +
+              (phaseSettings.restricted
+                ? `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
+                : `The table settings of namespace '${namespaceName}' are left unchanged. `) +
               `${describeSkippedTables(tables)}Run \`tailor tailordb migration status --namespace ${namespaceName}\` to check the checkpoint, restore connectivity if it fails, then deploy again.`,
             context: {
               namespace: namespaceName,
@@ -1092,6 +1099,7 @@ export async function applyTailorDB(
           migrationContext.tailorDBInputs,
           migrationContext.executorUsedTables,
           migrationContext.workspaceId,
+          phaseSettings.restricted,
         );
         const namespacesWithRecords = new Set([
           ...recordedNamespaces,
@@ -1129,11 +1137,14 @@ export async function applyTailorDB(
         } catch (restorationError) {
           if (!migrationFailure) throw restorationError;
           unrestored = readUnrestoredTables(restorationError);
-          warnTablesLeftRestricted(
-            `Could not restore every TailorDB table after the migration failed: ${toError(restorationError).message}.`,
-            unrestored,
-            { namesUnknown: unrestored.every((entry) => entry.tables.length === 0) },
-          );
+          const reason = `Could not restore every TailorDB table after the migration failed: ${toError(restorationError).message}.`;
+          if (phaseSettings.restricted) {
+            warnTablesLeftRestricted(reason, unrestored, {
+              namesUnknown: unrestored.every((entry) => entry.tables.length === 0),
+            });
+          } else {
+            logger.warn(reason);
+          }
           logger.log("The original migration error is reported below.");
           if (restorationError instanceof Error) restorationFailures.restoration = restorationError;
         }
@@ -1152,6 +1163,13 @@ export async function applyTailorDB(
         );
         const remaining = tables.filter((tableName) => !lifted.has(tableName));
         if (remaining.length === 0) continue;
+        if (!phaseSettings.restricted) {
+          logger.warn(
+            `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely. Tables needing manual repair in namespace '${migration.namespace}': ${remaining.join(", ")}.`,
+          );
+          logger.log(ROLLBACK_LEFTOVER_RECOVERY);
+          continue;
+        }
         warnTablesLeftRestricted(
           `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely.`,
           [{ namespace: migration.namespace, tables: remaining }],

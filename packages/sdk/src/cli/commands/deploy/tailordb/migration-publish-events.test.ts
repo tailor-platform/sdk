@@ -5,6 +5,8 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { errorToJson } from "#/cli/shared/error-json";
+import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { applyTailorDB, captureMigrationFileState, type MaintenanceModeRelease } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
@@ -1574,6 +1576,58 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect(settings?.disableGqlOperations).toBeUndefined();
       }
     });
+
+    test.each(["rollback", "restoration", "checkpoint"] as const)(
+      "does not report restrictions with maintenance mode off after a %s failure",
+      async (failure) => {
+        using stderr = captureStderr();
+        const client = createMockClient();
+        const planResult = createMockPlanResult({
+          creates: failure === "rollback" ? ["Order"] : [],
+          subscribedTables: ["Order"],
+          maintenanceMode: false,
+        });
+        if (failure === "rollback") {
+          mockAddedOrderMigration();
+          vi.mocked(client.deleteTailorDBType).mockRejectedValueOnce(new Error("rollback failed"));
+        } else {
+          snapshotState.tablesByVersion = {
+            0: { Order: orderTable() },
+            1: { Order: orderTable() },
+          };
+          vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+            mkPendingMigration([]),
+          ]);
+        }
+        if (failure === "checkpoint") {
+          vi.mocked(migrationModule.updateMigrationLabel).mockImplementationOnce(async () => {
+            remoteCheckpoint.number = 2;
+            return true;
+          });
+        } else {
+          vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
+            new Error("script failed"),
+          );
+          if (failure === "restoration") {
+            vi.mocked(client.updateTailorDBType).mockRejectedValueOnce(new Error("restore failed"));
+          }
+        }
+
+        const error = await applyTailorDB(client, planResult, "create-update").catch(
+          (failure: unknown) => failure,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect(vi.mocked(migrationModule.executeMigrations)).toHaveBeenCalledWith(
+          expect.objectContaining({ maintenanceMode: false }),
+          expect.any(Array),
+          expect.any(Object),
+        );
+        const restrictionClaim =
+          /Still restricted|keep the restrictions|Tables that stay restricted/;
+        expect(stderr.output).not.toMatch(restrictionClaim);
+        expect(JSON.stringify(errorToJson(error))).not.toMatch(restrictionClaim);
+      },
+    );
 
     test("uses migration maintenance mode when the option is unset", async () => {
       const client = createMockClient();

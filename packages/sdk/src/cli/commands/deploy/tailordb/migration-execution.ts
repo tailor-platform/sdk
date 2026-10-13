@@ -806,6 +806,7 @@ export async function applyMigrationRestrictions(
  * @param tailorDBInputs - TailorDB deploy inputs for the run
  * @param executorUsedTables - Tables an enabled executor subscribes to
  * @param workspaceId - Target workspace ID
+ * @param maintenanceMode - Whether this deploy restricted the migrating namespaces
  */
 export async function restoreMigrationRestrictions(
   client: OperatorClient,
@@ -814,6 +815,7 @@ export async function restoreMigrationRestrictions(
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
   workspaceId: string,
+  maintenanceMode: boolean,
 ): Promise<void> {
   let firstError: Error | undefined;
   const unrestored: RestrictedTables[] = [];
@@ -845,7 +847,9 @@ export async function restoreMigrationRestrictions(
     throw withErrorDiagnostics(firstError, {
       code: "MIGRATION_RESTORE_FAILED",
       suggestion: [
-        `${RESTRICTED_TABLES_RECOVERY} Tables that stay restricted: ${describeUnrestored(unrestored)}.`,
+        maintenanceMode
+          ? `${RESTRICTED_TABLES_RECOVERY} Tables that stay restricted: ${describeUnrestored(unrestored)}.`
+          : `Tables whose settings could not be restored: ${describeUnrestored(unrestored)}. Check these tables in the workspace and repair their settings before retrying the deployment.`,
         carried.suggestion,
       ]
         .filter(Boolean)
