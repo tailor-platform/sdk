@@ -344,16 +344,19 @@ async function releaseRolledBackRun(
   workspaceId: string,
   namespace: string,
   migrationNumber: number,
-): Promise<void> {
+): Promise<boolean> {
   try {
     await clearMigrationInProgress(client, workspaceId, namespace);
   } catch (error) {
     logger.warn(
       `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migrationNumber)}: ` +
-        `${error instanceof Error ? error.message : String(error)}.`,
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        "The migration stays in progress and its tables stay in maintenance mode; deploy again to resume it.",
     );
+    return false;
   }
   await removeRunResources(client, workspaceId, namespace, migrationNumber);
+  return true;
 }
 
 function withholdTablesFromRestoration(
@@ -856,12 +859,13 @@ export async function applyTailorDB(
               ),
             });
             if (rollsBackOnFailure) {
-              await releaseRolledBackRun(
+              const released = await releaseRolledBackRun(
                 client,
                 migrationContext.workspaceId,
                 migration.namespace,
                 migration.number,
               );
+              if (!released) partialMigrations.set(migration.namespace, migration);
             }
             return error;
           };

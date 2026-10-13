@@ -2093,6 +2093,32 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         );
       });
 
+      test("keeps the namespace restricted and its run's resources when the in-progress record could not be cleared", async () => {
+        const client = createMockClient();
+        setPendingMigrations([
+          { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: rollbackForm },
+        ]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(partiallyApplied());
+        vi.mocked(migrationModule.clearMigrationInProgress).mockRejectedValueOnce(
+          new Error("label write rejected"),
+        );
+        const goodsReceiptWrites: unknown[] = [];
+        vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+          goodsReceiptWrites.push(structuredClone(request));
+          return {} as never;
+        });
+
+        await expect(
+          applyTailorDB(client, withInputs(createUpdatePlanResult()), "create-update"),
+        ).rejects.toThrow("failed at recompute");
+
+        // Restriction, Pre-phase and the rollback write; the restoring write never comes.
+        expect(goodsReceiptWrites).toHaveLength(3);
+        expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
+      });
+
       test("reports a new table that could not be dropped as needing manual repair", async () => {
         const client = createMockClient();
         setPendingMigrations([mkRollbackMigration()]);
