@@ -102,7 +102,11 @@ export async function resolveClaudeOAuthToken(options: {
   return fromFile;
 }
 
-export function buildClaudeSolverArgs(options: { model: string; effort: string }): string[] {
+export function buildClaudeSolverArgs(options: {
+  model: string;
+  effort: string;
+  permissionMode?: string;
+}): string[] {
   return [
     "-p",
     "--output-format",
@@ -113,7 +117,7 @@ export function buildClaudeSolverArgs(options: { model: string; effort: string }
     "--effort",
     options.effort,
     "--permission-mode",
-    "bypassPermissions",
+    options.permissionMode ?? "bypassPermissions",
     "--disallowedTools",
     SOLVER_DISALLOWED_TOOLS.join(","),
     "--strict-mcp-config",

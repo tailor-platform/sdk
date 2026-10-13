@@ -183,6 +183,11 @@ export async function runAgentProcess(options: {
   tracePath: string;
   maxSeconds: number;
   env?: Record<string, string>;
+  /** Use `env` as the whole environment instead of layering it over this process's. */
+  replaceEnv?: boolean;
+  cwd?: string;
+  /** Start the child as a process group leader and signal the group, so its descendants die with it. */
+  killProcessGroup?: boolean;
   onTimeout?: () => Promise<void>;
 }): Promise<SolverResult> {
   await Promise.all([
@@ -194,9 +199,27 @@ export async function runAgentProcess(options: {
   const startedAt = Date.now();
   const result = await new Promise<SolverResult>((resolve, reject) => {
     const child = spawn(options.command, options.args, {
-      env: options.env === undefined ? undefined : { ...process.env, ...options.env },
+      cwd: options.cwd,
+      env:
+        options.env === undefined
+          ? undefined
+          : options.replaceEnv
+            ? options.env
+            : { ...process.env, ...options.env },
+      detached: options.killProcessGroup,
       stdio: ["pipe", "pipe", "pipe"],
     });
+    const signal = (name: NodeJS.Signals) => {
+      if (options.killProcessGroup && child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, name);
+        } catch {
+          child.kill(name);
+        }
+      } else {
+        child.kill(name);
+      }
+    };
     const stdout = createWriteStream(options.solverStdoutPath, { flags: "a" });
     const stderr = createWriteStream(options.solverStderrPath, { flags: "a" });
     const trace = createWriteStream(options.tracePath, { flags: "a" });
@@ -205,8 +228,8 @@ export async function runAgentProcess(options: {
 
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
+      signal("SIGTERM");
+      setTimeout(() => signal("SIGKILL"), 5_000).unref();
     }, options.maxSeconds * 1000);
     timeout.unref();
 
