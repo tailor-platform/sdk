@@ -595,19 +595,70 @@ describe("workspace create with user defaults", () => {
     },
   );
 
-  test.each([
-    { name: "organization", line: `TAILOR_PLATFORM_ORGANIZATION_ID=${otherOrganizationId}` },
-    { name: "folder", line: `TAILOR_PLATFORM_FOLDER_ID=${defaultFolderId}` },
-  ])("does not use the defaults when the $name comes from an --env-file", async ({ line }) => {
-    fs.writeFileSync(envFilePath, `${line}\n`);
-    const client = stubClient();
+  describe.each([true, false])("--env-file with stored defaults: %s", (hasDefaults) => {
+    aroundEach(async (runTest) => {
+      if (!hasDefaults) seedUserDefaults({});
+      await runTest();
+    });
 
-    const result = await runCreateWithDefaults("--env-file", envFilePath);
+    test.each([
+      {
+        name: "organization",
+        folder: false,
+        args: [],
+        organizationId: otherOrganizationId,
+        folderId: undefined,
+      },
+      {
+        name: "organization and folder",
+        folder: true,
+        args: [],
+        organizationId: otherOrganizationId,
+        folderId: defaultFolderId,
+      },
+      {
+        name: "organization overridden by a flag",
+        folder: false,
+        args: ["--organization-id", profileOrganizationId],
+        organizationId: profileOrganizationId,
+        folderId: undefined,
+      },
+      {
+        name: "folder overridden by a flag",
+        folder: true,
+        args: ["--folder-id", validUUID],
+        organizationId: otherOrganizationId,
+        folderId: validUUID,
+      },
+    ])("uses the $name from an --env-file", async ({ folder, args, organizationId, folderId }) => {
+      fs.writeFileSync(
+        envFilePath,
+        `TAILOR_PLATFORM_ORGANIZATION_ID=${otherOrganizationId}\n${
+          folder ? `TAILOR_PLATFORM_FOLDER_ID=${defaultFolderId}\n` : ""
+        }`,
+      );
+      const client = stubClient();
 
-    expect(result.success).toBe(true);
-    expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: undefined, folderId: undefined }),
-    );
+      const result = await runCreateWithDefaults("--env-file", envFilePath, ...args);
+
+      expect(result.success).toBe(true);
+      expect(client.createWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId, folderId }),
+      );
+    });
+
+    test("rejects a folder-only --env-file before creating a workspace", async () => {
+      fs.writeFileSync(envFilePath, `TAILOR_PLATFORM_FOLDER_ID=${defaultFolderId}\n`);
+      const client = stubClient();
+
+      const result = await runCreateWithDefaults("--env-file", envFilePath);
+
+      expect(result.success).toBe(false);
+      const error = result.success ? undefined : result.error;
+      expect(isCLIError(error) && error.code).toBe("WORKSPACE_FOLDER_WITHOUT_ORGANIZATION");
+      expect(initOperatorClient).not.toHaveBeenCalled();
+      expect(client.createWorkspace).not.toHaveBeenCalled();
+    });
   });
 
   test.each(["TAILOR_PLATFORM_TOKEN", "TAILOR_TOKEN"])(

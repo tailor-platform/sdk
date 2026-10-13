@@ -245,6 +245,8 @@ export const createCommand = defineAppCommand({
   description: "Create a new Tailor Platform workspace.",
   notes: ml`
     Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with \`user update\`, unless TAILOR_PLATFORM_TOKEN is set. Giving either option replaces both defaults, and --folder-id requires --organization-id.
+
+    TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID are also read from --env-file. Command-line options take precedence over the corresponding environment variables. Empty values in the env file are treated as not given.
   `,
   args: z.strictObject({
     // createWorkspace() re-applies this schema for programmatic callers; here it
@@ -345,13 +347,10 @@ export const createCommand = defineAppCommand({
       };
     }
 
-    const organizationId = args["organization-id"];
-    const folderId = args["folder-id"];
-    // Values loaded by --env-file never reach args, yet they still name a location.
-    const locationGiven =
-      organizationId !== undefined ||
-      folderId !== undefined ||
-      Boolean(process.env[ORGANIZATION_ID_ENV] || process.env[FOLDER_ID_ENV]);
+    const organizationId =
+      args["organization-id"] ?? (process.env[ORGANIZATION_ID_ENV] || undefined);
+    const folderId = args["folder-id"] ?? (process.env[FOLDER_ID_ENV] || undefined);
+    const locationGiven = organizationId !== undefined || folderId !== undefined;
     const defaults = locationGiven
       ? undefined
       : await loadUserWorkspaceDefaults({ profile: args.profile });
