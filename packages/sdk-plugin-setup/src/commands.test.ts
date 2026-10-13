@@ -6,7 +6,8 @@ import { setupEnv } from "./env";
 import { printTargetNextSteps, setupTarget } from "./generate";
 import { setupUpdate } from "./update";
 
-vi.mock("./generate", () => ({
+vi.mock("./generate", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./generate")>()),
   setupTarget: vi.fn(),
   printTargetNextSteps: vi.fn(),
 }));

@@ -1,5 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { ExecutorJobStatus } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { protoEnumName } from "#/cli/shared/proto-enum";
 import { executorTargetTypeToString, executorTriggerTypeToString } from "./status";
 import type {
   ExecutorExecutor,
@@ -35,20 +36,7 @@ export interface ExecutorJobAttemptInfo {
 }
 
 function executorJobStatusToString(status: ExecutorJobStatus): string {
-  switch (status) {
-    case ExecutorJobStatus.PENDING:
-      return "PENDING";
-    case ExecutorJobStatus.RUNNING:
-      return "RUNNING";
-    case ExecutorJobStatus.SUCCESS:
-      return "SUCCESS";
-    case ExecutorJobStatus.FAILED:
-      return "FAILED";
-    case ExecutorJobStatus.CANCELED:
-      return "CANCELED";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumName(ExecutorJobStatus, status) ?? "UNSPECIFIED";
 }
 
 /**

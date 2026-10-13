@@ -91,7 +91,7 @@ jobs:
           package-manager: __PACKAGE_MANAGER__
           label: __WORKSPACE_NAME__
           # __WORKING_DIRECTORY__
-          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
   tailor-deploy:
@@ -128,7 +128,7 @@ jobs:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
-          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
       # __SEED_DATA_START__
       - id: seed-data

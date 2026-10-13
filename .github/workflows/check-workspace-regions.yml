@@ -1,0 +1,37 @@
+name: "Check Workspace Regions"
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  check:
+    name: Regions match the Platform
+    if: github.event.pull_request.head.ref == 'changeset-release/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Install deps
+        uses: $/.github/actions/install-deps
+
+      - name: Login as machine user
+        run: pnpm tailor login --machine-user
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
+      - name: Check workspace regions
+        working-directory: packages/sdk
+        run: pnpm exec tsx scripts/check-workspace-regions.ts

@@ -5,7 +5,7 @@
  */
 
 import * as fs from "node:fs";
-import { parseSync } from "oxc-parser";
+import { parseSync, Visitor } from "oxc-parser";
 import { CLIError } from "#/cli/shared/errors";
 import { orderMigrationSteps, type MigrationStepNode } from "#/utils/migration-steps";
 import type {
@@ -28,6 +28,18 @@ export type MigrationScriptForm =
   | { kind: "steps"; order: string[] };
 
 const STEP_KEYS = new Set(["run", "dependsOn"]);
+
+/**
+ * Whether a migration runs each step as its own job. A script with a single
+ * step runs like `main`, because there is nothing to resume between steps,
+ * unless an earlier deploy left it in progress and its record must be honored.
+ * @param form - How the migration script runs, or null without a script
+ * @param resumed - Whether an earlier deploy left this migration in progress
+ * @returns True when the migration runs through the step runner
+ */
+export function usesStepRunner(form: MigrationScriptForm | null, resumed: boolean): boolean {
+  return form?.kind === "steps" && (form.order.length > 1 || resumed);
+}
 
 function invalidScript(filePath: string, problem: string): Error {
   return CLIError({
@@ -222,6 +234,90 @@ export function analyzeMigrationScriptSource(
  */
 export function analyzeMigrationScript(filePath: string): MigrationScriptForm {
   return analyzeMigrationScriptSource(fs.readFileSync(filePath, "utf-8"), filePath);
+}
+
+// Earlier versions generated this comment, instead of a `TODO()` call, to mark what still needs a decision.
+const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
+
+/** How to resolve what {@link countUnresolvedTodos} counts, for the error that reports it. */
+export const UNRESOLVED_TODO_SUGGESTION =
+  "Replace each TODO() call with the value or logic it asks for, then remove the TODO import from ./db. " +
+  `For the ${LEGACY_REVIEW_MARKER} comment that earlier versions generated, review the code it marks, then remove the comment and the \`never\` annotation next to it.`;
+
+/**
+ * The local names a script binds the `TODO` export of `./db` to, by name and by
+ * namespace import. A `TODO` from another module, or one the script declares itself, is the author's own.
+ * @param program - Parsed migrate.ts
+ * @returns Local names of the import and of namespace imports
+ */
+function collectTodoBindings(program: Program): { names: Set<string>; namespaces: Set<string> } {
+  const names = new Set<string>();
+  const namespaces = new Set<string>();
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration" || statement.source.value !== "./db") continue;
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaces.add(specifier.local.name);
+      } else if (specifier.type === "ImportSpecifier") {
+        const imported =
+          specifier.imported.type === "Identifier"
+            ? specifier.imported.name
+            : String(specifier.imported.value);
+        if (imported === "TODO") names.add(specifier.local.name);
+      }
+    }
+  }
+  return { names, namespaces };
+}
+
+/**
+ * Count the placeholders a migration script still contains: the calls to the `TODO`
+ * of `./db` its generator left for a decision, and the review marker that earlier
+ * versions left in a comment.
+ * @param source - Source of migrate.ts
+ * @param filePath - Path used in the parse error
+ * @returns Number of unresolved placeholders
+ */
+export function countUnresolvedTodos(source: string, filePath: string): number {
+  const { program, comments, errors } = parseSync(filePath, source, {
+    sourceType: "module",
+    lang: "ts",
+  });
+  if (errors.length > 0) {
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_INVALID",
+      message: `Failed to parse ${filePath}: ${errors.map((error) => error.message).join("; ")}`,
+    });
+  }
+  const { names, namespaces } = collectTodoBindings(program);
+  let calls = 0;
+  new Visitor({
+    CallExpression(node) {
+      const { callee } = node;
+      if (callee.type === "Identifier" && names.has(callee.name)) calls++;
+      else if (
+        callee.type === "MemberExpression" &&
+        !callee.computed &&
+        callee.object.type === "Identifier" &&
+        namespaces.has(callee.object.name) &&
+        callee.property.type === "Identifier" &&
+        callee.property.name === "TODO"
+      ) {
+        calls++;
+      }
+    },
+  }).visit(program);
+  const markers = comments.filter((comment) => comment.value.includes(LEGACY_REVIEW_MARKER)).length;
+  return calls + markers;
+}
+
+/**
+ * Count the placeholders the migration script at a path still contains.
+ * @param filePath - Path to migrate.ts
+ * @returns Number of unresolved placeholders
+ */
+export function countUnresolvedTodosInFile(filePath: string): number {
+  return countUnresolvedTodos(fs.readFileSync(filePath, "utf-8"), filePath);
 }
 
 /**

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "migration-configured",
+      "claim": "tailor.config.ts sets `migration.directory` on the `db` namespace that holds the customer directory table."
+    },
+    {
+      "id": "customer-table-defined",
+      "claim": "A customer directory table is defined with `db.table(...)` in a file matched by that namespace's `files` glob."
+    },
+    {
+      "id": "migrate-generate-ran",
+      "claim": "The command history shows the local `tailor` binary (not a global install) running `tailordb migration generate` after the customer table was defined, and its output or the files it wrote show that the run succeeded."
+    },
+    {
+      "id": "migration-artifacts",
+      "claim": "The migrations directory holds the artifacts for the customer table: either `0000/schema.json` containing the table (the initial migration for a new model) or a later numbered directory whose `diff.json` describes the change."
+    }
+  ]
+}

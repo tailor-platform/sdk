@@ -15,6 +15,7 @@ import {
 import {
   bundleMigrationScript,
   bundleMigrationSteps,
+  bundleSingleStepMigration,
 } from "#/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import { formatMigrationScriptHint } from "#/cli/commands/tailordb/migrate/hints";
@@ -25,7 +26,10 @@ import {
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
   analyzeMigrationScript,
+  countUnresolvedTodosInFile,
   ignoredStepsWarning,
+  UNRESOLVED_TODO_SUGGESTION,
+  usesStepRunner,
 } from "#/cli/commands/tailordb/migrate/script-form";
 import {
   loadDiff,
@@ -46,6 +50,7 @@ import { type OperatorClient } from "#/cli/shared/client";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { spinner } from "#/cli/shared/spinner";
+import { assertDefined } from "#/utils/assert";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
 import {
   executeMigrationAsWorkflow,
@@ -70,6 +75,7 @@ interface MigrationExecutionOptions {
   configDir: string;
   appName: string;
   appId: string | undefined;
+  skipSteps?: ReadonlyMap<string, readonly string[]>;
 }
 
 /**
@@ -87,6 +93,8 @@ export interface MigrationContext {
   appName: string;
   /** Application id, used to label a migration's temporary resources. */
   appId: string | undefined;
+  /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
+  skipSteps?: ReadonlyMap<string, readonly string[]>;
 }
 
 interface ExecutionResult {
@@ -197,6 +205,14 @@ export async function detectPendingMigrations(
         );
       }
 
+      if (hasScript && countUnresolvedTodosInFile(scriptPath) > 0) {
+        throw CLIError({
+          code: "MIGRATION_SCRIPT_REVIEW_REQUIRED",
+          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} still has a TODO() call or review marker in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
+          suggestion: UNRESOLVED_TODO_SUGGESTION,
+        });
+      }
+
       const scriptForm = hasScript ? analyzeMigrationScript(scriptPath) : null;
       if (scriptForm?.kind === "main" && scriptForm.ignoredSteps) {
         logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(file.number)}`));
@@ -242,20 +258,35 @@ async function executeSingleMigration(
   sp: Spinner,
 ): Promise<ExecutionResult> {
   const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
-  if (migration.scriptForm?.kind === "steps") {
-    return executeStepsMigration(options, migration, migration.scriptForm, inProgress, sp);
+  const form = migration.scriptForm;
+  if (form?.kind === "steps" && usesStepRunner(form, inProgress !== undefined)) {
+    return executeStepsMigration(options, migration, form, inProgress, sp);
   }
 
   // Bundle the migration script
-  const bundleResult = await bundleMigrationScript(
-    migration.scriptPath,
-    migration.namespace,
-    migration.number,
-    env,
-    configDir,
-    migration.diff.temporal ?? false,
-    migration.diff.dateRepresentation ?? "legacy",
-  );
+  const temporal = migration.diff.temporal ?? false;
+  const dateDefault = migration.diff.dateRepresentation ?? "legacy";
+  const bundleResult =
+    form?.kind === "steps"
+      ? await bundleSingleStepMigration({
+          sourceFile: migration.scriptPath,
+          namespace: migration.namespace,
+          migrationNumber: migration.number,
+          env,
+          baseDir: configDir,
+          step: assertDefined(form.order[0], "a steps script has at least one step"),
+          temporal,
+          dateDefault,
+        })
+      : await bundleMigrationScript(
+          migration.scriptPath,
+          migration.namespace,
+          migration.number,
+          env,
+          configDir,
+          temporal,
+          dateDefault,
+        );
 
   const result = await executeMigrationAsWorkflow({
     client,
@@ -361,6 +392,16 @@ export async function clearMigrationInProgress(
  */
 export function isMigrationPartiallyApplied(error: unknown): boolean {
   return isCLIError(error) && error.code === "MIGRATION_PARTIALLY_APPLIED";
+}
+
+/**
+ * Whether a migration run's outcome is unknown, so its schema changes must
+ * stay in place until the user settles the migration.
+ * @param error - Failure raised while executing migrations
+ * @returns True for a run whose outcome is unknown
+ */
+export function isMigrationOutcomeUnknown(error: unknown): boolean {
+  return isCLIError(error) && error.code === "MIGRATION_OUTCOME_UNKNOWN";
 }
 
 function partiallyAppliedError(
@@ -498,6 +539,7 @@ async function executeStepsMigration(
 ): Promise<ExecutionResult> {
   const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
   const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
+  const skipSteps = (inProgress && options.skipSteps?.get(migration.namespace)) || [];
   const bundleResult = await bundleMigrationSteps({
     sourceFile: migration.scriptPath,
     namespace: migration.namespace,
@@ -505,6 +547,7 @@ async function executeStepsMigration(
     env,
     baseDir: configDir,
     order: form.order,
+    skipSteps,
     runnerJobFunctionName: migrationStepRunnerName(
       migrationWorkflowResourceName(migration.namespace, migration.number),
     ),
@@ -512,9 +555,10 @@ async function executeStepsMigration(
     dateDefault: migration.diff.dateRepresentation ?? "legacy",
   });
 
-  const notify = (level: "info" | "warn", message: string) => {
+  const notify = (level: "info" | "warn", message: string, suggestion?: string) => {
     sp.stop();
     logger[level](message);
+    if (suggestion) logger.log(suggestion);
     sp.start();
   };
   let mayBeRecorded = inProgress !== undefined;
@@ -531,6 +575,7 @@ async function executeStepsMigration(
       appName,
       appId,
       order: form.order,
+      skipSteps,
       inProgress,
       notify,
       onBeforeStart: async () => {
@@ -647,6 +692,7 @@ export async function executeMigrations(
       configDir: context.configDir,
       appName: context.appName,
       appId: context.appId,
+      skipSteps: context.skipSteps,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);
@@ -667,7 +713,11 @@ export async function executeMigrations(
           sp,
         );
       } catch (error) {
-        sp.fail(`Migration ${migrationLabel} failed`);
+        sp.fail(
+          isMigrationOutcomeUnknown(error)
+            ? `Could not confirm the outcome of migration ${migrationLabel}`
+            : `Migration ${migrationLabel} failed`,
+        );
         throw error;
       }
 

@@ -30,6 +30,7 @@ function referencedNames(content: string): string[] {
     if (comment && !line.trimStart().startsWith("# editable:")) continue;
     for (const match of line.matchAll(/\b(secrets|vars)\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
       const type = match[1] === "secrets" ? "secret" : "variable";
+      if (type === "secret" && line.includes(`vars.${match[2]!} ||`)) continue;
       if (match[2] !== "GITHUB_TOKEN") names.add(`${type} ${match[2]!}`);
     }
   }
@@ -101,7 +102,7 @@ describe("collectEnvironmentRequirements", () => {
 
     expect(env?.environment).toBe("stg");
     expect(env?.requirements.filter((r) => r.required).map((r) => [r.type, r.name])).toEqual([
-      ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID"],
+      ["variable", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID"],
       ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET"],
       ["variable", "TAILOR_PLATFORM_WORKSPACE_ID"],
     ]);
@@ -204,7 +205,7 @@ describe("renderGhCommands", () => {
   test("sets required entries without embedding any value", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
-    expect(lines).toContain("gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=stg/eu");
+    expect(lines).toContain("gh variable set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=stg/eu");
     expect(lines).toContain(
       "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env=stg/eu",
     );
@@ -256,7 +257,7 @@ describe("when the repository is known from the origin remote", () => {
         'gh api -X PUT "repos/tailor-platform/sdk/environments/production" --silent; fi',
     );
     expect(lines).toContain(
-      "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=production --repo=tailor-platform/sdk",
+      "gh variable set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env=production --repo=tailor-platform/sdk",
     );
   });
 
@@ -379,7 +380,7 @@ describe("renderTerraform", () => {
     expect(hcl).toContain(
       "#   export TF_VAR_production_tailor_platform_machine_user_client_secret=",
     );
-    expect(hcl).toContain("#   export TF_VAR_stg_eu_tailor_platform_machine_user_client_id=");
+    expect(hcl).toContain("#   export TF_VAR_stg_eu_tailor_platform_machine_user_client_secret=");
   });
 
   test("links to the Tailor Platform docs that explain organizations, folders, and machine users", () => {

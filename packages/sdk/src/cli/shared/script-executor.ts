@@ -5,7 +5,10 @@
  */
 
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
+import {
+  isFunctionExecutionTerminalStatus,
+  joinFunctionLogMessages,
+} from "#/cli/shared/function-execution";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -96,11 +99,7 @@ export async function waitForExecution(
     }
 
     // Check for terminal states
-    if (
-      execution.status === FunctionExecution_Status.SUCCESS ||
-      execution.status === FunctionExecution_Status.FAILED ||
-      execution.status === FunctionExecution_Status.CANCELED
-    ) {
+    if (isFunctionExecutionTerminalStatus(execution.status)) {
       return {
         status: execution.status,
         logs: joinFunctionLogMessages(execution.logEntries),

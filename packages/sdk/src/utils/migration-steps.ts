@@ -11,13 +11,22 @@ export interface MigrationStepNode {
 
 const STEP_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 
+/**
+ * Whether a name is valid for a migration step.
+ * @param name - Candidate step name
+ * @returns True when the name can be used as a step name
+ */
+export function isMigrationStepName(name: string): boolean {
+  return STEP_NAME_PATTERN.test(name);
+}
+
 function collectProblems(nodes: readonly MigrationStepNode[]): string[] {
   if (nodes.length === 0) return ["A migration's `steps` must define at least one step."];
 
   const problems: string[] = [];
   const names = new Set<string>();
   for (const node of nodes) {
-    if (!STEP_NAME_PATTERN.test(node.name)) {
+    if (!isMigrationStepName(node.name)) {
       problems.push(
         `Step name "${node.name}" is invalid: use a letter followed by up to 63 letters, digits, or underscores.`,
       );
