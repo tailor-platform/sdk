@@ -226,6 +226,7 @@ export class MaintenanceTimeline {
 
   /** @param at - When the window ended */
   finish(at = performance.now()): void {
+    if (this.#end !== undefined) return;
     this.#logPrevious(at);
     this.#end = at;
   }
