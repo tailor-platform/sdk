@@ -3,6 +3,7 @@ import { constants as fsConstants, promises as fs, realpathSync, statSync } from
 import { createRequire } from "node:module";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
+import { buildHostEnv } from "./claude-host-runner";
 import { DEFAULT_CODEX_IMAGE } from "./runner";
 import { tailText, toPosix } from "./utils";
 import {
@@ -49,6 +50,8 @@ const TYPESCRIPT_COMPILER_ARGS = [
   "false",
 ];
 const TYPESCRIPT_NO_EMIT_COMMAND = `podman run [isolated verifier] node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
+const TYPESCRIPT_HOST_COMPILER_ARGS = ["--noEmit", "--pretty", "false"];
+const TYPESCRIPT_HOST_COMMAND = `node [trusted typescript]/bin/tsc ${TYPESCRIPT_HOST_COMPILER_ARGS.join(" ")}`;
 const TYPESCRIPT_VERIFIER_SCRIPT = `exec node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
 const TYPECHECK_TIMEOUT_MS = 120_000;
 const MIN_CONTAINER_RUNTIME_EXIT_CODE = 125;
@@ -80,6 +83,7 @@ export async function writeVerificationSummary(options: {
   runIndex: number;
   worktreePath: string;
   verifierImage?: string;
+  verifier?: "podman" | "host";
   verificationSummaryPath: string;
   verificationStdoutPath: string;
   verificationStderrPath: string;
@@ -105,10 +109,16 @@ export async function writeVerificationSummary(options: {
   for (const check of checks) {
     completedChecks.push(
       check.kind === "command"
-        ? await runCommandCheck(check, options.worktreePath, options.verifierImage, {
-            stdoutPath: options.verificationStdoutPath,
-            stderrPath: options.verificationStderrPath,
-          })
+        ? await runCommandCheck(
+            check,
+            options.worktreePath,
+            options.verifierImage,
+            options.verifier,
+            {
+              stdoutPath: options.verificationStdoutPath,
+              stderrPath: options.verificationStderrPath,
+            },
+          )
         : check,
     );
   }
@@ -464,26 +474,40 @@ async function runCommandCheck(
   check: VerificationCheckResult,
   worktreePath: string,
   verifierImage: string | undefined,
+  verifier: "podman" | "host" | undefined,
   logPaths: { stdoutPath: string; stderrPath: string },
 ): Promise<VerificationCheckResult> {
   if (check.command === undefined) {
     return check;
   }
+  const onHost = verifier === "host";
+  const command = onHost ? TYPESCRIPT_HOST_COMMAND : check.command;
   const startedAt = Date.now();
-  const result = await runProcess(
-    "podman",
-    typeScriptVerifierArgs(worktreePath, verifierImage),
-    worktreePath,
-    TYPECHECK_TIMEOUT_MS,
-  );
+  const result = onHost
+    ? await runProcess(
+        process.execPath,
+        [path.join(TRUSTED_TYPESCRIPT_PATH, "bin", "tsc"), ...TYPESCRIPT_HOST_COMPILER_ARGS],
+        worktreePath,
+        TYPECHECK_TIMEOUT_MS,
+        buildHostEnv(process.env),
+      )
+    : await runProcess(
+        "podman",
+        typeScriptVerifierArgs(worktreePath, verifierImage),
+        worktreePath,
+        TYPECHECK_TIMEOUT_MS,
+      );
   await Promise.all([
-    appendCommandLog(logPaths.stdoutPath, check.command, result.stdout),
-    appendCommandLog(logPaths.stderrPath, check.command, result.stderr),
+    appendCommandLog(logPaths.stdoutPath, command, result.stdout),
+    appendCommandLog(logPaths.stderrPath, command, result.stderr),
   ]);
   const verifierFailed =
-    result.spawnFailed || result.timedOut || result.exitCode >= MIN_CONTAINER_RUNTIME_EXIT_CODE;
+    result.spawnFailed ||
+    result.timedOut ||
+    (!onHost && result.exitCode >= MIN_CONTAINER_RUNTIME_EXIT_CODE);
   return {
     ...check,
+    command,
     outcome: verifierFailed ? "error" : result.exitCode === 0 ? "satisfied" : "unsatisfied",
     exitCode: result.exitCode,
     durationMs: Date.now() - startedAt,
@@ -527,6 +551,7 @@ async function runProcess(
   args: string[],
   cwd: string,
   timeoutMs: number,
+  env?: Record<string, string>,
 ): Promise<{
   stdout: string;
   stderr: string;
@@ -538,6 +563,7 @@ async function runProcess(
   return await new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd,
+      env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];

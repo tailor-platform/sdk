@@ -1191,6 +1191,53 @@ describe("verification summary", () => {
     );
   });
 
+  describe("on the host", () => {
+    async function verifyOnHost(source: string) {
+      const dir = await makeTempDir();
+      const worktreePath = path.join(dir, "work");
+      const payloadPath = path.join(dir, "host-payload");
+      await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
+      await fs.mkdir(path.join(worktreePath, "node_modules/typescript/bin"), { recursive: true });
+      await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+      await fs.writeFile(
+        path.join(worktreePath, "tsconfig.json"),
+        JSON.stringify({ compilerOptions: { strict: true }, include: ["src"] }),
+      );
+      await fs.writeFile(path.join(worktreePath, "src/app.ts"), source);
+      await fs.writeFile(
+        path.join(worktreePath, "node_modules/typescript/bin/tsc"),
+        `require("node:fs").writeFileSync(${JSON.stringify(payloadPath)}, "executed");\n`,
+      );
+      const summary = await writeVerificationSummary({
+        problem: makeProblem({ group: "cli" }),
+        runIndex: 0,
+        worktreePath,
+        verifier: "host",
+        verificationSummaryPath: path.join(dir, "verification-summary.json"),
+        verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+        verificationStderrPath: path.join(dir, "verification.stderr.log"),
+      });
+      return {
+        check: summary.checks.find((item) => item.id === "typescript-no-emit"),
+        payloadPath,
+      };
+    }
+
+    test("type checks with the trusted compiler and never runs the workspace one", async () => {
+      const { check, payloadPath } = await verifyOnHost("export const value: number = 1;\n");
+
+      expect(check).toMatchObject({ outcome: "satisfied", exitCode: 0 });
+      await expect(fs.stat(payloadPath)).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    test("reports a type error as an unsatisfied check", async () => {
+      const { check } = await verifyOnHost('export const value: number = "text";\n');
+
+      expect(check).toMatchObject({ outcome: "unsatisfied" });
+      expect(check?.outputTail).toContain("TS2322");
+    });
+  });
+
   test("records verifier infrastructure failures as errors instead of unsatisfied checks", async () => {
     const dir = await makeTempDir();
     const worktreePath = path.join(dir, "work");
