@@ -3,10 +3,9 @@ import { z } from "zod";
 import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
-  platformConfigFromProfile,
   readEnvironmentToken,
   readPlatformConfig,
-  resolveUserTokenKey,
+  resolveSelectedUserEntry,
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
@@ -59,16 +58,16 @@ export const updateCommand = defineAppCommand({
     }
 
     const config = await readPlatformConfig();
-    const profileName = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
-    const profileEntry = profileName ? config.profiles[profileName] : undefined;
-    if (profileName && !profileEntry) {
+    const selected = resolveSelectedUserEntry(config, { profile: args.profile });
+    if (!selected) {
+      const profileName = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
       throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profileName}" not found` });
     }
+    const { profile: profileName, user, userEntry: entry } = selected;
     const login = {
       command: "tailor",
       args: ["login", ...recoveryContextArgs({ profile: profileName })],
     };
-    const user = profileEntry ? profileEntry.user : config.current_user;
     if (!user) {
       throw CLIError({
         code: "USER_NOT_SET",
@@ -77,11 +76,6 @@ export const updateCommand = defineAppCommand({
         next: login,
       });
     }
-    const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-    const userKey = resolveUserTokenKey(config, user, platformConfig, {
-      allowLegacyUserKey: false,
-    });
-    const entry = config.users[userKey];
     if (!entry) {
       throw CLIError({
         code: "USER_NOT_FOUND",

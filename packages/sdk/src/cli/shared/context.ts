@@ -854,6 +854,24 @@ export type UserWorkspaceDefaults = {
 };
 
 /**
+ * Resolve the selected user's entry on the selected platform without a legacy-key fallback.
+ * @param config - Platform config
+ * @param opts - Profile options
+ * @returns The selected user and entry, or undefined when the profile does not exist
+ */
+export function resolveSelectedUserEntry(config: PfConfig, opts?: LoadAccessTokenOptions) {
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  const profileEntry = profile ? config.profiles[profile] : undefined;
+  if (profile && !profileEntry) return undefined;
+  const user = profileEntry?.user ?? config.current_user;
+  const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  const userEntry = user
+    ? findUserEntry(config, user, platformConfig, { allowLegacyUserKey: false }).userEntry
+    : undefined;
+  return { profile, user, userEntry };
+}
+
+/**
  * Load the default organization and folder stored on the user that config-based authentication
  * selects. An environment token's identity is not a config user, so none apply while one is set.
  * @param opts - Profile options
@@ -863,14 +881,8 @@ export async function loadUserWorkspaceDefaults(
   opts?: LoadAccessTokenOptions,
 ): Promise<UserWorkspaceDefaults | undefined> {
   if (readEnvironmentToken()) return undefined;
-  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   const config = await readPlatformConfig();
-  const profileEntry = profile ? config.profiles[profile] : undefined;
-  if (profile && !profileEntry) return undefined;
-  const user = profileEntry?.user ?? config.current_user;
-  if (!user) return undefined;
-  const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-  const { userEntry } = findUserEntry(config, user, platformConfig, { allowLegacyUserKey: false });
+  const userEntry = resolveSelectedUserEntry(config, opts)?.userEntry;
   if (!userEntry?.default_organization_id) return undefined;
   return {
     organizationId: userEntry.default_organization_id,
