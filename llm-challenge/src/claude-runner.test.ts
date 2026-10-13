@@ -165,6 +165,47 @@ describe("workspace redaction", () => {
   });
 });
 
+describe("secret in files too large to rewrite", () => {
+  const SIZE = 11 * 1024 * 1024;
+
+  async function setUp(files: Record<string, Buffer>) {
+    const dir = await makeTempDir();
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(worktreePath);
+    for (const [name, contents] of Object.entries(files)) {
+      await fs.writeFile(path.join(worktreePath, name), contents);
+    }
+    return worktreePath;
+  }
+
+  test("removes a file over the size limit that contains the secret and keeps one that does not", async () => {
+    const filler = Buffer.alloc(SIZE, "a");
+    const worktreePath = await setUp({
+      "leaky.bin": Buffer.concat([filler, Buffer.from("sk-secret")]),
+      "clean.bin": filler,
+    });
+
+    await expect(redactSecretInWorkspace(worktreePath, "sk-secret")).resolves.toEqual([
+      "leaky.bin",
+    ]);
+
+    await expect(fs.stat(path.join(worktreePath, "leaky.bin"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(fs.stat(path.join(worktreePath, "clean.bin"))).resolves.toBeDefined();
+  });
+
+  test("finds the secret when it straddles a read boundary", async () => {
+    const contents = Buffer.alloc(SIZE, "a");
+    Buffer.from("sk-secret").copy(contents, 1024 * 1024 - 4);
+    const worktreePath = await setUp({ "split.bin": contents });
+
+    await expect(redactSecretInWorkspace(worktreePath, "sk-secret")).resolves.toEqual([
+      "split.bin",
+    ]);
+  });
+});
+
 describe("solver container", () => {
   test("names the container and passes secrets by environment variable name only", () => {
     const args = buildAgentContainerArgs({

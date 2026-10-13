@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { createReadStream, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -307,7 +307,14 @@ export async function redactSecretInWorkspace(
   for (const relativePath of await listWorkspaceFiles(worktreePath)) {
     const filePath = path.join(worktreePath, relativePath);
     const stat = await fs.lstat(filePath);
-    if (!stat.isFile() || stat.size > WORKSPACE_REDACTION_BYTES_LIMIT) {
+    if (!stat.isFile()) {
+      continue;
+    }
+    if (stat.size > WORKSPACE_REDACTION_BYTES_LIMIT) {
+      if (await fileContains(filePath, secret)) {
+        await fs.rm(filePath);
+        redacted.push(toPosix(relativePath));
+      }
       continue;
     }
     const contents = await fs.readFile(filePath, "utf8");
@@ -340,4 +347,17 @@ export async function redactSecretInFiles(filePaths: string[], secret: string): 
 
 function redactSecret(value: string, secret: string): string {
   return secret.length === 0 ? value : value.replaceAll(secret, REDACTED);
+}
+
+async function fileContains(filePath: string, needle: string): Promise<boolean> {
+  const pattern = Buffer.from(needle);
+  let carry: Buffer = Buffer.alloc(0);
+  for await (const chunk of createReadStream(filePath, { highWaterMark: 1024 * 1024 })) {
+    const window = Buffer.concat([carry, chunk as Buffer]);
+    if (window.includes(pattern)) {
+      return true;
+    }
+    carry = window.subarray(Math.max(0, window.length - pattern.length + 1));
+  }
+  return false;
 }
