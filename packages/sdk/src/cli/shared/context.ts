@@ -934,15 +934,7 @@ export async function resolveTokens(
 
 function userExtraFields(entry: PfUser | undefined) {
   if (!entry) return {};
-  const {
-    storage: _storage,
-    access_token: _accessToken,
-    refresh_token: _refreshToken,
-    token_expires_at: _tokenExpiresAt,
-    email: _email,
-    ...extraFields
-  } = entry;
-  return extraFields;
+  return withoutKeys(entry, v2UserKeys.union(v3OnlyUserKeys));
 }
 
 type RemoveUserAliasOptions = {
