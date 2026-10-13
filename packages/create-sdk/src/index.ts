@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { chdir } from "node:process";
 import { intro, outro } from "@clack/prompts";
-import { arg, defineCommand, runMain } from "@politty/zod";
+import { defineCommand, runMain } from "@politty/zod";
 import pc from "picocolors";
 import { readPackageJSON } from "pkg-types";
-import { z } from "zod";
+import { args } from "./args";
 import { collectContext } from "./context";
 import { copyProject } from "./copy";
 import { initProject } from "./init";
@@ -15,16 +15,7 @@ const main = async () => {
   const cmd = defineCommand({
     name: packageJson.name ?? "create-sdk",
     description: packageJson.description,
-    // strip unknown keys
-    args: z.object({
-      name: arg(z.string().optional(), {
-        positional: true,
-        description: "Project name",
-      }),
-      template: arg(z.string().optional(), {
-        description: "Template name",
-      }),
-    }),
+    args,
     async run(args) {
       intro(pc.bold(pc.cyan("✨ Welcome to Tailor Platform SDK")));
 
