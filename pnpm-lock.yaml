@@ -201,8 +201,8 @@ importers:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
       pkg-pr-new:
-        specifier: 0.0.88
-        version: 0.0.88
+        specifier: 0.0.91
+        version: 0.0.91
       publint:
         specifier: 0.3.25
         version: 0.3.25
@@ -2670,6 +2670,7 @@ packages:
   '@toiroakr/lines-db@0.15.0':
     resolution: {integrity: sha512-6zjE6W6jNZq+RnWX+Sjso13u4ixxuJEgM2uZO7xijamFE7TjKeARE1PKVpHK0jR3C7FzWWs/s/aMIsVzPVj+4w==}
     engines: {node: '>=22.12.0'}
+    deprecated: This package has moved to lines-db. Install lines-db instead; add @lines-db/studio if you use Studio. Update imports from @toiroakr/lines-db to lines-db.
     hasBin: true
     peerDependencies:
       typescript: '>=5 <7 || >=7.1.0-0'
@@ -4028,8 +4029,8 @@ packages:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
 
-  pkg-pr-new@0.0.88:
-    resolution: {integrity: sha512-Xc6PMJ2gher0WZP+rtjefFk26hIb7V1PTLL30bmy1Z2vsRmSvqiss7Ag1XUdyplTGYzIlFNJp4L3vMNmK44N6g==}
+  pkg-pr-new@0.0.91:
+    resolution: {integrity: sha512-FQPmjspKRKYV4MlHQnun9snJqlYm6Yhmo12x1O3pgE2Akim/y/BZjMOppK//BFdh222WOj6WGqlmeZfrtUtfgQ==}
     hasBin: true
 
   pkg-types@2.3.3:
@@ -7035,7 +7036,7 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  pkg-pr-new@0.0.88: {}
+  pkg-pr-new@0.0.91: {}
 
   pkg-types@2.3.3:
     dependencies:
