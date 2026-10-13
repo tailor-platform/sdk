@@ -75,6 +75,7 @@ interface MigrationExecutionOptions {
   configDir: string;
   appName: string;
   appId: string | undefined;
+  skipSteps?: ReadonlyMap<string, readonly string[]>;
 }
 
 /**
@@ -92,6 +93,8 @@ export interface MigrationContext {
   appName: string;
   /** Application id, used to label a migration's temporary resources. */
   appId: string | undefined;
+  /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
+  skipSteps?: ReadonlyMap<string, readonly string[]>;
 }
 
 interface ExecutionResult {
@@ -391,6 +394,16 @@ export function isMigrationPartiallyApplied(error: unknown): boolean {
   return isCLIError(error) && error.code === "MIGRATION_PARTIALLY_APPLIED";
 }
 
+/**
+ * Whether a migration run's outcome is unknown, so its schema changes must
+ * stay in place until the user settles the migration.
+ * @param error - Failure raised while executing migrations
+ * @returns True for a run whose outcome is unknown
+ */
+export function isMigrationOutcomeUnknown(error: unknown): boolean {
+  return isCLIError(error) && error.code === "MIGRATION_OUTCOME_UNKNOWN";
+}
+
 function partiallyAppliedError(
   migration: PendingMigration,
   result: Pick<MigrationStepsWorkflowResult, "completedSteps" | "failedSteps" | "executionId">,
@@ -560,6 +573,7 @@ async function executeStepsMigration(
 ): Promise<ExecutionResult> {
   const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
   const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
+  const skipSteps = (inProgress && options.skipSteps?.get(migration.namespace)) || [];
   const bundleResult = await bundleMigrationSteps({
     sourceFile: migration.scriptPath,
     namespace: migration.namespace,
@@ -567,6 +581,7 @@ async function executeStepsMigration(
     env,
     baseDir: configDir,
     order: form.order,
+    skipSteps,
     runnerJobFunctionName: migrationStepRunnerName(
       migrationWorkflowResourceName(migration.namespace, migration.number),
     ),
@@ -574,9 +589,10 @@ async function executeStepsMigration(
     dateDefault: migration.diff.dateRepresentation ?? "legacy",
   });
 
-  const notify = (level: "info" | "warn", message: string) => {
+  const notify = (level: "info" | "warn", message: string, suggestion?: string) => {
     sp.stop();
     logger[level](message);
+    if (suggestion) logger.log(suggestion);
     sp.start();
   };
   let mayBeRecorded = inProgress !== undefined;
@@ -593,6 +609,7 @@ async function executeStepsMigration(
       appName,
       appId,
       order: form.order,
+      skipSteps,
       inProgress,
       notify,
       onBeforeStart: async () => {
@@ -709,6 +726,7 @@ export async function executeMigrations(
       configDir: context.configDir,
       appName: context.appName,
       appId: context.appId,
+      skipSteps: context.skipSteps,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);
@@ -729,7 +747,11 @@ export async function executeMigrations(
           sp,
         );
       } catch (error) {
-        sp.fail(`Migration ${migrationLabel} failed`);
+        sp.fail(
+          isMigrationOutcomeUnknown(error)
+            ? `Could not confirm the outcome of migration ${migrationLabel}`
+            : `Migration ${migrationLabel} failed`,
+        );
         throw error;
       }
 

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "profile-table",
+      "claim": "A creator profile table is defined with `db.table(...)`, exported by name, and matched by a `db` namespace `files` glob in defineConfig."
+    },
+    {
+      "id": "handle-unique-lookup",
+      "claim": "The `handle` field is a string field marked `.unique()` (which also makes it a lookup key)."
+    },
+    {
+      "id": "regular-fields",
+      "claim": "Display name and avatar label are regular string fields, and the topical tags are a string array field (`{ array: true }`)."
+    },
+    {
+      "id": "avatar-uploaded-file",
+      "claim": "The uploaded avatar image is declared with the table's `.files({ ... })` modifier, not as a string field."
+    },
+    {
+      "id": "created-time",
+      "claim": "The creation time is a datetime field (for example from `db.fields.timestamps()` or `db.datetime()` with a default or hook)."
+    }
+  ]
+}

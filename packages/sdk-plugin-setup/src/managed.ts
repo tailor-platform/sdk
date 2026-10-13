@@ -5,6 +5,7 @@ import {
   isScalar,
   isSeq,
   parseDocument,
+  Scalar,
   type Document,
   type Pair,
   type YAMLMap,
@@ -26,7 +27,12 @@ export const ENVIRONMENT_EDITABLE_JOBS: readonly string[] = [
   "tailor-erd-preview-matrix",
   "tailor-erd-preview",
   "tailor-erd-preview-comment",
+  "tailor-result",
+  "tailor-preview-result",
 ];
+
+// Users add their own jobs to the `needs` of these jobs; the `tailor-` entries stay managed.
+export const RESULT_JOBS: readonly string[] = ["tailor-result", "tailor-preview-result"];
 
 function editableJobKeys(jobId: string): readonly string[] {
   return ENVIRONMENT_EDITABLE_JOBS.includes(jobId)
@@ -108,6 +114,21 @@ function editableWithKeys(uses: unknown): readonly string[] | undefined {
 
 function omit(value: Plain, keys: readonly string[]): Plain {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+}
+
+function isUserNeed(need: unknown): boolean {
+  return typeof need === "string" && !need.startsWith(RESERVED_PREFIX);
+}
+
+function needsList(needs: unknown): unknown[] | undefined {
+  if (typeof needs === "string") return [needs];
+  return Array.isArray(needs) ? needs : undefined;
+}
+
+function withoutUserNeeds(jobId: string, job: Plain): Plain {
+  if (!RESULT_JOBS.includes(jobId)) return job;
+  const list = needsList(job["needs"]);
+  return list ? { ...job, needs: list.filter((need) => !isUserNeed(need)) } : job;
 }
 
 function canonicalJson(value: unknown, seen = new WeakSet<object>()): string {
@@ -268,7 +289,7 @@ function projectManaged(content: string, managedIds: readonly string[]): Plain {
         return [
           jobId,
           {
-            ...omit(job, [...editableJobKeys(jobId), "steps"]),
+            ...omit(withoutUserNeeds(jobId, job), [...editableJobKeys(jobId), "steps"]),
             steps: projectSteps(job["steps"], `${jobId}/`, managed),
           },
         ];
@@ -473,6 +494,20 @@ function mergeSteps(
   );
 }
 
+function carryUserNeeds(currentRoot: unknown, jobId: string, rendered: YAMLMap): void {
+  const renderedNeeds = findPair(rendered, "needs")?.value;
+  const jobs = isPlainObject(currentRoot) ? currentRoot["jobs"] : undefined;
+  const job = isPlainObject(jobs) ? lookup(jobs, jobId) : undefined;
+  if (!isPlainObject(job) || !isSeq(renderedNeeds)) return;
+  const source = (needsList(job["needs"]) ?? []).map((need) =>
+    isUserNeed(need) ? new Scalar(need) : need,
+  );
+  placeAfterAnchors(source, renderedNeeds.items, isScalar, (item) => {
+    const value: unknown = isScalar(item) ? item.value : item;
+    return typeof value === "string" ? value : undefined;
+  });
+}
+
 function assertNeedsResolve(root: YAMLMap): void {
   const jobs = mapAt(root, "jobs");
   if (!jobs) return;
@@ -520,6 +555,7 @@ export function mergeUserContent(params: {
   if (!isMap(currentRoot) || !isMap(renderedRoot)) {
     throw new ManagedMergeError("The file is not a YAML mapping.");
   }
+  const currentPlain = toPlain(currentDoc, "The file");
   const ctx: MergeContext = {
     previous: new Set(params.previousIds),
     force: params.force,
@@ -541,7 +577,10 @@ export function mergeUserContent(params: {
       if (userJobs.includes(pair) || !isMap(pair.value)) continue;
       const jobId = keyOf(pair) ?? "";
       const renderedJob = mapAt(renderedJobs, jobId);
-      if (renderedJob) carryFields(pair.value, renderedJob, editableJobKeys(jobId));
+      if (renderedJob) {
+        carryFields(pair.value, renderedJob, editableJobKeys(jobId));
+        if (RESULT_JOBS.includes(jobId)) carryUserNeeds(currentPlain, jobId, renderedJob);
+      }
       mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
     }
     carryLeadingComment(currentJobs, currentJobs.items[0], userJobs);

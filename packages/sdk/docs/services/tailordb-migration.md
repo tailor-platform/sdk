@@ -422,10 +422,31 @@ Because steps commit separately, a failure does not undo the steps that already 
 - If a step fails after another step has completed, `tailor deploy` stops and leaves the migration **in progress**. The pre-migration schema stays in place, the checkpoint is not advanced, and the namespace's tables stay in maintenance mode, as while the migration runs: GraphQL create, update, and delete operations, bulk upsert, and record events remain disabled, while `read` keeps its setting. `tailor tailordb migration status` reports the migration as in progress.
 - If `tailor deploy` cannot confirm whether the steps started, for example because the connection dropped while starting them, the migration also stays in progress. Run `tailor deploy` again; it checks whether the steps ran before continuing.
 - Fix the failing step and run `tailor deploy` again. The deploy resumes the migration: completed steps do not run again, and the failed step and the steps after it run with the updated script. A completed step is treated like an applied migration — editing it afterwards does not run it again.
-- If the steps changed since the earlier run (a step added, removed, or renamed, or the order the steps run in changed), or that run is no longer available, every step runs again from the beginning. Editing a step's code does not count as a change.
+- If the steps changed since the earlier run, or that run is no longer available, every step runs again from the beginning. See [Editing steps of a migration in progress](#editing-steps-of-a-migration-in-progress).
 - If every step completed but the post-migration schema changes fail (for example, a field the migration makes required still has empty values), the migration also stays in progress with its pre-migration schema, and the next deploy retries those schema changes without running the steps again.
-- To run a completed step again (because it had a bug, or to fix rows the post-migration schema changes reject), change the steps: rename that step and update the `dependsOn` lists that name it, or add a step that fixes the rows. Every step then runs again from the beginning, so this relies on every step being safe to run again.
+- To run a completed step again (because it had a bug, or to fix rows the post-migration schema changes reject), change the steps: rename that step and update the `dependsOn` lists that name it, or add a step that fixes the rows. Every step then runs again from the beginning, so this relies on every step being safe to run again; to keep the other completed steps from running again, skip them as described below.
 - While a migration is in progress, `migration set`, `migration sync`, and `migration rebaseline` refuse to run, and `migration test` refuses to use that workspace as its source. Finish the migration with `tailor deploy` first. The one exception is `migration set <N>` with the in-progress migration's own number: it marks that migration as completed and clears its in-progress record. Use it only when the migration's schema changes are already applied, for example after the deploy reported that the checkpoint write could not be confirmed.
+
+#### Editing steps of a migration in progress
+
+When `tailor deploy` finds a migration in progress, what you changed in `migrate.ts` decides how it continues:
+
+| What you changed since the earlier deploy                                  | What the next `tailor deploy` does                                                                                          |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| The code of a step that has not completed (the failed step or a later one) | Resumes: completed steps do not run again, and the rest run with the updated code.                                          |
+| The code of a step that already completed                                  | Resumes, but the change takes no effect: that step does not run again.                                                      |
+| A step added, removed, or renamed, or the order the steps run in           | Runs every step again from the beginning, and warns about it first. The warning lists the steps that had already succeeded. |
+| Nothing, but the earlier run was canceled or is no longer available        | Runs every step again from the beginning, and warns about it first.                                                         |
+
+Running every step again runs completed steps a second time, which breaks a step that is not safe to run twice. To keep specific steps from running again, pass them to `--migration-skip-steps` as comma-separated `<namespace>/<step>` entries:
+
+```bash
+tailor deploy --migration-skip-steps main-db/backfillUser,main-db/backfillInvoice
+```
+
+- A skipped step is reported as completed and is not run. Only steps that succeeded in the migration's earlier run can be skipped, so a step you renamed cannot be.
+- The option applies to the migration an earlier deploy left in progress. Deploy fails before changing anything when an entry names a step that did not succeed, a step the migration does not define, a namespace without a migration in progress, or a namespace that no deployed config defines. It also fails when the earlier run's step results cannot be read, because then it cannot confirm which steps succeeded; deploy again to retry.
+- It takes effect for the deploy you pass it to. If that run fails, the next `tailor deploy` resumes it as usual, and the skipped steps stay completed without passing the option again.
 
 #### Rolling back instead of resuming
 
@@ -821,6 +842,8 @@ A script that exports `steps` follows different rules once one of its steps has 
 - The whole `apply` aborts and the checkpoint label is not bumped. Subsequent migrations in the same run do not execute.
 
 The rollback is best-effort per table; if reverting a table fails, a warning is logged and the original migration error is still reported. The next deploy then stops with remote schema drift on that table. Run `tailor tailordb migration validate` to see which tables differ, return the namespace to its checkpoint with `tailor tailordb migration sync <N>`, where `<N>` is the checkpoint `tailor tailordb migration status` reports, and deploy again. `sync` deletes the tables and fields that are not in that migration's snapshot, together with any rows the failed migration wrote to them; the next deploy runs the failed migration again.
+
+If `tailor deploy` cannot tell whether a `main` script ran, for example because the connection dropped while it started or waited for the script, it does not roll anything back: the pre-migration schema changes stay, the namespace's tables stay in maintenance mode, and the deploy reports that it could not confirm the outcome. A later deploy refuses to run the migration while that run is still executing. Run `tailor workflow executions --workflow-name <name>` with the workflow name the error reports until the execution has finished or none is listed. If it succeeded, run `tailor tailordb migration sync <N>` with the migration's own number; otherwise run `tailor tailordb migration sync <N-1>`. Then deploy again. Do not deploy before running sync, even with `--no-schema-check` to skip the drift check: the deploy may run the `main` script again even if the execution succeeded.
 
 `migration sync` refuses to run while a migration is in progress. When a steps migration's post-migration schema changes fail and the deploy cannot return its tables to the pre-migration schema, it logs a warning, and the next deploy stops with remote schema drift on those tables. Run `tailor tailordb migration validate` from a checkout of the deployed migration history. If the only issue it reports is that drift, run `tailor deploy --no-schema-check`: the deploy applies the pre-migration schema again, skips the completed steps unless the steps changed, and retries the post-migration schema changes. `--no-schema-check` skips the schema checks of every namespace, so do not use it while `validate` reports any other issue.
 
