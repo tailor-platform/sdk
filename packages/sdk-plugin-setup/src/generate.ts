@@ -378,7 +378,7 @@ function devEnginePackageManagerNames(value: unknown): string[] {
   });
 }
 
-const LOCKFILES: ReadonlyArray<readonly [file: string, packageManager: PackageManager]> = [
+export const LOCKFILES: ReadonlyArray<readonly [file: string, packageManager: PackageManager]> = [
   ["pnpm-lock.yaml", "pnpm"],
   ["yarn.lock", "yarn"],
   ["bun.lock", "bun"],

@@ -8,6 +8,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
   detectPackageManager,
+  LOCKFILES,
   printTargetNextSteps,
   setupTarget,
   type BranchSetupOptions,
@@ -47,15 +48,6 @@ type GeneratedWorkflow = {
   jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
 };
 
-const ROOT_LOCKFILES = [
-  ["pnpm-lock.yaml", "pnpm"],
-  ["yarn.lock", "yarn"],
-  ["bun.lock", "bun"],
-  ["bun.lockb", "bun"],
-  ["package-lock.json", "npm"],
-  ["npm-shrinkwrap.json", "npm"],
-] as const;
-
 describe("detectPackageManager", () => {
   const testDir = path.join(
     "/tmp",
@@ -71,7 +63,7 @@ describe("detectPackageManager", () => {
     fs.writeFileSync(path.join(testDir, "package.json"), JSON.stringify(manifest));
   };
 
-  test.each(ROOT_LOCKFILES)("detects %s from %s", (lockfile, expected) => {
+  test.each(LOCKFILES)("detects %s from %s", (lockfile, expected) => {
     fs.writeFileSync(path.join(testDir, lockfile), "");
     expect(detectPackageManager(testDir)).toBe(expected);
   });
@@ -769,7 +761,7 @@ describe("ERD preview steps", () => {
     });
   });
 
-  test.each(ROOT_LOCKFILES)(
+  test.each(LOCKFILES)(
     "detects the base package manager from %s over a different head",
     (lockfile, expected) => {
       fs.mkdirSync(path.join(workDir, ".tailor-erd-base"), { recursive: true });
