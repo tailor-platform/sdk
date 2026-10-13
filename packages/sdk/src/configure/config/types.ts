@@ -227,12 +227,12 @@ export interface AppConfig<
    * every table in those namespaces are disabled and record events are not
    * published; `read` keeps its setting.
    *
-   * - `false` (default): no maintenance mode. While migrations run, the SDK does
+   * - `false`: no maintenance mode. While migrations run, the SDK does
    *   not guarantee what concurrent requests observe: tables can be in an
    *   intermediate schema, and record writes made by migration scripts publish
    *   events to the executors of the previous deploy.
-   * - `"migration"`: maintenance mode from the first pending migration until the
-   *   last one completes.
+   * - `"migration"` (default): maintenance mode from the first pending migration
+   *   until the last one completes.
    * - `"deploy"`: maintenance mode from the first pending migration until the
    *   deploy has applied every other change, including resolvers, executors,
    *   and workflows.

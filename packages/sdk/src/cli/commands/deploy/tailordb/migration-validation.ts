@@ -302,22 +302,3 @@ export async function validateAndDetectMigrations(
     maintenanceModeCheckpoints,
   };
 }
-
-/**
- * Recommend maintenance mode when pending migrations will run without it
- * because the config leaves `maintenanceMode` unset.
- * @param config - Loaded application config
- * @param pendingMigrations - Migrations the deploy will apply
- */
-export function warnUnsetMaintenanceMode(
-  config: LoadedConfig,
-  pendingMigrations: ReadonlyArray<PendingMigration>,
-): void {
-  if (config.maintenanceMode !== undefined || pendingMigrations.length === 0) return;
-  const namespaces = [...new Set(pendingMigrations.map((migration) => migration.namespace))];
-  logger.warn(
-    `GraphQL writes and record events of ${namespaces.length === 1 ? "namespace" : "namespaces"} ${namespaces.join(", ")} are not restricted while the pending migrations run, ` +
-      `because maintenanceMode is not set in ${path.basename(config.path)}. ` +
-      `Set it to "migration" or "deploy" to restrict them, or to false to hide this warning.`,
-  );
-}

@@ -2962,7 +2962,13 @@ describe("applyTailorDB migration label reconciliation", () => {
     const writtenCheckpoints = vi
       .mocked(client.setMetadata)
       .mock.calls.map((call) => call[0].labels?.["sdk-migration"]);
-    expect(writtenCheckpoints).toEqual(["m0000", "m0001"]);
+    expect(writtenCheckpoints).toEqual(["m0000", "m0001", "m0001"]);
+    expect(vi.mocked(client.setMetadata).mock.calls[1]?.[0].labels).toMatchObject({
+      "sdk-maintenance-mode": "m0001",
+    });
+    expect(vi.mocked(client.setMetadata).mock.calls[2]?.[0].labels).not.toHaveProperty(
+      "sdk-maintenance-mode",
+    );
     expect(vi.mocked(client.setMetadata).mock.calls[0]?.[0].labels).toMatchObject({
       "sdk-migration-history": "hcurrent",
     });

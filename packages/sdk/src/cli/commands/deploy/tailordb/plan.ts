@@ -52,7 +52,7 @@ import {
   normalizeComparableTailorDBType,
 } from "./compare";
 import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
-import { validateAndDetectMigrations, warnUnsetMaintenanceMode } from "./migration-validation";
+import { validateAndDetectMigrations } from "./migration-validation";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { PlanContext } from "../types";
 
@@ -160,14 +160,11 @@ export async function planTailorDB(context: PlanContext) {
       inProgressByNamespace: detected.inProgressMigrations,
     });
   }
-  const { namespacesWithMigrations, migrationFileState, checkpointRepairs, pendingMigrations } =
-    detected ?? {
-      namespacesWithMigrations: forRemoval ? [] : migrationConfig,
-      migrationFileState: forRemoval ? {} : captureMigrationFileState(migrationConfig),
-      checkpointRepairs: [],
-      pendingMigrations: [],
-    };
-  if (!migrationTestSnapshots) warnUnsetMaintenanceMode(config, pendingMigrations);
+  const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = detected ?? {
+    namespacesWithMigrations: forRemoval ? [] : migrationConfig,
+    migrationFileState: forRemoval ? {} : captureMigrationFileState(migrationConfig),
+    checkpointRepairs: [],
+  };
 
   const {
     changeSet: serviceChangeSet,

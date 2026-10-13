@@ -514,7 +514,7 @@ export async function applyTailorDB(
   options: ApplyTailorDBOptions = {},
 ): Promise<void> {
   const { changeSet, context: migrationContext } = result;
-  const maintenanceMode = migrationContext.config.maintenanceMode ?? false;
+  const maintenanceMode = migrationContext.config.maintenanceMode ?? "migration";
   const phaseSettings: MigrationPhaseSettings = {
     tailorDBInputs: migrationContext.tailorDBInputs,
     executorUsedTables: migrationContext.executorUsedTables,

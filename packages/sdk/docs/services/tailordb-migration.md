@@ -681,13 +681,13 @@ This split is what allows existing rows to be backfilled before the database sta
 
 `maintenanceMode` in `defineConfig` decides whether `tailor deploy` puts each namespace with pending migrations into maintenance mode while it applies them. A table in maintenance mode accepts no GraphQL `create`, `update`, `delete`, or bulk upsert operation and publishes no record events; its `read` setting is left as it is.
 
-| Value             | Maintenance mode                                                                                                                                                                       |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `false` (default) | None. Nothing is restricted while migrations run.                                                                                                                                      |
-| `"migration"`     | From before the first pending migration runs until the last one completes.                                                                                                             |
-| `"deploy"`        | From before the first pending migration runs until the deploy has applied every other change, including resolvers, executors, and workflows, and has removed the resources it deletes. |
+| Value                   | Maintenance mode                                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `false`                 | None. Nothing is restricted while migrations run.                                                                                                                                      |
+| `"migration"` (default) | From before the first pending migration runs until the last one completes.                                                                                                             |
+| `"deploy"`              | From before the first pending migration runs until the deploy has applied every other change, including resolvers, executors, and workflows, and has removed the resources it deletes. |
 
-A deploy without pending migrations never enters maintenance mode. When `maintenanceMode` is unset and migrations are pending, `tailor deploy` prints a warning; set it to `false` to keep the default without the warning. The value is read from the config like any other, so it can differ per environment (see [Multi-Environment Configuration](../multi-environment.md#varying-config-values-per-environment)):
+A deploy without pending migrations never enters maintenance mode. When `maintenanceMode` is unset, it behaves as `"migration"`, preserving the existing deployment behavior. The value is read from the config like any other, so it can differ per environment (see [Multi-Environment Configuration](../multi-environment.md#varying-config-values-per-environment)):
 
 ```typescript
 export default defineConfig({

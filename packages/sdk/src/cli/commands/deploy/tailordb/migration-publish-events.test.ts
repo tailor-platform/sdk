@@ -1556,15 +1556,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     };
     const released = { publishRecordEvents: true, disableGqlOperations: undefined };
 
-    test.each([
-      ["unset", undefined],
-      ["false", false],
-    ] as const)("leaves every write unrestricted when it is %s", async (_label, mode) => {
+    test("leaves every write unrestricted when it is false", async () => {
       const client = createMockClient();
       const planResult = createMockPlanResult({
         creates: ["Order"],
         subscribedTables: ["Order"],
-        maintenanceMode: mode,
+        maintenanceMode: false,
       });
       mockAddedOrderMigration();
 
@@ -1576,6 +1573,26 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect(settings?.publishRecordEvents).toBe(true);
         expect(settings?.disableGqlOperations).toBeUndefined();
       }
+    });
+
+    test("uses migration maintenance mode when the option is unset", async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: undefined,
+      });
+      mockAddedOrderMigration();
+      const holdMaintenanceMode = vi.fn();
+
+      await applyTailorDB(client, planResult, "create-update", { holdMaintenanceMode });
+
+      expect(typeSettingWrites(client).find(([name]) => name === "Order")?.[1]).toEqual(
+        expect.objectContaining(restricted),
+      );
+      expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+      expect(holdMaintenanceMode).not.toHaveBeenCalled();
     });
 
     test("writes a checkpoint table that opts out of publishing while an executor subscribes", async () => {
