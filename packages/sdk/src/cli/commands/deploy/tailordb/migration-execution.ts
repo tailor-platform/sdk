@@ -984,7 +984,6 @@ async function rollbackSingleMigrationPrePhase(
     return priorTable ? [{ tableName, priorTable }] : [];
   });
   const newTables = [...attemptedTables].filter((tableName) => !priorSnapshot.tables[tableName]);
-
   const leftRestricted: string[] = [];
   for (const { tableName, priorTable } of restoredTables) {
     try {
