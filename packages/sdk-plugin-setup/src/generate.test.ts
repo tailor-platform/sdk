@@ -1311,7 +1311,7 @@ describe("seed step", () => {
     (parseYAML(content) as GeneratedWorkflow).jobs[job]?.steps ?? [];
   const idsOf = (steps: Array<Record<string, unknown>>): unknown[] => steps.map((s) => s.id);
 
-  test("branch and tag workflows seed after the apply step with --upsert, validating first", () => {
+  test("branch and tag workflows seed after the apply step without repeating validation", () => {
     const rendered = [
       renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/api", seed: { datasets: [] } }),
       renderTagWorkflow({ ...tagBase, workingDirectory: "apps/api", seed: { datasets: [] } }),
@@ -1326,7 +1326,7 @@ describe("seed step", () => {
         shell: "bash",
         "working-directory": "apps/api",
         env: { TAILOR_PLATFORM_WORKSPACE_ID: "${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}" },
-        run: "pnpm exec tailor seed validate\npnpm exec tailor seed apply --upsert\n",
+        run: "pnpm exec tailor seed apply --upsert\n",
       });
       expect(generatedIds).toContain("tailor-deploy/tailor-seed");
       expect(content).not.toMatch(NO_MARKER);
@@ -1375,8 +1375,7 @@ describe("seed step", () => {
     expect(validate?.run).toBe("pnpm exec tailor seed validate --dataset preview --dataset local");
     const seed = stepsOf(content, "tailor-deploy").find((s) => s.id === "tailor-seed");
     expect(seed?.run).toBe(
-      "pnpm exec tailor seed validate --dataset preview --dataset local\n" +
-        "pnpm exec tailor seed apply --upsert --dataset preview --dataset local\n",
+      "pnpm exec tailor seed apply --upsert --dataset preview --dataset local\n",
     );
   });
 
