@@ -9,7 +9,7 @@ export const deployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy your application by applying the Tailor configuration.",
   notes:
-    "Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.",
+    "Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. Organization and folder IDs loaded by --env-file also replace the defaults; command-line options take precedence, and empty env-file values are ignored. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.",
   args: z.strictObject({
     ...workspaceArgs,
     ...multiConfigArg,
@@ -62,8 +62,9 @@ export const deployCommand = defineAppCommand({
         createWorkspace: args["create-workspace"],
         workspaceName: args["workspace-name"],
         workspaceRegion: args["workspace-region"],
-        organizationId: args["organization-id"],
-        folderId: args["folder-id"],
+        organizationId:
+          args["organization-id"] ?? (process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined),
+        folderId: args["folder-id"] ?? (process.env.TAILOR_PLATFORM_FOLDER_ID || undefined),
         noSchemaCheck: args["no-schema-check"],
         noValidate: args["no-validate"],
         noCache: args["no-cache"],

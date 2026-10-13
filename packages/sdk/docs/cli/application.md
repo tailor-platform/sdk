@@ -77,7 +77,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.
+Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. Organization and folder IDs loaded by --env-file also replace the defaults; command-line options take precedence, and empty env-file values are ignored. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.
 
 **JSON result:**
 

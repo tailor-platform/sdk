@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
@@ -15,6 +18,50 @@ vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: mocks.assertWrit
 vi.mock("#/cli/telemetry/index", () => ({ initTelemetry: mocks.initTelemetry }));
 
 describe("deployCommand", () => {
+  test.each([
+    {
+      name: "organization and folder",
+      args: [],
+      organizationId: "11111111-1111-4111-8111-111111111111",
+    },
+    {
+      name: "organization overridden by a flag",
+      args: ["--organization-id", "33333333-3333-4333-8333-333333333333"],
+      organizationId: "33333333-3333-4333-8333-333333333333",
+    },
+  ])("forwards $name loaded from an env file", async ({ args, organizationId }) => {
+    const dir = fs.mkdtempSync(path.join(tmpdir(), "tailor-deploy-location-"));
+    const envFile = path.join(dir, ".env");
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
+    fs.writeFileSync(
+      envFile,
+      "TAILOR_PLATFORM_ORGANIZATION_ID=11111111-1111-4111-8111-111111111111\nTAILOR_PLATFORM_FOLDER_ID=22222222-2222-4222-8222-222222222222\n",
+    );
+    try {
+      const result = await runCommand(
+        deployCommand,
+        ["--create-workspace", "--env-file", envFile, ...args],
+        {
+          // strip unknown keys
+          globalArgs: z.object(commonArgs),
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(mocks.deployFromCLI).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId,
+          folderId: "22222222-2222-4222-8222-222222222222",
+        }),
+        expect.any(Object),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("forwards workspace creation options", async () => {
     await runCommand(deployCommand, [
       "--create-workspace",
