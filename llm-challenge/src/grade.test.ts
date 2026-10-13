@@ -640,6 +640,7 @@ describe("grade summary", () => {
     pass: 0 | 1,
     status: RunGrade["status"] = "ok",
     report = "results/x/report.json",
+    reason?: string,
   ): RunGrade {
     return {
       report,
@@ -648,9 +649,32 @@ describe("grade summary", () => {
       runIndex: 0,
       artifactDir: `results/x/${problemId}`,
       status,
+      reason,
       metrics: status === "ok" ? { pass, claimRate: pass, commonChecks: 1 } : undefined,
     };
   }
+
+  test("counts excluded runs per reason and lists problems that left the denominator", () => {
+    const grades = [
+      grade("a", 1),
+      grade("a", 0, "excluded", undefined, "solver timeout"),
+      grade("b", 0, "excluded", undefined, "solver timeout"),
+      grade("b", 0, "excluded", undefined, "solver timeout"),
+      grade("c", 0, "excluded", undefined, "solver usage-limit"),
+      grade("d", 1, "error"),
+    ];
+
+    const { overall, problems } = summarizeGrades(grades, { seed: 7, iterations: 50 });
+
+    expect(overall.excludedByReason).toEqual({ "solver timeout": 3, "solver usage-limit": 1 });
+    expect(overall.unscoredProblems).toEqual(["sdk-api/b", "sdk-api/c", "sdk-api/d"]);
+    expect(problems.map((problem) => [problem.problemId, problem.excludedRuns])).toEqual([
+      ["a", 1],
+      ["b", 2],
+      ["c", 1],
+      ["d", 0],
+    ]);
+  });
 
   test("macro-averages problems and bootstraps a deterministic interval", () => {
     const grades = [

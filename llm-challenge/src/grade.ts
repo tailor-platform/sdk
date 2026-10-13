@@ -79,6 +79,7 @@ export type GradeSummary = {
     problemId: string;
     group: ProblemGroup;
     scoredRuns: number;
+    excludedRuns: number;
     passes: number;
     passRate?: number;
     claimRate?: number;
@@ -87,6 +88,8 @@ export type GradeSummary = {
     problems: number;
     scoredRuns: number;
     excludedRuns: number;
+    excludedByReason: Record<string, number>;
+    unscoredProblems: string[];
     errorRuns: number;
     passRate: number | null;
     ci95: [number, number] | null;
@@ -244,6 +247,7 @@ export function summarizeGrades(
         problemId: problemGrades[0].problemId,
         group: problemGrades[0].group,
         scoredRuns: scored.length,
+        excludedRuns: problemGrades.filter((grade) => grade.status === "excluded").length,
         passes,
         passRate: scored.length === 0 ? undefined : passes / scored.length,
         claimRate:
@@ -254,6 +258,13 @@ export function summarizeGrades(
       };
     });
   const scoredProblems = problems.filter((problem) => problem.scoredRuns > 0);
+  const excludedByReason: Record<string, number> = {};
+  for (const grade of grades) {
+    if (grade.status === "excluded") {
+      const reason = grade.reason ?? "unknown";
+      excludedByReason[reason] = (excludedByReason[reason] ?? 0) + 1;
+    }
+  }
   const passRate =
     scoredProblems.length === 0
       ? null
@@ -264,6 +275,10 @@ export function summarizeGrades(
       problems: scoredProblems.length,
       scoredRuns: scoredProblems.reduce((sum, problem) => sum + problem.scoredRuns, 0),
       excludedRuns: grades.filter((grade) => grade.status === "excluded").length,
+      excludedByReason,
+      unscoredProblems: problems
+        .filter((problem) => problem.scoredRuns === 0)
+        .map((problem) => `${problem.group}/${problem.problemId}`),
       errorRuns: grades.filter((grade) => grade.status === "error").length,
       passRate,
       ci95:
@@ -511,16 +526,25 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
     }
   }
   console.log(`Pass rate ${formatPassRate(summary)}`);
+  if (summary.overall.unscoredProblems.length > 0) {
+    console.log(
+      `Not in the pass rate (no scored run): ${summary.overall.unscoredProblems.join(", ")}`,
+    );
+  }
   console.log(`Grades ${reportPath(packageRoot, outputDir)}`);
 }
 
 function formatPassRate(summary: GradeSummary): string {
-  const { passRate, ci95, problems, scoredRuns, excludedRuns, errorRuns } = summary.overall;
+  const { passRate, ci95, problems, scoredRuns, excludedRuns, excludedByReason, errorRuns } =
+    summary.overall;
   const rate =
     passRate === null || ci95 === null
       ? "n/a"
       : `${(passRate * 100).toFixed(1)}% (95% CI ${(ci95[0] * 100).toFixed(1)}-${(ci95[1] * 100).toFixed(1)}%)`;
-  return `${rate} over ${problems} problems, ${scoredRuns} scored runs; excluded=${excludedRuns} error=${errorRuns}`;
+  const reasons = Object.entries(excludedByReason)
+    .map(([reason, count]) => `${reason}=${count}`)
+    .join(", ");
+  return `${rate} over ${problems} problems, ${scoredRuns} scored runs; excluded=${excludedRuns}${reasons === "" ? "" : ` (${reasons})`} error=${errorRuns}`;
 }
 
 async function gradeRun(options: {
