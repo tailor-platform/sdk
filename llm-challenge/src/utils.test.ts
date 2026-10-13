@@ -24,7 +24,7 @@ describe("runWithConcurrency", () => {
     });
 
     expect(started).toEqual([0, 1]);
-    expect(finished.toSorted()).toEqual([0, 1]);
+    expect(finished.toSorted((left, right) => left - right)).toEqual([0, 1]);
   });
 
   test("runs every item when no worker requests a stop", async () => {
@@ -34,6 +34,6 @@ describe("runWithConcurrency", () => {
       started.push(item);
     });
 
-    expect(started.toSorted()).toEqual([0, 1, 2]);
+    expect(started.toSorted((left, right) => left - right)).toEqual([0, 1, 2]);
   });
 });
