@@ -354,12 +354,6 @@ export const createCommand = defineAppCommand({
     const defaults = locationGiven
       ? undefined
       : await loadUserWorkspaceDefaults({ profile: args.profile });
-    if (defaults && !args.json) {
-      logger.info(
-        `Creating the workspace in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`,
-      );
-    }
-
     const { client, validated } = await prepareWorkspaceCreation({
       name: args.name,
       region: args.region,
@@ -371,6 +365,11 @@ export const createCommand = defineAppCommand({
     });
     let workspace: CreatedWorkspaceInfo;
     try {
+      if (defaults && !args.json) {
+        logger.info(
+          `Creating the workspace in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`,
+        );
+      }
       workspace = await createValidatedWorkspaceWithClient(client, validated);
     } catch (error) {
       if (defaults) pointAtUserDefaults(error, defaults);

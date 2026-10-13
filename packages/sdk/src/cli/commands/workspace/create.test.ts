@@ -538,6 +538,35 @@ describe("workspace create with user defaults", () => {
     );
   });
 
+  test.each(["invalid region", "missing login"])(
+    "does not announce creation with defaults after %s",
+    async (failure) => {
+      const client = stubClient();
+      if (failure === "invalid region") {
+        client.listAvailableWorkspaceRegions.mockResolvedValue({ regions: [] });
+      } else {
+        const config = await readPlatformConfig();
+        config.users["u@example.com"] = {
+          storage: "keyring",
+          token_expires_at: "2099-12-31T00:00:00Z",
+          default_organization_id: defaultOrganizationId,
+          default_folder_id: defaultFolderId,
+        };
+        writePlatformConfig(config);
+      }
+      using _logger = silenceLogger("out", "success", "warn", "error");
+      using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+      const result = await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west"]);
+
+      expect(result.success).toBe(false);
+      expect(client.createWorkspace).not.toHaveBeenCalled();
+      expect(infoSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining("Creating the workspace in"),
+      );
+    },
+  );
+
   test("reports the default location it creates the workspace in", async () => {
     stubClient();
     using _logger = silenceLogger("out", "success", "warn", "error");
