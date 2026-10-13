@@ -10,6 +10,7 @@ import {
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -319,6 +320,51 @@ describe("workspace prune command", () => {
     }
   });
 
+  test.each(["--yes", "--dry-run", "--json"])(
+    "warns about an unscoped sweep with %s",
+    async (mode) => {
+      const client = stubClient([
+        workspace("e2e-ws-a", { createdAt: hoursAgo(240) }),
+        workspace("e2e-ws-b", { organizationId: ORG_B, createdAt: hoursAgo(240) }),
+      ]);
+      loggerState.jsonMode = mode === "--json";
+      const result = await runCommand(pruneCommand, [
+        "--name",
+        "e2e-ws-.*",
+        "--older-than",
+        "7d",
+        ...(mode === "--dry-run" ? [mode] : []),
+        "--yes",
+      ]);
+      expect(result.success).toBe(true);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("Every workspace visible to this login"),
+      );
+      expect(logger.warn).toHaveBeenCalledBefore(client.listWorkspaces);
+      expect(loadUserWorkspaceDefaults).not.toHaveBeenCalled();
+      expect(client.deleteWorkspace).toHaveBeenCalledTimes(mode === "--dry-run" ? 0 : 2);
+    },
+  );
+
+  test.each([["--organization-root", ORG_A], ["--folder-id", FOLDER_A], ["--personal"]])(
+    "does not warn about an unscoped sweep with %j",
+    async (...location) => {
+      stubClient([]);
+      const result = await runCommand(pruneCommand, [
+        "--name",
+        "e2e-ws-.*",
+        "--older-than",
+        "7d",
+        "--yes",
+        ...location,
+      ]);
+      expect(result.success).toBe(true);
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining("Every workspace visible to this login"),
+      );
+    },
+  );
+
   test("requires a name filter", async () => {
     const client = stubClient([workspace("e2e-ws-1")]);
 
@@ -349,8 +395,12 @@ describe("workspace prune command", () => {
     ]);
     expectFailure(
       unscoped,
-      "--older-than 0s requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.",
+      "--older-than 0s requires --organization-root, --folder-id, or --personal.",
     );
+    if (unscoped.success || !isCLIError(unscoped.error)) throw new Error("Expected CLIError");
+    expect(unscoped.error.suggestion).toContain("`tailor user update`");
+    expect(unscoped.error.suggestion).toContain("on the command line");
+    expect(unscoped.error.message).not.toContain("user update");
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
 
     const scoped = await runCommand(pruneCommand, [
@@ -1175,10 +1225,11 @@ describe("workspace prune command", () => {
 
       const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
 
-      expectFailure(
-        result,
-        "--expired requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.",
-      );
+      expectFailure(result, "--expired requires --organization-root, --folder-id, or --personal.");
+      if (result.success || !isCLIError(result.error)) throw new Error("Expected CLIError");
+      expect(result.error.suggestion).toContain("`tailor user update`");
+      expect(result.error.suggestion).toContain("on the command line");
+      expect(result.error.message).not.toContain("user update");
       expect(client.listWorkspaces).not.toHaveBeenCalled();
       expect(loadUserWorkspaceDefaults).not.toHaveBeenCalled();
     });

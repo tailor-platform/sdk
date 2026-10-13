@@ -284,9 +284,8 @@ const KEPT_REASONS: {
   { key: "unknownAge", selection: "missingCreateTime", reason: "creation time is unknown" },
 ];
 
-function unscopedSweepMessage(option: string): string {
-  return `${option} requires --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by 'tailor user update' is not used by prune.`;
-}
+const UNSCOPED_SWEEP_SUGGESTION =
+  "Specify --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by `tailor user update` is not used by prune.";
 
 export const pruneCommand = defineAppCommand({
   name: "prune",
@@ -298,6 +297,8 @@ export const pruneCommand = defineAppCommand({
     With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires at least one location, and --name still applies on top.
 
     Every workspace lives in exactly one location, and the location options name them explicitly: --organization-root selects the workspaces directly under an organization and none inside its folders, --folder-id selects the workspaces in one folder, and --personal selects the workspaces belonging to no organization and no folder. Each option can be given more than once, they combine as a union, and none of them is read from the environment or from the default organization/folder set by \`user update\` -- a sweep covers exactly the locations spelled out on the command line. Selecting --personal is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded. Without any location option, a --name / --older-than sweep considers every visible workspace.
+
+    Without a location option, prune warns before listing workspaces that every workspace visible to this login is a candidate for the name and age filters, even with --yes or --dry-run. The default organization/folder set by \`tailor user update\` is not used.
 
     Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run \`workspace ttl set\` or \`workspace ttl clear\` before the next run — or keep it out of that run with --exclude.
 
@@ -400,7 +401,8 @@ export const pruneCommand = defineAppCommand({
     if (args.expired && !hasLocation(criteria)) {
       throw CLIError({
         code: "UNSCOPED_EXPIRED",
-        message: unscopedSweepMessage("--expired"),
+        message: "--expired requires --organization-root, --folder-id, or --personal.",
+        suggestion: UNSCOPED_SWEEP_SUGGESTION,
         details:
           "The expiry lives on the workspace, and writing a workspace's metadata is a lesser permission than deleting it, so an unscoped sweep would delete on behalf of anyone able to write that metadata.",
       });
@@ -408,13 +410,19 @@ export const pruneCommand = defineAppCommand({
     if (olderThanMs === 0 && !hasLocation(criteria)) {
       throw CLIError({
         code: "UNSCOPED_ZERO_AGE",
-        message: unscopedSweepMessage("--older-than 0s"),
+        message: "--older-than 0s requires --organization-root, --folder-id, or --personal.",
+        suggestion: UNSCOPED_SWEEP_SUGGESTION,
         details:
           "Without an age check the name filter is the only guard, so the sweep must name the organization roots, folders, or personal workspaces it covers.",
       });
     }
 
     await assertWritable({ profile: args.profile });
+    if (!hasLocation(criteria)) {
+      logger.warn(
+        `No location was specified. Every workspace visible to this login is a candidate for the name and age filters. ${UNSCOPED_SWEEP_SUGGESTION}`,
+      );
+    }
     const accessToken = await loadAccessToken({ profile: args.profile });
     const platformConfig = await loadPlatformClientConfig({ profile: args.profile });
     const client = await initOperatorClient(accessToken, platformConfig);
