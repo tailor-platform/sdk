@@ -715,10 +715,15 @@ server and its runners first:
 - **Actions from github.com:** the workflows use `tailor-platform/actions`,
   `actions/checkout`, `actions/setup-node`, `pnpm/action-setup`, and
   `oven-sh/setup-bun` (and `actions/upload-artifact` with `--erd-preview`).
-  Make them available on the server with GitHub Connect or `actions-sync`.
+  Make them available on the server with GitHub Connect or `actions-sync`. The
+  server ships its own copies of the `actions/*` ones, which may not include
+  the pinned versions: update them with `actions-sync`, or, with GitHub
+  Connect, delete them from the server's `actions` organization (see GitHub's
+  [Using the latest version of the official bundled actions](https://docs.github.com/en/enterprise-server@latest/admin/managing-github-actions-for-your-enterprise/managing-access-to-actions-from-githubcom/using-the-latest-version-of-the-official-bundled-actions)).
 - **Environment settings:** run the `gh` commands that `tailor setup ci env`
   prints from a clone of the repository, with `gh` signed in to the server
-  (`gh auth login --hostname <host>`).
+  (`gh auth login --hostname <host>`) and `GH_HOST=<host>` exported, so that
+  `gh api` calls the server instead of github.com.
 
 With `--erd-preview`, also pass `--ghes`:
 
@@ -730,7 +735,9 @@ GitHub Enterprise Server does not support `actions/upload-artifact` v4 or
 later, which the workflow uses to upload each ERD viewer unzipped. With
 `--ghes`, the workflow uploads it with v3 instead, so each viewer is a zip
 file, and the PR comment links to the workflow run, which lists the artifacts.
-`setup update` keeps `--ghes`.
+`setup update` keeps `--ghes`; pass it again whenever you re-run
+`setup ci branch`, or the workflow switches back to the upload that GitHub
+Enterprise Server does not support.
 
 ## Keeping dependencies and actions updated
 

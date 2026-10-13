@@ -581,17 +581,14 @@ jobs:
   # __ERD_PREVIEW_JOB_END__
   # __ERD_PREVIEW_COMMENT_JOB_START__
   tailor-erd-preview-comment:
-    # __ERD_GITHUB_COM_COMMENT_NEEDS_START__
-    needs: tailor-erd-preview
-    # __ERD_GITHUB_COM_COMMENT_NEEDS_END__
-    # __ERD_GHES_COMMENT_NEEDS_START__
-    needs: [tailor-erd-preview-matrix, tailor-erd-preview]
-    # __ERD_GHES_COMMENT_NEEDS_END__
+    # __ERD_COMMENT_NEEDS__
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      # __ERD_GITHUB_COM_ACTIONS_READ_START__
       actions: read
+      # __ERD_GITHUB_COM_ACTIONS_READ_END__
       pull-requests: write
     steps:
       - id: tailor-comment-erd-preview
@@ -631,9 +628,10 @@ jobs:
           body+="Self-contained ERD viewer HTML files for this pull request, each zipped as an artifact of [the workflow run]($SERVER/$REPO/actions/runs/$RUN_ID). Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
           # upload-artifact v3 artifacts reach the REST API only after the run completes.
           viewer_artifacts() { jq -r '.[] | "\(.)-viewer.html"' <<<"$NAMESPACES"; }
-          artifact_link() { printf '`%s`' "$1"; }
+          artifact_link() { printf '%s' "\`$1\`"; }
           # __ERD_GHES_LINKS_END__
 
+          viewers=$(viewer_artifacts | sort)
           while IFS=$'\t' read -r name id; do
             [ -z "$name" ] && continue
             if [[ "$name" != *-viewer.html ]]; then
@@ -642,7 +640,7 @@ jobs:
             ns=${name%-viewer.html}
             label="$ns viewer"
             body+=$'\n'"- **$label**: $(artifact_link "$name" "$id")"
-          done < <(viewer_artifacts | sort)
+          done <<<"$viewers"
 
           existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
             --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')

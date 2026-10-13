@@ -29,7 +29,13 @@ import {
 import { tempDir } from "./test-helpers/temp-dir";
 
 const NO_MARKER = /__[A-Z_]+__/;
-const UPLOAD_ARTIFACT_V7 = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const BRANCH_TEMPLATE = fs.readFileSync(
+  path.join(import.meta.dirname, "branch.workflow.yml"),
+  "utf8",
+);
+// Renovate changes this pin in the template, so tests derive the expected value from there.
+const [, UPLOAD_ARTIFACT_GITHUB_COM, UPLOAD_ARTIFACT_GITHUB_COM_VERSION] =
+  /uses: (actions\/upload-artifact@[0-9a-f]{40}) # (v\S+)/.exec(BRANCH_TEMPLATE) ?? [];
 const UPLOAD_ARTIFACT_V3 = "actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf";
 
 const branchBase: RenderBranchParams = {
@@ -504,9 +510,17 @@ describe("ERD preview artifacts per GitHub host", () => {
     (parseYAML(content) as GeneratedWorkflow).jobs[job]?.steps.find((step) => step.id === id);
   const uploadOf = (content: string) =>
     stepOf(content, "tailor-erd-preview", "tailor-upload-erd-viewer");
+  const commentPermissionsOf = (content: string) =>
+    (parseYAML(content) as { jobs: Record<string, { permissions?: unknown }> }).jobs[
+      "tailor-erd-preview-comment"
+    ]?.permissions;
 
   const FAKE_GH = `#!/usr/bin/env bash
-printf '%s %s\\n' "$GH_HOST" "$GH_ENTERPRISE_TOKEN" >> "$FAKE_GH_DIR/calls"
+case "$GH_HOST" in
+  github.com | *.ghe.com) token=$GH_TOKEN ;;
+  *) token=$GH_ENTERPRISE_TOKEN ;;
+esac
+printf '%s %s\\n' "$GH_HOST" "$token" >> "$FAKE_GH_DIR/calls"
 case "$*" in
   *"--method POST"*)
     for arg; do case "$arg" in body=*) printf '%s' "\${arg#body=}" > "$FAKE_GH_DIR/body" ;; esac; done ;;
@@ -515,7 +529,12 @@ case "$*" in
 esac
 `;
 
-  const runComment = (content: string, serverUrl: string, listedArtifacts: string) => {
+  const runComment = (
+    content: string,
+    serverUrl: string,
+    listedArtifacts: string,
+    namespaces = JSON.stringify(erdPreview.namespaces),
+  ) => {
     using tmp = tempDir("erd-comment-");
     const bin = path.join(tmp.dir, "bin");
     fs.mkdirSync(bin);
@@ -528,7 +547,7 @@ esac
       "github.event.pull_request.number": "7",
       "github.event.pull_request.base.ref": "main",
       "github.event.pull_request.head.sha": "head-sha",
-      "needs.tailor-erd-preview-matrix.outputs.namespaces": JSON.stringify(erdPreview.namespaces),
+      "needs.tailor-erd-preview-matrix.outputs.namespaces": namespaces,
     };
     const step = stepOf(content, "tailor-erd-preview-comment", "tailor-comment-erd-preview");
     const env = Object.fromEntries(
@@ -549,6 +568,7 @@ esac
         FAKE_GH_ARTIFACTS: listedArtifacts,
         ...env,
       },
+      stdio: "pipe",
     });
     return {
       calls: fs.readFileSync(path.join(tmp.dir, "calls"), "utf-8").trim().split("\n"),
@@ -559,8 +579,9 @@ esac
   test("on github.com, uploads each viewer unzipped and links its artifact", () => {
     const { content } = renderBranchWorkflow({ ...branchBase, erdPreview });
 
-    expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_V7);
+    expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_GITHUB_COM);
     expect(uploadOf(content)?.with).toMatchObject({ archive: false });
+    expect(commentPermissionsOf(content)).toEqual({ actions: "read", "pull-requests": "write" });
 
     const { calls, body } = runComment(
       content,
@@ -575,18 +596,27 @@ esac
 
   test("on GitHub Enterprise Server, uploads with upload-artifact v3 and names the viewers before the run lists its artifacts", () => {
     const { content } = renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true });
-    const v7Upload = uploadOf(renderBranchWorkflow({ ...branchBase, erdPreview }).content);
-    const { archive, ...v7Inputs } = (v7Upload?.with ?? {}) as Record<string, unknown>;
+    const dotcomUpload = uploadOf(renderBranchWorkflow({ ...branchBase, erdPreview }).content);
+    const { archive, ...dotcomInputs } = (dotcomUpload?.with ?? {}) as Record<string, unknown>;
 
     expect(archive).toBe(false);
     expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_V3);
-    expect(uploadOf(content)?.with).toEqual(v7Inputs);
+    expect(uploadOf(content)?.with).toEqual(dotcomInputs);
+    expect(commentPermissionsOf(content)).toEqual({ "pull-requests": "write" });
 
     const { calls, body } = runComment(content, "https://ghes.example.com", "");
     expect(new Set(calls)).toEqual(new Set(["ghes.example.com test-token"]));
     expect(body).toContain("https://ghes.example.com/acme/widgets/actions/runs/99)");
     expect(body).toContain("- **tailordb viewer**: `tailordb-viewer.html`");
     expect(body).not.toContain("/artifacts/");
+  });
+
+  test("fails rather than commenting without viewers when they cannot be listed", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true });
+
+    expect(() => runComment(content, "https://ghes.example.com", "", "not json")).toThrow(
+      /Command failed/,
+    );
   });
 
   test("renders the github.com workflow unless ghes is set", () => {
@@ -611,11 +641,9 @@ esac
         .map((match) => match.groups?.currentValue);
 
     expect(updatable(renderBranchWorkflow({ ...branchBase, erdPreview }).content)).toEqual([
-      "v7.0.1",
+      UPLOAD_ARTIFACT_GITHUB_COM_VERSION,
     ]);
-    expect(
-      updatable(fs.readFileSync(path.join(import.meta.dirname, "branch.workflow.yml"), "utf8")),
-    ).toEqual(["v7.0.1"]);
+    expect(updatable(BRANCH_TEMPLATE)).toEqual([UPLOAD_ARTIFACT_GITHUB_COM_VERSION]);
     expect(
       updatable(renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true }).content),
     ).toEqual([]);
@@ -1906,7 +1934,7 @@ export default defineConfig({
     test("is not recorded when off", async () => {
       await setupTarget(erdOptions(false));
 
-      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V7);
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_GITHUB_COM);
       expect(readLock(testDir)?.targets[0]?.inputs).not.toHaveProperty("ghes");
     });
 
@@ -1923,10 +1951,10 @@ export default defineConfig({
       await setupTarget(erdOptions(false));
       await setupTarget(erdOptions(true));
       expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V3);
-      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_V7);
+      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_GITHUB_COM);
 
       await setupTarget(erdOptions(false));
-      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V7);
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_GITHUB_COM);
       expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_V3);
       expect(readLock(testDir)?.targets[0]?.inputs).not.toHaveProperty("ghes");
     });
