@@ -1,3 +1,5 @@
+import path from "node:path";
+import { preflightClaudeOnHost, runClaudeOnHost } from "./claude-host-runner";
 import {
   getClaudeRuntimeConfig,
   preflightClaudeRunner,
@@ -10,7 +12,7 @@ import {
   runCodexInPodman,
   type SolverResult,
 } from "./runner";
-import type { SolverAgent } from "./types";
+import type { SolverAgent, SolverRuntimeKind } from "./types";
 
 export type SolverPreflight = {
   skipped: boolean;
@@ -35,6 +37,8 @@ export type SolverRunOptions = {
 
 export type SolverRuntime = {
   agent: SolverAgent;
+  kind: SolverRuntimeKind;
+  verifier: SolverRuntimeKind;
   image: string;
   agentPackage: string;
   preflight: (model: string) => Promise<SolverPreflight>;
@@ -44,11 +48,14 @@ export type SolverRuntime = {
 export async function createSolverRuntime(
   agent: SolverAgent,
   packageRoot: string,
+  kind: SolverRuntimeKind = "podman",
 ): Promise<SolverRuntime> {
   if (agent === "codex") {
     const runtime = getCodexRuntimeConfig();
     return {
       agent,
+      kind: "podman",
+      verifier: "podman",
       image: runtime.image,
       agentPackage: runtime.codexPackage,
       preflight: async () => {
@@ -60,9 +67,26 @@ export async function createSolverRuntime(
   }
 
   const runtime = getClaudeRuntimeConfig(packageRoot);
+  if (kind === "host") {
+    return {
+      agent,
+      kind,
+      verifier: "host",
+      image: "host",
+      agentPackage: runtime.claudePackage,
+      preflight: async (model) => {
+        const result = await preflightClaudeOnHost({ runtime, model });
+        return { ...result, agentVersion: result.claudeVersion };
+      },
+      run: (options) =>
+        runClaudeOnHost({ ...options, repoRoot: path.resolve(packageRoot, ".."), runtime }),
+    };
+  }
   const token = await resolveClaudeOAuthToken({ env: process.env, tokenFile: runtime.tokenFile });
   return {
     agent,
+    kind,
+    verifier: "podman",
     image: runtime.image,
     agentPackage: runtime.claudePackage,
     preflight: async (model) => {

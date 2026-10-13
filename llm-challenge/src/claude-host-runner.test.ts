@@ -6,8 +6,10 @@ import {
   buildClaudeHostArgs,
   buildHostEnv,
   buildHostSettings,
+  assertHostRuntimeSupported,
   buildHostVerifierProfile,
   detectReadableToolchainPaths,
+  preflightClaudeOnHost,
   runClaudeOnHost,
 } from "./claude-host-runner";
 
@@ -246,5 +248,45 @@ describe("running claude on the host", () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     expect(isAlive()).toBe(false);
+  });
+});
+
+describe("host preflight", () => {
+  const probeScript = `if [ "$1" = "--version" ]; then echo "2.1.285 (Claude Code)"; exit 0; fi
+cat > /dev/null
+echo '{"type":"assistant","parent_tool_use_id":null,"message":{"model":"claude-opus-5-5","content":[]}}'
+echo '{"type":"result","subtype":"success","is_error":false}'`;
+
+  async function setUp(claudePackage: string) {
+    const dir = await makeTempDir();
+    const installCacheDir = path.join(dir, "cache");
+    await fs.mkdir(path.join(installCacheDir, "bin"), { recursive: true });
+    await fs.writeFile(path.join(installCacheDir, "bin", "claude"), `#!/bin/sh\n${probeScript}\n`);
+    await fs.chmod(path.join(installCacheDir, "bin", "claude"), 0o755);
+    return { image: "", claudePackage, tokenFile: "", installCacheDir };
+  }
+
+  test("passes when the pinned version answers the model probe with the requested model", async () => {
+    const runtime = await setUp("@anthropic-ai/claude-code@2.1.285");
+
+    const result = await preflightClaudeOnHost({ runtime, model: "claude-opus-5-5" });
+
+    expect(result).toMatchObject({ exitCode: 0, claudeVersion: "2.1.285" });
+  });
+
+  test("fails when the installed version differs from the pin", async () => {
+    const runtime = await setUp("@anthropic-ai/claude-code@2.1.300");
+
+    const result = await preflightClaudeOnHost({ runtime, model: "claude-opus-5-5" });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("expected Claude Code 2.1.300, got 2.1.285");
+  });
+});
+
+describe("host runtime support", () => {
+  test("needs macOS because the type check is confined with sandbox-exec", () => {
+    expect(() => assertHostRuntimeSupported("darwin")).not.toThrow();
+    expect(() => assertHostRuntimeSupported("linux")).toThrow("macOS");
   });
 });

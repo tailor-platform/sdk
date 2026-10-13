@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
+import { assertHostRuntimeSupported } from "./claude-host-runner";
 import { gradeCommand } from "./grade";
 import { discoverProblems, selectProblems } from "./problems";
 import { extractAgentSkills } from "./profile";
@@ -64,7 +65,14 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const sharedPnpmStoreRoot = path.resolve(packageRoot, ".cache", "pnpm-store");
   await fs.mkdir(sharedPnpmStoreRoot, { recursive: true });
 
-  const runtime = await createSolverRuntime(solverSettings.agent, packageRoot);
+  if (solverSettings.runtime === "host") {
+    assertHostRuntimeSupported();
+  }
+  const runtime = await createSolverRuntime(
+    solverSettings.agent,
+    packageRoot,
+    solverSettings.runtime,
+  );
   console.log(`Preflight ${solverSettings.agent} ${runtime.image}`);
   const preflight = options.preflight
     ? await runtime.preflight(solverSettings.model)
@@ -113,6 +121,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       effort: solverSettings.effort,
       runsPerProblem: rerunPlan?.sourceReport.runsPerProblem ?? options.runs,
       runner: {
+        kind: runtime.kind,
         image: runtime.image,
         agentPackage: runtime.agentPackage,
         agentVersion: preflight.skipped ? undefined : preflight.agentVersion,
@@ -212,6 +221,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
           runIndex: task.runIndex,
           worktreePath: paths.worktreePath,
           verifierImage: runtime.image,
+          verifier: runtime.verifier,
+          hostRepoRoot: repoRoot,
           verificationSummaryPath: paths.verificationSummaryPath,
           verificationStdoutPath: paths.verificationStdoutPath,
           verificationStderrPath: paths.verificationStderrPath,
