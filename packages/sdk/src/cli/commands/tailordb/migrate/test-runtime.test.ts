@@ -249,6 +249,52 @@ describe("migration test runtime", () => {
     });
   });
 
+  test("bounds a poll that never answers by the remaining timeout", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi.fn(
+        (_request: unknown, callOptions: { timeoutMs: number }) =>
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new ConnectError("deadline exceeded", Code.DeadlineExceeded)),
+              callOptions.timeoutMs,
+            ),
+          ),
+      ),
+    } as unknown as OperatorClient;
+
+    const startedAt = Date.now();
+    await expect(
+      waitForCloneApplicationData(client, {
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+        operationId: "operation",
+        timeout: 50,
+        errorCodePrefix: "DATA_CLONE",
+      }),
+    ).rejects.toMatchObject({ code: "DATA_CLONE_TIMEOUT" });
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  test("does not sleep past the deadline between polls", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi
+        .fn()
+        .mockResolvedValue({ status: CloneOperationStatus.PENDING, errorMessage: "" }),
+    } as unknown as OperatorClient;
+
+    const startedAt = Date.now();
+    await expect(
+      waitForCloneApplicationData(client, {
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+        operationId: "operation",
+        pollInterval: 5_000,
+        timeout: 50,
+      }),
+    ).rejects.toMatchObject({ code: "MIGRATION_TEST_CLONE_TIMEOUT" });
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
   function runtimeState(client: OperatorClient, services: unknown[] = []) {
     return {
       client,

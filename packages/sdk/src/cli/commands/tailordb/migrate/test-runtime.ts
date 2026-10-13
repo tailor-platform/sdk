@@ -242,12 +242,23 @@ export async function waitForCloneApplicationData(
   const errorCodePrefix = options.errorCodePrefix ?? "MIGRATION_TEST_CLONE";
   const deadline = Date.now() + timeout;
 
-  while (Date.now() <= deadline) {
-    const operation = await client.getCloneApplicationDataOperation({
-      sourceWorkspaceId: options.sourceWorkspaceId,
-      targetWorkspaceId: options.targetWorkspaceId,
-      operationId: options.operationId,
-    });
+  for (let remaining = timeout; remaining > 0; remaining = deadline - Date.now()) {
+    let operation;
+    try {
+      operation = await client.getCloneApplicationDataOperation(
+        {
+          sourceWorkspaceId: options.sourceWorkspaceId,
+          targetWorkspaceId: options.targetWorkspaceId,
+          operationId: options.operationId,
+        },
+        { timeoutMs: remaining },
+      );
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.DeadlineExceeded) {
+        break;
+      }
+      throw error;
+    }
     if (operation.status === CloneOperationStatus.COMPLETED) {
       return;
     }
@@ -263,7 +274,7 @@ export async function waitForCloneApplicationData(
     ) {
       throw internalError(`Application data clone returned unexpected status ${operation.status}.`);
     }
-    await delay(pollInterval);
+    await delay(Math.min(pollInterval, Math.max(deadline - Date.now(), 0)));
   }
 
   throw CLIError({

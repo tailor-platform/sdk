@@ -432,8 +432,10 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
  *
  * Retries unary methods on `Unavailable`/`ResourceExhausted`, and
  * `Aborted`/`Internal` only for methods declared side-effect-free or idempotent,
- * up to 3 attempts. Workspace creation and workflow starts are excluded because
- * they have no idempotency key and a lost response is ambiguous.
+ * up to 3 attempts. Workspace creation, workflow starts, and application data
+ * cloning are excluded because they have no idempotency key and a lost response
+ * is ambiguous: a retry could start a second operation, or fail while the first
+ * keeps running.
  * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
