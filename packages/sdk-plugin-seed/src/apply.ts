@@ -18,7 +18,13 @@ import {
 import { renderFor } from "@tailor-platform/shared/color";
 import * as path from "pathe";
 import { z } from "zod";
-import { datasetArg, noBaseArg, selectDatasets } from "./datasets";
+import {
+  allDatasetsArg,
+  assertDatasetSelection,
+  datasetArg,
+  noBaseArg,
+  selectDatasets,
+} from "./datasets";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
@@ -473,6 +479,7 @@ export const seedApplyCommand = defineAppCommand({
       description: "Skip confirmation prompts (for --truncate)",
     }),
     ...datasetArg,
+    ...allDatasetsArg,
     ...noBaseArg,
     entities: arg(z.array(z.string()).default([]), {
       positional: true,
@@ -480,11 +487,12 @@ export const seedApplyCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    if (args["no-base"] && args.dataset.length === 0) {
-      throw new Error("--no-base needs at least one --dataset to apply.");
+    assertDatasetSelection(args.dataset, args["all-datasets"]);
+    if (args["no-base"] && args.dataset.length === 0 && !args["all-datasets"]) {
+      throw new Error("--no-base needs at least one --dataset or --all-datasets to apply.");
     }
     const context = await loadSeedContext({ configPath: args.config });
-    const datasets = selectDatasets(context, args.dataset);
+    const datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
 
     const namespaceTables = Object.fromEntries(
       context.namespaces.map((ns) => [ns.namespace, ns.types]),

@@ -16,6 +16,19 @@ export const datasetArg = {
   }),
 };
 
+export const allDatasetsArg = {
+  "all-datasets": arg(z.boolean().default(false), {
+    description:
+      "Select every dataset directory in name order, including local gitignored datasets (cannot be combined with --dataset)",
+  }),
+};
+
+export function assertDatasetSelection(requested: readonly string[], allDatasets: boolean): void {
+  if (allDatasets && requested.length > 0) {
+    throw new Error("--all-datasets cannot be combined with --dataset.");
+  }
+}
+
 export const noBaseArg = {
   "no-base": arg(z.boolean().default(false), {
     description: "Leave out the base seed data, using only the selected datasets",
@@ -99,18 +112,24 @@ function assertDatasetTables(dirs: readonly string[], tables: Set<string>): void
  * A directory named more than once is read once, where it is first named.
  * @param context - Seed context of the project
  * @param requested - Dataset names in the order they were given
+ * @param allDatasets - Select every dataset directory in name order
  * @returns The selected dataset directories
  */
 export function selectDatasets(
   context: SeedContext,
   requested: readonly string[],
+  allDatasets = false,
 ): DatasetSelection {
-  if (requested.length === 0) {
+  assertDatasetSelection(requested, allDatasets);
+  if (requested.length === 0 && !allDatasets) {
     return { names: [], dirs: [] };
   }
   const combinations = datasetCombinations(context);
   const dataDir = path.join(context.distPath, "data");
   const directories = listDatasetDirectories(dataDir);
+  if (allDatasets && directories.length === 0) {
+    throw new Error(`No dataset directories found in ${dataDir}.`);
+  }
   const collision = Object.keys(combinations).find((name) => directories.includes(name));
   if (collision) {
     throw new Error(
@@ -119,7 +138,7 @@ export function selectDatasets(
     );
   }
 
-  const names = requested.flatMap((name) => {
+  const names = (allDatasets ? directories : requested).flatMap((name) => {
     assertDatasetName(name);
     const combination = Object.hasOwn(combinations, name) ? combinations[name] : undefined;
     if (!combination) {

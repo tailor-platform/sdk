@@ -125,16 +125,20 @@ describe("seedValidateCommand", () => {
     expect(String(result.error)).toContain("field `name` is required with --upsert");
   });
 
-  test("checks dataset rows with --upsert and honors --no-base", async () => {
-    writeLines(path.join(dataDir, "Item.jsonl"), [{ name: "base without id" }]);
-    writeLines(path.join(cogs, "Item.jsonl"), [{ id: "i2", name: "dataset item" }]);
-    expect((await runValidate(["--upsert", "--dataset", "cogs"])).exitCode).toBe(1);
-    expect((await runValidate(["--upsert", "--dataset", "cogs", "--no-base"])).exitCode).toBe(0);
-    writeLines(path.join(cogs, "Item.jsonl"), [{ name: "dataset without id" }]);
-    const result = await runValidate(["--upsert", "--dataset", "cogs", "--no-base"]);
-    expect(result.exitCode).toBe(1);
-    expect(String(result.error)).toContain(path.join(cogs, "Item.jsonl"));
-  });
+  test.each(["--dataset", "--all-datasets"])(
+    "checks dataset rows with --upsert and honors --no-base: %s",
+    async (mode) => {
+      const selection = mode === "--dataset" ? [mode, "cogs"] : [mode];
+      writeLines(path.join(dataDir, "Item.jsonl"), [{ name: "base without id" }]);
+      writeLines(path.join(cogs, "Item.jsonl"), [{ id: "i2", name: "dataset item" }]);
+      expect((await runValidate(["--upsert", ...selection])).exitCode).toBe(1);
+      expect((await runValidate(["--upsert", ...selection, "--no-base"])).exitCode).toBe(0);
+      writeLines(path.join(cogs, "Item.jsonl"), [{ name: "dataset without id" }]);
+      const result = await runValidate(["--upsert", ...selection, "--no-base"]);
+      expect(result.exitCode).toBe(1);
+      expect(String(result.error)).toContain(path.join(cogs, "Item.jsonl"));
+    },
+  );
 
   test("accepts complete rows and IdP users without an id with --upsert", async () => {
     const context = await sdk.loadSeedContext();
@@ -150,6 +154,41 @@ describe("seedValidateCommand", () => {
     const result = await runValidate(["--upsert", dataDir]);
     expect(result.exitCode).toBe(1);
     expect(String(result.error)).toContain("--upsert cannot be combined with a path");
+  });
+
+  test("validates all datasets together with base data", async () => {
+    const local = path.join(dataDir, "local");
+    mkdirSync(local);
+    writeLines(path.join(local, "Item.jsonl"), [{ id: "i2", name: "local item" }]);
+    writeLines(path.join(cogs, "ItemValuation.jsonl"), [{ id: "v1", name: "v", itemId: "i2" }]);
+    const result = await runValidate(["--all-datasets", "--json"]);
+    expect(result.exitCode).toBe(0);
+    expect(logger.out).toHaveBeenCalledWith({
+      valid: true,
+      path: dataDir,
+      datasets: ["cogs", "local"],
+    });
+    writeLines(path.join(local, "Item.jsonl"), [{ id: "i1", name: "duplicate base item" }]);
+    const duplicate = await runValidate(["--all-datasets"]);
+    expect(duplicate.exitCode).toBe(1);
+    expect(String(duplicate.error)).toContain(path.join(local, "Item.jsonl"));
+  });
+
+  test("validates all datasets without base rows", async () => {
+    writeLines(path.join(cogs, "Item.jsonl"), [{ id: "i1", name: "dataset item" }]);
+    writeLines(path.join(cogs, "ItemValuation.jsonl"), [{ id: "v1", name: "v", itemId: "i1" }]);
+    const result = await runValidate(["--all-datasets", "--no-base"]);
+    expect(result.exitCode).toBe(0);
+    const withBase = await runValidate(["--all-datasets"]);
+    expect(withBase.exitCode).toBe(1);
+    expect(String(withBase.error)).toContain(path.join(cogs, "Item.jsonl"));
+  });
+
+  test.each(["dataset", "path"])("rejects all datasets combined with %s", async (kind) => {
+    const extra = kind === "path" ? [dataDir] : ["--dataset", "cogs"];
+    const result = await runValidate(["--all-datasets", ...extra]);
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("cannot be combined");
   });
 
   test("validates a dataset on top of the base data", async () => {
@@ -185,7 +224,7 @@ describe("seedValidateCommand", () => {
 
     expect(result.exitCode).toBe(1);
     expect(String(result.error)).toContain(
-      "--dataset and --no-base cannot be combined with a path",
+      "--dataset, --all-datasets and --no-base cannot be combined with a path",
     );
   });
 

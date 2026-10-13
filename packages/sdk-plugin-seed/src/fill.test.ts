@@ -395,41 +395,67 @@ describe("seedFillCommand", () => {
     });
   }
 
-  test("fills only the rows of the selected datasets, using the base schema files", async () => {
-    await writeFile(path.join(seedDataDir, "Widget.schema.ts"), schemaSource("Widget"));
-    const baseFile = path.join(seedDataDir, "Widget.jsonl");
-    await writeFile(baseFile, '{"name":"base"}\n');
-    const datasetFiles = [];
-    for (const name of ["cogs", "shipments"]) {
-      await mkdir(path.join(seedDataDir, name));
-      const file = path.join(seedDataDir, name, "Widget.jsonl");
-      await writeFile(file, `{"name":"${name}"}\n`);
-      datasetFiles.push(file);
-    }
+  test.each([["--dataset", "preview"], ["--all-datasets"]])(
+    "fills only dataset rows with %j, using the base schema files",
+    async (...selection) => {
+      await writeFile(path.join(seedDataDir, "Widget.schema.ts"), schemaSource("Widget"));
+      const baseFile = path.join(seedDataDir, "Widget.jsonl");
+      await writeFile(baseFile, '{"name":"base"}\n');
+      const datasetFiles = [];
+      for (const name of ["cogs", "shipments"]) {
+        await mkdir(path.join(seedDataDir, name));
+        const file = path.join(seedDataDir, name, "Widget.jsonl");
+        await writeFile(file, `{"name":"${name}"}\n`);
+        datasetFiles.push(file);
+      }
 
-    const result = await runFill(["--dataset", "preview", "--json"]);
+      const result = await runFill([...selection, "--json"]);
 
-    expect(result.exitCode).toBe(0);
-    expect(logger.info.mock.calls.map(([message]) => message)).toEqual([
-      "Filling dataset cogs",
-      "Filling dataset shipments",
-    ]);
-    await expect(readFile(baseFile, "utf-8")).resolves.toBe('{"name":"base"}\n');
-    for (const file of datasetFiles) {
-      const [row] = await readRows(file);
-      expect(uuid.safeParse(row?.id).success, `id: ${String(row?.id)}`).toBe(true);
-    }
-    expect(logger.out).toHaveBeenCalledWith({
-      path: seedDataDir,
-      datasets: ["cogs", "shipments"],
-      filled: datasetFiles.map((file) => ({ table: "Widget", file, fields: ["id"], count: 1 })),
-    });
-  });
+      expect(result.exitCode).toBe(0);
+      expect(logger.info.mock.calls.map(([message]) => message)).toEqual([
+        "Filling dataset cogs",
+        "Filling dataset shipments",
+      ]);
+      await expect(readFile(baseFile, "utf-8")).resolves.toBe('{"name":"base"}\n');
+      for (const file of datasetFiles) {
+        const [row] = await readRows(file);
+        expect(uuid.safeParse(row?.id).success, `id: ${String(row?.id)}`).toBe(true);
+      }
+      expect(logger.out).toHaveBeenCalledWith({
+        path: seedDataDir,
+        datasets: ["cogs", "shipments"],
+        filled: datasetFiles.map((file) => ({ table: "Widget", file, fields: ["id"], count: 1 })),
+      });
+    },
+  );
 
   test("rejects a dataset together with a path", async () => {
     const result = await runFill(["--dataset", "cogs", seedDataDir]);
 
     expect(result.exitCode).toBe(1);
-    expect(String(result.error)).toContain("--dataset cannot be combined with a path");
+    expect(String(result.error)).toContain(
+      "--dataset and --all-datasets cannot be combined with a path",
+    );
+  });
+
+  test("rejects all datasets together with a path", async () => {
+    const result = await runFill(["--all-datasets", seedDataDir]);
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("cannot be combined with a path");
+  });
+
+  test("rejects all datasets combined with named datasets", async () => {
+    const result = await runFill(["--all-datasets", "--dataset", "cogs"]);
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("cannot be combined with --dataset");
+  });
+
+  test("does not fill the base when all datasets selects nothing", async () => {
+    const baseFile = path.join(seedDataDir, "Widget.jsonl");
+    await writeFile(baseFile, '{"name":"base"}\n');
+    const result = await runFill(["--all-datasets"]);
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("No dataset directories found");
+    await expect(readFile(baseFile, "utf-8")).resolves.toBe('{"name":"base"}\n');
   });
 });

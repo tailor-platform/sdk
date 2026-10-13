@@ -1,7 +1,13 @@
 import * as sdkCli from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
-import { datasetArg, noBaseArg, selectDatasets } from "./datasets";
+import {
+  allDatasetsArg,
+  assertDatasetSelection,
+  datasetArg,
+  noBaseArg,
+  selectDatasets,
+} from "./datasets";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import type { DatasetSelection } from "./datasets";
 
@@ -25,6 +31,7 @@ export const seedValidateCommand = defineAppCommand({
   args: z.strictObject({
     ...configArg,
     ...datasetArg,
+    ...allDatasetsArg,
     ...noBaseArg,
     upsert: arg(z.boolean().default(false), {
       description: "Also check the id and required fields needed by seed apply --upsert",
@@ -39,14 +46,15 @@ export const seedValidateCommand = defineAppCommand({
   run: async (args) => {
     const { validateSeedData } = await import("@tailor-platform/sdk/seed");
 
-    if (args.path && (args.dataset.length > 0 || args["no-base"])) {
-      throw new Error("--dataset and --no-base cannot be combined with a path.");
+    assertDatasetSelection(args.dataset, args["all-datasets"]);
+    if (args.path && (args.dataset.length > 0 || args["all-datasets"] || args["no-base"])) {
+      throw new Error("--dataset, --all-datasets and --no-base cannot be combined with a path.");
     }
     if (args.path && args.upsert) {
       throw new Error("--upsert cannot be combined with a path. Use the configured seed data.");
     }
-    if (args["no-base"] && args.dataset.length === 0) {
-      throw new Error("--no-base needs at least one --dataset to validate.");
+    if (args["no-base"] && args.dataset.length === 0 && !args["all-datasets"]) {
+      throw new Error("--no-base needs at least one --dataset or --all-datasets to validate.");
     }
 
     let targetPath: string;
@@ -56,7 +64,7 @@ export const seedValidateCommand = defineAppCommand({
     } else {
       const context = await loadSeedContext({ configPath: args.config });
       targetPath = path.join(context.distPath, "data");
-      datasets = selectDatasets(context, args.dataset);
+      datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
       if (args.upsert) {
         assertSeedDataDirectory(targetPath);
         const dataDirs = [...(args["no-base"] ? [] : [targetPath]), ...datasets.dirs];

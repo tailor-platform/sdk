@@ -91,6 +91,19 @@ A table's rows are the rows of its base file followed by the rows of its file in
 
 A file in a dataset selected with `--dataset` that does not match a seeded table is rejected, so a misspelled file name does not silently seed nothing.
 
+### Selecting every dataset
+
+`--all-datasets` selects every dataset directory in name order, including directories added later and gitignored directories such as `local/`. It is available for `apply`, `validate`, and `fill`, and cannot be combined with `--dataset` or a file or directory path. Named combinations in `seedPlugin({ datasets })` are not expanded; the directories themselves are selected. A dataset directory name starts with a letter or digit and contains only letters, digits, `-`, and `_`; hidden directories are not selected. If no dataset directories exist, the command fails before applying or filling any rows.
+
+```bash
+tailor seed validate --all-datasets             # base and all datasets, checked together
+tailor seed apply --all-datasets                # base, then every dataset in name order
+tailor seed fill --all-datasets                 # fill every dataset, leaving base files unchanged
+tailor seed apply --all-datasets --no-base       # every dataset without base rows
+```
+
+The same duplicate-row checks and table filters apply. `apply --truncate --all-datasets` keeps the existing truncate scope and confirmation, then seeds the base data and every dataset, including `local/`. With `--no-base`, it seeds only the datasets after truncating. Use an explicit `--dataset` selection when local rows or other environments' datasets should be left out.
+
 ### Naming combinations
 
 Name the combinations you use in the `datasets` option of `seedPlugin`, so CI and scripts do not repeat the list:

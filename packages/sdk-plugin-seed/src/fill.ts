@@ -7,7 +7,7 @@ import {
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
-import { selectDatasets } from "./datasets";
+import { allDatasetsArg, assertDatasetSelection, selectDatasets } from "./datasets";
 import type { DatasetSelection } from "./datasets";
 
 export const seedFillCommand = defineAppCommand({
@@ -21,6 +21,7 @@ export const seedFillCommand = defineAppCommand({
     "directory. With --dataset, only the files of the selected datasets are filled.",
   args: z.strictObject({
     ...configArg,
+    ...allDatasetsArg,
     dataset: arg(z.array(z.string()).default([]), {
       description:
         "Dataset whose files to fill instead of the base seed data: a directory under the seed data directory, or a name from the seedPlugin datasets option (repeatable)",
@@ -48,8 +49,9 @@ export const seedFillCommand = defineAppCommand({
     if (fields.length === 0) {
       throw new Error("--fields needs at least one field name.");
     }
-    if (args.path && args.dataset.length > 0) {
-      throw new Error("--dataset cannot be combined with a path.");
+    assertDatasetSelection(args.dataset, args["all-datasets"]);
+    if (args.path && (args.dataset.length > 0 || args["all-datasets"])) {
+      throw new Error("--dataset and --all-datasets cannot be combined with a path.");
     }
 
     let targetPath: string;
@@ -59,7 +61,7 @@ export const seedFillCommand = defineAppCommand({
     } else {
       const context = await loadSeedContext({ configPath: args.config });
       targetPath = path.join(context.distPath, "data");
-      datasets = selectDatasets(context, args.dataset);
+      datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
     }
 
     const targets =
