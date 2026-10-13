@@ -61,8 +61,12 @@ const pfUserFileSchema = z.looseObject({
 
 const pfUserSchemaV2 = z.discriminatedUnion("storage", [pfUserKeyringSchema, pfUserFileSchema]);
 
-const pfUserMetadataV3 = {
+const pfUserIdentitySchemaV3 = z.strictObject({
   email: z.string().optional(),
+});
+
+const pfUserMetadataV3 = {
+  ...pfUserIdentitySchemaV3.shape,
   default_organization_id: z.string().optional(),
   default_folder_id: z.string().optional(),
 };
@@ -323,6 +327,7 @@ function declaredKeys(...schemas: ObjectSchema[]): Set<string> {
 
 const v2ConfigKeys = declaredKeys(pfConfigSchemaV2);
 const v2UserKeys = declaredKeys(pfUserKeyringSchema, pfUserFileSchema);
+const userTokenKeys = v2UserKeys.union(declaredKeys(pfUserIdentitySchemaV3));
 const profileKeys = declaredKeys(pfProfileSchema);
 // An older format does not validate keys a later format declares, so migration drops them.
 const v2OnlyConfigKeys = v2ConfigKeys.difference(declaredKeys(pfConfigSchemaV1));
@@ -975,7 +980,7 @@ export async function resolveTokens(
 
 function userExtraFields(entry: PfUser | undefined) {
   if (!entry) return {};
-  return withoutKeys(entry, v2UserKeys.union(v3OnlyUserKeys));
+  return withoutKeys(entry, userTokenKeys);
 }
 
 type RemoveUserAliasOptions = {
