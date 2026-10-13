@@ -25,6 +25,7 @@ import {
   clearMigrationInProgress,
   executeMigrations,
   isMigrationPartiallyApplied,
+  rollbackIncompleteError,
   updateMigrationLabel,
   type MigrationContext,
 } from "./migration";
@@ -304,6 +305,23 @@ async function removeRunResources(
         `${error instanceof Error ? error.message : String(error)}. A later deploy removes them.`,
     );
   }
+}
+
+async function releaseRolledBackRun(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  migrationNumber: number,
+): Promise<void> {
+  try {
+    await clearMigrationInProgress(client, workspaceId, namespace);
+  } catch (error) {
+    logger.warn(
+      `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migrationNumber)}: ` +
+        `${error instanceof Error ? error.message : String(error)}.`,
+    );
+  }
+  await removeRunResources(client, workspaceId, namespace, migrationNumber);
 }
 
 function withholdTablesFromRestoration(
@@ -600,6 +618,34 @@ export async function applyTailorDB(
           const attemptedTables = new Set<string>();
           const inProgress = inProgressMigrations[migration.namespace]?.number === migration.number;
           const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
+          const rollsBackOnFailure =
+            runsSteps &&
+            migration.scriptForm?.kind === "steps" &&
+            migration.scriptForm.rollbackOnFailure === true;
+          const rollBackFailedMigration = async (error: unknown): Promise<unknown> => {
+            const failedTables = await rollbackSingleMigrationAfterFailure(
+              client,
+              migration,
+              migrationContext.workspaceId,
+              migrationContext.tailorDBInputs,
+              attemptedTables,
+            );
+            if (!rollsBackOnFailure) return error;
+            await releaseRolledBackRun(
+              client,
+              migrationContext.workspaceId,
+              migration.namespace,
+              migration.number,
+            );
+            if (failedTables.length === 0) return error;
+            withholdTablesFromRestoration(
+              migration.namespace,
+              new Set(failedTables),
+              restorationSnapshots,
+              restorationSettings,
+            );
+            return rollbackIncompleteError(migration, failedTables, error);
+          };
           try {
             // Pre-migration phase: Create/update tables with breaking fields as optional
             await withSpan("apply.tailorDB.migration.prePhase", () =>
@@ -619,19 +665,13 @@ export async function applyTailorDB(
               );
             }
           } catch (error) {
-            const shouldKeepMigrationInProgress = inProgress || isMigrationPartiallyApplied(error);
+            const shouldKeepMigrationInProgress =
+              !rollsBackOnFailure && (inProgress || isMigrationPartiallyApplied(error));
             if (shouldKeepMigrationInProgress) {
               partialMigrations.set(migration.namespace, migration);
               throw error;
             }
-            await rollbackSingleMigrationAfterFailure(
-              client,
-              migration,
-              migrationContext.workspaceId,
-              migrationContext.tailorDBInputs,
-              attemptedTables,
-            );
-            throw error;
+            throw await rollBackFailedMigration(error);
           }
 
           try {
@@ -645,7 +685,7 @@ export async function applyTailorDB(
               ),
             );
           } catch (error) {
-            if (inProgress || runsSteps) {
+            if (!rollsBackOnFailure && (inProgress || runsSteps)) {
               partialMigrations.set(migration.namespace, migration);
               await reapplyPrePhaseAfterPostPhaseFailure(
                 client,
@@ -656,14 +696,7 @@ export async function applyTailorDB(
               );
               throw error;
             }
-            await rollbackSingleMigrationAfterFailure(
-              client,
-              migration,
-              migrationContext.workspaceId,
-              migrationContext.tailorDBInputs,
-              attemptedTables,
-            );
-            throw error;
+            throw await rollBackFailedMigration(error);
           }
 
           const previousRestorationSnapshot = restorationSnapshots.get(migration.namespace);

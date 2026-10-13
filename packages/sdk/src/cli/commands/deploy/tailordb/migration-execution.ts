@@ -410,9 +410,9 @@ export async function rollbackSingleMigrationAfterFailure(
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   attemptedTables: ReadonlySet<string>,
-): Promise<void> {
+): Promise<string[]> {
   try {
-    await rollbackSingleMigrationPrePhase(
+    return await rollbackSingleMigrationPrePhase(
       client,
       migration,
       workspaceId,
@@ -424,6 +424,7 @@ export async function rollbackSingleMigrationAfterFailure(
       `Failed to roll back migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
         `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
     );
+    return [...attemptedTables];
   }
 }
 
@@ -754,7 +755,7 @@ export async function executeSingleMigrationPostPhaseDeletions(
  * @param workspaceId - Workspace ID
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
- * @returns {Promise<void>} Promise that resolves when rollback attempts complete
+ * @returns Names of the tables whose schema could not be reverted
  */
 async function rollbackSingleMigrationPrePhase(
   client: OperatorClient,
@@ -762,10 +763,10 @@ async function rollbackSingleMigrationPrePhase(
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   attemptedTables: ReadonlySet<string>,
-): Promise<void> {
+): Promise<string[]> {
   // The baseline migration has no prior checkpoint to revert to.
-  if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
-  if (attemptedTables.size === 0) return;
+  if (migration.number <= INITIAL_SCHEMA_NUMBER) return [];
+  if (attemptedTables.size === 0) return [];
 
   const priorSnapshot = reconstructSnapshotFromMigrations(
     migration.migrationsDir,
@@ -779,7 +780,7 @@ async function rollbackSingleMigrationPrePhase(
         `prior snapshot (migration ${formatMigrationNumber(migration.number - 1)}) could not be reconstructed. ` +
         "Leaving schema as-is; manual repair may be required.",
     );
-    return;
+    return [...attemptedTables];
   }
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
 
@@ -796,6 +797,7 @@ async function rollbackSingleMigrationPrePhase(
     return priorTable ? [{ tableName, priorTable }] : [];
   });
   const newTables = [...attemptedTables].filter((tableName) => !priorSnapshot.tables[tableName]);
+  const failedTables: string[] = [];
 
   for (const { tableName, priorTable } of restoredTables) {
     try {
@@ -810,6 +812,7 @@ async function rollbackSingleMigrationPrePhase(
         tailordbType: manifest,
       });
     } catch (rollbackError) {
+      failedTables.push(tableName);
       logger.warn(
         `Failed to roll back table '${tableName}' in namespace '${migration.namespace}': ` +
           `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
@@ -834,10 +837,12 @@ async function rollbackSingleMigrationPrePhase(
         tailordbTypeName: tableName,
       });
     } catch (rollbackError) {
+      failedTables.push(tableName);
       logger.warn(
         `Failed to roll back table '${tableName}' in namespace '${migration.namespace}': ` +
           `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
       );
     }
   }
+  return failedTables;
 }

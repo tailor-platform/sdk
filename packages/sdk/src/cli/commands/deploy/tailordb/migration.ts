@@ -467,6 +467,40 @@ function unconfirmedStartError(migration: PendingMigration, cause: CLIError): Er
 }
 
 /**
+ * The failure of a migration that asked to be rolled back, whose pre-migration
+ * schema changes could not be reverted on some tables.
+ * @param migration - Migration whose rollback was incomplete
+ * @param failedTables - Tables whose schema could not be reverted
+ * @param cause - The failure that triggered the rollback
+ * @returns The error to raise instead of the original failure
+ */
+export function rollbackIncompleteError(
+  migration: PendingMigration,
+  failedTables: readonly string[],
+  cause: unknown,
+): Error {
+  const { namespace } = migration;
+  const migrationLabel = `${namespace}/${formatMigrationNumber(migration.number)}`;
+  const checkpoint = formatMigrationNumber(migration.number - 1);
+  return CLIError({
+    code: "MIGRATION_ROLLBACK_INCOMPLETE",
+    message:
+      `Migration ${migrationLabel} failed, and its schema changes could not be rolled back on ${failedTables.join(", ")}: ` +
+      `${cause instanceof Error ? cause.message : String(cause)}`,
+    suggestion:
+      `These tables stay in maintenance mode. Run 'tailor tailordb migration validate --namespace ${namespace}' to see which tables differ, ` +
+      `then 'tailor tailordb migration sync ${checkpoint} --namespace ${namespace}' to return the schema to migration ${checkpoint}. ` +
+      "sync removes the tables and fields that migration's snapshot does not have. Fix the script and deploy again.",
+    context: {
+      namespace,
+      migrationNumber: migration.number,
+      failedTables: [...failedTables],
+    },
+    cause,
+  });
+}
+
+/**
  * Clear the in-progress record of a migration whose steps did not commit.
  * When the record may remain, the migration stays in progress so the
  * Pre-phase schema matches what the record describes.
