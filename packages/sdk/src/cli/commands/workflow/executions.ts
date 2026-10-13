@@ -217,21 +217,11 @@ export async function getWorkflowExecution(
     functionExecutionId: string,
   ): Promise<FunctionExecution | undefined> {
     try {
-      const filter = create(FilterSchema, {
-        condition: create(ConditionSchema, {
-          field: "id",
-          operator: Condition_Operator.EQ,
-          value: { kind: { case: "stringValue", value: functionExecutionId } },
-        }),
-      });
-
-      const response = await client.listFunctionExecutions({
+      const { execution } = await client.getFunctionExecution({
         workspaceId,
-        filter,
-        pageSize: 1,
+        executionId: functionExecutionId,
       });
-
-      return response.executions[0];
+      return execution;
     } catch {
       return undefined;
     }
