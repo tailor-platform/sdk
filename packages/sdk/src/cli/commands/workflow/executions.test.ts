@@ -1,4 +1,7 @@
-import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
@@ -56,5 +59,41 @@ describe("getWorkflowExecution", () => {
       lastError: null,
     });
     expect(result.attempts).toBeGreaterThan(0);
+  });
+
+  test("reads job logs from the structured entries of each function execution", async () => {
+    const getFunctionExecution = vi.fn().mockResolvedValue({
+      execution: {
+        logEntries: [{ message: "first line" }, { message: "second line" }],
+        result: "",
+      },
+    });
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getWorkflowExecution: vi.fn().mockResolvedValue({
+        execution: {
+          ...execution(WorkflowExecution_Status.SUCCESS),
+          jobExecutions: [
+            {
+              id: "job-1",
+              stackedJobName: "main",
+              status: WorkflowJobExecution_Status.SUCCESS,
+              executionId: "function-execution-1",
+            },
+          ],
+        },
+      }),
+      getFunctionExecution,
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+
+    const { execution: result } = await getWorkflowExecution({
+      executionId: "execution-1",
+      logs: true,
+    });
+
+    expect(getFunctionExecution).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      executionId: "function-execution-1",
+    });
+    expect(result.jobDetails?.[0]?.logs).toBe("first line\nsecond line");
   });
 });

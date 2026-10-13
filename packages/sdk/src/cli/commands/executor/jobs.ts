@@ -27,7 +27,10 @@ import { fetchAll, fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatKeyValueTable } from "#/cli/shared/format";
-import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
+import {
+  functionExecutionStatusToString,
+  joinFunctionLogMessages,
+} from "#/cli/shared/function-execution";
 import { logger, styles } from "#/cli/shared/logger";
 import { spinner } from "#/cli/shared/spinner";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
@@ -600,7 +603,9 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                         targetType: targetTypeStr,
                         functionExecutionId: operationReference,
                         functionStatus,
-                        functionLogs: options.logs ? execution.logs || undefined : undefined,
+                        functionLogs: options.logs
+                          ? joinFunctionLogMessages(execution.logEntries) || undefined
+                          : undefined,
                       },
                       false,
                     );

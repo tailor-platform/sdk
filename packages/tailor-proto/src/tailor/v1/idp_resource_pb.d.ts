@@ -384,6 +384,9 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
 
   /**
    * List of allowed email domains (e.g., ["example.com", "corp.example.com"])
+   * A single "*" entry allows every email domain, and cannot be combined with
+   * other entries. This is the only way to enable Google/Microsoft OAuth without
+   * enumerating domains, since those require allowed_email_domains to be set.
    * Empty list means all domains are allowed (backward compatible)
    * Cannot be set when use_non_email_identifier is true
    *
@@ -395,7 +398,7 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * allow_google_oauth enables "Sign in with Google" for this namespace.
    * When enabled, users can authenticate using their Google account.
    * Cannot be enabled when use_non_email_identifier is true.
-   * Requires allowed_email_domains to be set.
+   * Requires allowed_email_domains to be set (["*"] to allow all domains).
    *
    * @generated from field: bool allow_google_oauth = 10;
    */
@@ -415,6 +418,7 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * allow_microsoft_oauth enables "Sign in with Microsoft" for this namespace.
    * Requires disable_password_auth to be true.
    * Cannot be enabled when use_non_email_identifier is true.
+   * Requires allowed_email_domains to be set (["*"] to allow all domains).
    *
    * @generated from field: bool allow_microsoft_oauth = 12;
    */

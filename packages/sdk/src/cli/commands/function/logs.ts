@@ -7,7 +7,10 @@ import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/share
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatKeyValueTable } from "#/cli/shared/format";
-import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
+import {
+  functionExecutionStatusToString,
+  joinFunctionLogMessages,
+} from "#/cli/shared/function-execution";
 import {
   downloadFunctionScript,
   scriptNameToRegistryName,
@@ -77,7 +80,7 @@ function toFunctionExecutionListInfo(execution: FunctionExecution): FunctionExec
 function toFunctionExecutionDetailInfo(execution: FunctionExecution): FunctionExecutionDetailInfo {
   return {
     ...toFunctionExecutionListInfo(execution),
-    logs: execution.logs,
+    logs: joinFunctionLogMessages(execution.logEntries),
     result: execution.result,
     error: execution.error
       ? {

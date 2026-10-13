@@ -19,12 +19,21 @@ const mockAuthInvoker: AuthInvoker = {
   machineUserName: "test-machine-user",
 } as AuthInvoker;
 
+type ExecutionResponse = {
+  execution: {
+    status: FunctionExecution_Status;
+    logEntries: { message: string }[];
+    result: string;
+  };
+};
+
 function execution(
   status: FunctionExecution_Status,
   logs: string,
   result: string,
-): { execution: { status: FunctionExecution_Status; logs: string; result: string } } {
-  return { execution: { status, logs, result } };
+): ExecutionResponse {
+  const logEntries = logs ? logs.split("\n").map((message) => ({ message })) : [];
+  return { execution: { status, logEntries, result } };
 }
 
 describe("waitForExecution", () => {
@@ -138,7 +147,7 @@ describe("executeScript", () => {
   });
 
   function createExecScriptMockClient(
-    execResult: { execution: { status: FunctionExecution_Status; logs: string; result: string } },
+    execResult: ExecutionResponse,
     testExecScriptResponse: { executionId: string; result?: string } = { executionId: "exec-123" },
   ) {
     return createMockClient({
