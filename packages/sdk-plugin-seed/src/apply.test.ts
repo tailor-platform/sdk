@@ -130,6 +130,41 @@ async function runApply(args: string[]): Promise<void> {
 }
 
 describe("seedApplyCommand", () => {
+  test.each([false, true])("applies all datasets with truncate and no-base=%j", async (noBase) => {
+    datasets.selectDatasets.mockReturnValue({
+      names: ["cogs", "local"],
+      dirs: ["/seed/data/cogs", "/seed/data/local"],
+    });
+    await runApply([
+      "--all-datasets",
+      "--truncate",
+      "--yes",
+      "--json",
+      ...(noBase ? ["--no-base"] : []),
+    ]);
+    expect(datasets.selectDatasets).toHaveBeenCalledWith(expect.anything(), [], true);
+    const dirs = [...(noBase ? [] : ["/seed/data"]), "/seed/data/cogs", "/seed/data/local"];
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(dirs, ["User"], expect.anything());
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(dirs, ["_User"], { keyField: "name" });
+    expect(sdk.truncate).toHaveBeenCalledWith({
+      configPath: "tailor.config.ts",
+      profile: undefined,
+      workspaceId: undefined,
+      all: true,
+    });
+    expect(logger.out).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, datasets: ["cogs", "local"] }),
+    );
+  });
+
+  test("rejects all datasets combined with named datasets before loading context", async () => {
+    const result = await runApplyCommand(["--all-datasets", "--dataset", "cogs"]);
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("cannot be combined with --dataset");
+    expect(sdk.loadSeedContext).not.toHaveBeenCalled();
+    expect(sdk.truncate).not.toHaveBeenCalled();
+  });
+
   test("rejects a missing generated data directory before remote operations", async () => {
     jsonl.assertSeedDataDirectory.mockImplementationOnce(() => {
       throw new Error("Seed data directory not found: /seed/data");
@@ -149,7 +184,7 @@ describe("seedApplyCommand", () => {
   test("reads the base data alone when no dataset is selected", async () => {
     await runApply([]);
 
-    expect(datasets.selectDatasets).toHaveBeenCalledWith(expect.anything(), []);
+    expect(datasets.selectDatasets).toHaveBeenCalledWith(expect.anything(), [], false);
     expect(jsonl.loadSeedData).toHaveBeenCalledWith(["/seed/data"], ["User"], {
       requireId: false,
       requiredFieldsByType: {},
@@ -167,7 +202,11 @@ describe("seedApplyCommand", () => {
 
     await runApply(["--dataset", "preview", "--dataset", "local", "--json"]);
 
-    expect(datasets.selectDatasets).toHaveBeenCalledWith(expect.anything(), ["preview", "local"]);
+    expect(datasets.selectDatasets).toHaveBeenCalledWith(
+      expect.anything(),
+      ["preview", "local"],
+      false,
+    );
     const dataDirs = ["/seed/data", "/seed/data/cogs", "/seed/data/local"];
     expect(jsonl.loadSeedData).toHaveBeenCalledWith(dataDirs, ["User"], expect.anything());
     expect(jsonl.loadSeedData).toHaveBeenCalledWith(dataDirs, ["_User"], { keyField: "name" });

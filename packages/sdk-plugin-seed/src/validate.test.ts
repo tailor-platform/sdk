@@ -102,6 +102,41 @@ function runValidate(args: string[]) {
 }
 
 describe("seedValidateCommand", () => {
+  test("validates all datasets together with base data", async () => {
+    const local = path.join(dataDir, "local");
+    mkdirSync(local);
+    writeLines(path.join(local, "Item.jsonl"), [{ id: "i2", name: "local item" }]);
+    writeLines(path.join(cogs, "ItemValuation.jsonl"), [{ id: "v1", name: "v", itemId: "i2" }]);
+    const result = await runValidate(["--all-datasets", "--json"]);
+    expect(result.exitCode).toBe(0);
+    expect(logger.out).toHaveBeenCalledWith({
+      valid: true,
+      path: dataDir,
+      datasets: ["cogs", "local"],
+    });
+    writeLines(path.join(local, "Item.jsonl"), [{ id: "i1", name: "duplicate base item" }]);
+    const duplicate = await runValidate(["--all-datasets"]);
+    expect(duplicate.exitCode).toBe(1);
+    expect(String(duplicate.error)).toContain(path.join(local, "Item.jsonl"));
+  });
+
+  test("validates all datasets without base rows", async () => {
+    writeLines(path.join(cogs, "Item.jsonl"), [{ id: "i1", name: "dataset item" }]);
+    writeLines(path.join(cogs, "ItemValuation.jsonl"), [{ id: "v1", name: "v", itemId: "i1" }]);
+    const result = await runValidate(["--all-datasets", "--no-base"]);
+    expect(result.exitCode).toBe(0);
+    const withBase = await runValidate(["--all-datasets"]);
+    expect(withBase.exitCode).toBe(1);
+    expect(String(withBase.error)).toContain(path.join(cogs, "Item.jsonl"));
+  });
+
+  test.each(["dataset", "path"])("rejects all datasets combined with %s", async (kind) => {
+    const extra = kind === "path" ? [dataDir] : ["--dataset", "cogs"];
+    const result = await runValidate(["--all-datasets", ...extra]);
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("cannot be combined");
+  });
+
   test("validates a dataset on top of the base data", async () => {
     writeLines(path.join(cogs, "ItemValuation.jsonl"), [{ id: "v1", name: "v", itemId: "i1" }]);
 
@@ -135,7 +170,7 @@ describe("seedValidateCommand", () => {
 
     expect(result.exitCode).toBe(1);
     expect(String(result.error)).toContain(
-      "--dataset and --no-base cannot be combined with a path",
+      "--dataset, --all-datasets and --no-base cannot be combined with a path",
     );
   });
 

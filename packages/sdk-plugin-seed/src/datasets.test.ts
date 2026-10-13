@@ -47,6 +47,46 @@ afterEach(() => {
 });
 
 describe("selectDatasets", () => {
+  test("selects every directory in name order, including local and newly added datasets", () => {
+    const local = dataset("local");
+    const cogs = dataset("cogs");
+    dataset(".hidden");
+    writeFileSync(path.join(dataDir, "Item.jsonl"), "");
+    const ctx = context({ datasets: { preview: ["cogs"] } });
+
+    expect(selectDatasets(ctx, [], true)).toEqual({
+      names: ["cogs", "local"],
+      dirs: [cogs, local],
+    });
+    const shipments = dataset("shipments");
+    expect(selectDatasets(ctx, [], true)).toEqual({
+      names: ["cogs", "local", "shipments"],
+      dirs: [cogs, local, shipments],
+    });
+  });
+
+  test("rejects all datasets combined with named datasets", () => {
+    dataset("cogs");
+    expect(() => selectDatasets(context(), ["cogs"], true)).toThrow(
+      "--all-datasets cannot be combined with --dataset.",
+    );
+  });
+
+  test("rejects all datasets when no dataset directories exist", () => {
+    expect(() => selectDatasets(context(), [], true)).toThrow("No dataset directories found");
+  });
+
+  test("keeps dataset file validation when selecting all datasets", () => {
+    dataset("local", ["Unknown.jsonl"]);
+    expect(() => selectDatasets(context(), [], true)).toThrow("does not match a seeded table");
+  });
+
+  test("deduplicates aliases when selecting all datasets", () => {
+    const cogs = dataset("cogs");
+    symlinkSync(cogs, path.join(dataDir, "copy"));
+    expect(selectDatasets(context(), [], true)).toEqual({ names: ["cogs"], dirs: [cogs] });
+  });
+
   test("selects nothing when no dataset is named", () => {
     expect(selectDatasets(context(), [])).toEqual({ names: [], dirs: [] });
   });
