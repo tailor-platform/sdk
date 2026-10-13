@@ -1339,9 +1339,56 @@ describe("workflow result job", () => {
 });
 
 describe("Tailor Platform action pins", () => {
-  test("pins every generated Tailor Platform action to the release pin", () => {
+  test("exposes only released Actions pins to tag-based digest updates", () => {
+    const renovateConfig = JSON.parse(
+      fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
+    ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
+    const sourceManager = renovateConfig.customManagers.find((m) =>
+      m.managerFilePatterns.some((p) => p.includes("templates")),
+    );
+    const yamlManager = renovateConfig.customManagers.find((m) =>
+      m.managerFilePatterns.some((p) => p.includes("ya?ml")),
+    );
+    expect(sourceManager).toBeDefined();
+    expect(yamlManager).toBeDefined();
+    const source = fs.readFileSync(path.join(import.meta.dirname, "templates.ts"), "utf8");
+    const released = ACTIONS_VERSION !== "unreleased commit";
+    const sourceMatch = new RegExp(sourceManager!.matchStrings[0]).exec(source);
+    expect(sourceMatch?.groups ?? null).toEqual(
+      released ? { currentDigest: ACTIONS_SHA, currentValue: ACTIONS_VERSION } : null,
+    );
+    const workflows = [
+      renderBranchWorkflow(branchBase).content,
+      renderTagWorkflow(tagBase).content,
+      renderPreviewWorkflow({
+        workspaceName: "my-app",
+        branch: "main",
+        environment: "my-app",
+        packageManager: "pnpm",
+        region: "us-west",
+      }).content,
+    ];
+    for (const content of workflows) {
+      const pins = [...content.matchAll(new RegExp(yamlManager!.matchStrings[0], "g"))].filter(
+        (match) => match.groups?.depName === "tailor-platform/actions",
+      );
+      expect(pins.length).toBeGreaterThanOrEqual(released ? 1 : 0);
+      expect(
+        pins.map((pin) => ({
+          currentDigest: pin.groups?.currentDigest,
+          currentValue: pin.groups?.currentValue,
+        })),
+      ).toEqual(
+        released
+          ? pins.map(() => ({ currentDigest: ACTIONS_SHA, currentValue: ACTIONS_VERSION }))
+          : [],
+      );
+    }
+  });
+
+  test("pins every generated Tailor Platform action to the same revision", () => {
     expect(ACTIONS_SHA).toMatch(/^[0-9a-f]{40}$/);
-    expect(ACTIONS_VERSION).toMatch(/^v\d+\.\d+\.\d+$/);
+    expect(ACTIONS_VERSION).toMatch(/^(?:v\d+\.\d+\.\d+|unreleased commit)$/);
 
     const contents = [
       renderBranchWorkflow({ ...branchBase, migrationDriftCheck: true }).content,
@@ -1357,7 +1404,9 @@ describe("Tailor Platform action pins", () => {
 
     for (const content of contents) {
       const refs = [
-        ...content.matchAll(/tailor-platform\/actions\/\S+?@(\S+?)(?:\s+#\s+(\S+))?(?=\s|$)/g),
+        ...content.matchAll(
+          /tailor-platform\/actions\/\S+?@(\S+)(?:[^\S\r\n]+#[^\S\r\n]+([^\r\n]+))?/g,
+        ),
       ];
       expect(refs.length).toBeGreaterThan(0);
       for (const [, sha, version] of refs) {
@@ -1369,7 +1418,7 @@ describe("Tailor Platform action pins", () => {
     }
   });
 
-  test("Renovate's custom manager regex actually matches this file's ACTIONS_SHA/ACTIONS_VERSION declarations", () => {
+  test("Renovate's custom manager recognizes released pin declarations", () => {
     const renovateConfig = JSON.parse(
       fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
     ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
@@ -1379,12 +1428,14 @@ describe("Tailor Platform action pins", () => {
     );
     expect(manager).toBeDefined();
 
-    const templatesSource = fs.readFileSync(path.join(import.meta.dirname, "templates.ts"), "utf8");
+    const templatesSource =
+      'export const ACTIONS_SHA = "22543e223136ce9b67844bfc7e0b92e88efb5967";\n' +
+      'export const ACTIONS_VERSION = "v2.5.0";';
     const match = new RegExp(manager!.matchStrings[0]).exec(templatesSource);
 
     expect(match?.groups).toEqual({
-      currentDigest: ACTIONS_SHA,
-      currentValue: ACTIONS_VERSION,
+      currentDigest: "22543e223136ce9b67844bfc7e0b92e88efb5967",
+      currentValue: "v2.5.0",
     });
   });
 });

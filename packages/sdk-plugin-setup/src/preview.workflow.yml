@@ -40,28 +40,28 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       # __GENERATE_CHECK_START__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/generate-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __GENERATE_CHECK_END__
       # __PER_APP_GENERATE_CHECK__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/drift-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       - id: tailor-preview-deploy
-        uses: tailor-platform/actions/preview-deploy@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/preview-deploy@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         # __CONFIG_ENV__
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
@@ -75,7 +75,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - id: tailor-preview-comment
         if: always()
-        uses: tailor-platform/actions/preview-comment@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/preview-comment@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
           workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
@@ -97,15 +97,15 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-preview-cleanup
-        uses: tailor-platform/actions/preview-cleanup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/preview-cleanup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           package-manager: __PACKAGE_MANAGER__

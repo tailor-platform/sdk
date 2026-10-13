@@ -41,16 +41,16 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       # __GENERATE_CHECK_START__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/generate-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -63,13 +63,13 @@ jobs:
       # __SEED_VALIDATE_END__
       # __PER_APP_SEED_VALIDATE__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/drift-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/migration-drift-check@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -78,7 +78,7 @@ jobs:
       - id: tailor-plan
         # Fork PRs cannot read secrets; the checks above still run for them.
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-        uses: tailor-platform/actions/plan@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/plan@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
@@ -235,11 +235,11 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-checkout-base
@@ -349,7 +349,7 @@ jobs:
               ;;
           esac
       - id: tailor-restore-head-setup
-        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-build-erd-preview
@@ -671,15 +671,15 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/setup@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/deploy@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
@@ -710,7 +710,7 @@ jobs:
           fi
       - id: tailor-notify
         if: always() && steps.tailor-slack-prereq.outputs.ready == 'true'
-        uses: tailor-platform/actions/notify@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # v2.5.0
+        uses: tailor-platform/actions/notify@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           provider: slack
           status: ${{ job.status }}
