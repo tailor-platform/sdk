@@ -56,7 +56,8 @@ pnpm -C llm-challenge challenge grade --report results/<run-id>/report.json [--r
 
 - `judge-model`: `claude-fable-5-1`, which differs from the default Claude solver model. The judge must not be the solver model; grading Claude Fable runs needs another `--judge-model` (for example `claude-opus-5-5`) for every report in the comparison. `--allow-self-judge` overrides the check.
 - `judge-effort`: `high`.
-- `concurrency`: `1`; the Podman VM's memory bounds this.
+- `runtime`: `podman` - where the judge runs: `podman` or `host` (see "Host Runtime"); `summary.json` records it under `judge.runtime`.
+- `concurrency`: `1`; with Podman the VM's memory bounds this, and on the host the machine's memory does.
 - `output`: `results/<run-id>/grades/<grade-id>/` next to the first report.
 
 The judge runs Claude Code in the same pinned container with only `Read`, `Glob`, and `Grep`, on a copy of the workspace without agent configuration (`.claude/`, `CLAUDE.md`, `.mcp.json`), symlinks, or dependency caches, plus `/evidence/commands.json` with the solver's command history. It returns one verdict per hidden rubric claim; a `satisfied` verdict counts only when one of its quoted excerpts (at least 12 characters) exists in the cited file. Command-history quotes come from text the solver produced, so CLI claims verified only through `/evidence/commands.json` trust that output.

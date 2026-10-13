@@ -515,6 +515,7 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
         judge: {
           model: options.judgeModel,
           effort: options.judgeEffort,
+          runtime: options.runtime,
           claudeCodePackage: runtime.claudePackage,
           claudeCodeVersion: judgeVersion,
           promptVersion: JUDGE_PROMPT_VERSION,
