@@ -1313,8 +1313,18 @@ describe("seed step", () => {
 
   test("branch and tag workflows seed after the apply step without repeating validation", () => {
     const rendered = [
-      renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/api", seed: { datasets: [] } }),
-      renderTagWorkflow({ ...tagBase, workingDirectory: "apps/api", seed: { datasets: [] } }),
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/api",
+        seedValidate: true,
+        seed: { datasets: [] },
+      }),
+      renderTagWorkflow({
+        ...tagBase,
+        workingDirectory: "apps/api",
+        seedValidate: true,
+        seed: { datasets: [] },
+      }),
     ];
 
     for (const { content, generatedIds } of rendered) {
@@ -1329,6 +1339,9 @@ describe("seed step", () => {
         run: "pnpm exec tailor seed apply --upsert\n",
       });
       expect(generatedIds).toContain("tailor-deploy/tailor-seed");
+      expect(
+        stepsOf(content, "tailor-plan").find((step) => step.id === "tailor-seed-validate")?.run,
+      ).toBe("pnpm exec tailor seed validate --upsert");
       expect(content).not.toMatch(NO_MARKER);
     }
   });
@@ -1372,7 +1385,9 @@ describe("seed step", () => {
     });
 
     const validate = stepsOf(content, "tailor-plan").find((s) => s.id === "tailor-seed-validate");
-    expect(validate?.run).toBe("pnpm exec tailor seed validate --dataset preview --dataset local");
+    expect(validate?.run).toBe(
+      "pnpm exec tailor seed validate --upsert --dataset preview --dataset local",
+    );
     const seed = stepsOf(content, "tailor-deploy").find((s) => s.id === "tailor-seed");
     expect(seed?.run).toBe(
       "pnpm exec tailor seed apply --upsert --dataset preview --dataset local\n",

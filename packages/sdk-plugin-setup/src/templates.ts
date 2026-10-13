@@ -343,7 +343,9 @@ function migrationDriftCheckIds(
 // Dataset names are restricted to `[A-Za-z0-9_-]`, so they need no shell quoting.
 function applySeed(content: string, seed: RenderSeed | undefined): string {
   const args = (seed?.datasets ?? []).map((dataset) => ` --dataset ${dataset}`).join("");
-  return block(content, "SEED", seed !== undefined).replaceAll("__SEED_ARGS__", () => args);
+  return block(content, "SEED", seed !== undefined)
+    .replaceAll("__SEED_ARGS__", () => args)
+    .replaceAll("__SEED_VALIDATE_ARGS__", () => `${seed ? " --upsert" : ""}${args}`);
 }
 
 function seedIds(job: string, seed: RenderSeed | undefined): string[] {
