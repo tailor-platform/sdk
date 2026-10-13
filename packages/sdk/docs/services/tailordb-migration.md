@@ -716,6 +716,26 @@ Maintenance mode lasts for the whole migration job, including the time the platf
 - **Must stay in `migrate.ts`**: anything the post-migration schema enforces or removes — filling a field that becomes required, resolving duplicates before a unique index, converting values for a field type change, and copying data out of a field or table that the migration renames or removes.
 - **Can move to a workflow**: work the post-migration schema does not depend on, such as filling an optional field, recomputing derived values, or cleaning up rows. Requests that run before the workflow finishes see the data in its unfixed state.
 
+### Time spent in maintenance mode
+
+When [maintenance mode](#maintenance-mode) is on, `tailor deploy` reports how long the migrating namespaces' tables were restricted, split into phases. With `"deploy"`, the window also includes the remaining deployment changes and ends when their restrictions are lifted. No maintenance report is emitted with `maintenanceMode: false`.
+
+| Phase              | Covers                                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `restrict`         | Putting the tables into maintenance mode                                                 |
+| `pre-migration`    | Pre-migration schema changes                                                             |
+| `job setup`        | Bundling `migrate.ts` and registering it as a job                                        |
+| `waiting to start` | Time when the platform has accepted the job but none of its code runs yet                |
+| `running`          | Time when the script runs                                                                |
+| `job cleanup`      | Collecting the script's logs and removing its job, unless its steps run as separate jobs |
+| `post-migration`   | Post-migration schema changes, the checkpoint update, and cleanup                        |
+| `remaining deploy` | With `"deploy"`, applying the remaining deployment changes while tables stay restricted  |
+| `restore`          | Taking the tables out of maintenance mode                                                |
+
+Phases that repeat across several migrations are added up. The report is printed only after the migrations succeed and the tables leave maintenance mode; when a migration fails, deploy reports the error instead (see [Failure Recovery](#failure-recovery)). When deploy resumes a migration that an earlier deploy left in progress, the tables were already in maintenance mode before it started, and the report covers only this deploy. A job can be reported as started on the platform well before its code runs, so deploy tells waiting from running by a line every job of a migration logs before your script: `[tailor-sdk] migration script started`. You may see that line in function execution logs; deploy leaves it out of the logs it prints. A script that exports [`steps`](#splitting-a-migration-into-steps) waits for each step's job to start, and that time counts as `waiting to start` too. Time when deploy cannot tell whether the script is running — because the run or a running job's logs could not be read, or because an older SDK version started the run and it never logs the line — is reported as `waiting to start or running` instead.
+
+Deploy checks the run every few seconds, so a boundary between `waiting to start` and `running` can be off by that much. With `--json`, the same breakdown is in `tailordbMaintenance` (see [Deploy JSON result](../cli/application.md#deploy)). Add `--verbose` to also print how long each phase took and every change in the job's status.
+
 ### Schema verification
 
 Before running migrations, `apply` performs two checks:
@@ -755,14 +775,14 @@ tailor deploy --no-schema-check
 ### Example output
 
 ```
-ℹ Found 2 pending migration(s) to execute.
-ℹ Executing 2 pending migration(s)...
+ℹ Executing 1 data migration(s)...
+
 ℹ Using machine user: admin-machine-user for namespace 'tailordb'
+10:42:31 AM ℹ Migration tailordb/0002 started running after waiting 15m02s for its job to start.
+✓ Migration tailordb/0002 completed successfully (waiting to start 15m02s, running 1m41s)
 
-✔ Migration tailordb/0002 completed successfully
-✔ Migration tailordb/0003 completed successfully
-
-✔ All migrations completed successfully.
+✔ All data migrations completed successfully.
+ℹ Tables of namespace tailordb were in maintenance mode for 16m56s (restrict 1.2s, pre-migration 3.4s, job setup 2.1s, waiting to start 15m02s, running 1m41s, job cleanup 0.8s, post-migration 4.0s, restore 1.1s).
 ✔ Successfully applied changes.
 ```
 

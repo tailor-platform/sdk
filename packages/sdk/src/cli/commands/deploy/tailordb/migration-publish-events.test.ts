@@ -1559,6 +1559,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const released = { publishRecordEvents: true, disableGqlOperations: undefined };
 
     test("leaves every write unrestricted when it is false", async () => {
+      using stderr = captureStderr();
       const client = createMockClient();
       const planResult = createMockPlanResult({
         creates: ["Order"],
@@ -1567,7 +1568,10 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       });
       mockAddedOrderMigration();
 
-      await applyTailorDB(client, planResult, "create-update");
+      const report = await applyTailorDB(client, planResult, "create-update");
+
+      expect(report).toBeUndefined();
+      expect(stderr.output).not.toContain("were in maintenance mode");
 
       const writes = typeSettingWrites(client).filter(([name]) => name === "Order");
       expect(writes.length).toBeGreaterThan(1);
@@ -1621,6 +1625,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           expect.objectContaining({ maintenanceMode: false }),
           expect.any(Array),
           expect.any(Object),
+          undefined,
         );
         const restrictionClaim =
           /Still restricted|keep the restrictions|Tables that stay restricted/;
@@ -1680,6 +1685,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
 
     test('"deploy" keeps the namespace restricted until the held release runs', async () => {
+      using stderr = captureStderr();
       const client = createMockClient();
       const planResult = createMockPlanResult({
         creates: ["Order"],
@@ -1688,17 +1694,33 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       });
       mockAddedOrderMigration();
 
-      const releases: MaintenanceModeRelease[] = [];
-      await applyTailorDB(client, planResult, "create-update", {
-        holdMaintenanceMode: (release) => releases.push(release),
-      });
+      const clock = vi.spyOn(performance, "now").mockReturnValue(0);
+      try {
+        const releases: MaintenanceModeRelease[] = [];
+        const report = await applyTailorDB(client, planResult, "create-update", {
+          holdMaintenanceMode: (release) => releases.push(release),
+        });
 
-      expect(lastOrderSettings(client)).toEqual(expect.objectContaining(restricted));
-      expect(releases).toHaveLength(1);
+        expect(report).toBeUndefined();
+        expect(stderr.output).not.toContain("were in maintenance mode");
+        expect(lastOrderSettings(client)).toEqual(expect.objectContaining(restricted));
+        expect(releases).toHaveLength(1);
 
-      await releases[0]?.(client);
+        clock.mockReturnValue(10_000);
+        vi.mocked(client.setMetadata).mockImplementationOnce(async (request) => {
+          clock.mockReturnValue(30_000);
+          remoteCheckpoint.maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
+          return {} as never;
+        });
+        const releasedReport = await releases[0]?.(client);
 
-      expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+        expect(releasedReport?.maintenanceMs).toBe(10_000);
+        expect(releasedReport?.phases.remainingDeploy).toBe(10_000);
+        expect(stderr.output).toContain("were in maintenance mode");
+        expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+      } finally {
+        clock.mockRestore();
+      }
     });
 
     test.each([

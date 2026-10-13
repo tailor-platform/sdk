@@ -7,6 +7,8 @@ import {
   type PlannedDeployment,
 } from "./apply-phases";
 import { writeMetadataLabels } from "./label";
+import { MaintenanceTimeline } from "./tailordb/migration-timing";
+import type { MaintenanceModeRelease } from "./tailordb";
 
 const mocks = vi.hoisted(() => {
   const calls: string[] = [];
@@ -267,6 +269,25 @@ describe("applyDeploymentPlans", () => {
     ]);
   });
 
+  test("applyRemainingResources returns how long each application's migrations kept tables in maintenance mode", async () => {
+    const report = {
+      namespaces: ["tailordb"],
+      maintenanceMs: 5,
+      phases: {},
+      migrations: [],
+    };
+    mocks.applyTailorDB
+      .mockImplementationOnce(async () => undefined)
+      .mockImplementationOnce(async () => report as never);
+
+    const maintenance = await applyRemainingResources({} as never, "workspace-id", [
+      deployment("supplier"),
+      deployment("buyer"),
+    ]);
+
+    expect(maintenance).toEqual([{ application: "buyer", ...report }]);
+  });
+
   test("applyRemainingResources applies every kind except secretManager, staticWebsite, aiGateway, idp create-update, and auth prerequisites", async () => {
     mocks.calls.length = 0;
 
@@ -408,8 +429,32 @@ describe("applyDeploymentPlans", () => {
 
 describe("applyRemainingResources with a held maintenance mode", () => {
   type HoldOptions = {
-    holdMaintenanceMode?: (release: (client: unknown) => Promise<void>) => void;
+    holdMaintenanceMode?: (release: MaintenanceModeRelease) => void;
   };
+
+  test("returns held and immediate reports in deployment order", async () => {
+    const timeline = new MaintenanceTimeline();
+    timeline.enter("restrict", 0);
+    timeline.finish(5);
+    const report = timeline.report(["tailordb"]);
+    const immediate = timeline.report(["buyer-db"]);
+    mocks.applyTailorDB.mockImplementationOnce(
+      async (_client, _result, _phase, options?: HoldOptions) => {
+        options?.holdMaintenanceMode?.(async () => report);
+      },
+    );
+    mocks.applyTailorDB.mockImplementationOnce(async () => immediate as never);
+
+    const maintenance = await applyRemainingResources({} as never, "workspace-id", [
+      deployment("supplier"),
+      deployment("buyer"),
+    ]);
+
+    expect(maintenance).toEqual([
+      { application: "supplier", ...report },
+      { application: "buyer", ...immediate },
+    ]);
+  });
 
   function holdMaintenanceMode(
     onRelease: (name: string) => Promise<void> = async () => {},

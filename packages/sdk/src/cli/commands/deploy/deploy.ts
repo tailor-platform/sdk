@@ -27,6 +27,7 @@ import {
   preflightAllTailorDB,
   type PlannedDeployment,
   type ReusablePlanKind,
+  type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { mergeBundledScripts } from "./bundled-scripts";
@@ -1057,6 +1058,7 @@ async function deployInternal(
     // the time env is read again below.
     await applyPrerequisiteResources(client, deployments);
 
+    let tailordbMaintenance: TailorDBMaintenance[];
     if (needsUrlResolution) {
       logger.info(
         "A static website was just created; rebuilding so env resolves to its real URL before the rest of this deploy applies.",
@@ -1078,9 +1080,9 @@ async function deployInternal(
       carryConfirmedAppDeletes(deployments, rebuilt.deployments, preConfirmAppDeleteCounts);
       await validate(rebuilt.deployments);
       planSummary = printDeploymentPlans(rebuilt.deployments, { dryRun: options?.dryRun });
-      await applyRemainingResources(client, workspaceId, rebuilt.deployments);
+      tailordbMaintenance = await applyRemainingResources(client, workspaceId, rebuilt.deployments);
     } else {
-      await applyRemainingResources(client, workspaceId, deployments);
+      tailordbMaintenance = await applyRemainingResources(client, workspaceId, deployments);
     }
 
     const applications =
@@ -1117,6 +1119,7 @@ async function deployInternal(
           status: "applied",
           workspaceId,
           applications,
+          ...(tailordbMaintenance.length ? { tailordbMaintenance } : {}),
           ...(deployedHooks.length ? { deployedHooks } : {}),
         });
       } else {

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { parseYAML } from "confbox";
+import { parseYAML, stringifyYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
 import {
@@ -891,6 +891,132 @@ describe("loadAccessToken", () => {
         JSON.stringify({ accessToken: "refreshed-token", refreshToken: "refreshed-refresh" }),
       );
     });
+
+    test("carries a legacy unscoped user's other keys over to its scoped platform key", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+      const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
+      const refreshedExpiresAt = Date.now() + 3600 * 1000;
+      clientMocks.refreshToken.mockResolvedValueOnce({
+        accessToken: "refreshed-token",
+        refreshToken: "refreshed-refresh",
+        expiresAt: refreshedExpiresAt,
+      });
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          testuser: {
+            access_token: "legacy-token",
+            refresh_token: "legacy-refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+            default_folder_id: "folder",
+          },
+        },
+        profiles: {},
+        current_user: "testuser",
+      });
+
+      await loadAccessToken();
+
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toEqual({
+        storage: "keyring",
+        token_expires_at: new Date(refreshedExpiresAt).toISOString(),
+        default_folder_id: "folder",
+      });
+    });
+
+    test("does not carry a default-platform user's keys over to another platform's user with the same email", async () => {
+      clientMocks.refreshToken.mockResolvedValueOnce({
+        accessToken: "refreshed-token",
+        refreshToken: "refreshed-refresh",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockResolvedValueOnce({
+        sub: "dev-user-sub",
+        email: "user@example.com",
+      });
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "user@example.com": {
+            access_token: validToken,
+            token_expires_at: futureDate,
+            storage: "file",
+            default_folder_id: "default-folder",
+          },
+          "https://api.dev.tailor.tech|user@example.com": {
+            access_token: "expired-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {
+          dev: {
+            user: "user@example.com",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+
+      await loadAccessToken({ profile: "dev" });
+
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|dev-user-sub"]).not.toHaveProperty(
+        "default_folder_id",
+      );
+    });
+
+    test("keeps the profile platform user's own keys over a default-platform user with the same email", async () => {
+      clientMocks.refreshToken.mockResolvedValueOnce({
+        accessToken: "refreshed-token",
+        refreshToken: "refreshed-refresh",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockResolvedValueOnce({
+        sub: "dev-user-sub",
+        email: "user@example.com",
+      });
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "user@example.com": {
+            access_token: validToken,
+            token_expires_at: futureDate,
+            storage: "file",
+            default_folder_id: "default-folder",
+          },
+          "https://api.dev.tailor.tech|user@example.com": {
+            access_token: "expired-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+            default_folder_id: "dev-folder",
+          },
+        },
+        profiles: {
+          dev: {
+            user: "user@example.com",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+
+      await loadAccessToken({ profile: "dev" });
+
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|dev-user-sub"]).toMatchObject({
+        default_folder_id: "dev-folder",
+      });
+    });
   });
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
@@ -1036,6 +1162,44 @@ describe("loadAccessToken", () => {
       );
       expect(config.current_user).toBe("platform-user-sub");
       expect(config.profiles.default?.user).toBe("platform-user-sub");
+    });
+
+    test("carries a legacy email-key user's other keys over to its subject key", async () => {
+      clientMocks.refreshToken.mockResolvedValue({
+        accessToken: "new-access-token",
+        refreshToken: "new-refresh-token",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockResolvedValue({
+        sub: "platform-user-sub",
+        email: "legacy@example.com",
+      });
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "legacy@example.com": {
+            access_token: "expired-access-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+            default_folder_id: "folder",
+          },
+        },
+        profiles: {},
+        current_user: "legacy@example.com",
+      });
+
+      await loadAccessToken();
+      const config = await readPlatformConfig();
+
+      expect(config.users["legacy@example.com"]).toBeUndefined();
+      expect(config.users["platform-user-sub"]).toEqual({
+        storage: "keyring",
+        token_expires_at: expect.any(String),
+        email: "legacy@example.com",
+        default_folder_id: "folder",
+      });
     });
 
     test("logs when refresh updates the stored user email", async () => {
@@ -1595,6 +1759,58 @@ describe("saveUserTokens", () => {
     expect(keyringPasswords.has("tailor-platform-cli:platform-user-sub")).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("keyring denied"));
   });
+
+  test("keeps the user's other keys and drops its file tokens when moving it to the keyring", async () => {
+    const config = createEmptyConfig();
+    config.users["platform-user-sub"] = {
+      storage: "file",
+      access_token: "old-access-token",
+      refresh_token: "old-refresh-token",
+      token_expires_at: futureDate,
+      email: "user@example.com",
+      default_folder_id: "folder",
+    };
+
+    await saveUserTokens(
+      config,
+      "platform-user-sub",
+      { accessToken: "access-token", refreshToken: "refresh-token" },
+      futureDate,
+    );
+
+    expect(config.users["platform-user-sub"]).toEqual({
+      storage: "keyring",
+      token_expires_at: futureDate,
+      email: "user@example.com",
+      default_folder_id: "folder",
+    });
+  });
+
+  test("keeps the user's other keys when falling back to the config file", async () => {
+    const config = createEmptyConfig();
+    config.users["platform-user-sub"] = {
+      storage: "keyring",
+      token_expires_at: futureDate,
+      default_folder_id: "folder",
+    };
+    keyringSetPasswordFailure.error = new Error("keyring denied");
+    using _warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await saveUserTokens(
+      config,
+      "platform-user-sub",
+      { accessToken: "access-token", refreshToken: "refresh-token" },
+      futureDate,
+    );
+
+    expect(config.users["platform-user-sub"]).toEqual({
+      storage: "file",
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+      token_expires_at: futureDate,
+      default_folder_id: "folder",
+    });
+  });
 });
 
 describe("V1 to V3 migration", () => {
@@ -1831,6 +2047,200 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     };
     expect(diskConfig.version).toBe(1);
     expect(diskConfig.current_user).toBeNull();
+  });
+});
+
+describe("unknown config keys", () => {
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
+  const workspaceId = "12345678-1234-4abc-8def-123456789012";
+  type RawConfig = {
+    version: number;
+    users: Record<string, Record<string, unknown>>;
+    profiles: Record<string, Record<string, unknown>>;
+    [key: string]: unknown;
+  };
+
+  beforeEach(() => {
+    resetKeyringState();
+  });
+
+  function writeRawConfig(config: Record<string, unknown>) {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, stringifyYAML(config));
+  }
+
+  function readRawConfig(): RawConfig {
+    return parseYAML(fs.readFileSync(configPath, "utf-8")) as RawConfig;
+  }
+
+  test.each([
+    {
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "user-sub": {
+          storage: "file",
+          access_token: "access-token",
+          token_expires_at: futureDate,
+          email: "user@example.com",
+          future_user: "user",
+        },
+      },
+      current_user: "user-sub",
+    },
+    {
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "user@example.com": {
+          storage: "keyring",
+          token_expires_at: futureDate,
+          future_user: "user",
+        },
+      },
+      current_user: "user@example.com",
+    },
+    {
+      version: 1,
+      users: {
+        "user@example.com": {
+          access_token: "access-token",
+          token_expires_at: futureDate,
+          future_user: "user",
+        },
+      },
+      current_user: "user@example.com",
+    },
+  ])("keeps unknown keys when a V$version config is read and written back", async (config) => {
+    const user = config.current_user;
+    writeRawConfig({
+      ...config,
+      future_top: "top",
+      profiles: { default: { user, workspace_id: workspaceId, future_profile: "profile" } },
+    });
+
+    writePlatformConfig(await readPlatformConfig());
+
+    expect(readRawConfig()).toMatchObject({
+      version: 3,
+      future_top: "top",
+      users: { [user]: { future_user: "user" } },
+      profiles: { default: { future_profile: "profile" } },
+    });
+  });
+
+  const fileUser = {
+    storage: "file" as const,
+    access_token: "access-token",
+    token_expires_at: futureDate,
+  };
+
+  test.each([
+    {
+      location: "a user",
+      fields: { users: { "user@example.com": { ...fileUser, default_folder_id: "folder" } } },
+    },
+    {
+      location: "a profile",
+      fields: {
+        profiles: {
+          default: { user: "user@example.com", workspace_id: workspaceId, future_profile: "x" },
+        },
+      },
+    },
+    { location: "the top level", fields: { future_top: "top" } },
+  ])(
+    "writes a file-only V2 config in the latest format when $location has an unknown key",
+    ({ fields }) => {
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: { "user@example.com": fileUser },
+        profiles: {},
+        current_user: "user@example.com",
+        ...fields,
+      });
+
+      expect(readRawConfig()).toMatchObject({ version: 3, ...fields });
+    },
+  );
+
+  test.each([
+    {
+      name: "an older version's user email",
+      config: {
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: { "user-sub": { storage: "keyring", token_expires_at: futureDate, email: null } },
+        profiles: {},
+        current_user: "user-sub",
+      },
+    },
+    {
+      name: "a V1 config's latest_min_sdk_version",
+      config: {
+        version: 1,
+        latest_min_sdk_version: "next",
+        users: { "user@example.com": { access_token: "token", token_expires_at: futureDate } },
+        profiles: {},
+        current_user: "user@example.com",
+      },
+    },
+  ])(
+    "keeps the config readable after migrating $name that the older format does not validate",
+    async ({ config }) => {
+      writeRawConfig(config);
+
+      writePlatformConfig(await readPlatformConfig());
+
+      await expect(readPlatformConfig()).resolves.toMatchObject({ version: 3 });
+    },
+  );
+
+  test("keeps a V1 config written directly readable when its user carries a later format's key", async () => {
+    writePlatformConfig({
+      version: 1,
+      users: {
+        "user@example.com": { access_token: "token", token_expires_at: futureDate, email: 5 },
+      },
+      profiles: {
+        dev: {
+          user: "user@example.com",
+          workspace_id: workspaceId,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: "user@example.com",
+    });
+
+    await expect(readPlatformConfig()).resolves.toMatchObject({ version: 3 });
+  });
+
+  test("drops file tokens left on a keyring user while keeping its other keys", async () => {
+    writeRawConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "user-sub": {
+          storage: "keyring",
+          token_expires_at: futureDate,
+          access_token: "stale-access-token",
+          refresh_token: "stale-refresh-token",
+          future_user: "user",
+        },
+      },
+      profiles: {},
+      current_user: "user-sub",
+    });
+
+    writePlatformConfig(await readPlatformConfig());
+
+    expect(readRawConfig().users["user-sub"]).toEqual({
+      storage: "keyring",
+      token_expires_at: futureDate,
+      future_user: "user",
+    });
   });
 });
 
