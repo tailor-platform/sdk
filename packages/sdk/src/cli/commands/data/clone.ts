@@ -1,17 +1,16 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
-import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
 import { z } from "zod";
-import { confirmationArgs } from "#/cli/shared/args";
-import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { waitForCloneApplicationData } from "#/cli/commands/tailordb/migrate/test-runtime";
+import { confirmationArgs, durationArg, parseDuration } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-
-const POLL_INTERVAL_MS = 2000;
 
 interface CloneOptions {
   sourceWorkspaceId: string;
@@ -19,25 +18,8 @@ interface CloneOptions {
   name: string;
   copyFiles?: boolean;
   copyIdpUsers?: boolean;
+  timeout?: string;
   profile?: string;
-}
-
-async function waitForClone(
-  client: OperatorClient,
-  options: { sourceWorkspaceId: string; targetWorkspaceId: string; operationId: string },
-): Promise<void> {
-  for (;;) {
-    const operation = await client.getCloneApplicationDataOperation(options);
-    if (operation.status === CloneOperationStatus.COMPLETED) return;
-    if (operation.status === CloneOperationStatus.FAILED) {
-      throw CLIError({
-        code: "DATA_CLONE_FAILED",
-        message: `Data clone failed: ${operation.errorMessage}`,
-        command: "data clone",
-      });
-    }
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-  }
 }
 
 async function $clone(options: CloneOptions & { yes?: boolean }) {
@@ -60,19 +42,38 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
   }
 
   const client = await initOperatorClient(await loadAccessToken({ profile: options.profile }));
-  const { operationId } = await client.cloneApplicationData({
-    sourceWorkspaceId: options.sourceWorkspaceId,
-    sourceApplicationName: options.name,
-    targetWorkspaceId: options.targetWorkspaceId,
-    targetApplicationName: options.name,
-    copyFiles: options.copyFiles,
-    copyIdpUsers: options.copyIdpUsers,
-  });
+  let operationId: string;
+  try {
+    const response = await client.cloneApplicationData({
+      sourceWorkspaceId: options.sourceWorkspaceId,
+      sourceApplicationName: options.name,
+      targetWorkspaceId: options.targetWorkspaceId,
+      targetApplicationName: options.name,
+      copyFiles: options.copyFiles,
+      copyIdpUsers: options.copyIdpUsers,
+    });
+    operationId = response.operationId;
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.Unimplemented) {
+      throw CLIError({
+        code: "DATA_CLONE_UNAVAILABLE",
+        message: "Application data clone is not enabled for this platform.",
+        command: "data clone",
+        cause: error,
+      });
+    }
+    throw error;
+  }
+  if (!operationId) {
+    throw internalError("Application data clone returned no operation ID.");
+  }
   logger.info(`Clone started (operation: ${operationId})`);
-  await waitForClone(client, {
+  await waitForCloneApplicationData(client, {
     sourceWorkspaceId: options.sourceWorkspaceId,
     targetWorkspaceId: options.targetWorkspaceId,
     operationId,
+    timeout: options.timeout === undefined ? undefined : parseDuration(options.timeout),
+    errorCodePrefix: "DATA_CLONE",
   });
   logger.success(
     `Cloned data of application "${options.name}" from "${options.sourceWorkspaceId}" to "${options.targetWorkspaceId}"`,
@@ -111,6 +112,11 @@ export const cloneCommand = defineAppCommand({
     "copy-idp-users": arg(z.boolean().default(false), {
       description: "Also copy IdP users, including their passwords",
     }),
+    timeout: arg(durationArg.optional(), {
+      description:
+        "How long to wait for the clone to finish, e.g. 30s or 10m (default: 5m). The clone keeps running on the platform after the CLI times out.",
+      completion: { type: "none" },
+    }),
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
@@ -120,6 +126,7 @@ export const cloneCommand = defineAppCommand({
       name: args.name,
       copyFiles: args["copy-files"],
       copyIdpUsers: args["copy-idp-users"],
+      timeout: args.timeout,
       profile: args.profile,
       yes: args.yes,
     });

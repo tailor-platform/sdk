@@ -223,6 +223,25 @@ describe("migration test runtime", () => {
     ).rejects.toThrow("namespace mismatch");
   });
 
+  test("reports a clone timeout under the given error code prefix", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi
+        .fn()
+        .mockResolvedValue({ status: CloneOperationStatus.PENDING, errorMessage: "" }),
+    } as unknown as OperatorClient;
+
+    await expect(
+      waitForCloneApplicationData(client, {
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+        operationId: "operation",
+        pollInterval: 0,
+        timeout: 0,
+        errorCodePrefix: "DATA_CLONE",
+      }),
+    ).rejects.toMatchObject({ code: "DATA_CLONE_TIMEOUT" });
+  });
+
   function runtimeState(client: OperatorClient, services: unknown[] = []) {
     return {
       client,

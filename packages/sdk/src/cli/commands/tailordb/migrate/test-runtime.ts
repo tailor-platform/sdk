@@ -77,6 +77,7 @@ interface WaitForCloneOptions {
   operationId: string;
   pollInterval?: number;
   timeout?: number;
+  errorCodePrefix?: string;
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -238,6 +239,7 @@ export async function waitForCloneApplicationData(
 ): Promise<void> {
   const pollInterval = options.pollInterval ?? CLONE_POLL_INTERVAL;
   const timeout = options.timeout ?? CLONE_TIMEOUT;
+  const errorCodePrefix = options.errorCodePrefix ?? "MIGRATION_TEST_CLONE";
   const deadline = Date.now() + timeout;
 
   while (Date.now() <= deadline) {
@@ -251,7 +253,7 @@ export async function waitForCloneApplicationData(
     }
     if (operation.status === CloneOperationStatus.FAILED) {
       throw CLIError({
-        code: "MIGRATION_TEST_CLONE_FAILED",
+        code: `${errorCodePrefix}_FAILED`,
         message: `Application data clone failed: ${operation.errorMessage || "unknown platform error"}`,
       });
     }
@@ -265,7 +267,7 @@ export async function waitForCloneApplicationData(
   }
 
   throw CLIError({
-    code: "MIGRATION_TEST_CLONE_TIMEOUT",
+    code: `${errorCodePrefix}_TIMEOUT`,
     message: `Application data clone timed out after ${Math.round(timeout / 1_000)} seconds.`,
   });
 }

@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
 import { describe, test, expect, vi, beforeEach } from "vitest";
@@ -63,6 +64,54 @@ describe("data clone", () => {
 
     expect(result.exitCode).not.toBe(0);
     expect(String(result.error?.message ?? result.error)).toContain("disk full");
+    expect(result.error).toMatchObject({ code: "DATA_CLONE_FAILED" });
+  });
+
+  test("operation が想定外の status を返したら待ち続けずに失敗する", async () => {
+    client.getCloneApplicationDataOperation.mockResolvedValue({
+      status: CloneOperationStatus.UNSPECIFIED,
+      errorMessage: "",
+    });
+
+    const result = await runCommand(cloneCommand, baseArgs);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(client.getCloneApplicationDataOperation).toHaveBeenCalledTimes(1);
+  });
+
+  test("--timeout を超えたら DATA_CLONE_TIMEOUT で失敗する", async () => {
+    client.getCloneApplicationDataOperation.mockResolvedValue({
+      status: CloneOperationStatus.PROCESSING,
+      errorMessage: "",
+    });
+
+    const result = await runCommand(cloneCommand, [...baseArgs, "--timeout", "1ms"]);
+
+    expect(result.error).toMatchObject({ code: "DATA_CLONE_TIMEOUT" });
+  });
+
+  test("--timeout に不正な形式を渡すと API を呼ばずに失敗する", async () => {
+    const result = await runCommand(cloneCommand, [...baseArgs, "--timeout", "soon"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(client.cloneApplicationData).not.toHaveBeenCalled();
+  });
+
+  test("operation ID が空なら状態の確認に進まず失敗する", async () => {
+    client.cloneApplicationData.mockResolvedValue({ operationId: "" });
+
+    const result = await runCommand(cloneCommand, baseArgs);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(client.getCloneApplicationDataOperation).not.toHaveBeenCalled();
+  });
+
+  test("プラットフォームが clone に未対応なら DATA_CLONE_UNAVAILABLE で失敗する", async () => {
+    client.cloneApplicationData.mockRejectedValue(new ConnectError("nope", Code.Unimplemented));
+
+    const result = await runCommand(cloneCommand, baseArgs);
+
+    expect(result.error).toMatchObject({ code: "DATA_CLONE_UNAVAILABLE" });
   });
 
   test("コピー元とコピー先が同じ workspace なら API を呼ばずに失敗する", async () => {
