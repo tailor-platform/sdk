@@ -564,7 +564,9 @@ async function pollUntilTerminal(
   }
 }
 
-type ObserveRunParams = CollectJobOutcomesOptions & PollExecutionOptions;
+type ObserveRunParams = CollectJobOutcomesOptions & {
+  onActive?: PollExecutionOptions["onActive"];
+};
 
 /**
  * Whether a function execution has logged {@link MIGRATION_SCRIPT_STARTED_LOG}. A failed read
