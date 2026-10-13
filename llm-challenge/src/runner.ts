@@ -157,6 +157,34 @@ export async function runAgentContainer(options: {
   maxSeconds: number;
   env?: Record<string, string>;
 }): Promise<SolverResult> {
+  return await runAgentProcess({
+    command: "podman",
+    args: options.podmanArgs,
+    prompt: options.prompt,
+    solverStdoutPath: options.solverStdoutPath,
+    solverStderrPath: options.solverStderrPath,
+    tracePath: options.tracePath,
+    maxSeconds: options.maxSeconds,
+    env: options.env,
+    onTimeout: async () => {
+      await runCommand("podman", ["rm", "-f", options.containerName], {
+        rejectOnNonZero: false,
+      }).catch(() => undefined);
+    },
+  });
+}
+
+export async function runAgentProcess(options: {
+  command: string;
+  args: string[];
+  prompt: string;
+  solverStdoutPath: string;
+  solverStderrPath: string;
+  tracePath: string;
+  maxSeconds: number;
+  env?: Record<string, string>;
+  onTimeout?: () => Promise<void>;
+}): Promise<SolverResult> {
   await Promise.all([
     fs.writeFile(options.solverStdoutPath, ""),
     fs.writeFile(options.solverStderrPath, ""),
@@ -165,7 +193,7 @@ export async function runAgentContainer(options: {
 
   const startedAt = Date.now();
   const result = await new Promise<SolverResult>((resolve, reject) => {
-    const child = spawn("podman", options.podmanArgs, {
+    const child = spawn(options.command, options.args, {
       env: options.env === undefined ? undefined : { ...process.env, ...options.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -216,9 +244,7 @@ export async function runAgentContainer(options: {
     child.stdin.end(options.prompt);
   });
   if (result.timedOut) {
-    await runCommand("podman", ["rm", "-f", options.containerName], {
-      rejectOnNonZero: false,
-    }).catch(() => undefined);
+    await options.onTimeout?.();
   }
   return result;
 }
