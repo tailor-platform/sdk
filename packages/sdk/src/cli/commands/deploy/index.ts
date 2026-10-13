@@ -8,6 +8,8 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 export const deployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy your application by applying the Tailor configuration.",
+  notes:
+    "Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.",
   args: z.strictObject({
     ...workspaceArgs,
     ...multiConfigArg,

@@ -12,6 +12,7 @@ Commands for managing Tailor Platform applications. These commands work with `ta
 {{politty:command:init}}
 {{politty:command:generate}}
 {{politty:command:deploy}}
+
 **JSON result:**
 
 After a successful `tailor deploy --json`, stdout includes `status: "applied"`,

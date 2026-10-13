@@ -17,6 +17,7 @@ import { logger } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import {
   createValidatedWorkspaceWithClient,
+  resolveWorkspaceCreationLocation,
   type ValidatedCreateWorkspaceOptions,
   validateCreateWorkspaceOptions,
   validateWorkspaceName,
@@ -425,12 +426,13 @@ async function createWorkspaceForDeploy(
 /**
  * Resolve or provision the workspace used by deploy.
  * Explicit configuration wins over project context and account discovery.
- * @param options - Deploy workspace selection and creation options
+ * @param input - Deploy workspace selection and creation options
  * @returns Authenticated client and resolved workspace ID
  */
 export async function resolveDeployWorkspace(
-  options: ResolveDeployWorkspaceOptions = {},
+  input: ResolveDeployWorkspaceOptions = {},
 ): Promise<ResolvedDeployWorkspace> {
+  let options = input;
   const createOptionNames = [
     options.workspaceName !== undefined ? "--workspace-name" : undefined,
     options.workspaceRegion !== undefined ? "--workspace-region" : undefined,
@@ -503,6 +505,9 @@ export async function resolveDeployWorkspace(
     }
     return useWorkspace(client, platformUrl, workspaceInfo(response.workspace), options, "warn");
   }
+
+  const location = await resolveWorkspaceCreationLocation(options);
+  options = { ...options, organizationId: location.organizationId, folderId: location.folderId };
 
   let requestedCreateOptions;
   if (

@@ -62,6 +62,28 @@ const createWorkspaceOptionsSchema = z.object({
 export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
 export type ValidatedCreateWorkspaceOptions = z.output<typeof createWorkspaceOptionsSchema>;
 
+type WorkspaceCreationLocationOptions = Pick<
+  CreateWorkspaceOptions,
+  "organizationId" | "folderId" | "profile"
+>;
+
+/**
+ * Resolve the location for a new workspace. Either explicit ID replaces both user defaults.
+ * @param options - Location and authentication profile
+ * @returns Resolved location and the user defaults used, if any
+ */
+export async function resolveWorkspaceCreationLocation(options: WorkspaceCreationLocationOptions) {
+  const defaults =
+    options.organizationId !== undefined || options.folderId !== undefined
+      ? undefined
+      : await loadUserWorkspaceDefaults({ profile: options.profile });
+  return {
+    organizationId: defaults ? defaults.organizationId : options.organizationId,
+    folderId: defaults ? defaults.folderId : options.folderId,
+    defaults,
+  };
+}
+
 /** A created workspace, plus how recording its prune expiry went when one was requested. */
 export type CreatedWorkspaceInfo = WorkspaceInfo & { ttl?: TtlWriteResult };
 
@@ -92,7 +114,8 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
 }
 
 /**
- * Create a new workspace with the given options.
+ * Create a new workspace with the given options. When neither location ID is provided,
+ * use the selected user's defaults unless an environment token is set.
  * @param options - Workspace creation options
  * @returns Created workspace info
  */
@@ -106,17 +129,20 @@ export async function createWorkspace(
 type PreparedWorkspaceCreation = {
   client: OperatorClient;
   validated: ValidatedCreateWorkspaceOptions;
+  defaults?: UserWorkspaceDefaults;
 };
 
 async function prepareWorkspaceCreation(
   options: CreateWorkspaceOptions,
 ): Promise<PreparedWorkspaceCreation> {
-  const validated = validateCreateWorkspaceOptions(options);
+  const provided = validateCreateWorkspaceOptions(options);
+  const { organizationId, folderId, defaults } = await resolveWorkspaceCreationLocation(provided);
+  const validated = validateCreateWorkspaceOptions({ ...provided, organizationId, folderId });
   const accessToken = await loadAccessToken({ profile: validated.profile });
   const platformConfig = await loadPlatformClientConfig({ profile: validated.profile });
   const client = await initOperatorClient(accessToken, platformConfig);
   await validateRegion(validated.region, client);
-  return { client, validated };
+  return { client, validated, defaults };
 }
 
 /**
@@ -350,16 +376,12 @@ export const createCommand = defineAppCommand({
     const organizationId =
       args["organization-id"] ?? (process.env[ORGANIZATION_ID_ENV] || undefined);
     const folderId = args["folder-id"] ?? (process.env[FOLDER_ID_ENV] || undefined);
-    const locationGiven = organizationId !== undefined || folderId !== undefined;
-    const defaults = locationGiven
-      ? undefined
-      : await loadUserWorkspaceDefaults({ profile: args.profile });
-    const { client, validated } = await prepareWorkspaceCreation({
+    const { client, validated, defaults } = await prepareWorkspaceCreation({
       name: args.name,
       region: args.region,
       deleteProtection: args["delete-protection"],
-      organizationId: defaults ? defaults.organizationId : organizationId,
-      folderId: defaults ? defaults.folderId : folderId,
+      organizationId,
+      folderId,
       ttl: args.ttl,
       profile: args.profile,
     });

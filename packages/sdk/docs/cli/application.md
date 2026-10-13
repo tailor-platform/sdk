@@ -74,6 +74,11 @@ tailor deploy [options]
 | `--clean-cache`                         | -     | Clean the bundle cache before building                                               | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.
+
 **JSON result:**
 
 After a successful `tailor deploy --json`, stdout includes `status: "applied"`,

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   listWorkspacesWithClient: vi.fn(),
   loadAccessToken: vi.fn(),
   loadPlatformClientConfig: vi.fn(),
+  loadUserWorkspaceDefaults: vi.fn(),
   loadWorkspaceContext: vi.fn(),
   saveWorkspaceContext: vi.fn(),
   info: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextModule>()),
   loadAccessToken: mocks.loadAccessToken,
   loadPlatformClientConfig: mocks.loadPlatformClientConfig,
+  loadUserWorkspaceDefaults: mocks.loadUserWorkspaceDefaults,
   tryLoadWorkspaceId: mocks.tryLoadWorkspaceId,
 }));
 
@@ -97,6 +99,7 @@ describe("resolveDeployWorkspace", () => {
     mocks.listWorkspacesWithClient.mockResolvedValue([]);
     mocks.loadAccessToken.mockResolvedValue("access-token");
     mocks.loadPlatformClientConfig.mockResolvedValue(undefined);
+    mocks.loadUserWorkspaceDefaults.mockResolvedValue(undefined);
     mocks.loadWorkspaceContext.mockResolvedValue(undefined);
     mocks.tryLoadWorkspaceId.mockResolvedValue(undefined);
     client.listAvailableWorkspaceRegions.mockResolvedValue({
@@ -112,6 +115,119 @@ describe("resolveDeployWorkspace", () => {
     await runTest();
   });
 
+  test("creates a workspace in the selected user's default location", async () => {
+    const created = workspace("aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa");
+    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+      organizationId: created.organizationId,
+      folderId: created.folderId,
+    });
+    mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: created.name,
+        workspaceRegion: created.region,
+      }),
+    ).resolves.toEqual({ client, workspaceId: created.id });
+
+    expect(mocks.createValidatedWorkspaceWithClient).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({
+        organizationId: created.organizationId,
+        folderId: created.folderId,
+      }),
+    );
+  });
+
+  test.each([false, true])(
+    "reuses a workspace in the default location with saved context: %s",
+    async (saved) => {
+      const existing = workspace("aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa");
+      mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+        organizationId: existing.organizationId,
+        folderId: existing.folderId,
+      });
+      mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
+      if (saved)
+        mocks.loadWorkspaceContext.mockResolvedValue({
+          version: 1,
+          platformUrl: "https://api.tailor.tech",
+          workspaceId: existing.id,
+        });
+
+      await expect(
+        resolveDeployWorkspace({
+          createWorkspace: true,
+          workspaceName: existing.name,
+          workspaceRegion: existing.region,
+        }),
+      ).resolves.toEqual({ client, workspaceId: existing.id });
+
+      expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+    },
+  );
+
+  test("does not reuse the personal root when a default organization is set", async () => {
+    const existing = {
+      ...workspace("aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa"),
+      organizationId: undefined,
+      folderId: undefined,
+    };
+    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+      organizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+    });
+    mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: existing.name,
+        workspaceRegion: existing.region,
+      }),
+    ).rejects.toMatchObject({ code: "WORKSPACE_CREATE_CONFLICT" });
+    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+  });
+
+  test("does not mix an explicit organization with a default folder", async () => {
+    const created = workspace("aaaaaaaa-4444-4444-8444-aaaaaaaaaaaa");
+    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+      organizationId: created.organizationId,
+      folderId: created.folderId,
+    });
+    mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
+
+    await resolveDeployWorkspace({
+      createWorkspace: true,
+      workspaceName: created.name,
+      workspaceRegion: created.region,
+      organizationId: created.organizationId,
+    });
+
+    expect(mocks.loadUserWorkspaceDefaults).not.toHaveBeenCalled();
+    expect(mocks.createValidatedWorkspaceWithClient).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ organizationId: created.organizationId, folderId: undefined }),
+    );
+  });
+
+  test("does not fill a folder-only request from the default organization", async () => {
+    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+      organizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+    });
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: "example-workspace",
+        workspaceRegion: "us-west",
+        folderId: "cccccccc-1111-4111-8111-cccccccccccc",
+      }),
+    ).rejects.toMatchObject({ code: "WORKSPACE_CREATE_OPTIONS_INVALID" });
+    expect(mocks.loadUserWorkspaceDefaults).not.toHaveBeenCalled();
+    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+  });
+
   test("uses an explicitly configured workspace without discovery", async () => {
     const id = "11111111-1111-4111-8111-111111111111";
     mocks.tryLoadWorkspaceId.mockResolvedValue(id);
@@ -122,6 +238,7 @@ describe("resolveDeployWorkspace", () => {
     });
     expect(mocks.listWorkspacesWithClient).not.toHaveBeenCalled();
     expect(mocks.loadWorkspaceContext).not.toHaveBeenCalled();
+    expect(mocks.loadUserWorkspaceDefaults).not.toHaveBeenCalled();
     expect(client.getWorkspace).toHaveBeenCalledWith({ workspaceId: id });
     expect(mocks.loadPlatformClientConfig).toHaveBeenCalledWith({
       profile: undefined,

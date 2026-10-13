@@ -812,7 +812,32 @@ describe("workspace create with user defaults", () => {
     expect(getErrorDiagnostics(error as Error).suggestion ?? "").not.toContain("user update");
   });
 
-  test("keeps programmatic createWorkspace() independent of the defaults", async () => {
+  test("uses the same user defaults for programmatic createWorkspace()", async () => {
+    const client = stubClient();
+
+    await createWorkspace({ name: "test-ws", region: "us-west" });
+
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: defaultOrganizationId, folderId: defaultFolderId }),
+    );
+  });
+
+  test("keeps an explicit programmatic organization independent of the defaults", async () => {
+    const client = stubClient();
+
+    await createWorkspace({
+      name: "test-ws",
+      region: "us-west",
+      organizationId: otherOrganizationId,
+    });
+
+    expect(client.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: otherOrganizationId, folderId: undefined }),
+    );
+  });
+
+  test("ignores user defaults for an environment-authenticated programmatic call", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", "env-token");
     const client = stubClient();
 
     await createWorkspace({ name: "test-ws", region: "us-west" });
