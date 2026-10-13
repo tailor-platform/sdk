@@ -145,6 +145,19 @@ function entriesOfNamespace<T extends { request: { namespaceName?: string } }>(
 }
 
 /**
+ * How to undo the GraphQL permission a migration's Pre-phase wrote for a table:
+ * restore `previous`, or delete the permission when there was none before.
+ */
+export type GqlPermissionUndo = Map<
+  string,
+  {
+    previous?: NonNullable<
+      TailorDBChangeSet["gqlPermission"]["updates"][number]["previousPermission"]
+    >;
+  }
+>;
+
+/**
  * Track which tables have been created/updated across migrations, keyed by
  * {@link namespacedTableKey}
  */
@@ -280,6 +293,7 @@ async function awaitAllSettledOrThrow(
  * @param {PendingMigration} migration - Single pending migration
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
+ * @param gqlPermissionUndo - Records how to undo each GraphQL permission this migration writes
  * @returns {Promise<void>} Promise that resolves when pre-migration phase completes
  */
 export async function executeSingleMigrationPrePhase(
@@ -288,6 +302,7 @@ export async function executeSingleMigrationPrePhase(
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
+  gqlPermissionUndo: GqlPermissionUndo,
 ): Promise<void> {
   // Build pre-migration changes maps for this single migration. Includes both
   // breaking changes (required-add, unique-add, enum value removal) and the
@@ -441,6 +456,14 @@ export async function executeSingleMigrationPrePhase(
         await client.createTailorDBType(clonedRequest);
       }
     }
+    for (const create of gqlPermissionCreatesForNamespace) {
+      gqlPermissionUndo.set(create.name, {});
+    }
+    for (const update of gqlPermissionUpdatesForNamespace) {
+      if (update.previousPermission) {
+        gqlPermissionUndo.set(update.name, { previous: update.previousPermission });
+      }
+    }
     await awaitAllSettledOrThrow([
       ...gqlPermissionCreatesForNamespace.map((create) =>
         client.createTailorDBGQLPermission(create.request),
@@ -488,6 +511,7 @@ export async function rollbackSingleMigrationAfterFailure(
   workspaceId: string,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: ReadonlySet<string>,
+  gqlPermissionUndo: GqlPermissionUndo,
 ): Promise<string[]> {
   const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
   let leftRestricted: string[];
@@ -498,13 +522,14 @@ export async function rollbackSingleMigrationAfterFailure(
       workspaceId,
       phaseSettings,
       attemptedTables,
+      gqlPermissionUndo,
     );
   } catch (rollbackError) {
     logger.warn(
       `Failed to roll back migration ${migrationLabel}: ` +
         `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
     );
-    leftRestricted = [...attemptedTables];
+    leftRestricted = [...new Set([...attemptedTables, ...gqlPermissionUndo.keys()])];
   }
   return leftRestricted;
 }
@@ -944,6 +969,7 @@ export async function executeSingleMigrationPostPhaseDeletions(
  * @param workspaceId - Workspace ID
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
+ * @param gqlPermissionUndo - How to undo each GraphQL permission this migration wrote
  * @returns Names of the tables the rollback left in their restricted state
  */
 async function rollbackSingleMigrationPrePhase(
@@ -952,10 +978,11 @@ async function rollbackSingleMigrationPrePhase(
   workspaceId: string,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: ReadonlySet<string>,
+  gqlPermissionUndo: GqlPermissionUndo,
 ): Promise<string[]> {
   // The baseline migration has no prior checkpoint to revert to.
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return [...attemptedTables];
-  if (attemptedTables.size === 0) return [];
+  if (attemptedTables.size === 0 && gqlPermissionUndo.size === 0) return [];
 
   const priorSnapshot = reconstructSnapshotFromMigrations(
     migration.migrationsDir,
@@ -969,7 +996,7 @@ async function rollbackSingleMigrationPrePhase(
         `prior snapshot (migration ${formatMigrationNumber(migration.number - 1)}) could not be reconstructed. ` +
         "Leaving schema as-is; manual repair may be required.",
     );
-    return [...attemptedTables];
+    return [...new Set([...attemptedTables, ...gqlPermissionUndo.keys()])];
   }
   logger.warn(
     `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} failed; ` +
@@ -1006,6 +1033,32 @@ async function rollbackSingleMigrationPrePhase(
     }
   }
 
+  for (const [tableName, undo] of gqlPermissionUndo) {
+    if (!priorSnapshot.tables[tableName]) continue;
+    try {
+      if (undo.previous) {
+        await client.updateTailorDBGQLPermission({
+          workspaceId,
+          namespaceName: migration.namespace,
+          typeName: tableName,
+          permission: undo.previous,
+        });
+      } else {
+        await client.deleteTailorDBGQLPermission({
+          workspaceId,
+          namespaceName: migration.namespace,
+          typeName: tableName,
+        });
+      }
+    } catch (rollbackError) {
+      leftRestricted.push(tableName);
+      logger.warn(
+        `Failed to roll back the GraphQL permission of table '${tableName}' in namespace '${migration.namespace}': ` +
+          `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+      );
+    }
+  }
+
   for (const tableName of newTables) {
     try {
       // New table: its GQL permission must go first (table deletion does not
@@ -1031,5 +1084,5 @@ async function rollbackSingleMigrationPrePhase(
       );
     }
   }
-  return leftRestricted;
+  return [...new Set(leftRestricted)];
 }
