@@ -11,6 +11,7 @@ export const BUILTIN_COMMAND_NAMES = [
   "auth",
   "authconnection",
   "crashreport",
+  "data",
   "deploy",
   "executor",
   "function",
