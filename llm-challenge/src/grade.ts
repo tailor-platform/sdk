@@ -37,6 +37,7 @@ import type {
   SdkProfile,
   SolverAgent,
   SolverFailureKind,
+  SolverRuntimeKind,
   StoredChallengeReport,
 } from "./types";
 
@@ -99,6 +100,7 @@ export type GradeSummary = {
 
 export type GradeVariant = {
   agent: SolverAgent;
+  runtime: SolverRuntimeKind;
   model: string;
   effort: string;
   profile: SdkProfile;
@@ -302,6 +304,7 @@ export function summarizeVariants(
   for (const { relativePath, report } of sources) {
     const settings = {
       agent: report.agent ?? "codex",
+      runtime: report.runner?.kind ?? "podman",
       model: report.model,
       effort: report.effort,
       profile: report.requestedProfile,
@@ -521,7 +524,7 @@ export async function gradeCommand(argv: string[], packageRoot: string): Promise
   if (variants.length > 1) {
     for (const variant of variants) {
       console.log(
-        `${variant.agent}/${variant.model}/${variant.effort} ${variant.profile} ${variant.sdkRef.slice(0, 12)}: pass rate ${formatPassRate(variant)}`,
+        `${variant.agent}/${variant.model}/${variant.effort} ${variant.runtime} ${variant.profile} ${variant.sdkRef.slice(0, 12)}: pass rate ${formatPassRate(variant)}`,
       );
     }
   }

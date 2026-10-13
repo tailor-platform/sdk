@@ -748,6 +748,31 @@ describe("grade summary", () => {
     expect(variants[0]).toMatchObject({ ...settings, profile: "no-docs" });
   });
 
+  test("keeps host runs apart from Podman runs, which includes reports without a runtime", () => {
+    const report = (runner?: { kind: "host" | "podman" }) =>
+      ({
+        agent: "claude",
+        model: "claude-haiku-4-5",
+        effort: "high",
+        sdkRef: "aaa",
+        requestedProfile: "no-docs",
+        ...(runner === undefined ? {} : { runner }),
+      }) as StoredChallengeReport;
+    const variants = summarizeVariants(
+      [
+        { relativePath: "results/old/report.json", report: report() },
+        { relativePath: "results/podman/report.json", report: report({ kind: "podman" }) },
+        { relativePath: "results/host/report.json", report: report({ kind: "host" }) },
+      ],
+      [],
+    );
+
+    expect(variants.map((variant) => [variant.runtime, variant.reports])).toEqual([
+      ["podman", ["results/old/report.json", "results/podman/report.json"]],
+      ["host", ["results/host/report.json"]],
+    ]);
+  });
+
   test("keeps runs with installed skills apart from runs without them", () => {
     const report = (installSkills?: boolean) =>
       ({
