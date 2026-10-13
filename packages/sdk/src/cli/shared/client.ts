@@ -642,7 +642,11 @@ const RETRY_BASE_DELAY_MS = 500;
 const MAX_RETRY_ATTEMPTS = 3;
 
 /** Methods without an idempotency key, which a retry could apply twice. */
-const NON_RETRIED_METHODS: ReadonlySet<string> = new Set(["CreateWorkspace", "StartWorkflow"]);
+const NON_RETRIED_METHODS: ReadonlySet<string> = new Set([
+  "CloneApplicationData",
+  "CreateWorkspace",
+  "StartWorkflow",
+]);
 
 /**
  * Wait for an exponential backoff delay with jitter.

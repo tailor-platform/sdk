@@ -85,6 +85,12 @@ export const cloneCommand = defineAppCommand({
   name: "clone",
   description:
     "Clone the data of an application (TailorDB namespaces registered in its subgraph) from one workspace to another.",
+  notes: `
+The platform rejects the clone with a failed precondition unless all of the following hold:
+- The source and target workspaces are in the same region.
+- The target workspace has the same namespaces as the source.
+- The target is empty for every namespace and copy type in scope (TailorDB records, plus files and IdP users when \`--copy-files\` / \`--copy-idp-users\` are given).
+`,
   args: z.strictObject({
     ...confirmationArgs,
     profile: arg(z.string().optional(), {

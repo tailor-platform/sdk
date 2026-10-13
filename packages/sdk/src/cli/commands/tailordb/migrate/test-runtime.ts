@@ -269,6 +269,12 @@ export async function waitForCloneApplicationData(
   throw CLIError({
     code: `${errorCodePrefix}_TIMEOUT`,
     message: `Application data clone timed out after ${Math.round(timeout / 1_000)} seconds.`,
+    details: "The clone keeps running on the platform after this timeout.",
+    context: {
+      operationId: options.operationId,
+      sourceWorkspaceId: options.sourceWorkspaceId,
+      targetWorkspaceId: options.targetWorkspaceId,
+    },
   });
 }
 

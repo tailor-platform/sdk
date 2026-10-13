@@ -239,7 +239,14 @@ describe("migration test runtime", () => {
         timeout: 0,
         errorCodePrefix: "DATA_CLONE",
       }),
-    ).rejects.toMatchObject({ code: "DATA_CLONE_TIMEOUT" });
+    ).rejects.toMatchObject({
+      code: "DATA_CLONE_TIMEOUT",
+      context: {
+        operationId: "operation",
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+      },
+    });
   });
 
   function runtimeState(client: OperatorClient, services: unknown[] = []) {

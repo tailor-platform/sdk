@@ -44,3 +44,11 @@ tailor data clone [options]
 | `--timeout <TIMEOUT>` | -     | How long to wait for the clone to finish, e.g. 30s or 10m (default: 5m). The clone keeps running on the platform after the CLI times out. | No       | -       | -                         |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+The platform rejects the clone with a failed precondition unless all of the following hold:
+
+- The source and target workspaces are in the same region.
+- The target workspace has the same namespaces as the source.
+- The target is empty for every namespace and copy type in scope (TailorDB records, plus files and IdP users when `--copy-files` / `--copy-idp-users` are given).
