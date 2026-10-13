@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.85.2
+
+### Patch Changes
+
+- [#2592](https://github.com/tailor-platform/sdk/pull/2592) [`9e4a644`](https://github.com/tailor-platform/sdk/commit/9e4a644807dae43f42f5cf0f2ccaaa7f3bfe0651) Thanks [@k1LoW](https://github.com/k1LoW)! - Fix function execution logs coming back empty. The logs that `tailor-sdk function test-run`, `function logs`, `workflow executions --logs`, `executor jobs --logs`, TailorDB migrations, seeding, and `executeScript()` show are now read from the platform's structured log entries, joined with newlines, instead of the deprecated flat `logs` field the platform no longer fills.
+
+- [#2592](https://github.com/tailor-platform/sdk/pull/2592) [`c84153e`](https://github.com/tailor-platform/sdk/commit/c84153ebc1c758585739914d074dd85f0e6eaf39) Thanks [@k1LoW](https://github.com/k1LoW)! - Accept IdP `userAuthPolicy.allowedEmailDomains: ["*"]`, the lone entry that allows every email domain. `tailor-sdk deploy` used to reject it with "must be a valid hostname" during pre-flight validation because the bundled protobuf descriptors carried the platform's older hostname-only rule. Each entry is now validated locally: it must be a hostname or `"*"`, entries must be unique when compared case-insensitively and number at most 100, and `"*"` cannot sit alongside another entry. Entries that differ only in letter case, such as `["Example.com", "example.com"]`, used to deploy and be merged into one domain by the platform, and are now rejected so the list says what is stored.
+  
+  `tailor-sdk deploy` also warns on an IdP service that leaves `allowedEmailDomains` empty. An empty list still allows every domain, but a future platform release requires that state to be explicit, so set `["*"]` to keep the current behavior or list the domains you accept.
+  
+  Fixes a plan diff that re-applied `allowedEmailDomains` on every deploy when an entry was written in mixed case.
+
 ## 1.85.1
 
 ### Patch Changes
