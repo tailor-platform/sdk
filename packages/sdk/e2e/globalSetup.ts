@@ -18,8 +18,7 @@ const TEMPDIR_TRACKING_DIR = path.join(os.tmpdir(), "e2e-tempdirs");
 const WORKSPACE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Track a workspace ID for cleanup in globalTeardown, and record when it becomes prunable so a
- * run that dies before teardown still leaves a workspace `workspace prune --expired` can reclaim
+ * Track a workspace ID for cleanup in globalTeardown and record its prune expiry
  * @param client - Operator client that created the workspace
  * @param workspaceId - The workspace ID to track
  */

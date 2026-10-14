@@ -160,4 +160,4 @@ jobs:
           fi
           pnpm --silent tailor workspace prune --expired --folder-id "$FOLDER_ID" \
             --name '(e2e-ws|template-e2e|sdk-ci)-.*' \
-            --limit 100 "${dry_run_args[@]}" --yes
+            --limit 0 "${dry_run_args[@]}" --yes
