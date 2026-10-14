@@ -441,6 +441,8 @@ db.string().serial({
 });
 ```
 
+A serial field cannot be used inside a `db.object()` field.
+
 > **Preview:** The `gapless` option is a preview feature. Its behavior and configuration may change before general availability.
 
 Set `gapless: true` to number records without gaps. A number is used only by a create that commits, so a create that fails leaves no hole. Numbered creates of the table run one at a time, so use it only when contiguous numbering is required. See the [TailorDB Serial documentation](https://docs.tailor.tech/guides/tailordb/fields#serial) for what the gapless guarantee covers.
