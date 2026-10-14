@@ -48,6 +48,7 @@ const EDITABLE_WITH_KEYS: Record<string, readonly string[]> = {
   install: ["install-command"],
   notify: ["user-mapping"],
   plan: ["label"],
+  "preview-deploy": ["ttl"],
   setup: ["node-version-file"],
 };
 

@@ -208,6 +208,22 @@ describe("computeManagedHash", () => {
     expect(hashOf(edited)).toBe(lockHash);
   });
 
+  test("keeps the managed hash when the preview ttl is edited", () => {
+    const preview = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const edited = preview.content.replace("ttl: 7d", "ttl: 30d");
+
+    expect(edited).not.toBe(preview.content);
+    expect(computeManagedHash(edited, preview.generatedIds)).toBe(
+      computeManagedHash(preview.content, preview.generatedIds),
+    );
+  });
+
   test.each([
     [
       "a managed if condition",

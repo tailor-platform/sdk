@@ -264,8 +264,8 @@ Everything else is yours, and re-running `setup` keeps it:
 - **These inputs of managed steps:** `ignore` on `tailor-generate-check` and
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
-  `tailor-setup`, `label` on `tailor-plan`, and `user-mapping` on
-  `tailor-notify`.
+  `tailor-setup`, `label` on `tailor-plan`, `ttl` on `tailor-preview-deploy`,
+  and `user-mapping` on `tailor-notify`.
 - **Your own jobs in the `needs` of `tailor-result` and
   `tailor-preview-result`**, so they count toward the workflow's result (see
   [Requiring the workflow in branch protection](#requiring-the-workflow-in-branch-protection)).
@@ -295,6 +295,17 @@ that only uses `app-url`, such as end-to-end tests, does not.
 The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
 request is closed, for draft and fork pull requests, and for unlabeled ones with
 `--require-preview-label`.
+
+A preview workspace expires 7 days (`ttl: 7d` on `tailor-preview-deploy`) after
+the last push to its pull request. When a pull request is closed,
+`tailor-preview-cleanup` deletes its workspace and also deletes the other
+expired preview workspaces of the same workspace name in the folder
+(`TAILOR_PLATFORM_FOLDER_ID`, or directly under the organization when unset), so
+a workspace whose own cleanup never ran does not stay forever. A pull request
+that stays idle past the `ttl` can have its workspace deleted while it is still
+open; the next push creates a fresh one. Change `ttl` to keep previews longer or
+shorter. Workflows generated before this was added get these settings the next
+time you run `tailor setup update`.
 
 Each new preview workflow run for a pull request, such as after a push or when
 the pull request is closed, cancels the run still in progress for it, including

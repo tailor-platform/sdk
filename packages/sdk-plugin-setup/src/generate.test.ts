@@ -1134,6 +1134,34 @@ describe("renderPreviewWorkflow", () => {
     });
   });
 
+  describe("preview workspace expiry", () => {
+    const { content } = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const { jobs } = parseYAML(content) as {
+      jobs: Record<string, { steps: { id?: string; with?: Record<string, string> }[] }>;
+    };
+    const withOf = (job: string, step: string) =>
+      jobs[job]?.steps.find((s) => s.id === step)?.with ?? {};
+
+    test("deploy records an expiry that a push to the pull request restarts", () => {
+      expect(withOf("tailor-preview-deploy", "tailor-preview-deploy")["ttl"]).toBe("7d");
+    });
+
+    test("cleanup prunes expired previews from the location the deploy creates them in", () => {
+      const deploy = withOf("tailor-preview-deploy", "tailor-preview-deploy");
+      const cleanup = withOf("tailor-preview-cleanup", "tailor-preview-cleanup");
+
+      expect(cleanup["prune-expired"]).toBe("true");
+      expect(cleanup["organization-id"]).toBe(deploy["organization-id"]);
+      expect(cleanup["folder-id"]).toBe(deploy["folder-id"]);
+    });
+  });
+
   test.each([false, true])(
     "cancels a superseded run as a whole, except from an event on a closed pull request (requirePreviewLabel: %s)",
     (requirePreviewLabel) => {
