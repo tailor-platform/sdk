@@ -327,7 +327,6 @@ export function processNestedFieldsFromSnapshot(
             ...(fieldConfig.serial.format && {
               format: fieldConfig.serial.format,
             }),
-            ...(fieldConfig.serial.gapless && { gapless: true }),
           },
         }),
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
