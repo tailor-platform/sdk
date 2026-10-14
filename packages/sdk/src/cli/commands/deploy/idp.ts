@@ -525,7 +525,7 @@ async function planServices(
     const loggedInOnlyLocations = findLoggedInOnlyPermitRules(idp.permission);
     if (loggedInOnlyLocations.length > 0) {
       logger.warn(
-        `IdP service "${namespaceName}" permits every authenticated user in permission rule(s) ${loggedInOnlyLocations.join(", ")} ([{ user: "_loggedIn" }, "=", true]). Any signed-in user can then read and change other users' login information (such as email addresses) and send password reset emails to anyone. Restrict these rules to an administrator role unless every user who can sign in is trusted.`,
+        `IdP service "${namespaceName}" permits every authenticated user in permission rule(s) ${loggedInOnlyLocations.join(", ")} (their only condition is on "_loggedIn"). Any signed-in user can then run these operations against any IdP user, for example reading and changing login information (such as email addresses) or sending password reset emails to anyone. Restrict these rules to an administrator role unless every user who can sign in is trusted.`,
       );
     }
     if (hasImplicitAllEmailDomains(userAuthPolicy)) {

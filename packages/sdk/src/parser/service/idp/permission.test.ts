@@ -354,4 +354,29 @@ describe("findLoggedInOnlyPermitRules", () => {
   test("returns empty for undefined permission", () => {
     expect(findLoggedInOnlyPermitRules(undefined)).toEqual([]);
   });
+
+  type RawRule = NonNullable<Parameters<typeof findLoggedInOnlyPermitRules>[0]>["read"][number];
+  const loggedIn = { user: "_loggedIn" } as const;
+  const permitWhen = (condition: unknown) =>
+    ({ conditions: [condition], permit: true }) as unknown as RawRule;
+
+  test.each([
+    ["operands reversed", [true, "=", loggedIn], ["read[0]"]],
+    ["inequality with false", [loggedIn, "!=", false], ["read[0]"]],
+    ["reversed inequality with false", [false, "!=", loggedIn], ["read[0]"]],
+    ["membership in [true]", [loggedIn, "in", [true]], ["read[0]"]],
+    ["membership in [true, false]", [loggedIn, "in", [true, false]], ["read[0]"]],
+    ["exclusion from [false]", [loggedIn, "not in", [false]], ["read[0]"]],
+    ["equality with false (signed-out callers only)", [loggedIn, "=", false], []],
+    ["inequality with true (signed-out callers only)", [loggedIn, "!=", true], []],
+    ["membership in [false]", [loggedIn, "in", [false]], []],
+    ["exclusion from [true]", [loggedIn, "not in", [true]], []],
+  ])(
+    "flags a _loggedIn condition equivalent to `= true` only when it matches signed-in callers: %s",
+    (_name, condition, expected) => {
+      expect(findLoggedInOnlyPermitRules({ ...empty, read: [permitWhen(condition)] })).toEqual(
+        expected,
+      );
+    },
+  );
 });

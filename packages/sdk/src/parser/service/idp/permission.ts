@@ -103,17 +103,36 @@ export function findLoggedInOnlyPermitRules(permission: RawIdPPermission | undef
   return locations;
 }
 
+function isLoggedInOperand(operand: unknown): boolean {
+  return (
+    typeof operand === "object" &&
+    operand !== null &&
+    "user" in operand &&
+    operand.user === "_loggedIn"
+  );
+}
+
 function isLoggedInOnly(conditions: readonly StandardIdPPermissionCondition[]): boolean {
   const [condition, ...rest] = conditions;
   if (!condition || rest.length > 0) {
     return false;
   }
   const [left, operator, right] = condition;
-  return (
-    operator === "eq" &&
-    right === true &&
-    typeof left === "object" &&
-    "user" in left &&
-    left.user === "_loggedIn"
-  );
+  const other: unknown = isLoggedInOperand(left)
+    ? right
+    : isLoggedInOperand(right)
+      ? left
+      : undefined;
+  switch (operator) {
+    case "eq":
+      return other === true;
+    case "ne":
+      return other === false;
+    case "in":
+      return isLoggedInOperand(left) && Array.isArray(other) && other.includes(true);
+    case "nin":
+      return isLoggedInOperand(left) && Array.isArray(other) && !other.includes(true);
+    default:
+      return false;
+  }
 }
