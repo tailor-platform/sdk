@@ -37,6 +37,12 @@ import {
   mergeUserContent,
 } from "./managed";
 import {
+  defaultLoadSeedSettings,
+  SEED_DATASET_NAME,
+  seedSettingsProblem,
+  type SeedSettings,
+} from "./seed-settings";
+import {
   appSlug,
   isPackageManager,
   renderBranchWorkflow,
@@ -47,6 +53,7 @@ import {
   type PackageManager,
   type RenderApp,
   type RenderResult,
+  type RenderSeed,
 } from "./templates";
 
 type CommonSetupOptions = {
@@ -70,6 +77,10 @@ type CommonSetupOptions = {
   loadHasMigrations?: (configPath: string) => Promise<boolean>;
   /** Injectable seed plugin detector, for testing. Defaults to loading the config. */
   loadHasSeeds?: (configPath: string) => Promise<boolean>;
+  /** Seed the workspace after each deploy (`--seed` / `--seed-dataset`). */
+  seed?: RenderSeed;
+  /** Injectable seedPlugin settings loader, for testing. Defaults to loading the config. */
+  loadSeedSettings?: (configPath: string) => Promise<SeedSettings | null>;
 };
 
 export type BranchSetupOptions = CommonSetupOptions & {
@@ -125,8 +136,35 @@ async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
 }
 
 async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
-  const { plugins } = await loadConfig(configPath);
-  return plugins.some((p) => p.id === "@tailor-platform/seed");
+  return (await defaultLoadSeedSettings(configPath)) !== null;
+}
+
+async function assertSeedable(
+  options: SetupTargetOptions,
+  configPath: string,
+  multi: boolean,
+): Promise<void> {
+  const { seed } = options;
+  if (!seed) return;
+  if (multi) {
+    throw new Error(
+      "--seed is supported only for a target that deploys one app. " +
+        "Seed the workspace of a multi-app target with a step of your own after the deploy.",
+    );
+  }
+  for (const dataset of seed.datasets) {
+    if (!SEED_DATASET_NAME.test(dataset)) {
+      throw new Error(
+        `"${dataset}" is not a valid dataset name. ` +
+          "Use letters, digits, `-` and `_`, starting with a letter or digit.",
+      );
+    }
+  }
+  const loadSeedSettings = options.loadSeedSettings ?? defaultLoadSeedSettings;
+  const problem = seedSettingsProblem(seed.datasets, await loadSeedSettings(configPath));
+  if (problem !== undefined) {
+    throw new Error(`${problem} Fix seedPlugin, or regenerate the workflow without --seed.`);
+  }
 }
 
 // The name is used as the plan label, the generated file name, and the default
@@ -495,6 +533,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const configPaths = dirs.map((d) => resolveConfigPath(options.outputDir, d));
   if (multi) assertDistinctConfigs(dirs, configPaths);
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
+  await assertSeedable(options, configPath, multi);
 
   const packageManager = options.packageManager ?? detectPackageManager(options.outputDir);
   if (packageManager === undefined) {
@@ -607,6 +646,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
       restrictDispatch: options.restrictDispatch ?? false,
+      seed: options.seed,
     });
   } else if (kind === "tag") {
     branch = options.branch ?? null;
@@ -629,6 +669,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
       restrictDispatch: options.restrictDispatch ?? false,
+      seed: options.seed,
     });
   } else {
     branchAutoDetected = options.branch === undefined;
@@ -646,6 +687,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       packageManager,
       region: options.region,
       requirePreviewLabel: options.requirePreviewLabel ?? false,
+      seed: options.seed,
     });
   }
 
@@ -672,6 +714,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     seedValidate: (kind === "branch" || kind === "tag") && !apps ? hasSeeds : undefined,
     restrictDispatch:
       kind === "branch" || kind === "tag" ? (options.restrictDispatch ?? false) : undefined,
+    seed: options.seed ? { datasets: [...options.seed.datasets] } : undefined,
   };
 
   return {

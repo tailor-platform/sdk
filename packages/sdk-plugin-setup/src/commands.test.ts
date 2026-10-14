@@ -145,6 +145,33 @@ describe("setup ci subcommand nesting", () => {
     ["branch", []],
     ["tag", []],
     ["preview", ["--region", "us-west"]],
+  ] as const)(
+    "ci %s turns --seed and --seed-dataset into the seed option",
+    async (subcommand, args) => {
+      await runCommand(setupCommand, ["ci", subcommand, ...args]);
+      await runCommand(setupCommand, ["ci", subcommand, ...args, "--seed"]);
+      await runCommand(setupCommand, [
+        "ci",
+        subcommand,
+        ...args,
+        "--seed-dataset",
+        "preview",
+        "--seed-dataset",
+        "local",
+      ]);
+
+      expect(vi.mocked(setupTarget).mock.calls.map(([options]) => options.seed)).toEqual([
+        undefined,
+        { datasets: [] },
+        { datasets: ["preview", "local"] },
+      ]);
+    },
+  );
+
+  test.each([
+    ["branch", []],
+    ["tag", []],
+    ["preview", ["--region", "us-west"]],
   ] as const)("ci %s passes --package-manager to setupTarget", async (subcommand, args) => {
     const result = await runCommand(setupCommand, [
       "ci",

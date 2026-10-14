@@ -573,6 +573,67 @@ plan job also enters the environment, allow `refs/pull/*/merge` as well so pull
 request plans keep running, and note that dry runs from other branches are then
 rejected too.
 
+## Seeding the workspace after deploy
+
+Pass `--seed` to `setup ci branch`, `setup ci tag`, or `setup ci preview` to seed
+the workspace with `tailor seed apply` right after each deploy. Add
+`--seed-dataset <name>` (repeatable, implies `--seed`) to apply
+[datasets](https://github.com/tailor-platform/sdk/tree/main/packages/sdk-plugin-seed#datasets)
+on top of the base seed data:
+
+```bash
+tailor setup ci branch --seed-dataset stg
+tailor setup ci preview --region us-west --seed-dataset preview
+```
+
+The deploy job gains a `tailor-seed` step after the deploy step. Branch targets
+validate seed data before deploy and also in the PR or dry-run plan job; tag
+targets validate it in the plan job before deploy. Both use
+`tailor seed validate --upsert` with the selected datasets to check the `id`
+and required fields that `seed apply --upsert` needs. Preview targets validate
+and apply the data after deploy.
+
+| Target      | Seeds with                           | Effect                                                                        |
+| ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
+| branch, tag | `tailor seed apply --upsert`         | The fields of each committed seed row are written; other rows are kept        |
+| preview     | `tailor seed apply --truncate --yes` | The preview workspace is emptied, IdP users included, and seeded from scratch |
+
+Setup stops unless the config uses `seedPlugin` with `machineUserName`, which
+names the machine user that seeds, and an existing `<distPath>/data/` directory.
+Every `--seed-dataset` must name an entry of
+the `seedPlugin` `datasets` option or a directory under `<distPath>/data/`.
+Commit the dataset directories the workflow seeds: a gitignored dataset such as
+a per-developer `local/` is not in the CI checkout.
+Install `@tailor-platform/sdk-plugin-seed` so the `tailor seed` commands resolve
+in CI. For branch and tag targets, use a version that supports
+`tailor seed validate --upsert`; update the setup and seed plugins together.
+Give every TailorDB seed row an `id` and
+every field its table requires: `--upsert` matches rows by id, so run
+`tailor seed fill` and commit the result.
+Seeding is available for a target that deploys one app.
+
+Before enabling it, note that:
+
+- Every branch or tag deploy writes the fields of the committed seed rows over
+  the workspace, `_User` rows and their passwords included, so an edit to one of
+  those fields in the workspace is undone. Each row is updated like any other update: update hooks
+  and validation run, `updatedAt` changes, and executors with
+  `recordUpdatedTrigger` fire once per seeded row on every deploy.
+- Every preview deploy deletes the data reviewers added to the preview
+  workspace. That is every push, and with `--require-preview-label` also every
+  label added to the pull request, since each one redeploys the preview.
+- A seed failure fails the deploy job and its notification, although the deploy
+  itself went through.
+- The step shares the deploy job's timeout. IdP users take about a second each.
+- Steps you added after the deploy step stay right after it, so they run before
+  `tailor-seed`. Move a step below `tailor-seed` when it needs the seeded data,
+  and move it again if you regenerate without `--seed` and then with it.
+- `tailor-seed` is an SDK-managed step. To seed another way (a different mode,
+  `--skip-idp`, a condition), leave `--seed` off and add your own step.
+
+Re-run `setup ci` with the flags each time you regenerate the workflow; `setup
+update` keeps them.
+
 ## Monorepo setup
 
 For a monorepo where your SDK app lives in a subdirectory, pass `--dir`:
@@ -693,8 +754,9 @@ a branch target deploys only its target branch, so use Option 1 there.
 - **Schema and data are not rolled back.** If the older config expects a schema
   state that no longer exists, the plan may show errors. In that case, review
   the diff carefully before proceeding.
-- **Seed data** is not part of the deployment pipeline and is unaffected by
-  rollbacks.
+- **Seed data** is not rolled back. Without `--seed`, the pipeline does not
+  touch it; with `--seed`, deploying an older commit seeds the rows committed
+  there on top of the current data.
 - **Static websites** are not yet integrated into the generated pipeline.
   Static asset rollbacks must be performed manually.
 

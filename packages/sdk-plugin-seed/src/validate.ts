@@ -8,6 +8,7 @@ import {
   noBaseArg,
   selectDatasets,
 } from "./datasets";
+import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import type { DatasetSelection } from "./datasets";
 
 const { loadSeedContext, configArg, defineAppCommand, logger, arg } = sdkCli;
@@ -24,12 +25,17 @@ export const seedValidateCommand = defineAppCommand({
   description: "Validate JSONL seed data against generated schema definitions.",
   notes:
     "With --dataset, the rows of each dataset are validated on top of the base seed data, so " +
-    "foreign keys resolve across them and an id defined in two of them is reported.",
+    "foreign keys resolve across them and an id defined in two of them is reported. " +
+    "With --upsert, TailorDB rows must also supply an id and the required fields checked by seed apply --upsert. " +
+    "--upsert uses the configured seed data and cannot be combined with a path.",
   args: z.strictObject({
     ...configArg,
     ...datasetArg,
     ...allDatasetsArg,
     ...noBaseArg,
+    upsert: arg(z.boolean().default(false), {
+      description: "Also check the id and required fields needed by seed apply --upsert",
+    }),
     path: arg(z.string().optional(), {
       positional: true,
       description:
@@ -44,6 +50,9 @@ export const seedValidateCommand = defineAppCommand({
     if (args.path && (args.dataset.length > 0 || args["all-datasets"] || args["no-base"])) {
       throw new Error("--dataset, --all-datasets and --no-base cannot be combined with a path.");
     }
+    if (args.path && args.upsert) {
+      throw new Error("--upsert cannot be combined with a path. Use the configured seed data.");
+    }
     if (args["no-base"] && args.dataset.length === 0 && !args["all-datasets"]) {
       throw new Error("--no-base needs at least one --dataset or --all-datasets to validate.");
     }
@@ -56,6 +65,16 @@ export const seedValidateCommand = defineAppCommand({
       const context = await loadSeedContext({ configPath: args.config });
       targetPath = path.join(context.distPath, "data");
       datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
+      if (args.upsert) {
+        assertSeedDataDirectory(targetPath);
+        const dataDirs = [...(args["no-base"] ? [] : [targetPath]), ...datasets.dirs];
+        for (const namespace of context.namespaces) {
+          loadSeedData(dataDirs, namespace.types, {
+            requireId: true,
+            requiredFieldsByType: namespace.requiredFields,
+          });
+        }
+      }
     }
 
     const result = await validateSeedData({

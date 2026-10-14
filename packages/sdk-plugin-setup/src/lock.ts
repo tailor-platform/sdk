@@ -72,6 +72,8 @@ export type LockInputs = {
   seedValidate?: boolean;
   /** Whether manual dispatch may deploy only the target branch or a tag (branch/tag). */
   restrictDispatch?: boolean;
+  /** Present when the deploy job seeds the workspace (`--seed`), with the `--seed-dataset` names. */
+  seed?: { datasets: string[] };
 };
 
 export type LockTarget = {

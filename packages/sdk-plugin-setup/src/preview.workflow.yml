@@ -73,6 +73,16 @@ jobs:
           platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      # __SEED_START__
+      - id: tailor-seed
+        shell: bash
+        # __WORKING_DIRECTORY__
+        env:
+          TAILOR_PLATFORM_WORKSPACE_ID: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
+        run: |
+          __TAILOR_CLI__ seed validate__SEED_ARGS__
+          __TAILOR_CLI__ seed apply --truncate --yes__SEED_ARGS__
+      # __SEED_END__
       - id: tailor-preview-comment
         if: always()
         uses: tailor-platform/actions/preview-comment@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0

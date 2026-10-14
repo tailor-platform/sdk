@@ -102,6 +102,60 @@ function runValidate(args: string[]) {
 }
 
 describe("seedValidateCommand", () => {
+  test.each([undefined, null])("requires an id with --upsert: %s", async (id) => {
+    writeLines(path.join(dataDir, "Item.jsonl"), [{ id, name: "item" }]);
+    expect((await runValidate([])).exitCode).toBe(0);
+
+    const result = await runValidate(["--upsert"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("`id` is required with --upsert");
+    expect(logger.out).not.toHaveBeenCalledWith(expect.objectContaining({ valid: true }));
+  });
+
+  test("checks the same required fields as apply --upsert", async () => {
+    const context = await sdk.loadSeedContext();
+    context.namespaces[0].requiredFields.Item = ["name"];
+    writeLines(path.join(dataDir, "Item.jsonl"), [{ id: "i1", name: null }]);
+    expect((await runValidate([])).exitCode).toBe(1);
+
+    const result = await runValidate(["--upsert"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("field `name` is required with --upsert");
+  });
+
+  test.each(["--dataset", "--all-datasets"])(
+    "checks dataset rows with --upsert and honors --no-base: %s",
+    async (mode) => {
+      const selection = mode === "--dataset" ? [mode, "cogs"] : [mode];
+      writeLines(path.join(dataDir, "Item.jsonl"), [{ name: "base without id" }]);
+      writeLines(path.join(cogs, "Item.jsonl"), [{ id: "i2", name: "dataset item" }]);
+      expect((await runValidate(["--upsert", ...selection])).exitCode).toBe(1);
+      expect((await runValidate(["--upsert", ...selection, "--no-base"])).exitCode).toBe(0);
+      writeLines(path.join(cogs, "Item.jsonl"), [{ name: "dataset without id" }]);
+      const result = await runValidate(["--upsert", ...selection, "--no-base"]);
+      expect(result.exitCode).toBe(1);
+      expect(String(result.error)).toContain(path.join(cogs, "Item.jsonl"));
+    },
+  );
+
+  test("accepts complete rows and IdP users without an id with --upsert", async () => {
+    const context = await sdk.loadSeedContext();
+    context.namespaces[0].requiredFields.Item = ["name"];
+    writeFileSync(path.join(dataDir, "_User.schema.ts"), schemaSource());
+    writeLines(path.join(dataDir, "_User.jsonl"), [{ name: "user" }]);
+    const result = await runValidate(["--upsert", "--json"]);
+    expect(result.exitCode).toBe(0);
+    expect(logger.out).toHaveBeenCalledWith({ valid: true, path: dataDir });
+  });
+
+  test("rejects --upsert together with a path", async () => {
+    const result = await runValidate(["--upsert", dataDir]);
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("--upsert cannot be combined with a path");
+  });
+
   test("validates all datasets together with base data", async () => {
     const local = path.join(dataDir, "local");
     mkdirSync(local);

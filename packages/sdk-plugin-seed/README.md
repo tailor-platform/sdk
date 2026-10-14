@@ -34,6 +34,9 @@ tailor seed apply User Order
 tailor seed validate
 tailor seed validate ./seed/data/User.jsonl
 
+# Check the id and required fields before updating existing rows
+tailor seed validate --upsert
+
 # Fill in the ids rows are missing (and any other create-time field)
 tailor seed fill
 tailor seed fill --fields id,createdAt
