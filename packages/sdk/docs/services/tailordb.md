@@ -431,12 +431,12 @@ db.string().vector();
 
 ```typescript
 db.int().serial({
-  start: 0,
+  start: 1,
   maxValue: 100,
 });
 
 db.string().serial({
-  start: 0,
+  start: 1,
   format: "CUST_%d",
 });
 ```
