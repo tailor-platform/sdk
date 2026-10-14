@@ -1,9 +1,20 @@
+import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import {
   runMigrationTest,
+  testCommand,
   type MigrationTestDependencies,
   type PreparedMigrationTest,
 } from "./test";
+import type * as TestRuntime from "./test-runtime";
+
+const mocks = vi.hoisted(() => ({ dependencies: undefined as unknown }));
+
+vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: vi.fn() }));
+vi.mock("./test-runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof TestRuntime>()),
+  createMigrationTestDependencies: () => mocks.dependencies,
+}));
 
 const prepared: PreparedMigrationTest = {
   sourceWorkspaceId: "11111111-1111-4111-8111-111111111111",
@@ -29,6 +40,9 @@ function createDependencies(events: string[]): MigrationTestDependencies {
     createWorkspace: vi.fn(async () => {
       events.push("create");
       return { id: "44444444-4444-4444-8444-444444444444", name: "migration-test" };
+    }),
+    recordWorkspaceExpiry: vi.fn(async () => {
+      events.push("expiry");
     }),
     deployBaseline: vi.fn(async () => {
       events.push("baseline");
@@ -99,6 +113,39 @@ describe("tailordb migration test", () => {
       }),
     );
     expect(dependencies.seedData).not.toHaveBeenCalled();
+  });
+
+  test("passes the clone timeout to the clone step", async () => {
+    const dependencies = createDependencies([]);
+
+    await runMigrationTest({ data: "clone", cloneTimeout: 600_000 }, dependencies);
+
+    expect(dependencies.cloneData).toHaveBeenCalledWith(
+      expect.objectContaining({ cloneTimeout: 600_000 }),
+    );
+  });
+
+  test("converts --clone-timeout to milliseconds for the clone step", async () => {
+    const dependencies = createDependencies([]);
+    mocks.dependencies = dependencies;
+
+    const result = await runCommand(testCommand, ["--data", "clone", "--clone-timeout", "10m"]);
+
+    expect(result.success).toBe(true);
+    expect(dependencies.cloneData).toHaveBeenCalledWith(
+      expect.objectContaining({ cloneTimeout: 600_000 }),
+    );
+  });
+
+  test("rejects a clone timeout with seed data before creating a workspace", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+
+    await expect(
+      runMigrationTest({ data: "seed", cloneTimeout: 600_000 }, dependencies),
+    ).rejects.toMatchObject({ code: "MIGRATION_TEST_OPTIONS_INVALID" });
+
+    expect(events).toEqual([]);
   });
 
   test("rejects a cross-region designated clone target before baseline deployment", async () => {
@@ -214,6 +261,52 @@ describe("tailordb migration test", () => {
     );
 
     expect(dependencies.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("records an expiry on a kept workspace right after creating it", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+
+    await runMigrationTest({ data: "seed", keep: true, keepTtl: "24h" }, dependencies);
+
+    expect(events.slice(0, 3)).toEqual(["prepare", "create", "expiry"]);
+    expect(dependencies.recordWorkspaceExpiry).toHaveBeenCalledWith(
+      "44444444-4444-4444-8444-444444444444",
+      "24h",
+    );
+    expect(dependencies.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("does not record an expiry unless --keep-ttl is passed", async () => {
+    const dependencies = createDependencies([]);
+
+    await runMigrationTest({ data: "seed", keep: true }, dependencies);
+
+    expect(dependencies.recordWorkspaceExpiry).not.toHaveBeenCalled();
+  });
+
+  test("keeps the workspace and finishes when recording the expiry fails", async () => {
+    const dependencies = createDependencies([]);
+    vi.mocked(dependencies.recordWorkspaceExpiry).mockRejectedValue(
+      new Error("label write failed"),
+    );
+
+    const result = await runMigrationTest(
+      { data: "seed", keep: true, keepTtl: "24h" },
+      dependencies,
+    );
+
+    expect(result.deleted).toBe(false);
+    expect(dependencies.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("rejects --keep-ttl without --keep before creating anything", async () => {
+    const dependencies = createDependencies([]);
+
+    await expect(runMigrationTest({ data: "seed", keepTtl: "24h" }, dependencies)).rejects.toThrow(
+      /--keep-ttl requires --keep/,
+    );
+    expect(dependencies.createWorkspace).not.toHaveBeenCalled();
   });
 
   test("rejects --keep with a designated target workspace", async () => {

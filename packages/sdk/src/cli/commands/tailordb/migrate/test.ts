@@ -1,9 +1,10 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { deploymentArgs } from "#/cli/shared/args";
+import { ageArg } from "#/cli/commands/workspace/age";
+import { deploymentArgs, durationArg, parseDuration } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
@@ -50,6 +51,20 @@ export async function runMigrationTest(
       command: "tailordb migration test",
     });
   }
+  if (options.keepTtl !== undefined && !options.keep) {
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: "--keep-ttl requires --keep.",
+      command: "tailordb migration test",
+    });
+  }
+  if (options.cloneTimeout !== undefined && options.data !== "clone") {
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: "--clone-timeout applies only to --data clone.",
+      command: "tailordb migration test",
+    });
+  }
   if (options.assertionNamespace && !options.assertionPath) {
     throw CLIError({
       code: "MIGRATION_TEST_OPTIONS_INVALID",
@@ -77,6 +92,30 @@ export async function runMigrationTest(
         id: assertDefined(options.targetWorkspaceId, "designated target workspace missing"),
         name: undefined,
       };
+  let expiryRecorded = false;
+  if (temporary && options.keepTtl !== undefined) {
+    try {
+      await dependencies.recordWorkspaceExpiry(workspace.id, options.keepTtl);
+      expiryRecorded = true;
+    } catch (expiryError) {
+      logger.warn(
+        `Failed to record an expiry on temporary workspace ${workspace.id}: ${expiryError instanceof Error ? expiryError.message : String(expiryError)}. Record one with ${formatCommandHint(
+          {
+            command: "tailor",
+            args: [
+              "workspace",
+              "ttl",
+              "set",
+              "--ttl",
+              options.keepTtl,
+              `--workspace-id=${workspace.id}`,
+              ...(options.profile ? [`--profile=${options.profile}`] : []),
+            ],
+          },
+        )}.`,
+      );
+    }
+  }
   let primaryError: unknown;
   let failed = false;
   let deleted = false;
@@ -89,6 +128,7 @@ export async function runMigrationTest(
       ...target,
       sourceWorkspaceId: prepared.sourceWorkspaceId,
       applicationName: prepared.sourceApplicationName,
+      cloneTimeout: options.cloneTimeout,
     };
     if (options.data === "clone") {
       await dependencies.cloneData(dataTarget);
@@ -111,7 +151,9 @@ export async function runMigrationTest(
   }
 
   if (temporary && options.keep) {
-    logger.info(`Keeping temporary workspace ${workspace.name ?? workspace.id}.`);
+    logger.info(
+      `Keeping temporary workspace ${workspace.name ?? workspace.id}${expiryRecorded ? `; it can be pruned after ${options.keepTtl}` : ""}.`,
+    );
   } else if (temporary) {
     try {
       await dependencies.deleteWorkspace(workspace.id);
@@ -168,7 +210,7 @@ export const testCommand = defineAppCommand({
   description:
     "Test pending migrations with seed fixtures or cloned data in a temporary workspace.",
   notes:
-    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs.",
+    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed.",
   args: z.strictObject({
     ...deploymentArgs,
     yes: arg(z.boolean().default(false), {
@@ -191,6 +233,16 @@ export const testCommand = defineAppCommand({
     "assert-namespace": arg(z.string().optional(), {
       description: "TailorDB namespace exposed to the assertion script",
     }),
+    "keep-ttl": arg(ageArg.optional(), {
+      description:
+        "Record an expiry on the kept workspace, e.g. 24h or 7d, so workspace prune --expired can delete it (requires --keep)",
+      completion: { type: "none" },
+    }),
+    "clone-timeout": arg(durationArg.optional(), {
+      description:
+        "How long to wait for the clone to finish with --data clone, e.g. 30s or 10m (default: 30m)",
+      completion: { type: "none" },
+    }),
     "machine-user": arg(z.string().optional(), {
       description: "Machine user for seed and assertion script execution",
     }),
@@ -204,9 +256,12 @@ export const testCommand = defineAppCommand({
       data: args.data,
       targetWorkspaceId: args["target-workspace-id"],
       keep: args.keep,
+      keepTtl: args["keep-ttl"],
       assertionPath: args.assert,
       assertionNamespace: args["assert-namespace"],
       machineUser: args["machine-user"],
+      cloneTimeout:
+        args["clone-timeout"] === undefined ? undefined : parseDuration(args["clone-timeout"]),
       yes: args.yes,
       json: logger.jsonMode,
     });

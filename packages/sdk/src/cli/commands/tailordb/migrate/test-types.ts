@@ -12,9 +12,11 @@ export interface MigrationTestOptions {
   data: MigrationTestDataMode;
   targetWorkspaceId?: string;
   keep?: boolean;
+  keepTtl?: string;
   assertionPath?: string;
   assertionNamespace?: string;
   machineUser?: string;
+  cloneTimeout?: number;
   yes?: boolean;
   json?: boolean;
 }
@@ -53,6 +55,7 @@ interface MigrationTestTarget {
 interface MigrationTestDataTarget extends MigrationTestTarget {
   sourceWorkspaceId: string;
   applicationName: string;
+  cloneTimeout?: number;
 }
 
 interface MigrationTestAssertionTarget extends MigrationTestTarget {
@@ -64,6 +67,7 @@ interface MigrationTestAssertionTarget extends MigrationTestTarget {
 export interface MigrationTestDependencies {
   prepare(options: MigrationTestOptions): Promise<PreparedMigrationTest>;
   createWorkspace(prepared: PreparedMigrationTest): Promise<MigrationTestWorkspace>;
+  recordWorkspaceExpiry(workspaceId: string, ttl: string): Promise<void>;
   deployBaseline(target: MigrationTestTarget): Promise<void>;
   seedData(target: MigrationTestDataTarget): Promise<void>;
   cloneData(target: MigrationTestDataTarget): Promise<void>;

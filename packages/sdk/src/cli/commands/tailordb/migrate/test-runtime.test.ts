@@ -223,6 +223,171 @@ describe("migration test runtime", () => {
     ).rejects.toThrow("namespace mismatch");
   });
 
+  test("reports a clone timeout under the given error code prefix", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi
+        .fn()
+        .mockResolvedValue({ status: CloneOperationStatus.PENDING, errorMessage: "" }),
+    } as unknown as OperatorClient;
+
+    await expect(
+      waitForCloneApplicationData(client, {
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+        operationId: "operation",
+        pollInterval: 0,
+        timeout: 0,
+        errorCodePrefix: "DATA_CLONE",
+      }),
+    ).rejects.toMatchObject({
+      code: "DATA_CLONE_TIMEOUT",
+      context: {
+        operationId: "operation",
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+      },
+    });
+  });
+
+  test("does not claim the clone keeps running when the caller has no step to resume it", async () => {
+    const client = { getCloneApplicationDataOperation: vi.fn() } as unknown as OperatorClient;
+
+    const error = await waitForCloneApplicationData(client, {
+      sourceWorkspaceId: "source",
+      targetWorkspaceId: "target",
+      operationId: "operation",
+      timeout: 0,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ code: "MIGRATION_TEST_CLONE_TIMEOUT" });
+    expect((error as { details?: string }).details).toBeUndefined();
+  });
+
+  test("says the clone keeps running when the caller provides a step to resume it", async () => {
+    const client = { getCloneApplicationDataOperation: vi.fn() } as unknown as OperatorClient;
+
+    const error = await waitForCloneApplicationData(client, {
+      sourceWorkspaceId: "source",
+      targetWorkspaceId: "target",
+      operationId: "operation",
+      timeout: 0,
+      errorCodePrefix: "DATA_CLONE",
+      next: { command: "tailor", args: ["data", "operation", "get"] },
+    }).catch((caught: unknown) => caught);
+
+    expect((error as { details?: string }).details).toContain("keeps running");
+  });
+
+  test("bounds a poll that never answers by the remaining timeout", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi.fn(
+        (_request: unknown, callOptions: { timeoutMs: number }) =>
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new ConnectError("deadline exceeded", Code.DeadlineExceeded)),
+              callOptions.timeoutMs,
+            ),
+          ),
+      ),
+    } as unknown as OperatorClient;
+
+    const startedAt = Date.now();
+    await expect(
+      waitForCloneApplicationData(client, {
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+        operationId: "operation",
+        timeout: 50,
+        errorCodePrefix: "DATA_CLONE",
+      }),
+    ).rejects.toMatchObject({ code: "DATA_CLONE_TIMEOUT" });
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  test("reports each change of a non-terminal status once", async () => {
+    const statuses = [
+      CloneOperationStatus.PENDING,
+      CloneOperationStatus.PENDING,
+      CloneOperationStatus.PROCESSING,
+      CloneOperationStatus.PROCESSING,
+      CloneOperationStatus.COMPLETED,
+    ];
+    const getOperation = vi.fn();
+    for (const status of statuses) {
+      getOperation.mockResolvedValueOnce({ status, errorMessage: "" });
+    }
+    const client = { getCloneApplicationDataOperation: getOperation } as unknown as OperatorClient;
+    const reported: CloneOperationStatus[] = [];
+
+    await waitForCloneApplicationData(client, {
+      sourceWorkspaceId: "source",
+      targetWorkspaceId: "target",
+      operationId: "operation",
+      pollInterval: 0,
+      onStatus: (status) => reported.push(status),
+    });
+
+    expect(reported).toEqual([CloneOperationStatus.PENDING, CloneOperationStatus.PROCESSING]);
+  });
+
+  test("waits up to 30 minutes when no timeout is given", async () => {
+    const getOperation = vi
+      .fn()
+      .mockResolvedValue({ status: CloneOperationStatus.COMPLETED, errorMessage: "" });
+    const client = { getCloneApplicationDataOperation: getOperation } as unknown as OperatorClient;
+
+    await waitForCloneApplicationData(client, {
+      sourceWorkspaceId: "source",
+      targetWorkspaceId: "target",
+      operationId: "operation",
+    });
+
+    const [, callOptions] = getOperation.mock.calls[0] as [unknown, { timeoutMs: number }];
+    expect(callOptions.timeoutMs).toBeGreaterThan(29 * 60 * 1_000);
+    expect(callOptions.timeoutMs).toBeLessThanOrEqual(30 * 60 * 1_000);
+  });
+
+  test("rethrows a deadline error that arrives long before the wait budget is spent", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi
+        .fn()
+        .mockRejectedValue(new ConnectError("server deadline", Code.DeadlineExceeded)),
+    } as unknown as OperatorClient;
+
+    await expect(
+      waitForCloneApplicationData(client, {
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+        operationId: "operation",
+        pollInterval: 0,
+        timeout: 60_000,
+      }),
+    ).rejects.toThrow("server deadline");
+  });
+
+  test("does not sleep past the deadline between polls", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi
+        .fn()
+        .mockResolvedValue({ status: CloneOperationStatus.PENDING, errorMessage: "" }),
+    } as unknown as OperatorClient;
+
+    const startedAt = Date.now();
+    await expect(
+      waitForCloneApplicationData(client, {
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+        operationId: "operation",
+        pollInterval: 5_000,
+        timeout: 50,
+      }),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_TEST_CLONE_TIMEOUT",
+      message: "Application data clone timed out after 50 ms.",
+    });
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
   function runtimeState(client: OperatorClient, services: unknown[] = []) {
     return {
       client,
