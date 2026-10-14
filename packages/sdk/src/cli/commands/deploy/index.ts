@@ -2,13 +2,20 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { deployFromCLI } from "#/cli/commands/deploy/deploy";
 import { parseMigrationSkipSteps } from "#/cli/commands/deploy/tailordb/migration-skip-steps";
-import { confirmationArgs, multiConfigArg, workspaceArgs } from "#/cli/shared/args";
+import {
+  confirmationArgs,
+  locationIdsWithEnvFile,
+  multiConfigArg,
+  workspaceArgs,
+} from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 
 export const deployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy your application by applying the Tailor configuration.",
+  notes:
+    "Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. Organization and folder IDs loaded by --env-file also replace the defaults; command-line options take precedence, and empty env-file values are ignored. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.",
   args: z.strictObject({
     ...workspaceArgs,
     ...multiConfigArg,
@@ -65,8 +72,7 @@ export const deployCommand = defineAppCommand({
         createWorkspace: args["create-workspace"],
         workspaceName: args["workspace-name"],
         workspaceRegion: args["workspace-region"],
-        organizationId: args["organization-id"],
-        folderId: args["folder-id"],
+        ...locationIdsWithEnvFile(args),
         noSchemaCheck: args["no-schema-check"],
         migrationSkipSteps: parseMigrationSkipSteps(args["migration-skip-steps"]),
         noValidate: args["no-validate"],

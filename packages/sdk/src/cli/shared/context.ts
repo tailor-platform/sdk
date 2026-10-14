@@ -61,13 +61,19 @@ const pfUserFileSchema = z.looseObject({
 
 const pfUserSchemaV2 = z.discriminatedUnion("storage", [pfUserKeyringSchema, pfUserFileSchema]);
 
-const pfUserKeyringSchemaV3 = pfUserKeyringSchema.extend({
+const pfUserIdentitySchemaV3 = z.strictObject({
   email: z.string().optional(),
 });
 
-const pfUserFileSchemaV3 = pfUserFileSchema.extend({
-  email: z.string().optional(),
-});
+const pfUserMetadataV3 = {
+  ...pfUserIdentitySchemaV3.shape,
+  default_organization_id: z.string().optional(),
+  default_folder_id: z.string().optional(),
+};
+
+const pfUserKeyringSchemaV3 = pfUserKeyringSchema.extend(pfUserMetadataV3);
+
+const pfUserFileSchemaV3 = pfUserFileSchema.extend(pfUserMetadataV3);
 
 const pfUserSchemaV3 = z.discriminatedUnion("storage", [pfUserKeyringSchemaV3, pfUserFileSchemaV3]);
 
@@ -321,6 +327,7 @@ function declaredKeys(...schemas: ObjectSchema[]): Set<string> {
 
 const v2ConfigKeys = declaredKeys(pfConfigSchemaV2);
 const v2UserKeys = declaredKeys(pfUserKeyringSchema, pfUserFileSchema);
+const userTokenKeys = v2UserKeys.union(declaredKeys(pfUserIdentitySchemaV3));
 const profileKeys = declaredKeys(pfProfileSchema);
 // An older format does not validate keys a later format declares, so migration drops them.
 const v2OnlyConfigKeys = v2ConfigKeys.difference(declaredKeys(pfConfigSchemaV1));
@@ -723,6 +730,14 @@ export async function loadMachineUserName(
 }
 
 /**
+ * Read the access token set through the environment, which takes precedence over any logged-in user.
+ * @returns TAILOR_PLATFORM_TOKEN, or the deprecated TAILOR_TOKEN, when set
+ */
+export function readEnvironmentToken(): string | undefined {
+  return process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+}
+
+/**
  * Load access token from environment variables, command options, or platform config.
  * In CLI context, profile env fallback is also handled by politty's arg env option.
  * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
@@ -731,7 +746,7 @@ export async function loadMachineUserName(
  */
 export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
-  const envToken = process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+  const envToken = readEnvironmentToken();
   if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
     logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
   }
@@ -769,7 +784,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
  */
 export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<AuthStatus> {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
-  const envToken = process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+  const envToken = readEnvironmentToken();
   if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
     logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
   }
@@ -829,6 +844,49 @@ export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<Aut
     permission: profileEntry?.readonly === true ? "read" : "write",
     platformUrl,
     tokenStatus,
+  };
+}
+
+/** Where `workspace create` places a workspace when no location is given. */
+export type UserWorkspaceDefaults = {
+  organizationId: string;
+  folderId?: string;
+};
+
+/**
+ * Resolve the selected user's entry on the selected platform without a legacy-key fallback.
+ * @param config - Platform config
+ * @param opts - Profile options
+ * @returns The selected user and entry, or undefined when the profile does not exist
+ */
+export function resolveSelectedUserEntry(config: PfConfig, opts?: LoadAccessTokenOptions) {
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  const profileEntry = profile ? config.profiles[profile] : undefined;
+  if (profile && !profileEntry) return undefined;
+  const user = profileEntry?.user ?? config.current_user;
+  const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  const userEntry = user
+    ? findUserEntry(config, user, platformConfig, { allowLegacyUserKey: false }).userEntry
+    : undefined;
+  return { profile, user, userEntry };
+}
+
+/**
+ * Load the default organization and folder stored on the user that config-based authentication
+ * selects. An environment token's identity is not a config user, so none apply while one is set.
+ * @param opts - Profile options
+ * @returns The user's defaults, or undefined when none apply
+ */
+export async function loadUserWorkspaceDefaults(
+  opts?: LoadAccessTokenOptions,
+): Promise<UserWorkspaceDefaults | undefined> {
+  if (readEnvironmentToken()) return undefined;
+  const config = await readPlatformConfig();
+  const userEntry = resolveSelectedUserEntry(config, opts)?.userEntry;
+  if (!userEntry?.default_organization_id) return undefined;
+  return {
+    organizationId: userEntry.default_organization_id,
+    ...(userEntry.default_folder_id ? { folderId: userEntry.default_folder_id } : {}),
   };
 }
 
@@ -934,7 +992,7 @@ export async function resolveTokens(
 
 function userExtraFields(entry: PfUser | undefined) {
   if (!entry) return {};
-  return withoutKeys(entry, v2UserKeys.union(v3OnlyUserKeys));
+  return withoutKeys(entry, userTokenKeys);
 }
 
 type RemoveUserAliasOptions = {
