@@ -107,6 +107,8 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "staticwebsite/domain/index.ts",
   "staticwebsite/domain/get.ts",
   "staticwebsite/domain/list.ts",
+  // Data (read-only branches; data/clone.ts starts a clone and is guarded)
+  "data/operation/get.ts",
   // TailorDB (read-only / local ops)
   "tailordb/index.ts",
   "tailordb/migrate/index.ts",
