@@ -292,6 +292,15 @@ export type ExcludeDefaultedDBFields<T extends Record<string, TailorAnyDBField>>
     ? never
     : T[K];
 };
+
+export type ExcludeSerialDBFields<T extends Record<string, TailorAnyDBField>> = {
+  [K in keyof T]: T[K] extends TailorDBField<
+    { type: TailorFieldType; array: boolean; serial: true },
+    any
+  >
+    ? never
+    : T[K];
+};
 // oxlint-enable no-explicit-any
 
 // --- Table features ---

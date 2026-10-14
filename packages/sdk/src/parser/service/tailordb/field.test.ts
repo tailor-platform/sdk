@@ -229,6 +229,19 @@ describe("parseFieldConfig nested inner field restrictions", () => {
       parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "status"] }),
     ).toThrow(".default() cannot be used on nested inner fields");
   });
+
+  test("throws on .serial() on nested inner fields", () => {
+    const field = {
+      type: "integer" as const,
+      fields: {},
+      rawRelation: undefined,
+      metadata: { serial: { start: 1 } },
+    };
+
+    expect(() =>
+      parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "number"] }),
+    ).toThrow(".serial() cannot be used on nested inner fields");
+  });
 });
 
 describe("parseFieldConfig enum allowed values", () => {
