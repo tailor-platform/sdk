@@ -1,7 +1,7 @@
 import { arg } from "@politty/zod";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
 import { z } from "zod";
-import { durationArg, recoveryContextArgs } from "#/cli/shared/args";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { formatCommandHint } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
@@ -15,12 +15,6 @@ export const cloneWorkspaceArgs = {
     completion: { type: "none" },
   }),
 };
-
-export const cloneTimeoutArg = arg(durationArg.default("30m"), {
-  description:
-    "How long this command waits for the clone to finish, e.g. 30s or 10m. It does not limit how long the clone may run: the clone keeps running on the platform when the wait ends.",
-  completion: { type: "none" },
-});
 
 export interface CloneOperationRef {
   sourceWorkspaceId: string;

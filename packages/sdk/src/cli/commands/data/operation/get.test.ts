@@ -69,21 +69,4 @@ describe("data operation get", () => {
     expect(result.error).toMatchObject({ code: "DATA_CLONE_FAILED" });
     expect(String(result.error?.message)).toContain("namespace mismatch");
   });
-
-  test("--wait の待ち時間を超えたら、続きを待つコマンドを next に入れて失敗する", async () => {
-    client.getCloneApplicationDataOperation.mockResolvedValue({
-      status: CloneOperationStatus.PENDING,
-      errorMessage: "",
-    });
-
-    const result = await runCommand(getCommand, [...baseArgs, "--wait", "--timeout", "1ms"]);
-
-    expect(result.error).toMatchObject({
-      code: "DATA_CLONE_TIMEOUT",
-      next: {
-        command: "tailor",
-        args: expect.arrayContaining(["--operation-id", "op-1", "--wait"]),
-      },
-    });
-  });
 });

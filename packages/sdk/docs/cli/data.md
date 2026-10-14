@@ -90,17 +90,16 @@ tailor data operation get [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                                                                                                                     | Required | Default | Env                       |
-| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------- |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                                                                               | No       | -       | `TAILOR_PLATFORM_PROFILE` |
-| `--from <FROM>`                 | -     | Workspace ID to copy data from                                                                                                                                                  | Yes      | -       | -                         |
-| `--to <TO>`                     | -     | Workspace ID to copy data to                                                                                                                                                    | Yes      | -       | -                         |
-| `--operation-id <OPERATION_ID>` | -     | Operation ID printed when the clone started                                                                                                                                     | Yes      | -       | -                         |
-| `--wait`                        | -     | Wait until the clone completes or fails                                                                                                                                         | No       | `false` | -                         |
-| `--timeout <TIMEOUT>`           | -     | How long this command waits for the clone to finish, e.g. 30s or 10m. It does not limit how long the clone may run: the clone keeps running on the platform when the wait ends. | No       | `"30m"` | -                         |
+| Option                          | Alias | Description                                 | Required | Default | Env                       |
+| ------------------------------- | ----- | ------------------------------------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                           | No       | -       | `TAILOR_PLATFORM_PROFILE` |
+| `--from <FROM>`                 | -     | Workspace ID to copy data from              | Yes      | -       | -                         |
+| `--to <TO>`                     | -     | Workspace ID to copy data to                | Yes      | -       | -                         |
+| `--operation-id <OPERATION_ID>` | -     | Operation ID printed when the clone started | Yes      | -       | -                         |
+| `--wait`                        | -     | Wait until the clone completes or fails     | No       | `false` | -                         |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 **Notes**
 
-Without --wait, the command prints the current status once and exits. With --wait, it waits until the clone completes or fails, and exits with an error if it fails or --timeout passes.
+Without --wait, the command prints the current status once and exits. With --wait, it waits until the clone completes or fails, and exits with an error if it fails. Pressing Ctrl+C stops waiting; the clone keeps running on the platform.
