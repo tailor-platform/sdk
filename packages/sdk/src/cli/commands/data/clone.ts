@@ -59,19 +59,24 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
       throw CLIError({
         code: "DATA_CLONE_TARGET_APPLICATION_NOT_FOUND",
         message: `Application "${options.name}" was not found in the target workspace "${options.targetWorkspaceId}".`,
-        suggestion:
-          "Check --to, and deploy the application to the target workspace first so it has the same namespaces and schema.",
-        next: {
-          command: "tailor",
-          args: [
-            "deploy",
-            ...recoveryContextArgs({
-              workspaceId: options.targetWorkspaceId,
-              profile: options.profile,
-            }),
-            ...configArgs,
-          ],
-        },
+        suggestion: options.nameFromConfig
+          ? "Check --to, and deploy the application to the target workspace first so it has the same namespaces and schema."
+          : `Check --to, and deploy the application "${options.name}" to the target workspace first so it has the same namespaces and schema.`,
+        ...(options.nameFromConfig
+          ? {
+              next: {
+                command: "tailor",
+                args: [
+                  "deploy",
+                  ...recoveryContextArgs({
+                    workspaceId: options.targetWorkspaceId,
+                    profile: options.profile,
+                  }),
+                  ...configArgs,
+                ],
+              },
+            }
+          : {}),
         command: "data clone",
         cause: error,
       });

@@ -106,7 +106,7 @@ describe("data clone", () => {
   test("コピー先にアプリがなければ、clone を始めずに、先に deploy するよう案内して失敗する", async () => {
     client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
-    const result = await runCommand(cloneCommand, baseArgs);
+    const result = await runCommand(cloneCommand, ["--from", "src", "--to", "dst", "--yes"]);
 
     expect(result.error).toMatchObject({
       code: "DATA_CLONE_TARGET_APPLICATION_NOT_FOUND",
@@ -114,9 +114,19 @@ describe("data clone", () => {
     });
     expect(client.getApplication).toHaveBeenCalledWith({
       workspaceId: "dst",
-      applicationName: "my-app",
+      applicationName: "config-app",
     });
     expect(client.cloneApplicationData).not.toHaveBeenCalled();
+  });
+
+  test("--name を指定したときは、deploy を実行できる形では案内せず文章で案内する", async () => {
+    client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const result = await runCommand(cloneCommand, baseArgs);
+
+    expect(result.error).toMatchObject({ code: "DATA_CLONE_TARGET_APPLICATION_NOT_FOUND" });
+    expect((result.error as { next?: unknown }).next).toBeUndefined();
+    expect((result.error as { suggestion?: string }).suggestion).toContain("my-app");
   });
 
   test("コピー先アプリの確認が NotFound 以外で失敗したら、そのエラーをそのまま返す", async () => {
@@ -170,7 +180,15 @@ describe("data clone", () => {
   test("コピー先にアプリがなければ、deploy の案内に指定した設定ファイルを引き継ぐ", async () => {
     client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
-    const result = await runCommand(cloneCommand, [...baseArgs, "--config", "custom.ts"]);
+    const result = await runCommand(cloneCommand, [
+      "--from",
+      "src",
+      "--to",
+      "dst",
+      "--yes",
+      "--config",
+      "custom.ts",
+    ]);
 
     expect(result.error).toMatchObject({
       next: { command: "tailor", args: ["deploy", "--workspace-id=dst", "--config=custom.ts"] },
