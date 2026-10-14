@@ -1,6 +1,7 @@
 import { PATScope } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { formatTimestamp } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
+import { protoEnumLookup } from "#/cli/shared/proto-enum";
 import ml from "#/utils/multiline";
 import type { PersonalAccessToken } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
@@ -12,15 +13,14 @@ export interface PersonalAccessTokenInfo {
   lastUsedAt: Date | null;
 }
 
+const PAT_SCOPE_LABEL = {
+  [PATScope.PAT_SCOPE_UNSPECIFIED]: "unknown",
+  [PATScope.PAT_SCOPE_READ]: "read",
+  [PATScope.PAT_SCOPE_WRITE]: "write",
+} satisfies Record<PATScope, string>;
+
 function patScopeToString(scope: PATScope): string {
-  switch (scope) {
-    case PATScope.PAT_SCOPE_READ:
-      return "read";
-    case PATScope.PAT_SCOPE_WRITE:
-      return "write";
-    default:
-      return "unknown";
-  }
+  return protoEnumLookup(PAT_SCOPE_LABEL, scope, "unknown");
 }
 
 /**

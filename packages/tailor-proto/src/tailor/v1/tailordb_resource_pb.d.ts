@@ -540,6 +540,11 @@ export declare type TailorDBType_Serial = Message<"tailor.v1.TailorDBType.Serial
    * @generated from field: optional string format = 3;
    */
   format?: string;
+
+  /**
+   * @generated from field: bool gapless = 4;
+   */
+  gapless: boolean;
 };
 
 /**

@@ -34,6 +34,7 @@ import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import { ageArg, parseAge } from "./age";
 import { writeWorkspaceExpiry } from "./expiry";
+import { KNOWN_WORKSPACE_REGIONS } from "./regions";
 import {
   workspaceDisplayName,
   workspaceInfoWithFolderName,
@@ -315,7 +316,7 @@ export const createCommand = defineAppCommand({
     }),
     region: arg(z.string(), {
       alias: "r",
-      description: "Workspace region (us-west, asia-northeast)",
+      description: `Workspace region (${KNOWN_WORKSPACE_REGIONS.join(", ")})`,
     }),
     "delete-protection": arg(z.boolean().default(false), {
       alias: "d",

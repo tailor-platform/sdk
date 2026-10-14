@@ -1,6 +1,7 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { deployFromCLI } from "#/cli/commands/deploy/deploy";
+import { parseMigrationSkipSteps } from "#/cli/commands/deploy/tailordb/migration-skip-steps";
 import {
   confirmationArgs,
   locationIdsWithEnvFile,
@@ -43,6 +44,10 @@ export const deployCommand = defineAppCommand({
     "no-schema-check": arg(z.boolean().optional(), {
       description: "Skip schema diff check against migration snapshots",
     }),
+    "migration-skip-steps": arg(z.string().optional(), {
+      description:
+        "Skip steps of a partially applied multi-step migration that already succeeded (comma-separated namespace/step entries)",
+    }),
     "no-validate": arg(z.boolean().optional(), {
       description: "Skip client-side validation against platform resource constraints",
     }),
@@ -69,6 +74,7 @@ export const deployCommand = defineAppCommand({
         workspaceRegion: args["workspace-region"],
         ...locationIdsWithEnvFile(args),
         noSchemaCheck: args["no-schema-check"],
+        migrationSkipSteps: parseMigrationSkipSteps(args["migration-skip-steps"]),
         noValidate: args["no-validate"],
         noCache: args["no-cache"],
         cleanCache: args["clean-cache"],

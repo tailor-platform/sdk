@@ -153,6 +153,10 @@ or end with a hyphen. It is used for the generated file name, the workflow
 select which workspace gets deployed (see
 [Targeting a workspace](#targeting-a-workspace)).
 
+For a preview target, the name can be at most 50 characters: each pull request
+gets its own workspace named `<name>-pr-<number>`, which must fit in 63
+characters.
+
 ## Targeting a workspace
 
 The generated `plan` and `deploy` jobs target a workspace by **id**, read from
@@ -190,6 +194,26 @@ the `plan` job as well as `deploy`, because `plan` must enter the environment to
 read the variable. (A token-based read that lets `plan` run without entering the
 environment is planned.)
 
+## Package manager
+
+The generated workflow sets up your package manager, installs dependencies with
+it, and runs `tailor` through it. `setup ci` detects the package manager from the
+lockfile at the repository root (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`,
+`bun.lockb`, `package-lock.json`, or `npm-shrinkwrap.json`), or, when there is
+none, from the `packageManager` or `devEngines.packageManager` field of the root
+`package.json`. When neither names one, `setup ci` stops instead of guessing.
+
+Pass `--package-manager` (`pnpm`, `npm`, `yarn`, or `bun`) to choose it
+yourself, for example to generate the workflow before the lockfile exists:
+
+```bash
+tailor setup ci branch --name my-app-stg --package-manager pnpm
+```
+
+The workflow installs dependencies at the repository root, so commit the
+lockfile there before it runs. `tailor setup update` keeps a package manager
+chosen with `--package-manager` and detects it again otherwise.
+
 ## Generated files
 
 Running a workflow setup subcommand creates or updates:
@@ -213,8 +237,8 @@ for what you can edit.
 ### Customizing the generated workflow
 
 The SDK owns the jobs and steps whose `id` starts with `tailor-`, and the
-top-level keys it writes (`name:`, `on:`, and `permissions:`). Do not edit or
-rename them. Everything else is yours, and re-running `setup` keeps it:
+top-level `name:`, `on:`, and `permissions:`. Do not edit or rename them.
+Everything else is yours, and re-running `setup` keeps it:
 
 - **Your own jobs and steps.** Add them anywhere, with an `id` (if any) that
   does not start with `tailor-`: the prefix is reserved for the SDK, even in a
@@ -224,18 +248,27 @@ rename them. Everything else is yours, and re-running `setup` keeps it:
   (such as `playwright install`) _after_ it. A job of your own can depend on a
   managed job with `needs: tailor-deploy`.
 - **Your own top-level keys**, such as a workflow-level `env:` or `defaults:`.
+- **The top-level `concurrency:` of a preview workflow.** The SDK writes a
+  default, and re-running `setup` keeps your edits to it. If you delete it,
+  re-running `setup` adds the default back.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
-  `container`, and `env`. On a managed job generated without an
-  `environment:` (such as `tailor-tag-guard` or `tailor-erd-preview`), you can
-  also add one, for example so a step you added there can read that GitHub
-  Environment's secrets. The `environment:` of `tailor-plan`, `tailor-deploy`,
-  and the preview jobs comes from `--environment`, so change it with that
-  option instead.
+  `container`, and `env`. If every managed job that re-running `setup` keeps
+  uses the same `runs-on` you set, such as self-hosted runners, a managed job
+  it adds (for example, the ERD preview jobs when you add `--erd-preview`)
+  uses it too; otherwise, set the new job's `runs-on` yourself. On a managed
+  job generated without an `environment:` (such as `tailor-tag-guard` or
+  `tailor-erd-preview`), you can also add one, for example so a step you added
+  there can read that GitHub Environment's secrets. The `environment:` of
+  `tailor-plan`, `tailor-deploy`, and the preview jobs comes from
+  `--environment`, so change it with that option instead.
 - **These inputs of managed steps:** `ignore` on `tailor-generate-check` and
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
   `tailor-setup`, `label` on `tailor-plan`, and `user-mapping` on
   `tailor-notify`.
+- **Your own jobs in the `needs` of `tailor-result` and
+  `tailor-preview-result`**, so they count toward the workflow's result (see
+  [Requiring the workflow in branch protection](#requiring-the-workflow-in-branch-protection)).
 
 In a preview workflow, the `tailor-preview-deploy` job exposes the per-PR
 workspace as the outputs `workspace-id`, `workspace-name`, and `app-url`, so a
@@ -248,7 +281,7 @@ deploy-assets:
   environment: my-app
   env:
     TAILOR_PLATFORM_WORKSPACE_ID: ${{ needs.tailor-preview-deploy.outputs.workspace-id }}
-    TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+    TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
     TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
   steps:
     # checkout, dependency installation, and your tailor commands
@@ -262,6 +295,14 @@ that only uses `app-url`, such as end-to-end tests, does not.
 The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
 request is closed, for draft and fork pull requests, and for unlabeled ones with
 `--require-preview-label`.
+
+Each new preview workflow run for a pull request, such as after a push or when
+the pull request is closed, cancels the run still in progress for it, including
+your jobs, so they do not keep running against a workspace that the new run
+may redeploy or delete. Events on a pull request that stays closed, such as a
+label added after merging, do not cancel anything. A job with `if: always()`
+still runs when its run is cancelled, and the new run waits for it to finish;
+use `if: ${{ !cancelled() }}` instead so it stops with the run.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
 deployed workspace as the outputs `workspace-id` and `app-url` to a job with
@@ -296,6 +337,48 @@ not rename or remove it.
 Files generated by an older SDK version are compared as a whole, so the first
 re-run after upgrading stops if you edited the file in any way. Re-run once with
 `--force` to switch it to this model; your own jobs and steps are kept.
+
+### Requiring the workflow in branch protection
+
+Branch and preview workflows end with a job that reports the result of the
+whole workflow: `tailor-result` in a branch workflow and
+`tailor-preview-result` in a preview workflow. Its check is named after the
+workspace, such as `tailor-result (my-app)`, so each workflow in the repository
+has its own. Require that one check in branch protection instead of listing
+the jobs one by one.
+
+The job runs after every other SDK-managed job of the workflow, even when one
+fails or the run is cancelled. It fails when a job in its `needs` failed or was
+cancelled, and passes when they succeeded or were skipped, for example when the
+preview deploy is skipped for a fork pull request. When a newer run cancels a
+job of an older one, such as the preview deploy of a commit you pushed over,
+the older run's check fails; the newer run reports its own.
+
+To make jobs of your own count, add them to its `needs`. A matrix job is listed
+once by its job id, however many combinations it expands to:
+
+```yaml
+tailor-preview-result:
+  name: tailor-preview-result (my-app)
+  needs:
+    - tailor-preview-deploy
+    - tailor-preview-cleanup
+    - seed
+    - e2e
+```
+
+Re-running `setup` keeps the jobs you add there and updates the `tailor-`
+entries to the jobs the SDK generates. A job skipped because a job it needs
+failed also counts as passing, so list every job of yours whose failure should
+block merging, not only the last one: above, `seed` is listed because `e2e`
+needs it.
+
+With `--require-preview-label`, the preview workflow does not start when a pull
+request is opened, so its check is not reported until the pull request is
+labeled, reopened, or pushed to. A draft pull request skips the preview deploy,
+and marking it ready for review does not start the workflow, so the check that
+passed while it was a draft stays until the next push. Tag workflows have no
+such job: they run on tags, not on pull requests.
 
 ### `.github/tailor.lock`
 
@@ -351,23 +434,33 @@ the move.
 
 ## Secrets
 
-The generated workflow requires two secrets (the optional Slack token is listed in
+The generated workflow requires one secret (the optional Slack token is listed in
 [Setting secrets and variables](#setting-secrets-and-variables)):
 
 | Secret                                       | Description                |
 | -------------------------------------------- | -------------------------- |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Machine user client ID     |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Machine user client secret |
 
-Set them on the target GitHub Environment (the `--environment` value, or the
-workspace name when omitted); `tailor setup ci env` prints the commands (see
+The machine user client ID is a variable, not a secret: it cannot authenticate
+without the client secret. The generated workflow reads
+`vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` and falls back to
+`secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`, so a repository that already
+stores the client ID as a secret keeps working unchanged. Storing the client ID
+as a secret is deprecated, and the fallback will be removed in a future release,
+so move it to a variable (`gh variable set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`)
+and delete the secret.
+
+Set the client secret as a secret and the client ID as a variable on the target
+GitHub Environment (the `--environment` value, or the workspace name when
+omitted); `tailor setup ci env` prints the commands (see
 [Setting secrets and variables](#setting-secrets-and-variables)).
 
 Setting them at the environment level isolates each target's credentials and
 keeps them alongside that environment's `TAILOR_PLATFORM_WORKSPACE_ID`
-variable. You can also set them as repository-level secrets if every target
-shares one machine user, but then any workflow on any branch can read them, so
-the environment's protection rules no longer guard your deploys.
+variable. You can also set the client secret as a repository-level secret and the
+client ID as a repository-level variable if every target shares one machine user,
+but then any workflow on any branch can read them, so the environment's
+protection rules no longer guard your deploys.
 
 ### Setting secrets and variables
 
@@ -387,17 +480,17 @@ tailor setup ci env --environment my-app-stg # only one environment (repeat for 
 
 The list follows what each generated workflow actually reads:
 
-| Name                                         | Kind     | Targets     | Required | Where the value comes from                                                                                                                                                                                                                                                                                      |
-| -------------------------------------------- | -------- | ----------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | secret   | all         | yes      | Client ID of the platform machine user CI signs in as; it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all         | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                 |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                 |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview     | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                   |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview     | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                            |
-| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all         | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                              |
-| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                    |
-| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                            |
-| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                            |
+| Name                                         | Kind     | Targets     | Required | Where the value comes from                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------- | -------- | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | variable | all         | yes      | Client ID of the platform machine user CI signs in as (an existing secret of the same name still works as a deprecated fallback); it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | secret   | all         | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                                                                                            |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | variable | branch, tag | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                                                                                            |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | variable | preview     | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                                                                                              |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | variable | preview     | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                                                                                                       |
+| `TAILOR_PLATFORM_FAIL_ON_DRIFT`              | variable | all         | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                                                                                                         |
+| `TAILOR_SLACK_BOT_TOKEN`                     | secret   | branch, tag | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                                                                                               |
+| `TAILOR_SLACK_CHANNEL_ID`                    | variable | branch, tag | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                                                                                                       |
+| `TAILOR_SLACK_USER_MAPPING`                  | variable | branch, tag | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                                       |
 
 See [Account management](https://docs.tailor.tech/administration/account-management)
 for how organizations, folders, workspaces, and machine users relate.
@@ -480,6 +573,67 @@ plan job also enters the environment, allow `refs/pull/*/merge` as well so pull
 request plans keep running, and note that dry runs from other branches are then
 rejected too.
 
+## Seeding the workspace after deploy
+
+Pass `--seed` to `setup ci branch`, `setup ci tag`, or `setup ci preview` to seed
+the workspace with `tailor seed apply` right after each deploy. Add
+`--seed-dataset <name>` (repeatable, implies `--seed`) to apply
+[datasets](https://github.com/tailor-platform/sdk/tree/main/packages/sdk-plugin-seed#datasets)
+on top of the base seed data:
+
+```bash
+tailor setup ci branch --seed-dataset stg
+tailor setup ci preview --region us-west --seed-dataset preview
+```
+
+The deploy job gains a `tailor-seed` step after the deploy step. Branch targets
+validate seed data before deploy and also in the PR or dry-run plan job; tag
+targets validate it in the plan job before deploy. Both use
+`tailor seed validate --upsert` with the selected datasets to check the `id`
+and required fields that `seed apply --upsert` needs. Preview targets validate
+and apply the data after deploy.
+
+| Target      | Seeds with                           | Effect                                                                        |
+| ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
+| branch, tag | `tailor seed apply --upsert`         | The fields of each committed seed row are written; other rows are kept        |
+| preview     | `tailor seed apply --truncate --yes` | The preview workspace is emptied, IdP users included, and seeded from scratch |
+
+Setup stops unless the config uses `seedPlugin` with `machineUserName`, which
+names the machine user that seeds, and an existing `<distPath>/data/` directory.
+Every `--seed-dataset` must name an entry of
+the `seedPlugin` `datasets` option or a directory under `<distPath>/data/`.
+Commit the dataset directories the workflow seeds: a gitignored dataset such as
+a per-developer `local/` is not in the CI checkout.
+Install `@tailor-platform/sdk-plugin-seed` so the `tailor seed` commands resolve
+in CI. For branch and tag targets, use a version that supports
+`tailor seed validate --upsert`; update the setup and seed plugins together.
+Give every TailorDB seed row an `id` and
+every field its table requires: `--upsert` matches rows by id, so run
+`tailor seed fill` and commit the result.
+Seeding is available for a target that deploys one app.
+
+Before enabling it, note that:
+
+- Every branch or tag deploy writes the fields of the committed seed rows over
+  the workspace, `_User` rows and their passwords included, so an edit to one of
+  those fields in the workspace is undone. Each row is updated like any other update: update hooks
+  and validation run, `updatedAt` changes, and executors with
+  `recordUpdatedTrigger` fire once per seeded row on every deploy.
+- Every preview deploy deletes the data reviewers added to the preview
+  workspace. That is every push, and with `--require-preview-label` also every
+  label added to the pull request, since each one redeploys the preview.
+- A seed failure fails the deploy job and its notification, although the deploy
+  itself went through.
+- The step shares the deploy job's timeout. IdP users take about a second each.
+- Steps you added after the deploy step stay right after it, so they run before
+  `tailor-seed`. Move a step below `tailor-seed` when it needs the seeded data,
+  and move it again if you regenerate without `--seed` and then with it.
+- `tailor-seed` is an SDK-managed step. To seed another way (a different mode,
+  `--skip-idp`, a condition), leave `--seed` off and add your own step.
+
+Re-run `setup ci` with the flags each time you regenerate the workflow; `setup
+update` keeps them.
+
 ## Monorepo setup
 
 For a monorepo where your SDK app lives in a subdirectory, pass `--dir`:
@@ -489,12 +643,14 @@ tailor setup ci branch --name my-app --dir apps/backend
 ```
 
 The `working-directory` for SDK commands is set accordingly, and the workflow
-only plans and deploys when that subdirectory changes. The workflow itself
-starts on every pull request and push: a `tailor-changes` job checks whether
-the change touches `apps/backend/**`, and the plan, deploy, and ERD preview jobs
-are skipped when it does not. A skipped job reports success, so you can make
-these checks required in branch protection; a workflow that a `paths` trigger
-filter never started would leave them pending instead. If the `tailor-changes` job
+only plans and deploys when that subdirectory or the generated workflow file
+changes. The workflow itself starts on every pull request and push: a
+`tailor-changes` job checks whether the change touches `apps/backend/**` or the
+generated workflow file itself, and the plan, deploy, and ERD preview jobs are
+skipped when it does not. A skipped job reports success, so you can require the
+workflow's [result check](#requiring-the-workflow-in-branch-protection) in
+branch protection; a workflow that a `paths` trigger filter never started would
+leave it pending instead. If the `tailor-changes` job
 itself fails (for example, on a GitHub API error), the plan, deploy, and ERD
 preview jobs fail too instead of being skipped, so a required check blocks
 merging and nothing is deployed. Re-run the failed jobs once the cause is gone.
@@ -535,8 +691,13 @@ tailor setup ci preview --name erp --region asia-northeast \
   --paths "apps/*/frontend/**" --paths "modules/**" --paths pnpm-lock.yaml
 ```
 
-The patterns are checked after the app directories, in order, and the last
-pattern that matches a changed file decides whether it counts. `*` matches
+The patterns are checked after the app directories and the generated workflow
+file, in order, and the last pattern that matches a changed file decides whether
+it counts. A change to the workflow file alone runs the generated plan, deploy,
+and preview jobs, and with them any job of yours that needs them, in the pull
+request or push that makes the change; to skip the jobs for such a change,
+exclude the file, for example `--paths '!.github/workflows/tailor-erp.yml'`
+(`tailor-erp-preview.yml` for the preview workflow). `*` matches
 within one path segment, `**` matches any number of segments, and a pattern
 starting with `!` excludes matching paths, so it can also exclude files inside
 an app directory, for example `--paths '!apps/erp/backend/**/*.md'`. Other glob
@@ -593,8 +754,9 @@ a branch target deploys only its target branch, so use Option 1 there.
 - **Schema and data are not rolled back.** If the older config expects a schema
   state that no longer exists, the plan may show errors. In that case, review
   the diff carefully before proceeding.
-- **Seed data** is not part of the deployment pipeline and is unaffected by
-  rollbacks.
+- **Seed data** is not rolled back. Without `--seed`, the pipeline does not
+  touch it; with `--seed`, deploying an older commit seeds the rows committed
+  there on top of the current data.
 - **Static websites** are not yet integrated into the generated pipeline.
   Static asset rollbacks must be performed manually.
 
@@ -701,10 +863,11 @@ It regenerates every workflow recorded in
 have to re-type `setup ci branch`, `setup ci tag`, and the rest one by one.
 Your own jobs, steps, and settings are kept (see
 [Customizing the generated workflow](#customizing-the-generated-workflow)). A
-branch that was detected from the repository default branch is detected again,
-and the parts that follow your config — the migration drift check, seed
-validation, and ERD preview namespaces — are derived
-from the current `tailor.config.ts`.
+branch that was detected from the repository default branch and a
+[package manager](#package-manager) that was detected from the repository root
+are detected again, and the parts that follow your config — the migration drift
+check, seed validation, and ERD preview namespaces — are derived from the
+current `tailor.config.ts`.
 
 A target that cannot be regenerated, for example because you edited a managed
 part, does not stop the others: `update` regenerates the rest, then lists the

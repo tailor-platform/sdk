@@ -4,6 +4,7 @@ import {
   FunctionLogSeverity,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { styles } from "./logger";
+import { protoEnumLookup, protoEnumName } from "./proto-enum";
 import type { FunctionLogEntry } from "@tailor-platform/tailor-proto/function_resource_pb";
 
 /**
@@ -24,22 +25,7 @@ export interface FunctionLogEntryInfo {
  * @returns Status string representation
  */
 export function functionExecutionStatusToString(status: FunctionExecution_Status): string {
-  switch (status) {
-    case FunctionExecution_Status.RUNNING:
-      return "RUNNING";
-    case FunctionExecution_Status.SUCCESS:
-      return "SUCCESS";
-    case FunctionExecution_Status.FAILED:
-      return "FAILED";
-    case FunctionExecution_Status.SUSPEND:
-      return "SUSPEND";
-    case FunctionExecution_Status.CANCELING:
-      return "CANCELING";
-    case FunctionExecution_Status.CANCELED:
-      return "CANCELED";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumName(FunctionExecution_Status, status) ?? "UNSPECIFIED";
 }
 
 /**
@@ -60,17 +46,24 @@ export function colorizeFunctionExecutionStatus(status: string): string {
   }
 }
 
+const FUNCTION_EXECUTION_TERMINAL = {
+  [FunctionExecution_Status.UNSPECIFIED]: false,
+  [FunctionExecution_Status.RUNNING]: false,
+  [FunctionExecution_Status.SUCCESS]: true,
+  [FunctionExecution_Status.FAILED]: true,
+  [FunctionExecution_Status.SUSPEND]: false,
+  [FunctionExecution_Status.CANCELING]: false,
+  [FunctionExecution_Status.CANCELED]: true,
+} satisfies Record<FunctionExecution_Status, boolean>;
+
 /**
  * Check if function execution status is terminal.
  * @param status - Function execution status enum value
  * @returns True if status is terminal
  */
 export function isFunctionExecutionTerminalStatus(status: FunctionExecution_Status): boolean {
-  return (
-    status === FunctionExecution_Status.SUCCESS ||
-    status === FunctionExecution_Status.FAILED ||
-    status === FunctionExecution_Status.CANCELED
-  );
+  // A status newer than the stubs is treated as not terminal, so waiting continues until the timeout.
+  return protoEnumLookup(FUNCTION_EXECUTION_TERMINAL, status, false);
 }
 
 /**
@@ -79,20 +72,7 @@ export function isFunctionExecutionTerminalStatus(status: FunctionExecution_Stat
  * @returns Severity string representation
  */
 export function functionLogSeverityToString(severity: FunctionLogSeverity): string {
-  switch (severity) {
-    case FunctionLogSeverity.LOG:
-      return "LOG";
-    case FunctionLogSeverity.DEBUG:
-      return "DEBUG";
-    case FunctionLogSeverity.INFO:
-      return "INFO";
-    case FunctionLogSeverity.WARNING:
-      return "WARNING";
-    case FunctionLogSeverity.ERROR:
-      return "ERROR";
-    default:
-      return "UNSPECIFIED";
-  }
+  return protoEnumName(FunctionLogSeverity, severity) ?? "UNSPECIFIED";
 }
 
 /**

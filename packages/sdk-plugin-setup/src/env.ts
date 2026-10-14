@@ -29,7 +29,7 @@ const CONCEPTS_NOTE =
 
 const CLIENT_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID",
-  type: "secret",
+  type: "variable",
   required: true,
   description:
     "Client ID of the platform machine user that CI signs in as for plan and deploy; it needs " +

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "local-cli-used",
+      "claim": "The command history shows the local `tailor` binary (for example `pnpm exec tailor generate`, `pnpm tailor generate`, or `./node_modules/.bin/tailor generate`) running `generate`, not a globally installed CLI."
+    },
+    {
+      "id": "generate-succeeded",
+      "claim": "The `generate` run succeeded, as shown by its output or by the files it produced."
+    },
+    {
+      "id": "task-list-project",
+      "claim": "tailor.config.ts defines a task list application: its name or its services and tables refer to tasks."
+    },
+    {
+      "id": "generated-artifacts-present",
+      "claim": "Generated files from that run exist in the workspace (for example `tailor.d.ts` or plugin output)."
+    }
+  ]
+}

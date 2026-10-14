@@ -4,7 +4,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
 import { setupTarget, type SetupTargetOptions } from "./generate";
-import { readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
+import { LOCK_VERSION, readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
 import { planUpdate, setupUpdate } from "./update";
@@ -131,6 +131,24 @@ describe("planUpdate", () => {
     });
   });
 
+  test.each(["branch", "tag", "preview"] as const)(
+    "%s: regenerates with the recorded seed datasets",
+    (kind) => {
+      const plan = planUpdate(
+        lockTarget(kind, "my-app", { seed: { datasets: ["preview"] } }),
+        common,
+      );
+
+      expect(plan).toMatchObject({ kind, seed: { datasets: ["preview"] } });
+    },
+  );
+
+  test("leaves seeding off for a target recorded without it", () => {
+    const plan = planUpdate(lockTarget("branch", "my-app", {}), common);
+
+    expect(plan).not.toHaveProperty("seed");
+  });
+
   test("preview: re-detects the default branch when it was auto-detected", () => {
     const plan = planUpdate(
       lockTarget("preview", "my-app", {
@@ -163,6 +181,42 @@ describe("planUpdate", () => {
       });
     },
   );
+
+  test.each(["branch", "tag", "preview"] as const)(
+    "%s: keeps a package manager that was passed with --package-manager",
+    (kind) => {
+      const plan = planUpdate(
+        lockTarget(kind, "my-app", { packageManager: "yarn", packageManagerAutoDetected: false }),
+        common,
+      );
+
+      expect(plan).toMatchObject({ kind, packageManager: "yarn" });
+    },
+  );
+
+  test.each([
+    ["it was auto-detected", { packageManagerAutoDetected: true }],
+    ["the lock does not say how it was chosen", {}],
+  ])("re-detects the package manager when %s", (_label, inputs) => {
+    const plan = planUpdate(
+      lockTarget("branch", "my-app", { packageManager: "npm", ...inputs }),
+      common,
+    );
+
+    expect(plan.packageManager).toBeUndefined();
+  });
+
+  test("rejects an explicit package manager the lock records with an unsupported value", () => {
+    expect(() =>
+      planUpdate(
+        lockTarget("branch", "my-app", {
+          packageManager: "pnpm\nmalicious: true",
+          packageManagerAutoDetected: false,
+        }),
+        common,
+      ),
+    ).toThrow(/unsupported package manager "pnpm\\nmalicious: true"/);
+  });
 
   test("tag: regenerates a multi-directory target with every recorded app directory", () => {
     const plan = planUpdate(
@@ -294,6 +348,93 @@ describe("setupUpdate", () => {
     expect(after?.[0]?.apps?.map((app) => app.dir)).toEqual(multi.dir);
   });
 
+  test("keeps seeding a target, and reports it once its dataset no longer resolves", async () => {
+    writeAppConfig("apps/api");
+    fs.mkdirSync(path.join(testDir, "apps/api/seed/data/cogs"), { recursive: true });
+    const settings = {
+      machineUserName: "admin",
+      datasets: { preview: ["cogs"] },
+      dataDir: path.join(testDir, "apps/api/seed/data"),
+    };
+    await generate({
+      kind: "branch",
+      workspaceName: "api",
+      dir: "apps/api",
+      erdPreview: false,
+      seed: { datasets: ["preview"] },
+      loadSeedSettings: async () => settings,
+    });
+    ageLock();
+
+    await setupUpdate({
+      force: false,
+      outputDir: testDir,
+      ...loaders,
+      loadSeedSettings: async () => settings,
+    });
+
+    expect(readLock(testDir)?.targets[0]).toMatchObject({
+      templateVersion: TEMPLATE_VERSION,
+      inputs: { seed: { datasets: ["preview"] } },
+    });
+    expect(
+      fs.readFileSync(path.join(testDir, ".github/workflows/tailor-api.yml"), "utf-8"),
+    ).toContain("seed apply --upsert --dataset preview");
+
+    await expect(
+      setupUpdate({
+        force: false,
+        outputDir: testDir,
+        ...loaders,
+        loadSeedSettings: async () => ({ ...settings, datasets: {} }),
+      }),
+    ).rejects.toThrow(/\[branch api\] Unknown seed dataset "preview"/);
+  });
+
+  test("keeps an explicit --package-manager and re-detects a detected one", async () => {
+    writeAppConfig("apps/front");
+    writeAppConfig("apps/api");
+    await generate({
+      kind: "branch",
+      workspaceName: "front",
+      dir: "apps/front",
+      erdPreview: false,
+      packageManager: "yarn",
+    });
+    await generate({ kind: "tag", workspaceName: "api", dir: "apps/api", tagPattern: "v*" });
+    fs.rmSync(path.join(testDir, "pnpm-lock.yaml"));
+    fs.writeFileSync(path.join(testDir, "bun.lock"), "");
+    ageLock();
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(
+      readLock(testDir)?.targets.map(({ inputs }) => [
+        inputs.packageManager,
+        inputs.packageManagerAutoDetected,
+      ]),
+    ).toEqual([
+      ["yarn", false],
+      ["bun", true],
+    ]);
+    const front = fs.readFileSync(
+      path.join(testDir, ".github/workflows/tailor-front.yml"),
+      "utf-8",
+    );
+    expect(front).toContain("package-manager: yarn");
+  });
+
+  test("lists a target whose package manager can no longer be detected", async () => {
+    writeAppConfig("apps/api");
+    await generate({ kind: "tag", workspaceName: "api", dir: "apps/api", tagPattern: "v*" });
+    fs.rmSync(path.join(testDir, "pnpm-lock.yaml"));
+    ageLock();
+
+    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
+      /\[tag api\] Could not detect the package manager/,
+    );
+  });
+
   test("keeps going past a hand-edited target and lists it as not updated", async () => {
     await generateMonorepo();
     ageLock();
@@ -322,6 +463,29 @@ describe("setupUpdate", () => {
     expect(fs.readFileSync(path.join(testDir, ".github/workflows/tailor-front.yml"), "utf-8")).toBe(
       edited,
     );
+  });
+
+  test("regenerates a preview target recorded under a name longer than 50 characters, with a warning", async () => {
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    writeAppConfig("apps/front");
+    const name = "a".repeat(57);
+    const file = `.github/workflows/tailor-${name}-preview.yml`;
+    writeLock(testDir, {
+      version: LOCK_VERSION,
+      targets: [
+        {
+          ...lockTarget("preview", name, { branch: "main", dir: "apps/front", region: "us-west" }),
+          file,
+          templateVersion: TEMPLATE_VERSION - 1,
+        },
+      ],
+    });
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(readLock(testDir)?.targets[0]?.templateVersion).toBe(TEMPLATE_VERSION);
+    expect(fs.existsSync(path.join(testDir, file))).toBe(true);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/from pull request #100\b/));
   });
 
   test("lists a CLI error's suggestion under its target, labelled as in `setup ci`", async () => {

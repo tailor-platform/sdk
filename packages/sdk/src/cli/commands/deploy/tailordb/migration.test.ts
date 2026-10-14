@@ -1,5 +1,9 @@
 import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import * as path from "pathe";
 import { describe, expect, test, vi, aroundAll, aroundEach } from "vitest";
 import {
@@ -29,10 +33,12 @@ import {
   isMigrationPartiallyApplied,
   type MigrationContext,
 } from "./migration";
+import { MaintenanceTimeline } from "./migration-timing";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { MigrationRunEvent } from "./migration-workflow";
 
 // Mock label.ts for resourceTrn
 vi.mock("../label", async (importOriginal) => ({
@@ -52,6 +58,7 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => ({
     debug: vi.fn(),
     newline: vi.fn(),
     log: vi.fn(),
+    verbose: false,
   },
   styles: {
     bold: (s: string) => s,
@@ -73,15 +80,21 @@ vi.mock("#/cli/shared/spinner", () => ({
 // Mock the bundler and the workflow executor so executeMigrations can run
 // without touching the network or building real bundles.
 const bundleMigrationScriptMock = vi.fn();
-const bundleMigrationStepsMock = vi.fn(
-  async (_options: { temporal?: boolean; dateDefault?: "legacy" | "temporal" }) => ({
-    bundledCode: "// bundled steps",
-  }),
-);
+type BundleStepsOptions = {
+  temporal?: boolean;
+  dateDefault?: "legacy" | "temporal";
+  skipSteps?: readonly string[];
+};
+const bundleMigrationStepsMock = vi.fn(async (_options: BundleStepsOptions) => ({
+  bundledCode: "// bundled steps",
+}));
+const bundleSingleStepMigrationMock = vi.fn(async (_options: unknown) => ({
+  bundledCode: "// bundled single step",
+}));
 vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
-  bundleMigrationSteps: (options: { temporal?: boolean; dateDefault?: "legacy" | "temporal" }) =>
-    bundleMigrationStepsMock(options),
+  bundleMigrationSteps: (options: BundleStepsOptions) => bundleMigrationStepsMock(options),
+  bundleSingleStepMigration: (options: unknown) => bundleSingleStepMigrationMock(options),
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
 const executeMigrationStepsAsWorkflowMock = vi.fn();
@@ -504,6 +517,50 @@ describe("migration", () => {
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("no data yet"));
     });
 
+    test("throws before anything changes when a pending migration script still calls TODO", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+      writeMigrateFile(
+        testDir,
+        1,
+        'import { TODO } from "./db";\nexport async function main() { TODO("fill email"); }',
+      );
+
+      const error = await detectPendingMigrations(client, workspaceId, [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ]).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).toMatchObject({ code: "MIGRATION_SCRIPT_REVIEW_REQUIRED" });
+      expect(error!.message).toContain("tailordb/0001");
+      expect((error as CLIError).suggestion).toContain("Replace each TODO() call");
+      expect((error as CLIError).suggestion).toContain("TODO(tailor-migration-review)");
+    });
+
+    test("accepts a pending migration script that no longer calls TODO", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+      writeMigrateFile(testDir, 1, "export async function main() {}");
+
+      const pending = await detectPendingMigrations(client, workspaceId, [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ]);
+
+      expect(pending.map((migration) => migration.number)).toEqual([1]);
+    });
+
     test("throws when a migration has both a script skip acknowledgment and migrate.ts", async () => {
       const client = createMockClient({ tailordb: 0 });
 
@@ -739,6 +796,7 @@ describe("migration", () => {
         configDir: "/project",
         appName: "test-app",
         appId: "test-app-id",
+        maintenanceMode: true,
         ...overrides,
       };
     }
@@ -757,7 +815,7 @@ describe("migration", () => {
       await runTest();
     });
 
-    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill"] };
+    const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill", "recompute"] };
 
     function stepsContext(setMetadataMock: ReturnType<typeof vi.fn>): MigrationContext {
       return {
@@ -765,6 +823,77 @@ describe("migration", () => {
         client: createMetadataClient({ labels: {} }, setMetadataMock),
       };
     }
+
+    test("hands the steps to skip to both the bundle and the run for the migration in progress", async () => {
+      bundleMigrationStepsMock.mockClear();
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: true,
+        logs: "",
+        completedSteps: [],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      });
+      const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
+      const skipSteps = new Map([["tailordb", ["backfill"]]]);
+
+      await executeMigrations({ ...stepsContext(vi.fn()), skipSteps }, [migration], {
+        tailordb: { number: 3 },
+      });
+
+      expect(bundleMigrationStepsMock.mock.calls[0]![0]).toMatchObject({ skipSteps: ["backfill"] });
+      expect(executeMigrationStepsAsWorkflowMock.mock.calls.at(-1)![0]).toMatchObject({
+        skipSteps: ["backfill"],
+      });
+    });
+
+    test("skips nothing in a migration that is not the one in progress", async () => {
+      bundleMigrationStepsMock.mockClear();
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: true,
+        logs: "",
+        completedSteps: [],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      });
+      const migration = createMockMigration({ number: 4, scriptForm: stepsForm });
+
+      await executeMigrations(
+        { ...stepsContext(vi.fn()), skipSteps: new Map([["tailordb", ["backfill"]]]) },
+        [migration],
+        { tailordb: { number: 3 } },
+      );
+
+      expect(bundleMigrationStepsMock.mock.calls[0]![0].skipSteps ?? []).toEqual([]);
+    });
+
+    test("shows what to do about a notice below the notice itself", async () => {
+      const migration = createMockMigration({ scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: {
+          notify?: (level: "info" | "warn", message: string, suggestion?: string) => void;
+        }) => {
+          options.notify?.(
+            "warn",
+            "every step runs again",
+            "skip them with --migration-skip-steps",
+          );
+          return {
+            success: true,
+            logs: "",
+            completedSteps: [],
+            failedSteps: [],
+            stepsMayHaveCommitted: true,
+          };
+        },
+      );
+      vi.mocked(logger.warn).mockClear();
+      vi.mocked(logger.log).mockClear();
+
+      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+
+      expect(logger.warn).toHaveBeenCalledWith("every step runs again");
+      expect(logger.log).toHaveBeenCalledWith("skip them with --migration-skip-steps");
+    });
 
     test("treats another deploy's active run as in progress without touching its records", async () => {
       const setMetadataMock = vi.fn();
@@ -903,6 +1032,32 @@ describe("migration", () => {
       expect(store.labels()).toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
     });
 
+    test("does not claim maintenance mode for tables it never restricted", async () => {
+      const store = createMetadataStore({});
+      const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: { onBeforeStart?: () => Promise<void> }) => {
+          await options.onBeforeStart?.();
+          throw CLIError({
+            code: "MIGRATION_START_UNCONFIRMED",
+            message:
+              "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
+            suggestion: "Deploy again.",
+          });
+        },
+      );
+
+      await expect(
+        executeMigrations(
+          { ...createMockContext({ maintenanceMode: false }), client: store.client },
+          [migration],
+        ),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        suggestion: "Deploy again.",
+      });
+    });
+
     test("asks to check the record when it can be neither cleared nor read", async () => {
       const store = createMetadataStore({ loseSetResponses: [0], failSets: [1], failGets: [2] });
       const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
@@ -914,8 +1069,8 @@ describe("migration", () => {
         code: "MIGRATION_PARTIALLY_APPLIED",
         message:
           "Migration tailordb/0003 failed before any step completed: [unavailable] unavailable",
-        suggestion: expect.stringContaining(
-          "tailor tailordb migration sync 0002 --namespace tailordb",
+        suggestion: expect.stringMatching(
+          /tailor tailordb migration sync 0002 --namespace tailordb.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/,
         ),
       });
     });
@@ -956,7 +1111,7 @@ describe("migration", () => {
 
     test("keeps the remediation of a failure that is not a step's own", async () => {
       const migration = createMockMigration({
-        scriptForm: { kind: "steps", order: ["backfill"] },
+        scriptForm: { kind: "steps", order: ["backfill", "recompute"] },
       });
       executeMigrationStepsAsWorkflowMock.mockRejectedValueOnce(
         CLIError({
@@ -974,6 +1129,22 @@ describe("migration", () => {
       });
     });
 
+    test("reports a migration whose outcome is unknown as unconfirmed rather than failed", async () => {
+      const unknown = CLIError({
+        code: "MIGRATION_OUTCOME_UNKNOWN",
+        message: "Could not confirm whether migration tailordb/0001 started: [unavailable] lost",
+      });
+      executeMigrationAsWorkflowMock.mockRejectedValueOnce(unknown);
+      spinnerMock.fail.mockClear();
+
+      await expect(
+        executeMigrations(createMockContext(), [createMockMigration({ number: 1 })]),
+      ).rejects.toBe(unknown);
+      expect(spinnerMock.fail).toHaveBeenCalledWith(
+        "Could not confirm the outcome of migration tailordb/0001",
+      );
+    });
+
     test("runs a migration as a workflow rather than a synchronous script execution", async () => {
       const migrations = [createMockMigration({ number: 1, hasScript: true })];
 
@@ -987,6 +1158,60 @@ describe("migration", () => {
         appName: "test-app",
         appId: "test-app-id",
       });
+    });
+
+    test("runs a script with a single step like a main script", async () => {
+      const migration = createMockMigration({
+        number: 1,
+        hasScript: true,
+        scriptForm: { kind: "steps", order: ["backfill"] },
+      });
+
+      await executeMigrations(createMockContext(), [migration]);
+
+      expect(bundleSingleStepMigrationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "tailordb", migrationNumber: 1, step: "backfill" }),
+      );
+      expect(executeMigrationAsWorkflowMock).toHaveBeenCalledWith(
+        expect.objectContaining({ code: "// bundled single step" }),
+      );
+      expect(executeMigrationStepsAsWorkflowMock).not.toHaveBeenCalled();
+    });
+
+    test("bundles a single-step script with the date default recorded for its migration", async () => {
+      const migration = createMockMigration({
+        number: 1,
+        hasScript: true,
+        scriptForm: { kind: "steps", order: ["backfill"] },
+        diff: createMockMigrationDiff({ dateRepresentation: "temporal" }),
+      });
+
+      await executeMigrations(createMockContext(), [migration]);
+
+      expect(bundleSingleStepMigrationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ dateDefault: "temporal" }),
+      );
+    });
+
+    test("keeps running a single-step script through the step runner when an earlier deploy left it in progress", async () => {
+      const migration = createMockMigration({
+        number: 1,
+        hasScript: true,
+        scriptForm: { kind: "steps", order: ["backfill"] },
+      });
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: true,
+        logs: "",
+        executionId: "exec-1",
+        completedSteps: ["backfill"],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      });
+
+      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+
+      expect(executeMigrationStepsAsWorkflowMock).toHaveBeenCalledTimes(1);
+      expect(executeMigrationAsWorkflowMock).not.toHaveBeenCalled();
     });
 
     test("surfaces a failed workflow migration as a migration failure", async () => {
@@ -1161,6 +1386,298 @@ describe("migration", () => {
         (call) => (call[0] as { migrationNumber: number }).migrationNumber,
       );
       expect(executedNumbers).toEqual([1, 3]);
+    });
+
+    describe("timing", () => {
+      let clock = 0;
+      aroundEach(async (runTest) => {
+        clock = 0;
+        const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+        vi.mocked(logger.info).mockClear();
+        vi.mocked(logger.debug).mockClear();
+        spinnerMock.succeed.mockClear();
+        try {
+          await runTest();
+        } finally {
+          now.mockRestore();
+        }
+      });
+
+      function emitting(events: (MigrationRunEvent | { advanceTo: number })[]) {
+        const texts: string[] = [];
+        executeMigrationAsWorkflowMock.mockImplementationOnce(
+          async (options: { onRunEvent?: (event: MigrationRunEvent) => void }) => {
+            for (const event of events) {
+              if ("advanceTo" in event) {
+                clock = event.advanceTo;
+                continue;
+              }
+              clock = event.at;
+              options.onRunEvent?.(event);
+              texts.push(spinnerMock.text);
+            }
+            return { success: true, logs: "" };
+          },
+        );
+        return texts;
+      }
+
+      const polled = (at: number, job: WorkflowJobExecution_Status): MigrationRunEvent => ({
+        type: "polled",
+        at,
+        execution: {
+          status: WorkflowExecution_Status.RUNNING,
+          jobExecutions: [{ status: job, kind: { case: "jobFunction", value: { name: "job" } } }],
+        } as never,
+      });
+
+      test("reports how long the script waited for its job to start and how long it ran", async () => {
+        emitting([
+          { advanceTo: 2_000 },
+          { type: "waiting", at: 2_000 },
+          { type: "running", at: 62_000 },
+          { type: "finished", at: 71_000, scriptStarted: true },
+          { advanceTo: 72_000 },
+        ]);
+        const timeline = new MaintenanceTimeline();
+        timeline.enter("preMigration", 0);
+
+        await executeMigrations(createMockContext(), [createMockMigration()], {}, timeline);
+        timeline.finish(72_000);
+
+        expect(logger.info).toHaveBeenCalledWith(
+          "Migration tailordb/0001 started running after waiting 1m00s for its job to start.",
+          { mode: "stream" },
+        );
+        expect(spinnerMock.succeed).toHaveBeenCalledWith(
+          "Migration tailordb/0001 completed successfully (waiting to start 1m00s, running 9.0s)",
+        );
+        expect(timeline.report(["tailordb"])).toMatchObject({
+          phases: { jobSetup: 2_000, waitingToStart: 60_000, running: 9_000, jobCleanup: 1_000 },
+          migrations: [
+            {
+              namespace: "tailordb",
+              migrationNumber: 1,
+              startObserved: true,
+              waitingToStartMs: 60_000,
+              runningMs: 9_000,
+            },
+          ],
+        });
+      });
+
+      test("does not split a run whose script was never seen starting", async () => {
+        emitting([
+          { type: "waiting", at: 1_000 },
+          { type: "finished", at: 5_000, scriptStarted: false },
+        ]);
+        const timeline = new MaintenanceTimeline();
+        timeline.enter("preMigration", 0);
+
+        await executeMigrations(createMockContext(), [createMockMigration()], {}, timeline);
+        timeline.finish(6_000);
+
+        expect(logger.info).not.toHaveBeenCalledWith(
+          expect.stringContaining("started running"),
+          expect.anything(),
+        );
+        expect(spinnerMock.succeed).toHaveBeenCalledWith(
+          "Migration tailordb/0001 completed successfully (waiting to start or running 4.0s)",
+        );
+        expect(timeline.report(["tailordb"]).migrations).toEqual([
+          expect.objectContaining({
+            startObserved: false,
+            waitingToStartMs: 0,
+            runningMs: 0,
+            waitingOrRunningMs: 4_000,
+          }),
+        ]);
+      });
+
+      test("reports the stretches it could not observe apart from waiting and running", async () => {
+        const texts = emitting([
+          { type: "waiting", at: 1_000 },
+          { type: "running", at: 5_000 },
+          { type: "unknown", at: 8_000 },
+          { type: "finished", at: 20_000, scriptStarted: true },
+        ]);
+
+        await executeMigrations(createMockContext(), [createMockMigration()]);
+
+        expect(texts[2]).toBe("Executing migration tailordb/0001 (0.0s)...");
+        expect(spinnerMock.succeed).toHaveBeenCalledWith(
+          "Migration tailordb/0001 completed successfully (waiting to start 4.0s, running 3.0s, waiting to start or running 12s)",
+        );
+      });
+
+      test("does not describe the run's status unless --verbose is on", async () => {
+        const jobExecutions = vi.fn(() => []);
+        emitting([
+          { type: "waiting", at: 1_000 },
+          {
+            type: "polled",
+            at: 2_000,
+            execution: {
+              status: WorkflowExecution_Status.RUNNING,
+              get jobExecutions() {
+                return jobExecutions();
+              },
+            } as never,
+          },
+        ]);
+
+        await executeMigrations(createMockContext(), [createMockMigration()]);
+
+        expect(jobExecutions).not.toHaveBeenCalled();
+      });
+
+      test("updates the spinner before reporting that the script started running", async () => {
+        emitting([
+          { type: "waiting", at: 1_000 },
+          { type: "running", at: 16_000 },
+        ]);
+        let textOnRestart: string | undefined;
+        spinnerMock.start.mockImplementationOnce(() => {
+          textOnRestart = spinnerMock.text;
+        });
+
+        await executeMigrations(createMockContext(), [createMockMigration()]);
+
+        expect(textOnRestart).toBe("Running migration tailordb/0001 (0.0s)...");
+      });
+
+      test("stops the spinner before logging the run's phases", async () => {
+        emitting([
+          { type: "waiting", at: 1_000 },
+          { type: "running", at: 16_000 },
+          { type: "finished", at: 20_000, scriptStarted: true },
+        ]);
+        spinnerMock.start.mockClear();
+        spinnerMock.stop.mockClear();
+        const timeline = new MaintenanceTimeline();
+        timeline.enter("preMigration", 0);
+
+        await executeMigrations(createMockContext(), [createMockMigration()], {}, timeline);
+
+        const debug = vi.mocked(logger.debug).mock;
+        const firstPhaseLine = debug.calls.findIndex(([message]) =>
+          message.startsWith("Maintenance phase"),
+        );
+        expect(firstPhaseLine).toBeGreaterThanOrEqual(0);
+        const phaseLoggedAt = debug.invocationCallOrder[firstPhaseLine] ?? Number.NaN;
+        const lastRestartAt = Math.max(...spinnerMock.start.mock.invocationCallOrder);
+        expect(
+          spinnerMock.stop.mock.invocationCallOrder.some(
+            (order) => order > lastRestartAt && order < phaseLoggedAt,
+          ),
+        ).toBe(true);
+      });
+
+      test("shows in the spinner what the run is doing and for how long", async () => {
+        const texts = emitting([
+          { type: "waiting", at: 1_000 },
+          polled(13_000, WorkflowJobExecution_Status.RUNNING),
+          { type: "running", at: 16_000 },
+          polled(16_000, WorkflowJobExecution_Status.RUNNING),
+          polled(21_000, WorkflowJobExecution_Status.RUNNING),
+        ]);
+
+        await executeMigrations(createMockContext(), [createMockMigration()]);
+
+        expect(texts).toEqual([
+          "Waiting for a job of migration tailordb/0001 to start (0.0s)...",
+          "Waiting for a job of migration tailordb/0001 to start (12s)...",
+          "Running migration tailordb/0001 (0.0s)...",
+          "Running migration tailordb/0001 (0.0s)...",
+          "Running migration tailordb/0001 (5.0s)...",
+        ]);
+      });
+
+      test("logs each change of the run's status under --verbose", async () => {
+        emitting([
+          { type: "waiting", at: 1_000 },
+          polled(2_000, WorkflowJobExecution_Status.RUNNING),
+          polled(5_000, WorkflowJobExecution_Status.RUNNING),
+          polled(8_000, WorkflowJobExecution_Status.SUCCESS),
+        ]);
+        logger.verbose = true;
+
+        try {
+          await executeMigrations(createMockContext(), [createMockMigration()]);
+        } finally {
+          logger.verbose = false;
+        }
+
+        const statusLines = vi
+          .mocked(logger.debug)
+          .mock.calls.map(([message]) => message)
+          .filter((message) => message.includes("workflow execution"));
+        expect(statusLines).toEqual([
+          "Migration tailordb/0001: workflow execution RUNNING, jobs job=RUNNING.",
+          "Migration tailordb/0001: workflow execution RUNNING, jobs job=SUCCESS.",
+        ]);
+      });
+
+      test("explains under --verbose only for a run whose script was never seen starting", async () => {
+        emitting([
+          { type: "waiting", at: 1_000 },
+          { type: "running", at: 2_000 },
+          { type: "finished", at: 3_000, scriptStarted: true },
+        ]);
+        emitting([
+          { type: "waiting", at: 4_000 },
+          { type: "finished", at: 5_000, scriptStarted: false },
+        ]);
+        logger.verbose = true;
+
+        try {
+          await executeMigrations(createMockContext(), [
+            createMockMigration({ number: 1 }),
+            createMockMigration({ number: 2 }),
+          ]);
+        } finally {
+          logger.verbose = false;
+        }
+
+        const unsplit = vi
+          .mocked(logger.debug)
+          .mock.calls.map(([message]) => message)
+          .filter((message) => message.startsWith("Could not observe"));
+        expect(unsplit).toEqual([
+          "Could not observe when migration tailordb/0002 started running, so its run is not split into waiting and running.",
+        ]);
+      });
+
+      test("shows a steps migration's progress next to how long it has run", async () => {
+        let text: string | undefined;
+        executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+          async (options: {
+            onRunEvent: (event: MigrationRunEvent) => void;
+            onProgress: (completed: number, total: number) => void;
+          }) => {
+            clock = 1_000;
+            options.onRunEvent({ type: "waiting", at: clock });
+            clock = 16_000;
+            options.onRunEvent({ type: "running", at: clock });
+            clock = 21_000;
+            options.onProgress(0, 1);
+            text = spinnerMock.text;
+            return {
+              success: true,
+              logs: "",
+              completedSteps: ["backfill"],
+              failedSteps: [],
+              stepsMayHaveCommitted: true,
+            };
+          },
+        );
+
+        await executeMigrations(createMockContext(), [
+          createMockMigration({ scriptForm: stepsForm }),
+        ]);
+
+        expect(text).toBe("Running migration tailordb/0001 (0/1 steps completed, 5.0s)...");
+      });
     });
   });
 });

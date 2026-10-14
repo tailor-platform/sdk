@@ -353,6 +353,7 @@ export function parseFieldConfig(
           start: metadata.serial.start,
           maxValue: metadata.serial.maxValue,
           format: "format" in metadata.serial ? metadata.serial.format : undefined,
+          gapless: metadata.serial.gapless,
         }
       : undefined,
   };

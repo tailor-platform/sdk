@@ -2,7 +2,8 @@ import { z } from "zod";
 import { formatIssues } from "#/cli/shared/parse-options";
 
 const WORKSPACE_NAME_MIN_LENGTH = 3;
-const WORKSPACE_NAME_MAX_LENGTH = 63;
+/** Maximum number of characters in a workspace name. */
+export const WORKSPACE_NAME_MAX_LENGTH = 63;
 const WORKSPACE_NAME_ALLOWED_CHARS_DESCRIPTION = "lowercase letters, numbers, and hyphens";
 const WORKSPACE_NAME_NO_LEADING_TRAILING_HYPHEN_DESCRIPTION = "cannot start or end with a hyphen";
 

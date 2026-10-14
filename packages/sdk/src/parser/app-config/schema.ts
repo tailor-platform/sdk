@@ -107,6 +107,11 @@ export const AppConfigSchema = z
         message: `'defaultDateRepresentation' must be "temporal" or "date".`,
       })
       .optional(),
+    maintenanceMode: z
+      .union([z.literal(false), z.enum(["migration", "deploy"])], {
+        message: `'maintenanceMode' must be false, "migration", or "deploy".`,
+      })
+      .optional(),
     metadata: metadataSchema.optional(),
     db: z.unknown().optional(),
     resolver: z.unknown().optional(),

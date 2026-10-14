@@ -402,22 +402,25 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
-    test.each([{ read: true }, { read: false }])(
-      "suppresses every GraphQL operation regardless of read=$read",
-      ({ read }) => {
+    test.each([
+      { read: true, readDisabled: false },
+      { read: false, readDisabled: true },
+    ])(
+      "suppresses create, update, and delete but keeps read as the snapshot sets it (read=$read)",
+      ({ read, readDisabled }) => {
         const snapshotType = createTestSnapshotType("User", {
           settings: { gqlOperations: { create: true, update: true, delete: true, read } },
         });
 
         const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-          suppressGqlOperations: true,
+          suppressGqlMutations: true,
         });
 
         expect(manifest.schema?.settings?.disableGqlOperations).toEqual({
           create: true,
           update: true,
           delete: true,
-          read: true,
+          read: readDisabled,
         });
       },
     );
@@ -428,7 +431,7 @@ describe("snapshot-manifest", () => {
       });
 
       const restricted = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        suppressGqlOperations: true,
+        suppressGqlMutations: true,
       });
       const restored = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
@@ -582,6 +585,33 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.orderNumber?.serial?.start).toBe(1000n);
       expect(manifest.schema?.fields?.orderNumber?.serial?.maxValue).toBe(9999n);
       expect(manifest.schema?.fields?.orderNumber?.serial?.format).toBe("ORD-%04d");
+    });
+
+    test("sets gapless on the serial only when the snapshot has it", () => {
+      const snapshotType = createTestSnapshotType("Invoice", {
+        fields: {
+          id: { type: "uuid", required: true },
+          number: { type: "integer", required: true, serial: { start: 1, gapless: true } },
+          sequence: { type: "integer", required: true, serial: { start: 1 } },
+          detail: {
+            type: "nested",
+            required: true,
+            fields: {
+              lineNumber: {
+                type: "integer",
+                required: true,
+                serial: { start: 1, gapless: true },
+              },
+            },
+          },
+        },
+      });
+
+      const fields = generateTailorDBTypeManifestFromSnapshot(snapshotType).schema?.fields;
+
+      expect(fields?.number?.serial?.gapless).toBe(true);
+      expect(fields?.sequence?.serial?.gapless).toBeUndefined();
+      expect(fields?.detail?.fields?.lineNumber?.serial?.gapless).toBe(true);
     });
 
     test("converts serial in nested fields to bigint", () => {

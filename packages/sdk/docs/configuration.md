@@ -90,6 +90,15 @@ The default applies wherever the SDK parses or serializes `t` fields on your beh
 
 The setting is per `tailor.config.ts`, but the field types are declared through `tailor.d.ts`, which TypeScript merges across every file in a program. If one `tsconfig.json` includes the `tailor.d.ts` of several applications, they must agree on `defaultDateRepresentation`. When they differ, `t.date()`, `t.datetime()`, and `t.time()` called without `as` fail to type-check in that program until the configs are aligned or each application gets its own `tsconfig.json`.
 
+**Maintenance Mode** (`maintenanceMode`): Whether `deploy` restricts the TailorDB namespaces it migrates while it applies pending migrations: `"migration"` (the default) restricts them until the migrations complete, `"deploy"` until the whole deploy completes, and `false` does not restrict them. See [Maintenance mode](./services/tailordb-migration.md#maintenance-mode) for what is restricted and what concurrent requests can observe without it.
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  maintenanceMode: "migration",
+});
+```
+
 ### Service Configuration
 
 Specify glob patterns to load service files:
@@ -323,7 +332,7 @@ When the SDK deploys application code or runs detected service code with `functi
 | Executor callbacks        | `body: ({ env }) => ...`, `url: ({ env }) => String(env.bar)`, `variables: ({ env }) => ({ enabled: env.baz })`, or similar callback args |
 | Workflow job body         | `body: (input, { env }) => ...`                                                                                                           |
 | Auth before-login hook    | `handler: async ({ env }) => ...`                                                                                                         |
-| TailorDB migration script | `main(trx, { env }: MigrationContext)`                                                                                                    |
+| TailorDB migration script | `main(trx, { env }: MigrationContext)`, or each step's `run(trx, { env })`                                                                |
 | `function run`            | Same `env` argument shape as the detected resolver, executor, or workflow job                                                             |
 
 ```typescript

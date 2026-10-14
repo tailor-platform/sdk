@@ -1,6 +1,7 @@
+import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { applyAIGateway, type planAIGateway } from "./aigateway";
-import { applyApplication, type planApplication } from "./application";
+import { applyApplication, recomposeApplication, type planApplication } from "./application";
 import { applyAuth, type planAuth } from "./auth";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
@@ -9,7 +10,12 @@ import { withMetadataWriteBatch } from "./label";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
-import { applyTailorDB, preflightTailorDB, type planTailorDB } from "./tailordb";
+import {
+  applyTailorDB,
+  preflightTailorDB,
+  type MaintenanceModeRelease,
+  type planTailorDB,
+} from "./tailordb";
 import { applyWorkflow, type planWorkflow } from "./workflow";
 import {
   applyWorkflowJobFunctionExecutionPolicy,
@@ -17,6 +23,12 @@ import {
 } from "./workflow-execution-policy";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { MaintenanceReport } from "./tailordb/migration-timing";
+
+/** How long one application's TailorDB migrations kept tables in maintenance mode. */
+export interface TailorDBMaintenance extends MaintenanceReport {
+  application: string;
+}
 
 export type PlannedDeployment = {
   readonly application: Readonly<Application>;
@@ -138,27 +150,106 @@ export async function applyPrerequisiteResources(
   });
 }
 
+type HeldMaintenanceMode = {
+  deployment: PlannedDeployment;
+  release: MaintenanceModeRelease;
+};
+
+/**
+ * Lift every maintenance mode a TailorDB apply held, even when one fails.
+ * @param client - Operator client instance
+ * @param held - Maintenance modes held by the deployments' TailorDB applies
+ * @param applyFailed - Whether the deploy already failed, so its error wins
+ * @returns Maintenance reports produced when the held restrictions were lifted
+ */
+async function releaseMaintenanceModes(
+  client: OperatorClient,
+  held: ReadonlyArray<HeldMaintenanceMode>,
+  applyFailed: boolean,
+): Promise<TailorDBMaintenance[]> {
+  const maintenance: TailorDBMaintenance[] = [];
+  let firstError: { error: unknown } | undefined;
+  for (const { deployment, release } of held) {
+    try {
+      const report = await release(client);
+      if (report) maintenance.push({ application: deployment.application.name, ...report });
+    } catch (error) {
+      if (!applyFailed && !firstError) {
+        firstError = { error };
+        continue;
+      }
+      logger.warn(
+        `Could not lift the maintenance mode of TailorDB tables: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+  if (firstError) throw firstError.error;
+  if (applyFailed) return maintenance;
+  const recomposed = new Set<PlannedDeployment>();
+  for (const { deployment } of held) {
+    if (recomposed.has(deployment)) continue;
+    recomposed.add(deployment);
+    await recomposeApplication(client, deployment.app);
+  }
+  return maintenance;
+}
+
 /**
  * Apply every resource kind not covered by {@link applyPrerequisiteResources}.
  * @param client - Operator client instance
  * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
+ * @returns Maintenance windows of the applications whose TailorDB migrations ran, in deploy order
  */
 export async function applyRemainingResources(
   client: OperatorClient,
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<void> {
+): Promise<TailorDBMaintenance[]> {
+  const held: HeldMaintenanceMode[] = [];
+  let maintenance: TailorDBMaintenance[];
+  try {
+    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(
+      client,
+      workspaceId,
+      deployments,
+      held,
+    );
+  } catch (error) {
+    await releaseMaintenanceModes(client, held, true);
+    throw error;
+  }
+  const released = await releaseMaintenanceModes(client, held, false);
+  const order = new Map(
+    deployments.map((deployment, index) => [deployment.application.name, index]),
+  );
+  return [...maintenance, ...released].toSorted(
+    (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
+  );
+}
+
+async function applyRemainingResourcesHoldingMaintenanceMode(
+  client: OperatorClient,
+  workspaceId: string,
+  deployments: ReadonlyArray<PlannedDeployment>,
+  held: HeldMaintenanceMode[],
+): Promise<TailorDBMaintenance[]> {
   const step = makeStep(deployments);
+  const maintenance: TailorDBMaintenance[] = [];
 
   await withMetadataWriteBatch(client, async (applyClient) => {
     await withSpan("apply.createUpdateServices", async () => {
       await step("apply.functionRegistry.createUpdate", (d) =>
         applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
       );
-      await step("apply.tailorDB.createUpdate", (d) =>
-        applyTailorDB(applyClient, d.tailorDB, "create-update"),
-      );
+      await step("apply.tailorDB.createUpdate", async (d) => {
+        const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
+          holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
+        });
+        if (report) maintenance.push({ application: d.application.name, ...report });
+      });
       await step("apply.auth.createUpdateDependents", (d) =>
         applyAuth(applyClient, d.auth, "create-update-dependents"),
       );
@@ -237,6 +328,7 @@ export async function applyRemainingResources(
       applyFunctionRegistry(client, workspaceId, d.functionRegistry, "delete"),
     );
   });
+  return maintenance;
 }
 
 /**

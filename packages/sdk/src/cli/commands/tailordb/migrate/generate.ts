@@ -1533,6 +1533,7 @@ async function generateExpandContractMigrations(
     [],
     temporal,
     dateDefault,
+    plans,
   );
 
   const fields = plans.map((plan) => `${plan.tableName}.${plan.fieldName}`).join(", ");

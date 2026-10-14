@@ -31,6 +31,7 @@ import {
   getLatestMigrationNumber,
   getMigrationFilePath,
   loadDiff,
+  isMigrationRestricted,
   MIGRATION_RESTRICTION_SETTINGS,
   MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
   stripFieldScriptProps,
@@ -293,6 +294,52 @@ function reconstructPreMigrationSnapshot(
 }
 
 /**
+ * Compare a namespace's deployed schema with a snapshot the way a deploy would leave it
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace whose remote schema is compared
+ * @param snapshot - Snapshot the remote is expected to match
+ * @param config - Loaded application config
+ * @param tailorDBInputs - Deploy inputs for namespace defaults
+ * @param ignoredSettings - Table settings left out of the comparison on both sides
+ * @param ignoredSettingsTables - Whether `ignoredSettings` applies to every table or only to tables in maintenance mode
+ * @returns Drifts between the remote and the snapshot
+ */
+export async function compareRemoteSchemaWithSnapshot(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  snapshot: SchemaSnapshot,
+  config: LoadedConfig,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  ignoredSettings: readonly (keyof SnapshotSettings)[] = [],
+  ignoredSettingsTables: "all" | "maintenance-mode" = "all",
+): Promise<SchemaDrift[]> {
+  const [remoteTypes, remoteGqlPermissions] = await Promise.all([
+    fetchRemoteTypes(client, workspaceId, namespace),
+    fetchRemoteGqlPermissions(client, workspaceId, namespace),
+  ]);
+  const expectedDeploySnapshot = deployComparableSnapshot(
+    snapshot,
+    remoteTypes,
+    namespaceGqlOperations(config, tailorDBInputs, namespace),
+  );
+  return compareRemoteWithSnapshot(
+    remoteTypes,
+    expectedDeploySnapshot,
+    remoteGqlPermissions,
+    ignoredSettings,
+    ignoredSettingsTables === "maintenance-mode"
+      ? new Set(
+          remoteTypes
+            .filter((type) => isMigrationRestricted(type.schema?.settings))
+            .map((type) => type.name),
+        )
+      : undefined,
+  );
+}
+
+/**
  * Verify remote schema matches the expected snapshot state
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
@@ -409,23 +456,18 @@ export async function verifyRemoteSchema(
       continue;
     }
 
-    // Fetch remote tables
-    const [remoteTypes, remoteGqlPermissions] = await Promise.all([
-      fetchRemoteTypes(client, workspaceId, namespace),
-      fetchRemoteGqlPermissions(client, workspaceId, namespace),
-    ]);
-    const expectedDeploySnapshot = deployComparableSnapshot(
+    const leftInMaintenanceMode =
+      inProgressNumber === undefined &&
+      remoteState.maintenanceModeCheckpoint === remoteMigrationNumber;
+    const drifts = await compareRemoteSchemaWithSnapshot(
+      client,
+      workspaceId,
+      namespace,
       expectedSnapshot,
-      remoteTypes,
-      namespaceGqlOperations(config, tailorDBInputs, namespace),
-    );
-
-    // Compare remote with expected snapshot
-    const drifts = compareRemoteWithSnapshot(
-      remoteTypes,
-      expectedDeploySnapshot,
-      remoteGqlPermissions,
-      inProgressNumber === undefined ? [] : MIGRATION_RESTRICTION_SETTINGS,
+      config,
+      tailorDBInputs,
+      inProgressNumber !== undefined || leftInMaintenanceMode ? MIGRATION_RESTRICTION_SETTINGS : [],
+      leftInMaintenanceMode ? "maintenance-mode" : "all",
     );
 
     results.push({

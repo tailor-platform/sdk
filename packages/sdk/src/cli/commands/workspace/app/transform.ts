@@ -4,6 +4,7 @@ import {
 } from "@tailor-platform/tailor-proto/application_pb";
 import { ApplicationSchemaUpdateAttemptStatus } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { formatTimestamp } from "#/cli/shared/format";
+import { protoEnumLookup } from "#/cli/shared/proto-enum";
 import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export interface AppInfo {
@@ -23,29 +24,25 @@ export interface AppHealthInfo {
   lastAttemptError: string;
 }
 
+const HEALTH_STATUS_LABEL = {
+  [GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus.UNSPECIFIED]: "unknown",
+  [GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus.OK]: "ok",
+  [GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus.COMPOSITION_ERROR]:
+    "composition_error",
+} satisfies Record<GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus, string>;
+
+const ATTEMPT_STATUS_LABEL = {
+  [ApplicationSchemaUpdateAttemptStatus.UNSPECIFIED]: "unknown",
+  [ApplicationSchemaUpdateAttemptStatus.SUCCEEDED]: "success",
+  [ApplicationSchemaUpdateAttemptStatus.FAILED]: "failure",
+} satisfies Record<ApplicationSchemaUpdateAttemptStatus, string>;
+
 const statusToString = (
   status: GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus,
-): string => {
-  switch (status) {
-    case GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus.OK:
-      return "ok";
-    case GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus.COMPOSITION_ERROR:
-      return "composition_error";
-    default:
-      return "unknown";
-  }
-};
+): string => protoEnumLookup(HEALTH_STATUS_LABEL, status, "unknown");
 
-const attemptStatusToString = (status: ApplicationSchemaUpdateAttemptStatus): string => {
-  switch (status) {
-    case ApplicationSchemaUpdateAttemptStatus.SUCCEEDED:
-      return "success";
-    case ApplicationSchemaUpdateAttemptStatus.FAILED:
-      return "failure";
-    default:
-      return "unknown";
-  }
-};
+const attemptStatusToString = (status: ApplicationSchemaUpdateAttemptStatus): string =>
+  protoEnumLookup(ATTEMPT_STATUS_LABEL, status, "unknown");
 
 export const appInfo = (app: Application): AppInfo => {
   return {

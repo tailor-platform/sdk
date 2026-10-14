@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "config-default-export",
+      "claim": "tailor.config.ts default-exports a defineConfig(...) call that sets a `name`."
+    },
+    {
+      "id": "db-namespace-wired",
+      "claim": "defineConfig's `db` declares a namespace whose `files` globs match at least one file that exports a table built with `db.table(...)`."
+    },
+    {
+      "id": "resolver-namespace-wired",
+      "claim": "defineConfig's `resolver` declares a namespace whose `files` globs match at least one file that default-exports `createResolver(...)`."
+    },
+    {
+      "id": "workflow-wired",
+      "claim": "defineConfig's `workflow.files` globs match at least one file that default-exports `createWorkflow(...)` whose `mainJob` is a job created with `createWorkflowJob(...)` and exported by name."
+    },
+    {
+      "id": "coherent-domain-names",
+      "claim": "The application name, database namespace, table, resolver, and workflow names all refer to the same operations domain; none of them is a generic placeholder such as foo, test, or example."
+    }
+  ]
+}
