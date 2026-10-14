@@ -55,6 +55,7 @@ export default defineConfig([
     onSuccess: (config) => {
       copyToOutDir(config.outDir, "src/cli/ts-hook.mjs", "cli/ts-hook.mjs");
       copyToOutDir(config.outDir, "src/cli/ts-hook.d.mts", "cli/ts-hook.d.mts");
+      copyToOutDir(config.outDir, "src/cli/ts-hook-register.mjs", "cli/ts-hook-register.mjs");
     },
   },
   {

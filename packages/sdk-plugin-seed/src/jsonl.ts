@@ -21,7 +21,7 @@ export function assertSeedDataDirectory(dataDir: string): void {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "ENOTDIR") {
       throw new Error(
-        `Seed data directory not found: ${dataDir}. Run \`tailor generate\` before applying seed data.`,
+        `Seed data directory not found: ${dataDir}. Run \`tailor generate\` to create it.`,
         { cause: error },
       );
     }
