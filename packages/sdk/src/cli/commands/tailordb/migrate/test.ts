@@ -91,11 +91,12 @@ export async function runMigrationTest(
     : {
         id: assertDefined(options.targetWorkspaceId, "designated target workspace missing"),
         name: undefined,
+        createdAt: undefined,
       };
   let expiryRecorded = false;
   if (temporary && options.keepTtl !== undefined) {
     try {
-      await dependencies.recordWorkspaceExpiry(workspace.id, options.keepTtl);
+      await dependencies.recordWorkspaceExpiry(workspace.id, options.keepTtl, workspace.createdAt);
       expiryRecorded = true;
     } catch (expiryError) {
       logger.warn(

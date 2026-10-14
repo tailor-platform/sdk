@@ -45,6 +45,7 @@ export interface PreparedMigrationTest {
 interface MigrationTestWorkspace {
   id: string;
   name: string;
+  createdAt?: Date;
 }
 
 interface MigrationTestTarget {
@@ -67,7 +68,7 @@ interface MigrationTestAssertionTarget extends MigrationTestTarget {
 export interface MigrationTestDependencies {
   prepare(options: MigrationTestOptions): Promise<PreparedMigrationTest>;
   createWorkspace(prepared: PreparedMigrationTest): Promise<MigrationTestWorkspace>;
-  recordWorkspaceExpiry(workspaceId: string, ttl: string): Promise<void>;
+  recordWorkspaceExpiry(workspaceId: string, ttl: string, createdAt?: Date): Promise<void>;
   deployBaseline(target: MigrationTestTarget): Promise<void>;
   seedData(target: MigrationTestDataTarget): Promise<void>;
   cloneData(target: MigrationTestDataTarget): Promise<void>;

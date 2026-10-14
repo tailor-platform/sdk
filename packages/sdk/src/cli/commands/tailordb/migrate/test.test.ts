@@ -39,7 +39,11 @@ function createDependencies(events: string[]): MigrationTestDependencies {
     }),
     createWorkspace: vi.fn(async () => {
       events.push("create");
-      return { id: "44444444-4444-4444-8444-444444444444", name: "migration-test" };
+      return {
+        id: "44444444-4444-4444-8444-444444444444",
+        name: "migration-test",
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+      };
     }),
     recordWorkspaceExpiry: vi.fn(async () => {
       events.push("expiry");
@@ -273,6 +277,7 @@ describe("tailordb migration test", () => {
     expect(dependencies.recordWorkspaceExpiry).toHaveBeenCalledWith(
       "44444444-4444-4444-8444-444444444444",
       "24h",
+      new Date("2026-01-01T00:00:00Z"),
     );
     expect(dependencies.deleteWorkspace).not.toHaveBeenCalled();
   });

@@ -825,11 +825,19 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         prepared.temporaryWorkspace,
       );
       logger.info(`Created temporary workspace ${workspace.name} (${workspace.id}).`);
-      return { id: workspace.id, name: workspace.name };
+      return {
+        id: workspace.id,
+        name: workspace.name,
+        ...(workspace.createdAt ? { createdAt: workspace.createdAt } : {}),
+      };
     },
-    recordWorkspaceExpiry: async (workspaceId, ttl) => {
+    recordWorkspaceExpiry: async (workspaceId, ttl, createdAt = new Date()) => {
       const state = stateOrThrow(runtimeState);
-      await writeWorkspaceExpiry(state.client, workspaceId, new Date(Date.now() + parseAge(ttl)));
+      await writeWorkspaceExpiry(
+        state.client,
+        workspaceId,
+        new Date(createdAt.getTime() + parseAge(ttl)),
+      );
     },
     deployBaseline: async ({ prepared, targetWorkspaceId }) => {
       const state = stateOrThrow(runtimeState);

@@ -142,7 +142,39 @@ describe("data clone", () => {
       code: "DATA_CLONE_PRECONDITION_FAILED",
       message: 'target namespace "testdb" already contains data in tables: User',
     });
-    expect((result.error as { suggestion?: string }).suggestion).toContain("tailordb truncate");
+    const suggestion = (result.error as { suggestion?: string }).suggestion;
+    expect(suggestion).toContain("tailordb truncate");
+    expect(suggestion).not.toContain("--all");
+  });
+
+  test("--name を省略したときだけ、設定ファイルを指定した実行可能な truncate を案内する", async () => {
+    client.cloneApplicationData.mockRejectedValue(
+      new ConnectError("target is not empty", Code.FailedPrecondition),
+    );
+
+    const result = await runCommand(cloneCommand, [
+      "--from",
+      "src",
+      "--to",
+      "dst",
+      "--yes",
+      "--config",
+      "custom.ts",
+    ]);
+
+    const suggestion = (result.error as { suggestion?: string }).suggestion;
+    expect(suggestion).toContain("tailordb truncate --all");
+    expect(suggestion).toContain("--config=custom.ts");
+  });
+
+  test("コピー先にアプリがなければ、deploy の案内に指定した設定ファイルを引き継ぐ", async () => {
+    client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const result = await runCommand(cloneCommand, [...baseArgs, "--config", "custom.ts"]);
+
+    expect(result.error).toMatchObject({
+      next: { command: "tailor", args: ["deploy", "--workspace-id=dst", "--config=custom.ts"] },
+    });
   });
 
   test("サーバーが NotFound を返したら、--from と --to と --name の確認を案内する", async () => {

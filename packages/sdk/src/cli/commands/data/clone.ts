@@ -2,7 +2,12 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { waitForCloneApplicationData } from "#/cli/commands/tailordb/migrate/test-runtime";
-import { configArg, confirmationArgs, recoveryContextArgs } from "#/cli/shared/args";
+import {
+  configArg,
+  confirmationArgs,
+  formatConfigArg,
+  recoveryContextArgs,
+} from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -24,6 +29,8 @@ interface CloneOptions {
   sourceWorkspaceId: string;
   targetWorkspaceId: string;
   name: string;
+  config?: string;
+  nameFromConfig?: boolean;
   copyFiles?: boolean;
   copyIdpUsers?: boolean;
   noWait?: boolean;
@@ -31,6 +38,8 @@ interface CloneOptions {
 }
 
 async function $clone(options: CloneOptions & { yes?: boolean }) {
+  const configArg = formatConfigArg(options.config);
+  const configArgs = configArg ? [configArg] : [];
   if (options.sourceWorkspaceId === options.targetWorkspaceId) {
     throw CLIError({
       code: "DATA_CLONE_SAME_WORKSPACE",
@@ -60,6 +69,7 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
               workspaceId: options.targetWorkspaceId,
               profile: options.profile,
             }),
+            ...configArgs,
           ],
         },
         command: "data clone",
@@ -103,20 +113,23 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
       throw CLIError({
         code: "DATA_CLONE_PRECONDITION_FAILED",
         message: error.rawMessage,
-        suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target. To empty the target's TailorDB records, run ${formatCommandHint(
-          {
-            command: "tailor",
-            args: [
-              "tailordb",
-              "truncate",
-              "--all",
-              ...recoveryContextArgs({
-                workspaceId: options.targetWorkspaceId,
-                profile: options.profile,
-              }),
-            ],
-          },
-        )}.`,
+        suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target. ${
+          options.nameFromConfig
+            ? `To empty the target's TailorDB records, run ${formatCommandHint({
+                command: "tailor",
+                args: [
+                  "tailordb",
+                  "truncate",
+                  "--all",
+                  ...recoveryContextArgs({
+                    workspaceId: options.targetWorkspaceId,
+                    profile: options.profile,
+                  }),
+                  ...configArgs,
+                ],
+              })}.`
+            : "To empty the target's TailorDB records, run tailor tailordb truncate for the namespaces of this application (see tailor tailordb truncate --help)."
+        }`,
         command: "data clone",
         cause: error,
       });
@@ -212,6 +225,8 @@ With --json, the result carries \`status\`: \`completed\` once the clone has fin
       sourceWorkspaceId: args.from,
       targetWorkspaceId: args.to,
       name,
+      config: args.config,
+      nameFromConfig: args.name === undefined,
       copyFiles: args["copy-files"],
       copyIdpUsers: args["copy-idp-users"],
       noWait: args["no-wait"],
