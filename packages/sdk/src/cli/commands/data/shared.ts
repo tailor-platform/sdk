@@ -18,7 +18,7 @@ export const cloneWorkspaceArgs = {
 
 export const cloneTimeoutArg = arg(durationArg.default("30m"), {
   description:
-    "How long to wait for the clone to finish, e.g. 30s or 10m. The clone keeps running on the platform when the wait ends.",
+    "How long this command waits for the clone to finish, e.g. 30s or 10m. It does not limit how long the clone may run: the clone keeps running on the platform when the wait ends.",
   completion: { type: "none" },
 });
 

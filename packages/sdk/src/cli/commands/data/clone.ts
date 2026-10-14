@@ -179,7 +179,7 @@ The platform rejects the clone with a failed precondition unless all of the foll
 - The TailorDB schema of the target matches the source, so deploy the same version to the target first.
 - The target is empty for every namespace and copy type in scope (TailorDB records, plus files and IdP users when \`--copy-files\` / \`--copy-idp-users\` are given).
 
-The command waits until the clone finishes, up to --timeout. Pressing Ctrl+C, reaching --timeout, or passing --no-wait does not stop the clone, which keeps running on the platform. Use \`tailor data operation get --wait\` with the operation ID printed at the start to keep waiting, or without --wait to check the status once.
+The command waits until the clone finishes, up to --timeout. --timeout only bounds how long this command waits; it neither extends nor shortens how long the platform lets a clone run. Pressing Ctrl+C, reaching --timeout, or passing --no-wait does not stop the clone, which keeps running on the platform. Use \`tailor data operation get --wait\` with the operation ID printed at the start to keep waiting, or without --wait to check the status once.
 
 With --json, the result carries \`status\`: \`completed\` once the clone has finished, or \`started\` with --no-wait.
 `,
