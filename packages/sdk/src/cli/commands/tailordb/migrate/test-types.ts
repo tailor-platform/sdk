@@ -15,6 +15,7 @@ export interface MigrationTestOptions {
   assertionPath?: string;
   assertionNamespace?: string;
   machineUser?: string;
+  cloneTimeout?: number;
   yes?: boolean;
   json?: boolean;
 }
@@ -53,6 +54,7 @@ interface MigrationTestTarget {
 interface MigrationTestDataTarget extends MigrationTestTarget {
   sourceWorkspaceId: string;
   applicationName: string;
+  cloneTimeout?: number;
 }
 
 interface MigrationTestAssertionTarget extends MigrationTestTarget {

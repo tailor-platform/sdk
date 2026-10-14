@@ -905,7 +905,13 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         }
       }
     },
-    cloneData: async ({ prepared, sourceWorkspaceId, targetWorkspaceId, applicationName }) => {
+    cloneData: async ({
+      prepared,
+      sourceWorkspaceId,
+      targetWorkspaceId,
+      applicationName,
+      cloneTimeout,
+    }) => {
       const state = stateOrThrow(runtimeState);
       await assertSourceBaselineFresh(state, prepared, sourceWorkspaceId);
       logger.warn(
@@ -938,6 +944,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         sourceWorkspaceId,
         targetWorkspaceId,
         operationId,
+        timeout: cloneTimeout,
       });
     },
     deployMigrations: async ({ prepared, targetWorkspaceId }) => {

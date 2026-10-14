@@ -290,18 +290,19 @@ tailor tailordb migration test [options]
 
 **Options**
 
-| Option                                        | Alias | Description                                                            | Required | Default              | Env                            |
-| --------------------------------------------- | ----- | ---------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>`               | `-w`  | Workspace ID                                                           | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`                         | `-p`  | Workspace profile                                                      | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`                           | `-c`  | Path to Tailor config file                                             | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                                       | `-y`  | Acknowledge that a designated target workspace may be overwritten      | No       | `false`              | -                              |
-| `--data <DATA>`                               | -     | Data source for the migration test (seed or clone)                     | No       | `"seed"`             | -                              |
-| `--target-workspace-id <TARGET_WORKSPACE_ID>` | -     | Existing throwaway workspace to retain after the test (requires --yes) | No       | -                    | -                              |
-| `--keep`                                      | -     | Keep the automatically created workspace after the test                | No       | `false`              | -                              |
-| `--assert <ASSERT>`                           | -     | Path to a TypeScript assertion script to run after migrations          | No       | -                    | -                              |
-| `--assert-namespace <ASSERT_NAMESPACE>`       | -     | TailorDB namespace exposed to the assertion script                     | No       | -                    | -                              |
-| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed and assertion script execution                   | No       | -                    | -                              |
+| Option                                        | Alias | Description                                                                               | Required | Default              | Env                            |
+| --------------------------------------------- | ----- | ----------------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`               | `-w`  | Workspace ID                                                                              | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`                         | `-p`  | Workspace profile                                                                         | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`                           | `-c`  | Path to Tailor config file                                                                | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                                       | `-y`  | Acknowledge that a designated target workspace may be overwritten                         | No       | `false`              | -                              |
+| `--data <DATA>`                               | -     | Data source for the migration test (seed or clone)                                        | No       | `"seed"`             | -                              |
+| `--target-workspace-id <TARGET_WORKSPACE_ID>` | -     | Existing throwaway workspace to retain after the test (requires --yes)                    | No       | -                    | -                              |
+| `--keep`                                      | -     | Keep the automatically created workspace after the test                                   | No       | `false`              | -                              |
+| `--assert <ASSERT>`                           | -     | Path to a TypeScript assertion script to run after migrations                             | No       | -                    | -                              |
+| `--assert-namespace <ASSERT_NAMESPACE>`       | -     | TailorDB namespace exposed to the assertion script                                        | No       | -                    | -                              |
+| `--clone-timeout <CLONE_TIMEOUT>`             | -     | How long to wait for the clone to finish with --data clone, e.g. 30s or 10m (default: 5m) | No       | -                    | -                              |
+| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed and assertion script execution                                      | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

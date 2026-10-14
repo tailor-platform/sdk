@@ -1,9 +1,20 @@
+import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import {
   runMigrationTest,
+  testCommand,
   type MigrationTestDependencies,
   type PreparedMigrationTest,
 } from "./test";
+import type * as TestRuntime from "./test-runtime";
+
+const mocks = vi.hoisted(() => ({ dependencies: undefined as unknown }));
+
+vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: vi.fn() }));
+vi.mock("./test-runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof TestRuntime>()),
+  createMigrationTestDependencies: () => mocks.dependencies,
+}));
 
 const prepared: PreparedMigrationTest = {
   sourceWorkspaceId: "11111111-1111-4111-8111-111111111111",
@@ -99,6 +110,39 @@ describe("tailordb migration test", () => {
       }),
     );
     expect(dependencies.seedData).not.toHaveBeenCalled();
+  });
+
+  test("passes the clone timeout to the clone step", async () => {
+    const dependencies = createDependencies([]);
+
+    await runMigrationTest({ data: "clone", cloneTimeout: 600_000 }, dependencies);
+
+    expect(dependencies.cloneData).toHaveBeenCalledWith(
+      expect.objectContaining({ cloneTimeout: 600_000 }),
+    );
+  });
+
+  test("converts --clone-timeout to milliseconds for the clone step", async () => {
+    const dependencies = createDependencies([]);
+    mocks.dependencies = dependencies;
+
+    const result = await runCommand(testCommand, ["--data", "clone", "--clone-timeout", "10m"]);
+
+    expect(result.success).toBe(true);
+    expect(dependencies.cloneData).toHaveBeenCalledWith(
+      expect.objectContaining({ cloneTimeout: 600_000 }),
+    );
+  });
+
+  test("rejects a clone timeout with seed data before creating a workspace", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+
+    await expect(
+      runMigrationTest({ data: "seed", cloneTimeout: 600_000 }, dependencies),
+    ).rejects.toMatchObject({ code: "MIGRATION_TEST_OPTIONS_INVALID" });
+
+    expect(events).toEqual([]);
   });
 
   test("rejects a cross-region designated clone target before baseline deployment", async () => {

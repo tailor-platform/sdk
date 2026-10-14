@@ -1,6 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { deploymentArgs } from "#/cli/shared/args";
+import { deploymentArgs, durationArg, parseDuration } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
@@ -50,6 +50,13 @@ export async function runMigrationTest(
       command: "tailordb migration test",
     });
   }
+  if (options.cloneTimeout !== undefined && options.data !== "clone") {
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: "--clone-timeout applies only to --data clone.",
+      command: "tailordb migration test",
+    });
+  }
   if (options.assertionNamespace && !options.assertionPath) {
     throw CLIError({
       code: "MIGRATION_TEST_OPTIONS_INVALID",
@@ -89,6 +96,7 @@ export async function runMigrationTest(
       ...target,
       sourceWorkspaceId: prepared.sourceWorkspaceId,
       applicationName: prepared.sourceApplicationName,
+      cloneTimeout: options.cloneTimeout,
     };
     if (options.data === "clone") {
       await dependencies.cloneData(dataTarget);
@@ -191,6 +199,11 @@ export const testCommand = defineAppCommand({
     "assert-namespace": arg(z.string().optional(), {
       description: "TailorDB namespace exposed to the assertion script",
     }),
+    "clone-timeout": arg(durationArg.optional(), {
+      description:
+        "How long to wait for the clone to finish with --data clone, e.g. 30s or 10m (default: 5m)",
+      completion: { type: "none" },
+    }),
     "machine-user": arg(z.string().optional(), {
       description: "Machine user for seed and assertion script execution",
     }),
@@ -207,6 +220,8 @@ export const testCommand = defineAppCommand({
       assertionPath: args.assert,
       assertionNamespace: args["assert-namespace"],
       machineUser: args["machine-user"],
+      cloneTimeout:
+        args["clone-timeout"] === undefined ? undefined : parseDuration(args["clone-timeout"]),
       yes: args.yes,
       json: logger.jsonMode,
     });
