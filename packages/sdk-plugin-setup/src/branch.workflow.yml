@@ -261,7 +261,7 @@ jobs:
               echo yarn
             elif [ -f bun.lockb ] || [ -f bun.lock ]; then
               echo bun
-            elif [ -f package-lock.json ]; then
+            elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
               echo npm
             else
               echo "__PACKAGE_MANAGER__"
@@ -312,7 +312,7 @@ jobs:
           run_install: false
       - id: tailor-setup-base-node
         if: steps.tailor-detect-base-package-manager.outputs['package-manager'] != 'bun'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .tailor-erd-base/package.json
       - id: tailor-setup-base-yarn
@@ -558,7 +558,7 @@ jobs:
           fi
           run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
       - id: tailor-upload-erd-viewer
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.namespace }}-viewer.html
           path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html

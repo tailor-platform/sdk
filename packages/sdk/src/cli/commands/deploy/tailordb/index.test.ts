@@ -309,6 +309,29 @@ describe("planTailorDB (service level)", () => {
     expect(result.context.migrationTestBaselines).toBeUndefined();
   });
 
+  describe("steps to skip", () => {
+    const plan = (migrationSkipSteps: ReadonlyMap<string, readonly string[]>) =>
+      planTailorDB({
+        client: createMockClient([]),
+        workspaceId,
+        application: createMockApplication([createMockTailorDBService("tailordb")]),
+        forRemoval: false,
+        config: mockConfig,
+        migrationSkipSteps,
+      });
+
+    test("rejects a skip with no partially applied migration while planning, so a dry run reports it too", async () => {
+      await expect(plan(new Map([["tailordb", ["backfillUser"]]]))).rejects.toMatchObject({
+        code: "MIGRATION_SKIP_STEPS_INVALID",
+        context: { namespace: "tailordb", requested: ["backfillUser"] },
+      });
+    });
+
+    test("leaves a skip for another config's namespace to that config", async () => {
+      await expect(plan(new Map([["other-app-ns", ["backfillUser"]]]))).resolves.toBeDefined();
+    });
+  });
+
   describe("rename scenarios (service level)", () => {
     test("old service is deleted when renamed", async () => {
       const client = createMockClient([{ name: "old-tailordb", label: appName }]);
@@ -856,6 +879,77 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
+
+    test.each([
+      { local: true, remote: undefined, updates: 1 },
+      { local: undefined, remote: true, updates: 1 },
+      { local: true, remote: true, updates: 0 },
+      { local: false, remote: undefined, updates: 0 },
+    ])(
+      "compares gapless serial (local $local, remote $remote)",
+      async ({ local, remote, updates }) => {
+        const tailordbType: TailorDBType = {
+          name: "Invoice",
+          pluralForm: "Invoices",
+          description: "Invoice table",
+          fields: {
+            number: {
+              name: "number",
+              config: {
+                type: "integer",
+                required: true,
+                serial: { start: 1, ...(local !== undefined && { gapless: local }) },
+              },
+            },
+          },
+          forwardRelationships: {},
+          backwardRelationships: {},
+          settings: {},
+          permissions: {},
+          files: {},
+        };
+
+        const tailorDBService = createMockTailorDBService("test-tailordb");
+        Object.defineProperty(tailorDBService, "types", {
+          value: { [tailordbType.name]: tailordbType },
+        });
+
+        const client = createRemoteTypeClient("test-tailordb", {
+          name: "Invoice",
+          description: "Invoice table",
+          pluralForm: "invoices",
+          fields: {
+            number: {
+              type: "integer",
+              required: true,
+              allowedValues: [],
+              description: "",
+              validate: [],
+              array: false,
+              index: false,
+              unique: false,
+              foreignKey: false,
+              vector: false,
+              fields: {},
+              serial: { start: "1", ...(remote !== undefined && { gapless: remote }) },
+            },
+          },
+        });
+
+        const ctx: PlanContext = {
+          client,
+          workspaceId,
+          application: createMockApplication([tailorDBService]),
+          forRemoval: false,
+          config: mockConfig,
+          noSchemaCheck: true,
+        };
+
+        const result = await planTailorDB(ctx);
+
+        expect(result.changeSet.type.updates).toHaveLength(updates);
+      },
+    );
 
     test("treats permission policy order differences as unchanged", async () => {
       // Committed migration snapshots can carry the same permission policies in
@@ -2518,6 +2612,56 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(client.createTailorDBType).not.toHaveBeenCalled();
   });
 
+  test("accepts a table a deploy left in maintenance mode after its checkpoint committed", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient({
+      ...(unchangedRemoteSettings() as object),
+      disableGqlOperations: { create: true, update: true, delete: true, read: true },
+    });
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0000", "sdk-maintenance-mode": "m0000" } },
+    } as never);
+
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
+  });
+
+  test.each([
+    ["no maintenance-mode record", { "sdk-migration": "m0000" }],
+    [
+      "a maintenance-mode record of another checkpoint",
+      { "sdk-migration": "m0000", "sdk-maintenance-mode": "m0001" },
+    ],
+  ])("rejects a table in maintenance mode with %s", async (_label, labels) => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient({
+      ...(unchangedRemoteSettings() as object),
+      disableGqlOperations: { create: true, update: true, delete: true, read: true },
+    });
+    vi.mocked(client.getMetadata).mockResolvedValue({ metadata: { labels } } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+  });
+
+  test("rejects a table whose GraphQL writes are only partly disabled", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient({
+      ...(unchangedRemoteSettings() as object),
+      disableGqlOperations: { create: true, update: false, delete: true, read: true },
+    });
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+  });
+
   test("revalidates remote schema immediately before apply", async () => {
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);
@@ -2889,7 +3033,13 @@ describe("applyTailorDB migration label reconciliation", () => {
     const writtenCheckpoints = vi
       .mocked(client.setMetadata)
       .mock.calls.map((call) => call[0].labels?.["sdk-migration"]);
-    expect(writtenCheckpoints).toEqual(["m0000", "m0001"]);
+    expect(writtenCheckpoints).toEqual(["m0000", "m0001", "m0001"]);
+    expect(vi.mocked(client.setMetadata).mock.calls[1]?.[0].labels).toMatchObject({
+      "sdk-maintenance-mode": "m0001",
+    });
+    expect(vi.mocked(client.setMetadata).mock.calls[2]?.[0].labels).not.toHaveProperty(
+      "sdk-maintenance-mode",
+    );
     expect(vi.mocked(client.setMetadata).mock.calls[0]?.[0].labels).toMatchObject({
       "sdk-migration-history": "hcurrent",
     });

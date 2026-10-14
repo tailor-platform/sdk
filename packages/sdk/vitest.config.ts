@@ -103,6 +103,9 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
 
 const { isolated: isolatedUnitTests, shared: sharedUnitTests } = classifyUnitTests();
 
+// CLI subprocesses keep human-readable output when the suite runs inside an AI coding agent.
+const e2eEnv = { POLITTY_NO_AGENT: "1" };
+
 export default defineConfig({
   resolve: {
     alias: [
@@ -171,6 +174,7 @@ export default defineConfig({
           testTimeout: 120000,
           hookTimeout: 300000,
           globalSetup: ["e2e/globalSetup.ts"],
+          env: e2eEnv,
         },
       },
       {
@@ -182,6 +186,7 @@ export default defineConfig({
           testTimeout: 120000,
           hookTimeout: 300000,
           globalSetup: ["e2e/globalSetup.ts"],
+          env: e2eEnv,
           typecheck: { enabled: false },
         },
       },

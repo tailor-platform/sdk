@@ -587,6 +587,33 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.orderNumber?.serial?.format).toBe("ORD-%04d");
     });
 
+    test("sets gapless on the serial only when the snapshot has it", () => {
+      const snapshotType = createTestSnapshotType("Invoice", {
+        fields: {
+          id: { type: "uuid", required: true },
+          number: { type: "integer", required: true, serial: { start: 1, gapless: true } },
+          sequence: { type: "integer", required: true, serial: { start: 1 } },
+          detail: {
+            type: "nested",
+            required: true,
+            fields: {
+              lineNumber: {
+                type: "integer",
+                required: true,
+                serial: { start: 1, gapless: true },
+              },
+            },
+          },
+        },
+      });
+
+      const fields = generateTailorDBTypeManifestFromSnapshot(snapshotType).schema?.fields;
+
+      expect(fields?.number?.serial?.gapless).toBe(true);
+      expect(fields?.sequence?.serial?.gapless).toBeUndefined();
+      expect(fields?.detail?.fields?.lineNumber?.serial?.gapless).toBe(true);
+    });
+
     test("converts serial in nested fields to bigint", () => {
       const snapshotType = createTestSnapshotType("Order", {
         fields: {

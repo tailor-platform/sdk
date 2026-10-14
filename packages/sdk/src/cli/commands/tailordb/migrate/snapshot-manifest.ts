@@ -263,6 +263,7 @@ export function convertFieldConfigToProto(
         ...(config.serial.format && {
           format: config.serial.format,
         }),
+        ...(config.serial.gapless && { gapless: true }),
       },
     }),
     ...(config.scale !== undefined && { scale: config.scale }),
@@ -326,6 +327,7 @@ export function processNestedFieldsFromSnapshot(
             ...(fieldConfig.serial.format && {
               format: fieldConfig.serial.format,
             }),
+            ...(fieldConfig.serial.gapless && { gapless: true }),
           },
         }),
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),

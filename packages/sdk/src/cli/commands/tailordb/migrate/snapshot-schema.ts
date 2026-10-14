@@ -101,6 +101,7 @@ const snapshotSerialSchema: z.ZodType<SnapshotSerial> = z.looseObject({
   start: z.number(),
   maxValue: z.number().optional(),
   format: z.string().optional(),
+  gapless: z.boolean().optional(),
 });
 
 const snapshotEnumValueSchema: z.ZodType<SnapshotEnumValue> = z.looseObject({

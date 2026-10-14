@@ -21,6 +21,11 @@ export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> 
   {
     start: number;
     maxValue?: number;
+    /**
+     * Number records without gaps: a number is used only by a create that
+     * commits. Creates of the table that are numbered run one at a time.
+     */
+    gapless?: boolean;
   } & (T extends "string"
     ? {
         format?: string;

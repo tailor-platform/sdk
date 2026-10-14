@@ -98,3 +98,49 @@ export declare type ControlplaneActivityLog = Message<"tailor.v1.ControlplaneAct
  */
 export declare const ControlplaneActivityLogSchema: GenMessage<ControlplaneActivityLog>;
 
+/**
+ * @generated from message tailor.v1.OrganizationActivityLog
+ */
+export declare type OrganizationActivityLog = Message<"tailor.v1.OrganizationActivityLog"> & {
+  /**
+   * @generated from field: string idempotency_key = 1;
+   */
+  idempotencyKey: string;
+
+  /**
+   * @generated from field: string organization_id = 2;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string actor_id = 3;
+   */
+  actorId: string;
+
+  /**
+   * @generated from field: string resource = 4;
+   */
+  resource: string;
+
+  /**
+   * @generated from field: string action = 5;
+   */
+  action: string;
+
+  /**
+   * @generated from field: string identifier = 6;
+   */
+  identifier: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp operated_at = 7;
+   */
+  operatedAt?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.OrganizationActivityLog.
+ * Use `create(OrganizationActivityLogSchema)` to create a new message.
+ */
+export declare const OrganizationActivityLogSchema: GenMessage<OrganizationActivityLog>;
+

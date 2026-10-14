@@ -39,7 +39,7 @@ import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
 import { annotateTerminalError } from "./shared/github-actions";
-import { logger, styles } from "./shared/logger";
+import { JSON_OUTPUT_ENV_VAR, logger, setJsonDefaultAgent, styles } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 import { dispatchPluginWithInstallHint } from "./shared/plugin";
 import { registerTsHook } from "./shared/register-ts-hook";
@@ -57,6 +57,14 @@ const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor";
 const packageName = packageJson.name ?? "@tailor-platform/sdk";
 const packageJsonPath = await resolvePackageJSON(import.meta.url);
 const bundledSkillsDir = resolve(dirname(packageJsonPath), "agent-skills");
+const cliReferencePath = resolve(dirname(packageJsonPath), "docs", "cli-reference.md");
+
+const agentHelp = `AI coding agent detected:
+
+- Unless \`--json=false\` or \`${JSON_OUTPUT_ENV_VAR}=false\` is set, commands that return structured results print JSON to stdout. Parse it instead of the table output, which is formatted for humans and may change.
+- CLI plugin commands keep the table unless you pass \`--json\` or set \`${JSON_OUTPUT_ENV_VAR}=true\`.
+- Pass \`--help-json\` to a command for machine-readable help.
+- Full command reference: \`${cliReferencePath}\``;
 
 function defaultSkillsRunToAdd(command: AnyCommand): AnyCommand {
   const { run: _run, ...rest } = command;
@@ -133,6 +141,10 @@ void runMain(mainCommand, {
   // strip unknown keys
   globalArgs: z.object(commonArgs),
   displayErrors: false,
+  agentHelp,
+  setup: ({ agent }) => {
+    setJsonDefaultAgent(agent?.id);
+  },
   // CLI plugin dispatch: an unknown subcommand at any level execs the external
   // `tailor-<path...>-<name>` binary, forwarding args and injecting context.
   onUnknownSubcommand: ({ commandPath, name, args, precedingArgs }) =>
