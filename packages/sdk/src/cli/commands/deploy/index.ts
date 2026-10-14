@@ -1,7 +1,12 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { deployFromCLI } from "#/cli/commands/deploy/deploy";
-import { confirmationArgs, multiConfigArg, workspaceArgs } from "#/cli/shared/args";
+import {
+  confirmationArgs,
+  locationIdsWithEnvFile,
+  multiConfigArg,
+  workspaceArgs,
+} from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 
@@ -62,9 +67,7 @@ export const deployCommand = defineAppCommand({
         createWorkspace: args["create-workspace"],
         workspaceName: args["workspace-name"],
         workspaceRegion: args["workspace-region"],
-        organizationId:
-          args["organization-id"] ?? (process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined),
-        folderId: args["folder-id"] ?? (process.env.TAILOR_PLATFORM_FOLDER_ID || undefined),
+        ...locationIdsWithEnvFile(args),
         noSchemaCheck: args["no-schema-check"],
         noValidate: args["no-validate"],
         noCache: args["no-cache"],

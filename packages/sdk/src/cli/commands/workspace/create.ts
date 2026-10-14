@@ -2,7 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { recoveryContextArgs } from "#/cli/shared/args";
+import { locationIdsWithEnvFile, recoveryContextArgs } from "#/cli/shared/args";
 import {
   getOAuth2ClientId,
   getPlatformBaseUrl,
@@ -263,9 +263,6 @@ function pointAtUserDefaults(error: unknown, defaults: UserWorkspaceDefaults): v
 
 export { validateWorkspaceName } from "#/cli/shared/workspace-name";
 
-const ORGANIZATION_ID_ENV = "TAILOR_PLATFORM_ORGANIZATION_ID";
-const FOLDER_ID_ENV = "TAILOR_PLATFORM_FOLDER_ID";
-
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
@@ -292,12 +289,12 @@ export const createCommand = defineAppCommand({
     "organization-id": arg(z.string().optional(), {
       alias: "o",
       description: "Organization ID to workspace associate with",
-      env: ORGANIZATION_ID_ENV,
+      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
     }),
     "folder-id": arg(z.string().optional(), {
       alias: "f",
       description: "Folder ID to workspace associate with",
-      env: FOLDER_ID_ENV,
+      env: "TAILOR_PLATFORM_FOLDER_ID",
     }),
     ttl: arg(ageArg.optional(), {
       description:
@@ -373,15 +370,11 @@ export const createCommand = defineAppCommand({
       };
     }
 
-    const organizationId =
-      args["organization-id"] ?? (process.env[ORGANIZATION_ID_ENV] || undefined);
-    const folderId = args["folder-id"] ?? (process.env[FOLDER_ID_ENV] || undefined);
     const { client, validated, defaults } = await prepareWorkspaceCreation({
       name: args.name,
       region: args.region,
       deleteProtection: args["delete-protection"],
-      organizationId,
-      folderId,
+      ...locationIdsWithEnvFile(args),
       ttl: args.ttl,
       profile: args.profile,
     });
