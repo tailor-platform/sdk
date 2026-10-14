@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
 import { resolveDeployWorkspace } from "./workspace";
 import type * as ClientModule from "#/cli/shared/client";
@@ -185,8 +186,109 @@ describe("resolveDeployWorkspace", () => {
         workspaceName: existing.name,
         workspaceRegion: existing.region,
       }),
-    ).rejects.toMatchObject({ code: "WORKSPACE_CREATE_CONFLICT" });
+    ).rejects.toMatchObject({
+      code: "WORKSPACE_CREATE_CONFLICT",
+      suggestion: expect.stringContaining(
+        "organization bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb, the default set by `tailor user update`",
+      ),
+      context: {
+        defaultOrganizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+        defaultFolderId: null,
+      },
+    });
     expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+    expect(mocks.info).not.toHaveBeenCalledWith(
+      expect.stringContaining("the default set by `tailor user update`"),
+    );
+  });
+
+  test("announces the default location before confirming creation in it", async () => {
+    const created = workspace("aaaaaaaa-5555-4555-8555-aaaaaaaaaaaa");
+    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+      organizationId: created.organizationId,
+      folderId: created.folderId,
+    });
+    mocks.canPrompt.mockReturnValue(true);
+    mocks.confirm.mockResolvedValue(true);
+    mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
+
+    await resolveDeployWorkspace({
+      createWorkspace: true,
+      workspaceName: created.name,
+      workspaceRegion: created.region,
+    });
+
+    const announcement = `Creating the workspace in folder ${created.folderId} in organization ${created.organizationId}, the default set by \`tailor user update\`.`;
+    expect(mocks.info.mock.calls.filter(([message]) => message === announcement)).toHaveLength(1);
+    expect(mocks.info).toHaveBeenNthCalledWith(1, announcement);
+    expect(mocks.info).toHaveBeenCalledBefore(mocks.confirm);
+  });
+
+  test("does not announce the default location when dry-run cannot create the workspace", async () => {
+    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+      organizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+    });
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: "example-workspace",
+        workspaceRegion: "us-west",
+        dryRun: true,
+      }),
+    ).rejects.toMatchObject({ code: "WORKSPACE_CREATION_DISABLED_IN_DRY_RUN" });
+    expect(mocks.info).not.toHaveBeenCalledWith(
+      expect.stringContaining("the default set by `tailor user update`"),
+    );
+  });
+
+  test.each([Code.NotFound, Code.PermissionDenied])(
+    "points a definitive creation failure (code %s) at the default location",
+    async (code) => {
+      mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+        organizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+      });
+      const error = new ConnectError("rejected", code);
+      mocks.createValidatedWorkspaceWithClient.mockRejectedValue(error);
+
+      await expect(
+        resolveDeployWorkspace({
+          createWorkspace: true,
+          workspaceName: "example-workspace",
+          workspaceRegion: "us-west",
+        }),
+      ).rejects.toBe(error);
+      expect(getErrorDiagnostics(error)).toMatchObject({
+        suggestion: expect.stringContaining(
+          "organization bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb, the default set by `tailor user update`",
+        ),
+        context: {
+          defaultOrganizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+          defaultFolderId: null,
+        },
+      });
+    },
+  );
+
+  test("names the default location behind the create command suggested for an empty account", async () => {
+    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
+      organizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+    });
+
+    await expect(resolveDeployWorkspace()).rejects.toMatchObject({
+      code: "WORKSPACE_NOT_FOUND",
+      suggestion: expect.stringContaining(
+        "organization bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb, the default set by `tailor user update`",
+      ),
+      next: {
+        command: "tailor",
+        args: expect.arrayContaining(["--organization-id", "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb"]),
+      },
+      context: {
+        defaultOrganizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+        defaultFolderId: null,
+      },
+    });
   });
 
   test("does not mix an explicit organization with a default folder", async () => {

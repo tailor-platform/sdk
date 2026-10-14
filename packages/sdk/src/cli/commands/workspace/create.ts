@@ -245,17 +245,52 @@ function describeUserDefaults(defaults: UserWorkspaceDefaults): string {
     : `organization ${defaults.organizationId}`;
 }
 
-function pointAtUserDefaults(error: unknown, defaults: UserWorkspaceDefaults): void {
+/**
+ * Log that a new workspace is about to be created in the user's default location.
+ * @param defaults - User defaults applied to this run
+ */
+export function announceUserDefaults(defaults: UserWorkspaceDefaults): void {
+  logger.info(
+    `Creating the workspace in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`,
+  );
+}
+
+/**
+ * Name the user defaults a run targeted, for suggestions on failures they shaped.
+ * @param defaults - User defaults applied to this run
+ * @returns Sentence naming the default location
+ */
+export function userDefaultsTarget(defaults: UserWorkspaceDefaults): string {
+  return `This run targeted ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`;
+}
+
+/**
+ * Error context fields for the user defaults a run targeted.
+ * @param defaults - User defaults applied to this run
+ * @returns Default organization and folder IDs
+ */
+export function userDefaultsContext(defaults: UserWorkspaceDefaults) {
+  return {
+    defaultOrganizationId: defaults.organizationId,
+    defaultFolderId: defaults.folderId ?? null,
+  };
+}
+
+/**
+ * Point a NotFound or PermissionDenied creation failure at the user defaults it targeted.
+ * @param error - Workspace creation failure
+ * @param defaults - User defaults applied to this run
+ */
+export function pointAtUserDefaults(error: unknown, defaults: UserWorkspaceDefaults): void {
   if (
     error instanceof ConnectError &&
     (error.code === Code.NotFound || error.code === Code.PermissionDenied)
   ) {
     withErrorDiagnostics(error, {
-      suggestion: `This run targeted ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`. Check that it exists and that this user can create workspaces there, or pass --organization-id (and --folder-id) to choose another location.`,
+      suggestion: `${userDefaultsTarget(defaults)} Check that it exists and that this user can create workspaces there, or pass --organization-id (and --folder-id) to choose another location.`,
       context: {
         ...getErrorDiagnostics(error).context,
-        defaultOrganizationId: defaults.organizationId,
-        defaultFolderId: defaults.folderId ?? null,
+        ...userDefaultsContext(defaults),
       },
     });
   }
@@ -380,11 +415,7 @@ export const createCommand = defineAppCommand({
     });
     let workspace: CreatedWorkspaceInfo;
     try {
-      if (defaults && !args.json) {
-        logger.info(
-          `Creating the workspace in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`,
-        );
-      }
+      if (defaults && !args.json) announceUserDefaults(defaults);
       workspace = await createValidatedWorkspaceWithClient(client, validated);
     } catch (error) {
       if (defaults) pointAtUserDefaults(error, defaults);

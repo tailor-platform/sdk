@@ -6,6 +6,7 @@ import {
   loadAccessToken,
   loadPlatformClientConfig,
   tryLoadWorkspaceId,
+  type UserWorkspaceDefaults,
 } from "#/cli/shared/context";
 import {
   CLIError,
@@ -16,8 +17,12 @@ import {
 import { logger } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import {
+  announceUserDefaults,
   createValidatedWorkspaceWithClient,
+  pointAtUserDefaults,
   resolveWorkspaceCreationLocation,
+  userDefaultsContext,
+  userDefaultsTarget,
   type ValidatedCreateWorkspaceOptions,
   validateCreateWorkspaceOptions,
   validateWorkspaceName,
@@ -49,6 +54,10 @@ interface WorkspaceContextTarget {
   configPath: string;
   applicationId: string;
 }
+
+type DeployWorkspaceOptions = ResolveDeployWorkspaceOptions & {
+  userDefaults?: UserWorkspaceDefaults;
+};
 
 export interface ResolvedDeployWorkspace {
   client: OperatorClient;
@@ -96,6 +105,16 @@ function createDeployArgs(
 
 function selectDeployArgs(options: ResolveDeployWorkspaceOptions): readonly string[] {
   return [...deployArgs(options), "--workspace-id", "<workspace-id>"];
+}
+
+function userDefaultsDiagnostics(options: DeployWorkspaceOptions, suggestion: string) {
+  const defaults = options.userDefaults;
+  return defaults
+    ? {
+        suggestion: `${suggestion} ${userDefaultsTarget(defaults)}`,
+        context: userDefaultsContext(defaults),
+      }
+    : { suggestion, context: {} };
 }
 
 function workspaceLabel(workspace: WorkspaceInfo): string {
@@ -235,7 +254,7 @@ async function chooseWorkspace(
   client: OperatorClient,
   platformUrl: string,
   workspaces: readonly WorkspaceInfo[],
-  options: ResolveDeployWorkspaceOptions,
+  options: DeployWorkspaceOptions,
 ): Promise<ResolvedDeployWorkspace> {
   const workspaceId = await prompt.select({
     message: "Select a workspace",
@@ -273,7 +292,7 @@ function invalidCreateOptionsError(
 async function createWorkspace(
   client: OperatorClient,
   platformUrl: string,
-  options: ResolveDeployWorkspaceOptions,
+  options: DeployWorkspaceOptions,
   availableRegions: readonly string[],
   validatedOptions?: ValidatedCreateWorkspaceOptions,
 ): Promise<ResolvedDeployWorkspace> {
@@ -336,6 +355,7 @@ async function createWorkspace(
     }
   }
 
+  if (options.userDefaults) announceUserDefaults(options.userDefaults);
   if (interactive) {
     const scope = [
       options.organizationId ? `organization: ${options.organizationId}` : undefined,
@@ -369,6 +389,7 @@ async function createWorkspace(
         Code.DataLoss,
       ].includes(error.code)
     ) {
+      if (options.userDefaults) pointAtUserDefaults(error, options.userDefaults);
       throw error;
     }
     throw CLIError({
@@ -406,7 +427,7 @@ async function createWorkspace(
 async function createWorkspaceForDeploy(
   client: OperatorClient,
   platformUrl: string,
-  options: ResolveDeployWorkspaceOptions,
+  options: DeployWorkspaceOptions,
   requestedRegions?: readonly string[],
   validatedOptions?: ValidatedCreateWorkspaceOptions,
 ): Promise<ResolvedDeployWorkspace> {
@@ -432,7 +453,7 @@ async function createWorkspaceForDeploy(
 export async function resolveDeployWorkspace(
   input: ResolveDeployWorkspaceOptions = {},
 ): Promise<ResolvedDeployWorkspace> {
-  let options = input;
+  let options: DeployWorkspaceOptions = input;
   const createOptionNames = [
     options.workspaceName !== undefined ? "--workspace-name" : undefined,
     options.workspaceRegion !== undefined ? "--workspace-region" : undefined,
@@ -507,7 +528,12 @@ export async function resolveDeployWorkspace(
   }
 
   const location = await resolveWorkspaceCreationLocation(options);
-  options = { ...options, organizationId: location.organizationId, folderId: location.folderId };
+  options = {
+    ...options,
+    organizationId: location.organizationId,
+    folderId: location.folderId,
+    userDefaults: location.defaults,
+  };
 
   let requestedCreateOptions;
   if (
@@ -587,13 +613,16 @@ export async function resolveDeployWorkspace(
       );
     }
 
+    const diagnostics = userDefaultsDiagnostics(
+      options,
+      "Create one during deploy by providing the workspace name and one of the available regions.",
+    );
     throw CLIError({
       code: "WORKSPACE_NOT_FOUND",
       message: "No workspaces are available for this account.",
-      suggestion:
-        "Create one during deploy by providing the workspace name and one of the available regions.",
+      suggestion: diagnostics.suggestion,
       next: executableAction(createDeployArgs(options, "<name>", "<region>")),
-      context: { availableRegions: regions },
+      context: { availableRegions: regions, ...diagnostics.context },
     });
   }
 
@@ -645,11 +674,14 @@ export async function resolveDeployWorkspace(
     if (!workspace) throw internalError("Workspace discovery returned an invalid result");
 
     if (options.createWorkspace && !workspaceMatchesRequestedIdentity(workspace, options)) {
+      const diagnostics = userDefaultsDiagnostics(
+        options,
+        "Use the existing workspace, or run the explicit workspace create command to create another one.",
+      );
       throw CLIError({
         code: "WORKSPACE_CREATE_CONFLICT",
         message: "The existing workspace does not match the requested workspace.",
-        suggestion:
-          "Use the existing workspace, or run the explicit workspace create command to create another one.",
+        suggestion: diagnostics.suggestion,
         next: executableAction([
           "workspace",
           "create",
@@ -664,6 +696,7 @@ export async function resolveDeployWorkspace(
         ]),
         context: {
           existingWorkspace: workspaceIdentity(workspace),
+          ...diagnostics.context,
         },
       });
     }
