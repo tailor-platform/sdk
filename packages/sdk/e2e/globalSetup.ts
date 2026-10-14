@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { writeWorkspaceExpiry } from "../src/cli/commands/workspace/expiry";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 
@@ -14,14 +15,22 @@ delete process.env.TAILOR_PLATFORM_PROFILE;
 
 const TRACKING_DIR = path.join(os.tmpdir(), "e2e-workspaces");
 const TEMPDIR_TRACKING_DIR = path.join(os.tmpdir(), "e2e-tempdirs");
+const WORKSPACE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Track a workspace ID for cleanup in globalTeardown
+ * Track a workspace ID for cleanup in globalTeardown, and record when it becomes prunable so a
+ * run that dies before teardown still leaves a workspace `workspace prune --expired` can reclaim
+ * @param client - Operator client that created the workspace
  * @param workspaceId - The workspace ID to track
  */
-export function trackWorkspace(workspaceId: string): void {
+export async function trackWorkspace(client: OperatorClient, workspaceId: string): Promise<void> {
   fs.mkdirSync(TRACKING_DIR, { recursive: true });
   fs.writeFileSync(path.join(TRACKING_DIR, workspaceId), "");
+  try {
+    await writeWorkspaceExpiry(client, workspaceId, new Date(Date.now() + WORKSPACE_TTL_MS));
+  } catch (e) {
+    console.warn(`[e2e] Could not record an expiry on workspace ${workspaceId}`, e);
+  }
 }
 
 /**

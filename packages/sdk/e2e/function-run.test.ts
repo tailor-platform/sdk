@@ -134,7 +134,7 @@ describe("E2E: function run", { concurrent: false }, () => {
     });
     workspaceId = createResp.workspace!.id;
     console.log(`Workspace created: ${workspaceId}`);
-    trackWorkspace(workspaceId);
+    await trackWorkspace(client, workspaceId);
 
     // Deploy example config to create DB schema, auth, machine users
     console.log("Deploying example config...");
