@@ -196,6 +196,39 @@ describe("snapshot", () => {
       ]);
     });
 
+    test("records gapless on a serial only when it is set", () => {
+      const mockTypes: Record<string, TailorDBType> = {
+        Invoice: createMockType("Invoice", {
+          id: { name: "id", config: { type: "uuid", required: true } },
+          number: {
+            name: "number",
+            config: { type: "integer", required: true, serial: { start: 1, gapless: true } },
+          },
+          code: {
+            name: "code",
+            config: {
+              type: "string",
+              required: true,
+              serial: { start: 1, format: "INV-%05d", gapless: false },
+            },
+          },
+          sequence: {
+            name: "sequence",
+            config: { type: "integer", required: true, serial: { start: 1 } },
+          },
+        }),
+      };
+
+      const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
+
+      expect(snapshot.tables.Invoice!.fields.number!.serial).toEqual({ start: 1, gapless: true });
+      expect(snapshot.tables.Invoice!.fields.code!.serial).toEqual({
+        start: 1,
+        format: "INV-%05d",
+      });
+      expect(snapshot.tables.Invoice!.fields.sequence!.serial).toEqual({ start: 1 });
+    });
+
     test("handles empty types object", () => {
       const mockTypes: Record<string, TailorDBType> = {};
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
