@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@tailor-platform/shared": "workspace:^",
-    "@types/node": "24.19.1",
+    "@types/node": "24.19.2",
     "@types/picomatch": "4.0.3",
     "@types/semver": "7.8.0",
     "eslint-plugin-zod": "5.0.0",
