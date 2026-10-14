@@ -18,7 +18,7 @@ const main = async () => {
     // strip unknown keys
     args: z.object({
       name: arg(z.string().optional(), {
-        positional: true,
+        positional: { named: true },
         description: "Project name",
       }),
       template: arg(z.string().optional(), {

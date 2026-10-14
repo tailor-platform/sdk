@@ -225,6 +225,7 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderBranchWorkflow", () => 
         seedValidate: true,
         workingDirectory: "apps/api",
         environment: "staging",
+        seed: { datasets: ["preview"] },
       },
     },
     {
@@ -268,6 +269,7 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderTagWorkflow", () => {
         seedValidate: true,
         workingDirectory: "apps/backend",
         environment: "production",
+        seed: { datasets: [] },
       },
     },
     {
@@ -318,6 +320,11 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewWorkflow", () =>
       name: "preview / pnpm / with workingDirectory",
       fileName: "preview-pnpm-dir",
       params: { workingDirectory: "apps/backend" },
+    },
+    {
+      name: "preview / pnpm / with seeding",
+      fileName: "preview-pnpm-seed",
+      params: { workingDirectory: "apps/backend", seed: { datasets: ["preview"] } },
     },
   ])("$name has no zizmor findings", ({ fileName, params }) => {
     const { content } = renderPreviewWorkflow({

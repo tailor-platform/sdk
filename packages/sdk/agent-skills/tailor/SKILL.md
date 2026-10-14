@@ -26,8 +26,10 @@ Use these files as the single source of truth:
 1. Prefer SDK docs above assumptions. If behavior is unclear, cite the exact doc path used.
 2. Keep examples compatible with Node.js 22+.
 3. For CLI questions, verify command and option names from `docs/cli-reference.md` and `docs/cli/*.md`.
-4. When running CLI commands, set `TAILOR_JSON_OUTPUT=true` (or pass `--json`) and parse the JSON
-   instead of the table output, which is formatted for humans and may change.
+4. When running CLI commands, parse the JSON instead of the table output, which is formatted for
+   humans and may change. The CLI defaults to JSON when it detects an AI coding agent; if a command
+   still prints a table (an undetected agent, or a CLI plugin command), set `TAILOR_JSON_OUTPUT=true`
+   or pass `--json`. Use `--help-json` for machine-readable help.
 5. For configuration questions, validate examples against `docs/configuration.md` and related service docs.
 
 ## Quick Navigation

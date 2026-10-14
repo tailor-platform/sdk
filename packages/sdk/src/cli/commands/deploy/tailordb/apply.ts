@@ -14,15 +14,15 @@ import {
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
-import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { resourceTrn, writeMetadataLabels } from "../label";
 import {
+  clearMaintenanceModeRecord,
   clearMigrationInProgress,
   executeMigrations,
   isMigrationOutcomeUnknown,
@@ -38,10 +38,13 @@ import {
   executeSingleMigrationPostPhase,
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
+  generateMigrationPhaseManifest,
   restoreMigrationRestrictions,
   getDeletedTableNames,
   migrationSnapshotCache,
   processedTables,
+  releaseRecordedMaintenanceMode,
+  type MigrationPhaseSettings,
   readUnrestoredTables,
   ROLLBACK_LEFTOVER_RECOVERY,
   RESTRICTION_EFFECT,
@@ -52,6 +55,11 @@ import {
   type RestrictedTables,
 } from "./migration-execution";
 import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
+import {
+  formatMaintenanceSummary,
+  MaintenanceTimeline,
+  type MaintenanceReport,
+} from "./migration-timing";
 import {
   migrationFileStatesEqual,
   validateAndDetectMigrations,
@@ -120,12 +128,14 @@ async function reconcileMigrationLabels(
  * @param client - Operator client instance
  * @param migrationContext - Planned TailorDB context
  * @param migrationsRequiringScripts - Migrations that require scripts
+ * @param maintenanceMode - Whether the migrating namespaces are in maintenance mode
  * @returns Migration context for script execution
  */
 async function buildMigrationContextForScripts(
   client: OperatorClient,
   migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
   migrationsRequiringScripts: PendingMigration[],
+  maintenanceMode: boolean,
 ): Promise<MigrationContext> {
   const authService = migrationContext.application.authService;
   if (!authService) {
@@ -165,6 +175,7 @@ async function buildMigrationContextForScripts(
     configDir: path.dirname(migrationContext.config.path),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,
+    maintenanceMode,
     skipSteps: migrationContext.migrationSkipSteps,
   };
 }
@@ -193,6 +204,7 @@ async function validateTailorDBMigrationState(
       migrationHistoryIds: {},
       inProgressMigrations: {},
       staleInProgress: [],
+      maintenanceModeCheckpoints: {},
     };
   }
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
@@ -284,14 +296,14 @@ function includeUndeletedTables(
  * @param client - Operator client instance
  * @param changeSet - TailorDB change set
  * @param migration - Migration whose Post-phase failed
- * @param tailorDBInputs - Deploy inputs
+ * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables the migration's phases touched
  */
 async function reapplyPrePhaseAfterPostPhaseFailure(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
-  tailorDBInputs: Parameters<typeof executeSingleMigrationPrePhase>[3],
+  phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
 ): Promise<void> {
   try {
@@ -299,7 +311,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
       client,
       changeSet,
       migration,
-      tailorDBInputs,
+      phaseSettings,
       attemptedTables,
     );
   } catch (error) {
@@ -367,6 +379,7 @@ function describeSkippedTables(tables: readonly string[]): string {
 }
 
 interface RestrictionHistory {
+  maintenanceMode: boolean;
   /** Settings captured before any restriction was applied. */
   captured: MigrationRestrictionState;
   /** Tables that migration phases rewrote, which also disables their read. */
@@ -380,6 +393,7 @@ function restrictedByDeploy(
   tableNames: Iterable<string>,
   history: RestrictionHistory,
 ): string[] {
+  if (!history.maintenanceMode) return [];
   return [...new Set(tableNames)]
     .filter((tableName) => {
       const captured = history.captured.get(namespaceName)?.get(tableName);
@@ -409,22 +423,114 @@ function skippedRestorationTables(
   );
 }
 
+async function clearRecordAfterRelease(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+): Promise<void> {
+  try {
+    await clearMaintenanceModeRecord(client, workspaceId, namespaceName);
+  } catch (error) {
+    logger.warn(
+      `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toError(error).message}. A later deploy removes it.`,
+    );
+  }
+}
+
 function describeMigrationCheckpoint(number: number | null | undefined): string {
   return number == null ? "<unset>" : formatMigrationNumber(number);
 }
+
+type ExpectedMigrationCheckpoint = { number: number | null; historyId: string | null };
+
+/**
+ * Find the namespaces whose migration checkpoint no longer matches the one
+ * this deploy expects, so their table settings are not restored over a
+ * concurrent deploy's.
+ * @param client - Operator client instance
+ * @param workspaceId - Target workspace ID
+ * @param expectedCheckpoints - Checkpoint this deploy expects in each namespace
+ * @param outcome - What the deploy does about such a namespace, appended to its error
+ * @returns The error to report for each namespace whose checkpoint changed or could not be read
+ */
+async function findUnownedMigrationCheckpoints(
+  client: OperatorClient,
+  workspaceId: string,
+  expectedCheckpoints: ReadonlyMap<string, ExpectedMigrationCheckpoint>,
+  outcome: string,
+): Promise<Map<string, CLIError>> {
+  const unowned = new Map<string, CLIError>();
+  for (const [namespaceName, expectedCheckpoint] of expectedCheckpoints) {
+    try {
+      const remoteState = await fetchRemoteMigrationState(
+        client,
+        resourceTrn(workspaceId, "tailordb", namespaceName),
+      );
+      const checkpointStillOwned =
+        remoteState.number === expectedCheckpoint.number &&
+        !remoteState.historyIdInvalid &&
+        remoteState.historyId === expectedCheckpoint.historyId;
+      if (checkpointStillOwned) continue;
+
+      unowned.set(
+        namespaceName,
+        CLIError({
+          code: "MIGRATION_CHECKPOINT_CONFLICT",
+          message: `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ${outcome}`,
+        }),
+      );
+    } catch (checkpointReadError) {
+      unowned.set(
+        namespaceName,
+        CLIError({
+          code: "MIGRATION_CHECKPOINT_UNVERIFIED",
+          message:
+            `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
+            `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ${outcome}`,
+        }),
+      );
+    }
+  }
+  return unowned;
+}
+
+/** Lifts the maintenance mode an apply held; run it once the deploy settles. */
+export type MaintenanceModeRelease = (
+  client: OperatorClient,
+) => Promise<MaintenanceReport | undefined>;
+
+export type ApplyTailorDBOptions = {
+  /**
+   * Receives the release of a `"deploy"` maintenance mode instead of the
+   * apply running it, so the caller can keep the migrated namespaces
+   * restricted until the rest of the deploy is applied. The caller must run
+   * it even when the apply throws afterwards.
+   */
+  holdMaintenanceMode?: (release: MaintenanceModeRelease) => void;
+};
 
 /**
  * Apply TailorDB-related changes for the given phase.
  * @param client - Operator client instance
  * @param result - Planned TailorDB changes
  * @param phase - Apply phase (defaults to "create-update")
+ * @param options - Apply options
+ * @returns How long migrations kept tables in maintenance mode, when any ran
  */
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
   phase: Exclude<ApplyPhase, "delete"> = "create-update",
-): Promise<void> {
+  options: ApplyTailorDBOptions = {},
+): Promise<MaintenanceReport | undefined> {
   const { changeSet, context: migrationContext } = result;
+  const maintenanceMode = migrationContext.config.maintenanceMode ?? "migration";
+  const phaseSettings: MigrationPhaseSettings = {
+    tailorDBInputs: migrationContext.tailorDBInputs,
+    executorUsedTables: migrationContext.executorUsedTables,
+    restricted: maintenanceMode !== false,
+  };
+  let maintenance: MaintenanceReport | undefined;
 
   if (phase === "create-update") {
     // Plan-time validation makes dry runs fail fast. Repeat the full validation
@@ -437,6 +543,7 @@ export async function applyTailorDB(
       migrationHistoryIds,
       inProgressMigrations,
       staleInProgress,
+      maintenanceModeCheckpoints,
     } = await validateTailorDBMigrationState(client, result);
 
     // Resolved before any mutation below -- including the checkpoint-repair
@@ -451,6 +558,7 @@ export async function applyTailorDB(
             client,
             migrationContext,
             migrationsRequiringScripts,
+            phaseSettings.restricted,
           )
         : undefined;
 
@@ -477,6 +585,7 @@ export async function applyTailorDB(
       );
     }
 
+    const migratingNamespaceNames = new Set(pendingMigrations.map((m) => m.namespace));
     if (pendingMigrations.length > 0) {
       // Migration flow: Execute each migration sequentially (pre -> script -> post)
       // This ensures intermediate states are properly handled when scripts depend on them
@@ -514,12 +623,18 @@ export async function applyTailorDB(
       const isOutsideMigrations = (namespaceName: string | undefined) =>
         namespaceName !== undefined && !migratingNamespaces.has(namespaceName);
       const firstPendingByNamespace = new Map<string, PendingMigration>();
+      const lastPendingByNamespace = new Map<string, PendingMigration>();
+      const recordedNamespaces = new Set<string>();
       const pendingDeletedTables = new Map<string, Set<string>>();
       const pendingSnapshotTableKeys = new Set<string>();
       for (const migration of pendingMigrations) {
         const first = firstPendingByNamespace.get(migration.namespace);
         if (!first || migration.number < first.number) {
           firstPendingByNamespace.set(migration.namespace, migration);
+        }
+        const last = lastPendingByNamespace.get(migration.namespace);
+        if (!last || migration.number > last.number) {
+          lastPendingByNamespace.set(migration.namespace, migration);
         }
         const deleted = pendingDeletedTables.get(migration.namespace) ?? new Set<string>();
         for (const tableName of getDeletedTableNames(migration)) deleted.add(tableName);
@@ -538,6 +653,25 @@ export async function applyTailorDB(
           });
         }
         preMigrationSnapshots.set(namespace, snapshot);
+        const input = migrationContext.tailorDBInputs.find(
+          (entry) => entry.namespace === namespace,
+        );
+        const capturedSettings = restrictionState.get(namespace);
+        if (
+          maintenanceModeCheckpoints[namespace] === first.number - 1 &&
+          input &&
+          capturedSettings
+        ) {
+          restrictionState.set(
+            namespace,
+            releaseRecordedMaintenanceMode(
+              capturedSettings,
+              snapshot,
+              input,
+              migrationContext.executorUsedTables,
+            ),
+          );
+        }
       }
 
       const deferredTypeKeys = new Set<string>();
@@ -579,18 +713,13 @@ export async function applyTailorDB(
           // would erase the removal boundary (the plan holds no delete entry
           // for a name its final state keeps).
           if (pendingDeletedTables.get(namespaceName)?.has(tableName)) continue;
-          const input = migrationContext.tailorDBInputs.find((i) => i.namespace === namespaceName);
           // Recorded so the pre-phase GQL-permission fallback does not create
           // the type a second time.
           processedTables.created.add(tableName);
           await client.createTailorDBType({
             workspaceId: create.request.workspaceId,
             namespaceName,
-            tailordbType: generateTailorDBTypeManifestFromSnapshot(priorTable, {
-              suppressRecordEvents: true,
-              suppressGqlMutations: true,
-              namespaceGqlOperations: input?.config.gqlOperations,
-            }),
+            tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
           });
         }
         for (const update of changeSet.type.updates) {
@@ -621,10 +750,7 @@ export async function applyTailorDB(
       const restorationSnapshots = new Map(preMigrationSnapshots);
       const restorationSkipped = new Set<string>();
       const restorationSettings = new Map(restrictionState);
-      const restorationCheckpoints = new Map<
-        string,
-        { number: number | null; historyId: string | null }
-      >(
+      const restorationCheckpoints = new Map<string, ExpectedMigrationCheckpoint>(
         [...firstPendingByNamespace].map(([namespaceName, firstMigration]) => [
           namespaceName,
           {
@@ -636,9 +762,17 @@ export async function applyTailorDB(
       let migrationFailure: { error: unknown } | undefined;
       const partialMigrations = new Map<string, PendingMigration>();
       const reachedMigrations = new Set<PendingMigration>();
+      const timeline = phaseSettings.restricted ? new MaintenanceTimeline() : undefined;
+      const finishMaintenance = () => {
+        if (!timeline) return undefined;
+        const report = timeline.report([...migratingNamespaces]);
+        logger.info(formatMaintenanceSummary(report));
+        return report;
+      };
       const unrolledBack: { migration: PendingMigration; tables: string[] }[] = [];
       const touchedTables: { namespace: string; tables: ReadonlySet<string> }[] = [];
       const restrictionHistory = (namespace: string): RestrictionHistory => ({
+        maintenanceMode: phaseSettings.restricted,
         captured: restrictionState,
         resumed: inProgressMigrations[namespace] !== undefined,
         touched: new Set(
@@ -648,21 +782,25 @@ export async function applyTailorDB(
         ),
       });
       try {
+        timeline?.enter("restrict");
         // A committed checkpoint drops its migration from the next run's pending set.
-        await applyMigrationRestrictions(
-          client,
-          preMigrationSnapshots,
-          restrictionState,
-          migrationContext.tailorDBInputs,
-          migrationContext.executorUsedTables,
-          migrationContext.workspaceId,
-        );
+        if (phaseSettings.restricted) {
+          await applyMigrationRestrictions(
+            client,
+            preMigrationSnapshots,
+            restrictionState,
+            migrationContext.tailorDBInputs,
+            migrationContext.executorUsedTables,
+            migrationContext.workspaceId,
+          );
+        }
         for (const migration of pendingMigrations) {
           reachedMigrations.add(migration);
           const attemptedTables = new Set<string>();
           touchedTables.push({ namespace: migration.namespace, tables: attemptedTables });
           const inProgress = inProgressMigrations[migration.namespace]?.number === migration.number;
           const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
+          timeline?.enter("preMigration");
           try {
             // Pre-migration phase: Create/update tables with breaking fields as optional
             await withSpan("apply.tailorDB.migration.prePhase", () =>
@@ -670,7 +808,7 @@ export async function applyTailorDB(
                 client,
                 changeSet,
                 migration,
-                migrationContext.tailorDBInputs,
+                phaseSettings,
                 attemptedTables,
               ),
             );
@@ -678,7 +816,7 @@ export async function applyTailorDB(
             // Script execution (only if migrate.ts exists for this migration)
             if (migration.hasScript && migrationCtx) {
               await withSpan("apply.tailorDB.migration.script", () =>
-                executeMigrations(migrationCtx, [migration], inProgressMigrations),
+                executeMigrations(migrationCtx, [migration], inProgressMigrations, timeline),
               );
             }
           } catch (error) {
@@ -694,20 +832,21 @@ export async function applyTailorDB(
                 client,
                 migration,
                 migrationContext.workspaceId,
-                migrationContext.tailorDBInputs,
+                phaseSettings,
                 attemptedTables,
               ),
             });
             throw error;
           }
 
+          timeline?.enter("postMigration");
           try {
             await withSpan("apply.tailorDB.migration.postPhase", () =>
               executeSingleMigrationPostPhase(
                 client,
                 changeSet,
                 migration,
-                migrationContext.tailorDBInputs,
+                phaseSettings,
                 attemptedTables,
               ),
             );
@@ -718,7 +857,7 @@ export async function applyTailorDB(
                 client,
                 changeSet,
                 migration,
-                migrationContext.tailorDBInputs,
+                phaseSettings,
                 attemptedTables,
               );
               throw error;
@@ -729,7 +868,7 @@ export async function applyTailorDB(
                 client,
                 migration,
                 migrationContext.workspaceId,
-                migrationContext.tailorDBInputs,
+                phaseSettings,
                 attemptedTables,
               ),
             });
@@ -741,6 +880,9 @@ export async function applyTailorDB(
           const postMigrationSnapshot = migrationSnapshotCache.load(migration);
           restorationSnapshots.set(migration.namespace, postMigrationSnapshot);
           const expectedHistoryId = migrationHistoryIds[migration.namespace] ?? null;
+          const recordsMaintenanceMode =
+            phaseSettings.restricted &&
+            lastPendingByNamespace.get(migration.namespace) === migration;
           const capturedSettingsAreEarlierRestrictions = inProgress;
           const settleRestorationSettings = () => {
             const input = migrationContext.tailorDBInputs.find(
@@ -770,6 +912,7 @@ export async function applyTailorDB(
               migration.namespace,
               migration.number,
               expectedHistoryId ?? undefined,
+              recordsMaintenanceMode,
             );
           } catch (error) {
             let remoteState: Awaited<ReturnType<typeof fetchRemoteMigrationState>>;
@@ -827,6 +970,7 @@ export async function applyTailorDB(
             number: migration.number,
             historyId: expectedHistoryId,
           });
+          if (recordsMaintenanceMode) recordedNamespaces.add(migration.namespace);
           if (runsSteps) {
             await removeRunResources(
               client,
@@ -843,7 +987,10 @@ export async function applyTailorDB(
           } catch (error) {
             logger.warn(
               `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-                "The leftover resources remain locked. Remove them manually before the next deployment; remote schema verification will fail closed until then.",
+                (phaseSettings.restricted
+                  ? "The leftover resources remain locked. Remove them"
+                  : "Remove the leftover resources") +
+                " manually before the next deployment; remote schema verification will fail closed until then.",
             );
             throw error;
           }
@@ -857,6 +1004,7 @@ export async function applyTailorDB(
         migrationFailure = { error };
       }
 
+      timeline?.enter("restore");
       const restorationFailures: Record<string, Error> = {};
       for (const [namespaceName, expectedCheckpoint] of restorationCheckpoints) {
         try {
@@ -884,8 +1032,10 @@ export async function applyTailorDB(
               `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
             suggestion:
-              `Another deploy changed the checkpoint, so the tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). ` +
-              `${describeSkippedTables(tables)}Wait for the other deploy to finish, run \`tailor tailordb migration status --namespace ${namespaceName}\` to see the checkpoint and any migration in progress, then deploy again if the tables are still restricted.`,
+              (phaseSettings.restricted
+                ? `Another deploy changed the checkpoint, so the tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
+                : `Another deploy changed the checkpoint, so the table settings of namespace '${namespaceName}' are left unchanged. `) +
+              `${describeSkippedTables(tables)}Wait for the other deploy to finish, run \`tailor tailordb migration status --namespace ${namespaceName}\` to see the checkpoint and any migration in progress, then check the tables before deploying again.`,
             context: {
               namespace: namespaceName,
               expectedCheckpoint: expectedCheckpoint.number,
@@ -918,7 +1068,9 @@ export async function applyTailorDB(
               `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
             suggestion:
-              `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). ` +
+              (phaseSettings.restricted
+                ? `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
+                : `The table settings of namespace '${namespaceName}' are left unchanged. `) +
               `${describeSkippedTables(tables)}Run \`tailor tailordb migration status --namespace ${namespaceName}\` to check the checkpoint, restore connectivity if it fails, then deploy again.`,
             context: {
               namespace: namespaceName,
@@ -959,27 +1111,69 @@ export async function applyTailorDB(
       }
 
       let unrestored: readonly RestrictedTables[] = [];
-      try {
+      const restore = async (restoreClient: OperatorClient) => {
         await restoreMigrationRestrictions(
-          client,
+          restoreClient,
           restorationSnapshots,
           restorationSettings,
           migrationContext.tailorDBInputs,
           migrationContext.executorUsedTables,
           migrationContext.workspaceId,
+          phaseSettings.restricted,
         );
-      } catch (restorationError) {
-        if (!migrationFailure) throw restorationError;
-        unrestored = readUnrestoredTables(restorationError);
-        warnTablesLeftRestricted(
-          `Could not restore every TailorDB table after the migration failed: ${
-            restorationError instanceof Error ? restorationError.message : String(restorationError)
-          }.`,
-          unrestored,
-          { namesUnknown: unrestored.every((entry) => entry.tables.length === 0) },
-        );
-        logger.log("The original migration error is reported below.");
-        if (restorationError instanceof Error) restorationFailures.restoration = restorationError;
+        timeline?.finish();
+        const namespacesWithRecords = new Set([
+          ...recordedNamespaces,
+          ...Object.keys(maintenanceModeCheckpoints),
+        ]);
+        for (const namespaceName of namespacesWithRecords) {
+          if (!restorationSnapshots.has(namespaceName)) continue;
+          await clearRecordAfterRelease(restoreClient, migrationContext.workspaceId, namespaceName);
+        }
+      };
+      const held =
+        maintenanceMode === "deploy" && !migrationFailure ? options.holdMaintenanceMode : undefined;
+      if (held) {
+        timeline?.enter("remainingDeploy");
+        held(async (releaseClient) => {
+          timeline?.enter("restore");
+          const unowned = await findUnownedMigrationCheckpoints(
+            releaseClient,
+            migrationContext.workspaceId,
+            restorationCheckpoints,
+            "Leaving its table settings unchanged.",
+          );
+          for (const namespaceName of unowned.keys()) restorationSnapshots.delete(namespaceName);
+          const [ownershipError, ...otherErrors] = unowned.values();
+          for (const error of otherErrors) logger.warn(error.message);
+          try {
+            await restore(releaseClient);
+          } catch (restorationError) {
+            if (!ownershipError) throw restorationError;
+            logger.warn(
+              `Could not restore every TailorDB table: ${toError(restorationError).message}.`,
+            );
+          }
+          if (ownershipError) throw ownershipError;
+          return finishMaintenance();
+        });
+      } else {
+        try {
+          await restore(client);
+        } catch (restorationError) {
+          if (!migrationFailure) throw restorationError;
+          unrestored = readUnrestoredTables(restorationError);
+          const reason = `Could not restore every TailorDB table after the migration failed: ${toError(restorationError).message}.`;
+          if (phaseSettings.restricted) {
+            warnTablesLeftRestricted(reason, unrestored, {
+              namesUnknown: unrestored.every((entry) => entry.tables.length === 0),
+            });
+          } else {
+            logger.warn(reason);
+          }
+          logger.log("The original migration error is reported below.");
+          if (restorationError instanceof Error) restorationFailures.restoration = restorationError;
+        }
       }
       for (const { migration, tables } of unrolledBack) {
         const failedRestoration = unrestored.find(
@@ -995,6 +1189,13 @@ export async function applyTailorDB(
         );
         const remaining = tables.filter((tableName) => !lifted.has(tableName));
         if (remaining.length === 0) continue;
+        if (!phaseSettings.restricted) {
+          logger.warn(
+            `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely. Tables needing manual repair in namespace '${migration.namespace}': ${remaining.join(", ")}.`,
+          );
+          logger.log(ROLLBACK_LEFTOVER_RECOVERY);
+          continue;
+        }
         warnTablesLeftRestricted(
           `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely.`,
           [{ namespace: migration.namespace, tables: remaining }],
@@ -1002,6 +1203,7 @@ export async function applyTailorDB(
         );
       }
       if (migrationFailure) {
+        timeline?.finish();
         const { error } = migrationFailure;
         if (error instanceof Error && Object.keys(restorationFailures).length > 0) {
           throw withErrorDiagnostics(error, {
@@ -1010,6 +1212,7 @@ export async function applyTailorDB(
         }
         throw error;
       }
+      if (!held) maintenance = finishMaintenance();
 
       for (const create of changeSet.type.creates) {
         const namespaceName = create.request.namespaceName;
@@ -1141,6 +1344,11 @@ export async function applyTailorDB(
         migrationHistoryIds,
       );
     }
+
+    for (const namespaceName of Object.keys(maintenanceModeCheckpoints)) {
+      if (migratingNamespaceNames.has(namespaceName)) continue;
+      await clearRecordAfterRelease(client, migrationContext.workspaceId, namespaceName);
+    }
   } else if (phase === "delete-resources") {
     // Delete GQL permissions first, then tables
     await Promise.all(
@@ -1153,6 +1361,7 @@ export async function applyTailorDB(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
     );
   }
+  return maintenance;
 }
 
 /**

@@ -21,6 +21,17 @@ export interface EntitySelection {
 }
 
 /**
+ * Every entity a project seeds: its TailorDB tables, and IdP `_User` when the
+ * config seeds IdP users.
+ * @param tables - TailorDB table names
+ * @param hasIdpUser - Whether the config seeds IdP `_User` records
+ * @returns The seedable entity names
+ */
+export function seedableEntities(tables: string[], hasIdpUser: boolean): string[] {
+  return hasIdpUser ? [...tables, "_User"] : tables;
+}
+
+/**
  * Resolve which entities a seed run should process from the namespace/entity
  * filters, mirroring the selection rules of the generated seed script.
  * @param options - Selection filters and available entities
@@ -29,7 +40,7 @@ export interface EntitySelection {
 export function selectEntities(options: SelectEntitiesOptions): EntitySelection {
   const { namespaceTables, hasIdpUser, namespace, entities, skipIdp } = options;
   const tables = Object.values(namespaceTables).flat();
-  const allEntities = hasIdpUser ? [...tables, "_User"] : tables;
+  const allEntities = seedableEntities(tables, hasIdpUser);
   const warnings: string[] = [];
 
   if (namespace && entities.length > 0) {

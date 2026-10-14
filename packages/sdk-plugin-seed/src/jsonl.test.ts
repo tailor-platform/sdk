@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
@@ -65,6 +65,63 @@ describe("loadSeedData", () => {
 
   test("loads no requested entities without requiring a data directory", () => {
     expect(loadSeedData("/missing", [])).toEqual({});
+  });
+
+  describe("several data directories", () => {
+    function makeDataset(baseDir: string, name: string, files: Record<string, string>): string {
+      const dir = path.join(baseDir, name);
+      mkdirSync(dir);
+      for (const [file, content] of Object.entries(files)) {
+        writeFileSync(path.join(dir, file), content);
+      }
+      return dir;
+    }
+
+    test("concatenates each table's rows in directory order", () => {
+      const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n', "Order.jsonl": '{"id":"o1"}\n' });
+      const cogs = makeDataset(base, "cogs", { "User.jsonl": '{"id":"u2"}\n' });
+      const local = makeDataset(base, "local", { "User.jsonl": '{"id":"u3"}\n' });
+
+      expect(loadSeedData([base, cogs, local], ["User", "Order"])).toEqual({
+        User: [{ id: "u1" }, { id: "u2" }, { id: "u3" }],
+        Order: [{ id: "o1" }],
+      });
+    });
+
+    test("rejects an id defined in two directories, naming both lines", () => {
+      const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n{"id":"u2"}\n' });
+      const cogs = makeDataset(base, "cogs", { "User.jsonl": '{"id":"u3"}\n{"id":"u2"}\n' });
+
+      expect(() => loadSeedData([base, cogs], ["User"])).toThrow(
+        `${path.join(cogs, "User.jsonl")}:2: id "u2" is already defined at ${path.join(base, "User.jsonl")}:2.`,
+      );
+    });
+
+    test("identifies rows by the key field it is given", () => {
+      const base = makeDataDir({ "_User.jsonl": '{"name":"ada@example.com","password":"a"}\n' });
+      const local = makeDataset(base, "local", {
+        "_User.jsonl": '{"name":"ada@example.com","password":"b"}\n',
+      });
+
+      expect(() => loadSeedData([base, local], ["_User"], { keyField: "name" })).toThrow(
+        /local\/_User\.jsonl:1: name "ada@example\.com" is already defined/,
+      );
+    });
+
+    test("leaves duplicates within a single directory to the database", () => {
+      const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n{"id":"u1"}\n' });
+
+      expect(loadSeedData([base], ["User"])).toEqual({ User: [{ id: "u1" }, { id: "u1" }] });
+    });
+
+    test("ignores rows without a key", () => {
+      const base = makeDataDir({ "User.jsonl": '{"name":"a"}\n' });
+      const cogs = makeDataset(base, "cogs", { "User.jsonl": '{"name":"b"}\n' });
+
+      expect(loadSeedData([base, cogs], ["User"])).toEqual({
+        User: [{ name: "a" }, { name: "b" }],
+      });
+    });
   });
 
   test("names the file and line for malformed JSON lines", () => {

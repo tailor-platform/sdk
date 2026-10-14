@@ -90,15 +90,6 @@ export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> &
   status: FunctionExecution_Status;
 
   /**
-   * Deprecated: use log_entries instead. Only populated in GetFunctionExecution,
-   * not in ListFunctionExecutions.
-   *
-   * @generated from field: string logs = 5 [deprecated = true];
-   * @deprecated
-   */
-  logs: string;
-
-  /**
    * @generated from field: google.protobuf.Timestamp started_at = 6;
    */
   startedAt?: Timestamp;

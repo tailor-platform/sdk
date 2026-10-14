@@ -58,7 +58,7 @@ jobs:
       # __PER_APP_GENERATE_CHECK__
       # __SEED_VALIDATE_START__
       - id: tailor-seed-validate
-        run: __TAILOR_CLI__ seed validate
+        run: __TAILOR_CLI__ seed validate__SEED_VALIDATE_ARGS__
         # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
       # __PER_APP_SEED_VALIDATE__
@@ -261,7 +261,7 @@ jobs:
               echo yarn
             elif [ -f bun.lockb ] || [ -f bun.lock ]; then
               echo bun
-            elif [ -f package-lock.json ]; then
+            elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
               echo npm
             else
               echo "__PACKAGE_MANAGER__"
@@ -312,7 +312,7 @@ jobs:
           run_install: false
       - id: tailor-setup-base-node
         if: steps.tailor-detect-base-package-manager.outputs['package-manager'] != 'bun'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .tailor-erd-base/package.json
       - id: tailor-setup-base-yarn
@@ -559,7 +559,7 @@ jobs:
           run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
       # __ERD_GITHUB_COM_UPLOAD_START__
       - id: tailor-upload-erd-viewer
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.namespace }}-viewer.html
           path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html
@@ -678,6 +678,11 @@ jobs:
         uses: tailor-platform/actions/install@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __SEED_PREFLIGHT_START__
+      - id: tailor-seed-validate
+        run: __TAILOR_CLI__ seed validate__SEED_VALIDATE_ARGS__
+        # __WORKING_DIRECTORY__
+      # __SEED_PREFLIGHT_END__
       - id: tailor-apply
         uses: tailor-platform/actions/deploy@bdc8fba57ce9e48e04c09d8c55a9c76c06db0bb9 # unreleased commit
         # __CONFIG_ENV__
@@ -687,17 +692,15 @@ jobs:
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
-      # __SEED_DATA_START__
-      - id: seed-data
-        if: false
+      # __SEED_START__
+      - id: tailor-seed
         shell: bash
         # __WORKING_DIRECTORY__
+        env:
+          TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
         run: |
-          # Uncomment and implement to seed data on deploy.
-          # Run after apply so the schema is ready.
-          # Example: node scripts/seed.mjs
-          true
-      # __SEED_DATA_END__
+          __TAILOR_CLI__ seed apply --upsert__SEED_ARGS__
+      # __SEED_END__
       - id: tailor-slack-prereq
         if: always()
         shell: bash

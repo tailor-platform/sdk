@@ -3,6 +3,7 @@ import { currentCommand } from "./current";
 import { listCommand } from "./list";
 import { patCommand } from "./pat";
 import { switchCommand } from "./switch";
+import { updateCommand } from "./update";
 
 export const userCommand = defineCommand({
   name: "user",
@@ -11,6 +12,7 @@ export const userCommand = defineCommand({
     current: currentCommand,
     list: listCommand,
     switch: switchCommand,
+    update: updateCommand,
     pat: patCommand,
   },
   defaultSubCommand: "list",

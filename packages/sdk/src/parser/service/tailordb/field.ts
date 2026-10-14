@@ -292,6 +292,12 @@ export function parseFieldConfig(
     );
   }
 
+  if (context && context.fieldPath.length > 1 && metadata.serial) {
+    throw new Error(
+      `${formatFieldLocation(context)}.serial() cannot be used on nested inner fields`,
+    );
+  }
+
   if (fieldType === "enum" && (metadata.allowedValues ?? []).length === 0) {
     throw new Error(
       `${formatFieldLocation(context)}enum fields must define at least one allowed value`,
@@ -353,6 +359,7 @@ export function parseFieldConfig(
           start: metadata.serial.start,
           maxValue: metadata.serial.maxValue,
           format: "format" in metadata.serial ? metadata.serial.format : undefined,
+          gapless: metadata.serial.gapless,
         }
       : undefined,
   };
