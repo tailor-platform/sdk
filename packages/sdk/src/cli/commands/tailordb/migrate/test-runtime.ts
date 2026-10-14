@@ -257,7 +257,7 @@ export async function waitForCloneApplicationData(
           targetWorkspaceId: options.targetWorkspaceId,
           operationId: options.operationId,
         },
-        { timeoutMs: remaining },
+        Number.isFinite(remaining) ? { timeoutMs: remaining } : undefined,
       );
     } catch (error) {
       if (

@@ -2,7 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { waitForCloneApplicationData } from "#/cli/commands/tailordb/migrate/test-runtime";
-import { configArg, confirmationArgs, parseDuration, recoveryContextArgs } from "#/cli/shared/args";
+import { configArg, confirmationArgs, recoveryContextArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -13,12 +13,10 @@ import { printMutationResult } from "#/cli/shared/mutation-result";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import {
-  cloneTimeoutArg,
   cloneWorkspaceArgs,
   formatElapsed,
   hintOnInterrupt,
   reportStatus,
-  resumeCommandArgs,
   resumeHint,
 } from "./shared";
 
@@ -29,7 +27,6 @@ interface CloneOptions {
   copyFiles?: boolean;
   copyIdpUsers?: boolean;
   noWait?: boolean;
-  timeout?: string;
   profile?: string;
 }
 
@@ -156,9 +153,8 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
       sourceWorkspaceId: ref.sourceWorkspaceId,
       targetWorkspaceId: ref.targetWorkspaceId,
       operationId,
-      timeout: parseDuration(options.timeout ?? "30m"),
+      timeout: Infinity,
       errorCodePrefix: "DATA_CLONE",
-      next: { command: "tailor", args: resumeCommandArgs(ref) },
       onStatus: reportStatus,
     }),
   );
@@ -179,7 +175,7 @@ The platform rejects the clone with a failed precondition unless all of the foll
 - The TailorDB schema of the target matches the source, so deploy the same version to the target first.
 - The target is empty for every namespace and copy type in scope (TailorDB records, plus files and IdP users when \`--copy-files\` / \`--copy-idp-users\` are given).
 
-The command waits until the clone finishes, up to --timeout. --timeout only bounds how long this command waits; it neither extends nor shortens how long the platform lets a clone run. Pressing Ctrl+C, reaching --timeout, or passing --no-wait does not stop the clone, which keeps running on the platform. Use \`tailor data operation get --wait\` with the operation ID printed at the start to keep waiting, or without --wait to check the status once.
+The command waits until the clone finishes. Pressing Ctrl+C or passing --no-wait does not stop the clone, which keeps running on the platform. Use \`tailor data operation get --wait\` with the operation ID printed at the start to keep waiting, or without --wait to check the status once.
 
 With --json, the result carries \`status\`: \`completed\` once the clone has finished, or \`started\` with --no-wait.
 `,
@@ -208,7 +204,6 @@ With --json, the result carries \`status\`: \`completed\` once the clone has fin
     "no-wait": arg(z.boolean().default(false), {
       description: "Start the clone and exit without waiting for it to finish",
     }),
-    timeout: cloneTimeoutArg,
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
@@ -220,7 +215,6 @@ With --json, the result carries \`status\`: \`completed\` once the clone has fin
       copyFiles: args["copy-files"],
       copyIdpUsers: args["copy-idp-users"],
       noWait: args["no-wait"],
-      timeout: args.timeout,
       profile: args.profile,
       yes: args.yes,
     });

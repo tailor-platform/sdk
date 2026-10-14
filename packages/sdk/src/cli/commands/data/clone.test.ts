@@ -192,50 +192,14 @@ describe("data clone", () => {
     expect(client.getCloneApplicationDataOperation).toHaveBeenCalledTimes(1);
   });
 
-  test("既定では 30 分を上限に状態確認を送る", async () => {
+  test("状態確認に待ち時間の上限を付けない", async () => {
     await runCommand(cloneCommand, baseArgs);
 
     const [, callOptions] = client.getCloneApplicationDataOperation.mock.calls[0] as [
       unknown,
-      { timeoutMs: number },
+      { timeoutMs: number } | undefined,
     ];
-    expect(callOptions.timeoutMs).toBeGreaterThan(29 * 60 * 1000);
-    expect(callOptions.timeoutMs).toBeLessThanOrEqual(30 * 60 * 1000);
-  });
-
-  test("--timeout を超えたら、続きを待つコマンドを next に入れて DATA_CLONE_TIMEOUT で失敗する", async () => {
-    client.getCloneApplicationDataOperation.mockResolvedValue({
-      status: CloneOperationStatus.PROCESSING,
-      errorMessage: "",
-    });
-
-    const result = await runCommand(cloneCommand, [...baseArgs, "--timeout", "1ms"]);
-
-    expect(result.error).toMatchObject({
-      code: "DATA_CLONE_TIMEOUT",
-      next: {
-        command: "tailor",
-        args: [
-          "data",
-          "operation",
-          "get",
-          "--from",
-          "src",
-          "--to",
-          "dst",
-          "--operation-id",
-          "op-1",
-          "--wait",
-        ],
-      },
-    });
-  });
-
-  test("--timeout に不正な形式を渡すと API を呼ばずに失敗する", async () => {
-    const result = await runCommand(cloneCommand, [...baseArgs, "--timeout", "soon"]);
-
-    expect(result.exitCode).not.toBe(0);
-    expect(client.cloneApplicationData).not.toHaveBeenCalled();
+    expect(callOptions).toBeUndefined();
   });
 
   test("--no-wait なら、開始だけして状態を確認せずに終了する", async () => {

@@ -204,6 +204,27 @@ describe("migration test runtime", () => {
     expect(getOperation).toHaveBeenCalledTimes(3);
   });
 
+  test("sends status checks without a request timeout when the wait is unlimited", async () => {
+    const getOperation = vi
+      .fn()
+      .mockResolvedValueOnce({ status: CloneOperationStatus.PROCESSING, errorMessage: "" })
+      .mockResolvedValueOnce({ status: CloneOperationStatus.COMPLETED, errorMessage: "" });
+    const client = { getCloneApplicationDataOperation: getOperation } as unknown as OperatorClient;
+
+    await waitForCloneApplicationData(client, {
+      sourceWorkspaceId: "source",
+      targetWorkspaceId: "target",
+      operationId: "operation",
+      pollInterval: 0,
+      timeout: Infinity,
+    });
+
+    expect(getOperation.mock.calls.map(([, callOptions]) => callOptions)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
   test("reports a failed clone operation", async () => {
     const client = {
       getCloneApplicationDataOperation: vi.fn().mockResolvedValue({
