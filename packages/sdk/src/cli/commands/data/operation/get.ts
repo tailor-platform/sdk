@@ -5,7 +5,13 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
-import { cloneWorkspaceArgs, hintOnInterrupt, reportStatus, statusName } from "../shared";
+import {
+  cloneWorkspaceArgs,
+  formatElapsed,
+  hintOnInterrupt,
+  reportStatus,
+  statusName,
+} from "../shared";
 
 export const getCommand = defineAppCommand({
   name: "get",
@@ -54,6 +60,7 @@ export const getCommand = defineAppCommand({
       return;
     }
 
+    const startedAt = Date.now();
     await hintOnInterrupt(ref, () =>
       waitForCloneApplicationData(client, {
         sourceWorkspaceId: ref.sourceWorkspaceId,
@@ -64,7 +71,9 @@ export const getCommand = defineAppCommand({
         onStatus: reportStatus,
       }),
     );
-    logger.success(`Clone operation ${ref.operationId} completed`);
+    logger.success(
+      `Clone operation ${ref.operationId} completed (waited ${formatElapsed(Date.now() - startedAt)})`,
+    );
     logger.out({ operationId: ref.operationId, status: "completed" });
   },
 });

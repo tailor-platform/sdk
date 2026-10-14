@@ -54,14 +54,16 @@ export async function runMigrationTest(
   if (options.keepTtl !== undefined && !options.keep) {
     throw CLIError({
       code: "MIGRATION_TEST_OPTIONS_INVALID",
-      message: "--keep-ttl requires --keep.",
+      message: "--keep-ttl was given without --keep.",
+      suggestion: "Pass --keep together with --keep-ttl, or remove --keep-ttl.",
       command: "tailordb migration test",
     });
   }
   if (options.cloneTimeout !== undefined && options.data !== "clone") {
     throw CLIError({
       code: "MIGRATION_TEST_OPTIONS_INVALID",
-      message: "--clone-timeout applies only to --data clone.",
+      message: "--clone-timeout was given without --data clone.",
+      suggestion: "Pass --data clone, or remove --clone-timeout.",
       command: "tailordb migration test",
     });
   }

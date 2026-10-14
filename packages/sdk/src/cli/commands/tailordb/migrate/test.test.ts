@@ -147,7 +147,11 @@ describe("tailordb migration test", () => {
 
     await expect(
       runMigrationTest({ data: "seed", cloneTimeout: 600_000 }, dependencies),
-    ).rejects.toMatchObject({ code: "MIGRATION_TEST_OPTIONS_INVALID" });
+    ).rejects.toMatchObject({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: "--clone-timeout was given without --data clone.",
+      suggestion: "Pass --data clone, or remove --clone-timeout.",
+    });
 
     expect(events).toEqual([]);
   });
@@ -308,9 +312,13 @@ describe("tailordb migration test", () => {
   test("rejects --keep-ttl without --keep before creating anything", async () => {
     const dependencies = createDependencies([]);
 
-    await expect(runMigrationTest({ data: "seed", keepTtl: "24h" }, dependencies)).rejects.toThrow(
-      /--keep-ttl requires --keep/,
-    );
+    await expect(
+      runMigrationTest({ data: "seed", keepTtl: "24h" }, dependencies),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: "--keep-ttl was given without --keep.",
+      suggestion: "Pass --keep together with --keep-ttl, or remove --keep-ttl.",
+    });
     expect(dependencies.createWorkspace).not.toHaveBeenCalled();
   });
 

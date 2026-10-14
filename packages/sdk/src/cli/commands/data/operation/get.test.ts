@@ -1,6 +1,7 @@
 import { runCommand } from "@politty/zod";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { getCommand } from "./get";
 
 const client = { getCloneApplicationDataOperation: vi.fn() };
@@ -56,6 +57,18 @@ describe("data operation get", () => {
     const result = await runCommand(getCommand, [...baseArgs, "--wait"]);
 
     expect(result.exitCode).toBe(0);
+  });
+
+  test("--wait の完了メッセージは、clone の所要時間ではなく待った時間として表示する", async () => {
+    const success = vi.spyOn(logger, "success").mockImplementation(() => {});
+    client.getCloneApplicationDataOperation.mockResolvedValue({
+      status: CloneOperationStatus.COMPLETED,
+      errorMessage: "",
+    });
+
+    await runCommand(getCommand, [...baseArgs, "--wait"]);
+
+    expect(success).toHaveBeenCalledWith(expect.stringMatching(/completed \(waited \d/));
   });
 
   test("--wait で clone が失敗していたら、プラットフォームのメッセージ付きで失敗する", async () => {

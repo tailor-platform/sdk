@@ -129,6 +129,14 @@ describe("data clone", () => {
     expect((result.error as { suggestion?: string }).suggestion).toContain("my-app");
   });
 
+  test("コピー先にアプリが見つからないときは、アクセス権の確認も案内する", async () => {
+    client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const result = await runCommand(cloneCommand, baseArgs);
+
+    expect((result.error as { suggestion?: string }).suggestion).toContain("access");
+  });
+
   test("コピー先アプリの確認が NotFound 以外で失敗したら、そのエラーをそのまま返す", async () => {
     client.getApplication.mockRejectedValue(new ConnectError("denied", Code.PermissionDenied));
 
@@ -155,6 +163,18 @@ describe("data clone", () => {
     const suggestion = (result.error as { suggestion?: string }).suggestion;
     expect(suggestion).toContain("tailordb truncate");
     expect(suggestion).not.toContain("--all");
+  });
+
+  test("コピー先が空でないときの案内は、truncate で空にできるのは TailorDB のレコードだけだと伝える", async () => {
+    client.cloneApplicationData.mockRejectedValue(
+      new ConnectError("target is not empty", Code.FailedPrecondition),
+    );
+
+    const result = await runCommand(cloneCommand, [...baseArgs, "--copy-idp-users"]);
+
+    const suggestion = (result.error as { suggestion?: string }).suggestion;
+    expect(suggestion).toContain("IdP users");
+    expect(suggestion).toContain("separately");
   });
 
   test("--name を省略したときだけ、設定ファイルを指定した実行可能な truncate を案内する", async () => {

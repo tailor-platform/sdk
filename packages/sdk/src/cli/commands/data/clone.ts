@@ -60,8 +60,8 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
         code: "DATA_CLONE_TARGET_APPLICATION_NOT_FOUND",
         message: `Application "${options.name}" was not found in the target workspace "${options.targetWorkspaceId}".`,
         suggestion: options.nameFromConfig
-          ? "Check --to, and deploy the application to the target workspace first so it has the same namespaces and schema."
-          : `Check --to, and deploy the application "${options.name}" to the target workspace first so it has the same namespaces and schema.`,
+          ? "Check --to and that you have access to the target workspace, and deploy the application to it first so it has the same namespaces and schema."
+          : `Check --to and that you have access to the target workspace, and deploy the application "${options.name}" to it first so it has the same namespaces and schema.`,
         ...(options.nameFromConfig
           ? {
               next: {
@@ -118,7 +118,7 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
       throw CLIError({
         code: "DATA_CLONE_PRECONDITION_FAILED",
         message: error.rawMessage,
-        suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target. ${
+        suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target for every copy type in scope. ${
           options.nameFromConfig
             ? `To empty the target's TailorDB records, run ${formatCommandHint({
                 command: "tailor",
@@ -134,7 +134,7 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
                 ],
               })}.`
             : "To empty the target's TailorDB records, run tailor tailordb truncate for the namespaces of this application (see tailor tailordb truncate --help)."
-        }`,
+        } That does not remove IdP users or files: with --copy-idp-users or --copy-files, remove those from the target separately.`,
         command: "data clone",
         cause: error,
       });
