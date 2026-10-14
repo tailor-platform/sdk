@@ -142,3 +142,22 @@ jobs:
             pnpm --silent tailor workspace prune \
               "${name_args[@]}" --older-than 1s --limit "$count" --yes
           fi
+
+      - name: Delete workspaces whose recorded expiry has passed
+        working-directory: packages/sdk
+        env:
+          FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          set -u
+          if [[ -z "$FOLDER_ID" ]]; then
+            echo "::error::TAILOR_PLATFORM_FOLDER_ID is not set; --expired needs an explicit location."
+            exit 1
+          fi
+          dry_run_args=()
+          if [[ "$DRY_RUN" == "true" ]]; then
+            dry_run_args+=(--dry-run)
+          fi
+          pnpm --silent tailor workspace prune --expired --folder-id "$FOLDER_ID" \
+            --name '(e2e-ws|template-e2e|sdk-ci)-.*' \
+            --limit 100 "${dry_run_args[@]}" --yes
