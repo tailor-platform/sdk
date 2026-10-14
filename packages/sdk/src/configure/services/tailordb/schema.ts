@@ -48,6 +48,7 @@ import type {
   ExcludeNestedDBFields,
   ExcludeHookedDBFields,
   ExcludeDefaultedDBFields,
+  ExcludeSerialDBFields,
   TypeFeatures,
   TypeValidateFn,
 } from "./types";
@@ -1155,7 +1156,8 @@ function object<
   const F extends Record<string, TailorAnyDBField> &
     ExcludeNestedDBFields<F> &
     ExcludeHookedDBFields<F> &
-    ExcludeDefaultedDBFields<F>,
+    ExcludeDefaultedDBFields<F> &
+    ExcludeSerialDBFields<F>,
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<

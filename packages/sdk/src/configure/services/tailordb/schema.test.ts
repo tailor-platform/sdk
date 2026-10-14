@@ -1473,6 +1473,14 @@ describe("db.object tests", () => {
     });
   });
 
+  test("serial on inner fields of db.object causes type error", () => {
+    db.object({
+      name: db.string(),
+      // @ts-expect-error serial on nested inner fields is not allowed
+      number: db.int().serial({ start: 1 }),
+    });
+  });
+
   test("validate on inner fields of db.object is allowed", () => {
     db.object({
       status: db.string().validate(({ value }) => (value.length > 0 ? undefined : "required")),
