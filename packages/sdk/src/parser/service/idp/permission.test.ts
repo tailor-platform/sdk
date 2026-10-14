@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  findLoggedInOnlyPermitRules,
   findOmittedPermitRules,
   normalizeIdPActionPermission,
   normalizeIdPPermission,
@@ -272,5 +273,85 @@ describe("findOmittedPermitRules", () => {
 
   test("returns empty for undefined permission", () => {
     expect(findOmittedPermitRules(undefined)).toEqual([]);
+  });
+});
+
+describe("findLoggedInOnlyPermitRules", () => {
+  const empty = {
+    create: [],
+    read: [],
+    update: [],
+    delete: [],
+    sendPasswordResetEmail: [],
+    unenrollMfa: [],
+  };
+
+  test.each([
+    [
+      "flags an object-form rule that permits on _loggedIn alone",
+      { ...empty, read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] },
+      ["read[0]"],
+    ],
+    [
+      "flags the single-condition array shorthand (it defaults to allow)",
+      { ...empty, sendPasswordResetEmail: [[{ user: "_loggedIn" }, "=", true]] },
+      ["sendPasswordResetEmail[0]"],
+    ],
+    [
+      "flags the rule's position among several rules",
+      {
+        ...empty,
+        update: [
+          { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+          { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+        ],
+      },
+      ["update[1]"],
+    ],
+    [
+      "ignores a rule that also requires another condition",
+      {
+        ...empty,
+        create: [
+          {
+            conditions: [
+              [{ user: "_loggedIn" }, "=", true],
+              [{ user: "role" }, "=", "ADMIN"],
+            ],
+            permit: true,
+          },
+        ],
+      },
+      [],
+    ],
+    [
+      "ignores a deny rule on _loggedIn",
+      { ...empty, delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false }] },
+      [],
+    ],
+    [
+      "ignores an administrator role rule",
+      { ...empty, create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] },
+      [],
+    ],
+    [
+      "ignores an unconditional allow rule (unsafeAllowAllIdPPermission names its looseness)",
+      { ...empty, create: [{ conditions: [], permit: true }] },
+      [],
+    ],
+    [
+      "flags unenrollMfa as well",
+      {
+        ...empty,
+        unenrollMfa: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+      },
+      ["unenrollMfa[0]"],
+    ],
+  ] as const)("%s", (_name, permission, expected) => {
+    expect(findLoggedInOnlyPermitRules(permission)).toEqual(expected);
+  });
+
+  test("returns empty for undefined permission", () => {
+    expect(findLoggedInOnlyPermitRules(undefined)).toEqual([]);
   });
 });

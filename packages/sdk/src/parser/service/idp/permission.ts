@@ -79,3 +79,41 @@ export function findOmittedPermitRules(permission: RawIdPPermission | undefined)
   }
   return locations;
 }
+
+/**
+ * Find IdP permission rules that allow every authenticated user, i.e. an
+ * allow rule whose only condition is `[{ user: "_loggedIn" }, "=", true]`, so
+ * the CLI can warn about them.
+ * @param permission - Raw IdP permission from user config
+ * @returns Locations of offending rules, e.g. `read[0]`
+ */
+export function findLoggedInOnlyPermitRules(permission: RawIdPPermission | undefined): string[] {
+  if (!permission) {
+    return [];
+  }
+  const normalized = normalizeIdPPermission(permission);
+  const locations: string[] = [];
+  for (const action of Object.keys(normalized) as Array<keyof typeof normalized>) {
+    normalized[action].forEach((rule, index) => {
+      if (rule.permit === "allow" && isLoggedInOnly(rule.conditions)) {
+        locations.push(`${action}[${index}]`);
+      }
+    });
+  }
+  return locations;
+}
+
+function isLoggedInOnly(conditions: readonly StandardIdPPermissionCondition[]): boolean {
+  const [condition, ...rest] = conditions;
+  if (!condition || rest.length > 0) {
+    return false;
+  }
+  const [left, operator, right] = condition;
+  return (
+    operator === "eq" &&
+    right === true &&
+    typeof left === "object" &&
+    "user" in left &&
+    left.user === "_loggedIn"
+  );
+}
