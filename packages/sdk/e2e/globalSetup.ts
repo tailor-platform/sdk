@@ -18,17 +18,25 @@ const TEMPDIR_TRACKING_DIR = path.join(os.tmpdir(), "e2e-tempdirs");
 const WORKSPACE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Track a workspace ID for cleanup in globalTeardown and record its prune expiry
+ * Track a workspace ID for cleanup in globalTeardown and record its prune expiry.
+ * Deletes the workspace and rethrows when the expiry cannot be recorded.
  * @param client - Operator client that created the workspace
  * @param workspaceId - The workspace ID to track
  */
 export async function trackWorkspace(client: OperatorClient, workspaceId: string): Promise<void> {
+  const trackingFile = path.join(TRACKING_DIR, workspaceId);
   fs.mkdirSync(TRACKING_DIR, { recursive: true });
-  fs.writeFileSync(path.join(TRACKING_DIR, workspaceId), "");
+  fs.writeFileSync(trackingFile, "");
   try {
     await writeWorkspaceExpiry(client, workspaceId, new Date(Date.now() + WORKSPACE_TTL_MS));
   } catch (e) {
-    console.warn(`[e2e] Could not record an expiry on workspace ${workspaceId}`, e);
+    try {
+      await client.deleteWorkspace({ workspaceId });
+      fs.rmSync(trackingFile, { force: true });
+    } catch (deleteError) {
+      console.warn(`[e2e] Could not delete workspace ${workspaceId}`, deleteError);
+    }
+    throw e;
   }
 }
 

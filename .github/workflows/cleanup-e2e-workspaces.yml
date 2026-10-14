@@ -144,6 +144,7 @@ jobs:
           fi
 
       - name: Delete workspaces whose recorded expiry has passed
+        if: ${{ !cancelled() }}
         working-directory: packages/sdk
         env:
           FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
