@@ -244,6 +244,28 @@ describe("parseFieldConfig nested inner field restrictions", () => {
   });
 });
 
+describe("parseFieldConfig serial", () => {
+  test("carries gapless from the serial definition", () => {
+    const type = db.table("Invoice", {
+      number: db.int().serial({ start: 1, gapless: true }),
+    });
+
+    const schema = toSchemaOutputs({ Invoice: type });
+
+    expect(parseFieldConfig(schema.Invoice!.fields.number!).serial?.gapless).toBe(true);
+  });
+
+  test("leaves gapless unset when the serial does not set it", () => {
+    const type = db.table("Invoice", {
+      number: db.int().serial({ start: 1 }),
+    });
+
+    const schema = toSchemaOutputs({ Invoice: type });
+
+    expect(parseFieldConfig(schema.Invoice!.fields.number!).serial?.gapless).toBeUndefined();
+  });
+});
+
 describe("parseFieldConfig enum allowed values", () => {
   const noValues = [] as unknown as ["x"];
 
