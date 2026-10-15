@@ -20,7 +20,7 @@ describe("data operation get", () => {
     vi.clearAllMocks();
   });
 
-  test("--wait なしでは、状態を 1 回だけ確認して終了する", async () => {
+  test("checks the status once and exits without --wait", async () => {
     client.getCloneApplicationDataOperation.mockResolvedValue({
       status: CloneOperationStatus.PROCESSING,
       errorMessage: "",
@@ -37,7 +37,7 @@ describe("data operation get", () => {
     });
   });
 
-  test("--wait なしでは、clone が失敗していても終了コードは 0 で状態を報告する", async () => {
+  test("reports a failed clone with exit code 0 without --wait", async () => {
     client.getCloneApplicationDataOperation.mockResolvedValue({
       status: CloneOperationStatus.FAILED,
       errorMessage: "namespace mismatch",
@@ -48,7 +48,7 @@ describe("data operation get", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  test("--wait なら、完了を確認して成功で終了する", async () => {
+  test("exits successfully once the clone completes with --wait", async () => {
     client.getCloneApplicationDataOperation.mockResolvedValue({
       status: CloneOperationStatus.COMPLETED,
       errorMessage: "",
@@ -59,7 +59,7 @@ describe("data operation get", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  test("--wait の完了メッセージは、clone の所要時間ではなく待った時間として表示する", async () => {
+  test("reports how long it waited, not how long the clone took, when --wait completes", async () => {
     const success = vi.spyOn(logger, "success").mockImplementation(() => {});
     client.getCloneApplicationDataOperation.mockResolvedValue({
       status: CloneOperationStatus.COMPLETED,
@@ -71,7 +71,7 @@ describe("data operation get", () => {
     expect(success).toHaveBeenCalledWith(expect.stringMatching(/completed \(waited \d/));
   });
 
-  test("--wait で clone が失敗していたら、プラットフォームのメッセージ付きで失敗する", async () => {
+  test("fails with the platform message when the clone failed with --wait", async () => {
     client.getCloneApplicationDataOperation.mockResolvedValue({
       status: CloneOperationStatus.FAILED,
       errorMessage: "namespace mismatch",

@@ -81,7 +81,6 @@ interface WaitForCloneOptions {
   pollInterval?: number;
   timeout?: number;
   errorCodePrefix?: string;
-  next?: { command: string; args: readonly string[] };
   onStatus?: (status: CloneOperationStatus) => void;
 }
 
@@ -294,15 +293,11 @@ export async function waitForCloneApplicationData(
   throw CLIError({
     code: `${errorCodePrefix}_TIMEOUT`,
     message: `Application data clone timed out after ${timeout < 1_000 ? `${timeout} ms` : `${Math.round(timeout / 1_000)} seconds`}.`,
-    details: options.next
-      ? "The clone keeps running on the platform after this timeout."
-      : undefined,
     context: {
       operationId: options.operationId,
       sourceWorkspaceId: options.sourceWorkspaceId,
       targetWorkspaceId: options.targetWorkspaceId,
     },
-    next: options.next,
   });
 }
 

@@ -17,8 +17,8 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => ({
 
 const ref = { sourceWorkspaceId: "src", targetWorkspaceId: "dst", operationId: "op-1" };
 
-describe("続きを待つコマンドの案内", () => {
-  test("コピー元・コピー先・operation ID を埋めた data operation get --wait を組み立てる", () => {
+describe("resume guidance", () => {
+  test("builds a data operation get --wait command with the source, target and operation ID filled in", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
 
     expect(resumeHint(ref)).toBe(
@@ -26,19 +26,19 @@ describe("続きを待つコマンドの案内", () => {
     );
   });
 
-  test("空白を含むプロファイル名は、コピーして実行できるように引用符で囲む", () => {
+  test("quotes a profile name containing spaces so the command can be copied and run", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
 
     expect(resumeHint({ ...ref, profile: "QA team" })).toContain("'--profile=QA team'");
   });
 
-  test("プロファイルを使って実行したときは、同じプロファイルを案内に含める", () => {
+  test("includes the profile in the guidance when the command ran with one", () => {
     expect(resumeCommandArgs({ ...ref, profile: "staging" }).slice(-1)).toEqual([
       "--profile=staging",
     ]);
   });
 
-  test("待機中に Ctrl+C されたら案内を出し、待機が終わればハンドラを外す", async () => {
+  test("prints the guidance on Ctrl+C while waiting and removes the handler once the wait ends", async () => {
     const before = process.listenerCount("SIGINT");
     let finish!: () => void;
     const running = hintOnInterrupt(ref, () => new Promise<void>((resolve) => (finish = resolve)));
@@ -57,11 +57,11 @@ describe("続きを待つコマンドの案内", () => {
     [45_000, "45s"],
     [201_000, "3m 21s"],
     [3_900_000, "1h 5m"],
-  ])("経過時間 %i ミリ秒を %s と表示する", (ms, expected) => {
+  ])("formats %i ms as %s", (ms, expected) => {
     expect(formatElapsed(ms)).toBe(expected);
   });
 
-  test("状態の遷移を、時刻付きの stream 表示で出す", () => {
+  test("reports each status change in stream mode with a timestamp", () => {
     reportStatus(CloneOperationStatus.PROCESSING);
 
     expect(logged.info).toHaveBeenCalledWith("status: processing", { mode: "stream" });

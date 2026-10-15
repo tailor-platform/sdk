@@ -40,7 +40,7 @@ describe("data clone", () => {
     });
   });
 
-  test("コピー元とコピー先に同じアプリ名を渡して clone を開始する", async () => {
+  test("starts the clone with the same application name for the source and the target", async () => {
     const result = await runCommand(cloneCommand, baseArgs);
 
     expect(result.exitCode).toBe(0);
@@ -54,7 +54,7 @@ describe("data clone", () => {
     });
   });
 
-  test("--name を省略したら、設定ファイルのアプリ名をコピー元とコピー先に使う", async () => {
+  test("uses the application name from the config for the source and the target when --name is omitted", async () => {
     const result = await runCommand(cloneCommand, ["--from", "src", "--to", "dst", "--yes"]);
 
     expect(result.exitCode).toBe(0);
@@ -66,13 +66,13 @@ describe("data clone", () => {
     );
   });
 
-  test("--name を指定したら、設定ファイルを読まない", async () => {
+  test("does not load the config when --name is given", async () => {
     await runCommand(cloneCommand, baseArgs);
 
     expect(configLoader.loadConfig).not.toHaveBeenCalled();
   });
 
-  test("--name を省略して設定ファイルも読めないなら、API を呼ばずに失敗する", async () => {
+  test("fails without calling the API when --name is omitted and the config cannot be loaded", async () => {
     configLoader.loadConfig.mockRejectedValue(new Error("Configuration file not found"));
 
     const result = await runCommand(cloneCommand, ["--from", "src", "--to", "dst", "--yes"]);
@@ -81,7 +81,7 @@ describe("data clone", () => {
     expect(client.cloneApplicationData).not.toHaveBeenCalled();
   });
 
-  test("待って完了したら、標準出力の結果に status: completed を入れる", async () => {
+  test("puts status: completed in the output once the wait finishes", async () => {
     using _json = jsonMode();
     const out = vi.spyOn(logger, "out").mockImplementation(() => {});
 
@@ -92,7 +92,7 @@ describe("data clone", () => {
     );
   });
 
-  test("--no-wait なら、標準出力の結果の status は started になる", async () => {
+  test("puts status: started in the output with --no-wait", async () => {
     using _json = jsonMode();
     const out = vi.spyOn(logger, "out").mockImplementation(() => {});
 
@@ -103,7 +103,7 @@ describe("data clone", () => {
     );
   });
 
-  test("コピー先にアプリがなければ、clone を始めずに、先に deploy するよう案内して失敗する", async () => {
+  test("fails without starting the clone and points to tailor deploy when the target has no application", async () => {
     client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
     const result = await runCommand(cloneCommand, ["--from", "src", "--to", "dst", "--yes"]);
@@ -119,7 +119,7 @@ describe("data clone", () => {
     expect(client.cloneApplicationData).not.toHaveBeenCalled();
   });
 
-  test("--name を指定したときは、deploy を実行できる形では案内せず文章で案内する", async () => {
+  test("describes the deploy step in words instead of an executable command when --name is given", async () => {
     client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
     const result = await runCommand(cloneCommand, baseArgs);
@@ -129,7 +129,7 @@ describe("data clone", () => {
     expect((result.error as { suggestion?: string }).suggestion).toContain("my-app");
   });
 
-  test("コピー先にアプリが見つからないときは、アクセス権の確認も案内する", async () => {
+  test("also suggests checking access when the target application is not found", async () => {
     client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
     const result = await runCommand(cloneCommand, baseArgs);
@@ -137,7 +137,7 @@ describe("data clone", () => {
     expect((result.error as { suggestion?: string }).suggestion).toContain("access");
   });
 
-  test("コピー先アプリの確認が NotFound 以外で失敗したら、そのエラーをそのまま返す", async () => {
+  test("returns the error as is when checking the target application fails with anything but NotFound", async () => {
     client.getApplication.mockRejectedValue(new ConnectError("denied", Code.PermissionDenied));
 
     const result = await runCommand(cloneCommand, baseArgs);
@@ -146,7 +146,7 @@ describe("data clone", () => {
     expect(client.cloneApplicationData).not.toHaveBeenCalled();
   });
 
-  test("サーバーが FailedPrecondition を返したら、メッセージを残して clone できる条件と対処を案内する", async () => {
+  test("keeps the server message and explains the clone conditions and remedies on FailedPrecondition", async () => {
     client.cloneApplicationData.mockRejectedValue(
       new ConnectError(
         'target namespace "testdb" already contains data in tables: User',
@@ -165,7 +165,7 @@ describe("data clone", () => {
     expect(suggestion).not.toContain("--all");
   });
 
-  test("コピー先が空でないときの案内は、truncate で空にできるのは TailorDB のレコードだけだと伝える", async () => {
+  test("says that truncate only empties TailorDB records when the target is not empty", async () => {
     client.cloneApplicationData.mockRejectedValue(
       new ConnectError("target is not empty", Code.FailedPrecondition),
     );
@@ -177,7 +177,7 @@ describe("data clone", () => {
     expect(suggestion).toContain("separately");
   });
 
-  test("--name を省略したときだけ、設定ファイルを指定した実行可能な truncate を案内する", async () => {
+  test("suggests an executable truncate with the config only when --name is omitted", async () => {
     client.cloneApplicationData.mockRejectedValue(
       new ConnectError("target is not empty", Code.FailedPrecondition),
     );
@@ -197,7 +197,7 @@ describe("data clone", () => {
     expect(suggestion).toContain("--config=custom.ts");
   });
 
-  test("コピー先にアプリがなければ、deploy の案内に指定した設定ファイルを引き継ぐ", async () => {
+  test("carries the given config into the deploy suggestion when the target has no application", async () => {
     client.getApplication.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
     const result = await runCommand(cloneCommand, [
@@ -215,7 +215,7 @@ describe("data clone", () => {
     });
   });
 
-  test("サーバーが NotFound を返したら、--from と --to と --name の確認を案内する", async () => {
+  test("suggests checking --from, --to and --name on NotFound", async () => {
     client.cloneApplicationData.mockRejectedValue(
       new ConnectError("source application not found", Code.NotFound),
     );
@@ -229,7 +229,7 @@ describe("data clone", () => {
     expect((result.error as { suggestion?: string }).suggestion).toContain("--from");
   });
 
-  test("--copy-files と --copy-idp-users を proto のフィールドに渡す", async () => {
+  test("passes --copy-files and --copy-idp-users to the request fields", async () => {
     await runCommand(cloneCommand, [...baseArgs, "--copy-files", "--copy-idp-users"]);
 
     expect(client.cloneApplicationData).toHaveBeenCalledWith(
@@ -237,7 +237,7 @@ describe("data clone", () => {
     );
   });
 
-  test("operation が FAILED になったらエラーメッセージ付きで失敗する", async () => {
+  test("fails with the error message when the operation FAILED", async () => {
     client.getCloneApplicationDataOperation.mockResolvedValue({
       status: CloneOperationStatus.FAILED,
       errorMessage: "disk full",
@@ -250,7 +250,7 @@ describe("data clone", () => {
     expect(result.error).toMatchObject({ code: "DATA_CLONE_FAILED" });
   });
 
-  test("operation が想定外の status を返したら待ち続けずに失敗する", async () => {
+  test("fails instead of waiting on an unexpected operation status", async () => {
     client.getCloneApplicationDataOperation.mockResolvedValue({
       status: CloneOperationStatus.UNSPECIFIED,
       errorMessage: "",
@@ -262,7 +262,7 @@ describe("data clone", () => {
     expect(client.getCloneApplicationDataOperation).toHaveBeenCalledTimes(1);
   });
 
-  test("状態確認に待ち時間の上限を付けない", async () => {
+  test("sends status checks without a request timeout", async () => {
     await runCommand(cloneCommand, baseArgs);
 
     const [, callOptions] = client.getCloneApplicationDataOperation.mock.calls[0] as [
@@ -272,7 +272,7 @@ describe("data clone", () => {
     expect(callOptions).toBeUndefined();
   });
 
-  test("--no-wait なら、開始だけして状態を確認せずに終了する", async () => {
+  test("only starts the clone and exits without checking the status with --no-wait", async () => {
     const result = await runCommand(cloneCommand, [...baseArgs, "--no-wait"]);
 
     expect(result.exitCode).toBe(0);
@@ -280,7 +280,7 @@ describe("data clone", () => {
     expect(client.getCloneApplicationDataOperation).not.toHaveBeenCalled();
   });
 
-  test("operation ID が空なら状態の確認に進まず失敗する", async () => {
+  test("fails without checking the status when the operation ID is empty", async () => {
     client.cloneApplicationData.mockResolvedValue({ operationId: "" });
 
     const result = await runCommand(cloneCommand, baseArgs);
@@ -289,7 +289,7 @@ describe("data clone", () => {
     expect(client.getCloneApplicationDataOperation).not.toHaveBeenCalled();
   });
 
-  test("プラットフォームが clone に未対応なら DATA_CLONE_UNAVAILABLE で失敗する", async () => {
+  test("fails with DATA_CLONE_UNAVAILABLE when the platform does not support clone", async () => {
     client.cloneApplicationData.mockRejectedValue(new ConnectError("nope", Code.Unimplemented));
 
     const result = await runCommand(cloneCommand, baseArgs);
@@ -297,7 +297,7 @@ describe("data clone", () => {
     expect(result.error).toMatchObject({ code: "DATA_CLONE_UNAVAILABLE" });
   });
 
-  test("コピー元とコピー先が同じ workspace なら API を呼ばずに失敗する", async () => {
+  test("fails without calling the API when the source and target workspaces are the same", async () => {
     const result = await runCommand(cloneCommand, [
       "--from",
       "same",

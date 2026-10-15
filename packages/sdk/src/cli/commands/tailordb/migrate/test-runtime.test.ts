@@ -281,22 +281,6 @@ describe("migration test runtime", () => {
     }).catch((caught: unknown) => caught);
 
     expect(error).toMatchObject({ code: "MIGRATION_TEST_CLONE_TIMEOUT" });
-    expect((error as { details?: string }).details).toBeUndefined();
-  });
-
-  test("says the clone keeps running when the caller provides a step to resume it", async () => {
-    const client = { getCloneApplicationDataOperation: vi.fn() } as unknown as OperatorClient;
-
-    const error = await waitForCloneApplicationData(client, {
-      sourceWorkspaceId: "source",
-      targetWorkspaceId: "target",
-      operationId: "operation",
-      timeout: 0,
-      errorCodePrefix: "DATA_CLONE",
-      next: { command: "tailor", args: ["data", "operation", "get"] },
-    }).catch((caught: unknown) => caught);
-
-    expect((error as { details?: string }).details).toContain("keeps running");
   });
 
   test("bounds a poll that never answers by the remaining timeout", async () => {
