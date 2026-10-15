@@ -51,6 +51,26 @@ function renderAll(): RenderedTemplate[] {
     }),
   );
   add(
+    "branch/migration-test",
+    renderBranchWorkflow({
+      ...full,
+      branch: "main",
+      migrationDriftCheck: true,
+      erdPreview: { namespaces: ["main"] },
+      migrationTest: { label: "tailor:migration-test" },
+    }),
+  );
+  add(
+    "branch/migration-test-dedicated",
+    renderBranchWorkflow({
+      ...full,
+      branch: "main",
+      migrationDriftCheck: true,
+      erdPreview: null,
+      migrationTest: { label: "tailor:migration-test", environment: "prod-source" },
+    }),
+  );
+  add(
     "branch/seed-validate",
     renderBranchWorkflow({ ...full, branch: "main", seedValidate: true, erdPreview: null }),
   );

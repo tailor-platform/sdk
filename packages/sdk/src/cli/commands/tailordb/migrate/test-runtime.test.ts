@@ -223,6 +223,53 @@ describe("migration test runtime", () => {
     ).rejects.toThrow("namespace mismatch");
   });
 
+  test("reports the operation ID and that the clone continues when the wait times out", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi
+        .fn()
+        .mockResolvedValue({ status: CloneOperationStatus.PROCESSING, errorMessage: "" }),
+    } as unknown as OperatorClient;
+
+    const error = await waitForCloneApplicationData(client, {
+      sourceWorkspaceId: "source",
+      targetWorkspaceId: "target",
+      operationId: "operation-1",
+      pollInterval: 0,
+      timeout: 5,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_TEST_CLONE_TIMEOUT",
+      context: {
+        operationId: "operation-1",
+        sourceWorkspaceId: "source",
+        targetWorkspaceId: "target",
+      },
+    });
+    expect((error as Error).message).toMatch(/after 5 ms/);
+    expect((error as { details?: string }).details).toMatch(/continues on the platform/);
+    expect((error as { details?: string }).details).toMatch(/operation-1/);
+    expect((error as { suggestion?: string }).suggestion).toMatch(/--clone-timeout/);
+  });
+
+  test("reports a timeout of a second or more in seconds", async () => {
+    const client = {
+      getCloneApplicationDataOperation: vi
+        .fn()
+        .mockResolvedValue({ status: CloneOperationStatus.PROCESSING, errorMessage: "" }),
+    } as unknown as OperatorClient;
+
+    const error = await waitForCloneApplicationData(client, {
+      sourceWorkspaceId: "source",
+      targetWorkspaceId: "target",
+      operationId: "operation-1",
+      pollInterval: 1,
+      timeout: 1_200,
+    }).catch((caught: unknown) => caught);
+
+    expect((error as Error).message).toMatch(/after 1 seconds/);
+  });
+
   function runtimeState(client: OperatorClient, services: unknown[] = []) {
     return {
       client,

@@ -52,6 +52,7 @@ import {
   workflowFilePath,
   type PackageManager,
   type RenderApp,
+  type RenderMigrationTestParams,
   type RenderResult,
   type RenderSeed,
 } from "./templates";
@@ -90,6 +91,12 @@ export type BranchSetupOptions = CommonSetupOptions & {
   extraPaths?: readonly string[];
   erdPreview: boolean;
   restrictDispatch?: boolean;
+  /** Add the label-triggered `tailordb migration test` job. */
+  migrationTest?: boolean;
+  /** PR label that triggers the migration test (default `tailor:migration-test`). */
+  migrationTestLabel?: string;
+  /** Dedicated GitHub Environment holding the migration test's source workspace. */
+  migrationTestEnvironment?: string;
 };
 
 type TagSetupOptions = CommonSetupOptions & {
@@ -248,6 +255,20 @@ export function validateEnvironment(environment: string): void {
   if (!ENVIRONMENT_RE.test(environment)) {
     throw new Error(
       `Invalid environment name "${environment}". Only letters, numbers, ".", "_", "/", and "-" are supported.`,
+    );
+  }
+}
+
+// The label is embedded in a single-quoted expression and a double-quoted YAML scalar.
+const MIGRATION_TEST_LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9 :._/-]*$/;
+const DEFAULT_MIGRATION_TEST_LABEL = "tailor:migration-test";
+
+const MIGRATION_TEST_LABEL_MAX_LENGTH = 50;
+
+function validateMigrationTestLabel(label: string): void {
+  if (!MIGRATION_TEST_LABEL_RE.test(label) || label.length > MIGRATION_TEST_LABEL_MAX_LENGTH) {
+    throw new Error(
+      `Invalid --migration-test-label "${label}". Use at most ${String(MIGRATION_TEST_LABEL_MAX_LENGTH)} characters: letters, numbers, spaces, ":", ".", "_", "/", and "-".`,
     );
   }
 }
@@ -517,6 +538,38 @@ function assertMultiDirTarget(options: SetupTargetOptions, dirs: readonly string
   }
 }
 
+function resolveMigrationTest(
+  options: BranchSetupOptions,
+  detected: { multi: boolean; hasMigrations: boolean },
+): RenderMigrationTestParams | undefined {
+  const { migrationTestLabel, migrationTestEnvironment } = options;
+  if (!options.migrationTest) {
+    if (migrationTestLabel !== undefined || migrationTestEnvironment !== undefined) {
+      throw new Error(
+        "--migration-test-label and --migration-test-environment require --migration-test.",
+      );
+    }
+    return undefined;
+  }
+  if (detected.multi) {
+    throw new Error(
+      "--migration-test is not supported with several --dir values. " +
+        "Generate the target for a single app directory.",
+    );
+  }
+  if (!detected.hasMigrations) {
+    throw new Error(
+      "--migration-test requires TailorDB migrations, but tailor.config.ts has no namespace with a migrations directory.",
+    );
+  }
+  const label = migrationTestLabel ?? DEFAULT_MIGRATION_TEST_LABEL;
+  validateMigrationTestLabel(label);
+  if (migrationTestEnvironment !== undefined) {
+    validateEnvironment(migrationTestEnvironment);
+  }
+  return { label, environment: migrationTestEnvironment };
+}
+
 /**
  * Resolve all derived values and render the workflow content.
  * @param options - Setup options
@@ -574,6 +627,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   let erdNamespaces: string[] = [];
   let hasMigrations = false;
   let hasSeeds = false;
+  let migrationTest: RenderMigrationTestParams | undefined;
   const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
   const loadHasSeeds = options.loadHasSeeds ?? defaultLoadHasSeeds;
   const loadApps = async (checks: boolean): Promise<RenderApp[] | undefined> => {
@@ -634,6 +688,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       hasMigrations = await loadHasMigrations(configPath);
       hasSeeds = await loadHasSeeds(configPath);
     }
+    migrationTest = resolveMigrationTest(options, { multi, hasMigrations });
     render = renderBranchWorkflow({
       workspaceName,
       branch,
@@ -645,6 +700,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       erdPreview: options.erdPreview ? { namespaces: erdNamespaces } : null,
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
+      migrationTest,
       restrictDispatch: options.restrictDispatch ?? false,
       seed: options.seed,
     });
@@ -705,6 +761,9 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
     erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
+    migrationTest: migrationTest ? true : undefined,
+    migrationTestLabel: migrationTest?.label,
+    migrationTestEnvironment: migrationTest?.environment,
     apps:
       apps && appErdNamespaces.size > 0
         ? apps.map((app) => ({ ...app, erdNamespaces: appErdNamespaces.get(app.dir) ?? [] }))
