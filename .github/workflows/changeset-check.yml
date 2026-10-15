@@ -47,6 +47,7 @@ jobs:
               - 'packages/sdk-codemod/**'
               - 'packages/sdk-plugin-tailordb-erd/**'
               - 'packages/sdk-plugin-frontend/**'
+              - 'packages/sdk-plugin-safeql/**'
               - 'packages/tailor-proto/**'
 
       - name: Fail if no changeset

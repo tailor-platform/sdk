@@ -1,0 +1,77 @@
+{
+  "name": "@tailor-platform/sdk-plugin-safeql",
+  "version": "0.0.0",
+  "description": "Type-check raw SQL written against TailorDB tables with SafeQL",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tailor-platform/sdk.git",
+    "directory": "packages/sdk-plugin-safeql"
+  },
+  "files": [
+    "CHANGELOG.md",
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./eslint": {
+      "types": "./dist/eslint.d.ts",
+      "import": "./dist/eslint.js",
+      "default": "./dist/eslint.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js",
+      "default": "./dist/plugin.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix",
+    "knip": "knip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "prepack": "pnpm run build",
+    "publint": "publint --strict"
+  },
+  "dependencies": {
+    "@electric-sql/pglite-socket": "0.2.11",
+    "@ts-safeql/eslint-plugin": "5.4.1",
+    "@ts-safeql/plugin-utils": "5.3.0",
+    "@typescript-eslint/parser": "8.71.0",
+    "@typescript-eslint/utils": "8.71.0",
+    "libpg-query": "18.1.5",
+    "pathe": "2.0.3",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@tailor-platform/sdk": "workspace:^",
+    "@types/node": "24.19.1",
+    "eslint": "10.11.0",
+    "oxlint": "1.86.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "tsdown": "0.23.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.1"
+  },
+  "peerDependencies": {
+    "@electric-sql/pglite": ">=0.2.0",
+    "@tailor-platform/sdk": "workspace:^",
+    "eslint": ">=9.0.0",
+    "typescript": ">=5.0.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}
