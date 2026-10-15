@@ -238,6 +238,37 @@ describe("tailordb migration resolve", () => {
     expect(state.deleteTailorDBType).not.toHaveBeenCalled();
   });
 
+  test("removes the record of a maintenance mode a deploy left in place", async () => {
+    remoteLabels({
+      "sdk-migration": "m0001",
+      "sdk-migration-in-progress": "m0002",
+      "sdk-maintenance-mode": "m0001",
+    });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.not.objectContaining({ "sdk-maintenance-mode": expect.anything() }),
+      }),
+    );
+  });
+
+  test("leaves the maintenance mode record alone when sending the schema fails", async () => {
+    remoteLabels({
+      "sdk-migration": "m0001",
+      "sdk-migration-in-progress": "m0002",
+      "sdk-maintenance-mode": "m0001",
+    });
+    state.updateTailorDBType.mockRejectedValue(new Error("update failed"));
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("--complete moves the checkpoint to the in-progress migration and drops its record", async () => {
     const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
 

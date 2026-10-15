@@ -2,7 +2,10 @@ import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
-import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
+import {
+  clearMaintenanceModeRecord,
+  updateMigrationLabel,
+} from "#/cli/commands/deploy/tailordb/migration";
 import {
   assertNoActiveMigrationExecution,
   removeMigrationWorkflowResources,
@@ -159,6 +162,10 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   await assertNoActiveMigrationExecution(client, workspaceId, namespace, migrationNumber);
   await applySnapshotPlan({ client, workspaceId, namespace, snapshot, manifestOptions, plan });
 
+  if (state.maintenanceModeCheckpoint !== null) {
+    await clearMaintenanceModeRecord(client, workspaceId, namespace);
+  }
+
   const labelChanged = await updateMigrationLabel(
     client,
     workspaceId,
@@ -205,12 +212,12 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
 export const resolveCommand = defineAppCommand({
   name: "resolve",
   description: "Settle a migration that a failed deploy left partially applied.",
-  notes: `Use this after a deploy failed partway through a migration whose \`migrate.ts\` exports \`steps\`. The failed migration stays in progress: the tables of its namespace keep GraphQL operations disabled and record events unpublished, and \`sync\` and \`rebaseline\` are refused, while \`set\` accepts only the number of the in-progress migration.
+  notes: `Use this after a deploy failed partway through a migration whose \`migrate.ts\` exports \`steps\`. The failed migration stays in progress: when \`maintenanceMode\` is on in your config, the tables of its namespace stay in maintenance mode, and \`sync\` and \`rebaseline\` are refused, while \`set\` accepts only the number of the in-progress migration.
 
 - \`--rollback\` sends the schema of the migration before the failed one. The next deploy runs the failed migration again from its first step. Data changes made by steps that already completed are not undone.
 - \`--complete\` sends the schema of the failed migration itself and records it as completed, without running its \`migrate.ts\` again. Fix the data first (for example with \`tailor query\`), and make sure no record lacks a value for a field that becomes required.
 
-Both options remove the in-progress record and the temporary resources of the failed run, so \`deploy\` and the other migration commands work again. As with \`tailordb migration sync\`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.`,
+Both options remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so \`deploy\` and the other migration commands work again. As with \`tailordb migration sync\`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.`,
   args: z.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
