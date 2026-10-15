@@ -27,7 +27,9 @@ async function setupWorkspace(name: string, region: string): Promise<WorkspaceIn
     ttl: "24h",
   });
   if (workspace.ttl?.state === "unconfirmed") {
-    await deleteWorkspace({ workspaceId: workspace.id }).catch(() => undefined);
+    await deleteWorkspace({ workspaceId: workspace.id }).catch((error: unknown) => {
+      console.warn(`Could not delete workspace "${workspace.name}" (${workspace.id}).`, error);
+    });
     throw new Error(
       `Could not record an expiry on workspace "${workspace.name}": ${workspace.ttl.message}`,
     );
