@@ -1173,6 +1173,7 @@ describe("renderPreviewWorkflow", () => {
 });
 
 type WorkflowJob = {
+  name?: string;
   if?: string;
   environment?: string;
   "timeout-minutes"?: number;
@@ -1236,7 +1237,7 @@ describe("renderBranchWorkflow migration test job", () => {
         "github.event_name == 'pull_request' &&",
         "github.event.action == 'labeled' &&",
         "github.event.label.name == 'tailor:migration-test' &&",
-        "!github.event.pull_request.head.repo.fork",
+        "github.event.pull_request.head.repo.full_name == github.repository",
       ].join("\n"),
     );
   });
@@ -1248,6 +1249,18 @@ describe("renderBranchWorkflow migration test job", () => {
     expect(workflow.jobs["tailor-erd-preview-matrix"]?.if).toContain(
       "github.event.action != 'labeled'",
     );
+  });
+
+  test("publishes label events under a check name the required result check never shares", () => {
+    const labelRun = render().workflow.jobs["tailor-result"]!;
+    const plain = renderBranchWorkflow(branchBase).content;
+
+    expect(labelRun.name).toBe(
+      "${{ github.event.action == 'labeled' && 'tailor-result (my-app) [label]' || 'tailor-result (my-app)' }}",
+    );
+    expect((parseYAML(plain) as Workflow).jobs["tailor-result"]).toMatchObject({
+      name: "tailor-result (my-app)",
+    });
   });
 
   test("uses the plan environment and its workspace variable by default", () => {
