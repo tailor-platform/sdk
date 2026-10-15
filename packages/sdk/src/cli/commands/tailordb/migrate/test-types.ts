@@ -12,6 +12,8 @@ export interface MigrationTestOptions {
   data: MigrationTestDataMode;
   targetWorkspaceId?: string;
   keep?: boolean;
+  organizationId?: string;
+  folderId?: string;
   assertionPath?: string;
   assertionNamespace?: string;
   machineUser?: string;

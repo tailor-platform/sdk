@@ -184,6 +184,16 @@ export const testCommand = defineAppCommand({
     keep: arg(z.boolean().default(false), {
       description: "Keep the automatically created workspace after the test",
     }),
+    "organization-id": arg(z.uuid().optional(), {
+      description:
+        "Organization to create the temporary workspace in, at its root unless --folder-id is given (default: the source workspace's organization and folder). With --target-workspace-id, must match the target's organization",
+      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+    }),
+    "folder-id": arg(z.uuid().optional(), {
+      description:
+        "Folder to create the temporary workspace in (default: the source workspace's folder). Requires --organization-id when the source workspace is not in an organization. With --target-workspace-id, must match the target's folder",
+      env: "TAILOR_PLATFORM_FOLDER_ID",
+    }),
     assert: arg(z.string().optional(), {
       description: "Path to a TypeScript assertion script to run after migrations",
       completion: { type: "file", extensions: ["ts"] },
@@ -204,6 +214,8 @@ export const testCommand = defineAppCommand({
       data: args.data,
       targetWorkspaceId: args["target-workspace-id"],
       keep: args.keep,
+      organizationId: args["organization-id"],
+      folderId: args["folder-id"],
       assertionPath: args.assert,
       assertionNamespace: args["assert-namespace"],
       machineUser: args["machine-user"],
