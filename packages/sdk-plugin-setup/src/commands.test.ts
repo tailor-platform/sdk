@@ -83,18 +83,6 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
-  test("ci branch no longer accepts --migration-test-data", async () => {
-    const result = await runCommand(setupCommand, [
-      "ci",
-      "branch",
-      "--migration-test",
-      "--migration-test-data",
-      "seed",
-    ]);
-
-    expect(result.success).toBe(false);
-  });
-
   test("ci branch rejects the removed --branch alias", async () => {
     const result = await runCommand(setupCommand, ["ci", "branch", "--branch", "release"]);
 

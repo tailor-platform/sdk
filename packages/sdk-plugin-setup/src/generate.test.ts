@@ -1549,6 +1549,12 @@ describe("renderBranchWorkflow migration test job", () => {
     expect(run?.env?.TAILOR_PLATFORM_WORKSPACE_ID).toBe("${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}");
   });
 
+  test("renders a dedicated environment name that YAML would read as a boolean as a string", () => {
+    const { workflow } = render({ migrationTest: { ...migrationTest, environment: "true" } });
+
+    expect(workflow.jobs["tailor-migration-test"]?.environment).toBe("true");
+  });
+
   test("uses a dedicated environment and its source workspace variable when given", () => {
     const { workflow } = render({
       migrationTest: { ...migrationTest, environment: "prod-readonly" },
