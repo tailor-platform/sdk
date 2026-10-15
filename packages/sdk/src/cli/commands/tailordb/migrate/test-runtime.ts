@@ -79,6 +79,12 @@ interface WaitForCloneOptions {
   timeout?: number;
 }
 
+function formatDuration(milliseconds: number): string {
+  return milliseconds < 1_000
+    ? `${milliseconds} ms`
+    : `${Math.round(milliseconds / 1_000)} seconds`;
+}
+
 function delay(milliseconds: number): Promise<void> {
   return milliseconds > 0
     ? new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -266,9 +272,9 @@ export async function waitForCloneApplicationData(
 
   throw CLIError({
     code: "MIGRATION_TEST_CLONE_TIMEOUT",
-    message: `Stopped waiting for the application data clone after ${Math.round(timeout / 1_000)} seconds. The clone continues on the platform; only the CLI stopped waiting.`,
-    suggestion:
-      "Retry with a longer --clone-timeout (e.g. --clone-timeout 60m). The operation ID is in the error context.",
+    message: `Stopped waiting for the application data clone after ${formatDuration(timeout)}.`,
+    details: `The clone continues on the platform; only the CLI stopped waiting. Operation ID: ${options.operationId}`,
+    suggestion: "Retry with a longer --clone-timeout (e.g. --clone-timeout 60m).",
     context: {
       operationId: options.operationId,
       sourceWorkspaceId: options.sourceWorkspaceId,
