@@ -584,10 +584,12 @@ function unreleasedRecordError(
   const { namespace } = migration;
   const number = formatMigrationNumber(migration.number);
   const checkpoint = formatMigrationNumber(migration.number - 1);
+  const resolveRollback = `'tailor tailordb migration resolve --rollback --namespace ${namespace}'`;
   const next = recordConfirmed
-    ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place and the next deploy runs every step again. Fix the failure and deploy again."
+    ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place and the next deploy runs every step again. " +
+      `Fix the failure and deploy again, or run ${resolveRollback} to clear the record without deploying.`
     : `Whether it is still recorded as in progress could not be confirmed, so its pre-migration schema stays in place. ` +
-      `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, fix the failure and deploy again; ` +
+      `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, fix the failure and deploy again, or run ${resolveRollback} to clear the record without deploying; ` +
       `otherwise run 'tailor tailordb migration sync ${checkpoint} --namespace ${namespace}' to return the schema to migration ${checkpoint}, then deploy again.`;
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",

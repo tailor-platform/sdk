@@ -1058,6 +1058,21 @@ describe("migration", () => {
       });
     });
 
+    test("points to migration resolve when the record is still in progress after it could not be cleared", async () => {
+      const store = createMetadataStore({ failSets: [1] });
+      const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(failBeforeStart);
+
+      await expect(
+        executeMigrations({ ...createMockContext(), client: store.client }, [migration]),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        suggestion: expect.stringContaining(
+          "tailor tailordb migration resolve --rollback --namespace tailordb",
+        ),
+      });
+    });
+
     test("asks to check the record when it can be neither cleared nor read", async () => {
       const store = createMetadataStore({ loseSetResponses: [0], failSets: [1], failGets: [2] });
       const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
@@ -1070,7 +1085,7 @@ describe("migration", () => {
         message:
           "Migration tailordb/0003 failed before any step completed: [unavailable] unavailable",
         suggestion: expect.stringMatching(
-          /tailor tailordb migration sync 0002 --namespace tailordb.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/,
+          /tailor tailordb migration status --namespace tailordb.*tailor tailordb migration resolve --rollback --namespace tailordb.*tailor tailordb migration sync 0002 --namespace tailordb.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/s,
         ),
       });
     });
