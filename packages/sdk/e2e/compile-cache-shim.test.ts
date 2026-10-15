@@ -16,7 +16,6 @@
  * - packages/sdk must be built (dist/cli/main.mjs must exist)
  */
 
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 // Namespace import: `enableCompileCache` doesn't exist on Node < 22.8, and a
 // named import of a missing binding would fail at link time, before the
@@ -26,6 +25,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect } from "vitest";
+import { runProcess } from "./cli";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,16 +42,21 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(sdkRoot, "package.json"
 // there, so the cache-population assertions below don't hold.
 const compileCacheSupported = typeof nodeModule.enableCompileCache === "function";
 
-function runShim(args: string[], cacheHome: string): string {
-  return execFileSync(process.execPath, [shimPath, ...args], {
-    stdio: ["ignore", "pipe", "pipe"],
-    // Cleared, not omitted: NODE_COMPILE_CACHE always wins over XDG_CACHE_HOME
-    // when set, so a value inherited from the parent (dev shell, CI) would
-    // silently defeat these tests' cacheHome isolation otherwise.
-    env: { ...process.env, XDG_CACHE_HOME: cacheHome, NODE_COMPILE_CACHE: "" },
-    encoding: "utf-8",
-    timeout: 30000,
+async function runShim(args: string[], cacheHome: string, signal: AbortSignal): Promise<string> {
+  const { stdout } = await runProcess(process.execPath, [shimPath, ...args], {
+    cwd: sdkRoot,
+    label: "tailor shim",
+    timeoutMs: 30000,
+    signal,
+    env: {
+      XDG_CACHE_HOME: cacheHome,
+      // Cleared, not omitted: NODE_COMPILE_CACHE always wins over XDG_CACHE_HOME
+      // when set, so a value inherited from the parent (dev shell, CI) would
+      // silently defeat these tests' cacheHome isolation otherwise.
+      NODE_COMPILE_CACHE: "",
+    },
   });
+  return stdout;
 }
 
 function collectCacheMtimes(cacheDir: string): string[] {
@@ -73,19 +78,19 @@ describe("compile-cache bin shim", () => {
     expect(content).toContain('await import("../dist/cli/main.mjs")');
   });
 
-  test("the shim starts the real CLI and reports the correct version", () => {
+  test("the shim starts the real CLI and reports the correct version", async ({ signal }) => {
     const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-compile-cache-"));
     try {
-      expect(runShim(["--version"], cacheHome).trim()).toBe(packageJson.version);
+      expect((await runShim(["--version"], cacheHome, signal)).trim()).toBe(packageJson.version);
     } finally {
       fs.rmSync(cacheHome, { recursive: true, force: true });
     }
   });
 
-  test("the shim dispatches subcommands correctly", () => {
+  test("the shim dispatches subcommands correctly", async ({ signal }) => {
     const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-compile-cache-"));
     try {
-      expect(runShim(["tailordb", "--help"], cacheHome)).toContain(
+      expect(await runShim(["tailordb", "--help"], cacheHome, signal)).toContain(
         "Manage TailorDB tables and data.",
       );
     } finally {
@@ -95,10 +100,10 @@ describe("compile-cache bin shim", () => {
 
   test.skipIf(!compileCacheSupported)(
     "running the shim populates the on-disk compile cache",
-    () => {
+    async ({ signal }) => {
       const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-compile-cache-"));
       try {
-        runShim(["--version"], cacheHome);
+        await runShim(["--version"], cacheHome, signal);
         const cacheDir = path.join(cacheHome, "tailor", "node-compile-cache");
         expect(fs.existsSync(cacheDir)).toBe(true);
         expect(collectCacheMtimes(cacheDir).length).toBeGreaterThan(0);
@@ -110,14 +115,14 @@ describe("compile-cache bin shim", () => {
 
   test.skipIf(!compileCacheSupported)(
     "a second run reuses the cache instead of rewriting it",
-    () => {
+    async ({ signal }) => {
       const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-compile-cache-"));
       try {
-        runShim(["--version"], cacheHome);
+        await runShim(["--version"], cacheHome, signal);
         const cacheDir = path.join(cacheHome, "tailor", "node-compile-cache");
         const before = collectCacheMtimes(cacheDir);
 
-        runShim(["--version"], cacheHome);
+        await runShim(["--version"], cacheHome, signal);
         const after = collectCacheMtimes(cacheDir);
 
         expect(after).toEqual(before);
