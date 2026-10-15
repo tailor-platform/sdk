@@ -45,6 +45,10 @@ const sdkSourceAliases = Object.entries(packageJson.exports).map(([exportName, t
 // workflow ("e2e" project).
 const e2eCoverageTestIncludes = ["e2e/deploy.test.ts"];
 
+// The e2e CLI helper's own tests need no workspace, so they run with the unit
+// tests instead of the e2e projects.
+const e2eHelperTestIncludes = ["e2e/cli.test.ts"];
+
 // Shared with the "integration" project definition below.
 const integrationTestIncludes = [
   "src/cli/commands/deploy/__test_fixtures__/**/*.test.ts",
@@ -92,9 +96,10 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
 
   const isolated: string[] = [];
   const shared: string[] = [];
-  for (const file of globSync(["src/**/*.{test,spec}.ts", "scripts/**/*.{test,spec}.ts"], {
-    cwd: import.meta.dirname,
-  })) {
+  for (const file of globSync(
+    ["src/**/*.{test,spec}.ts", "scripts/**/*.{test,spec}.ts", ...e2eHelperTestIncludes],
+    { cwd: import.meta.dirname },
+  )) {
     if (isExcludedUnitTest(file)) continue;
     (needsIsolation(file) ? isolated : shared).push(file);
   }
@@ -170,7 +175,11 @@ export default defineConfig({
         test: {
           name: "e2e",
           include: ["e2e/**/*.test.ts"],
-          exclude: [...configDefaults.exclude, ...e2eCoverageTestIncludes],
+          exclude: [
+            ...configDefaults.exclude,
+            ...e2eCoverageTestIncludes,
+            ...e2eHelperTestIncludes,
+          ],
           testTimeout: 120000,
           hookTimeout: 300000,
           globalSetup: ["e2e/globalSetup.ts"],

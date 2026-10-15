@@ -29,7 +29,6 @@
  * Running individual tests in isolation may fail.
  */
 
-import { execFileSync, execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -50,6 +49,7 @@ import {
 } from "../src/cli/commands/tailordb/migrate/types";
 import { initOperatorClient, isNotFoundError, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
+import { CLI_BUDGET_MS, type CliResult, cliTestTimeout, runCli, tryCli } from "./cli";
 import {
   resolveE2ERunId,
   resolveE2EWorkspaceRegion,
@@ -73,45 +73,25 @@ const testAppName = `migration-e2e-${testRunId}`;
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 const tailordbName = `testdb-${testRunId}`;
 
-// Keep each test timeout above the summed timeouts of the CLI calls it makes: a deploy
-// killed mid data migration cannot roll back, and the leftover remote schema fails all
-// later deploys closed.
-const CLI_TEST_TIMEOUT_MARGIN_MS = 60000;
-const GENERATE_CLI_TIMEOUT_MS = 120000;
-const DEPLOY_CLI_TIMEOUT_MS = 300000;
-const GENERATE_TEST_TIMEOUT_MS = GENERATE_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
-const DEPLOY_TEST_TIMEOUT_MS = DEPLOY_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
-const GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS =
-  GENERATE_CLI_TIMEOUT_MS + DEPLOY_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
+// A deploy killed mid data migration cannot roll back, and the leftover remote schema fails
+// all later deploys closed, so each test outlasts the CLI calls it makes.
+const GENERATE_TEST_TIMEOUT_MS = cliTestTimeout(CLI_BUDGET_MS.local);
+const DEPLOY_TEST_TIMEOUT_MS = cliTestTimeout(CLI_BUDGET_MS.deploy);
+const GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS = cliTestTimeout(
+  CLI_BUDGET_MS.local,
+  CLI_BUDGET_MS.deploy,
+);
 
 /**
  * Run the generate CLI command via subprocess
  * @param {string} configPath - Path to the config file
  * @param {string} cwd - Working directory
  */
-function runGenerateCli(configPath: string, cwd: string): void {
-  const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
-
-  try {
-    execSync(`node ${cliPath} tailordb migration generate --config ${configPath} --yes`, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"], // stdin ignored, stdout/stderr piped
-      env: {
-        ...process.env,
-        NODE_OPTIONS: "--experimental-vm-modules",
-      },
-      encoding: "utf-8",
-      timeout: GENERATE_CLI_TIMEOUT_MS,
-    });
-    // Success - output captured but not logged to keep test output clean
-  } catch (error: unknown) {
-    // Log error details for debugging
-    if (error && typeof error === "object" && "stderr" in error) {
-      console.error("Generate CLI error:", (error as { stderr?: Buffer }).stderr?.toString());
-    }
-    throw error;
-  }
+async function runGenerateCli(configPath: string, cwd: string): Promise<void> {
+  await runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"], {
+    cwd,
+    timeoutMs: CLI_BUDGET_MS.local,
+  });
 }
 
 /**
@@ -120,29 +100,11 @@ function runGenerateCli(configPath: string, cwd: string): void {
  * @param {string} workspaceId - Workspace ID
  * @param {string} cwd - Working directory
  */
-function runDeployCli(configPath: string, workspaceId: string, cwd: string): void {
-  const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
-
-  try {
-    execSync(`node ${cliPath} deploy --config ${configPath} --workspace-id ${workspaceId} --yes`, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"], // stdin ignored, stdout/stderr piped
-      env: {
-        ...process.env,
-        NODE_OPTIONS: "--experimental-vm-modules",
-      },
-      encoding: "utf-8",
-      timeout: DEPLOY_CLI_TIMEOUT_MS,
-    });
-    // Success - output captured but not logged to keep test output clean
-  } catch (error: unknown) {
-    // Log error details for debugging
-    if (error && typeof error === "object" && "stderr" in error) {
-      console.error("Deploy CLI error:", (error as { stderr?: Buffer }).stderr?.toString());
-    }
-    throw error;
-  }
+async function runDeployCli(configPath: string, workspaceId: string, cwd: string): Promise<void> {
+  await runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], {
+    cwd,
+    timeoutMs: CLI_BUDGET_MS.deploy,
+  });
 }
 
 /**
@@ -153,19 +115,15 @@ function runDeployCli(configPath: string, workspaceId: string, cwd: string): voi
  * @param assertionPath - Post-migration assertion script
  * @param cwd - Fixture working directory
  */
-function runMigrationTestCli(
+async function runMigrationTestCli(
   configPath: string,
   sourceWorkspaceId: string,
   targetWorkspaceId: string,
   assertionPath: string,
   cwd: string,
-): void {
-  const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
-  execFileSync(
-    "node",
+): Promise<void> {
+  await runCli(
     [
-      cliPath,
       "tailordb",
       "migration",
       "test",
@@ -181,56 +139,24 @@ function runMigrationTestCli(
       assertionPath,
       "--yes",
     ],
-    {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
-      encoding: "utf-8",
-      timeout: DEPLOY_CLI_TIMEOUT_MS,
-    },
+    { cwd, timeoutMs: CLI_BUDGET_MS.deploy },
   );
 }
 
 /**
  * Run the deploy CLI command, returning the result instead of throwing so callers
- * can assert on an expected failure.
+ * can assert on an expected failure. A deploy killed for exceeding its budget still
+ * rejects: it did not fail, it was interrupted.
  * @param {string} configPath - Path to the config file
  * @param {string} workspaceId - Workspace ID
  * @param {string} cwd - Working directory
- * @returns {{ ok: boolean; output: string }} Whether deploy succeeded and its combined output
+ * @returns {Promise<CliResult>} Whether deploy succeeded and its combined output
  */
-function tryDeployCli(
-  configPath: string,
-  workspaceId: string,
-  cwd: string,
-): { ok: boolean; output: string } {
-  const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
-
-  try {
-    const out = execSync(
-      `node ${cliPath} deploy --config ${configPath} --workspace-id ${workspaceId} --yes`,
-      {
-        cwd,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
-        encoding: "utf-8",
-        timeout: DEPLOY_CLI_TIMEOUT_MS,
-      },
-    );
-    return { ok: true, output: out };
-  } catch (error: unknown) {
-    // A timeout means the deploy was killed, not that it failed — surface it directly.
-    if (error && typeof error === "object" && (error as { code?: string }).code === "ETIMEDOUT") {
-      throw error;
-    }
-    let output = "";
-    if (error && typeof error === "object") {
-      const e = error as { stdout?: Buffer | string; stderr?: Buffer | string };
-      output = `${e.stdout?.toString() ?? ""}\n${e.stderr?.toString() ?? ""}`;
-    }
-    return { ok: false, output };
-  }
+function tryDeployCli(configPath: string, workspaceId: string, cwd: string): Promise<CliResult> {
+  return tryCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], {
+    cwd,
+    timeoutMs: CLI_BUDGET_MS.deploy,
+  });
 }
 
 describe("E2E: TailorDB Migrations", { concurrent: false }, () => {
@@ -525,7 +451,7 @@ export async function main(db: Kysely<any>): Promise<void> {
         const configPath = createConfig();
 
         // Generate migration via CLI
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         // Verify initial schema was created
         const files = getMigrationFiles(migrationsDir);
@@ -551,7 +477,7 @@ export async function main(db: Kysely<any>): Promise<void> {
       async () => {
         const configPath = createConfig();
 
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
 
         // Verify: TailorDB service should exist
         const services = await listTailorDBServiceNames();
@@ -592,7 +518,7 @@ export type user = typeof user;
         const configPath = createConfig();
 
         // Generate migration via CLI
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         // Verify diff was created
         const files = getMigrationFiles(migrationsDir);
@@ -625,7 +551,7 @@ export type user = typeof user;
         const targetWorkspaceId = targetResponse.workspace!.id;
         trackWorkspace(targetWorkspaceId);
 
-        runMigrationTestCli(
+        await runMigrationTestCli(
           configPath,
           workspaceId,
           targetWorkspaceId,
@@ -656,7 +582,7 @@ export type user = typeof user;
       async () => {
         const configPath = createConfig();
 
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
 
         // Verify: phone field should be added to User table
         const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -690,7 +616,7 @@ export type user = typeof user;
         const configPath = createConfig();
 
         // Generate migration (with yes flag to skip confirmation)
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         // Verify diff was created
         const files = getMigrationFiles(migrationsDir);
@@ -728,7 +654,7 @@ export type user = typeof user;
 
         const configPath = createConfig();
 
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
 
         // Verify: requiredField should be added to User table
         const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -752,7 +678,7 @@ export type user = typeof user;
         const countBefore = filesBefore.length;
 
         // Generate migration (should detect no changes)
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         // Verify no new file was created
         const filesAfter = getMigrationFiles(migrationsDir);
@@ -779,7 +705,7 @@ export type user = typeof user;
         const configPath = createConfig();
 
         // Generate migration
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         // Verify diff was created
         const files = getMigrationFiles(migrationsDir);
@@ -806,7 +732,7 @@ export type user = typeof user;
       async () => {
         const configPath = createConfig();
 
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
 
         // Verify: Post table should be added
         const types = await listTailorDBTypeNames(tailordbName);
@@ -840,7 +766,7 @@ export type user = typeof user;
 
         const configPath = createConfig();
 
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         // Verify diff was created
         const files = getMigrationFiles(migrationsDir);
@@ -868,7 +794,7 @@ export type user = typeof user;
       async () => {
         const configPath = createConfig();
 
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
 
         // Verify: requiredField should be removed from User table
         const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -900,7 +826,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(6);
@@ -931,7 +857,7 @@ export type user = typeof user;
         expect(checkpointBefore).toBe(4);
 
         const configPath = createConfig();
-        const result = tryDeployCli(configPath, workspaceId, tempDir);
+        const result = await tryDeployCli(configPath, workspaceId, tempDir);
 
         // The deploy must fail for the injected reason, not an unrelated error.
         expect(result.ok).toBe(false);
@@ -966,7 +892,7 @@ export type user = typeof user;
 
         const configPath = createConfig();
         // No drift error: the failed deploy left a consistent baseline at checkpoint 4.
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
 
         const fields = await getTailorDBTypeFields(tailordbName, "User");
         expect(fields).toContain("loyaltyTier");
@@ -1007,7 +933,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(7);
@@ -1055,7 +981,7 @@ export async function main(trx: Transaction): Promise<void> {
 `,
         );
 
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(6);
       },
       GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
@@ -1086,7 +1012,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(8);
@@ -1128,7 +1054,7 @@ export type user = typeof user;
         expect(editedScript).not.toMatch(/\bTODO\(/);
         fs.writeFileSync(migratePath, groupStepsIntoTwo(editedScript));
 
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(7);
       },
       GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
@@ -1160,7 +1086,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
 
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(9);
@@ -1230,7 +1156,7 @@ export async function main(trx: Transaction): Promise<void> {
 `,
         );
 
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
       },
       GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
@@ -1289,7 +1215,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir);
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(10);
         expect(files[9]!.number).toBe(9);
@@ -1314,7 +1240,7 @@ export const steps = {
 `,
         );
 
-        const result = tryDeployCli(configPath, workspaceId, tempDir);
+        const result = await tryDeployCli(configPath, workspaceId, tempDir);
 
         expect(result.ok).toBe(false);
         expect(result.output).toContain("MIGRATION_PARTIALLY_APPLIED");
@@ -1361,7 +1287,7 @@ export const steps = {
         );
 
         const configPath = createConfig();
-        runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir);
 
         expect(await getMigrationCheckpoint(tailordbName)).toBe(9);
         const labels = await namespaceLabels();

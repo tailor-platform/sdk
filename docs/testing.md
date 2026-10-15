@@ -34,9 +34,17 @@ Before raising the minimum supported migration format, identify a released bridg
 
 ## E2E Tests
 
-E2E tests require a deployed workspace. The `globalSetup` provisions a workspace before tests run.
+E2E tests require Platform credentials. Each suite creates its own disposable workspace, and `globalSetup` deletes them after the run.
 
 Located in `packages/sdk/e2e/`. CI runs these in the `sdk-e2e.yml` workflow (pull requests and pushes to main); `sdk-metrics.yml` additionally runs the `e2e-coverage` project under coverage.
+
+### Writing E2E Suites
+
+- Deploy only a fixture the suite owns, declaring just the resources its tests use. Do not deploy `example/`: a fresh deploy replays its whole migration history, and each data migration waits on a Platform job, so setup time grows with every migration added there. The `Workspace Deploy Test` workflow already covers a fresh deploy of `example/`.
+- Run CLI subprocesses through `e2e/cli.ts` (`runCli` / `tryCli`); oxlint rejects synchronous `child_process` calls under `e2e/`. A synchronous call blocks the test worker, so Vitest timeouts cannot fire and the worker's Platform connections go stale.
+- Give each CLI call a budget from `CLI_BUDGET_MS` and derive the test timeout from the budgets it spends with `cliTestTimeout`, so a stuck call fails with its own output instead of a bare test timeout.
+- Before raising a budget, find which phase grew. The helper logs every CLI line with its elapsed time, reports each call's share of its budget, and emits an `E2E CLI budget` warning on GitHub Actions once a call uses 60% of it.
+- Let setup failures fail the suite. Do not substitute a placeholder for a failed lookup; it surfaces later as an unrelated-looking assertion failure.
 
 ## Conventions
 
