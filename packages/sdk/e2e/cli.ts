@@ -37,6 +37,12 @@ interface ProcessOptions {
   label: string;
   /** The child is killed and the call rejects once this budget runs out. */
   timeoutMs: number;
+  /**
+   * The calling test's `signal`: a test that times out or is cancelled kills the child instead of
+   * leaving it to overlap later tests. Pass `undefined` only where no test signal exists, such as
+   * in a hook.
+   */
+  signal: AbortSignal | undefined;
   /** Layered over the parent environment; `undefined` removes a variable. */
   env?: Record<string, string | undefined>;
   killGraceMs?: number;
@@ -103,6 +109,11 @@ export function tryProcess(
   const elapsedMs = () => performance.now() - startedAt;
 
   return new Promise((resolve, reject) => {
+    const { signal } = options;
+    if (signal?.aborted) {
+      reject(new Error(`${label} was not started: ${abortReason(signal)}`));
+      return;
+    }
     const child = spawn(command, args, {
       cwd,
       env: mergeEnv(options.env),
@@ -131,6 +142,7 @@ export function tryProcess(
       settled = true;
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
+      signal?.removeEventListener("abort", onAbort);
       pipes.stdout?.destroy();
       pipes.stderr?.destroy();
       finish();
@@ -150,6 +162,15 @@ export function tryProcess(
         schedule(() => settle(() => reject(error())), CLOSE_WAIT_MS);
       }, killGraceMs);
     };
+
+    function onAbort() {
+      terminate(
+        () =>
+          new Error(
+            `${label} was aborted: ${abortReason(signal)}.\n${outputTail(captured.output)}`,
+          ),
+      );
+    }
 
     const createStream = (name: "stdout" | "stderr") => {
       const decoder = new StringDecoder("utf8");
@@ -220,6 +241,7 @@ export function tryProcess(
       });
     });
 
+    signal?.addEventListener("abort", onAbort, { once: true });
     schedule(
       () => terminate(() => new CliTimeoutError(label, timeoutMs, killSignal, captured.output)),
       timeoutMs,
@@ -312,6 +334,11 @@ export function reportBudget(label: string, result: CliResult, timeoutMs: number
   } else {
     console.warn(`[budget warning] ${message}`);
   }
+}
+
+function abortReason(signal: AbortSignal | undefined): string {
+  const reason: unknown = signal?.reason;
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 function describeExit(result: CliResult): string {

@@ -47,12 +47,12 @@ describe("E2E: TailorDB expand-contract field type change", { concurrent: false 
   let tempDir: string;
   let migrationsDir: string;
 
-  function runInTempDir(args: string[], timeoutMs: number) {
-    return runCli(args, { cwd: tempDir, timeoutMs });
+  function runInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
+    return runCli(args, { cwd: tempDir, timeoutMs, signal });
   }
 
-  function tryInTempDir(args: string[], timeoutMs: number) {
-    return tryCli(args, { cwd: tempDir, timeoutMs });
+  function tryInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
+    return tryCli(args, { cwd: tempDir, timeoutMs, signal });
   }
 
   /**
@@ -147,17 +147,19 @@ export type user = typeof user;
 
   test(
     "seeds integer values under the original type",
-    async () => {
+    async ({ signal }) => {
       updateTypeFile("db.int()", "db.string()");
       const configPath = createConfig();
 
       await runInTempDir(
         ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
         CLI_BUDGET_MS.local,
+        signal,
       );
       await runInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.deploy,
+        signal,
       );
 
       // A schema change is what earns a migration to hang the seed script on.
@@ -165,6 +167,7 @@ export type user = typeof user;
       await runInTempDir(
         ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
         CLI_BUDGET_MS.local,
+        signal,
       );
       fs.writeFileSync(
         getMigrationFilePath(migrationsDir, 1, "migrate"),
@@ -184,6 +187,7 @@ export async function main(trx: Transaction): Promise<void> {
       await runInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.deploy,
+        signal,
       );
 
       expect(
@@ -200,7 +204,7 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "rejects the type change until the conversion is requested",
-    async () => {
+    async ({ signal }) => {
       updateTypeFile(
         "db.bool()",
         "db.string({ array: true })",
@@ -211,6 +215,7 @@ export async function main(trx: Transaction): Promise<void> {
       const result = await tryInTempDir(
         ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
         CLI_BUDGET_MS.local,
+        signal,
       );
 
       expect(result.ok).toBe(false);
@@ -221,7 +226,7 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "marks the generated conversion as needing review",
-    async () => {
+    async ({ signal }) => {
       const configPath = createConfig();
 
       await runInTempDir(
@@ -238,6 +243,7 @@ export async function main(trx: Transaction): Promise<void> {
           "User.tags",
         ],
         CLI_BUDGET_MS.local,
+        signal,
       );
 
       const script = fs.readFileSync(conversionScriptPath(), "utf8");
@@ -250,12 +256,13 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "reports the unreviewed conversion through migration validate",
-    async () => {
+    async ({ signal }) => {
       const configPath = createConfig();
 
       const result = await tryInTempDir(
         ["tailordb", "migration", "validate", "--config", configPath],
         CLI_BUDGET_MS.local,
+        signal,
       );
 
       expect(result.ok).toBe(false);
@@ -266,7 +273,7 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "carries the values across when the conversion is filled in",
-    async () => {
+    async ({ signal }) => {
       const configPath = createConfig();
       const migratePath = conversionScriptPath();
       const reviewed = fs
@@ -281,6 +288,7 @@ export async function main(trx: Transaction): Promise<void> {
       await runInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.migratingDeploy,
+        signal,
       );
     },
     cliTestTimeout(CLI_BUDGET_MS.migratingDeploy),
@@ -288,7 +296,7 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "reads every row back through the new type",
-    async () => {
+    async ({ signal }) => {
       const configPath = createConfig();
       updateTypeFile(
         "db.bool()",
@@ -298,6 +306,7 @@ export async function main(trx: Transaction): Promise<void> {
       await runInTempDir(
         ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
         CLI_BUDGET_MS.local,
+        signal,
       );
 
       const readbackNumber = Math.max(...getMigrationFiles(migrationsDir).map((f) => f.number));
@@ -323,6 +332,7 @@ export async function main(trx: Transaction): Promise<void> {
       const result = await tryInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.migratingDeploy,
+        signal,
       );
       expect(result.output).not.toContain("PROBE_MISMATCH");
       expect(result.output).not.toContain("PROBE_TEMP_FIELD_REMAINS");

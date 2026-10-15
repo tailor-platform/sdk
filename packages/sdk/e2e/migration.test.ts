@@ -87,11 +87,17 @@ const GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS = cliTestTimeout(
  * Run the generate CLI command via subprocess
  * @param {string} configPath - Path to the config file
  * @param {string} cwd - Working directory
+ * @param {AbortSignal} signal - The calling test's signal
  */
-async function runGenerateCli(configPath: string, cwd: string): Promise<void> {
+async function runGenerateCli(
+  configPath: string,
+  cwd: string,
+  signal: AbortSignal | undefined,
+): Promise<void> {
   await runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"], {
     cwd,
     timeoutMs: CLI_BUDGET_MS.local,
+    signal,
   });
 }
 
@@ -100,11 +106,18 @@ async function runGenerateCli(configPath: string, cwd: string): Promise<void> {
  * @param {string} configPath - Path to the config file
  * @param {string} workspaceId - Workspace ID
  * @param {string} cwd - Working directory
+ * @param {AbortSignal} signal - The calling test's signal
  */
-async function runDeployCli(configPath: string, workspaceId: string, cwd: string): Promise<void> {
+async function runDeployCli(
+  configPath: string,
+  workspaceId: string,
+  cwd: string,
+  signal: AbortSignal | undefined,
+): Promise<void> {
   await runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], {
     cwd,
     timeoutMs: CLI_BUDGET_MS.deploy,
+    signal,
   });
 }
 
@@ -115,6 +128,7 @@ async function runDeployCli(configPath: string, workspaceId: string, cwd: string
  * @param targetWorkspaceId - Empty throwaway workspace retained for assertions
  * @param assertionPath - Post-migration assertion script
  * @param cwd - Fixture working directory
+ * @param signal - The calling test's signal
  */
 async function runMigrationTestCli(
   configPath: string,
@@ -122,6 +136,7 @@ async function runMigrationTestCli(
   targetWorkspaceId: string,
   assertionPath: string,
   cwd: string,
+  signal: AbortSignal | undefined,
 ): Promise<void> {
   await runCli(
     [
@@ -140,7 +155,7 @@ async function runMigrationTestCli(
       assertionPath,
       "--yes",
     ],
-    { cwd, timeoutMs: CLI_BUDGET_MS.deploy },
+    { cwd, timeoutMs: CLI_BUDGET_MS.deploy, signal },
   );
 }
 
@@ -151,12 +166,19 @@ async function runMigrationTestCli(
  * @param {string} configPath - Path to the config file
  * @param {string} workspaceId - Workspace ID
  * @param {string} cwd - Working directory
+ * @param {AbortSignal} signal - The calling test's signal
  * @returns {Promise<CliResult>} Whether deploy succeeded and its combined output
  */
-function tryDeployCli(configPath: string, workspaceId: string, cwd: string): Promise<CliResult> {
+function tryDeployCli(
+  configPath: string,
+  workspaceId: string,
+  cwd: string,
+  signal: AbortSignal | undefined,
+): Promise<CliResult> {
   return tryCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], {
     cwd,
     timeoutMs: CLI_BUDGET_MS.deploy,
+    signal,
   });
 }
 
@@ -444,12 +466,12 @@ export async function main(db: Kysely<any>): Promise<void> {
      */
     test(
       "generates initial schema migration",
-      async () => {
+      async ({ signal }) => {
         // Create config with migrations enabled
         const configPath = createConfig();
 
         // Generate migration via CLI
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         // Verify initial schema was created
         const files = getMigrationFiles(migrationsDir);
@@ -472,10 +494,10 @@ export async function main(db: Kysely<any>): Promise<void> {
      */
     test(
       "applies initial migration to workspace",
-      async () => {
+      async ({ signal }) => {
         const configPath = createConfig();
 
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
 
         // Verify: TailorDB service should exist
         const services = await listTailorDBServiceNames();
@@ -499,7 +521,7 @@ export async function main(db: Kysely<any>): Promise<void> {
      */
     test(
       "detects non-breaking change when adding optional field",
-      async () => {
+      async ({ signal }) => {
         // Update table to add optional field
         updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
@@ -516,7 +538,7 @@ export type user = typeof user;
         const configPath = createConfig();
 
         // Generate migration via CLI
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         // Verify diff was created
         const files = getMigrationFiles(migrationsDir);
@@ -536,7 +558,7 @@ export type user = typeof user;
 
     test(
       "rehearses the pending migration in a designated workspace",
-      async () => {
+      async ({ signal }) => {
         const configPath = createConfig();
         const sourceWorkspace = (await client.getWorkspace({ workspaceId })).workspace!;
         const targetResponse = await client.createWorkspace({
@@ -555,6 +577,7 @@ export type user = typeof user;
           targetWorkspaceId,
           path.join(tempDir, "assert-migration.ts"),
           tempDir,
+          signal,
         );
 
         const targetType = await client.getTailorDBType({
@@ -577,10 +600,10 @@ export type user = typeof user;
      */
     test(
       "applies non-breaking migration to workspace",
-      async () => {
+      async ({ signal }) => {
         const configPath = createConfig();
 
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
 
         // Verify: phone field should be added to User table
         const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -596,7 +619,7 @@ export type user = typeof user;
      */
     test(
       "detects breaking change when adding required field",
-      async () => {
+      async ({ signal }) => {
         // Update table to add required field (breaking change)
         updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
@@ -614,7 +637,7 @@ export type user = typeof user;
         const configPath = createConfig();
 
         // Generate migration (with yes flag to skip confirmation)
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         // Verify diff was created
         const files = getMigrationFiles(migrationsDir);
@@ -644,7 +667,7 @@ export type user = typeof user;
      */
     test(
       "applies breaking change migration to workspace",
-      async () => {
+      async ({ signal }) => {
         // Edit migration script to set default values for required field
         editMigrationScript(2, {
           requiredField: '"default"', // String value needs quotes
@@ -652,7 +675,7 @@ export type user = typeof user;
 
         const configPath = createConfig();
 
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
 
         // Verify: requiredField should be added to User table
         const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -668,7 +691,7 @@ export type user = typeof user;
      */
     test(
       "reports no changes when schema is unchanged",
-      async () => {
+      async ({ signal }) => {
         const configPath = createConfig();
 
         // Get current file count
@@ -676,7 +699,7 @@ export type user = typeof user;
         const countBefore = filesBefore.length;
 
         // Generate migration (should detect no changes)
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         // Verify no new file was created
         const filesAfter = getMigrationFiles(migrationsDir);
@@ -694,7 +717,7 @@ export type user = typeof user;
      */
     test(
       "detects table addition as non-breaking change",
-      async () => {
+      async ({ signal }) => {
         // Copy Post table fixture
         const srcPost = path.join(FIXTURE_DIR, "tailordb", "post.ts");
         const destPost = path.join(tempDir, "tailordb", "post.ts");
@@ -703,7 +726,7 @@ export type user = typeof user;
         const configPath = createConfig();
 
         // Generate migration
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         // Verify diff was created
         const files = getMigrationFiles(migrationsDir);
@@ -727,10 +750,10 @@ export type user = typeof user;
      */
     test(
       "applies table addition to workspace",
-      async () => {
+      async ({ signal }) => {
         const configPath = createConfig();
 
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
 
         // Verify: Post table should be added
         const types = await listTailorDBTypeNames(tailordbName);
@@ -748,7 +771,7 @@ export type user = typeof user;
      */
     test(
       "detects field removal as non-breaking change",
-      async () => {
+      async ({ signal }) => {
         // Update User table to remove requiredField
         updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
@@ -764,7 +787,7 @@ export type user = typeof user;
 
         const configPath = createConfig();
 
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         // Verify diff was created
         const files = getMigrationFiles(migrationsDir);
@@ -789,10 +812,10 @@ export type user = typeof user;
      */
     test(
       "applies field removal to workspace",
-      async () => {
+      async ({ signal }) => {
         const configPath = createConfig();
 
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
 
         // Verify: requiredField should be removed from User table
         const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -809,7 +832,7 @@ export type user = typeof user;
      */
     test(
       "generates the breaking migration whose script will fail",
-      async () => {
+      async ({ signal }) => {
         updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
@@ -824,7 +847,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(6);
@@ -841,7 +864,7 @@ export type user = typeof user;
 
     test(
       "rolls back the pre-migration DDL when migrate.ts fails",
-      async () => {
+      async ({ signal }) => {
         // Make the data migration deterministically fail.
         overwriteMigrationScript(
           5,
@@ -855,7 +878,7 @@ export type user = typeof user;
         expect(checkpointBefore).toBe(4);
 
         const configPath = createConfig();
-        const result = await tryDeployCli(configPath, workspaceId, tempDir);
+        const result = await tryDeployCli(configPath, workspaceId, tempDir, signal);
 
         // The deploy must fail for the injected reason, not an unrelated error.
         expect(result.ok).toBe(false);
@@ -875,7 +898,7 @@ export type user = typeof user;
 
     test(
       "a retry succeeds once migrate.ts is fixed (workspace was recoverable)",
-      async () => {
+      async ({ signal }) => {
         // Provide a working data migration that backfills the new required field.
         overwriteMigrationScript(
           5,
@@ -890,7 +913,7 @@ export type user = typeof user;
 
         const configPath = createConfig();
         // No drift error: the failed deploy left a consistent baseline at checkpoint 4.
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
 
         const fields = await getTailorDBTypeFields(tailordbName, "User");
         expect(fields).toContain("loyaltyTier");
@@ -908,7 +931,7 @@ export type user = typeof user;
 
     test(
       "seeds representative values under the source field types",
-      async () => {
+      async ({ signal }) => {
         updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
@@ -931,7 +954,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(7);
@@ -979,7 +1002,7 @@ export async function main(trx: Transaction): Promise<void> {
 `,
         );
 
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(6);
       },
       GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
@@ -987,7 +1010,7 @@ export async function main(trx: Transaction): Promise<void> {
 
     test(
       "generates one phased migration for verified type pairs",
-      async () => {
+      async ({ signal }) => {
         updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
@@ -1010,7 +1033,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(8);
@@ -1052,7 +1075,7 @@ export type user = typeof user;
         expect(editedScript).not.toMatch(/\bTODO\(/);
         fs.writeFileSync(migratePath, groupStepsIntoTwo(editedScript));
 
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(7);
       },
       GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
@@ -1060,7 +1083,7 @@ export type user = typeof user;
 
     test(
       "reads, updates, and deletes source rows after the type changes",
-      async () => {
+      async ({ signal }) => {
         updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
@@ -1084,7 +1107,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
 
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(9);
@@ -1154,7 +1177,7 @@ export async function main(trx: Transaction): Promise<void> {
 `,
         );
 
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
       },
       GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
@@ -1188,7 +1211,7 @@ export async function main(trx: Transaction): Promise<void> {
      */
     test(
       "leaves a multi-step migration in progress when a later step fails",
-      async () => {
+      async ({ signal }) => {
         updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
@@ -1213,7 +1236,7 @@ export type user = typeof user;
 `);
 
         const configPath = createConfig();
-        await runGenerateCli(configPath, tempDir);
+        await runGenerateCli(configPath, tempDir, signal);
         const files = getMigrationFiles(migrationsDir);
         expect(files.length).toBe(10);
         expect(files[9]!.number).toBe(9);
@@ -1238,7 +1261,7 @@ export const steps = {
 `,
         );
 
-        const result = await tryDeployCli(configPath, workspaceId, tempDir);
+        const result = await tryDeployCli(configPath, workspaceId, tempDir, signal);
 
         expect(result.ok).toBe(false);
         expect(result.output).toContain("MIGRATION_PARTIALLY_APPLIED");
@@ -1260,7 +1283,7 @@ export const steps = {
      */
     test(
       "resumes from the failed step without re-running the completed one",
-      async () => {
+      async ({ signal }) => {
         overwriteMigrationScript(
           9,
           `import type { Transaction } from "./db";
@@ -1285,7 +1308,7 @@ export const steps = {
         );
 
         const configPath = createConfig();
-        await runDeployCli(configPath, workspaceId, tempDir);
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
 
         expect(await getMigrationCheckpoint(tailordbName)).toBe(9);
         const labels = await namespaceLabels();

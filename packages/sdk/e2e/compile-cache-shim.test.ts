@@ -42,11 +42,12 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(sdkRoot, "package.json"
 // there, so the cache-population assertions below don't hold.
 const compileCacheSupported = typeof nodeModule.enableCompileCache === "function";
 
-async function runShim(args: string[], cacheHome: string): Promise<string> {
+async function runShim(args: string[], cacheHome: string, signal: AbortSignal): Promise<string> {
   const { stdout } = await runProcess(process.execPath, [shimPath, ...args], {
     cwd: sdkRoot,
     label: "tailor shim",
     timeoutMs: 30000,
+    signal,
     env: {
       XDG_CACHE_HOME: cacheHome,
       // Cleared, not omitted: NODE_COMPILE_CACHE always wins over XDG_CACHE_HOME
@@ -77,19 +78,19 @@ describe("compile-cache bin shim", () => {
     expect(content).toContain('await import("../dist/cli/main.mjs")');
   });
 
-  test("the shim starts the real CLI and reports the correct version", async () => {
+  test("the shim starts the real CLI and reports the correct version", async ({ signal }) => {
     const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-compile-cache-"));
     try {
-      expect((await runShim(["--version"], cacheHome)).trim()).toBe(packageJson.version);
+      expect((await runShim(["--version"], cacheHome, signal)).trim()).toBe(packageJson.version);
     } finally {
       fs.rmSync(cacheHome, { recursive: true, force: true });
     }
   });
 
-  test("the shim dispatches subcommands correctly", async () => {
+  test("the shim dispatches subcommands correctly", async ({ signal }) => {
     const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-compile-cache-"));
     try {
-      expect(await runShim(["tailordb", "--help"], cacheHome)).toContain(
+      expect(await runShim(["tailordb", "--help"], cacheHome, signal)).toContain(
         "Manage TailorDB tables and data.",
       );
     } finally {
@@ -99,10 +100,10 @@ describe("compile-cache bin shim", () => {
 
   test.skipIf(!compileCacheSupported)(
     "running the shim populates the on-disk compile cache",
-    async () => {
+    async ({ signal }) => {
       const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-compile-cache-"));
       try {
-        await runShim(["--version"], cacheHome);
+        await runShim(["--version"], cacheHome, signal);
         const cacheDir = path.join(cacheHome, "tailor", "node-compile-cache");
         expect(fs.existsSync(cacheDir)).toBe(true);
         expect(collectCacheMtimes(cacheDir).length).toBeGreaterThan(0);
@@ -114,14 +115,14 @@ describe("compile-cache bin shim", () => {
 
   test.skipIf(!compileCacheSupported)(
     "a second run reuses the cache instead of rewriting it",
-    async () => {
+    async ({ signal }) => {
       const cacheHome = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-compile-cache-"));
       try {
-        await runShim(["--version"], cacheHome);
+        await runShim(["--version"], cacheHome, signal);
         const cacheDir = path.join(cacheHome, "tailor", "node-compile-cache");
         const before = collectCacheMtimes(cacheDir);
 
-        await runShim(["--version"], cacheHome);
+        await runShim(["--version"], cacheHome, signal);
         const after = collectCacheMtimes(cacheDir);
 
         expect(after).toEqual(before);

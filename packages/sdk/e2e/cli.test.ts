@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi, type MockInstance } from "vitest";
 import {
   type CliResult,
@@ -37,7 +40,7 @@ function finishedResult(durationMs: number): CliResult {
   return { ok: true, exitCode: 0, signal: null, stdout: "", stderr: "", output: "", durationMs };
 }
 
-const options = { cwd: process.cwd(), label: "probe", timeoutMs: 30_000 };
+const options = { cwd: process.cwd(), label: "probe", timeoutMs: 30_000, signal: undefined };
 
 let log: MockInstance<typeof console.log>;
 let warn: MockInstance<typeof console.warn>;
@@ -111,6 +114,43 @@ describe("tryProcess", () => {
     const timeout = error as CliTimeoutError;
     expect(timeout.killSignal).toBe("SIGKILL");
     expect(isAlive(pidFrom(timeout.message))).toBe(false);
+  });
+
+  test("kills the child and rejects once the signal aborts", async () => {
+    const controller = new AbortController();
+    const run = tryProcess(
+      node,
+      nodeScript('console.log("PID " + process.pid); setInterval(() => {}, 1000);'),
+      { ...options, signal: controller.signal },
+    );
+    await vi.waitFor(() =>
+      expect(loggedLines(log).some((line) => line.includes("PID "))).toBe(true),
+    );
+
+    controller.abort(new Error("test timed out"));
+    const error: unknown = await run.catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toContain("probe was aborted: test timed out");
+    expect(isAlive(pidFrom(message))).toBe(false);
+  });
+
+  test("does not start the child once the signal has aborted", async () => {
+    const marker = path.join(os.tmpdir(), `tailor-e2e-cli-${process.pid}-${Date.now()}`);
+
+    await expect(
+      tryProcess(
+        node,
+        nodeScript(`require("node:fs").writeFileSync(${JSON.stringify(marker)}, "")`),
+        {
+          ...options,
+          signal: AbortSignal.abort(new Error("test timed out")),
+        },
+      ),
+    ).rejects.toThrow("probe was not started: test timed out");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(fs.existsSync(marker)).toBe(false);
   });
 
   test("treats a child that exits cleanly after its budget as timed out", async () => {

@@ -179,6 +179,8 @@ describe("E2E: function run", { concurrent: false }, () => {
       await runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], {
         cwd: tempDir,
         timeoutMs: CLI_BUDGET_MS.deploy,
+        // Hooks get no test signal; the hook timeout exceeds this budget instead.
+        signal: undefined,
       });
 
       const { machineUser: deployedMachineUser } = await client.getAuthMachineUser({

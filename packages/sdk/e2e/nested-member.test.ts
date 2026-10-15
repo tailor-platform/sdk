@@ -53,12 +53,12 @@ describe("E2E: TailorDB nested member rename", { concurrent: false }, () => {
   let tempDir: string;
   let migrationsDir: string;
 
-  function runInTempDir(args: string[], timeoutMs: number) {
-    return runCli(args, { cwd: tempDir, timeoutMs });
+  function runInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
+    return runCli(args, { cwd: tempDir, timeoutMs, signal });
   }
 
-  function tryInTempDir(args: string[], timeoutMs: number) {
-    return tryCli(args, { cwd: tempDir, timeoutMs });
+  function tryInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
+    return tryCli(args, { cwd: tempDir, timeoutMs, signal });
   }
 
   function createConfig(): string {
@@ -151,17 +151,19 @@ export type user = typeof user;
 
   test(
     "writes nested objects and arrays through the same migration on PGlite and TailorDB",
-    async () => {
+    async ({ signal }) => {
       updateTypeFile("zip");
       const configPath = createConfig();
 
       await runInTempDir(
         ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
         CLI_BUDGET_MS.local,
+        signal,
       );
       await runInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.deploy,
+        signal,
       );
 
       // A schema change is what earns a migration to hang the seed script on.
@@ -169,6 +171,7 @@ export type user = typeof user;
       await runInTempDir(
         ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
         CLI_BUDGET_MS.local,
+        signal,
       );
       const migrationNumber = latestMigrationNumber();
       await runInTempDir(
@@ -181,6 +184,7 @@ export type user = typeof user;
           configPath,
         ],
         CLI_BUDGET_MS.local,
+        signal,
       );
       const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
       fs.writeFileSync(
@@ -242,6 +246,7 @@ export async function main(trx: Transaction): Promise<void> {
       await runInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.deploy,
+        signal,
       );
 
       expect(await nestedMemberNames()).toEqual(["city", "zip"]);
@@ -257,13 +262,14 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "fails on the unresolved rename candidate without --rename",
-    async () => {
+    async ({ signal }) => {
       updateTypeFile("zipCode", "  seedMarker: db.string({ optional: true }),\n");
       const configPath = createConfig();
 
       const result = await tryInTempDir(
         ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
         CLI_BUDGET_MS.local,
+        signal,
       );
 
       expect(result.ok).toBe(false);
@@ -275,7 +281,7 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "records the rename and scaffolds a copy script with --rename",
-    async () => {
+    async ({ signal }) => {
       const configPath = createConfig();
 
       await runInTempDir(
@@ -290,6 +296,7 @@ export async function main(trx: Transaction): Promise<void> {
           "User.address.zip:zipCode",
         ],
         CLI_BUDGET_MS.local,
+        signal,
       );
 
       const migrationNumber = latestMigrationNumber();
@@ -314,12 +321,13 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "copies the renamed member with the generated script",
-    async () => {
+    async ({ signal }) => {
       const configPath = createConfig();
 
       await runInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.migratingDeploy,
+        signal,
       );
 
       const resp = await client.getTailorDBType({
@@ -336,7 +344,7 @@ export async function main(trx: Transaction): Promise<void> {
 
   test(
     "reads the copied member back under its new name",
-    async () => {
+    async ({ signal }) => {
       const configPath = createConfig();
       updateTypeFile(
         "zipCode",
@@ -345,6 +353,7 @@ export async function main(trx: Transaction): Promise<void> {
       await runInTempDir(
         ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
         CLI_BUDGET_MS.local,
+        signal,
       );
 
       fs.writeFileSync(
@@ -376,6 +385,7 @@ export async function main(trx: Transaction): Promise<void> {
       const result = await tryInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.migratingDeploy,
+        signal,
       );
       expect(result.output).not.toContain("PROBE_MISMATCH");
       expect(result.ok).toBe(true);
