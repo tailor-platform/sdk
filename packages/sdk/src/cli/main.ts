@@ -10,6 +10,7 @@ import { apiCommand } from "./commands/api";
 import { authCommand } from "./commands/auth";
 import { authconnectionCommand } from "./commands/authconnection";
 import { crashReportCommand } from "./commands/crashreport";
+import { dataCommand } from "./commands/data";
 import { deployCommand } from "./commands/deploy";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
@@ -84,6 +85,7 @@ The \`setup\` commands are provided by the @tailor-platform/sdk-plugin-setup CLI
       auth: authCommand,
       authconnection: authconnectionCommand,
       crashreport: crashReportCommand,
+      data: dataCommand,
       deploy: deployCommand,
       executor: executorCommand,
       function: functionCommand,

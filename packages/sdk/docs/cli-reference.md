@@ -324,6 +324,17 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration test](./cli/tailordb.md#tailordb-migration-test)             | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                                                                                                                                                                                       |
 | [tailordb migration validate](./cli/tailordb.md#tailordb-migration-validate)     | Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
 
+### [Data Commands](./cli/data.md)
+
+Commands for managing application data across workspaces.
+
+| Command                                                | Description                                                                                                      |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| [data](./cli/data.md#data)                             | Manage application data across workspaces.                                                                       |
+| [data clone](./cli/data.md#data-clone)                 | Clone the data of an application (TailorDB namespaces registered in its subgraph) from one workspace to another. |
+| [data operation](./cli/data.md#data-operation)         | Inspect asynchronous application data operations.                                                                |
+| [data operation get](./cli/data.md#data-operation-get) | Show the status of a data clone, or wait for it to finish.                                                       |
+
 ### [Query Commands](./cli/query.md)
 
 Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.
