@@ -26,6 +26,12 @@ async function setupWorkspace(name: string, region: string): Promise<WorkspaceIn
     folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     ttl: "24h",
   });
+  if (workspace.ttl?.state === "unconfirmed") {
+    await deleteWorkspace({ workspaceId: workspace.id }).catch(() => undefined);
+    throw new Error(
+      `Could not record an expiry on workspace "${workspace.name}": ${workspace.ttl.message}`,
+    );
+  }
   console.log(`Workspace "${workspace.name}" created successfully.`);
   return workspace;
 }
