@@ -226,6 +226,8 @@ export interface BundleMigrationStepsOptions {
   order: readonly string[];
   /** Job function the orchestrator starts once per step. */
   runnerJobFunctionName: string;
+  /** Steps the runner reports as skipped instead of running; they still occupy their place in `order`. */
+  skipSteps?: readonly string[];
   /** Directory to resolve the bundler's tsconfig against; defaults to the script's directory. */
   baseDir?: string;
   /** Whether the script's `db.ts` uses Temporal column types. Defaults to `false`. */
@@ -253,6 +255,7 @@ export async function bundleMigrationSteps(
     env,
     order,
     runnerJobFunctionName,
+    skipSteps = [],
     temporal = false,
     dateDefault = "legacy",
   } = options;
@@ -270,6 +273,7 @@ export async function bundleMigrationSteps(
 
     const STEP_ORDER = ${JSON.stringify(order)};
     const RUNNER_JOB_FUNCTION = ${JSON.stringify(runnerJobFunctionName)};
+    const SKIP_STEPS = ${JSON.stringify(skipSteps)};
 
     function getDB(namespace) {
       const client = new tailordb.Client({ namespace, temporal: ${JSON.stringify(temporal)} });
@@ -288,6 +292,9 @@ export async function bundleMigrationSteps(
       }
       if (!STEP_ORDER.includes(step)) {
         throw new Error(\`Unknown migration step "\${step}"\`);
+      }
+      if (SKIP_STEPS.includes(step)) {
+        return { step, skipped: true };
       }
       const env = ${JSON.stringify(env)};
       const db = getDB(${JSON.stringify(namespace)});

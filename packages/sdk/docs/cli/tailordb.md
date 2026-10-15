@@ -33,9 +33,9 @@ tailor tailordb truncate [options] [tables]
 
 **Arguments**
 
-| Argument | Description             | Required |
-| -------- | ----------------------- | -------- |
-| `tables` | Table names to truncate | No       |
+| Argument                      | Description             | Required |
+| ----------------------------- | ----------------------- | -------- |
+| `tables`, `--tables <TABLES>` | Table names to truncate | No       |
 
 **Options**
 

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "id": "customer-table",
+      "claim": "A customer table is defined with `db.table(...)`, exported by name, and matched by a `db` namespace `files` glob in defineConfig."
+    },
+    {
+      "id": "required-by-default",
+      "claim": "Required values are plain required fields (no `optional: true`), and only genuinely optional values, if any, use `{ optional: true }`."
+    },
+    {
+      "id": "unique-identifier",
+      "claim": "At least one value that identifies a customer (the stable identifier or the contact email) is a field marked `.unique()`, or the stable identifier is the built-in `id`."
+    },
+    {
+      "id": "tier-enum",
+      "claim": "The account tier is declared with `db.enum([...])` listing its allowed values."
+    },
+    {
+      "id": "signup-datetime",
+      "claim": "The signup time is a `db.datetime()` field (or provided by `db.fields.timestamps()`'s `createdAt`)."
+    }
+  ]
+}

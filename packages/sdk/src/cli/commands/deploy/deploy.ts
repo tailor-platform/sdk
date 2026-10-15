@@ -27,6 +27,7 @@ import {
   preflightAllTailorDB,
   type PlannedDeployment,
   type ReusablePlanKind,
+  type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { mergeBundledScripts } from "./bundled-scripts";
@@ -89,6 +90,10 @@ import { planPipeline } from "./resolver";
 import { planSecretManager } from "./secret-manager";
 import { planStaticWebsite } from "./staticwebsite";
 import { planTailorDB } from "./tailordb";
+import {
+  assertSkipNamespacesKnown,
+  formatMigrationSkipSteps,
+} from "./tailordb/migration-skip-steps";
 import { validatePlan } from "./validate-plan";
 import {
   collectVisibleIdpNames,
@@ -111,6 +116,8 @@ export interface DeployOptions {
   dryRun?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
+  /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   noValidate?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
@@ -275,6 +282,7 @@ type PlanDeploymentTargetParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   /** Resource kinds to reuse from `previous` instead of re-planning. */
@@ -297,6 +305,7 @@ type PlanDeploymentTargetsParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
@@ -326,6 +335,11 @@ function recoveryOutputArgs(cliContext?: DeployCLIContext): readonly string[] {
   ];
 }
 
+function migrationSkipStepsArgs(options: DeployOptions | undefined): readonly string[] {
+  const value = formatMigrationSkipSteps(options?.migrationSkipSteps);
+  return value === undefined ? [] : ["--migration-skip-steps", value];
+}
+
 function retryDeployArgs(
   options: DeployOptions | undefined,
   configPaths: readonly string[],
@@ -339,6 +353,7 @@ function retryDeployArgs(
     ...(options?.dryRun ? ["--dry-run"] : []),
     ...(options?.yes ? ["--yes"] : []),
     ...(options?.noSchemaCheck ? ["--no-schema-check"] : []),
+    ...migrationSkipStepsArgs(options),
     ...(options?.noValidate ? ["--no-validate"] : []),
     ...(options?.noCache ? ["--no-cache"] : []),
     ...(options?.cleanCache ? ["--clean-cache"] : []),
@@ -422,6 +437,7 @@ async function planDeploymentTarget(
     client,
     workspaceId,
     noSchemaCheck,
+    migrationSkipSteps,
     migrationTestBaselines,
     migrationTestSnapshots,
     skip,
@@ -473,6 +489,7 @@ async function planDeploymentTarget(
       forRemoval: false,
       config,
       noSchemaCheck,
+      migrationSkipSteps,
       migrationTestBaselines,
       migrationTestSnapshots,
       forceApplyAll,
@@ -933,6 +950,7 @@ async function deployInternal(
         client: metadataClient,
         workspaceId,
         noSchemaCheck: options?.noSchemaCheck,
+        migrationSkipSteps: options?.migrationSkipSteps,
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
         skip: reuse?.skip,
@@ -943,6 +961,14 @@ async function deployInternal(
     };
 
     const { planTargets, metadataClient, runInputs, deployments } = await plan(targets);
+    assertSkipNamespacesKnown(
+      options?.migrationSkipSteps ?? new Map(),
+      new Set(
+        deployments.flatMap((deployment) =>
+          deployment.tailorDB.context.tailorDBInputs.map((input) => input.namespace),
+        ),
+      ),
+    );
 
     // Phase 1b: Confirm
     const missingDependentApps = (
@@ -1032,6 +1058,7 @@ async function deployInternal(
     // the time env is read again below.
     await applyPrerequisiteResources(client, deployments);
 
+    let tailordbMaintenance: TailorDBMaintenance[];
     if (needsUrlResolution) {
       logger.info(
         "A static website was just created; rebuilding so env resolves to its real URL before the rest of this deploy applies.",
@@ -1053,9 +1080,9 @@ async function deployInternal(
       carryConfirmedAppDeletes(deployments, rebuilt.deployments, preConfirmAppDeleteCounts);
       await validate(rebuilt.deployments);
       planSummary = printDeploymentPlans(rebuilt.deployments, { dryRun: options?.dryRun });
-      await applyRemainingResources(client, workspaceId, rebuilt.deployments);
+      tailordbMaintenance = await applyRemainingResources(client, workspaceId, rebuilt.deployments);
     } else {
-      await applyRemainingResources(client, workspaceId, deployments);
+      tailordbMaintenance = await applyRemainingResources(client, workspaceId, deployments);
     }
 
     const applications =
@@ -1092,6 +1119,7 @@ async function deployInternal(
           status: "applied",
           workspaceId,
           applications,
+          ...(tailordbMaintenance.length ? { tailordbMaintenance } : {}),
           ...(deployedHooks.length ? { deployedHooks } : {}),
         });
       } else {

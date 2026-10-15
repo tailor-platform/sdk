@@ -154,9 +154,9 @@ tailor secret vault create [options] <name>
 
 **Arguments**
 
-| Argument | Description | Required |
-| -------- | ----------- | -------- |
-| `name`   | Vault name  | Yes      |
+| Argument                | Description | Required |
+| ----------------------- | ----------- | -------- |
+| `name`, `--name <NAME>` | Vault name  | Yes      |
 
 **Options**
 
@@ -179,9 +179,9 @@ tailor secret vault delete [options] <name>
 
 **Arguments**
 
-| Argument | Description | Required |
-| -------- | ----------- | -------- |
-| `name`   | Vault name  | Yes      |
+| Argument                | Description | Required |
+| ----------------------- | ----------- | -------- |
+| `name`, `--name <NAME>` | Vault name  | Yes      |
 
 **Options**
 

@@ -73,6 +73,16 @@ jobs:
           platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      # __SEED_START__
+      - id: tailor-seed
+        shell: bash
+        # __WORKING_DIRECTORY__
+        env:
+          TAILOR_PLATFORM_WORKSPACE_ID: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
+        run: |
+          __TAILOR_CLI__ seed validate__SEED_ARGS__
+          __TAILOR_CLI__ seed apply --truncate --yes__SEED_ARGS__
+      # __SEED_END__
       - id: tailor-preview-comment
         if: always()
         uses: tailor-platform/actions/preview-comment@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
@@ -113,3 +123,19 @@ jobs:
           platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  tailor-preview-result:
+    name: tailor-preview-result (__WORKSPACE_NAME__)
+    # Add your own jobs to needs to count them toward this check; tailor setup keeps them.
+    needs:
+      # __RESULT_NEEDS__
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - id: tailor-preview-result
+        if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+        run: |
+          echo "::error::A job in needs failed or was cancelled."
+          exit 1

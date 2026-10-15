@@ -239,7 +239,7 @@ export const truncateCommand = defineAppCommand({
     ...deploymentArgs,
     ...confirmationArgs,
     tables: arg(z.string().array().optional(), {
-      positional: true,
+      positional: { named: true },
       description: "Table names to truncate",
     }),
     all: arg(z.boolean().default(false), {

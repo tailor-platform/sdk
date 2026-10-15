@@ -16,27 +16,53 @@ export function interactiveTerminal(): boolean {
   return !isCI && process.stdin.isTTY === true && process.stdout.isTTY === true;
 }
 
-/** What selected JSON output: an explicit `--json`, the environment, or both. */
-export type JsonModeSource = "flag" | "env" | "both";
+/**
+ * What selected JSON output: an explicit `--json`, the environment, both, or
+ * the AI coding agent running the CLI.
+ */
+export type JsonModeSource = "flag" | "env" | "both" | "agent";
+
+/**
+ * Explain what selected JSON output and how to turn it off. Under an AI coding
+ * agent, dropping `--json` or unsetting the variable falls back to JSON again,
+ * so the remedy names the explicit `false` values instead.
+ * @param source - What selected JSON output
+ * @returns Sentence appended to the prompt refusal
+ */
+function jsonModeRemedy(source: JsonModeSource): string {
+  const agent = _jsonDefaultAgent;
+  switch (source) {
+    case "agent":
+      return ` JSON output is enabled because an AI coding agent${agent ? ` (${agent})` : ""} was detected; pass --json=false or set ${JSON_OUTPUT_ENV_VAR}=false to restore prompts.`;
+    case "flag":
+      return agent
+        ? " JSON output is enabled by --json; pass --json=false instead to restore prompts."
+        : " JSON output is enabled by --json; drop it to restore prompts.";
+    case "env":
+      return agent
+        ? ` JSON output is enabled by ${JSON_OUTPUT_ENV_VAR}; set it to false to restore prompts.`
+        : ` JSON output is enabled by ${JSON_OUTPUT_ENV_VAR}; unset it to restore prompts.`;
+    case "both":
+      return agent
+        ? ` JSON output is enabled by --json and ${JSON_OUTPUT_ENV_VAR}; pass --json=false instead of the flag to restore prompts.`
+        : ` JSON output is enabled by --json and ${JSON_OUTPUT_ENV_VAR}; drop the flag and unset the variable to restore prompts.`;
+  }
+}
 
 /**
  * Error thrown when a prompt is attempted in a non-interactive environment.
  *
  * JSON mode suppresses prompts, so name whatever selected it: an explicit
  * `--json` stays enabled however the environment is set, while
- * `TAILOR_JSON_OUTPUT` leaves nothing in the command line to explain the
- * refusal.
+ * `TAILOR_JSON_OUTPUT` or a detected AI coding agent leaves nothing in the
+ * command line to explain the refusal.
  */
 export class CIPromptError extends Error {
   constructor(message?: string) {
-    const remedy =
-      _jsonModeSource === "flag"
-        ? " JSON output is enabled by --json; drop it to restore prompts."
-        : _jsonModeSource === "env"
-          ? ` JSON output is enabled by ${JSON_OUTPUT_ENV_VAR}; unset it to restore prompts.`
-          : ` JSON output is enabled by --json and ${JSON_OUTPUT_ENV_VAR}; drop the flag and unset the variable to restore prompts.`;
     const reason =
-      _jsonMode && _jsonModeSource !== undefined && interactiveTerminal() ? remedy : "";
+      _jsonMode && _jsonModeSource !== undefined && interactiveTerminal()
+        ? jsonModeRemedy(_jsonModeSource)
+        : "";
     super(
       (message ??
         "Interactive prompts are not available in this environment. Provide the required options explicitly.") +
@@ -124,6 +150,7 @@ export interface OutOptions {
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
 let _jsonMode = false;
 let _jsonModeSource: JsonModeSource | undefined;
+let _jsonDefaultAgent: string | undefined;
 let _verbose = false;
 
 // Values registered via `logger.registerSecret()`, redacted from diagnostic log output
@@ -374,6 +401,23 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
   const output = formatLogLine({ mode, indent, type, message: formattedMessage, timestamp });
   process.stderr.write(renderFor(process.stderr, redactSecrets(output)));
+}
+
+/**
+ * Record the AI coding agent running the Tailor CLI, which makes JSON the
+ * default output. CLI plugins never record one, so they keep table output.
+ * @param agent - Detected agent id (e.g. `"claude_code"`), or undefined when none runs the CLI
+ */
+export function setJsonDefaultAgent(agent: string | undefined): void {
+  _jsonDefaultAgent = agent;
+}
+
+/**
+ * The AI coding agent recorded by {@link setJsonDefaultAgent}.
+ * @returns Detected agent id, or undefined when none was recorded
+ */
+export function jsonDefaultAgent(): string | undefined {
+  return _jsonDefaultAgent;
 }
 
 /**

@@ -10,11 +10,14 @@ import {
   reconstructSnapshotFromMigrations,
   formatMigrationNumber,
   INITIAL_SCHEMA_NUMBER,
+  isMigrationRestricted,
   type SchemaSnapshot,
+  type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, isNotFoundError, type OperatorClient } from "#/cli/shared/client";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import type {
@@ -172,16 +175,57 @@ export const migrationSnapshotCache = {
   },
 };
 
+/** How the migration phases of one deploy write table settings. */
+export type MigrationPhaseSettings = {
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>;
+  /** Tables an enabled executor in this deploy subscribes to */
+  executorUsedTables: ReadonlySet<string>;
+  /** Whether the migrating namespaces are in maintenance mode */
+  restricted: boolean;
+};
+
+/**
+ * Generate the manifest a migration phase writes for a snapshot table.
+ * @param snapshotType - Snapshot table to write
+ * @param namespaceName - Namespace of the table
+ * @param phaseSettings - How this deploy's migration phases write table settings
+ * @returns Table manifest
+ */
+export function generateMigrationPhaseManifest(
+  snapshotType: TailorDBSnapshotType,
+  namespaceName: string,
+  phaseSettings: MigrationPhaseSettings,
+): MessageInitShape<typeof TailorDBTypeSchema> {
+  const namespaceGqlOperations = phaseSettings.tailorDBInputs.find(
+    (input) => input.namespace === namespaceName,
+  )?.config.gqlOperations;
+  if (phaseSettings.restricted) {
+    // Overrides a declared `publishEvents: true`, which `subscribed` cannot.
+    return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+      suppressRecordEvents: true,
+      suppressGqlMutations: true,
+      namespaceGqlOperations,
+    });
+  }
+  // A checkpoint may opt out of publishing that a later migration in this
+  // deploy turns back on for a subscribing executor.
+  return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+    subscribed:
+      snapshotType.settings?.publishEvents !== false &&
+      phaseSettings.executorUsedTables.has(snapshotType.name),
+    namespaceGqlOperations,
+  });
+}
+
 function buildSnapshotTypeManifest(
   migration: PendingMigration,
   tableName: string,
-  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  phaseSettings: MigrationPhaseSettings,
   typeChanges?: Map<string, FieldDiffChange>,
 ): MessageInitShape<typeof TailorDBTypeSchema> | undefined {
   const snapshot = migrationSnapshotCache.load(migration);
   const snapshotType = snapshot.tables[tableName];
   if (!snapshotType) return undefined;
-  const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
   const typeScriptsChange = migration.diff.changes.find(
     (change): change is TableScriptsModifiedChange =>
       change.kind === "table_scripts_modified" && change.tableName === tableName,
@@ -189,15 +233,7 @@ function buildSnapshotTypeManifest(
   const manifestSnapshotType = typeChanges
     ? createPreMigrationSnapshotType(snapshotType, typeChanges, typeScriptsChange)
     : snapshotType;
-  return generateTailorDBTypeManifestFromSnapshot(manifestSnapshotType, {
-    // A migration script's own record writes would publish from a shape that is
-    // mid-migration, to executors still registered from the previous deploy.
-    // `restoreMigrationRestrictions` turns it back on once they have settled.
-    // Overrides a declared `publishEvents: true`, which `subscribed` cannot.
-    suppressRecordEvents: true,
-    suppressGqlMutations: true,
-    namespaceGqlOperations: input?.config.gqlOperations,
-  });
+  return generateMigrationPhaseManifest(manifestSnapshotType, migration.namespace, phaseSettings);
 }
 
 /**
@@ -224,7 +260,7 @@ async function awaitAllSettledOrThrow(
  * @param {OperatorClient} client - Operator client instance
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
- * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
+ * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when pre-migration phase completes
  */
@@ -232,7 +268,7 @@ export async function executeSingleMigrationPrePhase(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
-  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
 ): Promise<void> {
   // Build pre-migration changes maps for this single migration. Includes both
@@ -253,7 +289,7 @@ export async function executeSingleMigrationPrePhase(
     const snapshotType = buildSnapshotTypeManifest(
       migration,
       tableName,
-      tailorDBInputs,
+      phaseSettings,
       typeChanges,
     );
     if (!snapshotType) continue;
@@ -283,7 +319,7 @@ export async function executeSingleMigrationPrePhase(
     const snapshotType = buildSnapshotTypeManifest(
       migration,
       tableName,
-      tailorDBInputs,
+      phaseSettings,
       typeChanges,
     );
     if (!snapshotType) continue;
@@ -313,7 +349,7 @@ export async function executeSingleMigrationPrePhase(
     const snapshotType = buildSnapshotTypeManifest(
       migration,
       tableName,
-      tailorDBInputs,
+      phaseSettings,
       typeChanges,
     );
     if (!snapshotType) continue;
@@ -366,7 +402,7 @@ export async function executeSingleMigrationPrePhase(
       for (const create of missingTypeCreates) {
         const tableName = create.request.tailordbType?.name;
         if (!tableName) continue;
-        const snapshotType = buildSnapshotTypeManifest(migration, tableName, tailorDBInputs);
+        const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
         if (!snapshotType) continue;
         processedTables.created.add(tableName);
         attemptedTables.add(tableName);
@@ -404,27 +440,42 @@ export const deletedResources = {
   },
 };
 
+/**
+ * Roll a failed migration's Pre-phase back, logging what could not be reverted.
+ * Whether the tables it names stay restricted is for the caller to report once
+ * restoration has had its chance to lift them.
+ * @param client - Operator client instance
+ * @param migration - The failed migration
+ * @param workspaceId - Workspace ID
+ * @param phaseSettings - How this deploy's migration phases write table settings
+ * @param attemptedTables - Tables the migration's phases touched
+ * @returns Names of the tables the rollback left in their restricted state
+ */
 export async function rollbackSingleMigrationAfterFailure(
   client: OperatorClient,
   migration: PendingMigration,
   workspaceId: string,
-  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  phaseSettings: MigrationPhaseSettings,
   attemptedTables: ReadonlySet<string>,
-): Promise<void> {
+): Promise<string[]> {
+  const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
+  let leftRestricted: string[];
   try {
-    await rollbackSingleMigrationPrePhase(
+    leftRestricted = await rollbackSingleMigrationPrePhase(
       client,
       migration,
       workspaceId,
-      tailorDBInputs,
+      phaseSettings,
       attemptedTables,
     );
   } catch (rollbackError) {
     logger.warn(
-      `Failed to roll back migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
+      `Failed to roll back migration ${migrationLabel}: ` +
         `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
     );
+    leftRestricted = [...attemptedTables];
   }
+  return leftRestricted;
 }
 
 /**
@@ -432,7 +483,7 @@ export async function rollbackSingleMigrationAfterFailure(
  * @param {OperatorClient} client - Operator client instance
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
- * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
+ * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when post-migration phase completes
  */
@@ -440,7 +491,7 @@ export async function executeSingleMigrationPostPhase(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
-  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
 ): Promise<void> {
   // Re-use the pre-migration changes maps to know which tables were touched in
@@ -464,7 +515,7 @@ export async function executeSingleMigrationPostPhase(
       if (!tableName || !affectedTables.has(tableName) || !adjustedTypes.has(tableName)) {
         continue;
       }
-      const snapshotType = buildSnapshotTypeManifest(migration, tableName, tailorDBInputs);
+      const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
       if (!snapshotType) continue;
       attemptedTables.add(tableName);
       await client.updateTailorDBType({
@@ -480,7 +531,7 @@ export async function executeSingleMigrationPostPhase(
       if (!tableName || !affectedTables.has(tableName) || !adjustedTypes.has(tableName)) {
         continue;
       }
-      const snapshotType = buildSnapshotTypeManifest(migration, tableName, tailorDBInputs);
+      const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
       if (!snapshotType) continue;
       attemptedTables.add(tableName);
       await client.updateTailorDBType({
@@ -518,7 +569,7 @@ type RewriteRestrictedTablesParams = {
   continueOnError?: boolean;
 };
 
-function acceptsMigrationWrites(settings: MigrationTableSettings): boolean {
+export function acceptsMigrationWrites(settings: MigrationTableSettings): boolean {
   const operations = settings.disableGqlOperations;
   return (
     settings.publishRecordEvents ||
@@ -529,10 +580,56 @@ function acceptsMigrationWrites(settings: MigrationTableSettings): boolean {
   );
 }
 
+type RestrictedTablesRewrite = { failedTables: string[]; firstError?: Error };
+
+/** Tables of one namespace that kept their migration restrictions. */
+export type RestrictedTables = { namespace: string; tables: string[] };
+
+export const RESTRICTION_EFFECT =
+  "the GraphQL create, update, and delete operations and bulk upsert are disabled, and record events are not published";
+
+const RESTRICTED_TABLES_RECOVERY =
+  "Deploy again: once it finishes, the deploy writes the tables' configured settings back.";
+
+export const ROLLBACK_LEFTOVER_RECOVERY =
+  "Check these tables in the workspace and delete or repair them by hand. A deploy that finds a table the migration history does not know stops with remote schema drift, so deploying again does not release them.";
+
+interface LeftRestrictedOptions {
+  /** How the tables are released. */
+  recovery?: string;
+  /** Whether tables stay restricted although none of them can be named. */
+  namesUnknown?: boolean;
+}
+
+/**
+ * Warn about tables that keep their migration restrictions, and how they are released.
+ * @param reason - What left the tables restricted
+ * @param restricted - The tables, by namespace
+ * @param options - How the tables are released, and whether their names are unknown
+ */
+export function warnTablesLeftRestricted(
+  reason: string,
+  restricted: readonly RestrictedTables[],
+  options: LeftRestrictedOptions = {},
+): void {
+  const { recovery = RESTRICTED_TABLES_RECOVERY, namesUnknown = false } = options;
+  const tables = restricted.filter((entry) => entry.tables.length > 0);
+  if (tables.length === 0) {
+    logger.warn(reason);
+    if (namesUnknown) logger.log(recovery);
+    return;
+  }
+  logger.warn(
+    `${reason} Still restricted (${RESTRICTION_EFFECT}): ` +
+      `${tables.map((entry) => `namespace '${entry.namespace}': ${entry.tables.join(", ")}`).join("; ")}.`,
+  );
+  logger.log(recovery);
+}
+
 async function rewriteRestrictedTables(
   client: OperatorClient,
   params: RewriteRestrictedTablesParams,
-): Promise<void> {
+): Promise<RestrictedTablesRewrite> {
   const {
     workspaceId,
     namespaceName,
@@ -543,25 +640,22 @@ async function rewriteRestrictedTables(
     restricted,
     continueOnError = false,
   } = params;
+  const phaseSettings: MigrationPhaseSettings = {
+    tailorDBInputs: [input],
+    executorUsedTables,
+    restricted,
+  };
   let firstError: Error | undefined;
+  const failedTables: string[] = [];
   const tableNames = new Set([...Object.keys(snapshot.tables), ...(settingsState?.keys() ?? [])]);
   for (const tableName of tableNames) {
     try {
       const snapshotType = snapshot.tables[tableName];
       const activeSettings = settingsState?.get(tableName);
       if (settingsState && !activeSettings) continue;
-      if (restricted && (!activeSettings || !acceptsMigrationWrites(activeSettings))) continue;
+      if (restricted && (!activeSettings || isMigrationRestricted(activeSettings))) continue;
       const tailordbType = snapshotType
-        ? restricted
-          ? generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-              suppressRecordEvents: true,
-              suppressGqlMutations: true,
-              namespaceGqlOperations: input.config.gqlOperations,
-            })
-          : generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-              subscribed: executorUsedTables.has(tableName),
-              namespaceGqlOperations: input.config.gqlOperations,
-            })
+        ? generateMigrationPhaseManifest(snapshotType, namespaceName, phaseSettings)
         : activeSettings?.tailordbType
           ? structuredClone(activeSettings.tailordbType)
           : undefined;
@@ -588,10 +682,11 @@ async function rewriteRestrictedTables(
       await client.updateTailorDBType({ workspaceId, namespaceName, tailordbType });
     } catch (error) {
       if (!continueOnError) throw error;
+      failedTables.push(tableName);
       firstError ??= error instanceof Error ? error : toError(error);
     }
   }
-  if (firstError !== undefined) throw firstError;
+  return { failedTables, firstError };
 }
 
 /**
@@ -633,6 +728,31 @@ export function resolveMigrationSnapshotSettings(
     });
   }
   return settingsByTable;
+}
+
+/**
+ * Replace the captured settings of checkpoint tables that an interrupted
+ * deploy left in maintenance mode with the checkpoint's own settings, so this
+ * deploy releases them even if its migrations fail.
+ * @param capturedSettings - Settings captured before this deploy's migrations, keyed by table name
+ * @param snapshot - Schema of the checkpoint the maintenance-mode record names
+ * @param input - TailorDB deploy input for the namespace
+ * @param executorUsedTables - Tables an enabled executor in this deploy subscribes to
+ * @returns Settings keyed by table name
+ */
+export function releaseRecordedMaintenanceMode(
+  capturedSettings: ReadonlyMap<string, MigrationTableSettings>,
+  snapshot: SchemaSnapshot,
+  input: TailorDBDeployInput,
+  executorUsedTables: ReadonlySet<string>,
+): Map<string, MigrationTableSettings> {
+  const checkpointSettings = resolveMigrationSnapshotSettings(snapshot, input, executorUsedTables);
+  return new Map(
+    [...capturedSettings].map(([tableName, settings]) => {
+      const released = checkpointSettings.get(tableName);
+      return [tableName, released && isMigrationRestricted(settings) ? released : settings];
+    }),
+  );
 }
 
 /**
@@ -686,6 +806,7 @@ export async function applyMigrationRestrictions(
  * @param tailorDBInputs - TailorDB deploy inputs for the run
  * @param executorUsedTables - Tables an enabled executor subscribes to
  * @param workspaceId - Target workspace ID
+ * @param maintenanceMode - Whether this deploy restricted the migrating namespaces
  */
 export async function restoreMigrationRestrictions(
   client: OperatorClient,
@@ -694,13 +815,15 @@ export async function restoreMigrationRestrictions(
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
   workspaceId: string,
+  maintenanceMode: boolean,
 ): Promise<void> {
   let firstError: Error | undefined;
+  const unrestored: RestrictedTables[] = [];
   for (const [namespaceName, snapshot] of snapshots) {
     const input = tailorDBInputs.find((entry) => entry.namespace === namespaceName);
     if (!input) continue;
     try {
-      await rewriteRestrictedTables(client, {
+      const rewrite = await rewriteRestrictedTables(client, {
         workspaceId,
         namespaceName,
         snapshot,
@@ -710,11 +833,47 @@ export async function restoreMigrationRestrictions(
         restricted: false,
         continueOnError: true,
       });
+      if (rewrite.firstError) {
+        firstError ??= rewrite.firstError;
+        unrestored.push({ namespace: namespaceName, tables: rewrite.failedTables });
+      }
     } catch (error) {
       firstError ??= error instanceof Error ? error : toError(error);
+      unrestored.push({ namespace: namespaceName, tables: [] });
     }
   }
-  if (firstError !== undefined) throw firstError;
+  if (firstError !== undefined) {
+    const carried = getErrorDiagnostics(firstError);
+    throw withErrorDiagnostics(firstError, {
+      code: "MIGRATION_RESTORE_FAILED",
+      suggestion: [
+        maintenanceMode
+          ? `${RESTRICTED_TABLES_RECOVERY} Tables that stay restricted: ${describeUnrestored(unrestored)}.`
+          : `Tables whose settings could not be restored: ${describeUnrestored(unrestored)}. Check these tables in the workspace and repair their settings before retrying the deployment.`,
+        carried.suggestion,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      context: { ...carried.context, unrestored },
+    });
+  }
+}
+
+/**
+ * List the tables that restoring could not release, as `restoreMigrationRestrictions` reports them.
+ * @param error - Error thrown by `restoreMigrationRestrictions`
+ * @returns Tables that stay restricted, by namespace
+ */
+export function readUnrestoredTables(error: unknown): RestrictedTables[] {
+  if (!(error instanceof Error)) return [];
+  const unrestored = getErrorDiagnostics(error).context?.unrestored;
+  return Array.isArray(unrestored) ? (unrestored as RestrictedTables[]) : [];
+}
+
+function describeUnrestored(unrestored: readonly RestrictedTables[]): string {
+  return unrestored
+    .map((entry) => `namespace '${entry.namespace}': ${entry.tables.join(", ") || "(unknown)"}`)
+    .join("; ");
 }
 
 export async function executeSingleMigrationPostPhaseDeletions(
@@ -752,20 +911,20 @@ export async function executeSingleMigrationPostPhaseDeletions(
  * @param client - Operator client instance
  * @param migration - The migration whose Pre-phase DDL must be reverted
  * @param workspaceId - Workspace ID
- * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
+ * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
- * @returns {Promise<void>} Promise that resolves when rollback attempts complete
+ * @returns Names of the tables the rollback left in their restricted state
  */
 async function rollbackSingleMigrationPrePhase(
   client: OperatorClient,
   migration: PendingMigration,
   workspaceId: string,
-  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  phaseSettings: MigrationPhaseSettings,
   attemptedTables: ReadonlySet<string>,
-): Promise<void> {
+): Promise<string[]> {
   // The baseline migration has no prior checkpoint to revert to.
-  if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
-  if (attemptedTables.size === 0) return;
+  if (migration.number <= INITIAL_SCHEMA_NUMBER) return [...attemptedTables];
+  if (attemptedTables.size === 0) return [];
 
   const priorSnapshot = reconstructSnapshotFromMigrations(
     migration.migrationsDir,
@@ -779,10 +938,8 @@ async function rollbackSingleMigrationPrePhase(
         `prior snapshot (migration ${formatMigrationNumber(migration.number - 1)}) could not be reconstructed. ` +
         "Leaving schema as-is; manual repair may be required.",
     );
-    return;
+    return [...attemptedTables];
   }
-  const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
-
   logger.warn(
     `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} failed; ` +
       "rolling back its pre-migration schema changes.",
@@ -797,19 +954,21 @@ async function rollbackSingleMigrationPrePhase(
   });
   const newTables = [...attemptedTables].filter((tableName) => !priorSnapshot.tables[tableName]);
 
+  const leftRestricted: string[] = [];
   for (const { tableName, priorTable } of restoredTables) {
     try {
-      const manifest = generateTailorDBTypeManifestFromSnapshot(priorTable, {
-        suppressRecordEvents: true,
-        suppressGqlMutations: true,
-        namespaceGqlOperations: input?.config.gqlOperations,
-      });
+      const manifest = generateMigrationPhaseManifest(
+        priorTable,
+        migration.namespace,
+        phaseSettings,
+      );
       await client.updateTailorDBType({
         workspaceId,
         namespaceName: migration.namespace,
         tailordbType: manifest,
       });
     } catch (rollbackError) {
+      leftRestricted.push(tableName);
       logger.warn(
         `Failed to roll back table '${tableName}' in namespace '${migration.namespace}': ` +
           `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
@@ -834,10 +993,13 @@ async function rollbackSingleMigrationPrePhase(
         tailordbTypeName: tableName,
       });
     } catch (rollbackError) {
+      if (isNotFoundError(rollbackError)) continue;
+      leftRestricted.push(tableName);
       logger.warn(
         `Failed to roll back table '${tableName}' in namespace '${migration.namespace}': ` +
           `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
       );
     }
   }
+  return leftRestricted;
 }

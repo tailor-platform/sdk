@@ -63,6 +63,7 @@ describe("snapshot", () => {
         start: number;
         maxValue?: number;
         format?: string;
+        gapless?: boolean;
       };
       fields?: Record<string, MockRemoteFieldConfig>;
     };
@@ -149,6 +150,22 @@ describe("snapshot", () => {
       expect(snapshot.namespace).toBe(namespace);
       expect(snapshot.tables.Order?.pluralForm).toBe("Orders");
       expect(snapshot.tables.Order?.fields.amount?.scale).toBe(6);
+    });
+
+    test("reconstructs gapless on a remote serial only when it is set", () => {
+      const snapshot = createSnapshotFromRemoteTypes(
+        [
+          createMockRemoteType("Invoice", {
+            id: { type: "uuid", required: true },
+            number: { type: "integer", required: true, serial: { start: 1, gapless: true } },
+            sequence: { type: "integer", required: true, serial: { start: 1, gapless: false } },
+          }),
+        ],
+        namespace,
+      );
+
+      expect(snapshot.tables.Invoice?.fields.number?.serial).toEqual({ start: 1, gapless: true });
+      expect(snapshot.tables.Invoice?.fields.sequence?.serial).toEqual({ start: 1 });
     });
 
     test("reconstructs remote table-level schema elements", () => {
@@ -1195,6 +1212,60 @@ describe("snapshot", () => {
       expect(drifts[0]!.details).toContain("serial.start");
       expect(drifts[0]!.details).toContain("fields.child.type");
     });
+
+    function compareGapless(remote: boolean | undefined, inSnapshot: boolean | undefined) {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        tables: {
+          Invoice: {
+            name: "Invoice",
+            pluralForm: "Invoices",
+            fields: {
+              id: { type: "uuid", required: true },
+              number: {
+                type: "integer",
+                required: true,
+                serial: { start: 1, ...(inSnapshot !== undefined && { gapless: inSnapshot }) },
+              },
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType("Invoice", {
+          id: { type: "uuid", required: true },
+          number: {
+            type: "integer",
+            required: true,
+            serial: { start: 1, ...(remote !== undefined && { gapless: remote }) },
+          },
+        }),
+      ];
+      return compareRemoteWithSnapshot(remoteTypes, snapshot);
+    }
+
+    test.each([
+      { remote: true, inSnapshot: undefined },
+      { remote: undefined, inSnapshot: true },
+    ])("reports gapless drift (remote $remote, snapshot $inSnapshot)", ({ remote, inSnapshot }) => {
+      const drifts = compareGapless(remote, inSnapshot);
+
+      expect(drifts).toHaveLength(1);
+      expect(drifts[0]!.kind).toBe("field_mismatch");
+      expect(drifts[0]!.details).toContain("serial.gapless");
+    });
+
+    test.each([
+      { remote: true, inSnapshot: true },
+      { remote: false, inSnapshot: undefined },
+    ])(
+      "reports no gapless drift (remote $remote, snapshot $inSnapshot)",
+      ({ remote, inSnapshot }) => {
+        expect(compareGapless(remote, inSnapshot)).toHaveLength(0);
+      },
+    );
 
     test("normalizes decimal scale at compare entry so missing scale matches remote default", () => {
       // The snapshot is written from disk without an explicit scale (legacy /

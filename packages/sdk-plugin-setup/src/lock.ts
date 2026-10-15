@@ -45,6 +45,11 @@ export type LockInputs = {
   environment: string;
   dir: string;
   packageManager: string;
+  /**
+   * False when `packageManager` was set with `--package-manager`. Entries written before
+   * the flag existed lack it and were detected.
+   */
+  packageManagerAutoDetected?: boolean;
   /** For `preview` kind: workspace region used when creating the preview workspace. */
   region?: string;
   /**
@@ -73,6 +78,8 @@ export type LockInputs = {
   seedValidate?: boolean;
   /** Whether manual dispatch may deploy only the target branch or a tag (branch/tag). */
   restrictDispatch?: boolean;
+  /** Present when the deploy job seeds the workspace (`--seed`), with the `--seed-dataset` names. */
+  seed?: { datasets: string[] };
 };
 
 export type LockTarget = {

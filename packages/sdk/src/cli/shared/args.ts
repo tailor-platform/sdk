@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
-import { arg, parseArgv } from "@politty/zod";
+import { arg, parseArgv, type ArgSource } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import { withErrorDiagnostics } from "./error-diagnostics";
-import { JSON_OUTPUT_ENV_VAR, logger, type JsonModeSource } from "./logger";
+import { JSON_OUTPUT_ENV_VAR, jsonDefaultAgent, logger, type JsonModeSource } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -252,8 +252,8 @@ export function jsonFlagRequested(argv: readonly string[]): boolean {
 }
 
 /**
- * Report what requested JSON output, reading the command line and the environment
- * the same way the `--json` effect would.
+ * Report what requested JSON output, reading the command line, the environment,
+ * and the recorded AI coding agent the same way the `--json` argument would.
  * @param argv - Command-line arguments after the executable and script path
  * @returns What requested JSON output, or undefined when it is off
  */
@@ -263,15 +263,17 @@ export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource
   const envEnabled =
     env !== undefined && parseGlobalFlag([`--${JSON_ARG_NAME}=${env}`], JSON_ARG_NAME) === true;
   if (flag === true) return envEnabled ? "both" : "flag";
-  if (flag === undefined && envEnabled) return "env";
+  if (flag !== undefined) return undefined;
+  if (envEnabled) return "env";
+  if (env === undefined && jsonDefaultAgent() !== undefined) return "agent";
   return undefined;
 }
 
 /**
  * Prepare a failure that ended the command before the global arguments were
  * applied (see {@link globalArgsApplied}): apply `--verbose`, and when the
- * command line or the environment asked for JSON output, turn it on and name a
- * plain argument-parsing error `INVALID_ARGUMENTS`.
+ * command line, the environment, or the recorded AI coding agent asked for JSON
+ * output, turn it on and name a plain argument-parsing error `INVALID_ARGUMENTS`.
  * @param error - Failure about to be rendered
  * @param argv - Command-line arguments after the executable and script path
  */
@@ -289,6 +291,20 @@ export function resolveEarlyFailure(error: unknown, argv: readonly string[]): vo
   }
 }
 
+/**
+ * Name what set the `--json` value, the way the logger records it.
+ * @param source - Where the value was read from
+ * @returns What selected JSON output when the value is true
+ */
+function jsonArgSource(source: ArgSource | undefined): JsonModeSource {
+  if (source === "env") return "env";
+  // Only a recorded AI coding agent makes the default true.
+  if (source === "default") return "agent";
+  return source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true
+    ? "both"
+    : "flag";
+}
+
 interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
   verboseAlias?: string;
@@ -297,7 +313,8 @@ interface CommonArgsOptions {
 /**
  * Build the common arguments for all CLI commands. CLI plugins call this so
  * their forwarded global flags parse identically to the host Tailor CLI and
- * feed the same logger state.
+ * feed the same logger state. Only the host CLI records a detected AI coding
+ * agent, so under an agent `--json` defaults to true there but not in plugins.
  *
  * NOTE: --env-file and --env-file-if-exists collide with Node.js flags due to a bug
  * (https://github.com/nodejs/node/issues/54232). Node.js parses these even after the
@@ -329,18 +346,18 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
         logger.verbose = value;
       },
     }),
-    [JSON_ARG_NAME]: arg(z.boolean().default(false), {
-      alias: JSON_ARG_ALIAS,
-      description: "Output as JSON",
-      env: JSON_OUTPUT_ENV_VAR,
-      effect: (value, { args }) => {
-        globalArgsWereApplied = true;
-        const source = args.$source?.(JSON_ARG_NAME);
-        const envAlsoEnabled =
-          source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;
-        logger.setJsonMode(value, source === "env" ? "env" : envAlsoEnabled ? "both" : "flag");
+    [JSON_ARG_NAME]: arg(
+      z.boolean().default(() => jsonDefaultAgent() !== undefined),
+      {
+        alias: JSON_ARG_ALIAS,
+        description: "Output as JSON",
+        env: JSON_OUTPUT_ENV_VAR,
+        effect: (value, { args }) => {
+          globalArgsWereApplied = true;
+          logger.setJsonMode(value, jsonArgSource(args.$source?.(JSON_ARG_NAME)));
+        },
       },
-    }),
+    ),
   } satisfies ArgsShape;
 }
 
@@ -520,5 +537,27 @@ export const folderArgs = {
     completion: { type: "none" },
   }),
 } satisfies ArgsShape;
+
+type LocationIdArgs = {
+  "organization-id"?: string;
+  "folder-id"?: string;
+};
+
+/**
+ * Read the organization and folder ID options, including IDs loaded by `--env-file`.
+ * politty fills `args` from the environment before `--env-file` loads, so only env-file values reach the fallback.
+ * @param args - Parsed command arguments
+ * @returns Organization and folder IDs; empty env-file values count as not given
+ */
+export function locationIdsWithEnvFile(args: LocationIdArgs): {
+  organizationId?: string;
+  folderId?: string;
+} {
+  return {
+    organizationId:
+      args["organization-id"] ?? (process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined),
+    folderId: args["folder-id"] ?? (process.env.TAILOR_PLATFORM_FOLDER_ID || undefined),
+  };
+}
 
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;

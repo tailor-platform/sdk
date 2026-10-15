@@ -1,3 +1,4 @@
+import * as vm from "node:vm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
@@ -7,9 +8,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { writeMetadataLabelsDirect } from "../label";
 import {
+  assertSkippableSteps,
   executeMigrationStepsAsWorkflow,
+  MIGRATION_SCRIPT_STARTED_LOG,
   migrationPlanFingerprint,
   removeMigrationWorkflowResources,
+  type MigrationRunEvent,
   type MigrationStepsWorkflowOptions,
 } from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -69,7 +73,13 @@ interface StepsClientOptions {
 }
 
 function runnerJob(callIndex: number, status: WorkflowJobExecution_Status, logs: string[] = []) {
-  return { callIndex, name: RUNNER, status, logs };
+  return {
+    callIndex,
+    name: RUNNER,
+    status,
+    logs,
+    result: JSON.stringify({ step: ORDER[callIndex] }),
+  };
 }
 
 function createStepsClient(options: StepsClientOptions = {}) {
@@ -191,6 +201,7 @@ function run(
     invoker,
     appName: "my-app",
     appId: "app-1",
+    maintenanceMode: true,
     pollIntervalMs: 0,
     order: ORDER,
     onBeforeStart: vi.fn(async () => {}),
@@ -198,6 +209,15 @@ function run(
     notify: (level, message) => logger[level](message),
     ...overrides,
   });
+}
+
+function recordRunEvents() {
+  const events: string[] = [];
+  const onRunEvent = (event: MigrationRunEvent) => {
+    if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
+    else if (event.type !== "polled") events.push(event.type);
+  };
+  return { events, onRunEvent };
 }
 
 const ALL_STEPS_SUCCEEDED = [
@@ -487,6 +507,60 @@ describe("executeMigrationStepsAsWorkflow", () => {
     ]);
   });
 
+  test("counts only a running step, not the orchestrator, as running the script", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [
+          { status: WorkflowJobExecution_Status.RUNNING, logs: [MIGRATION_SCRIPT_STARTED_LOG] },
+        ],
+      },
+    });
+    const { events, onRunEvent } = recordRunEvents();
+
+    await run(client, { onRunEvent });
+
+    expect(events).toEqual(["waiting", "finished:false"]);
+  });
+
+  test("reports a step job that logged its start as running the script", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [
+          { status: WorkflowJobExecution_Status.SUSPEND, logs: [MIGRATION_SCRIPT_STARTED_LOG] },
+          runnerJob(0, WorkflowJobExecution_Status.RUNNING, [
+            MIGRATION_SCRIPT_STARTED_LOG,
+            "backfilled 10 users",
+          ]),
+        ],
+      },
+    });
+    const { events, onRunEvent } = recordRunEvents();
+
+    const result = await run(client, { onRunEvent });
+
+    expect(events).toEqual(["waiting", "running", "finished:true"]);
+    expect(result.logs).toBe("[backfillUser] backfilled 10 users");
+  });
+
+  test("reports a poll of the run that failed as unknown", async () => {
+    const { client, raw } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
+        jobs: [runnerJob(0, WorkflowJobExecution_Status.RUNNING, [MIGRATION_SCRIPT_STARTED_LOG])],
+      },
+    });
+    raw.getWorkflowExecution.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
+    const { events, onRunEvent } = recordRunEvents();
+
+    await run(client, { onRunEvent });
+
+    expect(events).toEqual(["waiting", "unknown", "running", "finished:true"]);
+  });
+
   test("treats a run that disappears while polling as possibly committed", async () => {
     const { client, raw } = createStepsClient({
       run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
@@ -526,7 +600,23 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
     await expect(run(client, { onBeforeStart })).rejects.toMatchObject({
       code: "MIGRATION_EXECUTION_ACTIVE",
+      message: "Migration tailordb/0003 has an execution that is still running (exec-old).",
+      suggestion:
+        "Wait for it to finish, or check that no other deploy is running against this workspace, then deploy again.",
+      context: { executionId: "exec-old" },
     });
+    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
+    expect(raw.startWorkflow).not.toHaveBeenCalled();
+    expect(onBeforeStart).not.toHaveBeenCalled();
+  });
+
+  test("fails with the listing's own error when the leftovers' executions cannot be listed", async () => {
+    const onBeforeStart = vi.fn(async () => {});
+    const { client, raw } = createStepsClient({ existingWorkflow: { id: "wf-old" } });
+    const lost = new ConnectError("lost", Code.Unavailable);
+    raw.listWorkflowExecutions.mockRejectedValueOnce(lost);
+
+    await expect(run(client, { onBeforeStart })).rejects.toBe(lost);
     expect(raw.deleteWorkflow).not.toHaveBeenCalled();
     expect(raw.startWorkflow).not.toHaveBeenCalled();
     expect(onBeforeStart).not.toHaveBeenCalled();
@@ -575,6 +665,29 @@ describe("executeMigrationStepsAsWorkflow", () => {
       expect(raw.createWorkflow).not.toHaveBeenCalled();
       expect(raw.startWorkflow).not.toHaveBeenCalled();
       expect(raw.deleteWorkflow).not.toHaveBeenCalled();
+    });
+
+    test("uploads the resumed script behind the log line that marks its start", async () => {
+      const { client, raw } = createStepsClient({
+        existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+        listed: [failedRun],
+        run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+      });
+
+      await run(client, { inProgress: { executionId: "exec-old" } });
+
+      const [stream] = raw.updateFunctionRegistry.mock.calls[0] as unknown as [
+        AsyncIterable<{ payload: { case: string; value: unknown } }>,
+      ];
+      const chunks: Uint8Array[] = [];
+      for await (const message of stream) {
+        if (message.payload.case === "chunk") chunks.push(message.payload.value as Uint8Array);
+      }
+      const content = Buffer.concat(chunks).toString("utf-8");
+      const logged: string[] = [];
+      vm.runInNewContext(content, { console: { log: (message: string) => logged.push(message) } });
+      expect(content.endsWith("\n// bundled steps")).toBe(true);
+      expect(logged).toEqual([MIGRATION_SCRIPT_STARTED_LOG]);
     });
 
     test("finds the run by name when its execution id was never recorded", async () => {
@@ -630,7 +743,11 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
       await run(client, { inProgress: { executionId: "exec-gone" }, notify, onBeforeStart });
 
-      expect(notify).toHaveBeenCalledWith("warn", expect.stringContaining("every step runs again"));
+      expect(notify).toHaveBeenCalledWith(
+        "warn",
+        expect.stringContaining("every step runs again"),
+        expect.any(String),
+      );
       expect(logger.warn).not.toHaveBeenCalled();
       expect(onBeforeStart).toHaveBeenCalledOnce();
       expect(calls.indexOf("onBeforeStart")).toBeLessThan(calls.indexOf("startWorkflow"));
@@ -722,6 +839,333 @@ describe("executeMigrationStepsAsWorkflow", () => {
         expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
       },
     );
+
+    describe("when every step has to run again", () => {
+      const succeededThenFailed = (status: WorkflowExecution_Status): ExecutionSpec => ({
+        id: "exec-old",
+        status,
+        jobs: [
+          { status: WorkflowJobExecution_Status.FAILED },
+          runnerJob(0, WorkflowJobExecution_Status.SUCCESS),
+          runnerJob(1, WorkflowJobExecution_Status.SUCCESS),
+          runnerJob(2, WorkflowJobExecution_Status.FAILED),
+        ],
+      });
+      const runKeeping = (
+        clientOptions: Parameters<typeof createStepsClient>[0],
+        overrides: Partial<MigrationStepsWorkflowOptions> = {},
+      ) => {
+        const notify = vi.fn();
+        const created = createStepsClient({
+          run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
+          ...clientOptions,
+        });
+        return {
+          notify,
+          ...created,
+          result: () =>
+            run(created.client, {
+              inProgress: { executionId: "exec-old" },
+              notify,
+              ...overrides,
+            }),
+        };
+      };
+
+      test("names the steps that already succeeded when the planned steps changed", async () => {
+        const { notify, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+        });
+
+        await result();
+
+        expect(notify).toHaveBeenCalledWith(
+          "warn",
+          expect.stringMatching(/steps changed.*backfillUser, backfillInvoice/),
+          expect.stringContaining(
+            "--migration-skip-steps tailordb/backfillUser,tailordb/backfillInvoice",
+          ),
+        );
+      });
+
+      test("explains that the earlier run was canceled and still lists the succeeded steps", async () => {
+        const { notify, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+          listed: [succeededThenFailed(WorkflowExecution_Status.CANCELED)],
+        });
+
+        await result();
+
+        expect(notify).toHaveBeenCalledWith(
+          "warn",
+          expect.stringMatching(/canceled.*backfillUser, backfillInvoice/),
+          expect.stringContaining("--migration-skip-steps"),
+        );
+      });
+
+      test("builds the suggested option only from steps that still exist, while listing every succeeded step", async () => {
+        const { notify, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { order: ["backfillUser", "renamedTotals"] },
+        );
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).toContain("backfillUser, backfillInvoice");
+        expect(suggestion).toContain("--migration-skip-steps tailordb/backfillUser.");
+        expect(suggestion).not.toContain("backfillInvoice");
+      });
+
+      test("does not offer skipping when none of the succeeded steps still exist", async () => {
+        const { notify, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { order: ["renamedUser", "renamedTotals"] },
+        );
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).toContain("backfillUser, backfillInvoice");
+        expect(suggestion).not.toContain("--migration-skip-steps");
+        expect(suggestion).toContain("safe to run twice");
+      });
+
+      test("does not offer skipping when the earlier run can no longer be read", async () => {
+        const { notify, result } = runKeeping({});
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).toContain("no longer available");
+        expect(suggestion).not.toContain("--migration-skip-steps");
+        expect(suggestion).toContain("safe to run twice");
+      });
+
+      test("does not list or offer skipping when no step had succeeded", async () => {
+        const { notify, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [
+            {
+              id: "exec-old",
+              status: WorkflowExecution_Status.FAILED,
+              jobs: [{ status: WorkflowJobExecution_Status.FAILED }],
+            },
+          ],
+        });
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).not.toContain("already succeeded");
+        expect(suggestion).not.toContain("--migration-skip-steps");
+      });
+
+      test("does not tell the user to interrupt a deploy whose run starts without waiting", async () => {
+        const { notify, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+        });
+
+        await result();
+
+        const [, , suggestion] = notify.mock.calls[0]!;
+        expect(suggestion).not.toContain("interrupt");
+        expect(suggestion).toContain("starts the run without waiting");
+      });
+
+      test("says when the results of some succeeded steps could not be read, so the list may be incomplete", async () => {
+        const { notify, raw, result } = runKeeping({
+          existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+          listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+        });
+        raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+
+        await result();
+
+        const [, message] = notify.mock.calls[0]!;
+        expect(message).toContain("could not be read");
+      });
+
+      test("names the succeeded steps that still run again when only some of them are skipped", async () => {
+        const { notify, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { skipSteps: ["backfillUser"] },
+        );
+
+        await result();
+
+        const [, message, suggestion] = notify.mock.calls[0]!;
+        expect(message).toContain("skipping backfillUser");
+        expect(message).toContain("backfillInvoice already succeeded but runs again");
+        expect(suggestion).toContain(
+          "--migration-skip-steps tailordb/backfillUser,tailordb/backfillInvoice",
+        );
+      });
+
+      test("starts a new run that skips the requested steps even though the plan changed", async () => {
+        const { raw, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { skipSteps: ["backfillUser"] },
+        );
+
+        await expect(result()).resolves.toMatchObject({ success: true, executionId: "exec-new" });
+        expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
+        expect(raw.startWorkflow).toHaveBeenCalledOnce();
+      });
+
+      test("reports the skipped steps instead of claiming that every step runs again", async () => {
+        const { notify, result } = runKeeping(
+          {
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
+            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+          },
+          { skipSteps: ["backfillUser"] },
+        );
+
+        await result();
+
+        const [level, message] = notify.mock.calls[0]!;
+        expect(level).toBe("warn");
+        expect(message).not.toContain("every step runs again");
+        expect(message).toContain("skipping backfillUser");
+      });
+    });
+  });
+});
+
+describe("assertSkippableSteps", () => {
+  const succeededRun: ExecutionSpec = {
+    id: "exec-old",
+    status: WorkflowExecution_Status.FAILED,
+    jobs: [
+      { status: WorkflowJobExecution_Status.FAILED },
+      runnerJob(0, WorkflowJobExecution_Status.SUCCESS),
+      runnerJob(1, WorkflowJobExecution_Status.FAILED),
+    ],
+  };
+  const check = (requested: string[], clientOptions: Parameters<typeof createStepsClient>[0]) =>
+    assertSkippableSteps({
+      client: createStepsClient(clientOptions).client,
+      workspaceId: "ws-1",
+      namespace: "tailordb",
+      migrationNumber: 3,
+      order: ORDER,
+      inProgress: { executionId: "exec-old" },
+      requested,
+    });
+
+  test("accepts steps that succeeded in the earlier run", async () => {
+    await expect(
+      check(["backfillUser"], { existingWorkflow: { id: "wf-old" }, listed: [succeededRun] }),
+    ).resolves.toBeUndefined();
+  });
+
+  test("rejects a step that did not succeed, naming the ones that did", async () => {
+    await expect(
+      check(["backfillInvoice"], { existingWorkflow: { id: "wf-old" }, listed: [succeededRun] }),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_INVALID",
+      context: {
+        namespace: "tailordb",
+        migrationNumber: 3,
+        requested: ["backfillInvoice"],
+        invalid: [{ step: "backfillInvoice", reason: "not_succeeded" }],
+        succeededSteps: ["backfillUser"],
+      },
+    });
+  });
+
+  test("suggests only succeeded steps that the migration still defines", async () => {
+    const error = await assertSkippableSteps({
+      client: createStepsClient({
+        existingWorkflow: { id: "wf-old" },
+        listed: [succeededRun],
+      }).client,
+      workspaceId: "ws-1",
+      namespace: "tailordb",
+      migrationNumber: 3,
+      order: ["renamedUser", "backfillInvoice", "recomputeTotals"],
+      inProgress: { executionId: "exec-old" },
+      requested: ["backfillInvoice"],
+    }).catch((thrown: Error) => thrown);
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_INVALID",
+      suggestion: expect.stringContaining(
+        "None of the steps that succeeded in the earlier run is still a step",
+      ),
+      context: { succeededSteps: ["backfillUser"] },
+    });
+  });
+
+  test("does not call a step unsuccessful when the earlier run's step results could not be read", async () => {
+    const { client, raw } = createStepsClient({
+      existingWorkflow: { id: "wf-old" },
+      listed: [succeededRun],
+    });
+    raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+
+    const error = await assertSkippableSteps({
+      client,
+      workspaceId: "ws-1",
+      namespace: "tailordb",
+      migrationNumber: 3,
+      order: ORDER,
+      inProgress: { executionId: "exec-old" },
+      requested: ["backfillUser"],
+    }).catch((thrown: Error) => thrown);
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_UNVERIFIED",
+      context: { invalid: [{ step: "backfillUser", reason: "unverified" }] },
+    });
+    expect((error as { suggestion?: string }).suggestion).not.toContain(
+      "Remove --migration-skip-steps",
+    );
+  });
+
+  test("rejects a step that the migration does not define", async () => {
+    await expect(
+      check(["renamedAway"], { existingWorkflow: { id: "wf-old" }, listed: [succeededRun] }),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_INVALID",
+      context: { invalid: [{ step: "renamedAway", reason: "unknown_step" }] },
+    });
+  });
+
+  test("rejects every request when the earlier run cannot be read", async () => {
+    await expect(check(["backfillUser"], {})).rejects.toMatchObject({
+      code: "MIGRATION_SKIP_STEPS_INVALID",
+      context: { invalid: [{ step: "backfillUser", reason: "no_earlier_run" }] },
+    });
+  });
+
+  test("rejects when the migration has no earlier run at all", async () => {
+    await expect(
+      assertSkippableSteps({
+        client: createStepsClient().client,
+        workspaceId: "ws-1",
+        namespace: "tailordb",
+        migrationNumber: 3,
+        order: ORDER,
+        inProgress: undefined,
+        requested: ["backfillUser"],
+      }),
+    ).rejects.toMatchObject({ code: "MIGRATION_SKIP_STEPS_INVALID" });
   });
 });
 
