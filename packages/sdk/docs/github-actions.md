@@ -144,6 +144,12 @@ The generated workflow also lists `labeled` in its `pull_request` types. The
 plan and ERD preview jobs skip label events, so adding an unrelated label does
 not re-run them.
 
+Runs started by a label report their result job as `tailor-result (<name>) [label]`
+instead of `tailor-result (<name>)`. A label event therefore never replaces the
+result of the check you require for branch protection. The migration test result
+appears only under the `[label]` name, so it does not block merging through the
+check you require.
+
 The job clones the source workspace's TailorDB records and passes
 `--clone-timeout 30m`, which bounds only the wait for the data clone. If the clone takes longer, the command
 fails with the clone's operation ID in the error and removes its temporary

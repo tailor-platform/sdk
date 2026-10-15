@@ -516,6 +516,10 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
 
   if (migrationTest) {
     out = out
+      .replace(
+        "name: tailor-result (__WORKSPACE_NAME__)",
+        `name: "\${{ github.event.action == 'labeled' && 'tailor-result (__WORKSPACE_NAME__) [label]' || 'tailor-result (__WORKSPACE_NAME__)' }}"`,
+      )
       .replaceAll("__MIGRATION_TEST_LABEL__", () => migrationTest.label)
       .replaceAll(
         "__MIGRATION_TEST_ENVIRONMENT__",

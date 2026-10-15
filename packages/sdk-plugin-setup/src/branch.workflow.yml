@@ -658,7 +658,7 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.action == 'labeled' &&
       github.event.label.name == '__MIGRATION_TEST_LABEL__' &&
-      !github.event.pull_request.head.repo.fork
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: "__MIGRATION_TEST_ENVIRONMENT__"
