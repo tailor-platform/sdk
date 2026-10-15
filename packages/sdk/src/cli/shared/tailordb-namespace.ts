@@ -1,6 +1,14 @@
+import { fetchAll } from "./client";
+
 type ListTailorDBTypesClient = {
-  listTailorDBTypes(args: { workspaceId: string; namespaceName: string }): Promise<{
+  listTailorDBTypes(args: {
+    workspaceId: string;
+    namespaceName: string;
+    pageToken: string;
+    pageSize: number;
+  }): Promise<{
     tailordbTypes: Array<{ name: string }>;
+    nextPageToken: string;
   }>;
 };
 
@@ -38,28 +46,29 @@ export async function resolveTableNamespaces(
       break;
     }
 
-    try {
-      const { tailordbTypes } = await args.client.listTailorDBTypes({
+    const tailordbTypes = await fetchAll(async (pageToken, maxPageSize) => {
+      const { tailordbTypes, nextPageToken } = await args.client.listTailorDBTypes({
         workspaceId: args.workspaceId,
         namespaceName: namespace,
+        pageToken,
+        pageSize: maxPageSize,
       });
+      return [tailordbTypes, nextPageToken];
+    });
 
-      for (const type of tailordbTypes) {
-        const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
-        if (!matchedRequestedTypes) {
+    for (const type of tailordbTypes) {
+      const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
+      if (!matchedRequestedTypes) {
+        continue;
+      }
+
+      for (const requestedTableName of matchedRequestedTypes) {
+        if (tableNamespaceMap.has(requestedTableName)) {
           continue;
         }
-
-        for (const requestedTableName of matchedRequestedTypes) {
-          if (tableNamespaceMap.has(requestedTableName)) {
-            continue;
-          }
-          tableNamespaceMap.set(requestedTableName, namespace);
-          unresolvedTables.delete(requestedTableName);
-        }
+        tableNamespaceMap.set(requestedTableName, namespace);
+        unresolvedTables.delete(requestedTableName);
       }
-    } catch {
-      continue;
     }
   }
 

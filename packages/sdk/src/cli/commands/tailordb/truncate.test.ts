@@ -13,12 +13,14 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 
-vi.mock("#/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal()),
   initOperatorClient: vi.fn().mockResolvedValue({
     truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
     truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
     listTailorDBTypes: vi.fn().mockResolvedValue({
       tailordbTypes: [{ name: "User" }, { name: "Order" }],
+      nextPageToken: "",
     }),
   }),
 }));
@@ -282,12 +284,32 @@ describe("truncate command", () => {
         truncateTailorDBTypes: vi.fn(),
         listTailorDBTypes: vi.fn().mockResolvedValue({
           tailordbTypes: [],
+          nextPageToken: "",
         }),
       } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
       await expect(truncate({ tables: ["NonExistentType"] })).rejects.toThrow(
         "The following tables were not found in any namespace: NonExistentType",
       );
+    });
+
+    test("does not truncate when listing a namespace's tables fails", async () => {
+      const { initOperatorClient } = await import("#/cli/shared/client");
+      const listError = new Error("list failed");
+      const client = {
+        truncateTailorDBType: vi.fn(),
+        truncateTailorDBTypes: vi.fn(),
+        listTailorDBTypes: vi
+          .fn()
+          .mockRejectedValueOnce(listError)
+          .mockResolvedValueOnce({ tailordbTypes: [{ name: "User" }], nextPageToken: "" }),
+      };
+      vi.mocked(initOperatorClient).mockResolvedValueOnce(
+        client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
+      );
+
+      await expect(truncate({ tables: ["User"] })).rejects.toBe(listError);
+      expect(client.truncateTailorDBType).not.toHaveBeenCalled();
     });
   });
 
@@ -325,6 +347,7 @@ describe("truncate command", () => {
         truncateTailorDBTypes: vi.fn(),
         listTailorDBTypes: vi.fn().mockResolvedValue({
           tailordbTypes: [{ name: "User" }, { name: "Order" }],
+          nextPageToken: "",
         }),
       } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
       using _json = jsonMode();
