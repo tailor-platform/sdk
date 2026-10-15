@@ -42,7 +42,7 @@ function editableJobKeys(jobId: string): readonly string[] {
 }
 
 // Keyed by the `tailor-platform/actions/<name>` a managed step uses.
-const EDITABLE_WITH_KEYS: Record<string, readonly string[]> = {
+export const EDITABLE_WITH_KEYS: Record<string, readonly string[]> = {
   "drift-check": ["ignore", "fail-on-drift"],
   "generate-check": ["ignore"],
   install: ["install-command"],

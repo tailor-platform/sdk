@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { parseDocument } from "yaml";
 import {
+  EDITABLE_WITH_KEYS,
   ENVIRONMENT_EDITABLE_JOBS,
   ManagedMergeError,
   RESULT_JOBS,
@@ -121,6 +122,17 @@ describe("RESULT_JOBS", () => {
         .map(([jobId]) => jobId),
     );
     expect(new Set(RESULT_JOBS)).toEqual(new Set(resultJobs));
+  });
+});
+
+describe("EDITABLE_WITH_KEYS", () => {
+  test("every editable input is named in the header of a generated workflow", () => {
+    const header = renderBranchWorkflow(branchBase).content.split("\nname:")[0] ?? "";
+    const missing = Object.values(EDITABLE_WITH_KEYS)
+      .flat()
+      .filter((key) => !new RegExp(`\\b${key}\\b`).test(header));
+
+    expect(missing).toEqual([]);
   });
 });
 
