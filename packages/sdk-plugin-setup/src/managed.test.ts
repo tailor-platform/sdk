@@ -436,6 +436,37 @@ describe("mergeUserContent", () => {
     expect(content).toContain("# Authenticate the private registry.\n      - name: Registry auth");
   });
 
+  describe("the preview ttl", () => {
+    const preview = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const mergePreview = (current: string) =>
+      mergeUserContent({
+        current,
+        rendered: preview.content,
+        previousIds: preview.generatedIds,
+        renderedIds: preview.generatedIds,
+        force: false,
+      });
+
+    test("keeps the user's value when the workflow is regenerated", () => {
+      const edited = preview.content.replace("ttl: 7d", "ttl: 30d");
+
+      expect(mergePreview(edited).content).toContain("ttl: 30d");
+    });
+
+    test("is added to a workflow generated before it existed", () => {
+      const legacy = preview.content.replace(/^ {10}ttl: 7d\n/m, "");
+      expect(legacy).not.toBe(preview.content);
+
+      expect(mergePreview(legacy).content).toContain("ttl: 7d");
+    });
+  });
+
   describe("an unmanaged top-level key the template writes", () => {
     const preview = renderPreviewWorkflow({
       workspaceName: "my-app",
