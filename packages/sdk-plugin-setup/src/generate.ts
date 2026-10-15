@@ -37,8 +37,14 @@ import {
   mergeUserContent,
 } from "./managed";
 import {
+  defaultLoadSeedSettings,
+  SEED_DATASET_NAME,
+  seedSettingsProblem,
+  type SeedSettings,
+} from "./seed-settings";
+import {
   appSlug,
-  detectPackageManager,
+  isPackageManager,
   renderBranchWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
@@ -47,6 +53,7 @@ import {
   type PackageManager,
   type RenderApp,
   type RenderResult,
+  type RenderSeed,
 } from "./templates";
 
 type CommonSetupOptions = {
@@ -54,6 +61,8 @@ type CommonSetupOptions = {
   /** App directory, or several deployed together in one multi-config run. */
   dir: string | readonly string[];
   environment?: string;
+  /** Package manager the workflow uses; detected from the repository root when omitted. */
+  packageManager?: PackageManager;
   force: boolean;
   outputDir: string;
   /** Injectable git runner, for testing. */
@@ -68,6 +77,10 @@ type CommonSetupOptions = {
   loadHasMigrations?: (configPath: string) => Promise<boolean>;
   /** Injectable seed plugin detector, for testing. Defaults to loading the config. */
   loadHasSeeds?: (configPath: string) => Promise<boolean>;
+  /** Seed the workspace after each deploy (`--seed` / `--seed-dataset`). */
+  seed?: RenderSeed;
+  /** Injectable seedPlugin settings loader, for testing. Defaults to loading the config. */
+  loadSeedSettings?: (configPath: string) => Promise<SeedSettings | null>;
 };
 
 export type BranchSetupOptions = CommonSetupOptions & {
@@ -123,8 +136,35 @@ async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
 }
 
 async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
-  const { plugins } = await loadConfig(configPath);
-  return plugins.some((p) => p.id === "@tailor-platform/seed");
+  return (await defaultLoadSeedSettings(configPath)) !== null;
+}
+
+async function assertSeedable(
+  options: SetupTargetOptions,
+  configPath: string,
+  multi: boolean,
+): Promise<void> {
+  const { seed } = options;
+  if (!seed) return;
+  if (multi) {
+    throw new Error(
+      "--seed is supported only for a target that deploys one app. " +
+        "Seed the workspace of a multi-app target with a step of your own after the deploy.",
+    );
+  }
+  for (const dataset of seed.datasets) {
+    if (!SEED_DATASET_NAME.test(dataset)) {
+      throw new Error(
+        `"${dataset}" is not a valid dataset name. ` +
+          "Use letters, digits, `-` and `_`, starting with a letter or digit.",
+      );
+    }
+  }
+  const loadSeedSettings = options.loadSeedSettings ?? defaultLoadSeedSettings;
+  const problem = seedSettingsProblem(seed.datasets, await loadSeedSettings(configPath));
+  if (problem !== undefined) {
+    throw new Error(`${problem} Fix seedPlugin, or regenerate the workflow without --seed.`);
+  }
 }
 
 // The name is used as the plan label, the generated file name, and the default
@@ -377,20 +417,74 @@ function assertDistinctConfigs(dirs: readonly string[], configPaths: readonly st
   }
 }
 
-function rootDeclaresSdk(outputDir: string): boolean {
+type RootManifest = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  packageManager?: unknown;
+  devEngines?: { packageManager?: unknown };
+};
+
+function readRootManifest(outputDir: string): RootManifest | undefined {
   const manifestPath = path.join(outputDir, "package.json");
-  if (!fs.existsSync(manifestPath)) return false;
-  let manifest: {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-  };
+  if (!fs.existsSync(manifestPath)) return undefined;
   try {
-    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as typeof manifest;
+    return JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as RootManifest;
   } catch (cause) {
     throw new Error("package.json at the repository root is not valid JSON. Fix it and re-run.", {
       cause,
     });
   }
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function devEnginePackageManagerNames(value: unknown): string[] {
+  return [value].flat().flatMap((entry) => {
+    const name =
+      typeof entry === "object" && entry !== null && "name" in entry
+        ? nonEmptyString(entry.name)
+        : undefined;
+    return name === undefined ? [] : [name];
+  });
+}
+
+export const LOCKFILES: ReadonlyArray<readonly [file: string, packageManager: PackageManager]> = [
+  ["pnpm-lock.yaml", "pnpm"],
+  ["yarn.lock", "yarn"],
+  ["bun.lock", "bun"],
+  ["bun.lockb", "bun"],
+  ["package-lock.json", "npm"],
+  ["npm-shrinkwrap.json", "npm"],
+];
+
+/**
+ * Detect the package manager from the lockfile at the repository root, or else
+ * from the `packageManager` or `devEngines.packageManager` field of its package.json.
+ * @param outputDir - Repository root
+ * @returns Detected package manager, or undefined when neither names a supported one
+ */
+export function detectPackageManager(outputDir: string): PackageManager | undefined {
+  const lockfile = LOCKFILES.find(([file]) => fs.existsSync(path.join(outputDir, file)));
+  if (lockfile) return lockfile[1];
+  const manifest = readRootManifest(outputDir);
+  const fromField = nonEmptyString(nonEmptyString(manifest?.packageManager)?.split("@")[0]);
+  const fromDevEngines = devEnginePackageManagerNames(manifest?.devEngines?.packageManager);
+  if (fromField !== undefined && fromDevEngines.length > 0 && !fromDevEngines.includes(fromField)) {
+    throw new Error(
+      `package.json at the repository root declares ${fromField} in packageManager but ` +
+        `${fromDevEngines.join(" or ")} in devEngines.packageManager. Make them name the same ` +
+        "package manager, or pass --package-manager to `tailor setup ci`.",
+    );
+  }
+  const declared = fromField ?? fromDevEngines.find(isPackageManager);
+  return isPackageManager(declared) ? declared : undefined;
+}
+
+function rootDeclaresSdk(outputDir: string): boolean {
+  const manifest = readRootManifest(outputDir);
+  if (manifest === undefined) return false;
   return [manifest.dependencies, manifest.devDependencies].some(
     (deps) => deps !== undefined && Object.hasOwn(deps, "@tailor-platform/sdk"),
   );
@@ -439,6 +533,19 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const configPaths = dirs.map((d) => resolveConfigPath(options.outputDir, d));
   if (multi) assertDistinctConfigs(dirs, configPaths);
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
+  await assertSeedable(options, configPath, multi);
+
+  const packageManager = options.packageManager ?? detectPackageManager(options.outputDir);
+  if (packageManager === undefined) {
+    throw new Error(
+      "Could not detect the package manager: the repository root has no lockfile " +
+        `(${LOCKFILES.map(([file]) => file).join(", ")}), and its package.json declares no ` +
+        "supported one in packageManager or devEngines.packageManager. Commit the lockfile at " +
+        "the repository root, where the generated workflow installs dependencies, or declare " +
+        "packageManager in package.json. To generate the workflow before the lockfile exists, " +
+        "pass --package-manager to `tailor setup ci`.",
+    );
+  }
 
   const loadName = options.loadConfigName ?? defaultLoadConfigName;
   const workspaceName = options.workspaceName ?? (await loadName(configPath));
@@ -451,7 +558,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   validateWorkspaceName(workspaceName);
 
   const { kind } = options;
-  const packageManager = detectPackageManager(options.outputDir);
   // The env-scoped TAILOR_PLATFORM_WORKSPACE_ID variable is only readable by a
   // job that declares `environment:`, so every plan/deploy job sets one. When
   // --environment is omitted it defaults to the workspace name.
@@ -540,6 +646,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
       restrictDispatch: options.restrictDispatch ?? false,
+      seed: options.seed,
     });
   } else if (kind === "tag") {
     branch = options.branch ?? null;
@@ -562,6 +669,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
       restrictDispatch: options.restrictDispatch ?? false,
+      seed: options.seed,
     });
   } else {
     branchAutoDetected = options.branch === undefined;
@@ -579,6 +687,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       packageManager,
       region: options.region,
       requirePreviewLabel: options.requirePreviewLabel ?? false,
+      seed: options.seed,
     });
   }
 
@@ -591,6 +700,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     environment,
     dir,
     packageManager,
+    packageManagerAutoDetected: options.packageManager === undefined,
     region: kind === "preview" ? options.region : undefined,
     requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
@@ -604,6 +714,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     seedValidate: (kind === "branch" || kind === "tag") && !apps ? hasSeeds : undefined,
     restrictDispatch:
       kind === "branch" || kind === "tag" ? (options.restrictDispatch ?? false) : undefined,
+    seed: options.seed ? { datasets: [...options.seed.datasets] } : undefined,
   };
 
   return {

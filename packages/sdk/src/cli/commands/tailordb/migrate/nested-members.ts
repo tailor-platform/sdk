@@ -147,6 +147,7 @@ export function areOwnFieldConfigsDifferent(
     if (oldSerial.start !== newSerial.start) return true;
     if (oldSerial.maxValue !== newSerial.maxValue) return true;
     if ((oldSerial.format ?? "") !== (newSerial.format ?? "")) return true;
+    if ((oldSerial.gapless ?? false) !== (newSerial.gapless ?? false)) return true;
   }
 
   if (oldField.scale !== newField.scale) return true;

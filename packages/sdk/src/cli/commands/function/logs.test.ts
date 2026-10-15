@@ -80,6 +80,43 @@ describe("composeExecutionErrorString", () => {
     });
     expect(result).toBe(`TypeError: x is undefined\n${stackTrace}`);
   });
+
+  test("returns only the message when the name is empty", () => {
+    const result = composeExecutionErrorString({
+      name: "",
+      message: "execution aborted due to timeout or cancellation",
+      stackTrace: "",
+    });
+    expect(result).toBe("execution aborted due to timeout or cancellation");
+  });
+
+  test("prepends only the message when the name is empty and stackTrace starts with frame lines", () => {
+    const stackTrace = "    at fn (file:///b.js:1:1)";
+    const result = composeExecutionErrorString({
+      name: "",
+      message: "boom",
+      stackTrace,
+    });
+    expect(result).toBe(`boom\n${stackTrace}`);
+  });
+
+  test("returns only the name when the message is empty", () => {
+    const result = composeExecutionErrorString({
+      name: "TypeError",
+      message: "",
+      stackTrace: "",
+    });
+    expect(result).toBe("TypeError");
+  });
+
+  test("returns an empty string when both the name and the message are empty", () => {
+    const result = composeExecutionErrorString({
+      name: "",
+      message: "",
+      stackTrace: "",
+    });
+    expect(result).toBe("");
+  });
 });
 
 describe("formatExecutionError", () => {
@@ -432,6 +469,24 @@ describe("logs command detail output", () => {
     await runCommand(logsCommand, ["exec-1"]);
 
     expect(stripAnsi(stdout.output)).toMatch(/errorKind\s*│\s*PLATFORM/);
+  });
+
+  test("shows a nameless error as its message alone", async () => {
+    using _stdout = captureStdoutStream();
+    using stderr = captureStderr();
+    mockClient([
+      functionExecution({
+        status: FunctionExecution_Status.FAILED,
+        errorKind: FunctionErrorKind.PLATFORM,
+        error: { message: "execution aborted due to timeout or cancellation" },
+      }),
+    ]);
+
+    await runCommand(logsCommand, ["exec-1"]);
+
+    expect(stripAnsi(stderr.output)).toContain(
+      "Error:\n  execution aborted due to timeout or cancellation\n",
+    );
   });
 
   test("omits the logs section when no entries are available", async () => {

@@ -1,14 +1,13 @@
 import { createHash } from "node:crypto";
 import {
+  PACKAGE_MANAGERS,
   renderBranchWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
-  type PackageManager,
 } from "./templates";
 
 type RenderedTemplate = { name: string; content: string; generatedIds: readonly string[] };
 
-const PACKAGE_MANAGERS: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const COMMON = { workspaceName: "my-app", environment: "production" } as const;
 
 /**
@@ -48,7 +47,12 @@ function renderAll(): RenderedTemplate[] {
       migrationDriftCheck: true,
       erdPreview: { namespaces: ["main", "analytics"] },
       restrictDispatch: true,
+      seed: { datasets: ["preview", "local"] },
     }),
+  );
+  add(
+    "branch/seed-validate",
+    renderBranchWorkflow({ ...full, branch: "main", seedValidate: true, erdPreview: null }),
   );
   add(
     "tag/full",
@@ -58,6 +62,7 @@ function renderAll(): RenderedTemplate[] {
       branch: "main",
       seedValidate: true,
       migrationDriftCheck: true,
+      seed: { datasets: [] },
       restrictDispatch: true,
     }),
   );
@@ -81,6 +86,7 @@ function renderAll(): RenderedTemplate[] {
       branch: "main",
       region: "us-west",
       requirePreviewLabel: true,
+      seed: { datasets: ["preview"] },
     }),
   );
   const apps = [

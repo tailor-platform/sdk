@@ -33,6 +33,7 @@ export interface SnapshotSerial {
   start: number;
   maxValue?: number;
   format?: string;
+  gapless?: boolean;
 }
 
 /**

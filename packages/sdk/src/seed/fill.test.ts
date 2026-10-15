@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ok } from "@toiroakr/lines-db";
@@ -44,5 +44,55 @@ describe("fillSeedData", () => {
       "C:/seed/data/Gadget.jsonl: line(s) 2 are not JSON objects, so nothing was filled in there",
     );
     expect(result.output).not.toContain("\\");
+  });
+
+  describe("schema directory", () => {
+    const emptyResult = ok({
+      filled: [],
+      tablesWithoutSchema: [],
+      unreadableLines: [],
+      unproducedFields: [],
+    });
+
+    test("looks schemas up in the directory it is given", async () => {
+      fillFields.mockResolvedValue(emptyResult);
+      const cogs = join(dir, "cogs");
+      mkdirSync(cogs);
+
+      await fillSeedData({ path: cogs, schemaDir: dir });
+
+      expect(fillFields).toHaveBeenCalledWith(
+        expect.objectContaining({ path: cogs, schemaDir: dir }),
+      );
+    });
+
+    test("fills a dataset directory or file named on its own as before, pointing at --dataset", async () => {
+      fillFields.mockResolvedValue(emptyResult);
+      writeFileSync(join(dir, "Item.schema.ts"), "");
+      const cogs = join(dir, "cogs");
+      mkdirSync(cogs);
+      const file = join(cogs, "Item.jsonl");
+      writeFileSync(file, "");
+
+      for (const path of [cogs, file]) {
+        const result = await fillSeedData({ path });
+
+        expect(fillFields).toHaveBeenLastCalledWith(
+          expect.objectContaining({ path, schemaDir: undefined }),
+        );
+        expect(result.output).toContain("run `tailor seed fill --dataset cogs`");
+      }
+    });
+
+    test("keeps looking schemas up next to the data of a data directory", async () => {
+      fillFields.mockResolvedValue(emptyResult);
+      writeFileSync(join(dir, "Item.schema.ts"), "");
+
+      await fillSeedData({ path: dir });
+
+      expect(fillFields).toHaveBeenCalledWith(
+        expect.objectContaining({ path: dir, schemaDir: undefined }),
+      );
+    });
   });
 });

@@ -41,71 +41,106 @@ export interface LoadSeedDataOptions {
   requireId?: boolean;
   /** Field names a row must supply per entity, enforced alongside `requireId`. */
   requiredFieldsByType?: Record<string, string[]>;
+  /**
+   * Field that identifies a row. With several data directories, a value
+   * defined in more than one of them is rejected. Defaults to `id`.
+   */
+  keyField?: string;
 }
 
 /**
- * Load seed rows from `<dataDir>/<typeName>.jsonl` for each entity. Missing
- * files load as empty lists.
- * @param dataDir - Directory containing the JSONL files
+ * Load seed rows from `<dataDir>/<typeName>.jsonl` for each entity, reading
+ * each data directory in order and concatenating its rows. Missing files load
+ * as empty lists.
+ * @param dataDirs - Directory, or directories in order, containing the JSONL files
  * @param typeNames - Entity names to load
  * @param options - Row validation options
  * @returns Seed rows per entity
  */
 export function loadSeedData(
-  dataDir: string,
+  dataDirs: string | readonly string[],
   typeNames: string[],
   options: LoadSeedDataOptions = {},
 ): SeedData {
-  const { requireId = false, requiredFieldsByType = {} } = options;
+  const dirs = typeof dataDirs === "string" ? [dataDirs] : dataDirs;
+  const { keyField = "id" } = options;
   const data: SeedData = {};
   for (const typeName of typeNames) {
-    const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
-    let content: string;
-    try {
-      content = readFileSync(jsonlPath, "utf-8").trim();
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        data[typeName] = [];
-        continue;
+    const rows: SeedData[string] = [];
+    const firstDefinitions = new Map<string, { file: string; line: number }>();
+    for (const dataDir of dirs) {
+      const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
+      for (const [index, row] of readSeedRows(jsonlPath, typeName, options).entries()) {
+        const key = row[keyField];
+        if (dirs.length > 1 && key !== undefined && key !== null) {
+          const keyText = JSON.stringify(key);
+          const first = firstDefinitions.get(keyText);
+          if (!first) {
+            firstDefinitions.set(keyText, { file: jsonlPath, line: index + 1 });
+          } else if (first.file !== jsonlPath) {
+            throw new Error(
+              `${jsonlPath}:${index + 1}: ${keyField} ${keyText} is already defined at ${first.file}:${first.line}. ` +
+                "A row can be defined in only one of the data directories applied together.",
+            );
+          }
+        }
+        rows.push(row);
       }
-      throw error;
     }
-    data[typeName] = content
-      ? content.split("\n").map((line, index) => {
-          let value: unknown;
-          try {
-            value = JSON.parse(line);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`Invalid JSON in ${jsonlPath} at line ${index + 1}: ${message}`, {
-              cause: error,
-            });
-          }
-          if (value === null || typeof value !== "object" || Array.isArray(value)) {
-            throw new Error(
-              `Invalid seed row in ${jsonlPath} at line ${index + 1}: expected a JSON object`,
-            );
-          }
-          const record = value as Record<string, unknown>;
-          if (requireId && (record.id === undefined || record.id === null)) {
-            throw new Error(
-              `${jsonlPath}:${index + 1}: \`id\` is required with --upsert. ` +
-                "Run `tailor seed fill` to write an id into every row that does not have one.",
-            );
-          }
-          const missingRequiredField = (requiredFieldsByType[typeName] ?? []).find(
-            (field) => record[field] === undefined || record[field] === null,
-          );
-          if (missingRequiredField) {
-            throw new Error(
-              `${jsonlPath}:${index + 1}: field \`${missingRequiredField}\` is required with --upsert`,
-            );
-          }
-          return record as SeedData[string][number];
-        })
-      : [];
+    data[typeName] = rows;
   }
   return data;
+}
+
+function readSeedRows(
+  jsonlPath: string,
+  typeName: string,
+  options: LoadSeedDataOptions,
+): SeedData[string] {
+  const { requireId = false, requiredFieldsByType = {} } = options;
+  let content: string;
+  try {
+    content = readFileSync(jsonlPath, "utf-8").trim();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+  return content
+    ? content.split("\n").map((line, index) => {
+        let value: unknown;
+        try {
+          value = JSON.parse(line);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`Invalid JSON in ${jsonlPath} at line ${index + 1}: ${message}`, {
+            cause: error,
+          });
+        }
+        if (value === null || typeof value !== "object" || Array.isArray(value)) {
+          throw new Error(
+            `Invalid seed row in ${jsonlPath} at line ${index + 1}: expected a JSON object`,
+          );
+        }
+        const record = value as Record<string, unknown>;
+        if (requireId && (record.id === undefined || record.id === null)) {
+          throw new Error(
+            `${jsonlPath}:${index + 1}: \`id\` is required with --upsert. ` +
+              "Run `tailor seed fill` to write an id into every row that does not have one.",
+          );
+        }
+        const missingRequiredField = (requiredFieldsByType[typeName] ?? []).find(
+          (field) => record[field] === undefined || record[field] === null,
+        );
+        if (missingRequiredField) {
+          throw new Error(
+            `${jsonlPath}:${index + 1}: field \`${missingRequiredField}\` is required with --upsert`,
+          );
+        }
+        return record as SeedData[string][number];
+      })
+    : [];
 }
 
 /**

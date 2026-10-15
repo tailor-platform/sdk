@@ -24,6 +24,7 @@ vi.mock("@politty/zod", async () => {
 const templateFiles: [output: string, commands: string[]][] = [
   ["application", ["init", "generate", "deploy", "remove", "show", "open", "api"]],
   ["tailordb", ["tailordb"]],
+  ["data", ["data"]],
   ["query", ["query"]],
   ["user", ["login", "logout", "auth", "user"]],
   ["organization", ["organization"]],

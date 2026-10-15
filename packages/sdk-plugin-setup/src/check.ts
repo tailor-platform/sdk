@@ -18,6 +18,7 @@ import {
   isManagedHash,
   ManagedMergeError,
 } from "./managed";
+import { defaultLoadSeedSettings, seedSettingsProblem, type SeedSettings } from "./seed-settings";
 import { TEMPLATE_VERSION } from "./templates";
 
 const DRIFT_COUNT_MARKER = "TAILOR_SETUP_CHECK_DRIFT_COUNT";
@@ -35,7 +36,8 @@ type DriftRule =
   | "default-branch"
   | "erd-namespaces"
   | "migration-drift"
-  | "seed-validate";
+  | "seed-validate"
+  | "seed";
 
 export type DriftFinding = {
   /** Human label for the target: `<kind> <workspaceName>`. */
@@ -68,6 +70,8 @@ export type TargetState = {
   hasMigrations?: boolean;
   /** Whether the current config uses the seed plugin (branch/tag only). */
   hasSeeds?: boolean;
+  /** Why the current seedPlugin settings cannot seed, for a target that seeds. */
+  seedProblem?: string;
   /** Current state of each app of a multi-directory target, in the order the lock records them. */
   apps?: AppState[];
 };
@@ -266,6 +270,16 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     });
   }
 
+  if (target.inputs.seed !== undefined && state.seedProblem !== undefined) {
+    findings.push({
+      target: id,
+      rule: "seed",
+      message:
+        `${state.seedProblem} The deploy job still seeds the workspace (tailor-seed): ` +
+        "fix seedPlugin, or re-run setup without --seed.",
+    });
+  }
+
   return findings;
 }
 
@@ -332,6 +346,8 @@ export type CheckGitHubOptions = {
   loadHasMigrations?: (configPath: string) => Promise<boolean> | boolean;
   /** Injectable seed plugin detector, for testing. Defaults to loading the config. */
   loadHasSeeds?: (configPath: string) => Promise<boolean> | boolean;
+  /** Injectable seedPlugin settings loader, for testing. Defaults to loading the config. */
+  loadSeedSettings?: (configPath: string) => Promise<SeedSettings | null>;
 };
 
 async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
@@ -373,6 +389,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
   const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
   const loadHasSeeds = options.loadHasSeeds ?? defaultLoadHasSeeds;
+  const loadSeedSettings = options.loadSeedSettings ?? defaultLoadSeedSettings;
 
   const findings: DriftFinding[] = [];
   for (const target of lock.targets) {
@@ -407,6 +424,10 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
       configAbs !== null &&
       configExists
         ? await loadHasSeeds(configAbs)
+        : undefined;
+    const seedProblem =
+      target.inputs.seed !== undefined && configAbs !== null && configExists
+        ? seedSettingsProblem(target.inputs.seed.datasets, await loadSeedSettings(configAbs))
         : undefined;
     const planKind = target.kind === "branch" || target.kind === "tag";
     const apps =
@@ -449,6 +470,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
         erdNamespaces,
         hasMigrations,
         hasSeeds,
+        seedProblem,
         apps,
       }),
     );

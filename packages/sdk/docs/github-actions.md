@@ -194,6 +194,26 @@ the `plan` job as well as `deploy`, because `plan` must enter the environment to
 read the variable. (A token-based read that lets `plan` run without entering the
 environment is planned.)
 
+## Package manager
+
+The generated workflow sets up your package manager, installs dependencies with
+it, and runs `tailor` through it. `setup ci` detects the package manager from the
+lockfile at the repository root (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`,
+`bun.lockb`, `package-lock.json`, or `npm-shrinkwrap.json`), or, when there is
+none, from the `packageManager` or `devEngines.packageManager` field of the root
+`package.json`. When neither names one, `setup ci` stops instead of guessing.
+
+Pass `--package-manager` (`pnpm`, `npm`, `yarn`, or `bun`) to choose it
+yourself, for example to generate the workflow before the lockfile exists:
+
+```bash
+tailor setup ci branch --name my-app-stg --package-manager pnpm
+```
+
+The workflow installs dependencies at the repository root, so commit the
+lockfile there before it runs. `tailor setup update` keeps a package manager
+chosen with `--package-manager` and detects it again otherwise.
+
 ## Generated files
 
 Running a workflow setup subcommand creates or updates:
@@ -232,12 +252,15 @@ Everything else is yours, and re-running `setup` keeps it:
   default, and re-running `setup` keeps your edits to it. If you delete it,
   re-running `setup` adds the default back.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
-  `container`, and `env`. On a managed job generated without an
-  `environment:` (such as `tailor-tag-guard` or `tailor-erd-preview`), you can
-  also add one, for example so a step you added there can read that GitHub
-  Environment's secrets. The `environment:` of `tailor-plan`, `tailor-deploy`,
-  and the preview jobs comes from `--environment`, so change it with that
-  option instead.
+  `container`, and `env`. If every managed job that re-running `setup` keeps
+  uses the same `runs-on` you set, such as self-hosted runners, a managed job
+  it adds (for example, the ERD preview jobs when you add `--erd-preview`)
+  uses it too; otherwise, set the new job's `runs-on` yourself. On a managed
+  job generated without an `environment:` (such as `tailor-tag-guard` or
+  `tailor-erd-preview`), you can also add one, for example so a step you added
+  there can read that GitHub Environment's secrets. The `environment:` of
+  `tailor-plan`, `tailor-deploy`, and the preview jobs comes from
+  `--environment`, so change it with that option instead.
 - **These inputs of managed steps:** `ignore` on `tailor-generate-check` and
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
@@ -550,6 +573,67 @@ plan job also enters the environment, allow `refs/pull/*/merge` as well so pull
 request plans keep running, and note that dry runs from other branches are then
 rejected too.
 
+## Seeding the workspace after deploy
+
+Pass `--seed` to `setup ci branch`, `setup ci tag`, or `setup ci preview` to seed
+the workspace with `tailor seed apply` right after each deploy. Add
+`--seed-dataset <name>` (repeatable, implies `--seed`) to apply
+[datasets](https://github.com/tailor-platform/sdk/tree/main/packages/sdk-plugin-seed#datasets)
+on top of the base seed data:
+
+```bash
+tailor setup ci branch --seed-dataset stg
+tailor setup ci preview --region us-west --seed-dataset preview
+```
+
+The deploy job gains a `tailor-seed` step after the deploy step. Branch targets
+validate seed data before deploy and also in the PR or dry-run plan job; tag
+targets validate it in the plan job before deploy. Both use
+`tailor seed validate --upsert` with the selected datasets to check the `id`
+and required fields that `seed apply --upsert` needs. Preview targets validate
+and apply the data after deploy.
+
+| Target      | Seeds with                           | Effect                                                                        |
+| ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
+| branch, tag | `tailor seed apply --upsert`         | The fields of each committed seed row are written; other rows are kept        |
+| preview     | `tailor seed apply --truncate --yes` | The preview workspace is emptied, IdP users included, and seeded from scratch |
+
+Setup stops unless the config uses `seedPlugin` with `machineUserName`, which
+names the machine user that seeds, and an existing `<distPath>/data/` directory.
+Every `--seed-dataset` must name an entry of
+the `seedPlugin` `datasets` option or a directory under `<distPath>/data/`.
+Commit the dataset directories the workflow seeds: a gitignored dataset such as
+a per-developer `local/` is not in the CI checkout.
+Install `@tailor-platform/sdk-plugin-seed` so the `tailor seed` commands resolve
+in CI. For branch and tag targets, use a version that supports
+`tailor seed validate --upsert`; update the setup and seed plugins together.
+Give every TailorDB seed row an `id` and
+every field its table requires: `--upsert` matches rows by id, so run
+`tailor seed fill` and commit the result.
+Seeding is available for a target that deploys one app.
+
+Before enabling it, note that:
+
+- Every branch or tag deploy writes the fields of the committed seed rows over
+  the workspace, `_User` rows and their passwords included, so an edit to one of
+  those fields in the workspace is undone. Each row is updated like any other update: update hooks
+  and validation run, `updatedAt` changes, and executors with
+  `recordUpdatedTrigger` fire once per seeded row on every deploy.
+- Every preview deploy deletes the data reviewers added to the preview
+  workspace. That is every push, and with `--require-preview-label` also every
+  label added to the pull request, since each one redeploys the preview.
+- A seed failure fails the deploy job and its notification, although the deploy
+  itself went through.
+- The step shares the deploy job's timeout. IdP users take about a second each.
+- Steps you added after the deploy step stay right after it, so they run before
+  `tailor-seed`. Move a step below `tailor-seed` when it needs the seeded data,
+  and move it again if you regenerate without `--seed` and then with it.
+- `tailor-seed` is an SDK-managed step. To seed another way (a different mode,
+  `--skip-idp`, a condition), leave `--seed` off and add your own step.
+
+Re-run `setup ci` with the flags each time you regenerate the workflow; `setup
+update` keeps them.
+
 ## Monorepo setup
 
 For a monorepo where your SDK app lives in a subdirectory, pass `--dir`:
@@ -670,8 +754,9 @@ a branch target deploys only its target branch, so use Option 1 there.
 - **Schema and data are not rolled back.** If the older config expects a schema
   state that no longer exists, the plan may show errors. In that case, review
   the diff carefully before proceeding.
-- **Seed data** is not part of the deployment pipeline and is unaffected by
-  rollbacks.
+- **Seed data** is not rolled back. Without `--seed`, the pipeline does not
+  touch it; with `--seed`, deploying an older commit seeds the rows committed
+  there on top of the current data.
 - **Static websites** are not yet integrated into the generated pipeline.
   Static asset rollbacks must be performed manually.
 
@@ -778,10 +863,11 @@ It regenerates every workflow recorded in
 have to re-type `setup ci branch`, `setup ci tag`, and the rest one by one.
 Your own jobs, steps, and settings are kept (see
 [Customizing the generated workflow](#customizing-the-generated-workflow)). A
-branch that was detected from the repository default branch is detected again,
-and the parts that follow your config — the migration drift check, seed
-validation, and ERD preview namespaces — are derived
-from the current `tailor.config.ts`.
+branch that was detected from the repository default branch and a
+[package manager](#package-manager) that was detected from the repository root
+are detected again, and the parts that follow your config — the migration drift
+check, seed validation, and ERD preview namespaces — are derived from the
+current `tailor.config.ts`.
 
 A target that cannot be regenerated, for example because you edited a managed
 part, does not stop the others: `update` regenerates the rest, then lists the

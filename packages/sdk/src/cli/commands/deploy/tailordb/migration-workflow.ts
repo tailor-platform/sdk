@@ -47,6 +47,25 @@ const CHUNK_SIZE = 64 * 1024;
 /** Poll interval while waiting for the migration workflow to finish. */
 const POLL_INTERVAL_MS = 3000;
 
+/** Rereads of a finished run's logs when the start of its script has not arrived yet. */
+const START_LOG_REREADS = 2;
+
+/**
+ * Logged first by every job of a migration run. Platform statuses and start times report a job as
+ * running well before its code starts, so this line is what tells that the script is running.
+ */
+export const MIGRATION_SCRIPT_STARTED_LOG = "[tailor-sdk] migration script started";
+
+type RunState = "waiting" | "running" | "unknown";
+
+/** Progress of a migration run as observed while waiting for it, timed with `performance.now()`. */
+export type MigrationRunEvent =
+  | { type: "waiting"; at: number }
+  | { type: "running"; at: number }
+  | { type: "unknown"; at: number }
+  | { type: "polled"; at: number; execution: WorkflowExecution }
+  | { type: "finished"; at: number; scriptStarted: boolean };
+
 export interface LongRunningMigrationOptions {
   client: OperatorClient;
   workspaceId: string;
@@ -57,7 +76,15 @@ export interface LongRunningMigrationOptions {
   invoker: AuthInvoker;
   appName: string;
   appId: string | undefined;
+  /** Whether the migrating namespace is in maintenance mode. */
+  maintenanceMode: boolean;
   pollIntervalMs?: number;
+  /**
+   * Called when no job is running the script (`waiting`, also when waiting starts), when a job is
+   * (`running`), when a poll cannot tell (`unknown`), on every poll that finds the run active, and
+   * when the run finished, with whether any job was seen running the script.
+   */
+  onRunEvent?: (event: MigrationRunEvent) => void;
 }
 
 export interface LongRunningMigrationResult {
@@ -79,7 +106,8 @@ export function migrationWorkflowResourceName(namespace: string, migrationNumber
 }
 
 /**
- * Upload the bundled migration script to the function registry.
+ * Upload the bundled migration script to the function registry, behind a line logging
+ * {@link MIGRATION_SCRIPT_STARTED_LOG}.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param name - Function registry name
@@ -97,13 +125,14 @@ async function uploadMigrationFunction(
   appId: string | undefined,
   mode: "create" | "update" = "create",
 ): Promise<void> {
-  const buffer = Buffer.from(code, "utf-8");
+  const content = `globalThis.console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n${code}`;
+  const buffer = Buffer.from(content, "utf-8");
   const info = {
     workspaceId,
     name,
     description: "Temporary function for a TailorDB migration",
     sizeBytes: BigInt(buffer.length),
-    contentHash: crypto.createHash("sha256").update(code, "utf-8").digest("hex"),
+    contentHash: crypto.createHash("sha256").update(content, "utf-8").digest("hex"),
   };
 
   /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Info header followed by content chunks */
@@ -388,7 +417,7 @@ export async function executeMigrationAsWorkflow(
 
   let result: LongRunningMigrationResult;
   try {
-    result = await waitForMigrationWorkflow(client, workspaceId, executionId, pollInterval);
+    result = await waitForMigrationWorkflow(options, executionId);
   } catch (error) {
     throw outcomeUnknownError(
       options,
@@ -477,8 +506,10 @@ function outcomeUnknownError(
       `Run ${executionsHint} until its execution has finished or none is listed. ` +
       `If the execution succeeded, run ${syncHint(migrationNumber)}; otherwise run ${syncHint(migrationNumber - 1)}. ` +
       "Then deploy again. Do not deploy before running sync, even with `--no-schema-check` to skip the drift check: " +
-      "the deploy may run the `main` script again even if the execution succeeded. " +
-      `Until then, the tables of namespace '${namespace}' stay in maintenance mode.`,
+      "the deploy may run the `main` script again even if the execution succeeded." +
+      (options.maintenanceMode
+        ? ` Until then, the tables of namespace '${namespace}' stay in maintenance mode.`
+        : ""),
     context: {
       namespace,
       migrationNumber,
@@ -491,7 +522,9 @@ function outcomeUnknownError(
 
 interface PollExecutionOptions {
   /** Called with each polled execution that is still active. */
-  onActive?: (execution: WorkflowExecution) => void;
+  onActive?: (execution: WorkflowExecution) => void | Promise<void>;
+  /** Called for each poll whose transient error was retried. */
+  onPollFailed?: () => void;
 }
 
 /**
@@ -519,6 +552,7 @@ async function pollUntilTerminal(
       ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
     } catch (error) {
       if (!isRetryableWaitError(error)) throw error;
+      options.onPollFailed?.();
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
       continue;
     }
@@ -529,27 +563,119 @@ async function pollUntilTerminal(
       });
     }
     if (!isExecutionActive(execution)) return execution;
-    options.onActive?.(execution);
+    await options.onActive?.(execution);
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
   }
 }
 
+type ObserveRunParams = CollectJobOutcomesOptions & {
+  onActive?: PollExecutionOptions["onActive"];
+};
+
 /**
- * Wait for a migration workflow execution to finish and report its result.
+ * Whether a function execution has logged {@link MIGRATION_SCRIPT_STARTED_LOG}. A failed read
+ * does not fail the run being observed.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @param executionId - Workflow execution id
- * @param pollInterval - Poll interval in milliseconds
- * @returns Execution result
+ * @param executionId - Function execution id
+ * @returns Whether the start was logged, or undefined when the logs could not be read
  */
-async function waitForMigrationWorkflow(
+async function hasLoggedScriptStart(
   client: OperatorClient,
   workspaceId: string,
   executionId: string,
-  pollInterval: number,
+): Promise<boolean | undefined> {
+  try {
+    const { execution } = await client.getFunctionExecution({ workspaceId, executionId });
+    return execution?.logEntries.some((entry) => entry.message === MIGRATION_SCRIPT_STARTED_LOG);
+  } catch (error) {
+    logger.debug(
+      `Could not read the logs of migration job execution '${executionId}': ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Wait for a migration run to finish, reporting through `onRunEvent` whether a job is running the
+ * script, and collect its jobs' outcomes.
+ * @param options - Execution options
+ * @param executionId - Workflow execution id
+ * @param params - How to poll the run and read its jobs
+ * @returns The execution in its terminal state and its jobs' outcomes
+ */
+async function observeRun(
+  options: LongRunningMigrationOptions,
+  executionId: string,
+  params: ObserveRunParams,
+): Promise<{ execution: WorkflowExecution; outcomes: JobOutcomes }> {
+  const { client, workspaceId, onRunEvent } = options;
+  const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
+  const started = new Set<string>();
+  let state: RunState = "waiting";
+  const report = (next: RunState) => {
+    if (next === state) return;
+    state = next;
+    onRunEvent?.({ type: next, at: performance.now() });
+  };
+  onRunEvent?.({ type: "waiting", at: performance.now() });
+
+  const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval, {
+    onPollFailed: () => report("unknown"),
+    onActive: async (active) => {
+      let next: RunState = "waiting";
+      for (const job of active.jobExecutions) {
+        if (job.status !== WorkflowJobExecution_Status.RUNNING || !params.runsScript(job)) continue;
+        const id = job.executionId;
+        if (!started.has(id)) {
+          const logged = id ? await hasLoggedScriptStart(client, workspaceId, id) : undefined;
+          if (logged) started.add(id);
+          else if (logged === undefined) next = "unknown";
+        }
+        if (started.has(id)) {
+          next = "running";
+          break;
+        }
+      }
+      report(next);
+      onRunEvent?.({ type: "polled", at: performance.now(), execution: active });
+      await params.onActive?.(active);
+    },
+  });
+  const finishedAt = performance.now();
+
+  let outcomes = await collectJobOutcomes(client, workspaceId, execution, params);
+  const startLogPending = () =>
+    started.size === 0 &&
+    !outcomes.scriptStarted &&
+    execution.status === WorkflowExecution_Status.SUCCESS;
+  for (let reread = 0; reread < START_LOG_REREADS && startLogPending(); reread++) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, 1000)));
+    outcomes = await collectJobOutcomes(client, workspaceId, execution, params);
+  }
+  onRunEvent?.({
+    type: "finished",
+    at: finishedAt,
+    scriptStarted: started.size > 0 || outcomes.scriptStarted,
+  });
+  return { execution, outcomes };
+}
+
+/**
+ * Wait for a migration workflow execution to finish and report its result.
+ * @param options - Execution options
+ * @param executionId - Workflow execution id
+ * @returns Execution result
+ */
+async function waitForMigrationWorkflow(
+  options: LongRunningMigrationOptions,
+  executionId: string,
 ): Promise<LongRunningMigrationResult> {
-  const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval);
-  const outcomes = await collectJobOutcomes(client, workspaceId, execution);
+  const { execution, outcomes } = await observeRun(options, executionId, {
+    runsScript: () => true,
+  });
   if (execution.status === WorkflowExecution_Status.SUCCESS) {
     return { success: true, logs: outcomes.logs };
   }
@@ -563,6 +689,22 @@ async function waitForMigrationWorkflow(
   return { success: false, logs: outcomes.logs, error: extractFailureMessage(outcomes) };
 }
 
+interface JobOutcomes {
+  logs: string;
+  failures: string[];
+  /** Whether a job running the script logged {@link MIGRATION_SCRIPT_STARTED_LOG}. */
+  scriptStarted: boolean;
+}
+
+interface CollectJobOutcomesOptions {
+  /** Prefix for a job's log lines, e.g. the step it ran. */
+  labelJob?: (job: WorkflowJobExecution) => string | undefined;
+  /** Whether a job's error or result can explain the failure. */
+  reportsFailure?: (job: WorkflowJobExecution) => boolean;
+  /** Whether a job runs the migration script itself, as opposed to orchestrating it. */
+  runsScript: (job: WorkflowJobExecution) => boolean;
+}
+
 /**
  * Collect the logs and failure reasons of every job in a workflow execution.
  *
@@ -571,17 +713,16 @@ async function waitForMigrationWorkflow(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param execution - Workflow execution to read jobs from
- * @param labelJob - Prefix for a job's log lines, e.g. the step it ran
- * @param reportsFailure - Whether a job's error or result can explain the failure
- * @returns Concatenated job logs and the reasons the jobs failed
+ * @param options - How to label and judge each job
+ * @returns Concatenated job logs, the reasons the jobs failed, and whether the script started
  */
 async function collectJobOutcomes(
   client: OperatorClient,
   workspaceId: string,
   execution: WorkflowExecution,
-  labelJob: (job: WorkflowJobExecution) => string | undefined = () => undefined,
-  reportsFailure: (job: WorkflowJobExecution) => boolean = () => true,
-): Promise<{ logs: string; failures: string[] }> {
+  options: CollectJobOutcomesOptions,
+): Promise<JobOutcomes> {
+  const { labelJob = () => undefined, reportsFailure = () => true, runsScript } = options;
   const outcomes = await Promise.all(
     execution.jobExecutions.map(async (job) => {
       const label = labelJob(job);
@@ -597,10 +738,15 @@ async function collectJobOutcomes(
         const failure = reportsFailure(job)
           ? functionExecution.error?.message.trim() || functionExecution.result.trim() || ""
           : "";
-        const logs = joinFunctionLogMessages(functionExecution.logEntries);
+        const scriptEntries = functionExecution.logEntries.filter(
+          (entry) => entry.message !== MIGRATION_SCRIPT_STARTED_LOG,
+        );
+        const logs = joinFunctionLogMessages(scriptEntries);
         return {
           logs: label && logs ? prefixLines(logs, `[${label}] `) : logs,
           failure,
+          scriptStarted:
+            runsScript(job) && scriptEntries.length < functionExecution.logEntries.length,
         };
       } catch {
         return undefined;
@@ -616,6 +762,7 @@ async function collectJobOutcomes(
     failures: outcomes
       .map((outcome) => outcome?.failure)
       .filter((failure): failure is string => !!failure),
+    scriptStarted: outcomes.some((outcome) => outcome?.scriptStarted),
   };
 }
 
@@ -625,7 +772,7 @@ async function collectJobOutcomes(
  * @param outcomes - Collected job logs and failure reasons
  * @returns Failure message
  */
-function extractFailureMessage(outcomes: { logs: string; failures: string[] }): string {
+function extractFailureMessage(outcomes: JobOutcomes): string {
   const failure = outcomes.failures.at(-1);
   if (failure) return failure;
 
@@ -697,8 +844,13 @@ export interface MigrationStepsWorkflowOptions extends LongRunningMigrationOptio
   onBeforeStart: () => Promise<void>;
   /** Called as soon as a new execution exists, before waiting on it. */
   onExecutionStarted: (executionId: string) => Promise<void>;
-  /** Reports what happens to an earlier run. */
-  notify: (level: "info" | "warn", message: string) => void;
+  /**
+   * Steps of the earlier run that are reported as done instead of run again.
+   * Each must have succeeded in that run; see {@link assertSkippableSteps}.
+   */
+  skipSteps?: readonly string[];
+  /** Reports what happens to an earlier run, with what to do about it when there is something to do. */
+  notify: (level: "info" | "warn", message: string, suggestion?: string) => void;
   /** Called while waiting, with the number of steps that have completed. */
   onProgress?: (completedSteps: number, totalSteps: number) => void;
 }
@@ -745,6 +897,184 @@ function classifySteps(
     );
   });
   return { completed, failed };
+}
+
+interface SucceededSteps {
+  steps: string[];
+  /** Succeeded step jobs whose result could not be read, so their step is not in `steps`. */
+  unreadable: number;
+}
+
+async function readSucceededStepNames(
+  client: OperatorClient,
+  workspaceId: string,
+  execution: WorkflowExecution,
+  runnerName: string,
+): Promise<SucceededSteps> {
+  const succeeded = execution.jobExecutions
+    .filter(
+      (job) =>
+        job.kind.case === "jobFunction" &&
+        job.kind.value.name === runnerName &&
+        job.status === WorkflowJobExecution_Status.SUCCESS &&
+        job.executionId,
+    )
+    .toSorted((a, b) => (a.position?.callIndex ?? 0) - (b.position?.callIndex ?? 0));
+  const names = await Promise.all(
+    succeeded.map(async (job) => {
+      try {
+        const { execution: functionExecution } = await client.getFunctionExecution({
+          workspaceId,
+          executionId: job.executionId,
+        });
+        const parsed: unknown = JSON.parse(functionExecution?.result ?? "");
+        const step = (parsed as { step?: unknown } | null)?.step;
+        return typeof step === "string" ? step : undefined;
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+  return {
+    steps: [...new Set(names.filter((name): name is string => name !== undefined))],
+    unreadable: names.filter((name) => name === undefined).length,
+  };
+}
+
+type SkipRejection = "unknown_step" | "no_earlier_run" | "not_succeeded" | "unverified";
+
+const SKIP_REJECTION_REASONS: Record<SkipRejection, string> = {
+  unknown_step: "is not a step of this migration",
+  no_earlier_run: "has no earlier run to have succeeded in",
+  not_succeeded: "did not succeed in the earlier run",
+  unverified: "could not be verified because the earlier run's step results could not be read",
+};
+
+export interface SkippableStepsOptions {
+  client: OperatorClient;
+  workspaceId: string;
+  namespace: string;
+  migrationNumber: number;
+  /** Step names of the migration, in execution order. */
+  order: readonly string[];
+  /** What an earlier deploy recorded for this migration, if anything. */
+  inProgress: { executionId?: string } | undefined;
+  /** Steps the caller asked to skip. */
+  requested: readonly string[];
+}
+
+function skipSuggestion(succeededSteps: readonly string[], order: readonly string[]): string {
+  const skippable = succeededSteps.filter((step) => order.includes(step));
+  if (skippable.length > 0) {
+    return `Skip only steps that succeeded in the earlier run and are still steps of this migration: ${skippable.join(", ")}.`;
+  }
+  if (succeededSteps.length > 0) {
+    return "None of the steps that succeeded in the earlier run is still a step of this migration, so there is nothing to skip. Remove --migration-skip-steps for this migration.";
+  }
+  return "Skipping applies only to a migration that an earlier deploy left partially applied, and only to its steps that succeeded. Remove --migration-skip-steps for this migration.";
+}
+
+/**
+ * Reject a request to skip steps that did not succeed in the migration's
+ * earlier run, before anything of the migration runs.
+ * @param options - The requested steps and where the earlier run is recorded
+ */
+export async function assertSkippableSteps(options: SkippableStepsOptions): Promise<void> {
+  const { client, workspaceId, namespace, migrationNumber, order, inProgress, requested } = options;
+  const name = migrationWorkflowResourceName(namespace, migrationNumber);
+  const execution = inProgress
+    ? await findRecordedExecution(client, workspaceId, name, inProgress.executionId)
+    : undefined;
+  const { steps: succeededSteps, unreadable } = execution
+    ? await readSucceededStepNames(client, workspaceId, execution, migrationStepRunnerName(name))
+    : { steps: [], unreadable: 0 };
+  const invalid = requested.flatMap((step) => {
+    const reason: SkipRejection | undefined = !order.includes(step)
+      ? "unknown_step"
+      : !execution
+        ? "no_earlier_run"
+        : !succeededSteps.includes(step)
+          ? unreadable > 0
+            ? "unverified"
+            : "not_succeeded"
+          : undefined;
+    return reason ? [{ step, reason }] : [];
+  });
+  if (invalid.length === 0) return;
+  const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
+  const onlyUnverified = invalid.every(({ reason }) => reason === "unverified");
+  throw CLIError({
+    code: onlyUnverified ? "MIGRATION_SKIP_STEPS_UNVERIFIED" : "MIGRATION_SKIP_STEPS_INVALID",
+    message:
+      `Cannot skip steps of migration ${migrationLabel}: ` +
+      invalid.map(({ step, reason }) => `'${step}' ${SKIP_REJECTION_REASONS[reason]}`).join("; ") +
+      ".",
+    suggestion: onlyUnverified
+      ? "Deploy again to retry reading the earlier run; if it keeps failing, check connectivity to the platform."
+      : skipSuggestion(succeededSteps, order),
+    context: {
+      namespace,
+      migrationNumber,
+      requested: [...requested],
+      invalid,
+      succeededSteps,
+      unreadableSteps: unreadable,
+    },
+  });
+}
+
+interface RerunDescriptionParams {
+  migrationLabel: string;
+  namespace: string;
+  reason: string;
+  succeeded: SucceededSteps;
+  order: readonly string[];
+  skipped: readonly string[];
+}
+
+function describeRerun(params: RerunDescriptionParams): { message: string; suggestion: string } {
+  const { migrationLabel, namespace, reason, succeeded, order, skipped } = params;
+  const base = `Migration ${migrationLabel} cannot be resumed because ${reason}`;
+  const unlisted =
+    succeeded.unreadable > 0
+      ? ` The results of ${succeeded.unreadable} succeeded step job${succeeded.unreadable === 1 ? "" : "s"} could not be read, so steps that succeeded may be missing from this list.`
+      : "";
+  const skipOption = (steps: readonly string[]) =>
+    `--migration-skip-steps ${steps.map((step) => `${namespace}/${step}`).join(",")}`;
+  const rerunning = succeeded.steps.filter((step) => !skipped.includes(step));
+  const rerunningSkippable = rerunning.filter((step) => order.includes(step));
+  if (skipped.length > 0) {
+    const stillRunning =
+      rerunning.length > 0
+        ? ` ${rerunning.join(", ")} already succeeded but ${rerunning.length === 1 ? "runs" : "run"} again.`
+        : "";
+    return {
+      message: `${base}; starting it again and skipping ${skipped.join(", ")}.${stillRunning}${unlisted}`,
+      suggestion:
+        "Every other step runs again, so each must be safe to run twice." +
+        (rerunningSkippable.length > 0
+          ? ` To skip ${rerunningSkippable.join(", ")} as well, pass ${skipOption([...skipped, ...rerunningSkippable])} on a deploy that changes the steps.`
+          : ""),
+    };
+  }
+  const message =
+    succeeded.steps.length === 0
+      ? `${base}; every step runs again.${unlisted}`
+      : `${base}; every step runs again, including ${succeeded.steps.join(", ")}, which already succeeded.${unlisted}`;
+  if (rerunningSkippable.length === 0) {
+    return {
+      message,
+      suggestion:
+        "A step that had already committed would run a second time, so each step must be safe to run twice.",
+    };
+  }
+  return {
+    message,
+    suggestion:
+      "A step that is not safe to run twice breaks on its second run, and this deploy starts the run without waiting. " +
+      `To skip succeeded steps on a deploy that changes the steps of a migration in progress, pass ${skipOption(rerunningSkippable)}. ` +
+      "A renamed step cannot be skipped.",
+  };
 }
 
 async function listMigrationExecutions(
@@ -860,29 +1190,39 @@ async function readWorkflowPlan(
   return response?.metadata?.labels[MIGRATION_PLAN_LABEL_KEY];
 }
 
+function stepJobOptions(
+  runnerName: string,
+  order: readonly string[],
+): Required<CollectJobOutcomesOptions> {
+  const runsScript = (job: WorkflowJobExecution) =>
+    job.kind.case === "jobFunction" && job.kind.value.name === runnerName;
+  return {
+    runsScript,
+    labelJob: (job) => {
+      if (!runsScript(job)) return undefined;
+      const index = job.position?.callIndex;
+      return index === undefined ? undefined : order[index];
+    },
+    reportsFailure: (job) =>
+      job.status === WorkflowJobExecution_Status.FAILED ||
+      job.status === WorkflowJobExecution_Status.CANCELED,
+  };
+}
+
 async function summarizeSteps(
   client: OperatorClient,
   workspaceId: string,
   execution: WorkflowExecution,
   runnerName: string,
   order: readonly string[],
+  outcomes?: JobOutcomes,
 ): Promise<MigrationStepsWorkflowResult> {
   const steps = classifySteps(execution, runnerName, order);
-  const outcomes = await collectJobOutcomes(
-    client,
-    workspaceId,
-    execution,
-    (job) => {
-      if (job.kind.case !== "jobFunction" || job.kind.value.name !== runnerName) return undefined;
-      const index = job.position?.callIndex;
-      return index === undefined ? undefined : order[index];
-    },
-    (job) =>
-      job.status === WorkflowJobExecution_Status.FAILED ||
-      job.status === WorkflowJobExecution_Status.CANCELED,
-  );
+  const jobOutcomes =
+    outcomes ??
+    (await collectJobOutcomes(client, workspaceId, execution, stepJobOptions(runnerName, order)));
   const base = {
-    logs: outcomes.logs,
+    logs: jobOutcomes.logs,
     executionId: execution.id,
     completedSteps: steps.completed,
     failedSteps: steps.failed,
@@ -894,7 +1234,7 @@ async function summarizeSteps(
   const error =
     execution.status === WorkflowExecution_Status.CANCELED
       ? "Migration workflow execution was canceled."
-      : extractFailureMessage(outcomes);
+      : extractFailureMessage(jobOutcomes);
   return { success: false, error, ...base };
 }
 
@@ -906,16 +1246,16 @@ async function waitForSteps(
   const runnerName = migrationStepRunnerName(
     migrationWorkflowResourceName(options.namespace, options.migrationNumber),
   );
-  const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
   try {
-    const execution = await pollUntilTerminal(client, workspaceId, executionId, pollInterval, {
+    const { execution, outcomes } = await observeRun(options, executionId, {
+      ...stepJobOptions(runnerName, order),
       onActive: (active) =>
         options.onProgress?.(
           classifySteps(active, runnerName, order).completed.length,
           order.length,
         ),
     });
-    return await summarizeSteps(client, workspaceId, execution, runnerName, order);
+    return await summarizeSteps(client, workspaceId, execution, runnerName, order, outcomes);
   } catch (error) {
     return {
       success: false,
@@ -954,6 +1294,7 @@ export async function executeMigrationStepsAsWorkflow(
   const { notify } = options;
 
   if (options.inProgress) {
+    let waited = false;
     const execution = await findRecordedExecution(
       client,
       workspaceId,
@@ -969,6 +1310,7 @@ export async function executeMigrationStepsAsWorkflow(
         `Migration ${migrationLabel} is still running from an earlier deploy; waiting.`,
       );
       const earlier = await waitForSteps(options, execution.id);
+      waited = true;
       if (planUnchanged) return earlier;
     } else if (execution?.status === WorkflowExecution_Status.SUCCESS && planUnchanged) {
       return await summarizeSteps(client, workspaceId, execution, runnerName, order);
@@ -988,10 +1330,22 @@ export async function executeMigrationStepsAsWorkflow(
         : execution.status === WorkflowExecution_Status.CANCELED
           ? "its earlier run was canceled"
           : "its steps changed since its earlier run";
-    notify(
-      "warn",
-      `Migration ${migrationLabel} cannot be resumed because ${reason}; every step runs again.`,
-    );
+    const latest =
+      execution && waited
+        ? await findRecordedExecution(client, workspaceId, name, execution.id)
+        : execution;
+    const succeeded = latest
+      ? await readSucceededStepNames(client, workspaceId, latest, runnerName)
+      : { steps: [], unreadable: 0 };
+    const { message, suggestion } = describeRerun({
+      migrationLabel,
+      namespace,
+      reason,
+      succeeded,
+      order,
+      skipped: options.skipSteps ?? [],
+    });
+    notify("warn", message, suggestion);
   }
 
   await assertNoActiveExecution(client, workspaceId, name, migrationLabel);

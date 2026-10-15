@@ -229,6 +229,41 @@ describe("parseFieldConfig nested inner field restrictions", () => {
       parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "status"] }),
     ).toThrow(".default() cannot be used on nested inner fields");
   });
+
+  test("throws on .serial() on nested inner fields", () => {
+    const field = {
+      type: "integer" as const,
+      fields: {},
+      rawRelation: undefined,
+      metadata: { serial: { start: 1 } },
+    };
+
+    expect(() =>
+      parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "number"] }),
+    ).toThrow(".serial() cannot be used on nested inner fields");
+  });
+});
+
+describe("parseFieldConfig serial", () => {
+  test("carries gapless from the serial definition", () => {
+    const type = db.table("Invoice", {
+      number: db.int().serial({ start: 1, gapless: true }),
+    });
+
+    const schema = toSchemaOutputs({ Invoice: type });
+
+    expect(parseFieldConfig(schema.Invoice!.fields.number!).serial?.gapless).toBe(true);
+  });
+
+  test("leaves gapless unset when the serial does not set it", () => {
+    const type = db.table("Invoice", {
+      number: db.int().serial({ start: 1 }),
+    });
+
+    const schema = toSchemaOutputs({ Invoice: type });
+
+    expect(parseFieldConfig(schema.Invoice!.fields.number!).serial?.gapless).toBeUndefined();
+  });
 });
 
 describe("parseFieldConfig enum allowed values", () => {

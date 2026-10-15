@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  findLoggedInOnlyPermitRules,
   findOmittedPermitRules,
   normalizeIdPActionPermission,
   normalizeIdPPermission,
@@ -273,4 +274,109 @@ describe("findOmittedPermitRules", () => {
   test("returns empty for undefined permission", () => {
     expect(findOmittedPermitRules(undefined)).toEqual([]);
   });
+});
+
+describe("findLoggedInOnlyPermitRules", () => {
+  const empty = {
+    create: [],
+    read: [],
+    update: [],
+    delete: [],
+    sendPasswordResetEmail: [],
+    unenrollMfa: [],
+  };
+
+  test.each([
+    [
+      "flags an object-form rule that permits on _loggedIn alone",
+      { ...empty, read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] },
+      ["read[0]"],
+    ],
+    [
+      "flags the single-condition array shorthand (it defaults to allow)",
+      { ...empty, sendPasswordResetEmail: [[{ user: "_loggedIn" }, "=", true]] },
+      ["sendPasswordResetEmail[0]"],
+    ],
+    [
+      "flags the rule's position among several rules",
+      {
+        ...empty,
+        update: [
+          { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+          { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+        ],
+      },
+      ["update[1]"],
+    ],
+    [
+      "ignores a rule that also requires another condition",
+      {
+        ...empty,
+        create: [
+          {
+            conditions: [
+              [{ user: "_loggedIn" }, "=", true],
+              [{ user: "role" }, "=", "ADMIN"],
+            ],
+            permit: true,
+          },
+        ],
+      },
+      [],
+    ],
+    [
+      "ignores a deny rule on _loggedIn",
+      { ...empty, delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false }] },
+      [],
+    ],
+    [
+      "ignores an administrator role rule",
+      { ...empty, create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] },
+      [],
+    ],
+    [
+      "ignores an unconditional allow rule (unsafeAllowAllIdPPermission names its looseness)",
+      { ...empty, create: [{ conditions: [], permit: true }] },
+      [],
+    ],
+    [
+      "flags unenrollMfa as well",
+      {
+        ...empty,
+        unenrollMfa: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+      },
+      ["unenrollMfa[0]"],
+    ],
+  ] as const)("%s", (_name, permission, expected) => {
+    expect(findLoggedInOnlyPermitRules(permission)).toEqual(expected);
+  });
+
+  test("returns empty for undefined permission", () => {
+    expect(findLoggedInOnlyPermitRules(undefined)).toEqual([]);
+  });
+
+  type RawRule = NonNullable<Parameters<typeof findLoggedInOnlyPermitRules>[0]>["read"][number];
+  const loggedIn = { user: "_loggedIn" } as const;
+  const permitWhen = (condition: unknown) =>
+    ({ conditions: [condition], permit: true }) as unknown as RawRule;
+
+  test.each([
+    ["operands reversed", [true, "=", loggedIn], ["read[0]"]],
+    ["inequality with false", [loggedIn, "!=", false], ["read[0]"]],
+    ["reversed inequality with false", [false, "!=", loggedIn], ["read[0]"]],
+    ["membership in [true]", [loggedIn, "in", [true]], ["read[0]"]],
+    ["membership in [true, false]", [loggedIn, "in", [true, false]], ["read[0]"]],
+    ["exclusion from [false]", [loggedIn, "not in", [false]], ["read[0]"]],
+    ["equality with false (signed-out callers only)", [loggedIn, "=", false], []],
+    ["inequality with true (signed-out callers only)", [loggedIn, "!=", true], []],
+    ["membership in [false]", [loggedIn, "in", [false]], []],
+    ["exclusion from [true]", [loggedIn, "not in", [true]], []],
+  ])(
+    "flags a _loggedIn condition equivalent to `= true` only when it matches signed-in callers: %s",
+    (_name, condition, expected) => {
+      expect(findLoggedInOnlyPermitRules({ ...empty, read: [permitWhen(condition)] })).toEqual(
+        expected,
+      );
+    },
+  );
 });

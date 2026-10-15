@@ -50,6 +50,16 @@ keep table output. Other values are rejected. JSON mode also disables interactiv
 variable per invocation or per job rather than exporting it from a shell profile; a command that
 needed a prompt names what selected JSON when it refuses.
 
+When an AI coding agent such as Claude Code, Codex, Cursor, or Gemini CLI runs the CLI, every
+command defaults to JSON as if `TAILOR_JSON_OUTPUT=true` were set, and `--help` starts with a short
+guide for the agent. The CLI recognizes an agent by the environment variables it sets for the
+commands it runs; a non-blank `AI_AGENT` also counts as one. An explicit `--json` or
+`TAILOR_JSON_OUTPUT` still wins, so `--json=false` or `TAILOR_JSON_OUTPUT=false` keeps table output
+under an agent, and setting `POLITTY_NO_AGENT` to any non-empty value, such as `1`, turns agent
+detection off. Set these variables in the environment itself: values loaded with `--env-file` do not
+change the default. CLI plugins keep table output under an agent unless they receive `--json` or
+`TAILOR_JSON_OUTPUT`, and their `--help` does not include the guide.
+
 Errors, warnings, progress, and diagnostic messages are written to stderr. A command failure under
 `--json` or `TAILOR_JSON_OUTPUT` emits a JSON error envelope to stderr, including a failure while
 parsing arguments: an unknown option or subcommand, or an option value that fails validation, is
@@ -107,9 +117,9 @@ without reporting through the CLI's error path, such as one relaying a failed re
 writes no annotation.
 
 Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` (also `off`, `no`, or `0`) to turn annotations off.
-Passing `--json` or setting `TAILOR_JSON_OUTPUT` also suppresses them, so a workflow step that parses
-JSON output gets only the error envelope on stderr, even when the command fails during argument
-parsing.
+Passing `--json`, setting `TAILOR_JSON_OUTPUT`, or the JSON default under an AI coding agent also
+suppresses them, so a workflow step that parses JSON output gets only the error envelope on stderr,
+even when the command fails during argument parsing.
 
 An annotation does not by itself fail a step: the step still fails on the CLI's exit code, which
 is unchanged. Workflows that already echo their own `::error::` around the CLI keep working;
@@ -315,6 +325,17 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration test](./cli/tailordb.md#tailordb-migration-test)             | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                                                                                                                                                                                       |
 | [tailordb migration validate](./cli/tailordb.md#tailordb-migration-validate)     | Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
 
+### [Data Commands](./cli/data.md)
+
+Commands for managing application data across workspaces.
+
+| Command                                                | Description                                                                                                      |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| [data](./cli/data.md#data)                             | Manage application data across workspaces.                                                                       |
+| [data clone](./cli/data.md#data-clone)                 | Clone the data of an application (TailorDB namespaces registered in its subgraph) from one workspace to another. |
+| [data operation](./cli/data.md#data-operation)         | Inspect asynchronous application data operations.                                                                |
+| [data operation get](./cli/data.md#data-operation-get) | Show the status of a data clone, or wait for it to finish.                                                       |
+
 ### [Query Commands](./cli/query.md)
 
 Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.
@@ -343,6 +364,7 @@ Commands for authentication and user management.
 | [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                                                      |
 | [user pat update](./cli/user.md#user-pat-update) | Update a personal access token (delete and recreate).                                 |
 | [user switch](./cli/user.md#user-switch)         | Set current user.                                                                     |
+| [user update](./cli/user.md#user-update)         | Set the current user's default organization and folder for new workspaces.            |
 
 ### [Organization Commands](./cli/organization.md)
 

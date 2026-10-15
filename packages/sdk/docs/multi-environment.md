@@ -96,3 +96,27 @@ defineStaticWebSite("my-website", {
   customDomains: process.env.APP_ENV === "production" ? ["app.example.com"] : undefined,
 });
 ```
+
+## Seed data per environment and per scenario
+
+`seedPlugin` seeds every environment from the JSONL files in `<distPath>/data/`. Rows that only some environments or scenarios need go into **datasets** — directories under `<distPath>/data/` that hold JSONL files for some of the tables — and are applied on top of the base seed data with `tailor seed apply --dataset <name>`:
+
+```
+seed/data/
+  *.schema.ts, *.jsonl     # base seed data, applied everywhere
+  cogs/Item.jsonl          # scenario: rows only a costing demo needs
+  dev/Account.jsonl        # environment: the dev variant of a table
+  stg/Account.jsonl        # environment: the staging variant of the same table
+  local/_User.jsonl        # per developer, gitignored
+```
+
+A table whose rows differ per environment lives only in the per-environment datasets, since a row may be defined in only one of the selected files. Name the combinations each environment uses in the `datasets` option of `seedPlugin`, so a deploy pipeline runs `tailor seed apply --dataset preview` instead of repeating the list:
+
+```typescript
+seedPlugin({
+  distPath: "./seed",
+  datasets: { preview: ["cogs", "dev"] },
+});
+```
+
+The `tailor seed` commands come from the `@tailor-platform/sdk-plugin-seed` CLI plugin; see its [Datasets](https://github.com/tailor-platform/sdk/tree/main/packages/sdk-plugin-seed#datasets) guide for validating, filling, and dumping datasets.

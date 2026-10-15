@@ -130,15 +130,18 @@ function toFunctionExecutionDetailInfo(execution: FunctionExecution): FunctionEx
  * `Error.prototype.stack` in V8 begins with `Name: message`, but the
  * platform may store only the frame lines; in that case prepend the
  * message line. When `stackTrace` is empty, return only `Name: message`.
+ * Like `Error.prototype.toString`, the message line drops an empty name
+ * or message, so a nameless error yields just its message.
  * @param error - Function error info from FunctionExecution
  * @returns Error string suitable for parseStackTrace
  */
 export function composeExecutionErrorString(error: FunctionExecutionErrorDisplay): string {
   const { name, message, stackTrace } = error;
-  if (!stackTrace) return `${name}: ${message}`;
+  const header = name && message ? `${name}: ${message}` : name || message;
+  if (!stackTrace) return header;
   const firstLine = stackTrace.split("\n", 1)[0] ?? "";
   if (/^\s+at\s+/.test(firstLine)) {
-    return `${name}: ${message}\n${stackTrace}`;
+    return `${header}\n${stackTrace}`;
   }
   return stackTrace;
 }
