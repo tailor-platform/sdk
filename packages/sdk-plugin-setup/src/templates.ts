@@ -4,8 +4,8 @@ import tagTemplate from "./tag.workflow.yml";
 
 // Only the release PR changes RELEASED_TEMPLATE_VERSION and the fingerprint below; a PR that
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
-// Released template fingerprint: 0a057164d1055f14d2fcd2cc58c02fbaa1c4cc5f910e50675cbb44c748e43355
-const RELEASED_TEMPLATE_VERSION = 17;
+// Released template fingerprint: 86b33e949f5740f760b6e2c236440b50f1b727930264a466d427d9f65a45d94a
+const RELEASED_TEMPLATE_VERSION = 18;
 const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
