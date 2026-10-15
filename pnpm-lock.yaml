@@ -184,7 +184,7 @@ importers:
         version: 24.19.2
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       knip:
         specifier: 6.39.0
         version: 6.39.0
@@ -251,7 +251,7 @@ importers:
         version: 7.0.0-dev.20260707.2
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       graphql:
         specifier: 17.0.2
         version: 17.0.2
@@ -290,7 +290,7 @@ importers:
         version: 24.19.2
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -314,7 +314,7 @@ importers:
         version: 1.8.1
       '@politty/zod':
         specifier: 0.4.3
-        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.5)
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.6)
       execa:
         specifier: 10.0.1
         version: 10.0.1
@@ -325,15 +325,15 @@ importers:
         specifier: 2.3.3
         version: 2.3.3
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -670,7 +670,7 @@ importers:
         version: 0.152.0
       '@politty/zod':
         specifier: 0.4.3
-        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.5)
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.6)
       '@secretlint/core':
         specifier: 13.0.7
         version: 13.0.7(supports-color@7.2.0)
@@ -777,8 +777,8 @@ importers:
         specifier: 5.1.0
         version: 5.1.0
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@electric-sql/pglite':
         specifier: 0.5.8
@@ -809,7 +809,7 @@ importers:
         version: 5.0.3(vitest@5.0.3)
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       oxfmt:
         specifier: 0.71.0
         version: 0.71.0
@@ -833,7 +833,7 @@ importers:
         version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       zinfer:
         specifier: 0.4.7
-        version: 0.4.7(typescript@6.0.3)(zod@4.6.5)
+        version: 0.4.7(typescript@6.0.3)(zod@4.6.6)
 
   packages/sdk-codemod:
     dependencies:
@@ -842,7 +842,7 @@ importers:
         version: 0.45.3
       '@politty/zod':
         specifier: 0.4.3
-        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.5)
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.6)
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -859,8 +859,8 @@ importers:
         specifier: 7.8.5
         version: 7.8.5
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@tailor-platform/shared':
         specifier: workspace:^
@@ -876,7 +876,7 @@ importers:
         version: 7.8.0
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -907,7 +907,7 @@ importers:
         version: 24.19.2
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -928,7 +928,7 @@ importers:
     dependencies:
       '@politty/zod':
         specifier: 0.4.3
-        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.5)
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.6)
       pathe:
         specifier: 2.0.3
         version: 2.0.3
@@ -936,8 +936,8 @@ importers:
         specifier: 2.3.3
         version: 2.3.3
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@tailor-platform/sdk':
         specifier: workspace:^
@@ -950,7 +950,7 @@ importers:
         version: 24.19.2
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -974,7 +974,7 @@ importers:
         version: 0.2.2
       '@politty/zod':
         specifier: 0.4.3
-        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.5)
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.6)
       json5:
         specifier: 2.2.3
         version: 2.2.3
@@ -991,8 +991,8 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@tailor-platform/sdk':
         specifier: workspace:^
@@ -1005,7 +1005,7 @@ importers:
         version: 0.3.1
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -1026,7 +1026,7 @@ importers:
     dependencies:
       '@politty/zod':
         specifier: 0.4.3
-        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.5)
+        version: 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.6)
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -1043,8 +1043,8 @@ importers:
         specifier: 2.3.3
         version: 2.3.3
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@tailor-platform/sdk':
         specifier: workspace:^
@@ -1057,7 +1057,7 @@ importers:
         version: 24.19.2
       eslint-plugin-zod:
         specifier: 5.0.0
-        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5)
+        version: 5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6)
       oxlint:
         specifier: 1.86.0
         version: 1.86.0(oxlint-tsgolint@7.0.2003)
@@ -4507,8 +4507,8 @@ packages:
       typescript: '>=5.0.0'
       zod: '>=3.25.76'
 
-  zod@4.6.5:
-    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
 snapshots:
 
@@ -5522,10 +5522,10 @@ snapshots:
 
   '@pnpm/deps.graph-sequencer@1100.0.1': {}
 
-  '@politty/zod@0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.5)':
+  '@politty/zod@0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.6)':
     dependencies:
       yaml: 2.9.1
-      zod: 4.6.5
+      zod: 4.6.6
     optionalDependencies:
       '@clack/prompts': 1.8.1
       '@inquirer/prompts': 8.7.3(@types/node@24.19.2)
@@ -5612,10 +5612,10 @@ snapshots:
 
   '@toiroakr/lines-db@0.15.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3)':
     dependencies:
-      '@politty/zod': 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.5)
+      '@politty/zod': 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.6)
       '@standard-schema/spec': 1.1.0
       amaro: 1.2.1
-      zod: 4.6.5
+      zod: 4.6.6
     optionalDependencies:
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -6172,14 +6172,14 @@ snapshots:
     optionalDependencies:
       source-map: 0.6.1
 
-  eslint-plugin-zod@5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.5):
+  eslint-plugin-zod@5.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.6.6):
     dependencies:
       '@eslint-zod/utils': 6.0.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
       '@typescript-eslint/utils': 8.71.0(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
     optionalDependencies:
       eslint: 10.12.0(jiti@2.7.0)(supports-color@7.2.0)
       oxlint: 1.86.0(oxlint-tsgolint@7.0.2003)
-      zod: 4.6.5
+      zod: 4.6.6
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -6507,7 +6507,7 @@ snapshots:
       tinyglobby: 0.2.17
       unbash: 4.0.12
       yaml: 2.9.1
-      zod: 4.6.5
+      zod: 4.6.6
 
   kysely@0.29.6: {}
 
@@ -7392,7 +7392,7 @@ snapshots:
       '@yuku-toolchain/types': 0.18.1
       yuku-core: 0.18.1
 
-  zinfer@0.4.7(typescript@6.0.3)(zod@4.6.5):
+  zinfer@0.4.7(typescript@6.0.3)(zod@4.6.6):
     dependencies:
       commander: 15.0.0
       glob: 13.0.6
@@ -7400,6 +7400,6 @@ snapshots:
       pathe: 2.0.3
       ts-morph: 28.0.0
       typescript: 6.0.3
-      zod: 4.6.5
+      zod: 4.6.6
 
-  zod@4.6.5: {}
+  zod@4.6.6: {}
