@@ -529,12 +529,12 @@
             "paths": [
               {
                 "name": "node:child_process",
-                "importNames": ["execSync", "execFileSync", "spawnSync"],
+                "importNames": ["default", "execSync", "execFileSync", "spawnSync"],
                 "message": "Run e2e subprocesses through e2e/cli.ts: a synchronous spawn blocks the test worker's event loop."
               },
               {
                 "name": "child_process",
-                "importNames": ["execSync", "execFileSync", "spawnSync"],
+                "importNames": ["default", "execSync", "execFileSync", "spawnSync"],
                 "message": "Run e2e subprocesses through e2e/cli.ts: a synchronous spawn blocks the test worker's event loop."
               }
             ]

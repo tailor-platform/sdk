@@ -4,9 +4,9 @@
 
 Vitest is configured with several projects (see [`packages/sdk/vitest.config.ts`](../packages/sdk/vitest.config.ts)):
 
-- **unit / unit-core / unit-plugin / unit-shell** — Unit tests under `src/**` and `scripts/**`, split by isolation needs; the `unit*` glob selects all four, and the Windows CI job runs `unit-plugin` and `unit-shell`, whose tests spawn real launchers and shells
+- **unit / unit-core / unit-plugin / unit-shell** — Unit tests under `src/**` and `scripts/**`, plus `e2e/cli.test.ts` (the e2e CLI helper's own tests, which need no workspace), split by isolation needs; the `unit*` glob selects all four, and the Windows CI job runs `unit-plugin` and `unit-shell`, whose tests spawn real launchers and shells
 - **integration** — Deploy fixture integration tests
-- **e2e** — Subprocess-driven e2e files in `e2e/**` (120-second test timeout); excluded from coverage CI because subprocess execution does not contribute coverage data
+- **e2e** — Subprocess-driven e2e files in `e2e/**` other than `e2e/cli.test.ts` (120-second test timeout); excluded from coverage CI because subprocess execution does not contribute coverage data
 - **e2e-coverage** — `e2e/deploy.test.ts`, which exercises `deploy()` in-process; the coverage CI job runs it, and `--project=e2e*` selects both e2e projects
 - **scripts** — Tests for repository scripts
 
@@ -17,7 +17,7 @@ pnpm test
 # In packages/sdk/:
 pnpm test                      # All projects
 pnpm test:unit                 # Unit only
-pnpm test:e2e                  # E2E only (requires deployed workspace)
+pnpm test:e2e                  # E2E only (most suites need Platform credentials)
 pnpm test path/to/file.test.ts # Single file
 pnpm test -t "pattern"         # Pattern match
 ```
@@ -34,15 +34,15 @@ Before raising the minimum supported migration format, identify a released bridg
 
 ## E2E Tests
 
-E2E tests require Platform credentials. Each suite creates its own disposable workspace, and `globalSetup` deletes them after the run.
+Most E2E suites require Platform credentials, and each of those creates its own disposable workspace. CI deletes the workspaces in a cleanup step keyed by the run ID; `globalSetup`'s teardown deletes them only when `TAILOR_PLATFORM_TOKEN` is set, so after a local run under `tailor login`, delete them yourself (the `e2e-test` skill's wrapper does this).
 
 Located in `packages/sdk/e2e/`. CI runs these in the `sdk-e2e.yml` workflow (pull requests and pushes to main); `sdk-metrics.yml` additionally runs the `e2e-coverage` project under coverage.
 
 ### Writing E2E Suites
 
 - Deploy only a fixture the suite owns, declaring just the resources its tests use. Do not deploy `example/`: a fresh deploy replays its whole migration history, and each data migration waits on a Platform job, so setup time grows with every migration added there. The `Workspace Deploy Test` workflow already covers a fresh deploy of `example/`.
-- Run CLI subprocesses through `e2e/cli.ts` (`runCli` / `tryCli`); oxlint rejects synchronous `child_process` calls under `e2e/`. A synchronous call blocks the test worker, so Vitest timeouts cannot fire and the worker's Platform connections go stale.
-- Give each CLI call a budget from `CLI_BUDGET_MS` and derive the test timeout from the budgets it spends with `cliTestTimeout`, so a stuck call fails with its own output instead of a bare test timeout.
+- Run CLI subprocesses through `e2e/cli.ts` (`runCli` / `tryCli`, or `runProcess` / `tryProcess` for another executable). A synchronous call blocks the test worker for the whole call, so Vitest timeouts cannot fire and the worker's Platform connections can go stale. oxlint rejects importing `execSync`, `execFileSync`, `spawnSync`, or the default export of `child_process` under `e2e/`.
+- Give each CLI call an explicit budget (`CLI_BUDGET_MS` covers the common cases) and derive the test timeout from the budgets it spends with `cliTestTimeout`, adding `WORKSPACE_CREATION_ALLOWANCE_MS` when the test also creates a workspace, so a stuck call fails with its own output instead of a bare test timeout.
 - Before raising a budget, find which phase grew. The helper logs every CLI line with its elapsed time, reports each call's share of its budget, and emits an `E2E CLI budget` warning on GitHub Actions once a call uses 60% of it.
 - Let setup failures fail the suite. Do not substitute a placeholder for a failed lookup; it surfaces later as an unrelated-looking assertion failure.
 

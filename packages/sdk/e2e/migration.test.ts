@@ -55,6 +55,7 @@ import {
   resolveE2EWorkspaceRegion,
   trackWorkspace,
   trackTempDir,
+  WORKSPACE_CREATION_ALLOWANCE_MS,
 } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -300,9 +301,6 @@ export async function main(db: Kysely<any>): Promise<void> {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-e2e-"));
     trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
-
-    // Unset EDITOR to prevent opening editor during migration generation
-    delete process.env.EDITOR;
 
     // Copy fixture to temp directory
     copyFixture();
@@ -571,7 +569,7 @@ export type user = typeof user;
         });
         expect(parseMigrationLabelNumber(metadata?.labels[MIGRATION_LABEL_KEY] ?? "")).toBe(1);
       },
-      DEPLOY_TEST_TIMEOUT_MS,
+      WORKSPACE_CREATION_ALLOWANCE_MS + DEPLOY_TEST_TIMEOUT_MS,
     );
 
     /**

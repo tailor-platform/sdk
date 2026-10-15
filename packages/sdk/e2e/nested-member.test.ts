@@ -47,20 +47,6 @@ const tailordbName = `nesteddb-${testRunId}`;
 const FIRST_ID = "50000000-0000-4000-8000-000000000001";
 const SECOND_ID = "50000000-0000-4000-8000-000000000002";
 
-const GENERATE_TEST_TIMEOUT_MS = cliTestTimeout(CLI_BUDGET_MS.local);
-const SEED_TEST_TIMEOUT_MS = cliTestTimeout(
-  CLI_BUDGET_MS.local,
-  CLI_BUDGET_MS.deploy,
-  CLI_BUDGET_MS.local,
-  CLI_BUDGET_MS.local,
-  CLI_BUDGET_MS.deploy,
-);
-const MIGRATE_TEST_TIMEOUT_MS = cliTestTimeout(CLI_BUDGET_MS.migratingDeploy);
-const GENERATE_AND_MIGRATE_TEST_TIMEOUT_MS = cliTestTimeout(
-  CLI_BUDGET_MS.local,
-  CLI_BUDGET_MS.migratingDeploy,
-);
-
 describe("E2E: TailorDB nested member rename", { concurrent: false }, () => {
   let workspaceId: string;
   let client: OperatorClient;
@@ -137,9 +123,6 @@ export type user = typeof user;
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nested-e2e-"));
     trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
-
-    delete process.env.EDITOR;
-    delete process.env.VISUAL;
 
     fs.mkdirSync(path.join(tempDir, "tailordb"), { recursive: true });
     fs.mkdirSync(migrationsDir, { recursive: true });
@@ -263,7 +246,13 @@ export async function main(trx: Transaction): Promise<void> {
 
       expect(await nestedMemberNames()).toEqual(["city", "zip"]);
     },
-    SEED_TEST_TIMEOUT_MS,
+    cliTestTimeout(
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.deploy,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.deploy,
+    ),
   );
 
   test(
@@ -281,7 +270,7 @@ export async function main(trx: Transaction): Promise<void> {
       expect(result.output).toContain("Possible rename(s) detected");
       expect(result.output).toContain("User.address.zip → zipCode?");
     },
-    GENERATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.local),
   );
 
   test(
@@ -320,7 +309,7 @@ export async function main(trx: Transaction): Promise<void> {
       );
       expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
     },
-    GENERATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.local),
   );
 
   test(
@@ -328,12 +317,10 @@ export async function main(trx: Transaction): Promise<void> {
     async () => {
       const configPath = createConfig();
 
-      const result = await tryInTempDir(
+      await runInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
         CLI_BUDGET_MS.migratingDeploy,
       );
-      if (!result.ok) throw new Error(`deploy failed:\n${result.output}`);
-      expect(result.ok).toBe(true);
 
       const resp = await client.getTailorDBType({
         workspaceId,
@@ -344,7 +331,7 @@ export async function main(trx: Transaction): Promise<void> {
       expect(Object.keys(members).toSorted()).toEqual(["city", "zipCode"]);
       expect(members.zipCode?.required).toBe(true);
     },
-    MIGRATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.migratingDeploy),
   );
 
   test(
@@ -391,9 +378,8 @@ export async function main(trx: Transaction): Promise<void> {
         CLI_BUDGET_MS.migratingDeploy,
       );
       expect(result.output).not.toContain("PROBE_MISMATCH");
-      if (!result.ok) throw new Error(`deploy failed:\n${result.output}`);
       expect(result.ok).toBe(true);
     },
-    GENERATE_AND_MIGRATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
   );
 });

@@ -5,10 +5,8 @@
  * different function types on the Tailor Platform server.
  *
  * Uses internal APIs directly (detectFunctionType, bundleForRun, executeScript)
- * instead of spawning CLI subprocesses. The functions come from example/, but
- * the workspace receives only the tables and machine user they use: deploying
- * example/ itself would replay its whole migration history, whose data
- * migrations each wait on a Platform job.
+ * instead of spawning CLI subprocesses. The functions come from example/; the
+ * workspace receives only the tables and machine user they use.
  *
  * Prerequisites:
  * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
@@ -40,6 +38,7 @@ import {
   resolveE2EWorkspaceRegion,
   trackTempDir,
   trackWorkspace,
+  WORKSPACE_CREATION_ALLOWANCE_MS,
 } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,9 +51,6 @@ const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""
 
 const sdkRoot = path.resolve(__dirname, "..");
 const exampleDir = path.resolve(sdkRoot, "..", "..", "example");
-
-// Workspace creation has taken over two minutes when sibling suites contend for the Platform.
-const WORKSPACE_CREATION_ALLOWANCE_MS = 180_000;
 
 let workspaceId: string;
 let client: OperatorClient;

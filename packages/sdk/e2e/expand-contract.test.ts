@@ -41,19 +41,6 @@ const tailordbName = `expanddb-${testRunId}`;
 const FIRST_ID = "40000000-0000-4000-8000-000000000001";
 const SECOND_ID = "40000000-0000-4000-8000-000000000002";
 
-const GENERATE_TEST_TIMEOUT_MS = cliTestTimeout(CLI_BUDGET_MS.local);
-const SEED_TEST_TIMEOUT_MS = cliTestTimeout(
-  CLI_BUDGET_MS.local,
-  CLI_BUDGET_MS.deploy,
-  CLI_BUDGET_MS.local,
-  CLI_BUDGET_MS.deploy,
-);
-const MIGRATE_TEST_TIMEOUT_MS = cliTestTimeout(CLI_BUDGET_MS.migratingDeploy);
-const GENERATE_AND_MIGRATE_TEST_TIMEOUT_MS = cliTestTimeout(
-  CLI_BUDGET_MS.local,
-  CLI_BUDGET_MS.migratingDeploy,
-);
-
 describe("E2E: TailorDB expand-contract field type change", { concurrent: false }, () => {
   let workspaceId: string;
   let client: OperatorClient;
@@ -133,9 +120,6 @@ export type user = typeof user;
     trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
 
-    delete process.env.EDITOR;
-    delete process.env.VISUAL;
-
     fs.mkdirSync(path.join(tempDir, "tailordb"), { recursive: true });
     fs.mkdirSync(migrationsDir, { recursive: true });
     const generatedDir = path.join(tempDir, "generated");
@@ -206,7 +190,12 @@ export async function main(trx: Transaction): Promise<void> {
         reconstructSnapshotFromMigrations(migrationsDir)?.tables.User?.fields.price?.type,
       ).toBe("integer");
     },
-    SEED_TEST_TIMEOUT_MS,
+    cliTestTimeout(
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.deploy,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.deploy,
+    ),
   );
 
   test(
@@ -227,7 +216,7 @@ export async function main(trx: Transaction): Promise<void> {
       expect(result.ok).toBe(false);
       expect(result.output).toContain("Unsupported schema changes detected");
     },
-    GENERATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.local),
   );
 
   test(
@@ -256,7 +245,7 @@ export async function main(trx: Transaction): Promise<void> {
       expect(script).toContain(`["tagsMigrate"]: convertedValue`);
       expect(script.match(/\bTODO\(/g)).toHaveLength(1);
     },
-    GENERATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.local),
   );
 
   test(
@@ -272,7 +261,7 @@ export async function main(trx: Transaction): Promise<void> {
       expect(result.ok).toBe(false);
       expect(result.output).toContain("TODO()");
     },
-    GENERATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.local),
   );
 
   test(
@@ -294,7 +283,7 @@ export async function main(trx: Transaction): Promise<void> {
         CLI_BUDGET_MS.migratingDeploy,
       );
     },
-    MIGRATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.migratingDeploy),
   );
 
   test(
@@ -339,7 +328,7 @@ export async function main(trx: Transaction): Promise<void> {
       expect(result.output).not.toContain("PROBE_TEMP_FIELD_REMAINS");
       expect(result.ok).toBe(true);
     },
-    GENERATE_AND_MIGRATE_TEST_TIMEOUT_MS,
+    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
   );
 
   test("replays local history to the declared schema", () => {

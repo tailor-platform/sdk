@@ -1,16 +1,12 @@
-/**
- * Runs CLI subprocesses for e2e tests without blocking the test worker.
- *
- * A synchronous spawn stalls the worker's event loop for the whole call, so
- * Vitest timeouts cannot fire and the worker's Platform connections go stale.
- * Every child line is logged as it arrives, and each run reports how much of
- * its budget it used, warning on GitHub Actions once that share gets high.
- */
+/** Runs CLI subprocesses for e2e tests without blocking the test worker; see docs/testing.md. */
 
 import { spawn } from "node:child_process";
 import * as path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
+import { expect } from "vitest";
+import { formatAnnotation } from "../src/cli/shared/github-actions";
+import type { Readable } from "node:stream";
 
 const tailorBin = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -19,16 +15,15 @@ const tailorBin = path.resolve(
   "tailor.mjs",
 );
 
-/** Budgets for CLI calls: local commands, plain deploys, and deploys that run data migrations. */
+/** Budgets for CLI calls: local commands, deploys, and deploys given extra room for slow data migrations. */
 export const CLI_BUDGET_MS = {
   local: 120_000,
   deploy: 300_000,
   migratingDeploy: 900_000,
 } as const;
 
-/** Room a test keeps beyond its CLI budgets for killing a child and for its own RPCs and assertions. */
-export const CLI_TEST_TIMEOUT_MARGIN_MS = 60_000;
-
+// Covers killing a timed-out child plus the test's own RPCs and assertions.
+const CLI_TEST_TIMEOUT_MARGIN_MS = 60_000;
 const BUDGET_WARNING_RATIO = 0.6;
 const DEFAULT_KILL_GRACE_MS = 10_000;
 const CLOSE_WAIT_MS = 5_000;
@@ -36,7 +31,7 @@ const DEFAULT_MAX_CAPTURE_BYTES = 16 * 1024 * 1024;
 const ERROR_TAIL_LINES = 50;
 const ERROR_TAIL_BYTES = 8 * 1024;
 
-export interface ProcessOptions {
+interface ProcessOptions {
   cwd: string;
   /** Prefix for logged lines and the budget report. */
   label: string;
@@ -48,7 +43,7 @@ export interface ProcessOptions {
   maxCaptureBytes?: number;
 }
 
-export type CliOptions = Omit<ProcessOptions, "label" | "killGraceMs" | "maxCaptureBytes">;
+type CliOptions = Omit<ProcessOptions, "label" | "killGraceMs" | "maxCaptureBytes">;
 
 export interface CliResult {
   ok: boolean;
@@ -65,11 +60,12 @@ export class CliTimeoutError extends Error {
   constructor(
     label: string,
     timeoutMs: number,
-    readonly killSignal: NodeJS.Signals,
-    readonly output: string,
+    readonly killSignal: NodeJS.Signals | undefined,
+    output: string,
   ) {
+    const killed = killSignal ? ` and was killed with ${killSignal}` : "";
     super(
-      `${label} exceeded its ${formatSeconds(timeoutMs)}s budget and was killed with ${killSignal}.\n${outputTail(output)}`,
+      `${label} exceeded its ${formatSeconds(timeoutMs)}s budget${killed}.\n${outputTail(output)}`,
     );
     this.name = "CliTimeoutError";
   }
@@ -112,11 +108,11 @@ export function tryProcess(
       env: mergeEnv(options.env),
       stdio: ["ignore", "pipe", "pipe"],
     });
+    // Node skips creating the pipes when spawning fails with EMFILE or ENFILE.
+    const pipes: { stdout: Readable | null; stderr: Readable | null } = child;
 
     const captured = { stdout: "", stderr: "", output: "" };
     let capturedBytes = 0;
-    let exitCode: number | null = null;
-    let exitSignal: NodeJS.Signals | null = null;
     let killSignal: NodeJS.Signals | undefined;
     let failure: (() => Error) | undefined;
     let settled = false;
@@ -135,14 +131,13 @@ export function tryProcess(
       settled = true;
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
-      child.stdout.destroy();
-      child.stderr.destroy();
+      pipes.stdout?.destroy();
+      pipes.stderr?.destroy();
       finish();
     };
 
     const sendSignal = (signal: NodeJS.Signals) => {
-      killSignal = signal;
-      child.kill(signal);
+      if (child.kill(signal)) killSignal = signal;
     };
 
     const terminate = (error: () => Error) => {
@@ -159,6 +154,9 @@ export function tryProcess(
     const createStream = (name: "stdout" | "stderr") => {
       const decoder = new StringDecoder("utf8");
       let pendingLine = "";
+      const logLine = (line: string) => {
+        console.log(`[${label} +${formatSeconds(elapsedMs())}s] ${line.replace(/\r$/, "")}`);
+      };
       const append = (text: string) => {
         captured[name] += text;
         captured.output += text;
@@ -167,12 +165,8 @@ export function tryProcess(
         pendingLine = lines.pop() ?? "";
         for (const line of lines) logLine(line);
       };
-      const logLine = (line: string) => {
-        console.log(`[${label} +${formatSeconds(elapsedMs())}s] ${line.replace(/\r$/, "")}`);
-      };
       return {
         write(chunk: Buffer) {
-          if (failure && capturedBytes > maxCaptureBytes) return;
           capturedBytes += chunk.length;
           if (capturedBytes > maxCaptureBytes) {
             terminate(
@@ -188,15 +182,9 @@ export function tryProcess(
         end() {
           append(decoder.end());
           if (pendingLine) logLine(pendingLine);
-          pendingLine = "";
         },
       };
     };
-
-    const stdout = createStream("stdout");
-    const stderr = createStream("stderr");
-    child.stdout.on("data", (chunk: Buffer) => stdout.write(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.write(chunk));
 
     child.on("error", (error) => {
       if (child.pid === undefined) {
@@ -205,11 +193,13 @@ export function tryProcess(
         );
       }
     });
-    child.on("exit", (code, signal) => {
-      exitCode = code;
-      exitSignal = signal;
-    });
-    child.on("close", () => {
+
+    const stdout = createStream("stdout");
+    const stderr = createStream("stderr");
+    pipes.stdout?.on("data", (chunk: Buffer) => stdout.write(chunk));
+    pipes.stderr?.on("data", (chunk: Buffer) => stderr.write(chunk));
+
+    child.on("close", (exitCode, signal) => {
       stdout.end();
       stderr.end();
       if (failure) {
@@ -220,7 +210,7 @@ export function tryProcess(
       const result: CliResult = {
         ok: exitCode === 0,
         exitCode,
-        signal: exitSignal,
+        signal,
         ...captured,
         durationMs: elapsedMs(),
       };
@@ -231,10 +221,7 @@ export function tryProcess(
     });
 
     schedule(
-      () =>
-        terminate(
-          () => new CliTimeoutError(label, timeoutMs, killSignal ?? "SIGTERM", captured.output),
-        ),
+      () => terminate(() => new CliTimeoutError(label, timeoutMs, killSignal, captured.output)),
       timeoutMs,
     );
   });
@@ -306,16 +293,24 @@ function mergeEnv(overrides: ProcessOptions["env"]): NodeJS.ProcessEnv {
   return env;
 }
 
-function reportBudget(label: string, result: CliResult, timeoutMs: number): void {
+/**
+ * Log how much of its budget a finished call used, warning once the share gets high.
+ * @param label - Label of the call
+ * @param result - Result of the finished call
+ * @param timeoutMs - Budget of the call
+ */
+export function reportBudget(label: string, result: CliResult, timeoutMs: number): void {
   const share = result.durationMs / timeoutMs;
   const usage = `${formatSeconds(result.durationMs)}s (${Math.round(share * 100)}% of ${formatSeconds(timeoutMs)}s budget)`;
   console.log(`[${label}] exited ${result.exitCode ?? result.signal} after ${usage}`);
   if (share < BUDGET_WARNING_RATIO) return;
-  const message = `${label} took ${usage}`;
+  const { currentTestName, testPath } = expect.getState();
+  const caller = currentTestName ?? (testPath && path.basename(testPath));
+  const message = `${label} took ${usage}${caller ? ` in ${caller}` : ""}`;
   if (process.env.GITHUB_ACTIONS === "true") {
-    console.log(`::warning title=E2E CLI budget::${escapeWorkflowCommandData(message)}`);
+    console.log(formatAnnotation("warning", message, { title: "E2E CLI budget" }).trimEnd());
   } else {
-    console.warn(`[${label}] nearing its budget: took ${usage}`);
+    console.warn(`[budget warning] ${message}`);
   }
 }
 
@@ -324,16 +319,14 @@ function describeExit(result: CliResult): string {
 }
 
 function outputTail(output: string): string {
-  const tail = output.trimEnd().split("\n").slice(-ERROR_TAIL_LINES).join("\n");
-  if (!tail) return "(no output)";
-  const bounded = tail.length > ERROR_TAIL_BYTES ? `…${tail.slice(-ERROR_TAIL_BYTES)}` : tail;
-  return `Last output:\n${bounded}`;
+  const recent = output.slice(-ERROR_TAIL_BYTES).trimEnd();
+  if (!recent) return "(no output)";
+  const lines = recent.split("\n");
+  const tail = lines.slice(-ERROR_TAIL_LINES).join("\n");
+  const truncated = output.trimEnd().length > tail.length;
+  return `Last output:\n${truncated ? "…" : ""}${tail}`;
 }
 
 function formatSeconds(ms: number): string {
   return String(Number((ms / 1000).toFixed(1)));
-}
-
-function escapeWorkflowCommandData(value: string): string {
-  return value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 }

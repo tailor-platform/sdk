@@ -25,7 +25,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect } from "vitest";
-import { runCli } from "./cli";
+import { runProcess } from "./cli";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,8 +43,9 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(sdkRoot, "package.json"
 const compileCacheSupported = typeof nodeModule.enableCompileCache === "function";
 
 async function runShim(args: string[], cacheHome: string): Promise<string> {
-  const { stdout } = await runCli(args, {
+  const { stdout } = await runProcess(process.execPath, [shimPath, ...args], {
     cwd: sdkRoot,
+    label: "tailor shim",
     timeoutMs: 30000,
     env: {
       XDG_CACHE_HOME: cacheHome,
@@ -52,8 +53,6 @@ async function runShim(args: string[], cacheHome: string): Promise<string> {
       // when set, so a value inherited from the parent (dev shell, CI) would
       // silently defeat these tests' cacheHome isolation otherwise.
       NODE_COMPILE_CACHE: "",
-      // Start the shim the way a user's shell does, without the e2e default.
-      NODE_OPTIONS: process.env.NODE_OPTIONS,
     },
   });
   return stdout;
