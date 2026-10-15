@@ -1,4 +1,6 @@
+import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "../shared/logger";
 import {
   getReplHistoryPath,
   query,
@@ -7,6 +9,7 @@ import {
   resolveQueryCommandInput,
   resolveReplCommand,
 } from "./index";
+import type * as ConfigModule from "../shared/config";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
 
@@ -70,6 +73,10 @@ vi.mock("./sql-type-extractor", () => ({
 
 vi.mock("./type-field-order", () => ({
   loadTypeFieldOrder: vi.fn(),
+}));
+
+vi.mock("@toiroakr/read-multiline", () => ({
+  createPrompt: vi.fn(),
 }));
 
 function sqlRowKeys(result: unknown): string[] {
@@ -237,6 +244,159 @@ describe("query", () => {
         query: "select 1;",
       }),
     ).rejects.toThrow("Could not infer namespace from query. Detected namespaces: crm, sales.");
+  });
+
+  test("runs SQL in the explicit namespace without inferring it from the query", async () => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { extractTableNamesFromSql } = await import("./sql-type-extractor");
+    const { executeScript } = await import("../shared/script-executor");
+
+    vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      namespace: "sales",
+      query: 'select * from "User";',
+    });
+
+    expect(extractTableNamesFromSql).not.toHaveBeenCalled();
+    expect(resolveTableNamespaces).not.toHaveBeenCalled();
+    expect(executeScript).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        name: "query-sql-sales.js",
+        arg: expect.objectContaining({ namespace: "sales" }),
+      }),
+    );
+    expect(result).toMatchObject({ engine: "sql", namespace: "sales" });
+  });
+
+  test("accepts an external namespace declared in the config", async () => {
+    const { loadConfig } = await import("../shared/config-loader");
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { executeScript } = await import("../shared/script-executor");
+    const actualConfig = await vi.importActual<typeof ConfigModule>("../shared/config");
+
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        name: "sample-app",
+        path: "/project/tailor.config.ts",
+        db: { crm: {}, shared: { external: true } },
+      },
+    } as never);
+    vi.mocked(extractAllNamespaces).mockImplementation(actualConfig.extractAllNamespaces);
+
+    await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      namespace: "shared",
+      query: 'select * from "User";',
+    });
+
+    expect(executeScript).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ arg: expect.objectContaining({ namespace: "shared" }) }),
+    );
+  });
+
+  test.each(["missing", ""])(
+    "rejects namespace %j that the config does not define",
+    async (namespace) => {
+      const { extractAllNamespaces } = await import("../shared/config");
+      const { executeScript } = await import("../shared/script-executor");
+
+      vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
+
+      await expect(
+        query({
+          workspaceId: "workspace-1",
+          configPath: "tailor.config.ts",
+          engine: "sql",
+          machineUser: "bot",
+          namespace,
+          query: 'select * from "User";',
+        }),
+      ).rejects.toMatchObject({
+        name: "CLIError",
+        code: "TAILORDB_NAMESPACE_NOT_FOUND",
+        context: { namespace, namespaces: ["crm", "sales"] },
+      });
+      expect(mockClient.getApplication).not.toHaveBeenCalled();
+      expect(executeScript).not.toHaveBeenCalled();
+    },
+  );
+
+  test("rejects a namespace for the GraphQL engine before connecting", async () => {
+    const { initOperatorClient } = await import("../shared/client");
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "gql",
+        machineUser: "bot",
+        namespace: "tailordb",
+        query: "{ viewer { id } }",
+      }),
+    ).rejects.toMatchObject({ name: "CLIError", code: "QUERY_NAMESPACE_REQUIRES_SQL" });
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test("forwards --namespace from the CLI", async () => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { executeScript } = await import("../shared/script-executor");
+
+    vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
+
+    const result = await runCommand(
+      queryCommand,
+      ["--engine", "sql", "--namespace", "sales", "-m", "bot", "-q", 'select * from "User";'],
+      { captureLogs: true },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(result.success).toBe(true);
+    expect(resolveTableNamespaces).not.toHaveBeenCalled();
+    expect(executeScript).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ arg: expect.objectContaining({ namespace: "sales" }) }),
+    );
+  });
+
+  test("pins every REPL query to --namespace", async () => {
+    const { createPrompt } = await import("@toiroakr/read-multiline");
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { executeScript } = await import("../shared/script-executor");
+
+    vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
+    const prompt = vi
+      .fn()
+      .mockResolvedValueOnce(['select * from "User";', undefined])
+      .mockResolvedValueOnce(['select * from "Order";', undefined])
+      .mockResolvedValueOnce(["", { kind: "eof" }]);
+    vi.mocked(createPrompt).mockReturnValue(prompt);
+    using info = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    const result = await runCommand(
+      queryCommand,
+      ["--engine", "sql", "--namespace", "sales", "-m", "bot"],
+      { captureLogs: true },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(result.success).toBe(true);
+    expect(prompt).toHaveBeenCalledTimes(3);
+    expect(resolveTableNamespaces).not.toHaveBeenCalled();
+    expect(vi.mocked(executeScript).mock.calls.map(([call]) => call.arg)).toEqual([
+      expect.objectContaining({ namespace: "sales" }),
+      expect.objectContaining({ namespace: "sales" }),
+    ]);
+    expect(info).toHaveBeenCalledWith("Entering SQL REPL mode (namespace: sales).");
   });
 
   test("maps SQL parser errors to CLIError with suggestion", async () => {
@@ -766,6 +926,11 @@ describe("queryCommand args", () => {
       "edit and file",
       { edit: true, file: "query.sql" },
       "Pass only one of --edit, -q/--query, or -f/--file.",
+    ],
+    [
+      "gql engine and namespace",
+      { engine: "gql", namespace: "tailordb" },
+      "--namespace applies only to --engine sql.",
     ],
   ])("rejects when %s are both passed", (_label, extraArgs, expectedMessage) => {
     const result = queryCommand.args.safeParse({
