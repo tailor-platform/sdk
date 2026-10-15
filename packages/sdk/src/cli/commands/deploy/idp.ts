@@ -27,7 +27,11 @@ import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
-import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
+import {
+  findLoggedInOnlyPermitRules,
+  findOmittedPermitRules,
+  parseIdPPermission,
+} from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -516,6 +520,12 @@ async function planServices(
     if (omittedPermitLocations.length > 0) {
       logger.warn(
         `IdP service "${namespaceName}" has permission rule(s) ${omittedPermitLocations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+      );
+    }
+    const loggedInOnlyLocations = findLoggedInOnlyPermitRules(idp.permission);
+    if (loggedInOnlyLocations.length > 0) {
+      logger.warn(
+        `IdP service "${namespaceName}" permits every authenticated user in permission rule(s) ${loggedInOnlyLocations.join(", ")} (their only condition is on "_loggedIn"). Any signed-in user can then run these operations against any IdP user, for example reading and changing login information (such as email addresses) or sending password reset emails to anyone. Restrict these rules to an administrator role unless every user who can sign in is trusted.`,
       );
     }
     if (hasImplicitAllEmailDomains(userAuthPolicy)) {

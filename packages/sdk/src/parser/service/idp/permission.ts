@@ -79,3 +79,60 @@ export function findOmittedPermitRules(permission: RawIdPPermission | undefined)
   }
   return locations;
 }
+
+/**
+ * Find IdP permission rules that allow every authenticated user, i.e. an
+ * allow rule whose only condition is `[{ user: "_loggedIn" }, "=", true]`, so
+ * the CLI can warn about them.
+ * @param permission - Raw IdP permission from user config
+ * @returns Locations of offending rules, e.g. `read[0]`
+ */
+export function findLoggedInOnlyPermitRules(permission: RawIdPPermission | undefined): string[] {
+  if (!permission) {
+    return [];
+  }
+  const normalized = normalizeIdPPermission(permission);
+  const locations: string[] = [];
+  for (const action of Object.keys(normalized) as Array<keyof typeof normalized>) {
+    normalized[action].forEach((rule, index) => {
+      if (rule.permit === "allow" && isLoggedInOnly(rule.conditions)) {
+        locations.push(`${action}[${index}]`);
+      }
+    });
+  }
+  return locations;
+}
+
+function isLoggedInOperand(operand: unknown): boolean {
+  return (
+    typeof operand === "object" &&
+    operand !== null &&
+    "user" in operand &&
+    operand.user === "_loggedIn"
+  );
+}
+
+function isLoggedInOnly(conditions: readonly StandardIdPPermissionCondition[]): boolean {
+  const [condition, ...rest] = conditions;
+  if (!condition || rest.length > 0) {
+    return false;
+  }
+  const [left, operator, right] = condition;
+  const other: unknown = isLoggedInOperand(left)
+    ? right
+    : isLoggedInOperand(right)
+      ? left
+      : undefined;
+  switch (operator) {
+    case "eq":
+      return other === true;
+    case "ne":
+      return other === false;
+    case "in":
+      return isLoggedInOperand(left) && Array.isArray(other) && other.includes(true);
+    case "nin":
+      return isLoggedInOperand(left) && Array.isArray(other) && !other.includes(true);
+    default:
+      return false;
+  }
+}
