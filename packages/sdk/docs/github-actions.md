@@ -98,7 +98,8 @@ The generated workflow builds one self-contained ERD viewer HTML file for each
 owned TailorDB namespace in `tailor.config.ts`. The viewer compares the pull
 request merge result with the base branch, can switch between the current schema
 and highlighted diff, uploads the HTML files as unarchived Actions artifacts,
-and upserts a PR comment with artifact links.
+and upserts a PR comment with artifact links. On GitHub Enterprise Server, also
+pass `--ghes` (see [GitHub Enterprise Server](#github-enterprise-server)).
 
 ERD preview does not use Tailor Platform credentials. Fork pull requests still
 build artifacts, but the comment step is skipped because fork tokens cannot
@@ -783,6 +784,45 @@ tailor setup ci env
 ```
 
 Commit both workflow files and `.github/tailor.lock`.
+
+## GitHub Enterprise Server
+
+The generated workflows also run on GitHub Enterprise Server. Prepare the
+server and its runners first:
+
+- **Runners:** GitHub Enterprise Server has no GitHub-hosted runners. Change
+  `runs-on` on the managed jobs to the labels of your self-hosted runners;
+  re-running `setup` keeps it (see
+  [Customizing the generated workflow](#customizing-the-generated-workflow)).
+  The runners need Actions runner 2.327.1 or later, which runs the Node 24
+  actions the workflows use, and `gh` and `jq` on `PATH` (plus `node` with
+  `--erd-preview`).
+- **Actions from github.com:** the workflows use `tailor-platform/actions`,
+  `actions/checkout`, `actions/setup-node`, `pnpm/action-setup`, and
+  `oven-sh/setup-bun` (and `actions/upload-artifact` with `--erd-preview`).
+  Make them available on the server with GitHub Connect or `actions-sync`. The
+  server ships its own copies of the `actions/*` ones, which may not include
+  the pinned versions: update them with `actions-sync`, or, with GitHub
+  Connect, delete them from the server's `actions` organization (see GitHub's
+  [Using the latest version of the official bundled actions](https://docs.github.com/en/enterprise-server@latest/admin/managing-github-actions-for-your-enterprise/managing-access-to-actions-from-githubcom/using-the-latest-version-of-the-official-bundled-actions)).
+- **Environment settings:** run the `gh` commands that `tailor setup ci env`
+  prints from a clone of the repository, with `gh` signed in to the server
+  (`gh auth login --hostname <host>`) and `GH_HOST=<host>` exported, so that
+  `gh api` calls the server instead of github.com.
+
+With `--erd-preview`, also pass `--ghes`:
+
+```bash
+tailor setup ci branch --name my-app-stg --erd-preview --ghes
+```
+
+GitHub Enterprise Server does not support `actions/upload-artifact` v4 or
+later, which the workflow uses to upload each ERD viewer unzipped. With
+`--ghes`, the workflow uploads it with v3 instead, so each viewer is a zip
+file, and the PR comment links to the workflow run, which lists the artifacts.
+`setup update` keeps `--ghes`; pass it again whenever you re-run
+`setup ci branch`, or the workflow switches back to the upload that GitHub
+Enterprise Server does not support.
 
 ## Keeping dependencies and actions updated
 

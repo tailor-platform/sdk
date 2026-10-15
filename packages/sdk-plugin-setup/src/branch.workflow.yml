@@ -557,6 +557,7 @@ jobs:
             diff_args+=(--base-html "$base_html")
           fi
           run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
+      # __ERD_GITHUB_COM_UPLOAD_START__
       - id: tailor-upload-erd-viewer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -565,30 +566,48 @@ jobs:
           if-no-files-found: error
           archive: false
           retention-days: 7
+      # __ERD_GITHUB_COM_UPLOAD_END__
+      # __ERD_GHES_UPLOAD_START__
+      - id: tailor-upload-erd-viewer
+        # upload-artifact v3.2.2: GitHub Enterprise Server does not support v4 or later.
+        uses: actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf
+        with:
+          name: ${{ matrix.namespace }}-viewer.html
+          path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html
+          if-no-files-found: error
+          retention-days: 7
+      # __ERD_GHES_UPLOAD_END__
 
   # __ERD_PREVIEW_JOB_END__
   # __ERD_PREVIEW_COMMENT_JOB_START__
   tailor-erd-preview-comment:
-    needs: tailor-erd-preview
+    # __ERD_COMMENT_NEEDS__
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      # __ERD_GITHUB_COM_ACTIONS_READ_START__
       actions: read
+      # __ERD_GITHUB_COM_ACTIONS_READ_END__
       pull-requests: write
     steps:
       - id: tailor-comment-erd-preview
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_ENTERPRISE_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           SERVER: ${{ github.server_url }}
+          # __ERD_GHES_NAMESPACES_START__
+          NAMESPACES: ${{ needs.tailor-erd-preview-matrix.outputs.namespaces }}
+          # __ERD_GHES_NAMESPACES_END__
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MARKER: "<!-- tailor-erd-preview: __WORKSPACE_NAME__ -->"
         run: |
           set -euo pipefail
+          export GH_HOST="${GITHUB_SERVER_URL#*://}"
 
           current_head=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.head.sha')
           if [ "$current_head" != "$HEAD_SHA" ]; then
@@ -597,8 +616,22 @@ jobs:
           fi
 
           body="$MARKER"$'\n'"### TailorDB ERD preview (__WORKSPACE_NAME__)"$'\n\n'
+          # __ERD_GITHUB_COM_LINKS_START__
           body+="Self-contained ERD viewer HTML artifacts for this pull request. Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
+          viewer_artifacts() {
+            gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+              --jq '.artifacts[] | select(.name | endswith("-viewer.html")) | [.name, (.id|tostring)] | @tsv'
+          }
+          artifact_link() { printf '[%s](%s)' "$1" "$SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$2"; }
+          # __ERD_GITHUB_COM_LINKS_END__
+          # __ERD_GHES_LINKS_START__
+          body+="Self-contained ERD viewer HTML files for this pull request, each zipped as an artifact of [the workflow run]($SERVER/$REPO/actions/runs/$RUN_ID). Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
+          # upload-artifact v3 artifacts reach the REST API only after the run completes.
+          viewer_artifacts() { jq -r '.[] | "\(.)-viewer.html"' <<<"$NAMESPACES"; }
+          artifact_link() { printf '%s' "\`$1\`"; }
+          # __ERD_GHES_LINKS_END__
 
+          viewers=$(viewer_artifacts | sort)
           while IFS=$'\t' read -r name id; do
             [ -z "$name" ] && continue
             if [[ "$name" != *-viewer.html ]]; then
@@ -606,9 +639,8 @@ jobs:
             fi
             ns=${name%-viewer.html}
             label="$ns viewer"
-            body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
-          done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select(.name | endswith("-viewer.html")) | [.name, (.id|tostring)] | @tsv' | sort)
+            body+=$'\n'"- **$label**: $(artifact_link "$name" "$id")"
+          done <<<"$viewers"
 
           existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
             --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')

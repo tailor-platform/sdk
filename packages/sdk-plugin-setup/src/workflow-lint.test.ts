@@ -208,6 +208,15 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderBranchWorkflow", () => 
       },
     },
     {
+      name: "branch / pnpm / with ERD preview on GitHub Enterprise Server",
+      fileName: "branch-pnpm-erd-preview-ghes",
+      params: {
+        packageManager: "pnpm" as const,
+        erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
+        ghes: true,
+      },
+    },
+    {
       name: "branch / npm / with seed validation + workingDirectory + environment",
       fileName: "branch-npm-dir-env",
       params: {

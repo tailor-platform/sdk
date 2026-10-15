@@ -49,6 +49,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         branch: recordedBranchUnlessDetected(inputs),
         extraPaths: inputs.paths,
         erdPreview: inputs.erdPreview ?? false,
+        ghes: inputs.ghes ?? false,
         restrictDispatch: inputs.restrictDispatch ?? false,
       };
     case "tag":

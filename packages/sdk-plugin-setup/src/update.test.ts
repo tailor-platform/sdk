@@ -41,6 +41,7 @@ describe("planUpdate", () => {
         environment: "production",
         dir: "apps/api",
         erdPreview: true,
+        ghes: true,
         restrictDispatch: true,
       }),
       common,
@@ -53,10 +54,17 @@ describe("planUpdate", () => {
       environment: "production",
       branch: "release",
       erdPreview: true,
+      ghes: true,
       restrictDispatch: true,
       force: false,
       outputDir: "/repo",
     });
+  });
+
+  test("branch: regenerates for github.com when the entry has no ghes", () => {
+    const plan = planUpdate(lockTarget("branch", "my-app", { erdPreview: true }), common);
+
+    expect(plan).toMatchObject({ kind: "branch", erdPreview: true, ghes: false });
   });
 
   test("branch: re-detects the default branch when it was auto-detected", () => {

@@ -51,6 +51,15 @@ function renderAll(): RenderedTemplate[] {
     }),
   );
   add(
+    "branch/ghes",
+    renderBranchWorkflow({
+      ...full,
+      branch: "main",
+      erdPreview: { namespaces: ["main", "analytics"] },
+      ghes: true,
+    }),
+  );
+  add(
     "branch/seed-validate",
     renderBranchWorkflow({ ...full, branch: "main", seedValidate: true, erdPreview: null }),
   );
