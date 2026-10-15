@@ -23,30 +23,6 @@ const state = vi.hoisted(() => ({
   tablesByDir: {} as Record<string, Record<number, unknown>>,
 }));
 
-vi.mock("../label", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../label");
-  return {
-    ...original,
-    buildMetaRequest: vi.fn().mockImplementation(async () => ({
-      trn: "trn:v1:workspace:test-workspace:tailordb:main-ns",
-      labels: {},
-    })),
-  };
-});
-
-vi.mock("../change-set", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../change-set");
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...original.createChangeSet(title),
-      lines: () => [],
-    }),
-  };
-});
-
 vi.mock("./migration", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("./migration");
@@ -285,25 +261,23 @@ function createMockClient() {
   } as unknown as OperatorClient;
 }
 
-function typeWriteFields(client: OperatorClient, namespace: string, tableName: string) {
-  return [
-    ...vi.mocked(client.createTailorDBType).mock.calls,
-    ...vi.mocked(client.updateTailorDBType).mock.calls,
-  ]
+function typeWritesOf(mock: { calls: unknown[][] }, namespace: string, tableName: string) {
+  return mock.calls
     .map((call) => call[0] as TypeWrite)
     .filter(
       (request) => request.namespaceName === namespace && request.tailordbType?.name === tableName,
-    )
-    .map((request) => Object.keys(request.tailordbType?.schema?.fields ?? {}));
+    );
+}
+
+function typeWriteFields(client: OperatorClient, namespace: string, tableName: string) {
+  return [
+    ...typeWritesOf(vi.mocked(client.createTailorDBType).mock, namespace, tableName),
+    ...typeWritesOf(vi.mocked(client.updateTailorDBType).mock, namespace, tableName),
+  ].map((request) => Object.keys(request.tailordbType?.schema?.fields ?? {}));
 }
 
 function typeCreateCount(client: OperatorClient, namespace: string, tableName: string) {
-  return vi
-    .mocked(client.createTailorDBType)
-    .mock.calls.map((call) => call[0] as TypeWrite)
-    .filter(
-      (request) => request.namespaceName === namespace && request.tailordbType?.name === tableName,
-    ).length;
+  return typeWritesOf(vi.mocked(client.createTailorDBType).mock, namespace, tableName).length;
 }
 
 function deleteOrders(client: OperatorClient, namespace: string, tableName: string) {
@@ -396,6 +370,12 @@ describe("migration flow: a table name shared across namespaces", () => {
       entry: "create",
     },
     {
+      title: "the new table is created without a migration",
+      migrating: [MAIN],
+      pending: moveOutOfMain,
+      entry: "create",
+    },
+    {
       title: "the existing table is updated without a migration",
       migrating: [MAIN],
       pending: moveOutOfMain,
@@ -468,15 +448,16 @@ describe("migration flow: a table name shared across namespaces", () => {
     );
   });
 
-  test("deletes a namespace's table even when another namespace's migration removes the same name", async () => {
+  test("deletes a namespace's table after the migrations even when another namespace's migration removes the same name", async () => {
     state.migratingNamespaces = [MAIN];
     const legacy = { value: { type: "string", required: false } };
     state.tablesByDir = {
-      [migrationsDirOf(MAIN)]: { 0: { Legacy: snapshotTable("Legacy", legacy) }, 1: {} },
+      [migrationsDirOf(MAIN)]: { 0: { Legacy: snapshotTable("Legacy", legacy) }, 1: {}, 2: {} },
     };
     state.checkpoints.set(MAIN, 0);
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
+      mkPendingMigration(MAIN, 2, []),
     ]);
     const client = createMockClient();
 
@@ -489,7 +470,7 @@ describe("migration flow: a table name shared across namespaces", () => {
     expect(deletionOf(client, MAIN, "Legacy", checkpointOrder(MAIN, 1))).toEqual(
       DELETED_ONCE_AFTER_CHECKPOINT,
     );
-    expect(deletionOf(client, SUB, "Legacy", checkpointOrder(MAIN, 1))).toEqual(
+    expect(deletionOf(client, SUB, "Legacy", checkpointOrder(MAIN, 2))).toEqual(
       DELETED_ONCE_AFTER_CHECKPOINT,
     );
   });
