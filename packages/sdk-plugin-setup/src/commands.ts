@@ -14,6 +14,23 @@ import { setupRenovate } from "./renovate";
 import { PACKAGE_MANAGERS } from "./templates";
 import { setupUpdate } from "./update";
 
+const seedArgs = {
+  seed: arg(z.boolean().default(false), {
+    description:
+      "Seed the workspace after each deploy with `tailor seed apply` (--upsert for branch and tag, --truncate for preview). Needs seedPlugin with machineUserName",
+  }),
+  "seed-dataset": arg(z.array(z.string().min(1)).default([]), {
+    description:
+      "Seed dataset to apply on top of the base seed data (repeatable, applied in order); implies --seed",
+  }),
+};
+
+function seedOption(args: { seed: boolean; "seed-dataset": string[] }) {
+  return args.seed || args["seed-dataset"].length > 0
+    ? { datasets: args["seed-dataset"] }
+    : undefined;
+}
+
 const checkCommand = defineAppCommand({
   name: "check",
   description: "Audit generated workflows for drift against the current config/repo (read-only).",
@@ -64,6 +81,10 @@ const branchCommand = defineAppCommand({
     "erd-preview": arg(z.boolean().default(false), {
       description: "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
     }),
+    ghes: arg(z.boolean().default(false), {
+      description:
+        "Upload the ERD preview with upload-artifact v3, which GitHub Enterprise Server supports (requires --erd-preview)",
+    }),
     "restrict-dispatch": arg(z.boolean().default(false), {
       description:
         "Deploy on manual dispatch only from the target branch; dry runs stay unrestricted",
@@ -77,6 +98,7 @@ const branchCommand = defineAppCommand({
       description:
         "App directory (for monorepo setups). Repeat to deploy several apps together in one multi-config run; --name is then required",
     }),
+    ...seedArgs,
     force: arg(z.boolean().default(false), {
       description:
         "Reset hand edits to SDK-managed parts (your own jobs and steps are kept) / take over unmanaged files",
@@ -91,9 +113,11 @@ const branchCommand = defineAppCommand({
       environment: args.environment,
       packageManager: args["package-manager"],
       erdPreview: args["erd-preview"],
+      ghes: args.ghes,
       restrictDispatch: args["restrict-dispatch"],
       dir: args.dir,
       extraPaths: args.paths,
+      seed: seedOption(args),
       force: args.force,
       outputDir: process.cwd(),
     });
@@ -128,6 +152,7 @@ const tagCommand = defineAppCommand({
       description:
         "App directory (for monorepo setups). Repeat to deploy several apps together in one multi-config run; --name is then required",
     }),
+    ...seedArgs,
     force: arg(z.boolean().default(false), {
       description:
         "Reset hand edits to SDK-managed parts (your own jobs and steps are kept) / take over unmanaged files",
@@ -144,6 +169,7 @@ const tagCommand = defineAppCommand({
       environment: args.environment,
       packageManager: args["package-manager"],
       dir: args.dir,
+      seed: seedOption(args),
       force: args.force,
       outputDir: process.cwd(),
     });
@@ -181,6 +207,7 @@ const previewCommand = defineAppCommand({
       description:
         "App directory (for monorepo setups). Repeat to deploy several apps together in one multi-config run; --name is then required",
     }),
+    ...seedArgs,
     force: arg(z.boolean().default(false), {
       description:
         "Reset hand edits to SDK-managed parts (your own jobs and steps are kept) / take over unmanaged files",
@@ -198,6 +225,7 @@ const previewCommand = defineAppCommand({
       packageManager: args["package-manager"],
       dir: args.dir,
       extraPaths: args.paths,
+      seed: seedOption(args),
       force: args.force,
       outputDir: process.cwd(),
     });

@@ -37,6 +37,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
     dir,
     environment: inputs.environment,
     packageManager: recordedPackageManagerUnlessDetected(inputs),
+    ...(inputs.seed ? { seed: inputs.seed } : {}),
     ...common,
   };
 
@@ -48,6 +49,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         branch: recordedBranchUnlessDetected(inputs),
         extraPaths: inputs.paths,
         erdPreview: inputs.erdPreview ?? false,
+        ghes: inputs.ghes ?? false,
         restrictDispatch: inputs.restrictDispatch ?? false,
       };
     case "tag":
@@ -73,7 +75,12 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
 export type UpdateOptions = UpdateCommon &
   Pick<
     SetupTargetOptions,
-    "gitRunner" | "loadConfigId" | "loadErdNamespaces" | "loadHasMigrations" | "loadHasSeeds"
+    | "gitRunner"
+    | "loadConfigId"
+    | "loadErdNamespaces"
+    | "loadHasMigrations"
+    | "loadHasSeeds"
+    | "loadSeedSettings"
   >;
 
 // Not the SDK's errorSummary: it is not exported from @tailor-platform/sdk/cli,

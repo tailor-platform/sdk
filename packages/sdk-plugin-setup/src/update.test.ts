@@ -41,6 +41,7 @@ describe("planUpdate", () => {
         environment: "production",
         dir: "apps/api",
         erdPreview: true,
+        ghes: true,
         restrictDispatch: true,
       }),
       common,
@@ -53,10 +54,17 @@ describe("planUpdate", () => {
       environment: "production",
       branch: "release",
       erdPreview: true,
+      ghes: true,
       restrictDispatch: true,
       force: false,
       outputDir: "/repo",
     });
+  });
+
+  test("branch: regenerates for github.com when the entry has no ghes", () => {
+    const plan = planUpdate(lockTarget("branch", "my-app", { erdPreview: true }), common);
+
+    expect(plan).toMatchObject({ kind: "branch", erdPreview: true, ghes: false });
   });
 
   test("branch: re-detects the default branch when it was auto-detected", () => {
@@ -129,6 +137,24 @@ describe("planUpdate", () => {
       force: false,
       outputDir: "/repo",
     });
+  });
+
+  test.each(["branch", "tag", "preview"] as const)(
+    "%s: regenerates with the recorded seed datasets",
+    (kind) => {
+      const plan = planUpdate(
+        lockTarget(kind, "my-app", { seed: { datasets: ["preview"] } }),
+        common,
+      );
+
+      expect(plan).toMatchObject({ kind, seed: { datasets: ["preview"] } });
+    },
+  );
+
+  test("leaves seeding off for a target recorded without it", () => {
+    const plan = planUpdate(lockTarget("branch", "my-app", {}), common);
+
+    expect(plan).not.toHaveProperty("seed");
   });
 
   test("preview: re-detects the default branch when it was auto-detected", () => {
@@ -328,6 +354,49 @@ describe("setupUpdate", () => {
       before?.map((inputs) => [inputs.apps, inputs.paths]),
     );
     expect(after?.[0]?.apps?.map((app) => app.dir)).toEqual(multi.dir);
+  });
+
+  test("keeps seeding a target, and reports it once its dataset no longer resolves", async () => {
+    writeAppConfig("apps/api");
+    fs.mkdirSync(path.join(testDir, "apps/api/seed/data/cogs"), { recursive: true });
+    const settings = {
+      machineUserName: "admin",
+      datasets: { preview: ["cogs"] },
+      dataDir: path.join(testDir, "apps/api/seed/data"),
+    };
+    await generate({
+      kind: "branch",
+      workspaceName: "api",
+      dir: "apps/api",
+      erdPreview: false,
+      seed: { datasets: ["preview"] },
+      loadSeedSettings: async () => settings,
+    });
+    ageLock();
+
+    await setupUpdate({
+      force: false,
+      outputDir: testDir,
+      ...loaders,
+      loadSeedSettings: async () => settings,
+    });
+
+    expect(readLock(testDir)?.targets[0]).toMatchObject({
+      templateVersion: TEMPLATE_VERSION,
+      inputs: { seed: { datasets: ["preview"] } },
+    });
+    expect(
+      fs.readFileSync(path.join(testDir, ".github/workflows/tailor-api.yml"), "utf-8"),
+    ).toContain("seed apply --upsert --dataset preview");
+
+    await expect(
+      setupUpdate({
+        force: false,
+        outputDir: testDir,
+        ...loaders,
+        loadSeedSettings: async () => ({ ...settings, datasets: {} }),
+      }),
+    ).rejects.toThrow(/\[branch api\] Unknown seed dataset "preview"/);
   });
 
   test("keeps an explicit --package-manager and re-detects a detected one", async () => {

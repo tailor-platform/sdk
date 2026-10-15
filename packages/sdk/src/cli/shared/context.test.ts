@@ -1555,6 +1555,8 @@ describe("initial platform config", () => {
 });
 
 describe("saveUserTokens", () => {
+  const defaultOrganizationId = "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa";
+  const defaultFolderId = "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb";
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
   const originalEnv = process.env;
   type PlatformConfig = Parameters<typeof saveUserTokens>[0];
@@ -1768,7 +1770,8 @@ describe("saveUserTokens", () => {
       refresh_token: "old-refresh-token",
       token_expires_at: futureDate,
       email: "user@example.com",
-      default_folder_id: "folder",
+      default_organization_id: defaultOrganizationId,
+      default_folder_id: defaultFolderId,
     };
 
     await saveUserTokens(
@@ -1782,7 +1785,8 @@ describe("saveUserTokens", () => {
       storage: "keyring",
       token_expires_at: futureDate,
       email: "user@example.com",
-      default_folder_id: "folder",
+      default_organization_id: defaultOrganizationId,
+      default_folder_id: defaultFolderId,
     });
   });
 
@@ -1791,7 +1795,8 @@ describe("saveUserTokens", () => {
     config.users["platform-user-sub"] = {
       storage: "keyring",
       token_expires_at: futureDate,
-      default_folder_id: "folder",
+      default_organization_id: defaultOrganizationId,
+      default_folder_id: defaultFolderId,
     };
     keyringSetPasswordFailure.error = new Error("keyring denied");
     using _warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
@@ -1808,7 +1813,8 @@ describe("saveUserTokens", () => {
       access_token: "access-token",
       refresh_token: "refresh-token",
       token_expires_at: futureDate,
-      default_folder_id: "folder",
+      default_organization_id: defaultOrganizationId,
+      default_folder_id: defaultFolderId,
     });
   });
 });

@@ -38,6 +38,15 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
+  test("ci branch passes --ghes to setupTarget", async () => {
+    const result = await runCommand(setupCommand, ["ci", "branch", "--erd-preview", "--ghes"]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "branch", erdPreview: true, ghes: true }),
+    );
+  });
+
   test("ci branch rejects the removed --branch alias", async () => {
     const result = await runCommand(setupCommand, ["ci", "branch", "--branch", "release"]);
 
@@ -140,6 +149,33 @@ describe("setup ci subcommand nesting", () => {
       expect.objectContaining({ extraPaths: ["apps/erp/frontend/**", "modules/**"] }),
     );
   });
+
+  test.each([
+    ["branch", []],
+    ["tag", []],
+    ["preview", ["--region", "us-west"]],
+  ] as const)(
+    "ci %s turns --seed and --seed-dataset into the seed option",
+    async (subcommand, args) => {
+      await runCommand(setupCommand, ["ci", subcommand, ...args]);
+      await runCommand(setupCommand, ["ci", subcommand, ...args, "--seed"]);
+      await runCommand(setupCommand, [
+        "ci",
+        subcommand,
+        ...args,
+        "--seed-dataset",
+        "preview",
+        "--seed-dataset",
+        "local",
+      ]);
+
+      expect(vi.mocked(setupTarget).mock.calls.map(([options]) => options.seed)).toEqual([
+        undefined,
+        { datasets: [] },
+        { datasets: ["preview", "local"] },
+      ]);
+    },
+  );
 
   test.each([
     ["branch", []],

@@ -115,6 +115,12 @@ tailor workspace create [options]
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+**Notes**
+
+Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with `user update`, unless TAILOR_PLATFORM_TOKEN is set. Giving either option replaces both defaults, and --folder-id requires --organization-id.
+
+TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID are also read from --env-file. Command-line options take precedence over the corresponding environment variables. Empty values in the env file are treated as not given.
+
 ### workspace delete
 
 Delete a Tailor Platform workspace.
@@ -207,7 +213,9 @@ Use this to reclaim workspaces left behind by CI runs, preview deployments, or i
 
 With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires at least one location, and --name still applies on top.
 
-Every workspace lives in exactly one location, and the location options name them explicitly: --organization-root selects the workspaces directly under an organization and none inside its folders, --folder-id selects the workspaces in one folder, and --personal selects the workspaces belonging to no organization and no folder. Each option can be given more than once, they combine as a union, and none of them is read from the environment -- a sweep covers exactly the locations spelled out on the command line. Selecting --personal is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded. Without any location option, a --name / --older-than sweep considers every visible workspace.
+Every workspace lives in exactly one location, and the location options name them explicitly: --organization-root selects the workspaces directly under an organization and none inside its folders, --folder-id selects the workspaces in one folder, and --personal selects the workspaces belonging to no organization and no folder. Each option can be given more than once, they combine as a union, and none of them is read from the environment or from the default organization/folder set by `user update` -- a sweep covers exactly the locations spelled out on the command line. Selecting --personal is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded. Without any location option, a --name / --older-than sweep considers every visible workspace.
+
+Without a location option, prune warns before listing workspaces that every workspace visible to this login is a candidate for the name and age filters, even with --yes or --dry-run. The default organization/folder set by `tailor user update` is not used.
 
 Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run `workspace ttl set` or `workspace ttl clear` before the next run — or keep it out of that run with --exclude.
 

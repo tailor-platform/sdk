@@ -1009,6 +1009,46 @@ describe("snapshot", () => {
       });
     });
 
+    describe("gapless serial changes", () => {
+      function snapshotWithNumber(gapless: boolean | undefined): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          tables: {
+            Invoice: {
+              name: "Invoice",
+              pluralForm: "Invoices",
+              fields: {
+                id: { type: "uuid", required: true },
+                number: {
+                  type: "integer",
+                  required: true,
+                  serial: { start: 1, ...(gapless !== undefined && { gapless }) },
+                },
+              },
+            },
+          },
+        };
+      }
+
+      test.each([
+        { from: undefined, to: true },
+        { from: true, to: undefined },
+      ])("detects gapless $from → $to as a non-breaking change", ({ from, to }) => {
+        const diff = compareRawSnapshots(snapshotWithNumber(from), snapshotWithNumber(to));
+
+        expect(diff.changes).toHaveLength(1);
+        expect(diff.changes[0]!.kind).toBe("field_modified");
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
+
+      test("treats gapless false the same as omitted", () => {
+        const diff = compareRawSnapshots(snapshotWithNumber(undefined), snapshotWithNumber(false));
+
+        expect(diff.changes).toHaveLength(0);
+      });
+    });
+
     describe("table-level index changes", () => {
       function snapshotWithIndexes(
         indexes: Record<string, { fields: string[]; unique?: boolean }> | undefined,

@@ -66,12 +66,16 @@ export type LockInputs = {
   paths?: string[];
   erdPreview?: boolean;
   erdNamespaces?: string[];
+  /** For branch targets: whether `--ghes` was given. Absent means github.com. */
+  ghes?: boolean;
   /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */
   migrationDriftCheck?: boolean;
   /** Whether tailor-seed-validate was generated (config used seedPlugin). */
   seedValidate?: boolean;
   /** Whether manual dispatch may deploy only the target branch or a tag (branch/tag). */
   restrictDispatch?: boolean;
+  /** Present when the deploy job seeds the workspace (`--seed`), with the `--seed-dataset` names. */
+  seed?: { datasets: string[] };
 };
 
 export type LockTarget = {

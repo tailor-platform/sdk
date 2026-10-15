@@ -1915,6 +1915,7 @@ export type AuthConfig =
                           start: number;
                           maxValue?: number | undefined | undefined;
                           format?: string | undefined | undefined;
+                          gapless?: boolean | undefined | undefined;
                         }
                       | undefined;
                     scale?: number | undefined | undefined;

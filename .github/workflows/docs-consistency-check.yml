@@ -8,7 +8,6 @@ on:
       - "packages/sdk/docs/**"
       - "example/**"
       - "AGENTS.md"
-      - "CLAUDE.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        uses: anthropics/claude-code-action@a26b07d8c778b0c43f64618e5fd29fd0f8af72e8 # v1.0.250
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Allow PRs opened by the tailor-bobbin GitHub App to run this check
@@ -58,14 +57,13 @@ jobs:
             - `packages/sdk/docs/services/*.md` - Service documentation
             - `packages/sdk/docs/configuration.md` - Configuration reference
             - `AGENTS.md` - Developer guide and code patterns
-            - `CLAUDE.md` - Compatibility adapter for agent instructions
             - `example/` - Working example code
             - Published JSDoc on **exported** symbols in `packages/sdk/src/**` - shipped to users' IDEs via the package's `.d.ts` files
 
             ### Audience scope (important)
 
             - `packages/sdk/docs/**` ships inside the published npm package (`@tailor-platform/sdk`), `example/` is read by SDK users, and JSDoc on exported symbols reaches users through editor tooltips/autocompletion. Apply **both** the Consistency and Reader-Perspective checks to these.
-            - `AGENTS.md` / `CLAUDE.md` are developer/contributor instructions, **not** user-facing. Apply **only** the Consistency check to them; do **not** raise reader-perspective issues for them.
+            - `AGENTS.md` contains developer/contributor instructions and is **not** user-facing. Apply **only** the Consistency check to it; do **not** raise reader-perspective issues for it.
             - JSDoc on non-exported / internal symbols is not user-facing — skip it for the reader-perspective check.
 
             ## Investigation Steps
@@ -211,7 +209,7 @@ jobs:
               `${{ env.REVIEW_BODY_FILE }}`
             - Be specific: include file paths and line numbers for every issue
             - Only flag real issues, not stylistic differences
-            - Reader-perspective issues apply **only** to user-facing documentation: `packages/sdk/docs/**`, `example/`, and published JSDoc on exported symbols in `packages/sdk/src/**`. Do **not** raise reader-perspective issues for `AGENTS.md` / `CLAUDE.md` (developer-facing) or for non-exported / internal code.
+            - Reader-perspective issues apply **only** to user-facing documentation: `packages/sdk/docs/**`, `example/`, and published JSDoc on exported symbols in `packages/sdk/src/**`. Do **not** raise reader-perspective issues for `AGENTS.md` (developer-facing) or for non-exported / internal code.
             - Do not flag internal mechanics that a user must understand to use the API correctly (see the note in step 4)
             - If unsure whether something is an issue, mention it with a note that it may be intentional
 
@@ -234,7 +232,7 @@ jobs:
 
       - name: Fix Recommended Actions heading with Claude
         if: always() && steps.validate-heading.outputs.needs_fix == 'true'
-        uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        uses: anthropics/claude-code-action@a26b07d8c778b0c43f64618e5fd29fd0f8af72e8 # v1.0.250
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Allow PRs opened by the tailor-bobbin GitHub App to run this check

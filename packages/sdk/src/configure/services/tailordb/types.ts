@@ -21,6 +21,11 @@ export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> 
   {
     start: number;
     maxValue?: number;
+    /**
+     * Number records without gaps: a number is used only by a create that
+     * commits. Creates of the table that are numbered run one at a time.
+     */
+    gapless?: boolean;
   } & (T extends "string"
     ? {
         format?: string;
@@ -282,6 +287,15 @@ export type ExcludeHookedDBFields<T extends Record<string, TailorAnyDBField>> = 
 export type ExcludeDefaultedDBFields<T extends Record<string, TailorAnyDBField>> = {
   [K in keyof T]: T[K] extends TailorDBField<
     { type: TailorFieldType; array: boolean; default: true },
+    any
+  >
+    ? never
+    : T[K];
+};
+
+export type ExcludeSerialDBFields<T extends Record<string, TailorAnyDBField>> = {
+  [K in keyof T]: T[K] extends TailorDBField<
+    { type: TailorFieldType; array: boolean; serial: true },
     any
   >
     ? never

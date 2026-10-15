@@ -107,6 +107,8 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "staticwebsite/domain/index.ts",
   "staticwebsite/domain/get.ts",
   "staticwebsite/domain/list.ts",
+  // Data (read-only branches; data/clone.ts starts a clone and is guarded)
+  "data/operation/get.ts",
   // TailorDB (read-only / local ops)
   "tailordb/index.ts",
   "tailordb/migrate/index.ts",
@@ -116,11 +118,12 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "tailordb/migrate/validate.ts",
   // Upgrade (local SDK upgrade)
   "upgrade/index.ts",
-  // User (read-only / local switch)
+  // User (read-only / local config only)
   "user/index.ts",
   "user/current.ts",
   "user/list.ts",
   "user/switch.ts",
+  "user/update.ts",
   "user/pat/index.ts",
   "user/pat/list.ts",
   // Workflow (read-only branches). `workflow/start.ts` and `workflow/resume.ts`

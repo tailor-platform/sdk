@@ -128,7 +128,25 @@ export function getDeletedTableNames(migration: PendingMigration): Set<string> {
 }
 
 /**
- * Track which tables have been created/updated across migrations
+ * Key a table by its namespace, since table names are only unique within one.
+ * @param namespaceName - Namespace of the table
+ * @param tableName - Table name
+ * @returns Namespace-qualified table key
+ */
+export function namespacedTableKey(namespaceName: string, tableName: string): string {
+  return `${namespaceName}/${tableName}`;
+}
+
+function entriesOfNamespace<T extends { request: { namespaceName?: string } }>(
+  entries: readonly T[],
+  namespaceName: string,
+): T[] {
+  return entries.filter((entry) => entry.request.namespaceName === namespaceName);
+}
+
+/**
+ * Track which tables have been created/updated across migrations, keyed by
+ * {@link namespacedTableKey}
  */
 export const processedTables = {
   created: new Set<string>(),
@@ -278,11 +296,18 @@ export async function executeSingleMigrationPrePhase(
   const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const preMigrationIndexChanges = buildPreMigrationIndexChangesMap([migration]);
   const affectedTables = getAffectedTableNames(migration);
+  const tableKey = (tableName: string) => namespacedTableKey(migration.namespace, tableName);
+  const typeCreates = entriesOfNamespace(changeSet.type.creates, migration.namespace);
+  const typeUpdates = entriesOfNamespace(changeSet.type.updates, migration.namespace);
   const createdBeforeMigration = new Set(processedTables.created);
 
-  for (const create of changeSet.type.creates) {
+  for (const create of typeCreates) {
     const tableName = create.request.tailordbType?.name;
-    if (!tableName || !affectedTables.has(tableName) || createdBeforeMigration.has(tableName)) {
+    if (
+      !tableName ||
+      !affectedTables.has(tableName) ||
+      createdBeforeMigration.has(tableKey(tableName))
+    ) {
       continue;
     }
     const typeChanges = preMigrationChanges.get(tableName);
@@ -305,14 +330,18 @@ export async function executeSingleMigrationPrePhase(
       applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
     }
 
-    processedTables.created.add(tableName);
+    processedTables.created.add(tableKey(tableName));
     attemptedTables.add(tableName);
     await client.createTailorDBType(clonedRequest);
   }
 
-  for (const create of changeSet.type.creates) {
+  for (const create of typeCreates) {
     const tableName = create.request.tailordbType?.name;
-    if (!tableName || !affectedTables.has(tableName) || !createdBeforeMigration.has(tableName)) {
+    if (
+      !tableName ||
+      !affectedTables.has(tableName) ||
+      !createdBeforeMigration.has(tableKey(tableName))
+    ) {
       continue;
     }
     const typeChanges = preMigrationChanges.get(tableName);
@@ -333,7 +362,7 @@ export async function executeSingleMigrationPrePhase(
       applyPreMigrationIndexAdjustments(clonedTypeRequest.schema.indexes, indexChanges);
     }
 
-    processedTables.updated.add(tableName);
+    processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
     await client.updateTailorDBType({
       workspaceId: create.request.workspaceId,
@@ -342,7 +371,7 @@ export async function executeSingleMigrationPrePhase(
     });
   }
 
-  for (const update of changeSet.type.updates) {
+  for (const update of typeUpdates) {
     const tableName = update.request.tailordbType?.name;
     if (!tableName || !affectedTables.has(tableName)) continue;
     const typeChanges = preMigrationChanges.get(tableName);
@@ -365,37 +394,38 @@ export async function executeSingleMigrationPrePhase(
       applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
     }
 
-    processedTables.updated.add(tableName);
+    processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
     await client.updateTailorDBType(clonedRequest);
   }
 
   const currentTableNames = new Set(Object.keys(migrationSnapshotCache.load(migration).tables));
-  const permissionKey = (tableName: string) => `${migration.namespace}/${tableName}`;
-  const gqlPermissionCreatesForNamespace = changeSet.gqlPermission.creates.filter(
+  const gqlPermissionCreatesForNamespace = entriesOfNamespace(
+    changeSet.gqlPermission.creates,
+    migration.namespace,
+  ).filter(
     (create) =>
-      create.request.namespaceName === migration.namespace &&
       currentTableNames.has(create.name) &&
-      !processedTables.gqlPermissionsProcessed.has(permissionKey(create.name)),
+      !processedTables.gqlPermissionsProcessed.has(tableKey(create.name)),
   );
-  const gqlPermissionUpdatesForNamespace = changeSet.gqlPermission.updates.filter(
+  const gqlPermissionUpdatesForNamespace = entriesOfNamespace(
+    changeSet.gqlPermission.updates,
+    migration.namespace,
+  ).filter(
     (update) =>
-      update.request.namespaceName === migration.namespace &&
       currentTableNames.has(update.name) &&
-      !processedTables.gqlPermissionsProcessed.has(permissionKey(update.name)),
+      !processedTables.gqlPermissionsProcessed.has(tableKey(update.name)),
   );
   if (gqlPermissionCreatesForNamespace.length + gqlPermissionUpdatesForNamespace.length > 0) {
     const gqlPermissionTypeNames = new Set(
       gqlPermissionCreatesForNamespace.map((create) => create.name),
     );
-    const missingTypeCreates = changeSet.type.creates.filter((create) => {
+    const missingTypeCreates = typeCreates.filter((create) => {
       const tableName = create.request.tailordbType?.name;
-      const namespaceName = create.request.namespaceName;
       return (
-        namespaceName === migration.namespace &&
         tableName &&
         gqlPermissionTypeNames.has(tableName) &&
-        !processedTables.created.has(tableName)
+        !processedTables.created.has(tableKey(tableName))
       );
     });
     if (missingTypeCreates.length > 0) {
@@ -404,7 +434,7 @@ export async function executeSingleMigrationPrePhase(
         if (!tableName) continue;
         const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
         if (!snapshotType) continue;
-        processedTables.created.add(tableName);
+        processedTables.created.add(tableKey(tableName));
         attemptedTables.add(tableName);
         const clonedRequest = structuredClone(create.request);
         clonedRequest.tailordbType = snapshotType;
@@ -423,13 +453,14 @@ export async function executeSingleMigrationPrePhase(
       ...gqlPermissionCreatesForNamespace.map((create) => create.name),
       ...gqlPermissionUpdatesForNamespace.map((update) => update.name),
     ]) {
-      processedTables.gqlPermissionsProcessed.add(permissionKey(typeName));
+      processedTables.gqlPermissionsProcessed.add(tableKey(typeName));
     }
   }
 }
 
 /**
- * Track which tables/permissions have been deleted across migrations
+ * Track which tables/permissions have been deleted across migrations, keyed by
+ * {@link namespacedTableKey}
  */
 export const deletedResources = {
   types: new Set<string>(),
@@ -510,7 +541,7 @@ export async function executeSingleMigrationPostPhase(
   // take effect after the data script has reconciled records.
   try {
     // For newly created tables that had pre-migration adjustments in this migration, send update with snapshot[N] values
-    for (const create of changeSet.type.creates) {
+    for (const create of entriesOfNamespace(changeSet.type.creates, migration.namespace)) {
       const tableName = create.request.tailordbType?.name;
       if (!tableName || !affectedTables.has(tableName) || !adjustedTypes.has(tableName)) {
         continue;
@@ -526,7 +557,7 @@ export async function executeSingleMigrationPostPhase(
     }
 
     // For updated tables affected by this migration, send update with snapshot[N] values
-    for (const update of changeSet.type.updates) {
+    for (const update of entriesOfNamespace(changeSet.type.updates, migration.namespace)) {
       const tableName = update.request.tailordbType?.name;
       if (!tableName || !affectedTables.has(tableName) || !adjustedTypes.has(tableName)) {
         continue;
@@ -883,25 +914,25 @@ export async function executeSingleMigrationPostPhaseDeletions(
 ): Promise<void> {
   const deletedTableNames = getDeletedTableNames(migration);
   if (deletedTableNames.size > 0) {
-    const gqlPermissionsToDelete = changeSet.gqlPermission.deletes.filter((del) => {
-      const permKey = `${del.request.namespaceName}/${del.name}`;
-      if (deletedResources.gqlPermissions.has(permKey)) return false;
-      const tableName = del.name;
-      return deletedTableNames.has(tableName);
-    });
+    const tableKey = (tableName: string) => namespacedTableKey(migration.namespace, tableName);
+    const gqlPermissionsToDelete = entriesOfNamespace(
+      changeSet.gqlPermission.deletes,
+      migration.namespace,
+    ).filter(
+      (del) =>
+        deletedTableNames.has(del.name) && !deletedResources.gqlPermissions.has(tableKey(del.name)),
+    );
     for (const del of gqlPermissionsToDelete) {
       await client.deleteTailorDBGQLPermission(del.request);
-      deletedResources.gqlPermissions.add(`${del.request.namespaceName}/${del.name}`);
+      deletedResources.gqlPermissions.add(tableKey(del.name));
     }
 
-    const typesToDelete = changeSet.type.deletes.filter((del) => {
-      const tableName = del.name;
-      if (!tableName || deletedResources.types.has(tableName)) return false;
-      return deletedTableNames.has(tableName);
-    });
+    const typesToDelete = entriesOfNamespace(changeSet.type.deletes, migration.namespace).filter(
+      (del) => deletedTableNames.has(del.name) && !deletedResources.types.has(tableKey(del.name)),
+    );
     for (const del of typesToDelete) {
       await client.deleteTailorDBType(del.request);
-      deletedResources.types.add(del.name);
+      deletedResources.types.add(tableKey(del.name));
     }
   }
 }

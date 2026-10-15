@@ -44,6 +44,11 @@ export interface SeedContext {
   distPath: string;
   /** Default machine user name from seedPlugin options, if configured. */
   machineUserName?: string | undefined;
+  /**
+   * Named combinations of dataset directory names from seedPlugin options.
+   * Always set by {@link loadSeedContext}; optional so a context built elsewhere stays valid.
+   */
+  datasets?: Record<string, readonly string[]>;
   /** Seed ordering information per TailorDB namespace. */
   namespaces: SeedNamespaceConfig[];
   /** IdP `_User` seeding context, or null when not applicable. */
@@ -107,7 +112,50 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
     config,
     distPath: path.resolve(pluginOptions.distPath),
     machineUserName: pluginOptions.machineUserName,
+    datasets: parseDatasets(pluginOptions.datasets, config.path),
     namespaces: buildSeedNamespaceConfigs(namespaces),
     idpUser,
   };
+}
+
+const DATASET_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+function assertDatasetName(name: string, configPath: string): void {
+  if (!DATASET_NAME_PATTERN.test(name)) {
+    throw new Error(
+      `Dataset name "${name}" in the seedPlugin datasets option of ${configPath} is invalid. ` +
+        "Use letters, digits, `-` and `_`, starting with a letter or digit.",
+    );
+  }
+}
+
+function parseDatasets(value: unknown, configPath: string): Record<string, readonly string[]> {
+  if (value === undefined) return {};
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(
+      `seedPlugin datasets must map names to lists of dataset directory names in ${configPath}.`,
+    );
+  }
+  const datasets: Record<string, readonly string[]> = {};
+  for (const [name, directories] of Object.entries(value)) {
+    assertDatasetName(name, configPath);
+    if (!Array.isArray(directories)) {
+      throw new Error(
+        `seedPlugin datasets.${name} must be an array of dataset directory names in ${configPath}.`,
+      );
+    }
+    if (directories.length === 0) {
+      throw new Error(`seedPlugin datasets.${name} lists no dataset directories in ${configPath}.`);
+    }
+    for (const directory of directories) {
+      if (typeof directory !== "string") {
+        throw new Error(
+          `seedPlugin datasets.${name} must be an array of dataset directory names in ${configPath}.`,
+        );
+      }
+      assertDatasetName(directory, configPath);
+    }
+    datasets[name] = directories as string[];
+  }
+  return datasets;
 }

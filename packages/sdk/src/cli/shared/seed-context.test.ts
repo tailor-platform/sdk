@@ -117,6 +117,40 @@ describe("loadSeedContext", () => {
     expect(context.machineUserName).toBe("admin");
   });
 
+  test("exposes no datasets when seedPlugin configures none", async () => {
+    mockLoadResult({ plugins: [seedPluginInstance({ distPath: "./seed" })] });
+
+    const context = await loadSeedContext();
+    expect(context.datasets).toEqual({});
+  });
+
+  test("exposes the datasets configured in seedPlugin", async () => {
+    mockLoadResult({
+      plugins: [
+        seedPluginInstance({
+          distPath: "./seed",
+          datasets: { preview: ["cogs", "shipments"], dev: ["local"] },
+        }),
+      ],
+    });
+
+    const context = await loadSeedContext();
+    expect(context.datasets).toEqual({ preview: ["cogs", "shipments"], dev: ["local"] });
+  });
+
+  test.each([
+    { datasets: { "bad/name": ["cogs"] }, message: /Dataset name "bad\/name"/ },
+    { datasets: { preview: ["../cogs"] }, message: /Dataset name "\.\.\/cogs"/ },
+    { datasets: { preview: [".hidden"] }, message: /Dataset name "\.hidden"/ },
+    { datasets: { preview: [] }, message: /datasets\.preview lists no dataset directories/ },
+    { datasets: { preview: "cogs" }, message: /datasets\.preview must be an array/ },
+    { datasets: ["cogs"], message: /datasets must map names to lists/ },
+  ])("rejects an invalid datasets option: $datasets", async ({ datasets, message }) => {
+    mockLoadResult({ plugins: [seedPluginInstance({ distPath: "./seed", datasets })] });
+
+    await expect(loadSeedContext()).rejects.toThrow(message);
+  });
+
   test("builds per-namespace seed ordering from relations", async () => {
     const user = fakeType("User", { id: { config: {} } });
     const order = fakeType("Order", {

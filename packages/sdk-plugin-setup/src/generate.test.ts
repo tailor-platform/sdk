@@ -27,8 +27,17 @@ import {
   type RenderBranchParams,
   type RenderTagParams,
 } from "./templates";
+import { tempDir } from "./test-helpers/temp-dir";
 
 const NO_MARKER = /__[A-Z_]+__/;
+const BRANCH_TEMPLATE = fs.readFileSync(
+  path.join(import.meta.dirname, "branch.workflow.yml"),
+  "utf8",
+);
+// Renovate changes this pin in the template, so tests derive the expected value from there.
+const [, UPLOAD_ARTIFACT_GITHUB_COM, UPLOAD_ARTIFACT_GITHUB_COM_VERSION] =
+  /uses: (actions\/upload-artifact@[0-9a-f]{40}) # (v\S+)/.exec(BRANCH_TEMPLATE) ?? [];
+const UPLOAD_ARTIFACT_V3 = "actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf";
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -46,7 +55,7 @@ const tagBase: RenderTagParams = {
 };
 
 type GeneratedWorkflow = {
-  jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
+  jobs: Record<string, { if?: string; steps: Array<Record<string, unknown>> }>;
 };
 
 describe("detectPackageManager", () => {
@@ -561,6 +570,152 @@ describe("renderBranchWorkflow", () => {
   test("preserves $ characters in values", () => {
     const { content } = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a$&b" });
     expect(content).toContain("working-directory: apps/a$&b");
+  });
+});
+
+describe("ERD preview artifacts per GitHub host", () => {
+  const erdPreview = { namespaces: ["tailordb"] };
+  const stepOf = (content: string, job: string, id: string) =>
+    (parseYAML(content) as GeneratedWorkflow).jobs[job]?.steps.find((step) => step.id === id);
+  const uploadOf = (content: string) =>
+    stepOf(content, "tailor-erd-preview", "tailor-upload-erd-viewer");
+  const commentPermissionsOf = (content: string) =>
+    (parseYAML(content) as { jobs: Record<string, { permissions?: unknown }> }).jobs[
+      "tailor-erd-preview-comment"
+    ]?.permissions;
+
+  const FAKE_GH = `#!/usr/bin/env bash
+case "$GH_HOST" in
+  github.com | *.ghe.com) token=$GH_TOKEN ;;
+  *) token=$GH_ENTERPRISE_TOKEN ;;
+esac
+printf '%s %s\\n' "$GH_HOST" "$token" >> "$FAKE_GH_DIR/calls"
+case "$*" in
+  *"--method POST"*)
+    for arg; do case "$arg" in body=*) printf '%s' "\${arg#body=}" > "$FAKE_GH_DIR/body" ;; esac; done ;;
+  *"/pulls/"*) printf 'head-sha\\n' ;;
+  *"/artifacts"*) printf '%s' "$FAKE_GH_ARTIFACTS" ;;
+esac
+`;
+
+  const runComment = (
+    content: string,
+    serverUrl: string,
+    listedArtifacts: string,
+    namespaces = JSON.stringify(erdPreview.namespaces),
+  ) => {
+    using tmp = tempDir("erd-comment-");
+    const bin = path.join(tmp.dir, "bin");
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, "gh"), FAKE_GH, { mode: 0o755 });
+    const context: Record<string, string> = {
+      "github.token": "test-token",
+      "github.repository": "acme/widgets",
+      "github.run_id": "99",
+      "github.server_url": serverUrl,
+      "github.event.pull_request.number": "7",
+      "github.event.pull_request.base.ref": "main",
+      "github.event.pull_request.head.sha": "head-sha",
+      "needs.tailor-erd-preview-matrix.outputs.namespaces": namespaces,
+    };
+    const step = stepOf(content, "tailor-erd-preview-comment", "tailor-comment-erd-preview");
+    const env = Object.fromEntries(
+      Object.entries(step?.env as Record<string, string>).map(([key, value]) => [
+        key,
+        value.replaceAll(/\$\{\{ ([\w.-]+) \}\}/g, (_match, expression: string) => {
+          const resolved = context[expression];
+          if (resolved === undefined) throw new Error(`No test value for ${expression}`);
+          return resolved;
+        }),
+      ]),
+    );
+    execFileSync("bash", ["-c", String(step?.run)], {
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        GITHUB_SERVER_URL: serverUrl,
+        FAKE_GH_DIR: tmp.dir,
+        FAKE_GH_ARTIFACTS: listedArtifacts,
+        ...env,
+      },
+      stdio: "pipe",
+    });
+    return {
+      calls: fs.readFileSync(path.join(tmp.dir, "calls"), "utf-8").trim().split("\n"),
+      body: fs.readFileSync(path.join(tmp.dir, "body"), "utf-8"),
+    };
+  };
+
+  test("on github.com, uploads each viewer unzipped and links its artifact", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, erdPreview });
+
+    expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_GITHUB_COM);
+    expect(uploadOf(content)?.with).toMatchObject({ archive: false });
+    expect(commentPermissionsOf(content)).toEqual({ actions: "read", "pull-requests": "write" });
+
+    const { calls, body } = runComment(
+      content,
+      "https://github.com",
+      "tailordb-viewer.html\t123\n",
+    );
+    expect(new Set(calls)).toEqual(new Set(["github.com test-token"]));
+    expect(body).toContain(
+      "[tailordb-viewer.html](https://github.com/acme/widgets/actions/runs/99/artifacts/123)",
+    );
+  });
+
+  test("on GitHub Enterprise Server, uploads with upload-artifact v3 and names the viewers before the run lists its artifacts", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true });
+    const dotcomUpload = uploadOf(renderBranchWorkflow({ ...branchBase, erdPreview }).content);
+    const { archive, ...dotcomInputs } = (dotcomUpload?.with ?? {}) as Record<string, unknown>;
+
+    expect(archive).toBe(false);
+    expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_V3);
+    expect(uploadOf(content)?.with).toEqual(dotcomInputs);
+    expect(commentPermissionsOf(content)).toEqual({ "pull-requests": "write" });
+
+    const { calls, body } = runComment(content, "https://ghes.example.com", "");
+    expect(new Set(calls)).toEqual(new Set(["ghes.example.com test-token"]));
+    expect(body).toContain("https://ghes.example.com/acme/widgets/actions/runs/99)");
+    expect(body).toContain("- **tailordb viewer**: `tailordb-viewer.html`");
+    expect(body).not.toContain("/artifacts/");
+  });
+
+  test("fails rather than commenting without viewers when they cannot be listed", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true });
+
+    expect(() => runComment(content, "https://ghes.example.com", "", "not json")).toThrow(
+      /Command failed/,
+    );
+  });
+
+  test("renders the github.com workflow unless ghes is set", () => {
+    expect(renderBranchWorkflow({ ...branchBase, erdPreview, ghes: false })).toEqual(
+      renderBranchWorkflow({ ...branchBase, erdPreview }),
+    );
+    expect(renderBranchWorkflow({ ...branchBase, ghes: true })).toEqual(
+      renderBranchWorkflow(branchBase),
+    );
+  });
+
+  test("keeps the GitHub Enterprise Server upload-artifact pin out of Renovate's updates", () => {
+    const renovateConfig = JSON.parse(
+      fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
+    ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
+    const manager = renovateConfig.customManagers.find((m) =>
+      m.managerFilePatterns.some((p) => p.includes("ya?ml")),
+    );
+    const updatable = (source: string) =>
+      [...source.matchAll(new RegExp(manager!.matchStrings[0]!, "g"))]
+        .filter((match) => match.groups?.depName === "actions/upload-artifact")
+        .map((match) => match.groups?.currentValue);
+
+    expect(updatable(renderBranchWorkflow({ ...branchBase, erdPreview }).content)).toEqual([
+      UPLOAD_ARTIFACT_GITHUB_COM_VERSION,
+    ]);
+    expect(updatable(BRANCH_TEMPLATE)).toEqual([UPLOAD_ARTIFACT_GITHUB_COM_VERSION]);
+    expect(
+      updatable(renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true }).content),
+    ).toEqual([]);
   });
 });
 
@@ -1402,6 +1557,147 @@ describe("seed validation step", () => {
   );
 });
 
+describe("seed step", () => {
+  const stepsOf = (content: string, job: string): Array<Record<string, unknown>> =>
+    (parseYAML(content) as GeneratedWorkflow).jobs[job]?.steps ?? [];
+  const idsOf = (steps: Array<Record<string, unknown>>): unknown[] => steps.map((s) => s.id);
+
+  test("validates branch seed data before deploy when deploy events skip the plan job", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      workingDirectory: "apps/api",
+      seedValidate: true,
+      seed: { datasets: ["preview"] },
+    });
+    const workflow = parseYAML(content) as GeneratedWorkflow;
+    expect(workflow.jobs["tailor-plan"]?.if).toContain("github.event_name == 'pull_request'");
+    expect(workflow.jobs["tailor-deploy"]?.if).toContain("github.event_name == 'push'");
+    const steps = stepsOf(content, "tailor-deploy");
+    const ids = idsOf(steps);
+    const validationIndex = ids.indexOf("tailor-seed-validate");
+    expect(validationIndex).toBeGreaterThan(-1);
+    expect(validationIndex).toBeLessThan(ids.indexOf("tailor-apply"));
+    expect(steps[validationIndex]).toEqual({
+      id: "tailor-seed-validate",
+      run: "pnpm exec tailor seed validate --upsert --dataset preview",
+      "working-directory": "apps/api",
+    });
+    expect(generatedIds).toContain("tailor-deploy/tailor-seed-validate");
+
+    const tag = renderTagWorkflow({ ...tagBase, seedValidate: true, seed: { datasets: [] } });
+    expect(idsOf(stepsOf(tag.content, "tailor-deploy"))).not.toContain("tailor-seed-validate");
+    const withoutSeed = renderBranchWorkflow({ ...branchBase, seedValidate: true });
+    expect(idsOf(stepsOf(withoutSeed.content, "tailor-deploy"))).not.toContain(
+      "tailor-seed-validate",
+    );
+    expect(withoutSeed.generatedIds).not.toContain("tailor-deploy/tailor-seed-validate");
+  });
+
+  test("branch and tag workflows seed after the apply step without repeating validation", () => {
+    const rendered = [
+      renderBranchWorkflow({
+        ...branchBase,
+        workingDirectory: "apps/api",
+        seedValidate: true,
+        seed: { datasets: [] },
+      }),
+      renderTagWorkflow({
+        ...tagBase,
+        workingDirectory: "apps/api",
+        seedValidate: true,
+        seed: { datasets: [] },
+      }),
+    ];
+
+    for (const { content, generatedIds } of rendered) {
+      const steps = stepsOf(content, "tailor-deploy");
+      const index = idsOf(steps).indexOf("tailor-seed");
+      expect(idsOf(steps)[index - 1]).toBe("tailor-apply");
+      expect(steps[index]).toEqual({
+        id: "tailor-seed",
+        shell: "bash",
+        "working-directory": "apps/api",
+        env: { TAILOR_PLATFORM_WORKSPACE_ID: "${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}" },
+        run: "pnpm exec tailor seed apply --upsert\n",
+      });
+      expect(generatedIds).toContain("tailor-deploy/tailor-seed");
+      expect(
+        stepsOf(content, "tailor-plan").find((step) => step.id === "tailor-seed-validate")?.run,
+      ).toBe("pnpm exec tailor seed validate --upsert");
+      expect(content).not.toMatch(NO_MARKER);
+    }
+  });
+
+  test("the preview workflow reseeds the preview workspace with --truncate before commenting", () => {
+    const { content, generatedIds } = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "npm",
+      region: "us-west",
+      seed: { datasets: [] },
+    });
+
+    const steps = stepsOf(content, "tailor-preview-deploy");
+    const index = idsOf(steps).indexOf("tailor-seed");
+    expect(idsOf(steps).slice(index - 1, index + 2)).toEqual([
+      "tailor-preview-deploy",
+      "tailor-seed",
+      "tailor-preview-comment",
+    ]);
+    expect(steps[index]).toEqual({
+      id: "tailor-seed",
+      shell: "bash",
+      env: {
+        TAILOR_PLATFORM_WORKSPACE_ID: "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
+      },
+      run:
+        "npx @tailor-platform/sdk seed validate\n" +
+        "npx @tailor-platform/sdk seed apply --truncate --yes\n",
+    });
+    expect(generatedIds).toContain("tailor-preview-deploy/tailor-seed");
+    expect(content).not.toMatch(NO_MARKER);
+  });
+
+  test("passes the datasets to the seed step and to the plan job's validation", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      seedValidate: true,
+      seed: { datasets: ["preview", "local"] },
+    });
+
+    const validate = stepsOf(content, "tailor-plan").find((s) => s.id === "tailor-seed-validate");
+    expect(validate?.run).toBe(
+      "pnpm exec tailor seed validate --upsert --dataset preview --dataset local",
+    );
+    const seed = stepsOf(content, "tailor-deploy").find((s) => s.id === "tailor-seed");
+    expect(seed?.run).toBe(
+      "pnpm exec tailor seed apply --upsert --dataset preview --dataset local\n",
+    );
+  });
+
+  test("leaves the seed step out unless seeding is enabled", () => {
+    const rendered = [
+      renderBranchWorkflow(branchBase),
+      renderTagWorkflow(tagBase),
+      renderPreviewWorkflow({
+        workspaceName: "my-app",
+        branch: "main",
+        environment: "my-app",
+        packageManager: "pnpm",
+        region: "us-west",
+      }),
+    ];
+
+    for (const { content, generatedIds } of rendered) {
+      expect(content).not.toContain("tailor-seed\n");
+      expect(content).not.toContain("seed apply");
+      expect(content).not.toContain("seed-data");
+      expect(generatedIds.filter((id) => id.endsWith("/tailor-seed"))).toEqual([]);
+    }
+  });
+});
+
 describe("detectDefaultBranch", () => {
   test("strips the origin/ prefix", () => {
     const run = vi.fn().mockReturnValue("origin/main");
@@ -1907,6 +2203,52 @@ export default defineConfig({
     expect(readLock(testDir)?.targets[0]).toMatchObject({ inputs: { restrictDispatch: true } });
   });
 
+  describe("--ghes", () => {
+    const wfPath = path.join(testDir, ".github/workflows/tailor-my-app.yml");
+    const erdOptions = (ghes: boolean) =>
+      baseOptions({
+        workspaceName: "my-app",
+        erdPreview: true,
+        ghes,
+        loadErdNamespaces: async () => ["tailordb"],
+      });
+
+    test("records the choice and uploads ERD viewers with upload-artifact v3", async () => {
+      await setupTarget(erdOptions(true));
+
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V3);
+      expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({ erdPreview: true, ghes: true });
+    });
+
+    test("is not recorded when off", async () => {
+      await setupTarget(erdOptions(false));
+
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_GITHUB_COM);
+      expect(readLock(testDir)?.targets[0]?.inputs).not.toHaveProperty("ghes");
+    });
+
+    test("is rejected without --erd-preview, before anything is written", async () => {
+      await expect(
+        setupTarget(baseOptions({ workspaceName: "my-app", ghes: true })),
+      ).rejects.toThrow(/--ghes .*--erd-preview/);
+
+      expect(fs.existsSync(wfPath)).toBe(false);
+      expect(readLock(testDir)).toBeNull();
+    });
+
+    test("switches an existing workflow to and from GitHub Enterprise Server without --force", async () => {
+      await setupTarget(erdOptions(false));
+      await setupTarget(erdOptions(true));
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V3);
+      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_GITHUB_COM);
+
+      await setupTarget(erdOptions(false));
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_GITHUB_COM);
+      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_V3);
+      expect(readLock(testDir)?.targets[0]?.inputs).not.toHaveProperty("ghes");
+    });
+  });
+
   test("errors on an unmanaged pre-existing file", async () => {
     const wf = path.join(testDir, ".github/workflows/tailor-my-app.yml");
     fs.mkdirSync(path.dirname(wf), { recursive: true });
@@ -2288,6 +2630,237 @@ export default defineConfig({
     expect(wf).toContain("tailor-seed-validate");
     const lock = readLock(testDir);
     expect(lock?.targets[0]).toMatchObject({ inputs: { seedValidate: true } });
+  });
+
+  describe("--seed", () => {
+    const seedSettings =
+      (
+        overrides: {
+          machineUserName?: string;
+          datasets?: Record<string, string[]>;
+          dataDir?: string;
+        } = {},
+      ) =>
+      async () => ({
+        machineUserName: "admin",
+        datasets: {},
+        dataDir: path.join(testDir, "seed/data"),
+        ...overrides,
+      });
+
+    test("seeds after each deploy and records the datasets in the lock", async () => {
+      fs.mkdirSync(path.join(testDir, "seed/data/cogs"), { recursive: true });
+      fs.mkdirSync(path.join(testDir, "seed/data/shipments"), { recursive: true });
+
+      await setupTarget(
+        baseOptions({
+          workspaceName: "my-app",
+          seed: { datasets: ["preview", "cogs"] },
+          loadHasSeeds: async () => true,
+          loadSeedSettings: seedSettings({ datasets: { preview: ["shipments"] } }),
+        }),
+      );
+
+      const wf = fs.readFileSync(
+        path.join(testDir, ".github/workflows/tailor-my-app.yml"),
+        "utf-8",
+      );
+      expect(wf).toContain("pnpm exec tailor seed apply --upsert --dataset preview --dataset cogs");
+      const target = readLock(testDir)?.targets[0];
+      expect(target?.inputs.seed).toEqual({ datasets: ["preview", "cogs"] });
+      expect(target?.generatedIds).toContain("tailor-deploy/tailor-seed");
+    });
+
+    test("reads the machine user, datasets, and data directory from seedPlugin in the app's config", async () => {
+      const appDir = path.join(testDir, "apps/seeded");
+      fs.mkdirSync(path.join(appDir, "seed/data/cogs"), { recursive: true });
+      fs.writeFileSync(
+        path.join(appDir, "tailor.config.ts"),
+        [
+          `import { defineConfig, definePlugins } from "@tailor-platform/sdk";`,
+          `import { seedPlugin } from "${import.meta.resolve("@tailor-platform/sdk/plugin/seed")}";`,
+          `export default defineConfig({ name: "seeded" });`,
+          `export const plugins = definePlugins(`,
+          `  seedPlugin({ distPath: "./seed", machineUserName: "admin", datasets: { preview: ["cogs"] } }),`,
+          `);`,
+          ``,
+        ].join("\n"),
+      );
+      const options = (datasets: string[]) =>
+        baseOptions({
+          workspaceName: "seeded",
+          dir: "apps/seeded",
+          seed: { datasets },
+          force: true,
+        });
+
+      await setupTarget(options(["preview", "cogs"]));
+      await expect(setupTarget(options(["shipments"]))).rejects.toThrow(
+        `Unknown seed dataset "shipments". Datasets in seedPlugin options: preview. ` +
+          `It is not a directory in ${path.join(appDir, "seed/data")} either.`,
+      );
+    });
+
+    test("keeps a user step right after the deploy step as seeding is turned on and off", async () => {
+      fs.mkdirSync(path.join(testDir, "seed/data"), { recursive: true });
+      const file = path.join(testDir, ".github/workflows/tailor-my-app.yml");
+      const deployStepIds = (): unknown[] =>
+        (parseYAML(fs.readFileSync(file, "utf-8")) as GeneratedWorkflow).jobs[
+          "tailor-deploy"
+        ]?.steps.map((step) => step.id) ?? [];
+      const seedOff = baseOptions({ workspaceName: "my-app" });
+      const seedOn = baseOptions({
+        workspaceName: "my-app",
+        seed: { datasets: [] },
+        loadSeedSettings: seedSettings(),
+      });
+
+      await setupTarget(seedOff);
+      fs.writeFileSync(
+        file,
+        fs
+          .readFileSync(file, "utf-8")
+          .replace(
+            "      - id: tailor-slack-prereq\n",
+            "      - id: smoke\n        run: echo smoke\n      - id: tailor-slack-prereq\n",
+          ),
+      );
+
+      await setupTarget(seedOn);
+      const ids = deployStepIds();
+      expect(ids.slice(ids.indexOf("tailor-apply"), ids.indexOf("tailor-apply") + 3)).toEqual([
+        "tailor-apply",
+        "smoke",
+        "tailor-seed",
+      ]);
+
+      await setupTarget(seedOff);
+      expect(deployStepIds()).not.toContain("tailor-seed");
+      expect(deployStepIds()).toContain("smoke");
+      expect(readLock(testDir)?.targets[0]?.inputs.seed).toBeUndefined();
+    });
+
+    test("seeds the preview workspace of a preview target", async () => {
+      fs.mkdirSync(path.join(testDir, "seed/data"), { recursive: true });
+      await setupTarget({
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
+        seed: { datasets: [] },
+        loadSeedSettings: seedSettings(),
+      });
+
+      const wf = fs.readFileSync(
+        path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
+        "utf-8",
+      );
+      expect(wf).toContain("pnpm exec tailor seed apply --truncate --yes");
+      expect(readLock(testDir)?.targets[0]?.inputs.seed).toEqual({ datasets: [] });
+    });
+
+    test.each([
+      {
+        name: "a config without seedPlugin",
+        loadSeedSettings: async () => null,
+        datasets: [],
+        message:
+          "--seed needs seedPlugin from @tailor-platform/sdk/plugin/seed in tailor.config.ts. " +
+          "Fix seedPlugin, or regenerate the workflow without --seed.",
+      },
+      {
+        name: "a seedPlugin without machineUserName",
+        loadSeedSettings: seedSettings({ machineUserName: undefined }),
+        datasets: [],
+        message: "--seed needs the machineUserName option of seedPlugin",
+      },
+      {
+        name: "an unknown dataset",
+        loadSeedSettings: seedSettings({ datasets: { preview: ["cogs"] } }),
+        dirs: ["cogs"],
+        datasets: ["typo"],
+        message: 'Unknown seed dataset "typo". Datasets in seedPlugin options: preview.',
+      },
+      {
+        name: "an invalid dataset name",
+        loadSeedSettings: seedSettings(),
+        datasets: ["bad name"],
+        message: '"bad name" is not a valid dataset name.',
+      },
+      {
+        name: "a seedPlugin without distPath",
+        loadSeedSettings: seedSettings({ dataDir: undefined }),
+        datasets: [],
+        message: "--seed needs the distPath option of seedPlugin",
+      },
+      {
+        name: "a missing seed data directory without datasets",
+        loadSeedSettings: seedSettings(),
+        datasets: [],
+        message: "Seed data directory not found:",
+      },
+      {
+        name: "a dataset directory spelled in another case",
+        loadSeedSettings: seedSettings(),
+        dirs: ["preview"],
+        datasets: ["Preview"],
+        message: 'Unknown seed dataset "Preview".',
+      },
+      {
+        name: "a configured dataset that lists a missing directory",
+        loadSeedSettings: seedSettings({ datasets: { preview: ["cogs", "missing"] } }),
+        dirs: ["cogs"],
+        datasets: ["preview"],
+        message: `Dataset "preview" in seedPlugin options lists "missing", but ${path.join(testDir, "seed/data/missing")} is not a directory`,
+      },
+    ])(
+      "rejects $name before writing anything",
+      async ({ loadSeedSettings, dirs, datasets, message }) => {
+        for (const dir of dirs ?? []) {
+          fs.mkdirSync(path.join(testDir, "seed/data", dir), { recursive: true });
+        }
+        await expect(
+          setupTarget(
+            baseOptions({ workspaceName: "my-app", seed: { datasets }, loadSeedSettings }),
+          ),
+        ).rejects.toThrow(message);
+
+        expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"))).toBe(
+          false,
+        );
+        expect(readLock(testDir)).toBeNull();
+      },
+    );
+
+    test("rejects seeding a target that deploys several apps", async () => {
+      fs.writeFileSync(
+        path.join(testDir, "package.json"),
+        JSON.stringify({ private: true, devDependencies: { "@tailor-platform/sdk": "1.0.0" } }),
+      );
+      for (const dir of ["apps/erp/backend", "apps/users/backend"]) {
+        fs.mkdirSync(path.join(testDir, dir), { recursive: true });
+        fs.writeFileSync(
+          path.join(testDir, dir, "tailor.config.ts"),
+          `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "app" });\n`,
+        );
+      }
+
+      await expect(
+        setupTarget(
+          baseOptions({
+            workspaceName: "erp",
+            dir: ["apps/erp/backend", "apps/users/backend"],
+            seed: { datasets: [] },
+            loadSeedSettings: seedSettings(),
+          }),
+        ),
+      ).rejects.toThrow("--seed is supported only for a target that deploys one app.");
+    });
   });
 
   describe("--paths", () => {

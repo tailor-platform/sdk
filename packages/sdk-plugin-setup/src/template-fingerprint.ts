@@ -47,7 +47,21 @@ function renderAll(): RenderedTemplate[] {
       migrationDriftCheck: true,
       erdPreview: { namespaces: ["main", "analytics"] },
       restrictDispatch: true,
+      seed: { datasets: ["preview", "local"] },
     }),
+  );
+  add(
+    "branch/ghes",
+    renderBranchWorkflow({
+      ...full,
+      branch: "main",
+      erdPreview: { namespaces: ["main", "analytics"] },
+      ghes: true,
+    }),
+  );
+  add(
+    "branch/seed-validate",
+    renderBranchWorkflow({ ...full, branch: "main", seedValidate: true, erdPreview: null }),
   );
   add(
     "tag/full",
@@ -57,6 +71,7 @@ function renderAll(): RenderedTemplate[] {
       branch: "main",
       seedValidate: true,
       migrationDriftCheck: true,
+      seed: { datasets: [] },
       restrictDispatch: true,
     }),
   );
@@ -80,6 +95,7 @@ function renderAll(): RenderedTemplate[] {
       branch: "main",
       region: "us-west",
       requirePreviewLabel: true,
+      seed: { datasets: ["preview"] },
     }),
   );
   const apps = [

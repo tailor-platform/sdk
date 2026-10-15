@@ -72,6 +72,8 @@ export type DBFieldMetadata = {
         maxValue?: number | undefined;
         /** Format string for serial value (string type only) */
         format?: string | undefined;
+        /** Number records without gaps */
+        gapless?: boolean | undefined;
       }
     | undefined;
   /** Decimal scale (number of digits after decimal point, 0-12) */
