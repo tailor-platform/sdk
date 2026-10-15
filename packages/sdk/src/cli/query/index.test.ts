@@ -346,7 +346,7 @@ describe("query", () => {
     expect(initOperatorClient).not.toHaveBeenCalled();
   });
 
-  test("forwards --namespace from the CLI", async () => {
+  test.each(["--namespace", "-n"])("forwards %s from the CLI", async (flag) => {
     const { extractAllNamespaces } = await import("../shared/config");
     const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
     const { executeScript } = await import("../shared/script-executor");
@@ -355,7 +355,7 @@ describe("query", () => {
 
     const result = await runCommand(
       queryCommand,
-      ["--engine", "sql", "--namespace", "sales", "-m", "bot", "-q", 'select * from "User";'],
+      ["--engine", "sql", flag, "sales", "-m", "bot", "-q", 'select * from "User";'],
       { captureLogs: true },
     );
 

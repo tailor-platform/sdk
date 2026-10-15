@@ -145,7 +145,6 @@ async function loadOptions(options: QueryBaseOptions) {
     throw CLIError({
       code: "QUERY_NAMESPACE_REQUIRES_SQL",
       message: "The namespace option applies only to the sql engine.",
-      command: "query",
     });
   }
 
@@ -798,8 +797,8 @@ export const queryCommand = defineAppCommand({
           "REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap.",
       }),
       namespace: arg(z.string().optional(), {
-        description:
-          "TailorDB namespace to run SQL queries in (sql engine only); omit to infer it from the tables each query references",
+        alias: "n",
+        description: "TailorDB namespace to run SQL queries in (sql engine only)",
       }),
     })
     .superRefine((args, ctx) => {
@@ -835,10 +834,11 @@ export const queryCommand = defineAppCommand({
         });
       }
     }),
+  notes: `With \`--engine sql\`, each query runs in a single TailorDB namespace. When the config defines one namespace, that namespace is used; when it defines several, it is inferred from the tables the query references. Pass \`--namespace\` to choose it yourself, for example when it cannot be inferred or a table name exists in more than one namespace. The namespace must be declared under \`db\` in the config; namespaces declared with \`{ external: true }\` are accepted. In REPL mode, \`--namespace\` applies to every query in the session.`,
   examples: [
     {
       cmd: `--engine sql -q 'select * from "User";'`,
-      desc: "Run a SQL query in the namespace that defines the referenced tables",
+      desc: "Run a SQL query",
     },
     {
       cmd: `--engine sql --namespace analytics -q 'select count(*) from "Event";'`,
