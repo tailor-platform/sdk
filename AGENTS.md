@@ -7,7 +7,6 @@ This file provides guidance to coding agents when working with code in this repo
 ## Agent Instruction Sources
 
 - `AGENTS.md` is the shared repository instruction entrypoint for Codex, Claude, and other coding agents.
-- `CLAUDE.md` is a compatibility adapter and must contain only `@AGENTS.md`.
 - Project-scoped skills live under `.agents/skills/`. `.claude/skills/` is a compatibility adapter that points to those same skill directories.
 - Path-scoped rule bodies live under `.agents/rules/`. Rule path scopes live in `.agents/rules.json`.
 - Run `pnpm agent:rules:update` after editing `.agents/rules.json` or `.agents/rules/*.md`. The command regenerates the rule index below and `.claude/rules/*.md`.

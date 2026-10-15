@@ -692,5 +692,5 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   return appendResultJob({ content: out, generatedIds }, "tailor-preview-result");
 }
 
-export const ACTIONS_SHA = "f96c743ceaf39250f1111b7a194e080bb2e736b8";
-export const ACTIONS_VERSION = "unreleased commit";
+export const ACTIONS_SHA = "26a3cae341adecfaf0e6c81bd969de09c72dad55";
+export const ACTIONS_VERSION = "v2.7.0";

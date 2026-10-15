@@ -1448,7 +1448,7 @@ describe("Tailor Platform action pins", () => {
     expect(sourceManager).toBeDefined();
     expect(yamlManager).toBeDefined();
     const source = fs.readFileSync(path.join(import.meta.dirname, "templates.ts"), "utf8");
-    const released = ACTIONS_VERSION !== "unreleased commit";
+    const released = /^v\d+\.\d+\.\d+$/.test(ACTIONS_VERSION);
     const sourceMatch = new RegExp(sourceManager!.matchStrings[0]).exec(source);
     expect(sourceMatch?.groups ?? null).toEqual(
       released ? { currentDigest: ACTIONS_SHA, currentValue: ACTIONS_VERSION } : null,
