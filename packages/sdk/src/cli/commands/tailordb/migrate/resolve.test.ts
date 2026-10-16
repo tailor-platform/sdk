@@ -94,6 +94,19 @@ function remoteLabels(labels: Record<string, string>): void {
   });
 }
 
+const LOCAL_HISTORY_ID = "h0123456789abcdef0123456789abcdef";
+
+function rebaselineLocalHistory(migrationsDir: string): void {
+  const file = path.join(migrationsDir, "0000", "schema.json");
+  const snapshot = JSON.parse(fs.readFileSync(file, "utf8"));
+  snapshot.rebaseline = {
+    historyId: LOCAL_HISTORY_ID,
+    replacedHistoryId: null,
+    replacedLatestMigration: 0,
+  };
+  fs.writeFileSync(file, JSON.stringify(snapshot));
+}
+
 describe("tailordb migration resolve", () => {
   aroundEach(async (runTest) => {
     state.stderr = [];
@@ -382,6 +395,34 @@ describe("tailordb migration resolve", () => {
       "sdk-migration-in-progress": "m0002",
       "sdk-migration-history": "h0123456789abcdef0123456789abcdef",
     });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/does not match the local migration history/);
+    expectNothingWritten();
+  });
+
+  test.each(["--rollback", "--complete"])(
+    "%s works when the workspace has neither a checkpoint nor a history ID yet",
+    async (flag) => {
+      rebaselineLocalHistory(state.migrationsDir);
+      remoteLabels({ "sdk-migration-in-progress": "m0002" });
+
+      const result = await runCommand(resolveCommand, [flag, "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(state.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({
+          labels: expect.objectContaining({ "sdk-migration-history": LOCAL_HISTORY_ID }),
+        }),
+      );
+    },
+  );
+
+  test("refuses a rebaselined checkout when the workspace has a checkpoint but no history ID", async () => {
+    rebaselineLocalHistory(state.migrationsDir);
+    remoteLabels({ "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" });
 
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
