@@ -81,6 +81,7 @@ const treeshakeSchema = z.strictObject({
 
 const buildOptionsSchema = z.strictObject({
   inlineSourcemap: z.boolean().optional(),
+  inlineSourcemapDependencySources: z.boolean().optional(),
   logLevel: logLevelSchema.optional(),
   allowedRuntimeGlobals: allowedRuntimeGlobalsSchema.optional(),
   treeshake: treeshakeSchema.optional(),

@@ -197,6 +197,16 @@ describe("AppConfigSchema", () => {
       ).toBe(true);
     });
 
+    test("accepts inlineSourcemapDependencySources", () => {
+      expect(parseBuildOptions({ inlineSourcemapDependencySources: true }).success).toBe(true);
+    });
+
+    test("rejects a non-boolean inlineSourcemapDependencySources", () => {
+      expect(
+        firstIssue(parseBuildOptions({ inlineSourcemapDependencySources: "yes" }))?.path,
+      ).toEqual(["buildOptions", "inlineSourcemapDependencySources"]);
+    });
+
     test("rejects unknown fields", () => {
       expect(parseBuildOptions({ minify: false }).success).toBe(false);
     });

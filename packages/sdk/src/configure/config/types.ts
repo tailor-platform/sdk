@@ -70,6 +70,16 @@ export interface BuildOptions {
    */
   inlineSourcemap?: boolean;
   /**
+   * Embed the source text of installed packages (everything under `node_modules`) in
+   * the inline sourcemap. By default only your own source text is embedded, which
+   * makes bundled functions much smaller. Error positions still resolve to the
+   * original files and lines; `tailor function run` shows a code snippet for a frame
+   * inside an installed package only when that package's file exists locally.
+   * Only applies when `inlineSourcemap` is enabled.
+   * @default false
+   */
+  inlineSourcemapDependencySources?: boolean;
+  /**
    * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
    * calls remain in bundled functions. `logger.setAttributes` has no severity and
    * is never dropped.

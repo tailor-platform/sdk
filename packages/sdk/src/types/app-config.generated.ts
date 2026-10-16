@@ -26,6 +26,7 @@ export type AppConfigParsed = {
   buildOptions?:
     | {
         inlineSourcemap?: boolean | undefined;
+        inlineSourcemapDependencySources?: boolean | undefined;
         logLevel?: string | undefined;
         allowedRuntimeGlobals?:
           | {

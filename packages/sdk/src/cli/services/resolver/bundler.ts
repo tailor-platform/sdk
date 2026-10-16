@@ -23,6 +23,7 @@ import {
   INVOKER_EXPR,
   resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
+import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -58,6 +59,8 @@ export interface BundleResolversOptions {
   cache?: BundleCache;
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
+  /** Whether inline sourcemaps embed the source text of installed packages */
+  inlineSourcemapDependencySources?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */
@@ -91,6 +94,7 @@ export async function bundleResolvers(
     startContext,
     cache,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     tsconfigCache,
@@ -141,6 +145,7 @@ export async function bundleResolvers(
       startContext,
       cache,
       inlineSourcemap,
+      inlineSourcemapDependencySources,
       bundleLogLevel,
       bundleTreeshake,
       tsconfigCache,
@@ -174,6 +179,7 @@ async function bundleSingleResolver(
     startContext,
     cache,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     tsconfigCache,
@@ -192,6 +198,7 @@ async function bundleSingleResolver(
     extraContext: JSON.stringify([serializedStartContext, defaultPermission ?? null, dateDefault]),
     tsconfig,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel,
     bundleTreeshake,
   });
@@ -255,7 +262,7 @@ async function bundleSingleResolver(
         write: false,
         output: {
           format: "esm",
-          sourcemap: inlineSourcemap ? "inline" : true,
+          sourcemap: true,
           minify: inlineSourcemap
             ? {
                 mangle: {
@@ -277,7 +284,11 @@ async function bundleSingleResolver(
 
       const [chunk] = result.output;
       return {
-        code: chunk.code,
+        code: chunkCodeWithSourcemap({
+          chunk,
+          inlineSourcemap: inlineSourcemap ?? false,
+          dependencySources: inlineSourcemapDependencySources ?? false,
+        }),
         packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Resolver "${resolver.name}"`),
       };
     },

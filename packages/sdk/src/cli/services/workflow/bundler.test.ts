@@ -3,7 +3,9 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
+import { assertDefined } from "#/utils/assert";
 import {
   bundleWorkflowJobs,
   collectExecJobFunctionTargets,
@@ -232,6 +234,7 @@ export const mainJob = createWorkflowJob({
   async function bundleEncodingJob(
     packageName: string,
     allowedRuntimeGlobals?: Record<string, string[]>,
+    inlineSourcemap?: { dependencySources?: boolean },
   ) {
     const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-package-global-")));
     const packageDir = path.join(tmpDir, "node_modules", packageName);
@@ -266,11 +269,13 @@ export const mainJob = createWorkflowJob({
         { modules: new Map() },
         tmpDir,
         undefined,
-        undefined,
+        inlineSourcemap !== undefined,
         undefined,
         undefined,
         undefined,
         allowedRuntimeGlobals,
+        undefined,
+        inlineSourcemap?.dependencySources,
       );
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -289,6 +294,36 @@ export const mainJob = createWorkflowJob({
     });
 
     expect(result.bundledCode.get("main-job")).toBeDefined();
+  });
+
+  describe("source text in inline sourcemaps", () => {
+    async function embeddedSourceTexts(inlineSourcemap: {
+      dependencySources?: boolean;
+    }): Promise<string[]> {
+      const result = await bundleEncodingJob(
+        "job-sourcemap-lib",
+        { "job-sourcemap-lib": ["Buffer"] },
+        inlineSourcemap,
+      );
+      const traceMap = assertDefined(
+        extractInlineSourcemap(assertDefined(result.bundledCode.get("main-job"), "job missing")),
+        "inline sourcemap missing",
+      );
+      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
+    }
+
+    test("leaves out the source text of installed packages by default", async () => {
+      const texts = await embeddedSourceTexts({});
+
+      expect(texts.some((text) => text.includes('toString("base64")'))).toBe(false);
+      expect(texts.some((text) => text.includes('encode("hi")'))).toBe(true);
+    });
+
+    test("embeds the source text of installed packages when asked to", async () => {
+      const texts = await embeddedSourceTexts({ dependencySources: true });
+
+      expect(texts.some((text) => text.includes('toString("base64")'))).toBe(true);
+    });
   });
 
   test("bundles a job that uses Web Standard globals", async () => {

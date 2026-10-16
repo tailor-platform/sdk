@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
+import { assertDefined } from "#/utils/assert";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
 import type * as pkgTypes from "pkg-types";
@@ -147,6 +149,49 @@ export function main() {
       expect(result.bundledCode).not.toContain("console.info");
       expect(result.bundledCode).toContain("console.warn");
       expect(result.bundledCode).toContain("console.error");
+    });
+  });
+
+  describe("source text in inline sourcemaps", () => {
+    async function embeddedSourceTexts(options: {
+      inlineSourcemapDependencySources?: boolean;
+    }): Promise<string[]> {
+      const libDir = path.join(testDir, "node_modules", "function-sourcemap-lib");
+      fs.mkdirSync(libDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(libDir, "package.json"),
+        JSON.stringify({ name: "function-sourcemap-lib", type: "module", main: "index.js" }),
+      );
+      fs.writeFileSync(
+        path.join(libDir, "index.js"),
+        "export const installedValue = () => 'INSTALLED_LIB_SOURCE';\n",
+      );
+
+      const result = await bundle(
+        "uses-lib.ts",
+        `import { installedValue } from "function-sourcemap-lib";\n` +
+          `export function main() { return installedValue() + "OWN_SOURCE"; }\n`,
+        { type: "plain", name: "uses-lib", namedMain: true },
+        { inlineSourcemap: true, ...options },
+      );
+      const traceMap = assertDefined(
+        extractInlineSourcemap(result.bundledCode),
+        "inline sourcemap missing",
+      );
+      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
+    }
+
+    test("leaves out the source text of installed packages by default", async () => {
+      const texts = await embeddedSourceTexts({});
+
+      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(false);
+      expect(texts.some((text) => text.includes("OWN_SOURCE"))).toBe(true);
+    });
+
+    test("embeds the source text of installed packages when asked to", async () => {
+      const texts = await embeddedSourceTexts({ inlineSourcemapDependencySources: true });
+
+      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(true);
     });
   });
 

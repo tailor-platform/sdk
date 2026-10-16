@@ -208,6 +208,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
             : undefined,
         env: config.env ?? {},
         inlineSourcemap: buildOptions.inlineSourcemap,
+        inlineSourcemapDependencySources: buildOptions.inlineSourcemapDependencySources,
         logLevel: buildOptions.logLevel,
         treeshake: buildOptions.treeshake,
         dateDefault: effectiveDateDefault(config),

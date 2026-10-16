@@ -610,6 +610,11 @@ describe("computeBundlerContextHash", () => {
       { bundleTreeshake: { propertyReadSideEffects: true } },
       { bundleTreeshake: { propertyReadSideEffects: false } },
     ],
+    [
+      "inlineSourcemapDependencySources",
+      { inlineSourcemapDependencySources: false },
+      { inlineSourcemapDependencySources: true },
+    ],
   ])("returns different hash when %s differs", (_label, overrideA, overrideB) => {
     const a = computeBundlerContextHash({ ...baseParams, ...overrideA });
     const b = computeBundlerContextHash({ ...baseParams, ...overrideB });
@@ -657,6 +662,16 @@ describe("computeBundlerContextHash", () => {
     const b = computeBundlerContextHash({ ...baseParams, tsconfig });
 
     expect(a).not.toBe(b);
+  });
+
+  test("returns same hash when inlineSourcemapDependencySources is undefined vs false", () => {
+    const a = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: undefined,
+    });
+    const b = computeBundlerContextHash({ ...baseParams, inlineSourcemapDependencySources: false });
+
+    expect(a).toBe(b);
   });
 
   test("returns same hash when prefix is undefined vs empty string", () => {
