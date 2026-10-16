@@ -354,14 +354,6 @@ describe("tailordb migration resolve", () => {
     ]);
   });
 
-  test("--complete asks to check that every record has a value", async () => {
-    await runCommand(resolveCommand, ["--complete", "--yes"]);
-
-    expect(state.stderr.join("")).toMatch(
-      /every record has a value for each field that becomes required/,
-    );
-  });
-
   test("refuses while an execution of the in-progress migration is still running", async () => {
     state.assertNoActiveMigrationExecution.mockRejectedValue(
       CLIError({

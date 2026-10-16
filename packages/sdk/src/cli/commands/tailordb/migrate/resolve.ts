@@ -139,9 +139,6 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     logger.warn(
       `Completing applies the schema of migration ${migrationLabel} without running its migrate.ts again; do this only after the data it needs is in place.`,
     );
-    logger.warn(
-      "Check that every record has a value for each field that becomes required before you continue; a record without one may become unreadable and unchangeable.",
-    );
   }
   logger.newline();
 
