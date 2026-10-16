@@ -275,6 +275,7 @@ export const mainJob = createWorkflowJob({
         undefined,
         allowedRuntimeGlobals,
         undefined,
+        undefined,
         inlineSourcemap?.dependencySources,
       );
     } finally {
