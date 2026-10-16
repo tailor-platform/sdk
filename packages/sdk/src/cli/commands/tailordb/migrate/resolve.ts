@@ -140,7 +140,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
       `Completing applies the schema of migration ${migrationLabel} without running its migrate.ts again; do this only after the data it needs is in place.`,
     );
     logger.warn(
-      "Records that have no value for a field that becomes required are accepted by the update but can no longer be read or changed. Check that every record has a value before you continue.",
+      "Check that every record has a value for each field that becomes required before you continue: a platform that does not reject the change leaves a record without a value unreadable and unchangeable.",
     );
   }
   logger.newline();

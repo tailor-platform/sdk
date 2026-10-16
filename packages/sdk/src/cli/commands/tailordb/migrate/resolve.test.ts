@@ -354,10 +354,12 @@ describe("tailordb migration resolve", () => {
     ]);
   });
 
-  test("--complete warns that records without a value make a required field unreadable", async () => {
+  test("--complete asks to check every record has a value without claiming how the platform reacts", async () => {
     await runCommand(resolveCommand, ["--complete", "--yes"]);
 
-    expect(state.stderr.join("")).toMatch(/no value for a field that becomes required/);
+    const output = state.stderr.join("");
+    expect(output).toMatch(/every record has a value for each field that becomes required/);
+    expect(output).not.toMatch(/accepted by the update/);
   });
 
   test("refuses while an execution of the in-progress migration is still running", async () => {
