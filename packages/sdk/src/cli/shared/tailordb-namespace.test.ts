@@ -92,6 +92,25 @@ describe("resolveTableNamespaces", () => {
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
   });
 
+  test("stops paging a namespace once every table is resolved", async () => {
+    const client = {
+      listTailorDBTypes: vi
+        .fn()
+        .mockResolvedValueOnce({ tailordbTypes: [{ name: "User" }], nextPageToken: "page-2" })
+        .mockRejectedValueOnce(new ConnectError("transient failure", Code.Unavailable)),
+    };
+
+    const result = await resolveTableNamespaces({
+      workspaceId: "workspace-id",
+      namespaces: ["main"],
+      tableNames: ["User"],
+      client,
+    });
+
+    expect(result.get("User")).toBe("main");
+    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
+  });
+
   test("matches requested type names case-insensitively", async () => {
     const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("Project")) };
 

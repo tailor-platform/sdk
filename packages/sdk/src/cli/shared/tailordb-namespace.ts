@@ -1,4 +1,4 @@
-import { fetchAll } from "./client";
+import { MAX_PAGE_SIZE } from "./client";
 
 type ListTailorDBTypesClient = {
   listTailorDBTypes(args: {
@@ -46,30 +46,32 @@ export async function resolveTableNamespaces(
       break;
     }
 
-    const tailordbTypes = await fetchAll(async (pageToken, maxPageSize) => {
+    let pageToken = "";
+    do {
       const { tailordbTypes, nextPageToken } = await args.client.listTailorDBTypes({
         workspaceId: args.workspaceId,
         namespaceName: namespace,
         pageToken,
-        pageSize: maxPageSize,
+        pageSize: MAX_PAGE_SIZE,
       });
-      return [tailordbTypes, nextPageToken];
-    });
 
-    for (const type of tailordbTypes) {
-      const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
-      if (!matchedRequestedTypes) {
-        continue;
-      }
-
-      for (const requestedTableName of matchedRequestedTypes) {
-        if (tableNamespaceMap.has(requestedTableName)) {
+      for (const type of tailordbTypes) {
+        const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
+        if (!matchedRequestedTypes) {
           continue;
         }
-        tableNamespaceMap.set(requestedTableName, namespace);
-        unresolvedTables.delete(requestedTableName);
+
+        for (const requestedTableName of matchedRequestedTypes) {
+          if (tableNamespaceMap.has(requestedTableName)) {
+            continue;
+          }
+          tableNamespaceMap.set(requestedTableName, namespace);
+          unresolvedTables.delete(requestedTableName);
+        }
       }
-    }
+
+      pageToken = nextPageToken;
+    } while (pageToken && unresolvedTables.size > 0);
   }
 
   return tableNamespaceMap;
