@@ -282,9 +282,10 @@ function buildCodeSnippet(content: string, targetLine: number): string {
  * @returns The file content, or undefined when the path is not an installed package file or cannot be read
  */
 function readInstalledSource(absolutePath: string): string | undefined {
-  if (sourcePackageName(absolutePath) === undefined) return undefined;
   try {
-    return fs.readFileSync(absolutePath, "utf-8");
+    const realPath = fs.realpathSync(absolutePath);
+    if (sourcePackageName(realPath) === undefined) return undefined;
+    return fs.readFileSync(realPath, "utf-8");
   } catch {
     return undefined;
   }

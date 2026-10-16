@@ -130,6 +130,15 @@ describe("toInlineSourcemapCode", () => {
     expect(extractInlineSourcemap(result)).not.toBeNull();
   });
 
+  test("replaces a reference that is followed by a trailing newline", () => {
+    const code = "export const run = () => 1;\n//# sourceMappingURL=app.js.map\n";
+
+    const result = toInlineSourcemapCode({ code, map: createMap() });
+
+    expect(result).not.toContain("app.js.map");
+    expect(result.match(/sourceMappingURL=/g)).toHaveLength(1);
+  });
+
   test("keeps the code before the reference unchanged", () => {
     const code = "export const run = () => 1;\n\n//# sourceMappingURL=app.js.map";
 

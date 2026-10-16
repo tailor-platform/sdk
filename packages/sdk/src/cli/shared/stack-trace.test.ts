@@ -644,6 +644,27 @@ describe("formatMappedError without embedded source text", () => {
     expect(plain).not.toContain("from the installed package");
   });
 
+  test("does not read through a symlinked package that points outside node_modules", () => {
+    const dir = projectWith({ "outside/secret.js": installedSource });
+    fs.mkdirSync(path.join(dir, "node_modules"));
+    fs.symlinkSync("../outside", path.join(dir, "node_modules/linked"));
+
+    const plain = format("node_modules/linked/secret.js", null, dir);
+
+    expect(plain).not.toContain("from the installed package");
+  });
+
+  test("reads through a symlinked package whose target is inside node_modules", () => {
+    const dir = projectWith({
+      "node_modules/.pnpm/lib@1.0.0/node_modules/lib/index.js": installedSource,
+    });
+    fs.symlinkSync(".pnpm/lib@1.0.0/node_modules/lib", path.join(dir, "node_modules/lib"));
+
+    const plain = format("node_modules/lib/index.js", null, dir);
+
+    expect(plain).toContain('throw new Error("from the installed package")');
+  });
+
   test("does not read a file that a node_modules path climbs out of node_modules to reach", () => {
     const dir = projectWith({ "secret.txt": installedSource });
 

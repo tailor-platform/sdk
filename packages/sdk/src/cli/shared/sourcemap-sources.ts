@@ -28,7 +28,7 @@ export interface ToInlineSourcemapCodeParams {
   map: SourcemapData;
 }
 
-const SOURCEMAP_REFERENCE_REGEX = /\n*\/\/[#@]\s*sourceMappingURL=.*$/;
+const SOURCEMAP_REFERENCE_REGEX = /\n*\/\/[#@]\s*sourceMappingURL=[^\n]*\s*$/;
 
 // Written in two parts so a tool that scans built files for sourcemap comments does not mistake this literal for one.
 const INLINE_SOURCEMAP_PREFIX =
