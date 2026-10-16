@@ -272,6 +272,27 @@ interface SeedIdpUserParams {
   upsert: boolean;
 }
 
+async function hookIdpUserRows(
+  schemaDir: string,
+  rows: SeedData[string] | undefined,
+  upsert: boolean,
+): Promise<SeedData[string]> {
+  const { hookSeedRows } = await import("@tailor-platform/sdk/seed");
+  const hooked = (await hookSeedRows({
+    schemaDir,
+    table: "_User",
+    rows: rows ?? [],
+  })) as SeedData[string];
+  const missing = upsert ? [] : hooked.filter((row) => typeof row.password !== "string");
+  if (missing.length > 0) {
+    const names = missing.map((row) => row.name as string).join(", ");
+    throw new Error(
+      `_User has no password for: ${names}. Set it in _User.jsonl or in the SEED_USER_PASSWORD environment variable.`,
+    );
+  }
+  return hooked;
+}
+
 async function seedIdpUser(
   params: SeedIdpUserParams,
 ): Promise<{ success: boolean; processed: number; transportError?: unknown }> {
@@ -558,7 +579,11 @@ export const seedApplyCommand = defineAppCommand({
       !args["skip-idp"] &&
       (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
     const idpUserRows = shouldSeedUser
-      ? (loadSeedData(dataDirs, ["_User"], { keyField: "name" })._User ?? [])
+      ? await hookIdpUserRows(
+          dataDir,
+          loadSeedData(dataDirs, ["_User"], { keyField: "name" })._User,
+          args.upsert,
+        )
       : [];
 
     const appInfo = await show({

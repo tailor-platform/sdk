@@ -538,3 +538,13 @@ describe("generateIdpTruncateScriptCode", () => {
     ]);
   });
 });
+
+describe("generateIdpUserSchemaFile password source", () => {
+  test("hook fills the password from the environment", () => {
+    const output = generateIdpUserSchemaFile({ usernameField: "email", userTableName: "User" });
+    expect(output).toContain(
+      'import { defineSchema, fillIdpUserPassword } from "@tailor-platform/sdk/seed"',
+    );
+    expect(output).toContain("fillIdpUserPassword(data)");
+  });
+});
