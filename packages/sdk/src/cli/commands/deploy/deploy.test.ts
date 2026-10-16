@@ -1,3 +1,4 @@
+import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger, symbols } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -1235,6 +1236,7 @@ describe("printDeploymentPlans", () => {
 });
 
 type FakeBundledScripts = {
+  configDir?: string;
   appName?: string;
   resolvers?: Record<string, string>;
   executors?: Record<string, string>;
@@ -1255,6 +1257,10 @@ type FakeBundledScripts = {
 
 let fakeTargetSequence = 0;
 
+function fakeConfigPath(configDir: string): string {
+  return path.join(process.cwd(), configDir, "tailor.config.ts");
+}
+
 function fakeTarget(
   bundles: FakeBundledScripts,
 ): Parameters<typeof assertUniqueGlobalResourceNames>[0][number] {
@@ -1269,7 +1275,7 @@ function fakeTarget(
       },
       workflowService: {
         workflows: Object.fromEntries(
-          (bundles.workflowNames ?? []).map((name) => [name, { name }]),
+          (bundles.workflowNames ?? []).map((name, index) => [`/workflow-${index}.ts`, { name }]),
         ),
       },
       staticWebsiteServices: (bundles.staticWebsiteNames ?? []).map((name) => ({ name })),
@@ -1291,6 +1297,7 @@ function fakeTarget(
       secrets: (bundles.vaultNames ?? []).map((vaultName) => ({ vaultName })),
     },
     config: {
+      path: fakeConfigPath(bundles.configDir ?? `apps/fake-app-${fakeTargetSequence}`),
       workflow: {
         executionPolicies: Object.fromEntries(
           (bundles.executionPolicyNames ?? []).map((name) => [name, { name }]),
@@ -1610,45 +1617,127 @@ describe("mergeBundledScripts", () => {
           resolvers: { [resolverBundleKey("shared", "get")]: "b" },
         }),
       ]),
-    ).toThrow(`Duplicate resolver bundle name "${resolverBundleKey("shared", "get")}"`);
+    ).toThrow(`- Resolver bundle "${resolverBundleKey("shared", "get")}": `);
   });
 
-  test("rejects duplicate executor, workflow job, and auth hook bundle names across configs", () => {
+  test("reports every duplicate bundle name in one error with the config paths", () => {
     expect(() =>
       mergeBundledScripts([
-        fakeTarget({ executors: { sync: "buyer" } }),
-        fakeTarget({ executors: { sync: "supplier" } }),
-      ]),
-    ).toThrow('Duplicate executor bundle name "sync" across config files.');
-
-    expect(() =>
-      mergeBundledScripts([
-        fakeTarget({ workflowJobs: { notify: "buyer" } }),
-        fakeTarget({ workflowJobs: { notify: "supplier" } }),
-      ]),
-    ).toThrow('Duplicate workflow job bundle name "notify" across config files.');
-
-    expect(() =>
-      mergeBundledScripts([
-        fakeTarget({ authHooks: { "auth-hook--shared--before-login": "buyer" } }),
-        fakeTarget({ authHooks: { "auth-hook--shared--before-login": "supplier" } }),
+        fakeTarget({
+          configDir: "apps/buyer",
+          executors: { sync: "buyer" },
+          workflowJobs: { notify: "buyer" },
+          authHooks: { "auth-hook--shared--before-login": "buyer" },
+        }),
+        fakeTarget({
+          configDir: "apps/supplier",
+          executors: { sync: "supplier" },
+          workflowJobs: { notify: "supplier" },
+          authHooks: { "auth-hook--shared--before-login": "supplier" },
+        }),
       ]),
     ).toThrow(
-      'Duplicate auth hook bundle name "auth-hook--shared--before-login" across config files.',
+      expect.objectContaining({
+        code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
+        message: [
+          "Duplicate resource names in this deploy:",
+          '  - Executor bundle "sync": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts',
+          '  - Workflow job bundle "notify": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts',
+          '  - Auth hook bundle "auth-hook--shared--before-login": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts',
+        ].join("\n"),
+      }),
     );
   });
 });
 
 describe("assertUniqueGlobalResourceNames", () => {
+  test("reports every duplicate name in one error with the config paths", () => {
+    const erp = fakeTarget({
+      configDir: "apps/erp",
+      executorNames: ["recompute-on-role-permissions-updated", "sync-order"],
+      staticWebsiteNames: ["default-web"],
+      tailorDBNamespaces: ["main-db"],
+      authNamespace: "default",
+      idpNames: ["default"],
+    });
+    const userManagement = fakeTarget({
+      configDir: "apps/user-management",
+      executorNames: ["recompute-on-role-permissions-updated", "sync-user"],
+      staticWebsiteNames: ["default-web"],
+      tailorDBNamespaces: ["main-db"],
+      authNamespace: "default",
+      idpNames: ["default"],
+    });
+    const configPaths = [fakeConfigPath("apps/erp"), fakeConfigPath("apps/user-management")];
+
+    expect(() => assertUniqueGlobalResourceNames([erp, userManagement])).toThrow(
+      expect.objectContaining({
+        code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
+        message: [
+          "Duplicate resource names in this deploy:",
+          '  - Executor "recompute-on-role-permissions-updated": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+          '  - StaticWebsite "default-web": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+          '  - TailorDB namespace "main-db": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+          '  - Auth namespace "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+          '  - IdP namespace "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+        ].join("\n"),
+        suggestion:
+          "Rename the duplicates so each name is defined once across all configs in a single deploy.",
+        context: {
+          duplicates: [
+            {
+              resourceType: "Executor",
+              name: "recompute-on-role-permissions-updated",
+              configPaths,
+            },
+            { resourceType: "StaticWebsite", name: "default-web", configPaths },
+            { resourceType: "TailorDB namespace", name: "main-db", configPaths },
+            { resourceType: "Auth namespace", name: "default", configPaths },
+            { resourceType: "IdP namespace", name: "default", configPaths },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("lists every config that defines a duplicate name", () => {
+    expect(() =>
+      assertUniqueGlobalResourceNames([
+        fakeTarget({ configDir: "apps/a", tailorDBNamespaces: ["shared-db"] }),
+        fakeTarget({ configDir: "apps/b", tailorDBNamespaces: ["other-db"] }),
+        fakeTarget({ configDir: "apps/c", tailorDBNamespaces: ["shared-db"] }),
+        fakeTarget({ configDir: "apps/d", tailorDBNamespaces: ["shared-db"] }),
+      ]),
+    ).toThrow(
+      '  - TailorDB namespace "shared-db": apps/a/tailor.config.ts, apps/c/tailor.config.ts, apps/d/tailor.config.ts',
+    );
+  });
+
+  test("lists a config once when it defines the same name more than once", () => {
+    expect(() =>
+      assertUniqueGlobalResourceNames([
+        fakeTarget({
+          configDir: "apps/a",
+          workflowNames: ["order-processing", "order-processing"],
+        }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        message: [
+          "Duplicate resource names in this deploy:",
+          '  - Workflow "order-processing": apps/a/tailor.config.ts',
+        ].join("\n"),
+      }),
+    );
+  });
+
   test("throws when two configs define the same application name", () => {
     expect(() =>
       assertUniqueGlobalResourceNames([
         fakeTarget({ appName: "shared-app" }),
         fakeTarget({ appName: "shared-app" }),
       ]),
-    ).toThrow(
-      'Duplicate Application name "shared-app" across config files. Application names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Application "shared-app": ');
   });
 
   test("throws when two configs define the same executor name", () => {
@@ -1657,9 +1746,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ executorNames: ["sync-user"] }),
         fakeTarget({ executorNames: ["sync-user"] }),
       ]),
-    ).toThrow(
-      'Duplicate Executor name "sync-user" across config files. Executor names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Executor "sync-user": ');
   });
 
   test("throws when two configs define the same non-bundled executor name", () => {
@@ -1668,9 +1755,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
         fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
       ]),
-    ).toThrow(
-      'Duplicate Executor name "forward-webhook" across config files. Executor names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Executor "forward-webhook": ');
   });
 
   test("throws when two configs define the same workflow job name", () => {
@@ -1679,9 +1764,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ workflowJobs: { "notify-job": "a" } }),
         fakeTarget({ workflowJobs: { "notify-job": "b" } }),
       ]),
-    ).toThrow(
-      'Duplicate Workflow job name "notify-job" across config files. Workflow job names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Workflow job "notify-job": ');
   });
 
   test("accepts distinct executor names across configs", () => {
@@ -1732,9 +1815,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
         fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
       ]),
-    ).toThrow(
-      'Duplicate StaticWebsite name "marketing-site" across config files. StaticWebsite names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- StaticWebsite "marketing-site": ');
   });
 
   test("throws when two configs define the same TailorDB namespace", () => {
@@ -1743,9 +1824,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
         fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
       ]),
-    ).toThrow(
-      'Duplicate TailorDB namespace name "shared-db" across config files. TailorDB namespace names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- TailorDB namespace "shared-db": ');
   });
 
   test("throws when two configs define the same Auth namespace", () => {
@@ -1754,9 +1833,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ authNamespace: "shared-auth" }),
         fakeTarget({ authNamespace: "shared-auth" }),
       ]),
-    ).toThrow(
-      'Duplicate Auth namespace name "shared-auth" across config files. Auth namespace names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Auth namespace "shared-auth": ');
   });
 
   test("throws when two configs define the same IdP namespace", () => {
@@ -1765,9 +1842,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ idpNames: ["shared-idp"] }),
         fakeTarget({ idpNames: ["shared-idp"] }),
       ]),
-    ).toThrow(
-      'Duplicate IdP namespace name "shared-idp" across config files. IdP namespace names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- IdP namespace "shared-idp": ');
   });
 
   test("throws when two configs define the same Resolver namespace", () => {
@@ -1776,9 +1851,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ resolverNamespaces: ["shared-pipeline"] }),
         fakeTarget({ resolverNamespaces: ["shared-pipeline"] }),
       ]),
-    ).toThrow(
-      'Duplicate Resolver namespace name "shared-pipeline" across config files. Resolver namespace names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Resolver namespace "shared-pipeline": ');
   });
 
   test("throws when two configs define the same AIGateway name", () => {
@@ -1787,9 +1860,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ aiGatewayNames: ["shared-gateway"] }),
         fakeTarget({ aiGatewayNames: ["shared-gateway"] }),
       ]),
-    ).toThrow(
-      'Duplicate AIGateway name "shared-gateway" across config files. AIGateway names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- AIGateway "shared-gateway": ');
   });
 
   test("throws when two configs define the same Secret Manager vault name", () => {
@@ -1798,9 +1869,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ vaultNames: ["shared-vault"] }),
         fakeTarget({ vaultNames: ["shared-vault"] }),
       ]),
-    ).toThrow(
-      'Duplicate Secret Manager vault name "shared-vault" across config files. Secret Manager vault names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Secret Manager vault "shared-vault": ');
   });
 
   test("throws when two configs define the same workflow name", () => {
@@ -1809,9 +1878,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ workflowNames: ["order-processing"] }),
         fakeTarget({ workflowNames: ["order-processing"] }),
       ]),
-    ).toThrow(
-      'Duplicate Workflow name "order-processing" across config files. Workflow names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Workflow "order-processing": ');
   });
 
   test("throws when two configs define the same workflow execution policy name", () => {
@@ -1820,9 +1887,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ executionPolicyNames: ["premium"] }),
         fakeTarget({ executionPolicyNames: ["premium"] }),
       ]),
-    ).toThrow(
-      'Duplicate Workflow execution policy name "premium" across config files. Workflow execution policy names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Workflow execution policy "premium": ');
   });
 
   test("throws when two configs define the same Auth connection name", () => {
@@ -1831,9 +1896,7 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ authNamespace: "auth-a", authConnectionNames: ["google-sso"] }),
         fakeTarget({ authNamespace: "auth-b", authConnectionNames: ["google-sso"] }),
       ]),
-    ).toThrow(
-      'Duplicate Auth connection name "google-sso" across config files. Auth connection names must be unique across all configs in a single deploy.',
-    );
+    ).toThrow('- Auth connection "google-sso": ');
   });
 });
 

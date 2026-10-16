@@ -1,30 +1,14 @@
-import { CLIError } from "#/cli/shared/errors";
+import { assertNoDuplicateResourceNames } from "./duplicate-resource-names";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
-function setBundledScript(
-  target: Map<string, string>,
-  name: string,
-  code: string,
-  kind: string,
-): void {
-  if (target.has(name)) {
-    throw CLIError({
-      code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
-      message: `Duplicate ${kind} bundle name "${name}" across config files.`,
-    });
-  }
-  target.set(name, code);
-}
+type BundledScripts = BuiltDeploymentTarget["bundledScripts"];
 
-function addBundledScripts(
-  target: Map<string, string>,
-  source: ReadonlyMap<string, string>,
-  kind: string,
-): void {
-  for (const [name, code] of source) {
-    setBundledScript(target, name, code, kind);
-  }
-}
+const BUNDLE_KINDS: ReadonlyArray<{ key: keyof BundledScripts; resourceLabel: string }> = [
+  { key: "resolvers", resourceLabel: "Resolver bundle" },
+  { key: "executors", resourceLabel: "Executor bundle" },
+  { key: "workflowJobs", resourceLabel: "Workflow job bundle" },
+  { key: "authHooks", resourceLabel: "Auth hook bundle" },
+];
 
 /**
  * Merge per-config bundled scripts into one build-only result.
@@ -33,26 +17,20 @@ function addBundledScripts(
  * @param targets - Built deployment targets to merge
  * @returns Combined bundled scripts across all targets
  */
-export function mergeBundledScripts(
-  targets: ReadonlyArray<BuiltDeploymentTarget>,
-): BuiltDeploymentTarget["bundledScripts"] {
-  const bundledScripts: BuiltDeploymentTarget["bundledScripts"] = {
-    resolvers: new Map(),
-    executors: new Map(),
-    workflowJobs: new Map(),
-    authHooks: new Map(),
+export function mergeBundledScripts(targets: ReadonlyArray<BuiltDeploymentTarget>): BundledScripts {
+  assertNoDuplicateResourceNames(
+    targets,
+    BUNDLE_KINDS.map(({ key, resourceLabel }) => ({
+      resourceLabel,
+      namesOf: (target) => target.bundledScripts[key].keys(),
+    })),
+  );
+  const mergeKind = (key: keyof BundledScripts) =>
+    new Map(targets.flatMap((target) => [...target.bundledScripts[key]]));
+  return {
+    resolvers: mergeKind("resolvers"),
+    executors: mergeKind("executors"),
+    workflowJobs: mergeKind("workflowJobs"),
+    authHooks: mergeKind("authHooks"),
   };
-
-  for (const target of targets) {
-    addBundledScripts(bundledScripts.resolvers, target.bundledScripts.resolvers, "resolver");
-    addBundledScripts(bundledScripts.executors, target.bundledScripts.executors, "executor");
-    addBundledScripts(
-      bundledScripts.workflowJobs,
-      target.bundledScripts.workflowJobs,
-      "workflow job",
-    );
-    addBundledScripts(bundledScripts.authHooks, target.bundledScripts.authHooks, "auth hook");
-  }
-
-  return bundledScripts;
 }
