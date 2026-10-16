@@ -206,21 +206,15 @@ describe("seedApplyCommand", () => {
       );
     });
 
-    test("stops before seeding when a row has no password after the hook", async () => {
+    test("still sends a row without password when the environment has none", async () => {
       rowsWithoutPassword();
       seedModule.hookSeedRows.mockImplementation(async ({ rows }: { rows: unknown[] }) => rows);
-      const result = await runApplyCommand(["--machine-user", "manager", "_User"]);
-      expect(result.exitCode).toBe(1);
-      expect(String(result.error)).toContain("_User has no password for: Ada");
-      expect(sdk.executeScript).not.toHaveBeenCalled();
-    });
-
-    test("allows a row without password with --upsert", async () => {
-      rowsWithoutPassword();
-      seedModule.hookSeedRows.mockImplementation(async ({ rows }: { rows: unknown[] }) => rows);
-      await runApply(["--upsert", "_User"]);
+      await runApply(["_User"]);
       expect(sdk.executeScript).toHaveBeenCalledWith(
-        expect.objectContaining({ name: "seed-idp-user.ts" }),
+        expect.objectContaining({
+          name: "seed-idp-user.ts",
+          arg: expect.objectContaining({ users: [{ name: "Ada" }] }),
+        }),
       );
     });
   });
