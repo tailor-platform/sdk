@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { logger } from "@tailor-platform/sdk/cli";
 import {
   type EnvRequirement,
@@ -6,30 +5,10 @@ import {
   renderGhCommands,
   SECRET_FALLBACK_VARIABLES,
 } from "./env";
-import { detectRepository, type GitRunner, type Repository } from "./git";
+import { defaultGhRunner, type GhOutput, type GhRunner, parseRepoView, REPO_VIEW_ARGS } from "./gh";
+import { detectRepository, GITHUB_HOST, type GitRunner, type Repository } from "./git";
 
-export type GhOutput = { status: number; stdout: string; stderr: string };
-
-/**
- * Runs a gh command.
- * @param args - Arguments passed to `gh`
- * @param cwd - Working directory to run gh in
- * @returns Exit status and output, or null when gh is not installed
- */
-export type GhRunner = (args: string[], cwd: string) => GhOutput | null;
-
-const GH_TIMEOUT_MS = 60_000;
 const GH_AUTH_REQUIRED_EXIT = 4;
-
-const defaultGhRunner: GhRunner = (args, cwd) => {
-  const result = spawnSync("gh", args, { cwd, encoding: "utf-8", timeout: GH_TIMEOUT_MS });
-  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return null;
-  return {
-    status: result.status ?? 1,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr || result.error?.message || "",
-  };
-};
 
 type EntryType = EnvRequirement["type"];
 
@@ -108,31 +87,29 @@ export function checkEnv(options: {
     return result;
   };
 
+  const target = repository ?? resolveRepository(gh);
+  const path = `${target.owner}/${target.name}`;
   // `gh api` sends every request to its default host, not to the host of the repository it
-  // resolves from the current directory, so a repository off github.com needs `--hostname`.
-  const target = repository
-    ? { host: null, path: `${repository.owner}/${repository.name}` }
-    : resolveRepository(gh);
-  const ghApi = (args: string[]) =>
-    gh(["api", ...(target.host ? ["--hostname", target.host] : []), ...args]);
+  // resolves from the current directory.
+  const ghApi = (args: string[]) => gh(["api", "--hostname", target.host ?? GITHUB_HOST, ...args]);
 
-  const repoResult = ghApi([`repos/${target.path}`]);
+  const repoResult = ghApi([`repos/${path}`]);
   if (httpStatus(repoResult) === 404) {
     throw new Error(
-      `Repository ${target.path} was not found, or the gh account has no access to it: GitHub ` +
+      `Repository ${path} was not found, or the gh account has no access to it: GitHub ` +
         "answers 404 for a private repository the account cannot see. Run `gh auth status` to " +
         "check which account gh uses; it needs write access to the repository.",
     );
   }
   if (repoResult.status !== 0) {
-    throw new Error(`Repository ${target.path} could not be read: ${ghMessage(repoResult)}`);
+    throw new Error(`Repository ${path} could not be read: ${ghMessage(repoResult)}`);
   }
   const repo = JSON.parse(repoResult.stdout) as {
     full_name?: string;
     owner?: { type?: string };
     permissions?: Record<string, boolean>;
   };
-  const fullName = repo.full_name ?? target.path;
+  const fullName = repo.full_name ?? path;
   // GitHub refuses every list endpoint below the write role.
   const { permissions } = repo;
   if (permissions?.push === false) {
@@ -166,7 +143,7 @@ export function checkEnv(options: {
     variable: listNames(paths.variable, "variable", describe("variables")),
   });
 
-  const actions = `repos/${target.path}/actions`;
+  const actions = `repos/${path}/actions`;
   const repositoryScopes: ScopedNames[] = [
     {
       scope: "repository",
@@ -192,7 +169,7 @@ export function checkEnv(options: {
   }
 
   const checks = environments.map(({ environment, targets, requirements }): EnvironmentCheck => {
-    const base = `repos/${target.path}/environments/${encodeURIComponent(environment)}`;
+    const base = `repos/${path}/environments/${encodeURIComponent(environment)}`;
     const result = ghApi([base]);
     if (result.status !== 0 && httpStatus(result) !== 404) {
       throw new Error(
@@ -214,23 +191,23 @@ export function checkEnv(options: {
       requirements: requirements.map((requirement) => checkRequirement(requirement, scopes)),
     };
   });
-  report(checks, fullName, repository);
+  report(checks, fullName, target);
 }
 
-function resolveRepository(gh: (args: string[]) => GhOutput): { host: string; path: string } {
-  const result = gh(["repo", "view", "--json", "nameWithOwner,url"]);
-  if (result.status !== 0) {
+function resolveRepository(gh: (args: string[]) => GhOutput): Repository {
+  const result = gh(REPO_VIEW_ARGS);
+  const repository = result.status === 0 ? parseRepoView(result.stdout) : null;
+  if (!repository) {
+    const reason =
+      result.status === 0
+        ? `gh named a repository that cannot be embedded in commands (${result.stdout.trim()})`
+        : ghMessage(result);
     throw new Error(
-      `Could not tell which GitHub repository to check from the current directory: ` +
-        `${ghMessage(result)}. Run the check in a clone of the repository whose remote points ` +
-        "at GitHub.",
+      `Could not tell which GitHub repository to check from the current directory: ${reason}. ` +
+        "Run the check in a clone of the repository whose remote points at GitHub.",
     );
   }
-  const { nameWithOwner, url } = JSON.parse(result.stdout) as {
-    nameWithOwner: string;
-    url: string;
-  };
-  return { host: new URL(url).host, path: nameWithOwner };
+  return repository;
 }
 
 function httpStatus(result: GhOutput): number | null {
@@ -243,7 +220,7 @@ function ghMessage(result: GhOutput): string {
   return line.replace(/^gh: /, "").trim() || `gh exited with status ${String(result.status)}`;
 }
 
-function report(checks: EnvironmentCheck[], fullName: string, repository: Repository | null): void {
+function report(checks: EnvironmentCheck[], fullName: string, repository: Repository): void {
   const missing = checks
     .flatMap(({ requirements }) => requirements)
     .filter((check) => check.required && !check.registered).length;
@@ -261,11 +238,7 @@ function report(checks: EnvironmentCheck[], fullName: string, repository: Reposi
   logger.success("All required secrets and variables are registered.");
 }
 
-function printReport(
-  checks: EnvironmentCheck[],
-  fullName: string,
-  repository: Repository | null,
-): void {
+function printReport(checks: EnvironmentCheck[], fullName: string, repository: Repository): void {
   logger.info(`Checking the GitHub Environment secrets and variables of ${fullName}`);
   for (const { environment, targets, exists, requirements } of checks) {
     const heading = `Environment "${environment}" (${targets.join(", ")})`;

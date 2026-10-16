@@ -1,5 +1,6 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { validateEnvironment, validateWorkspaceName } from "./generate";
+import { type GhRunner, viewRepository } from "./gh";
 import { detectRepository, type GitRunner, type Repository } from "./git";
 import { type LockFile, readLock, type TargetKind } from "./lock";
 
@@ -172,7 +173,9 @@ export function renderGhCommands(
   repository: Repository | null = null,
 ): string {
   const repoPath = repository ? `${repository.owner}/${repository.name}` : "{owner}/{repo}";
-  const repoFlag = repository ? ` --repo=${repository.owner}/${repository.name}` : "";
+  const hostPrefix = repository?.host ? `${repository.host}/` : "";
+  const repoFlag = repository ? ` --repo=${hostPrefix}${repoPath}` : "";
+  const ghApi = repository?.host ? `gh api --hostname ${repository.host}` : "gh api";
   const blocks = environments.map(({ environment, targets, requirements, exists }) => {
     const endpoint = `"repos/${repoPath}/environments/${encodeURIComponent(environment)}"`;
     const lines = [`# Environment "${environment}" (${targets.join(", ")})`];
@@ -180,7 +183,7 @@ export function renderGhCommands(
       lines.push(
         // PUT also rewrites an existing environment and needs admin access, so only create a missing
         // one. The status is compared as text so the expected 404 exit does not fail under pipefail.
-        `if [ "$(gh api -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then gh api -X PUT ${endpoint} --silent; fi`,
+        `if [ "$(${ghApi} -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then ${ghApi} -X PUT ${endpoint} --silent; fi`,
       );
     }
     for (const { required, type, name, description, howTo } of requirements) {
@@ -195,6 +198,9 @@ export function renderGhCommands(
   });
   const header = [
     "# Run these one at a time: each `gh ... set` prompts for its value.",
+    ...(repository
+      ? []
+      : ["# On GitHub Enterprise Server, export GH_HOST=<host> first so that gh api calls it."]),
     `# ${CONCEPTS_NOTE}`,
   ].join("\n");
   return `${[header, ...blocks].join("\n\n")}\n`;
@@ -260,7 +266,8 @@ function terraformUsage(
     `# ${CONCEPTS_NOTE}`,
     "#",
     "# 1. Authenticate the GitHub provider, for example:",
-    `#   export GITHUB_TOKEN=<token> GITHUB_OWNER=${repository?.owner ?? "<owner>"}`,
+    `#   export GITHUB_TOKEN=<token> GITHUB_OWNER=${repository?.owner ?? "<owner>"}` +
+      (repository?.host ? ` GITHUB_BASE_URL=https://${repository.host}/` : ""),
     "# 2. Set the non-secret values in terraform.tfvars:",
     ...(repository ? [] : ['#   repository = "<repository>"']),
     ...inputs
@@ -421,19 +428,23 @@ export function loadEnvironmentRequirements(
  * @param options.format - Output format
  * @param options.environments - Only print these environments; all when empty
  * @param options.gitRunner - Injectable git runner, for testing
+ * @param options.ghRunner - Injectable gh runner, for testing
  */
 export function setupEnv(options: {
   outputDir: string;
   format: EnvFormat;
   environments?: string[];
   gitRunner?: GitRunner;
+  ghRunner?: GhRunner;
 }): void {
   const environments = loadEnvironmentRequirements(options.outputDir, options.environments);
   if (logger.jsonMode) {
     logger.out(environments);
     return;
   }
-  const repository = detectRepository(options.outputDir, options.gitRunner);
+  const repository =
+    detectRepository(options.outputDir, options.gitRunner) ??
+    viewRepository(options.outputDir, options.ghRunner);
   logger.out(
     options.format === "terraform"
       ? renderTerraform(environments, repository)

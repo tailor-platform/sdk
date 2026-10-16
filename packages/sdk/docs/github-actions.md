@@ -481,9 +481,12 @@ protection rules no longer guard your deploys.
 Environment the generated workflows use, the commands that create the
 environment (only when it does not exist yet) and set its secrets and
 variables. It is read-only, so re-run it whenever you add a target. When the
-`origin` remote points at github.com, the output names that repository, so the
-commands work from any directory; otherwise `gh` resolves the repository from
-the current directory and the Terraform output leaves it as a placeholder.
+`origin` remote points at github.com, the output names that repository;
+otherwise it names the repository `gh repo view` reports for the current
+directory, with its host on GitHub Enterprise Server. Either way the commands
+work from any directory. When neither names a repository, `gh` resolves it from
+the current directory when you run the commands, and the Terraform output leaves
+it as a placeholder.
 
 ```bash
 tailor setup ci env                          # gh CLI commands (default)
@@ -842,10 +845,12 @@ server and its runners first:
   the pinned versions: update them with `actions-sync`, or, with GitHub
   Connect, delete them from the server's `actions` organization (see GitHub's
   [Using the latest version of the official bundled actions](https://docs.github.com/en/enterprise-server@latest/admin/managing-github-actions-for-your-enterprise/managing-access-to-actions-from-githubcom/using-the-latest-version-of-the-official-bundled-actions)).
-- **Environment settings:** run the `gh` commands that `tailor setup ci env`
-  prints from a clone of the repository, with `gh` signed in to the server
-  (`gh auth login --hostname <host>`) and `GH_HOST=<host>` exported, so that
-  `gh api` calls the server instead of github.com.
+- **Environment settings:** sign `gh` in to the server
+  (`gh auth login --hostname <host>`) before you run `tailor setup ci env` in a
+  clone of the repository, so that the `gh` commands it prints and its Terraform
+  output target the server. When `gh` cannot tell the repository, the printed
+  commands say to export `GH_HOST=<host>` first, so that `gh api` calls the
+  server instead of github.com.
 
 With `--erd-preview`, also pass `--ghes`:
 

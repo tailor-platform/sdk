@@ -1,9 +1,10 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { describe, expect, test, vi } from "vitest";
-import { checkEnv, type GhOutput, type GhRunner } from "./env-check";
+import { checkEnv } from "./env-check";
 import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
 import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
+import type { GhOutput, GhRunner } from "./gh";
 import type { GitRunner } from "./git";
 
 const CLIENT_ID = "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID";
@@ -293,7 +294,51 @@ describe("checkEnv", () => {
     expect(output.stderr().split("\n")[0]).toBe(
       "Checking the GitHub Environment secrets and variables of acme/app",
     );
-    expect(output.stdout().split("\n")).toContain(`gh variable set ${WORKSPACE_ID} --env=stg`);
+    const lines = output.stdout().split("\n");
+    expect(lines).toContain(
+      'if [ "$(gh api --hostname ghe.example.com -i "repos/acme/app/environments/stg" 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then ' +
+        'gh api --hostname ghe.example.com -X PUT "repos/acme/app/environments/stg" --silent; fi',
+    );
+    expect(lines).toContain(
+      `gh secret set ${CLIENT_SECRET} --env=stg --repo=ghe.example.com/acme/app`,
+    );
+    expect(lines).toContain(
+      `gh variable set ${WORKSPACE_ID} --env=stg --repo=ghe.example.com/acme/app`,
+    );
+  });
+
+  test("sends its requests to github.com for a github.com origin, whatever gh's default host is", () => {
+    using tmp = setup();
+    using _output = captureOutput();
+    const gh = fakeGh();
+
+    expect(() => checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh })).toThrow(
+      /3 required/,
+    );
+
+    const apiCalls = gh.calls.filter(([command]) => command === "api");
+    expect(apiCalls.length).toBeGreaterThan(0);
+    for (const args of apiCalls) {
+      expect(args.slice(1, 3)).toEqual(["--hostname", "github.com"]);
+    }
+  });
+
+  test("names the github.com repository gh resolves for an origin it cannot parse, such as an SSH alias", () => {
+    using tmp = setup();
+    using output = captureOutput();
+
+    expect(() =>
+      checkEnv({
+        outputDir: tmp.dir,
+        gitRunner: () => "git@github-work:acme/app.git",
+        ghRunner: fakeGh(),
+      }),
+    ).toThrow(/3 required/);
+
+    expect(output.stdout()).toContain('gh api -X PUT "repos/acme/app/environments/stg" --silent');
+    expect(output.stdout().split("\n")).toContain(
+      `gh variable set ${WORKSPACE_ID} --env=stg --repo=acme/app`,
+    );
   });
 
   test("prints the result as data in JSON mode, still failing when a required entry is missing", () => {
