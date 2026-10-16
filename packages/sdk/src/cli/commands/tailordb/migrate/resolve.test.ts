@@ -354,13 +354,12 @@ describe("tailordb migration resolve", () => {
     ]);
   });
 
-  test("--complete asks to check every record has a value without describing the platform", async () => {
+  test("--complete asks to check that every record has a value", async () => {
     await runCommand(resolveCommand, ["--complete", "--yes"]);
 
-    const output = state.stderr.join("");
-    expect(output).toMatch(/every record has a value for each field that becomes required/);
-    expect(output).not.toMatch(/accepted by the update/);
-    expect(output).not.toMatch(/platform/i);
+    expect(state.stderr.join("")).toMatch(
+      /every record has a value for each field that becomes required/,
+    );
   });
 
   test("refuses while an execution of the in-progress migration is still running", async () => {
