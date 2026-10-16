@@ -1,6 +1,7 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { ManagedResourceType } from "./managed-resource-type";
 
 type ResourcePageFetcher<T> = (pageToken: string, maxPageSize: number) => Promise<[T[], string]>;
 
@@ -51,7 +52,7 @@ export interface TrackDesiredResourceOwnershipParams {
   ownerLabel: string | undefined;
   appName: string;
   appId: string | undefined;
-  resourceType: string;
+  resourceType: ManagedResourceType;
   resourceLabel: string;
   resourceName: string;
   conflicts: OwnerConflict[];

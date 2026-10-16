@@ -31,6 +31,7 @@ import {
 } from "./visible-resources";
 import type { PlannedDeployment } from "./apply-phases";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
+import type { ManagedResourceType } from "./managed-resource-type";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
 
@@ -971,17 +972,31 @@ describe("printPlanResults", () => {
   test("reports unmanaged resources and owner conflicts of every plan kind", () => {
     const results = emptyResults();
     const kinds = Object.keys(results) as Array<keyof PlanResults>;
+    const resourceTypes: Record<keyof PlanResults, ManagedResourceType> = {
+      aiGateway: "aigateway",
+      app: "application",
+      auth: "auth.service",
+      executor: "executor",
+      functionRegistry: "function_registry",
+      idp: "idp.service",
+      pipeline: "pipeline.service",
+      secretManager: "secret.vault",
+      staticWebsite: "staticwebsite",
+      tailorDB: "tailordb.service",
+      workflow: "workflow",
+      workflowExecutionPolicy: "workflow_job_function_execution_policy",
+    };
     for (const kind of kinds) {
       results[kind].unmanaged = [
         {
-          resourceType: kind,
+          resourceType: resourceTypes[kind],
           resourceLabel: `${kind} label`,
           resourceName: `unmanaged-${kind}`,
         },
       ];
       results[kind].conflicts = [
         {
-          resourceType: kind,
+          resourceType: resourceTypes[kind],
           resourceLabel: `${kind} label`,
           resourceName: `conflict-${kind}`,
           currentOwner: "other-app",
@@ -1001,11 +1016,15 @@ describe("printPlanResults", () => {
     };
 
     expect(payload.warnings).toEqual(
-      kinds.map((kind) => ({ type: "unmanaged", resourceType: kind, name: `unmanaged-${kind}` })),
+      kinds.map((kind) => ({
+        type: "unmanaged",
+        resourceType: resourceTypes[kind],
+        name: `unmanaged-${kind}`,
+      })),
     );
     expect(payload.conflicts).toEqual(
       kinds.map((kind) => ({
-        resourceType: kind,
+        resourceType: resourceTypes[kind],
         name: `conflict-${kind}`,
         currentOwner: "other-app",
       })),

@@ -22,6 +22,7 @@ import { collectOwnerConflicts, collectUnmanagedResources } from "./managed-reso
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
+import type { ManagedResourceType } from "./managed-resource-type";
 type PrintPlanOptions = {
   dryRun?: boolean;
 };
@@ -43,11 +44,11 @@ type JsonPlanPayload = {
   >;
   warnings: Array<{
     type: "unmanaged" | "skippedSecret";
-    resourceType: string;
+    resourceType: ManagedResourceType;
     name: string;
   }>;
   conflicts: Array<{
-    resourceType: string;
+    resourceType: ManagedResourceType;
     name: string;
     currentOwner: string;
   }>;
@@ -204,7 +205,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
     })),
     ...results.secretManager.skippedSecrets.map((name) => ({
       type: "skippedSecret" as const,
-      resourceType: "secret.secret",
+      resourceType: "secret.secret" as const,
       name,
     })),
   ];
