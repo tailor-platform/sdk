@@ -72,6 +72,11 @@ runnable command), or `error.context`. `UNEXPECTED_ERROR` marks failures without
 including SDK-internal errors. Diagnostic lines may precede the error envelope, and stdout is not
 guaranteed to contain an error object.
 
+The exit code separates a mistyped command from a failed one without parsing output: `0` on success,
+`2` when the CLI rejects the command line itself (an unknown option or subcommand, an unexpected
+argument, or an option value that fails validation), and `1` for any other failure, including checks
+a command makes after reading its arguments. A CLI plugin exits with its own code.
+
 Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
 (`AUTH_TOKEN_REFRESH_FAILED`). Login recovery preserves the selected profile. For saved identities,
