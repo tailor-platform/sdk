@@ -41,7 +41,7 @@ export interface BundleAuthHooksOptions {
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
-  inlineSourcemapDependencySources?: boolean;
+  inlineSourcemapDependencySources?: boolean | string[];
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */

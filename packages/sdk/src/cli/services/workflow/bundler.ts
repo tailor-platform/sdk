@@ -322,7 +322,7 @@ export async function bundleWorkflowJobs(
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
   dateDefault: EffectiveDateDefault = "legacy",
   bundleTreeshake?: TreeshakeOptions,
-  inlineSourcemapDependencySources?: boolean,
+  inlineSourcemapDependencySources?: boolean | string[],
 ): Promise<BundleWorkflowJobsResult> {
   const jobSourceFiles = allJobs.map((job) => job.sourceFile);
   const sourceFileState = hashReachabilitySourceFiles([
@@ -628,7 +628,7 @@ async function bundleSingleJob(
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
   dateDefault: EffectiveDateDefault = "legacy",
   bundleTreeshake?: TreeshakeOptions,
-  inlineSourcemapDependencySources?: boolean,
+  inlineSourcemapDependencySources?: boolean | string[],
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 

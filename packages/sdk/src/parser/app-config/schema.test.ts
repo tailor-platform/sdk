@@ -201,6 +201,16 @@ describe("AppConfigSchema", () => {
       expect(parseBuildOptions({ inlineSourcemapDependencySources: true }).success).toBe(true);
     });
 
+    test("accepts a package list for inlineSourcemapDependencySources", () => {
+      expect(
+        parseBuildOptions({ inlineSourcemapDependencySources: ["kysely", "@scope/lib"] }).success,
+      ).toBe(true);
+    });
+
+    test("rejects a package list with a non-string entry", () => {
+      expect(parseBuildOptions({ inlineSourcemapDependencySources: [1] }).success).toBe(false);
+    });
+
     test("rejects a non-boolean inlineSourcemapDependencySources", () => {
       expect(
         firstIssue(parseBuildOptions({ inlineSourcemapDependencySources: "yes" }))?.path,

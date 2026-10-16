@@ -9,8 +9,8 @@ export interface SourcemapData {
   mappings: string;
 }
 
-/** An exact package name, or a pattern tested against the package name. */
-type SourcemapPackageSelector = string | RegExp;
+/** An exact package name, a pattern tested against the package name, or a predicate on the package name. */
+type SourcemapPackageSelector = string | RegExp | ((packageName: string) => boolean);
 
 /** Parameters for {@link omitSourcesContent}. */
 export interface OmitSourcesContentParams {
@@ -55,9 +55,11 @@ export function sourcePackageName(source: string): string | undefined {
 function isExcludedSource(source: string, exclude: readonly SourcemapPackageSelector[]): boolean {
   const name = sourcePackageName(source);
   if (name === undefined) return false;
-  return exclude.some((selector) =>
-    typeof selector === "string" ? selector === name : name.search(selector) !== -1,
-  );
+  return exclude.some((selector) => {
+    if (typeof selector === "string") return selector === name;
+    if (typeof selector === "function") return selector(name);
+    return name.search(selector) !== -1;
+  });
 }
 
 /**
@@ -102,14 +104,14 @@ export interface ChunkCodeWithSourcemapParams {
   chunk: BundledChunk;
   /** Whether the code carries an inline sourcemap. */
   inlineSourcemap: boolean;
-  /** Whether the inline sourcemap embeds the source text of installed packages. */
-  dependencySources: boolean;
+  /** Whether the inline sourcemap embeds the source text of installed packages: all of them, or only the listed packages. */
+  dependencySources: boolean | readonly string[];
 }
 
 /**
  * Produce the code to deploy for a bundled chunk.
  * With inline sourcemaps enabled, the map is embedded into the code after dropping the
- * source text of installed packages unless `dependencySources` is set.
+ * source text of installed packages unless `dependencySources` is `true` or lists them.
  * @param params - The chunk and the sourcemap settings
  * @returns The chunk code, with the inline sourcemap when enabled
  */
@@ -117,8 +119,10 @@ export function chunkCodeWithSourcemap(params: ChunkCodeWithSourcemapParams): st
   const { chunk, inlineSourcemap, dependencySources } = params;
   if (!inlineSourcemap || !chunk.map) return chunk.code;
 
-  const map = dependencySources
-    ? chunk.map
-    : omitSourcesContent({ map: chunk.map, exclude: [/.*/] });
+  if (dependencySources === true)
+    return toInlineSourcemapCode({ code: chunk.code, map: chunk.map });
+
+  const kept = new Set(dependencySources || []);
+  const map = omitSourcesContent({ map: chunk.map, exclude: [(name) => !kept.has(name)] });
   return toInlineSourcemapCode({ code: chunk.code, map });
 }

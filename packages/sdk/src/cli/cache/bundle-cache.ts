@@ -67,7 +67,7 @@ type ComputeBundlerContextHashParams = {
   extraContext: string;
   tsconfig?: string;
   inlineSourcemap?: boolean;
-  inlineSourcemapDependencySources?: boolean;
+  inlineSourcemapDependencySources?: boolean | string[];
   bundleLogLevel?: string;
   bundleTreeshake?: TreeshakeOptions;
   prefix?: string;
@@ -104,10 +104,17 @@ function computeBundlerContextHash(params: ComputeBundlerContextHashParams): str
       extraContext +
       (tsconfig ? hashFile(tsconfig) : "") +
       String(inlineSourcemap ?? false) +
-      String(inlineSourcemapDependencySources ?? false) +
+      dependencySourcesKey(inlineSourcemapDependencySources) +
       (bundleLogLevel ?? "") +
       (treeshakeEntries.length > 0 ? JSON.stringify(treeshakeEntries) : ""),
   );
+}
+
+function dependencySourcesKey(value: boolean | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value.length === 0 ? "false" : JSON.stringify([...new Set(value)].toSorted());
+  }
+  return String(value ?? false);
 }
 
 type WithCacheParams = {

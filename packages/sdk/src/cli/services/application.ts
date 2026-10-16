@@ -96,7 +96,7 @@ interface ReusableBuildState {
   readonly startContext: StartContext;
   readonly tsconfigCache: TsconfigLookupCache;
   readonly inlineSourcemap: boolean;
-  readonly inlineSourcemapDependencySources: boolean;
+  readonly inlineSourcemapDependencySources: boolean | string[];
   readonly bundleLogLevel: LogLevel;
 }
 

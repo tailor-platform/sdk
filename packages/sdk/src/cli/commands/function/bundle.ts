@@ -62,7 +62,7 @@ interface BundleForRunOptions {
   /** Inline sourcemap config value from defineConfig */
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
-  inlineSourcemapDependencySources?: boolean;
+  inlineSourcemapDependencySources?: boolean | string[];
   /** Log level config value from defineConfig */
   logLevel?: LogLevelInput;
   /** Treeshake config value from defineConfig */

@@ -664,6 +664,39 @@ describe("computeBundlerContextHash", () => {
     expect(a).not.toBe(b);
   });
 
+  test("returns same hash when inlineSourcemapDependencySources lists the same packages in another order", () => {
+    const a = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: ["kysely", "@scope/lib"],
+    });
+    const b = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: ["@scope/lib", "kysely"],
+    });
+
+    expect(a).toBe(b);
+  });
+
+  test("returns different hash when inlineSourcemapDependencySources lists different packages", () => {
+    const a = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: ["kysely"],
+    });
+    const b = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: ["kysely", "zod"],
+    });
+
+    expect(a).not.toBe(b);
+  });
+
+  test("returns same hash when inlineSourcemapDependencySources is an empty list vs false", () => {
+    const a = computeBundlerContextHash({ ...baseParams, inlineSourcemapDependencySources: [] });
+    const b = computeBundlerContextHash({ ...baseParams, inlineSourcemapDependencySources: false });
+
+    expect(a).toBe(b);
+  });
+
   test("returns same hash when inlineSourcemapDependencySources is undefined vs false", () => {
     const a = computeBundlerContextHash({
       ...baseParams,

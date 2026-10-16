@@ -50,7 +50,7 @@ export interface BundleExecutorsOptions {
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
-  inlineSourcemapDependencySources?: boolean;
+  inlineSourcemapDependencySources?: boolean | string[];
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */
@@ -165,7 +165,7 @@ async function bundleSingleExecutor(
   startContext?: StartContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
-  inlineSourcemapDependencySources?: boolean,
+  inlineSourcemapDependencySources?: boolean | string[],
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,

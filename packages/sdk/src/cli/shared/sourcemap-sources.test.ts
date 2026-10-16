@@ -202,6 +202,29 @@ describe("chunkCodeWithSourcemap", () => {
     expect(contentOf(result, "plain/dist/index.js")).toBeNull();
   });
 
+  test("keeps the source text of only the listed packages when given a package list", () => {
+    const result = chunkCodeWithSourcemap({
+      chunk: { code, map: createMap() },
+      inlineSourcemap: true,
+      dependencySources: ["@scope/lib"],
+    });
+
+    expect(contentOf(result, "@scope/lib/index.js")).toBe("scoped source");
+    expect(contentOf(result, "plain/dist/index.js")).toBeNull();
+    expect(contentOf(result, "src/app.ts")).toBe("app source");
+  });
+
+  test("drops every installed package when the package list is empty", () => {
+    const result = chunkCodeWithSourcemap({
+      chunk: { code, map: createMap() },
+      inlineSourcemap: true,
+      dependencySources: [],
+    });
+
+    expect(contentOf(result, "@scope/lib/index.js")).toBeNull();
+    expect(contentOf(result, "plain/dist/index.js")).toBeNull();
+  });
+
   test("keeps the source text of the project's own files", () => {
     const result = chunkCodeWithSourcemap({
       chunk: { code, map: createMap() },
