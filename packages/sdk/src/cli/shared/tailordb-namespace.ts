@@ -1,6 +1,14 @@
+import { MAX_PAGE_SIZE } from "./client";
+
 type ListTailorDBTypesClient = {
-  listTailorDBTypes(args: { workspaceId: string; namespaceName: string }): Promise<{
+  listTailorDBTypes(args: {
+    workspaceId: string;
+    namespaceName: string;
+    pageToken: string;
+    pageSize: number;
+  }): Promise<{
     tailordbTypes: Array<{ name: string }>;
+    nextPageToken: string;
   }>;
 };
 
@@ -38,10 +46,13 @@ export async function resolveTypeNamespaces(
       break;
     }
 
-    try {
-      const { tailordbTypes } = await args.client.listTailorDBTypes({
+    let pageToken = "";
+    do {
+      const { tailordbTypes, nextPageToken } = await args.client.listTailorDBTypes({
         workspaceId: args.workspaceId,
         namespaceName: namespace,
+        pageToken,
+        pageSize: MAX_PAGE_SIZE,
       });
 
       for (const type of tailordbTypes) {
@@ -58,9 +69,9 @@ export async function resolveTypeNamespaces(
           unresolvedTypes.delete(requestedTypeName);
         }
       }
-    } catch {
-      continue;
-    }
+
+      pageToken = nextPageToken;
+    } while (pageToken && unresolvedTypes.size > 0);
   }
 
   return typeNamespaceMap;
