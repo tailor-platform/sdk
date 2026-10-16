@@ -68,7 +68,7 @@ describe("E2E: Service deletion order", () => {
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
-    trackWorkspace(workspaceId);
+    await trackWorkspace(client, workspaceId);
     console.log(`Workspace created: ${workspaceId}`);
 
     // Set workspace ID for apply operations
@@ -673,7 +673,7 @@ describe("E2E: static website env reference created in the same deploy", () => {
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
-    trackWorkspace(workspaceId);
+    await trackWorkspace(client, workspaceId);
 
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-static-env-"));

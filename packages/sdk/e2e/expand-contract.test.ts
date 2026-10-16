@@ -112,7 +112,7 @@ export type user = typeof user;
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
-    trackWorkspace(workspaceId);
+    await trackWorkspace(client, workspaceId);
     process.env.TAILOR_PLATFORM_WORKSPACE_ID = workspaceId;
 
     const sdkRoot = path.resolve(__dirname, "..");
