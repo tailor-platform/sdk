@@ -91,7 +91,7 @@ A table's rows are the rows of its base file followed by the rows of its file in
 
 ### IdP user passwords from the environment
 
-A `_User` row without a `password` gets one from the `SEED_USER_PASSWORD` environment variable, in `validate` and in `apply`. A plain string is the password of every such user; a JSON object maps each `name` to its password (`{"alice@example.com":"..."}`), and a user missing from it still has none. A `password` written in `_User.jsonl` is never replaced. `apply` stops before seeding when a row still has no password, except with `--upsert`, where a row may carry only the `name` of an existing user.
+A `_User` row without a `password` gets one from the `SEED_USER_PASSWORD` environment variable, in `validate` and in `apply`. A plain string is the password of every such user; a JSON object maps each `name` to its password (`{"alice@example.com":"..."}`), and a user missing from it still has none. A `password` written in `_User.jsonl` is never replaced. The variable only sets the password when a user is created: with `--upsert`, a user that already exists keeps its password. `apply` stops before seeding when a row still has no password, except with `--upsert`, where a row may carry only the `name` of an existing user.
 
 A file in a dataset selected with `--dataset` that does not match a seeded table is rejected, so a misspelled file name does not silently seed nothing.
 

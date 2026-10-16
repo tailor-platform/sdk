@@ -183,6 +183,29 @@ describe("seedApplyCommand", () => {
       });
     });
 
+    test("sends a password the hook supplied as initialPassword and keeps one written in the file", async () => {
+      jsonl.loadSeedData.mockImplementation((_dirs: string[], typeNames: string[]) =>
+        Object.fromEntries(
+          typeNames.map((typeName) => [
+            typeName,
+            typeName === "_User" ? [{ name: "Ada" }, { name: "Bob", password: "own" }] : [],
+          ]),
+        ),
+      );
+      await runApply(["--upsert", "_User"]);
+      expect(sdk.executeScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "seed-idp-user.ts",
+          arg: expect.objectContaining({
+            users: [
+              { name: "Ada", initialPassword: "pw" },
+              { name: "Bob", password: "own" },
+            ],
+          }),
+        }),
+      );
+    });
+
     test("stops before seeding when a row has no password after the hook", async () => {
       rowsWithoutPassword();
       seedModule.hookSeedRows.mockImplementation(async ({ rows }: { rows: unknown[] }) => rows);

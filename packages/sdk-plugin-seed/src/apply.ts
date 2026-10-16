@@ -278,19 +278,33 @@ async function hookIdpUserRows(
   upsert: boolean,
 ): Promise<SeedData[string]> {
   const { hookSeedRows } = await import("@tailor-platform/sdk/seed");
+  const source = rows ?? [];
   const hooked = (await hookSeedRows({
     schemaDir,
     table: "_User",
-    rows: rows ?? [],
+    rows: source,
   })) as SeedData[string];
-  const missing = upsert ? [] : hooked.filter((row) => typeof row.password !== "string");
+  // A password the schema hook supplied (not one written in _User.jsonl) only applies when the
+  // user is created, so --upsert does not reset the password of a user that already exists.
+  const users = hooked.map((row, index) => {
+    const written = source[index]?.password;
+    if (written !== undefined && written !== null) return row;
+    const { password, ...rest } = row;
+    return password === undefined ? row : { ...rest, initialPassword: password };
+  });
+  const missing = upsert
+    ? []
+    : users.filter(
+        (row) => typeof row.password !== "string" && typeof row.initialPassword !== "string",
+      );
   if (missing.length > 0) {
     const names = missing.map((row) => row.name as string).join(", ");
     throw new Error(
-      `_User has no password for: ${names}. Set it in _User.jsonl or in the SEED_USER_PASSWORD environment variable.`,
+      `_User has no password for: ${names}. Set it in _User.jsonl or in the SEED_USER_PASSWORD environment variable ` +
+        "(run `tailor generate` if _User.schema.ts was generated before SEED_USER_PASSWORD was supported).",
     );
   }
-  return hooked;
+  return users;
 }
 
 async function seedIdpUser(

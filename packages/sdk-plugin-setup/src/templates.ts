@@ -291,7 +291,7 @@ function perAppSeedValidateSteps(apps: readonly RenderApp[]): string | undefined
       `- id: tailor-seed-validate-${appSlug(app.dir)}`,
       `  run: __TAILOR_CLI__ seed validate`,
       `  env:`,
-      `    SEED_USER_PASSWORD: \${{ secrets.SEED_USER_PASSWORD }}`,
+      `    SEED_USER_PASSWORD: \${{ github.event_name == 'pull_request' && 'validate-only' || secrets.SEED_USER_PASSWORD }}`,
       ...(app.dir === "." ? [] : [`  working-directory: ${app.dir}`]),
     ]);
   return lines.length > 0 ? lines.join("\n") : undefined;
