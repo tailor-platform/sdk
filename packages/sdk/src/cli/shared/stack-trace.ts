@@ -9,9 +9,11 @@
  * output with file paths and code snippets.
  */
 
+import * as fs from "node:fs";
 import { TraceMap, generatedPositionFor, originalPositionFor } from "@jridgewell/trace-mapping";
 import * as path from "pathe";
 import { styles } from "#/cli/shared/logger";
+import { sourcePackageName } from "#/cli/shared/sourcemap-sources";
 import { assertDefined } from "#/utils/assert";
 
 /** A single frame parsed from a V8 stack trace */
@@ -271,6 +273,24 @@ function buildCodeSnippet(content: string, targetLine: number): string {
 }
 
 /**
+ * Read the source file of an installed package, for a frame whose sourcemap does not embed
+ * its text.
+ *
+ * Only a path inside `node_modules` is read: the map can come from a downloaded script, so an
+ * arbitrary path in it must not be opened.
+ * @param absolutePath - Absolute path the frame's source resolves to
+ * @returns The file content, or undefined when the path is not an installed package file or cannot be read
+ */
+function readInstalledSource(absolutePath: string): string | undefined {
+  if (sourcePackageName(absolutePath) === undefined) return undefined;
+  try {
+    return fs.readFileSync(absolutePath, "utf-8");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Format mapped stack frames into a human-readable error display.
  * Includes file paths (clickable in terminals), code snippets, and
  * falls back to raw frame info for unmapped frames.
@@ -303,11 +323,10 @@ export function formatMappedError(
 
       if (traceMap) {
         const sourceIndex = traceMap.sources.indexOf(source);
-        if (sourceIndex !== -1) {
-          const content = traceMap.sourcesContent?.[sourceIndex];
-          if (content) {
-            parts.push(buildCodeSnippet(content, line));
-          }
+        const content = sourceIndex === -1 ? undefined : traceMap.sourcesContent?.[sourceIndex];
+        const snippetSource = content || readInstalledSource(absolutePath);
+        if (snippetSource) {
+          parts.push(buildCodeSnippet(snippetSource, line));
         }
       }
     } else {
