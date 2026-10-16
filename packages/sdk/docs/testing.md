@@ -44,9 +44,9 @@ The Tailor Platform function runtime only provides Web Standard APIs. Node.js bu
 ### Setup
 
 ```typescript
+import { tailorRuntime } from "@tailor-platform/sdk/vitest";
 // vitest.config.ts
 import { defineConfig } from "vitest/config";
-import { tailorRuntime } from "@tailor-platform/sdk/vitest";
 
 export default defineConfig({
   plugins: [tailorRuntime()],
@@ -590,9 +590,9 @@ describe("incrementUserAge resolver", () => {
 Once the logic gets more involved, mocking raw SQL calls becomes brittle. Push database access behind a `DbOperations` interface and test the pure function that uses it:
 
 ```typescript
+import type { Namespace } from "../generated/db";
 // src/resolver/decrementUserAge.ts
 import type { Selectable } from "@tailor-platform/sdk/kysely";
-import type { Namespace } from "../generated/db";
 
 export interface DbOperations {
   transaction: <T>(fn: (ops: DbOperations) => Promise<T>) => Promise<T>;

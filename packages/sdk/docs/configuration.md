@@ -492,8 +492,8 @@ Configure plugins using `definePlugins()`, exported as `export const plugins`.
 
 ```typescript
 import { definePlugins } from "@tailor-platform/sdk";
-import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 
 export const plugins = definePlugins(
   kyselyTypePlugin({ distPath: "./generated/tailordb.ts" }),
