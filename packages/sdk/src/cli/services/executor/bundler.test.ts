@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
+import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
+import { assertDefined } from "#/utils/assert";
 import { bundleExecutors } from "./bundler";
 
 function writeBufferEncodingPackage(projectDir: string, name: string): void {
@@ -101,6 +103,46 @@ describe("bundleExecutors", () => {
     });
 
     expect(result.get("encoder")).toBeDefined();
+  });
+
+  describe("source text in inline sourcemaps", () => {
+    async function embeddedSourceTexts(
+      options: { inlineSourcemapDependencySources?: boolean },
+      dirPrefix: string,
+    ): Promise<string[]> {
+      using tmp = tempCwd(dirPrefix);
+      writeBufferEncodingPackage(tmp.dir, "executor-sourcemap-lib");
+      writeEncodingExecutor(tmp.dir, "executor-sourcemap-lib");
+
+      const result = await bundleExecutors({
+        config: { files: ["./src/backend/pkgglobal/executor/*.ts"] },
+        baseDir: tmp.dir,
+        allowedRuntimeGlobals: { "executor-sourcemap-lib": ["Buffer"] },
+        inlineSourcemap: true,
+        ...options,
+      });
+      const traceMap = assertDefined(
+        extractInlineSourcemap(assertDefined(result.get("encoder"), "encoder bundle missing")),
+        "inline sourcemap missing",
+      );
+      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
+    }
+
+    test("leaves out the source text of installed packages by default", async () => {
+      const texts = await embeddedSourceTexts({}, "sdk-bundler-executor-sourcemap-deps-");
+
+      expect(texts.some((text) => text.includes('toString("base64")'))).toBe(false);
+      expect(texts.some((text) => text.includes('cron: "0 12 * * *"'))).toBe(true);
+    });
+
+    test("embeds the source text of installed packages when asked to", async () => {
+      const texts = await embeddedSourceTexts(
+        { inlineSourcemapDependencySources: true },
+        "sdk-bundler-executor-sourcemap-with-deps-",
+      );
+
+      expect(texts.some((text) => text.includes('toString("base64")'))).toBe(true);
+    });
   });
 
   test("bundles an executor that uses Web Standard globals", async () => {

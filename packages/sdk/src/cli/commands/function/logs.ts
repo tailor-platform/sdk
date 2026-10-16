@@ -7,6 +7,7 @@ import {
   type FunctionExecution_Status,
   FunctionExecution_Type,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
+import * as path from "pathe";
 import { z } from "zod";
 import {
   durationArg,
@@ -165,6 +166,11 @@ function formatExecutionErrorFallback(error: FunctionExecutionErrorDisplay): str
   ].join("\n");
 }
 
+// Sources of a deployed bundle are relative to rolldown's default output folder, which is never created.
+function deployedBundleDir(): string {
+  return path.join(process.cwd(), "dist");
+}
+
 /**
  * Format an execution error for display, applying sourcemap mapping
  * when bundled code is available.
@@ -178,7 +184,7 @@ export function formatExecutionError(
 ): string {
   if (bundledCode && error.stackTrace) {
     const errorString = composeExecutionErrorString(error);
-    const formatted = formatErrorWithSourcemap(errorString, bundledCode, process.cwd());
+    const formatted = formatErrorWithSourcemap(errorString, bundledCode, deployedBundleDir());
     if (formatted) return formatted;
   }
   return formatExecutionErrorFallback(error);

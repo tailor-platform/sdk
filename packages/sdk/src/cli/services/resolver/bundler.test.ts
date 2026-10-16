@@ -6,7 +6,9 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { createBundleCache } from "#/cli/cache/bundle-cache";
 import { createCacheStore } from "#/cli/cache/store";
 import { logger } from "#/cli/shared/logger";
+import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
+import { assertDefined } from "#/utils/assert";
 import { bundleResolvers } from "./bundler";
 import type * as pkgTypes from "pkg-types";
 import type * as rolldown from "rolldown";
@@ -385,6 +387,79 @@ describe("bundleResolvers", () => {
 
     expect(firstCode).toBeDefined();
     expect(firstCode).toBe(second.get("stable"));
+  });
+
+  describe("source text in inline sourcemaps", () => {
+    function writeResolverUsingInstalledPackage(projectDir: string): void {
+      writeSdkDependency(projectDir);
+      const libDir = path.join(projectDir, "node_modules", "installed-lib");
+      fs.mkdirSync(libDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(libDir, "package.json"),
+        JSON.stringify({ name: "installed-lib", type: "module", main: "index.js" }),
+      );
+      fs.writeFileSync(
+        path.join(libDir, "index.js"),
+        "export const installedValue = () => 'INSTALLED_LIB_SOURCE';\n",
+      );
+      const resolverDir = path.join(projectDir, "resolver");
+      fs.mkdirSync(resolverDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(resolverDir, "uses-lib.ts"),
+        `import { installedValue } from "installed-lib";\n` +
+          `export default {\n` +
+          `  operation: "query",\n` +
+          `  name: "usesLib",\n` +
+          `  body: async () => installedValue() + "OWN_SOURCE",\n` +
+          `  output: { type: "string", metadata: {}, fields: {} },\n` +
+          `};\n`,
+      );
+    }
+
+    async function sourceTexts(
+      projectDir: string,
+      options: { inlineSourcemapDependencySources?: boolean },
+    ): Promise<string[]> {
+      const bundles = await bundleResolvers({
+        namespace: "sourcemap",
+        config: { files: ["./resolver/*.ts"] },
+        baseDir: projectDir,
+        inlineSourcemap: true,
+        ...options,
+      });
+      const traceMap = assertDefined(
+        extractInlineSourcemap(assertDefined(bundles.get("usesLib"), "usesLib bundle missing")),
+        "inline sourcemap missing",
+      );
+      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
+    }
+
+    test("leaves out the source text of installed packages by default", async () => {
+      using tmp = tempCwd("sdk-bundler-sourcemap-deps-");
+      writeResolverUsingInstalledPackage(tmp.dir);
+
+      const texts = await sourceTexts(tmp.dir, {});
+
+      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(false);
+    });
+
+    test("keeps the source text of the project's own files by default", async () => {
+      using tmp = tempCwd("sdk-bundler-sourcemap-own-");
+      writeResolverUsingInstalledPackage(tmp.dir);
+
+      const texts = await sourceTexts(tmp.dir, {});
+
+      expect(texts.some((text) => text.includes("OWN_SOURCE"))).toBe(true);
+    });
+
+    test("embeds the source text of installed packages when asked to", async () => {
+      using tmp = tempCwd("sdk-bundler-sourcemap-with-deps-");
+      writeResolverUsingInstalledPackage(tmp.dir);
+
+      const texts = await sourceTexts(tmp.dir, { inlineSourcemapDependencySources: true });
+
+      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(true);
+    });
   });
 
   describe("concurrency", () => {

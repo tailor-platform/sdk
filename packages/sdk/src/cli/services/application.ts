@@ -96,6 +96,7 @@ interface ReusableBuildState {
   readonly startContext: StartContext;
   readonly tsconfigCache: TsconfigLookupCache;
   readonly inlineSourcemap: boolean;
+  readonly inlineSourcemapDependencySources: boolean | string[];
   readonly bundleLogLevel: LogLevel;
 }
 
@@ -676,6 +677,7 @@ export async function loadApplication(
   // 9. Resolve bundle settings
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
+  const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
 
@@ -697,6 +699,7 @@ export async function loadApplication(
       startContext,
       cache: bundleCache,
       inlineSourcemap,
+      inlineSourcemapDependencySources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
@@ -716,6 +719,7 @@ export async function loadApplication(
       additionalFiles: [...pluginExecutorFiles],
       cache: bundleCache,
       inlineSourcemap,
+      inlineSourcemapDependencySources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
@@ -743,6 +747,7 @@ export async function loadApplication(
       buildOptions.allowedRuntimeGlobals,
       dateDefault,
       buildOptions.treeshake,
+      inlineSourcemapDependencySources,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -776,6 +781,7 @@ export async function loadApplication(
       startContext,
       cache: bundleCache,
       inlineSourcemap,
+      inlineSourcemapDependencySources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
@@ -827,7 +833,13 @@ export async function loadApplication(
     workflowBuildResult,
     httpAdapterBuildResult,
     bundledScripts,
-    reusableBuildState: { startContext, tsconfigCache, inlineSourcemap, bundleLogLevel },
+    reusableBuildState: {
+      startContext,
+      tsconfigCache,
+      inlineSourcemap,
+      inlineSourcemapDependencySources,
+      bundleLogLevel,
+    },
   };
 }
 
@@ -858,7 +870,13 @@ async function reloadEnvDependentBundles(params: {
     previous,
   } = params;
   const { application: previousApplication, reusableBuildState } = previous;
-  const { startContext, tsconfigCache, inlineSourcemap, bundleLogLevel } = reusableBuildState;
+  const {
+    startContext,
+    tsconfigCache,
+    inlineSourcemap,
+    inlineSourcemapDependencySources,
+    bundleLogLevel,
+  } = reusableBuildState;
 
   const env =
     client && workspaceId
@@ -889,6 +907,7 @@ async function reloadEnvDependentBundles(params: {
       buildOptionsOf(config).allowedRuntimeGlobals,
       effectiveDateDefault(config),
       buildOptionsOf(config).treeshake,
+      inlineSourcemapDependencySources,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -903,6 +922,7 @@ async function reloadEnvDependentBundles(params: {
       startContext,
       cache: bundleCache,
       inlineSourcemap,
+      inlineSourcemapDependencySources,
       bundleLogLevel,
       bundleTreeshake: buildOptionsOf(config).treeshake,
       baseDir,

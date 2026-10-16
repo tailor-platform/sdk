@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -11,7 +13,8 @@ import {
   FunctionLogEntrySchema,
   FunctionLogSeverity,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { aroundEach, describe, test, expect, vi } from "vitest";
+import * as path from "pathe";
+import { afterEach, aroundEach, describe, test, expect, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import {
   captureStderr,
@@ -234,6 +237,82 @@ describe("formatExecutionError", () => {
 
     expect(plain).toContain("Error: intentional error");
     expect(plain).toContain("resolvers/error-test.ts:4:3");
+  });
+});
+
+describe("formatExecutionError with a deployed bundle", () => {
+  // A deployed bundle records `sources` relative to a `dist` folder under the project
+  // (`../src/handler.ts`), not relative to the project itself.
+  let projectDir: string | undefined;
+  const originalCwd = process.cwd();
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    if (projectDir) {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+      projectDir = undefined;
+    }
+  });
+
+  function inProject(files: Record<string, string>): void {
+    projectDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "logs-deployed-bundle-")));
+    for (const [relativePath, content] of Object.entries(files)) {
+      const file = path.join(projectDir, relativePath);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content);
+    }
+    process.chdir(projectDir);
+  }
+
+  function deployedBundle(source: string, embedded: string | null): string {
+    return makeInlineSourcemapBundle(
+      {
+        version: 3,
+        sources: [source],
+        sourcesContent: [embedded],
+        names: ["throwError"],
+        mappings: "AAGEA",
+      },
+      'function M(){throw new Error("intentional error")}M();',
+    );
+  }
+
+  const error = {
+    name: "Error",
+    message: "intentional error",
+    stackTrace: "Error: intentional error\n    at throwError (file:///bundle.js:4:3)",
+  };
+
+  test("shows the snippet of an installed package from the project's node_modules", () => {
+    inProject({
+      "node_modules/lib/index.js": [
+        "function inner() {",
+        "  const a = 1;",
+        "  const b = 2;",
+        '  throw new Error("thrown inside the installed package");',
+        "}",
+      ].join("\n"),
+    });
+
+    const plain = stripVTControlCharacters(
+      formatExecutionError(error, deployedBundle("../node_modules/lib/index.js", null)),
+    );
+
+    expect(plain).toContain('throw new Error("thrown inside the installed package")');
+  });
+
+  test("shows a path inside the project without a leading ../", () => {
+    inProject({});
+
+    const plain = stripVTControlCharacters(
+      formatExecutionError(
+        error,
+        deployedBundle("../src/handler.ts", "line 1\nline 2\nline 3\nline 4"),
+      ),
+    );
+
+    expect(plain).toContain("./src/handler.ts:4:3");
+    expect(plain).not.toContain("../src/handler.ts");
   });
 });
 

@@ -15,6 +15,7 @@ export function buildOptionsOf(config: BuildOptionsSource): BuildOptions {
   return {
     // oxlint-disable-next-line typescript/no-deprecated -- Configs written before buildOptions still set it here.
     inlineSourcemap: buildOptions.inlineSourcemap ?? config.inlineSourcemap,
+    inlineSourcemapDependencySources: buildOptions.inlineSourcemapDependencySources,
     // oxlint-disable-next-line typescript/no-deprecated -- Configs written before buildOptions still set it here.
     logLevel: buildOptions.logLevel ?? config.logLevel,
     allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,

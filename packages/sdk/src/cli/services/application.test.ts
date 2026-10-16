@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { defineConfig } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
@@ -398,6 +399,121 @@ export default createExecutor({
     expect(second.application.executorService).toBe(first.application.executorService);
     expect(second.application.tailorDBServices).toBe(first.application.tailorDBServices);
     expect(second.reusableBuildState).toBe(first.reusableBuildState);
+  });
+});
+
+describe("loadApplication source text in inline sourcemaps", () => {
+  const INSTALLED_MARKER = "APPLICATION_INSTALLED_LIB_SOURCE";
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  function embeddedSourceText(code: string): string {
+    const traceMap = extractInlineSourcemap(code);
+    if (!traceMap) throw new Error("Expected the bundle to carry an inline sourcemap");
+    return (traceMap.sourcesContent ?? []).filter((text) => text != null).join("\n");
+  }
+
+  async function loadBundles(inlineSourcemapDependencySources: boolean | undefined) {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const libDir = path.join(tmpDir, "node_modules", "application-sourcemap-lib");
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, "package.json"),
+      JSON.stringify({ name: "application-sourcemap-lib", type: "module", main: "index.js" }),
+    );
+    fs.writeFileSync(
+      path.join(libDir, "index.js"),
+      `export const marker = () => "${INSTALLED_MARKER}";\n`,
+    );
+    const workflowFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      workflowFile,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { marker } from "application-sourcemap-lib";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: () => ({ value: marker() }),
+});
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+import { marker } from "application-sourcemap-lib";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => { marker(); } },
+});
+`,
+    );
+    const resolverFile = path.join(tmpDir, "resolver.ts");
+    fs.writeFileSync(
+      resolverFile,
+      `
+import { createResolver, t } from "@tailor-platform/sdk";
+import { marker } from "application-sourcemap-lib";
+
+export default createResolver({
+  name: "marker",
+  operation: "query",
+  body: () => marker(),
+  output: t.string(),
+});
+`,
+    );
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        resolver: { main: { files: [resolverFile] } },
+        workflow: { files: [workflowFile] },
+        executor: { files: [executorFile] },
+        buildOptions: { inlineSourcemapDependencySources },
+      }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+
+    const first = await loadApplication({ config });
+    const second = await loadApplication({ config, previous: first });
+    return {
+      resolver: [...first.bundledScripts.resolvers.values()].join("\n"),
+      executor: [...first.bundledScripts.executors.values()].join("\n"),
+      workflowJob: [...(first.workflowBuildResult?.bundledCode.values() ?? [])].join("\n"),
+      rebundledWorkflowJob: [...(second.workflowBuildResult?.bundledCode.values() ?? [])].join(
+        "\n",
+      ),
+    };
+  }
+
+  test("leaves out the source text of installed packages by default", async () => {
+    const bundles = await loadBundles(undefined);
+
+    expect(embeddedSourceText(bundles.resolver)).not.toContain(INSTALLED_MARKER);
+    expect(embeddedSourceText(bundles.executor)).not.toContain(INSTALLED_MARKER);
+    expect(embeddedSourceText(bundles.workflowJob)).not.toContain(INSTALLED_MARKER);
+    expect(embeddedSourceText(bundles.rebundledWorkflowJob)).not.toContain(INSTALLED_MARKER);
+  });
+
+  test("embeds the source text of installed packages when buildOptions asks for it", async () => {
+    const bundles = await loadBundles(true);
+
+    expect(embeddedSourceText(bundles.resolver)).toContain(INSTALLED_MARKER);
+    expect(embeddedSourceText(bundles.executor)).toContain(INSTALLED_MARKER);
+    expect(embeddedSourceText(bundles.workflowJob)).toContain(INSTALLED_MARKER);
+    expect(embeddedSourceText(bundles.rebundledWorkflowJob)).toContain(INSTALLED_MARKER);
   });
 });
 

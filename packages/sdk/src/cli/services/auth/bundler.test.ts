@@ -3,6 +3,8 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
+import { assertDefined } from "#/utils/assert";
 import { bundleAuthHooks } from "./bundler";
 import type * as pkgTypes from "pkg-types";
 
@@ -82,6 +84,63 @@ export default {
     });
 
     expect(bundled.get("auth-hook--my-auth--before-login")).toBeDefined();
+  });
+
+  describe("source text in inline sourcemaps", () => {
+    async function embeddedSourceTexts(options: {
+      inlineSourcemapDependencySources?: boolean;
+    }): Promise<string[]> {
+      const configFile = writeConfig(`
+import { shout } from "auth-sourcemap-lib";
+
+const handler = async ({ claims }) => {
+  return { claims, shouted: shout("OWN_HANDLER_SOURCE") };
+};
+
+export default {
+  auth: { hooks: { beforeLogin: { handler } } },
+};
+`);
+      const libDir = path.join(path.dirname(configFile), "node_modules", "auth-sourcemap-lib");
+      fs.mkdirSync(libDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(libDir, "package.json"),
+        JSON.stringify({ name: "auth-sourcemap-lib", type: "module", main: "index.js" }),
+      );
+      fs.writeFileSync(
+        path.join(libDir, "index.js"),
+        "export const shout = (text) => text.toUpperCase() + 'INSTALLED_LIB_SOURCE';\n",
+      );
+
+      const bundled = await bundleAuthHooks({
+        configPath: configFile,
+        authName: "my-auth",
+        handlerAccessPath: "auth.hooks.beforeLogin.handler",
+        baseDir: path.dirname(configFile),
+        inlineSourcemap: true,
+        ...options,
+      });
+      const traceMap = assertDefined(
+        extractInlineSourcemap(
+          assertDefined(bundled.get("auth-hook--my-auth--before-login"), "hook bundle missing"),
+        ),
+        "inline sourcemap missing",
+      );
+      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
+    }
+
+    test("leaves out the source text of installed packages by default", async () => {
+      const texts = await embeddedSourceTexts({});
+
+      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(false);
+      expect(texts.some((text) => text.includes("OWN_HANDLER_SOURCE"))).toBe(true);
+    });
+
+    test("embeds the source text of installed packages when asked to", async () => {
+      const texts = await embeddedSourceTexts({ inlineSourcemapDependencySources: true });
+
+      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(true);
+    });
   });
 
   test("injects an empty env object when none is provided", async () => {

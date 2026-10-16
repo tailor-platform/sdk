@@ -11,6 +11,7 @@ import {
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -39,6 +40,8 @@ export interface BundleAuthHooksOptions {
   cache?: BundleCache;
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
+  /** Whether inline sourcemaps embed the source text of installed packages */
+  inlineSourcemapDependencySources?: boolean | string[];
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */
@@ -71,6 +74,7 @@ export async function bundleAuthHooks(
     startContext,
     cache,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     baseDir,
@@ -98,6 +102,7 @@ export async function bundleAuthHooks(
     extraContext: JSON.stringify([serializedStartContext, dateDefault]),
     tsconfig,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel,
     bundleTreeshake,
     prefix: sortedEnvPrefix,
@@ -142,7 +147,7 @@ export async function bundleAuthHooks(
         write: false,
         output: {
           format: "esm",
-          sourcemap: inlineSourcemap ? "inline" : true,
+          sourcemap: true,
           minify: inlineSourcemap
             ? {
                 mangle: {
@@ -167,7 +172,15 @@ export async function bundleAuthHooks(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      return { code: result.output[0].code, packageRuntimeGlobals: {} };
+      const [chunk] = result.output;
+      return {
+        code: chunkCodeWithSourcemap({
+          chunk,
+          inlineSourcemap: inlineSourcemap ?? false,
+          dependencySources: inlineSourcemapDependencySources ?? false,
+        }),
+        packageRuntimeGlobals: {},
+      };
     },
   });
 
