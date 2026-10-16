@@ -67,7 +67,7 @@ export interface TrackDesiredResourceOwnershipParams {
  * @param params.appName - Current application name
  * @param params.appId - Current application id, when present
  * @param params.resourceType - Stable resource kind identifier for machine-readable output
- * @param params.resourceLabel - Resource kind for confirmation messages
+ * @param params.resourceLabel - Resource kind for human-readable plan and confirmation messages
  * @param params.resourceName - Resource name for confirmation messages
  * @param params.conflicts - Conflict accumulator
  * @param params.unmanaged - Unmanaged-resource accumulator

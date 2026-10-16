@@ -2,7 +2,7 @@
 "@tailor-platform/sdk": patch
 ---
 
-`tailor deploy --dry-run --json` now reports `resourceType` in `warnings` and `conflicts` as a stable identifier instead of the display name shown in the human-readable plan, which is unchanged. Update any automation that matches on the old values:
+Fix `tailor deploy --dry-run --json` reporting `resourceType` in `warnings` and `conflicts` as the display name from the human-readable plan, such as `Executor` or `TailorDB service`. It now reports a stable identifier such as `executor` or `tailordb.service`, and the human-readable plan is unchanged. The values change as follows:
 
 | Before                      | After                                    |
 | --------------------------- | ---------------------------------------- |
