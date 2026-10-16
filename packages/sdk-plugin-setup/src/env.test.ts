@@ -4,6 +4,7 @@ import {
   collectEnvironmentRequirements,
   renderGhCommands,
   renderTerraform,
+  SECRET_FALLBACK_VARIABLES,
   setupEnv,
   targetRequirements,
 } from "./env";
@@ -42,14 +43,21 @@ const namesOf = (kind: TargetKind) =>
     .map((r) => `${r.type} ${r.name}`)
     .toSorted();
 
+function fallbackSecretNames(content: string): string[] {
+  const names = new Set<string>();
+  for (const match of content.matchAll(/\bvars\.([A-Za-z_][A-Za-z0-9_]*) \|\| secrets\.\1\b/g)) {
+    names.add(match[1]!);
+  }
+  return [...names].toSorted();
+}
+
 describe("targetRequirements matches the secrets/vars the rendered templates reference", () => {
   const common = {
     workspaceName: "my-app",
     environment: "my-app",
     packageManager: "pnpm" as const,
   };
-
-  test.each([
+  const renders = [
     ["branch", renderBranchWorkflow({ ...common, branch: "main", erdPreview: null })],
     [
       "branch",
@@ -64,9 +72,20 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     ["tag", renderTagWorkflow({ ...common, tagPattern: "v*" })],
     ["tag", renderTagWorkflow({ ...common, tagPattern: "v*", branch: "main" })],
     ["preview", renderPreviewWorkflow({ ...common, branch: "main", region: "us-west" })],
-  ] as const)("%s", (kind, render) => {
+  ] as const;
+
+  test.each(renders)("%s", (kind, render) => {
     expect(referencedNames(render.content)).toEqual(namesOf(kind));
   });
+
+  test.each(renders)(
+    "%s falls back to a same-name secret only for the listed variables",
+    (_, render) => {
+      expect(fallbackSecretNames(render.content)).toEqual(
+        [...SECRET_FALLBACK_VARIABLES].toSorted(),
+      );
+    },
+  );
 });
 
 describe("how to get each value", () => {

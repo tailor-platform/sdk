@@ -488,6 +488,7 @@ the current directory and the Terraform output leaves it as a placeholder.
 tailor setup ci env                          # gh CLI commands (default)
 tailor setup ci env --format terraform       # Terraform for the integrations/github provider
 tailor setup ci env --environment my-app-stg # only one environment (repeat for several)
+tailor setup ci env --check                  # check what is registered in GitHub (see below)
 ```
 
 The list follows what each generated workflow actually reads:
@@ -528,6 +529,30 @@ secrets are overwritten. The generated environments ignore changes to their
 protection settings (reviewers, wait timer, branch policy), so importing an
 environment keeps the approval gate you configured; remove the `lifecycle` block
 to manage those settings in Terraform instead.
+
+### Checking what is registered
+
+`tailor setup ci env --check` reads GitHub with `gh` and reports, for each
+environment, which of these entries are registered. It fails when a required
+entry is missing, reports missing optional entries without failing, and prints
+the `gh` commands that set only the missing entries, with where each value comes
+from. It changes nothing, and it checks names only, since GitHub never returns
+secret values.
+
+- An entry set on the repository, or on the organization and shared with the
+  repository, counts as registered, because the workflow reads it from there when
+  the environment does not set it. The report says where each entry was found.
+- An entry registered as the other kind, such as `TAILOR_PLATFORM_WORKSPACE_ID`
+  set as a secret, is reported as missing, because the workflow does not read it.
+  `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` set as a secret still counts, with a
+  reminder to move it to a variable.
+- `gh` must be installed and logged in (`gh auth login`) as an account with write
+  access to the repository, which listing secrets and variables requires. GitHub
+  answers 404 for a private repository the account cannot see, so the check
+  reports that as an access problem, not as missing entries.
+
+`--environment` narrows the check the same way. `--check` cannot be combined with
+`--format terraform`.
 
 ## GitHub Environments (approval gate)
 

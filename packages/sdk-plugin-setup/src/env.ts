@@ -36,6 +36,9 @@ const CLIENT_ID: EnvRequirement = {
     "an editor or admin role on the organization or folder that holds the workspace",
   howTo: `${MACHINE_USER_HOW_TO}; use its client ID`,
 };
+/** Variables the generated workflows also read from a secret of the same name, a deprecated fallback. */
+export const SECRET_FALLBACK_VARIABLES: ReadonlySet<string> = new Set([CLIENT_ID.name]);
+
 const CLIENT_SECRET: EnvRequirement = {
   name: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
   type: "secret",
@@ -160,24 +163,26 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
 
 /**
  * Render `gh` commands that create each missing environment and set its secrets and variables.
- * @param environments - Requirements grouped by environment
+ * @param environments - Requirements grouped by environment; `exists: true` skips creating it
  * @param repository - Target repository; when null, gh resolves it from the current directory
  * @returns Shell script text
  */
 export function renderGhCommands(
-  environments: EnvironmentRequirements[],
+  environments: (EnvironmentRequirements & { exists?: boolean })[],
   repository: Repository | null = null,
 ): string {
   const repoPath = repository ? `${repository.owner}/${repository.name}` : "{owner}/{repo}";
   const repoFlag = repository ? ` --repo=${repository.owner}/${repository.name}` : "";
-  const blocks = environments.map(({ environment, targets, requirements }) => {
+  const blocks = environments.map(({ environment, targets, requirements, exists }) => {
     const endpoint = `"repos/${repoPath}/environments/${encodeURIComponent(environment)}"`;
-    const lines = [
-      `# Environment "${environment}" (${targets.join(", ")})`,
-      // PUT also rewrites an existing environment and needs admin access, so only create a missing
-      // one. The status is compared as text so the expected 404 exit does not fail under pipefail.
-      `if [ "$(gh api -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then gh api -X PUT ${endpoint} --silent; fi`,
-    ];
+    const lines = [`# Environment "${environment}" (${targets.join(", ")})`];
+    if (exists !== true) {
+      lines.push(
+        // PUT also rewrites an existing environment and needs admin access, so only create a missing
+        // one. The status is compared as text so the expected 404 exit does not fail under pipefail.
+        `if [ "$(gh api -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then gh api -X PUT ${endpoint} --silent; fi`,
+      );
+    }
     for (const { required, type, name, description, howTo } of requirements) {
       const command = `gh ${type} set ${name} --env=${environment}${repoFlag}`;
       lines.push(
@@ -390,6 +395,26 @@ function selectEnvironments(
 }
 
 /**
+ * Read the lock and group the requirements of its targets by GitHub Environment.
+ * @param outputDir - Repository root where `.github` lives
+ * @param names - Only these environments; all when empty
+ * @returns One entry per selected environment, in lock order
+ */
+export function loadEnvironmentRequirements(
+  outputDir: string,
+  names: string[] = [],
+): EnvironmentRequirements[] {
+  const lock = readLock(outputDir);
+  if (!lock || lock.targets.length === 0) {
+    throw new Error(
+      "No managed workflows found (.github/tailor.lock is missing or empty). " +
+        "Run `tailor setup ci branch` (or another setup subcommand) first.",
+    );
+  }
+  return selectEnvironments(collectEnvironmentRequirements(lock), names);
+}
+
+/**
  * Print what each GitHub Environment used by the generated workflows needs. Read-only.
  * @param options - Env options
  * @param options.outputDir - Repository root where `.github` lives
@@ -403,15 +428,7 @@ export function setupEnv(options: {
   environments?: string[];
   gitRunner?: GitRunner;
 }): void {
-  const lock = readLock(options.outputDir);
-  if (!lock || lock.targets.length === 0) {
-    throw new Error(
-      "No managed workflows found (.github/tailor.lock is missing or empty). " +
-        "Run `tailor setup ci branch` (or another setup subcommand) first.",
-    );
-  }
-  const allEnvironments = collectEnvironmentRequirements(lock);
-  const environments = selectEnvironments(allEnvironments, options.environments ?? []);
+  const environments = loadEnvironmentRequirements(options.outputDir, options.environments);
   if (logger.jsonMode) {
     logger.out(environments);
     return;

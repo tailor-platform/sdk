@@ -9,6 +9,7 @@ import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupEnv } from "./env";
+import { checkEnv } from "./env-check";
 import { PREVIEW_NAME_MAX_LENGTH, printTargetNextSteps, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
 import { PACKAGE_MANAGERS } from "./templates";
@@ -44,17 +45,30 @@ const checkCommand = defineAppCommand({
 const envCommand = defineAppCommand({
   name: "env",
   description:
-    "Print the secrets and variables each GitHub Environment used by the generated workflows needs (read-only).",
+    "Print the secrets and variables each GitHub Environment used by the generated workflows needs, or check which are registered (read-only).",
   args: z.strictObject({
     format: arg(z.enum(["gh", "terraform"]).default("gh"), {
       description: "Output format: gh CLI commands, or Terraform (integrations/github provider)",
     }),
     environment: arg(z.array(z.string().min(1)).default([]), {
-      description: "Only print this GitHub Environment. Repeat to print several",
+      description: "Only print or check this GitHub Environment. Repeat for several",
+    }),
+    check: arg(z.boolean().default(false), {
+      description:
+        "Check with gh which of them are registered in GitHub, and print gh commands for the missing ones; fails when a required one is missing",
     }),
   }),
   run: (args) => {
     logBetaWarning("setup");
+    if (args.check) {
+      if (args.format === "terraform") {
+        throw new Error(
+          "--check cannot be combined with --format terraform: it reads GitHub with gh and prints gh commands for what is missing.",
+        );
+      }
+      checkEnv({ outputDir: process.cwd(), environments: args.environment });
+      return;
+    }
     setupEnv({ outputDir: process.cwd(), format: args.format, environments: args.environment });
   },
 });
