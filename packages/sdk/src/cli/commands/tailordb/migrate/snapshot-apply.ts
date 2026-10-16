@@ -43,6 +43,7 @@ export type ApplySnapshotPlanParams = SnapshotApplyTarget & {
   snapshot: SchemaSnapshot;
   manifestOptions: GenerateAllManifestsOptions;
   plan: SnapshotApplyPlan;
+  requiredFieldGuidance: readonly string[];
 };
 
 async function fetchRemoteGqlPermissions(
@@ -142,9 +143,11 @@ export async function planSnapshotApply(
  * @param params.snapshot - Snapshot the manifests are generated from
  * @param params.manifestOptions - Manifest generation options deploy would use
  * @param params.plan - What {@link planSnapshotApply} returned
+ * @param params.requiredFieldGuidance - Lines shown when a field cannot be made required because records have no value for it
  */
 export async function applySnapshotPlan(params: ApplySnapshotPlanParams): Promise<void> {
-  const { client, workspaceId, namespace, snapshot, manifestOptions, plan } = params;
+  const { client, workspaceId, namespace, snapshot, manifestOptions, plan, requiredFieldGuidance } =
+    params;
   const { creates, updates, deletes, desiredGqlPermissions, gqlPermissionDeletes } = plan;
   const manifests = generateAllTypeManifestsFromSnapshot(snapshot, manifestOptions);
 
@@ -181,10 +184,7 @@ export async function applySnapshotPlan(params: ApplySnapshotPlanParams): Promis
       ),
     ]);
   } catch (error) {
-    handleOptionalToRequiredError(error, [
-      "The target snapshot marks a field as required, but existing remote records have no value for it.",
-      "Populate those records first (e.g. with a migration script applied via 'tailor deploy'), then re-run the sync.",
-    ]);
+    handleOptionalToRequiredError(error, [...requiredFieldGuidance]);
   }
   await Promise.all(
     desiredGqlPermissions.map(({ typeName, permission }) => {

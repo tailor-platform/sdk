@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -373,6 +374,71 @@ describe("tailordb migration resolve", () => {
       2,
     );
     expectNothingWritten();
+  });
+
+  test("refuses when the remote migration history differs from the local one", async () => {
+    remoteLabels({
+      "sdk-migration": "m0001",
+      "sdk-migration-in-progress": "m0002",
+      "sdk-migration-history": "h0123456789abcdef0123456789abcdef",
+    });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/does not match the local migration history/);
+    expectNothingWritten();
+  });
+
+  test("refuses when the remote migration history marker cannot be read", async () => {
+    remoteLabels({
+      "sdk-migration": "m0001",
+      "sdk-migration-in-progress": "m0002",
+      "sdk-migration-history": "INVALID",
+    });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/does not match the local migration history/);
+    expectNothingWritten();
+  });
+
+  test("refuses when the migration state changed since it was read", async () => {
+    state.getMetadata
+      .mockResolvedValueOnce({
+        metadata: {
+          labels: {
+            "sdk-name": "my-app",
+            "sdk-migration": "m0001",
+            "sdk-migration-in-progress": "m0002",
+          },
+        },
+      })
+      .mockResolvedValue({
+        metadata: { labels: { "sdk-name": "my-app", "sdk-migration": "m0002" } },
+      });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/changed while the command was running/);
+    expectNothingWritten();
+  });
+
+  test("--complete explains how to go on when records without a value reject the update", async () => {
+    state.updateTailorDBType.mockRejectedValue(
+      new ConnectError(
+        'field "code" cannot be updated from non-required to required when records exist',
+        Code.FailedPrecondition,
+      ),
+    );
+
+    const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(state.stderr.join("")).toMatch(/run the command again.*stays in progress/s);
+    expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
   test("declining the confirmation writes nothing", async () => {

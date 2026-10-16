@@ -12,6 +12,7 @@ import {
 } from "#/cli/commands/deploy/tailordb/migration-workflow";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
+import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
@@ -21,7 +22,11 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
-import { fetchRemoteMigrationState, isStaleMigrationInProgress } from "./remote-state";
+import {
+  fetchRemoteMigrationState,
+  isStaleMigrationInProgress,
+  type RemoteMigrationState,
+} from "./remote-state";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
@@ -52,6 +57,33 @@ type ResolveResult = {
   tables: { created: string[]; updated: string[]; deleted: string[] };
   gqlPermissions: { set: string[]; deleted: string[] };
 };
+
+type AssertStateUnchangedParams = {
+  client: OperatorClient;
+  workspaceId: string;
+  namespace: string;
+  before: RemoteMigrationState;
+};
+
+async function assertMigrationStateUnchanged(params: AssertStateUnchangedParams): Promise<void> {
+  const { client, workspaceId, namespace, before } = params;
+  const now = await fetchRemoteMigrationState(
+    client,
+    resourceTrn(workspaceId, "tailordb", namespace),
+  );
+  if (
+    now.number !== before.number ||
+    now.historyId !== before.historyId ||
+    now.inProgress?.number !== before.inProgress?.number ||
+    now.inProgress?.executionId !== before.inProgress?.executionId
+  ) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_STATE_CHANGED",
+      message: `The migration state of namespace "${namespace}" changed while the command was running.`,
+      suggestion: "Run the command again.",
+    });
+  }
+}
 
 /**
  * Settle a migration that an earlier deploy left partially applied.
@@ -97,6 +129,17 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
       code: "MIGRATION_RESOLVE_NO_IN_PROGRESS",
       message: `No migration is in progress for namespace "${namespace}".`,
       suggestion: `Run 'tailor tailordb migration status --namespace ${namespace}' to check the migration state.`,
+    });
+  }
+
+  const localHistoryId =
+    reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
+  if (state.historyIdInvalid || state.historyId !== localHistoryId) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_HISTORY_MISMATCH",
+      message: `The migration history of namespace "${namespace}" on the workspace does not match the local migration history.`,
+      suggestion:
+        "Run the command from a checkout of the migration history that was deployed to the workspace.",
     });
   }
 
@@ -156,8 +199,20 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     logger.newline();
   }
 
+  await assertMigrationStateUnchanged({ client, workspaceId, namespace, before: state });
   await assertNoActiveMigrationExecution(client, workspaceId, namespace, migrationNumber);
-  await applySnapshotPlan({ client, workspaceId, namespace, snapshot, manifestOptions, plan });
+  await applySnapshotPlan({
+    client,
+    workspaceId,
+    namespace,
+    snapshot,
+    manifestOptions,
+    plan,
+    requiredFieldGuidance: [
+      `The schema of migration ${migrationLabel} marks a field as required, but records still have no value for it.`,
+      "Fill in those records first (for example with 'tailor query'), then run the command again; the migration stays in progress until the update goes through.",
+    ],
+  });
 
   if (state.maintenanceModeCheckpoint !== null) {
     await clearMaintenanceModeRecord(client, workspaceId, namespace);

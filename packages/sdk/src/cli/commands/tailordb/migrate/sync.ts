@@ -300,6 +300,10 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     snapshot,
     manifestOptions,
     plan,
+    requiredFieldGuidance: [
+      "The target snapshot marks a field as required, but existing remote records have no value for it.",
+      "Populate those records first (e.g. with a migration script applied via 'tailor deploy'), then re-run the sync.",
+    ],
   });
 
   const historyId = snapshot.rebaseline?.historyId;
