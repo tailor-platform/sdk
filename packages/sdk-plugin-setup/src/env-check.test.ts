@@ -1,23 +1,14 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { describe, expect, test, vi } from "vitest";
 import { checkEnv, type GhOutput, type GhRunner } from "./env-check";
-import { LOCK_VERSION, type LockTarget, type TargetKind, writeLock } from "./lock";
+import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
+import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
 import type { GitRunner } from "./git";
 
 const CLIENT_ID = "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID";
 const CLIENT_SECRET = "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET";
 const WORKSPACE_ID = "TAILOR_PLATFORM_WORKSPACE_ID";
-
-const target = (kind: TargetKind, workspaceName: string, environment: string): LockTarget => ({
-  kind,
-  workspaceName,
-  file: `.github/workflows/tailor-${workspaceName}.yml`,
-  templateVersion: 1,
-  inputs: { branch: "main", tagPattern: null, environment, dir: ".", packageManager: "pnpm" },
-  generatedIds: [],
-  contentHash: "sha256:abc",
-});
 
 type Entries = { secrets?: readonly string[]; variables?: readonly string[] };
 
@@ -427,5 +418,24 @@ describe("checkEnv when gh cannot read the repository", () => {
         `GitHub denied listing the ${what} of acme/app: Resource not accessible by personal access token`,
       ),
     );
+  });
+
+  test.each([
+    ["repos/acme/app", /Repository acme\/app could not be read: Server Error/],
+    [
+      "repos/acme/app/environments/stg",
+      /Could not read environment "stg" of acme\/app: Server Error/,
+    ],
+    [
+      "repos/acme/app/actions/variables",
+      /Could not list the repository variables of acme\/app: Server Error/,
+    ],
+  ])("stops with gh's reason when %s fails for another reason", (path, message) => {
+    const gh = fakeGh({
+      environments: { stg: {} },
+      responses: { [path]: httpError(500, "Server Error") },
+    });
+
+    expect(() => check(gh)).toThrow(message);
   });
 });

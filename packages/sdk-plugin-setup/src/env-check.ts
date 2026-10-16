@@ -22,14 +22,7 @@ const GH_TIMEOUT_MS = 60_000;
 const GH_AUTH_REQUIRED_EXIT = 4;
 
 const defaultGhRunner: GhRunner = (args, cwd) => {
-  // A forced TTY would color the --jq output that is parsed here.
-  const { GH_FORCE_TTY: _forceTty, CLICOLOR_FORCE: _forceColor, ...env } = process.env;
-  const result = spawnSync("gh", args, {
-    cwd,
-    encoding: "utf-8",
-    timeout: GH_TIMEOUT_MS,
-    env: { ...env, GH_PROMPT_DISABLED: "1" },
-  });
+  const result = spawnSync("gh", args, { cwd, encoding: "utf-8", timeout: GH_TIMEOUT_MS });
   if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return null;
   return {
     status: result.status ?? 1,
@@ -142,7 +135,7 @@ export function checkEnv(options: {
   const fullName = repo.full_name ?? target.path;
   // GitHub refuses every list endpoint below the write role.
   const { permissions } = repo;
-  if (permissions && !permissions.push && !permissions.maintain && !permissions.admin) {
+  if (permissions?.push === false) {
     const granted = Object.keys(permissions).filter((name) => permissions[name]);
     throw new Error(
       `Listing secrets and variables needs the push (write) permission on ${fullName}, but the ` +

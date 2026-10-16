@@ -10,17 +10,8 @@ import {
 } from "./env";
 import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind, writeLock } from "./lock";
 import { renderBranchWorkflow, renderPreviewWorkflow, renderTagWorkflow } from "./templates";
+import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
-
-const target = (kind: TargetKind, workspaceName: string, environment: string): LockTarget => ({
-  kind,
-  workspaceName,
-  file: `.github/workflows/tailor-${workspaceName}.yml`,
-  templateVersion: 1,
-  inputs: { branch: "main", tagPattern: null, environment, dir: ".", packageManager: "pnpm" },
-  generatedIds: [],
-  contentHash: "sha256:abc",
-});
 
 const lockOf = (...targets: LockTarget[]): LockFile => ({ version: LOCK_VERSION, targets });
 
