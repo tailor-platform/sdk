@@ -23,7 +23,6 @@ export interface MachineUserInfo {
   id: string;
   name: string;
   clientId: string;
-  clientSecret: string;
   createdAt: Date | null;
   updatedAt: Date | null;
   attributes: Record<string, unknown>;
@@ -35,12 +34,10 @@ export interface MachineUserInfo {
  * @returns Flattened machine user info
  */
 function machineUserInfo(user: MachineUser): MachineUserInfo {
-  logger.registerSecret(user.clientSecret);
   return {
     id: user.id,
     name: user.name,
     clientId: user.clientId,
-    clientSecret: user.clientSecret,
     createdAt: user.createdAt ? timestampDate(user.createdAt) : null,
     updatedAt: user.updatedAt ? timestampDate(user.updatedAt) : null,
     attributes: Object.fromEntries(
