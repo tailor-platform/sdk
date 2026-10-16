@@ -485,7 +485,7 @@ describe("createCommonArgs effects", () => {
       // Strip unknown keys the same way the CLI entrypoint parses global args.
       globalArgs: z.object(createCommonArgs()),
     });
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(ran).toBe(false);
   });
 
