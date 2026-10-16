@@ -7,6 +7,7 @@
  */
 
 import { readdir, stat } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import {
   LinesDB,
   ErrorFormatter,
@@ -19,9 +20,10 @@ import {
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join, normalize } from "pathe";
 import { firstErrorLocation } from "./record-lines";
-import type { JsonlParseError, RowFiller, ValidationErrorDetail } from "lines-db";
+import type { JsonObject, JsonlParseError, RowFiller, ValidationErrorDetail } from "lines-db";
 
 export { defineSchema } from "lines-db";
+export { fillIdpUserPassword } from "./idp-user-password";
 export type { ForeignKeyDefinition, IndexDefinition } from "lines-db";
 
 /** Fields `fillSeedData` writes when the caller names none. */
@@ -392,4 +394,30 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
   );
 
   return { output: outputLines.join("\n"), filled };
+}
+
+type HookSeedRowsOptions = {
+  /** Directory holding the generated schema files */
+  schemaDir: string;
+  /** Name of the seeded table, matching the schema file name */
+  table: string;
+  /** Rows as read from the JSONL files */
+  rows: readonly Record<string, unknown>[];
+};
+
+/**
+ * Run each row through the `hook` its generated schema file exports, so the values a row gets
+ * from the schema (such as the `_User` password read from the environment) are the ones that
+ * are seeded. Rows are returned as they are when the table has no schema file or the file
+ * exports no `hook`.
+ * @param options - Schema directory, table name and rows
+ * @returns The rows after the hook
+ */
+export async function hookSeedRows(options: HookSeedRowsOptions): Promise<unknown[]> {
+  const schemaPath = await findSchemaFile(options.schemaDir, options.table);
+  if (!schemaPath) return [...options.rows];
+  const schemaModule = await import(`${pathToFileURL(schemaPath).href}?t=${Date.now()}`);
+  const hook = schemaModule.hook;
+  if (typeof hook !== "function") return [...options.rows];
+  return options.rows.map((row) => (hook as SeedHook)(structuredClone(row) as JsonObject));
 }

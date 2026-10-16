@@ -105,6 +105,16 @@ const SLACK_USER_MAPPING: EnvRequirement = {
     'a JSON object such as {"alice":"U0123456"}, with the member ID (U...) from each Slack profile',
 };
 
+const SEED_USER_PASSWORD: EnvRequirement = {
+  name: "SEED_USER_PASSWORD",
+  type: "secret",
+  required: false,
+  description:
+    "Password the seed step gives IdP users (`_User`) whose rows have none; a JSON object such as " +
+    '{"alice@example.com":"..."} sets it per user. Only read when seeding is enabled',
+  howTo: "the password you want the seeded IdP users to sign in with",
+};
+
 const DEPLOY_REQUIREMENTS = [
   CLIENT_ID,
   CLIENT_SECRET,
@@ -112,12 +122,20 @@ const DEPLOY_REQUIREMENTS = [
   FAIL_ON_DRIFT,
   SLACK_BOT_TOKEN,
   SLACK_CHANNEL_ID,
+  SEED_USER_PASSWORD,
 ];
 
 const REQUIREMENTS: Record<TargetKind, EnvRequirement[]> = {
   branch: [...DEPLOY_REQUIREMENTS, SLACK_USER_MAPPING],
   tag: [...DEPLOY_REQUIREMENTS, SLACK_USER_MAPPING],
-  preview: [CLIENT_ID, CLIENT_SECRET, ORGANIZATION_ID, FOLDER_ID, FAIL_ON_DRIFT],
+  preview: [
+    CLIENT_ID,
+    CLIENT_SECRET,
+    ORGANIZATION_ID,
+    FOLDER_ID,
+    FAIL_ON_DRIFT,
+    SEED_USER_PASSWORD,
+  ],
 };
 
 /**

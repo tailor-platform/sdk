@@ -1576,6 +1576,7 @@ describe("seed validation step", () => {
         expect(seedValidateStep).toEqual({
           id: "tailor-seed-validate",
           run,
+          env: { SEED_USER_PASSWORD: "${{ secrets.SEED_USER_PASSWORD }}" },
           "working-directory": "apps/api",
         });
         expect(content).not.toContain("tailor-platform/actions/seed-validate@");
@@ -1608,6 +1609,7 @@ describe("seed step", () => {
     expect(steps[validationIndex]).toEqual({
       id: "tailor-seed-validate",
       run: "pnpm exec tailor seed validate --upsert --dataset preview",
+      env: { SEED_USER_PASSWORD: "${{ secrets.SEED_USER_PASSWORD }}" },
       "working-directory": "apps/api",
     });
     expect(generatedIds).toContain("tailor-deploy/tailor-seed-validate");
@@ -1645,7 +1647,10 @@ describe("seed step", () => {
         id: "tailor-seed",
         shell: "bash",
         "working-directory": "apps/api",
-        env: { TAILOR_PLATFORM_WORKSPACE_ID: "${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}" },
+        env: {
+          TAILOR_PLATFORM_WORKSPACE_ID: "${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}",
+          SEED_USER_PASSWORD: "${{ secrets.SEED_USER_PASSWORD }}",
+        },
         run: "pnpm exec tailor seed apply --upsert\n",
       });
       expect(generatedIds).toContain("tailor-deploy/tailor-seed");
@@ -1678,6 +1683,7 @@ describe("seed step", () => {
       shell: "bash",
       env: {
         TAILOR_PLATFORM_WORKSPACE_ID: "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
+        SEED_USER_PASSWORD: "${{ secrets.SEED_USER_PASSWORD }}",
       },
       run:
         "npx @tailor-platform/sdk seed validate\n" +

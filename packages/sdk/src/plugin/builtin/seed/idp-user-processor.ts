@@ -248,7 +248,7 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
 
   return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
-    import { defineSchema } from "@tailor-platform/sdk/seed";
+    import { defineSchema, fillIdpUserPassword } from "@tailor-platform/sdk/seed";
     import { createStandardSchema } from "@tailor-platform/sdk/test";
 
     const schemaType = t.object({
@@ -256,8 +256,7 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
       password: t.string(),
     });
 
-    // Simple identity hook for _User (no TailorDB backing table)
-    export const hook = <T>(data: unknown) => data as T;
+    export const hook = <T>(data: unknown) => fillIdpUserPassword(data) as T;
 
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook),
