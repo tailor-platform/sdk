@@ -488,9 +488,9 @@ Pass the runtime key through the `executionPolicyKey` option on `job.start()`. F
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";
-import { executionPolicies } from "./policies";
-import { sendNotification } from "./jobs/send-notification";
 import { fetchTenant } from "./jobs/fetch-tenant";
+import { sendNotification } from "./jobs/send-notification";
+import { executionPolicies } from "./policies";
 
 export const mainJob = createWorkflowJob({
   name: "main-job",

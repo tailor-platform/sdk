@@ -976,8 +976,8 @@ When `migrate.ts` already exists (the usual case for breaking changes, where `mi
 // migrations/0005/migrate.test.ts
 import { createKyselyMock } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
-import type { Database } from "./db";
 import { main } from "./migrate";
+import type { Database } from "./db";
 
 describe("0005 add required email", () => {
   test("backfills null emails", async () => {
@@ -1013,9 +1013,9 @@ The generated `db.pglite.ts` exports the `CREATE TABLE` script for the same sche
 import { PGlite } from "@electric-sql/pglite";
 import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import type { Database } from "./db";
 import { pgliteSchema } from "./db.pglite";
 import { main } from "./migrate";
+import type { Database } from "./db";
 
 const pglite = new PGlite();
 const db = createKyselyPGlite<Unmigrated<Database>>(pglite);
