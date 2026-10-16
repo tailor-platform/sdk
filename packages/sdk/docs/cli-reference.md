@@ -74,8 +74,9 @@ guaranteed to contain an error object.
 
 The exit code separates a mistyped command from a failed one without parsing output: `0` on success,
 `2` when the CLI rejects the command line itself (an unknown option or subcommand, an unexpected
-argument, or an option value that fails validation), and `1` for any other failure, including checks
-a command makes after reading its arguments. A CLI plugin exits with its own code.
+argument, or an option value that fails validation, including one set through its environment
+variable), and `1` for other failures, including checks a command makes after reading its
+arguments. Cancelling an interactive prompt exits with `130`, and a CLI plugin exits with its own code.
 
 Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
