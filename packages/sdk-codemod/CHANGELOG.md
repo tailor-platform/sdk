@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-codemod
 
+## 0.9.2
+
+### Patch Changes
+
+- [#2588](https://github.com/tailor-platform/sdk/pull/2588) [`3de270f`](https://github.com/tailor-platform/sdk/commit/3de270f6bb1d75b74ed4d277593f0e70ecc2b59b) Thanks [@dqn](https://github.com/dqn)! - Update `@politty/zod` to 0.4.3. A positional argument is no longer accepted under its own name as an option, so pass the value positionally: `tailor profile create dev`, not `tailor profile create --name dev`. Most commands report such an option as unknown; a few, such as `tailor completion` and `npm create @tailor-platform/sdk`, only warn and ignore it. `tailor secret vault create --name`, `tailor secret vault delete --name`, and `tailor tailordb truncate --tables`, which the documentation and earlier release notes use, still accept both forms. Mixing the two forms, as in `tailor tailordb truncate --tables User Order`, is rejected; repeat the option for each table, as in `--tables User --tables Order`.
+
+- [#2556](https://github.com/tailor-platform/sdk/pull/2556) [`56abcc9`](https://github.com/tailor-platform/sdk/commit/56abcc9a063ca90c4561d908c1975296227a3480) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @​inquirer
+
+- [#2604](https://github.com/tailor-platform/sdk/pull/2604) [`4dde6ea`](https://github.com/tailor-platform/sdk/commit/4dde6ea565c97b1bfbdc8606bd0c565d25af6623) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.19.2
+
 ## 0.9.1
 
 ### Patch Changes

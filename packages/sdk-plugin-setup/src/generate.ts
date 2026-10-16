@@ -89,6 +89,8 @@ export type BranchSetupOptions = CommonSetupOptions & {
   /** Extra `paths` filter patterns beyond the app directories. */
   extraPaths?: readonly string[];
   erdPreview: boolean;
+  /** Upload the ERD preview the way GitHub Enterprise Server supports; requires `erdPreview`. */
+  ghes?: boolean;
   restrictDispatch?: boolean;
 };
 
@@ -528,6 +530,11 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   if (multi) assertMultiDirTarget(options, dirs);
   const dir = multi ? "." : (dirs[0] ?? ".");
   const extraPaths = resolveExtraPaths(options, dirs);
+  if (options.kind === "branch" && options.ghes && !options.erdPreview) {
+    throw new Error(
+      "--ghes has no effect without --erd-preview: it only changes how the ERD preview uploads its viewers.",
+    );
+  }
   const workingDirectory = dir !== "." ? dir : undefined;
 
   const configPaths = dirs.map((d) => resolveConfigPath(options.outputDir, d));
@@ -643,6 +650,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       environment,
       packageManager,
       erdPreview: options.erdPreview ? { namespaces: erdNamespaces } : null,
+      ghes: options.ghes ?? false,
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
       restrictDispatch: options.restrictDispatch ?? false,
@@ -705,6 +713,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
     erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
+    ghes: kind === "branch" && options.ghes ? true : undefined,
     apps:
       apps && appErdNamespaces.size > 0
         ? apps.map((app) => ({ ...app, erdNamespaces: appErdNamespaces.get(app.dir) ?? [] }))

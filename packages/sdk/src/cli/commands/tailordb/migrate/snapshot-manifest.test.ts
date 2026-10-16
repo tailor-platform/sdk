@@ -593,17 +593,6 @@ describe("snapshot-manifest", () => {
           id: { type: "uuid", required: true },
           number: { type: "integer", required: true, serial: { start: 1, gapless: true } },
           sequence: { type: "integer", required: true, serial: { start: 1 } },
-          detail: {
-            type: "nested",
-            required: true,
-            fields: {
-              lineNumber: {
-                type: "integer",
-                required: true,
-                serial: { start: 1, gapless: true },
-              },
-            },
-          },
         },
       });
 
@@ -611,7 +600,6 @@ describe("snapshot-manifest", () => {
 
       expect(fields?.number?.serial?.gapless).toBe(true);
       expect(fields?.sequence?.serial?.gapless).toBeUndefined();
-      expect(fields?.detail?.fields?.lineNumber?.serial?.gapless).toBe(true);
     });
 
     test("converts serial in nested fields to bigint", () => {

@@ -4,8 +4,8 @@ import tagTemplate from "./tag.workflow.yml";
 
 // Only the release PR changes RELEASED_TEMPLATE_VERSION and the fingerprint below; a PR that
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
-// Released template fingerprint: 0a057164d1055f14d2fcd2cc58c02fbaa1c4cc5f910e50675cbb44c748e43355
-const RELEASED_TEMPLATE_VERSION = 17;
+// Released template fingerprint: 86b33e949f5740f760b6e2c236440b50f1b727930264a466d427d9f65a45d94a
+const RELEASED_TEMPLATE_VERSION = 18;
 const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
@@ -78,6 +78,8 @@ export type RenderBranchParams = {
   /** Include the migration-drift-check step in the plan job (default: false). */
   migrationDriftCheck?: boolean;
   erdPreview: { namespaces: string[] } | null;
+  /** Upload the ERD preview the way GitHub Enterprise Server supports (default: false). */
+  ghes?: boolean;
   /** Deploy on manual dispatch only from the target branch. */
   restrictDispatch?: boolean;
   /** Seed the workspace after each deploy (single-app targets only). */
@@ -444,11 +446,23 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   const migrationDriftCheck = !params.apps && (params.migrationDriftCheck ?? false);
   const seed = params.apps ? undefined : params.seed;
   const erdPreview = params.erdPreview;
+  const ghes = params.ghes ?? false;
 
   let out = branchTemplate;
   out = block(out, "PLAN_JOB", true);
   out = block(out, "ERD_PREVIEW_JOB", erdPreview !== null);
   out = block(out, "ERD_PREVIEW_COMMENT_JOB", erdPreview !== null);
+  out = block(out, "ERD_GITHUB_COM_UPLOAD", !ghes);
+  out = block(out, "ERD_GHES_UPLOAD", ghes);
+  out = line(
+    out,
+    "ERD_COMMENT_NEEDS",
+    ghes ? "needs: [tailor-erd-preview-matrix, tailor-erd-preview]" : "needs: tailor-erd-preview",
+  );
+  out = block(out, "ERD_GITHUB_COM_ACTIONS_READ", !ghes);
+  out = block(out, "ERD_GHES_NAMESPACES", ghes);
+  out = block(out, "ERD_GITHUB_COM_LINKS", !ghes);
+  out = block(out, "ERD_GHES_LINKS", ghes);
   out = block(out, "PULL_REQUEST", true);
   out = block(out, "DISPATCH_INPUTS", true);
   out = block(out, "SEED_VALIDATE", seedValidate);
@@ -678,5 +692,5 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   return appendResultJob({ content: out, generatedIds }, "tailor-preview-result");
 }
 
-export const ACTIONS_SHA = "22543e223136ce9b67844bfc7e0b92e88efb5967";
-export const ACTIONS_VERSION = "v2.5.0";
+export const ACTIONS_SHA = "26a3cae341adecfaf0e6c81bd969de09c72dad55";
+export const ACTIONS_VERSION = "v2.7.0";

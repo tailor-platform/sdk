@@ -538,4 +538,26 @@ export const folderArgs = {
   }),
 } satisfies ArgsShape;
 
+type LocationIdArgs = {
+  "organization-id"?: string;
+  "folder-id"?: string;
+};
+
+/**
+ * Read the organization and folder ID options, including IDs loaded by `--env-file`.
+ * politty fills `args` from the environment before `--env-file` loads, so only env-file values reach the fallback.
+ * @param args - Parsed command arguments
+ * @returns Organization and folder IDs; empty env-file values count as not given
+ */
+export function locationIdsWithEnvFile(args: LocationIdArgs): {
+  organizationId?: string;
+  folderId?: string;
+} {
+  return {
+    organizationId:
+      args["organization-id"] ?? (process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined),
+    folderId: args["folder-id"] ?? (process.env.TAILOR_PLATFORM_FOLDER_ID || undefined),
+  };
+}
+
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;

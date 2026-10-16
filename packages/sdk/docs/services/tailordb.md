@@ -431,15 +431,17 @@ db.string().vector();
 
 ```typescript
 db.int().serial({
-  start: 0,
+  start: 1,
   maxValue: 100,
 });
 
 db.string().serial({
-  start: 0,
+  start: 1,
   format: "CUST_%d",
 });
 ```
+
+A serial field cannot be used inside a `db.object()` field.
 
 > **Preview:** The `gapless` option is a preview feature. Its behavior and configuration may change before general availability.
 

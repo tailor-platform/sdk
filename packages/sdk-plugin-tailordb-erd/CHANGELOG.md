@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.2.9
+
+### Patch Changes
+
+- [#2588](https://github.com/tailor-platform/sdk/pull/2588) [`3de270f`](https://github.com/tailor-platform/sdk/commit/3de270f6bb1d75b74ed4d277593f0e70ecc2b59b) Thanks [@dqn](https://github.com/dqn)! - Update `@politty/zod` to 0.4.3. A positional argument is no longer accepted under its own name as an option, so pass the value positionally: `tailor profile create dev`, not `tailor profile create --name dev`. Most commands report such an option as unknown; a few, such as `tailor completion` and `npm create @tailor-platform/sdk`, only warn and ignore it. `tailor secret vault create --name`, `tailor secret vault delete --name`, and `tailor tailordb truncate --tables`, which the documentation and earlier release notes use, still accept both forms. Mixing the two forms, as in `tailor tailordb truncate --tables User Order`, is rejected; repeat the option for each table, as in `--tables User --tables Order`.
+
+- [#2556](https://github.com/tailor-platform/sdk/pull/2556) [`56abcc9`](https://github.com/tailor-platform/sdk/commit/56abcc9a063ca90c4561d908c1975296227a3480) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @​inquirer
+
+- [#2604](https://github.com/tailor-platform/sdk/pull/2604) [`4dde6ea`](https://github.com/tailor-platform/sdk/commit/4dde6ea565c97b1bfbdc8606bd0c565d25af6623) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.19.2
+- Updated dependencies [[`4bf9fd5`](https://github.com/tailor-platform/sdk/commit/4bf9fd5cae3b240f39647002adfdb55b93afb15b), [`928a0cf`](https://github.com/tailor-platform/sdk/commit/928a0cf2d12deeb680f1319ae5cfc90d3c52873d), [`1c36c61`](https://github.com/tailor-platform/sdk/commit/1c36c618e9c4ad2ee4373a5962c8ea278e9aac07), [`a99be0b`](https://github.com/tailor-platform/sdk/commit/a99be0b905bf95a5057e52e19d146b53a78475cc), [`a99be0b`](https://github.com/tailor-platform/sdk/commit/a99be0b905bf95a5057e52e19d146b53a78475cc), [`3de270f`](https://github.com/tailor-platform/sdk/commit/3de270f6bb1d75b74ed4d277593f0e70ecc2b59b), [`b57a21f`](https://github.com/tailor-platform/sdk/commit/b57a21f9b6e16d6e3a87e19f7504429a41988a9c), [`9c54e51`](https://github.com/tailor-platform/sdk/commit/9c54e516264276dd453d6ad3b546452c830b4006), [`34a67e3`](https://github.com/tailor-platform/sdk/commit/34a67e33a34533bd62f34b7e5bc358c2448eb038), [`56abcc9`](https://github.com/tailor-platform/sdk/commit/56abcc9a063ca90c4561d908c1975296227a3480), [`4dde6ea`](https://github.com/tailor-platform/sdk/commit/4dde6ea565c97b1bfbdc8606bd0c565d25af6623), [`b517e0a`](https://github.com/tailor-platform/sdk/commit/b517e0aeede87d34eb518b79c5cfdd8378eb0e50), [`938f418`](https://github.com/tailor-platform/sdk/commit/938f418c4d847402e579f458f1e3ef3941906288), [`65b793b`](https://github.com/tailor-platform/sdk/commit/65b793b86896b939946851a49cbf65f6465fbee7), [`ea634ba`](https://github.com/tailor-platform/sdk/commit/ea634ba08df767730a1e8f415c87e60dfc4c0300), [`23b3b36`](https://github.com/tailor-platform/sdk/commit/23b3b363cc09bbf6c48e7d84d8b32068898062dd), [`eab2d88`](https://github.com/tailor-platform/sdk/commit/eab2d8867b4e74c79a31a7f47eaeb958c6381370), [`a139e89`](https://github.com/tailor-platform/sdk/commit/a139e899b087858677aa9e4cc03bf54e49dba95b)]:
+  - @tailor-platform/sdk@2.28.0
+
 ## 0.2.8
 
 ### Patch Changes

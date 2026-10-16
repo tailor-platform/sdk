@@ -27,8 +27,17 @@ import {
   type RenderBranchParams,
   type RenderTagParams,
 } from "./templates";
+import { tempDir } from "./test-helpers/temp-dir";
 
 const NO_MARKER = /__[A-Z_]+__/;
+const BRANCH_TEMPLATE = fs.readFileSync(
+  path.join(import.meta.dirname, "branch.workflow.yml"),
+  "utf8",
+);
+// Renovate changes this pin in the template, so tests derive the expected value from there.
+const [, UPLOAD_ARTIFACT_GITHUB_COM, UPLOAD_ARTIFACT_GITHUB_COM_VERSION] =
+  /uses: (actions\/upload-artifact@[0-9a-f]{40}) # (v\S+)/.exec(BRANCH_TEMPLATE) ?? [];
+const UPLOAD_ARTIFACT_V3 = "actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf";
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -561,6 +570,152 @@ describe("renderBranchWorkflow", () => {
   test("preserves $ characters in values", () => {
     const { content } = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a$&b" });
     expect(content).toContain("working-directory: apps/a$&b");
+  });
+});
+
+describe("ERD preview artifacts per GitHub host", () => {
+  const erdPreview = { namespaces: ["tailordb"] };
+  const stepOf = (content: string, job: string, id: string) =>
+    (parseYAML(content) as GeneratedWorkflow).jobs[job]?.steps.find((step) => step.id === id);
+  const uploadOf = (content: string) =>
+    stepOf(content, "tailor-erd-preview", "tailor-upload-erd-viewer");
+  const commentPermissionsOf = (content: string) =>
+    (parseYAML(content) as { jobs: Record<string, { permissions?: unknown }> }).jobs[
+      "tailor-erd-preview-comment"
+    ]?.permissions;
+
+  const FAKE_GH = `#!/usr/bin/env bash
+case "$GH_HOST" in
+  github.com | *.ghe.com) token=$GH_TOKEN ;;
+  *) token=$GH_ENTERPRISE_TOKEN ;;
+esac
+printf '%s %s\\n' "$GH_HOST" "$token" >> "$FAKE_GH_DIR/calls"
+case "$*" in
+  *"--method POST"*)
+    for arg; do case "$arg" in body=*) printf '%s' "\${arg#body=}" > "$FAKE_GH_DIR/body" ;; esac; done ;;
+  *"/pulls/"*) printf 'head-sha\\n' ;;
+  *"/artifacts"*) printf '%s' "$FAKE_GH_ARTIFACTS" ;;
+esac
+`;
+
+  const runComment = (
+    content: string,
+    serverUrl: string,
+    listedArtifacts: string,
+    namespaces = JSON.stringify(erdPreview.namespaces),
+  ) => {
+    using tmp = tempDir("erd-comment-");
+    const bin = path.join(tmp.dir, "bin");
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, "gh"), FAKE_GH, { mode: 0o755 });
+    const context: Record<string, string> = {
+      "github.token": "test-token",
+      "github.repository": "acme/widgets",
+      "github.run_id": "99",
+      "github.server_url": serverUrl,
+      "github.event.pull_request.number": "7",
+      "github.event.pull_request.base.ref": "main",
+      "github.event.pull_request.head.sha": "head-sha",
+      "needs.tailor-erd-preview-matrix.outputs.namespaces": namespaces,
+    };
+    const step = stepOf(content, "tailor-erd-preview-comment", "tailor-comment-erd-preview");
+    const env = Object.fromEntries(
+      Object.entries(step?.env as Record<string, string>).map(([key, value]) => [
+        key,
+        value.replaceAll(/\$\{\{ ([\w.-]+) \}\}/g, (_match, expression: string) => {
+          const resolved = context[expression];
+          if (resolved === undefined) throw new Error(`No test value for ${expression}`);
+          return resolved;
+        }),
+      ]),
+    );
+    execFileSync("bash", ["-c", String(step?.run)], {
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        GITHUB_SERVER_URL: serverUrl,
+        FAKE_GH_DIR: tmp.dir,
+        FAKE_GH_ARTIFACTS: listedArtifacts,
+        ...env,
+      },
+      stdio: "pipe",
+    });
+    return {
+      calls: fs.readFileSync(path.join(tmp.dir, "calls"), "utf-8").trim().split("\n"),
+      body: fs.readFileSync(path.join(tmp.dir, "body"), "utf-8"),
+    };
+  };
+
+  test("on github.com, uploads each viewer unzipped and links its artifact", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, erdPreview });
+
+    expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_GITHUB_COM);
+    expect(uploadOf(content)?.with).toMatchObject({ archive: false });
+    expect(commentPermissionsOf(content)).toEqual({ actions: "read", "pull-requests": "write" });
+
+    const { calls, body } = runComment(
+      content,
+      "https://github.com",
+      "tailordb-viewer.html\t123\n",
+    );
+    expect(new Set(calls)).toEqual(new Set(["github.com test-token"]));
+    expect(body).toContain(
+      "[tailordb-viewer.html](https://github.com/acme/widgets/actions/runs/99/artifacts/123)",
+    );
+  });
+
+  test("on GitHub Enterprise Server, uploads with upload-artifact v3 and names the viewers before the run lists its artifacts", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true });
+    const dotcomUpload = uploadOf(renderBranchWorkflow({ ...branchBase, erdPreview }).content);
+    const { archive, ...dotcomInputs } = (dotcomUpload?.with ?? {}) as Record<string, unknown>;
+
+    expect(archive).toBe(false);
+    expect(uploadOf(content)?.uses).toBe(UPLOAD_ARTIFACT_V3);
+    expect(uploadOf(content)?.with).toEqual(dotcomInputs);
+    expect(commentPermissionsOf(content)).toEqual({ "pull-requests": "write" });
+
+    const { calls, body } = runComment(content, "https://ghes.example.com", "");
+    expect(new Set(calls)).toEqual(new Set(["ghes.example.com test-token"]));
+    expect(body).toContain("https://ghes.example.com/acme/widgets/actions/runs/99)");
+    expect(body).toContain("- **tailordb viewer**: `tailordb-viewer.html`");
+    expect(body).not.toContain("/artifacts/");
+  });
+
+  test("fails rather than commenting without viewers when they cannot be listed", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true });
+
+    expect(() => runComment(content, "https://ghes.example.com", "", "not json")).toThrow(
+      /Command failed/,
+    );
+  });
+
+  test("renders the github.com workflow unless ghes is set", () => {
+    expect(renderBranchWorkflow({ ...branchBase, erdPreview, ghes: false })).toEqual(
+      renderBranchWorkflow({ ...branchBase, erdPreview }),
+    );
+    expect(renderBranchWorkflow({ ...branchBase, ghes: true })).toEqual(
+      renderBranchWorkflow(branchBase),
+    );
+  });
+
+  test("keeps the GitHub Enterprise Server upload-artifact pin out of Renovate's updates", () => {
+    const renovateConfig = JSON.parse(
+      fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
+    ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
+    const manager = renovateConfig.customManagers.find((m) =>
+      m.managerFilePatterns.some((p) => p.includes("ya?ml")),
+    );
+    const updatable = (source: string) =>
+      [...source.matchAll(new RegExp(manager!.matchStrings[0]!, "g"))]
+        .filter((match) => match.groups?.depName === "actions/upload-artifact")
+        .map((match) => match.groups?.currentValue);
+
+    expect(updatable(renderBranchWorkflow({ ...branchBase, erdPreview }).content)).toEqual([
+      UPLOAD_ARTIFACT_GITHUB_COM_VERSION,
+    ]);
+    expect(updatable(BRANCH_TEMPLATE)).toEqual([UPLOAD_ARTIFACT_GITHUB_COM_VERSION]);
+    expect(
+      updatable(renderBranchWorkflow({ ...branchBase, erdPreview, ghes: true }).content),
+    ).toEqual([]);
   });
 });
 
@@ -2046,6 +2201,52 @@ export default defineConfig({
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
     expect(wf).toContain("github.ref == 'refs/heads/main'");
     expect(readLock(testDir)?.targets[0]).toMatchObject({ inputs: { restrictDispatch: true } });
+  });
+
+  describe("--ghes", () => {
+    const wfPath = path.join(testDir, ".github/workflows/tailor-my-app.yml");
+    const erdOptions = (ghes: boolean) =>
+      baseOptions({
+        workspaceName: "my-app",
+        erdPreview: true,
+        ghes,
+        loadErdNamespaces: async () => ["tailordb"],
+      });
+
+    test("records the choice and uploads ERD viewers with upload-artifact v3", async () => {
+      await setupTarget(erdOptions(true));
+
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V3);
+      expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({ erdPreview: true, ghes: true });
+    });
+
+    test("is not recorded when off", async () => {
+      await setupTarget(erdOptions(false));
+
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_GITHUB_COM);
+      expect(readLock(testDir)?.targets[0]?.inputs).not.toHaveProperty("ghes");
+    });
+
+    test("is rejected without --erd-preview, before anything is written", async () => {
+      await expect(
+        setupTarget(baseOptions({ workspaceName: "my-app", ghes: true })),
+      ).rejects.toThrow(/--ghes .*--erd-preview/);
+
+      expect(fs.existsSync(wfPath)).toBe(false);
+      expect(readLock(testDir)).toBeNull();
+    });
+
+    test("switches an existing workflow to and from GitHub Enterprise Server without --force", async () => {
+      await setupTarget(erdOptions(false));
+      await setupTarget(erdOptions(true));
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_V3);
+      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_GITHUB_COM);
+
+      await setupTarget(erdOptions(false));
+      expect(fs.readFileSync(wfPath, "utf-8")).toContain(UPLOAD_ARTIFACT_GITHUB_COM);
+      expect(fs.readFileSync(wfPath, "utf-8")).not.toContain(UPLOAD_ARTIFACT_V3);
+      expect(readLock(testDir)?.targets[0]?.inputs).not.toHaveProperty("ghes");
+    });
   });
 
   test("errors on an unmanaged pre-existing file", async () => {

@@ -5,8 +5,8 @@
  * different function types on the Tailor Platform server.
  *
  * Uses internal APIs directly (detectFunctionType, bundleForRun, executeScript)
- * instead of spawning CLI subprocesses. The deploy step still uses subprocess
- * since it orchestrates multiple services.
+ * instead of spawning CLI subprocesses. The functions come from example/; the
+ * workspace receives only the tables and machine user they use.
  *
  * Prerequisites:
  * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
@@ -16,7 +16,7 @@
  * Note: Tests are executed sequentially and share a single workspace.
  */
 
-import { execFileSync } from "node:child_process";
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -32,7 +32,14 @@ import { detectFunctionType } from "../src/cli/commands/function/detect";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
-import { resolveE2ERunId, resolveE2EWorkspaceRegion, trackWorkspace } from "./globalSetup";
+import { CLI_BUDGET_MS, cliTestTimeout, runCli } from "./cli";
+import {
+  resolveE2ERunId,
+  resolveE2EWorkspaceRegion,
+  trackTempDir,
+  trackWorkspace,
+  WORKSPACE_CREATION_ALLOWANCE_MS,
+} from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,7 +50,6 @@ const testRunId = Date.now().toString(36);
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 
 const sdkRoot = path.resolve(__dirname, "..");
-const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
 const exampleDir = path.resolve(sdkRoot, "..", "..", "example");
 
 let workspaceId: string;
@@ -53,6 +59,34 @@ let machineUser: ResolvedMachineUser;
 const env = { foo: 1, bar: "hello", baz: true };
 const AUTH_NAMESPACE = "my-auth";
 const MACHINE_USER_NAME = "manager-machine-user";
+// The example tables the tested functions read and write.
+const EXAMPLE_TABLE_FILES = ["user.ts", "supplier.ts", "nested.ts"];
+
+// Write a config that deploys only what the tested example functions need, under example's names.
+function writeFixtureConfig(dir: string): string {
+  const exampleTablePath = (file: string) =>
+    path.join(exampleDir, "tailordb", file).replaceAll("\\", "/");
+  const configPath = path.join(dir, "tailor.config.ts");
+  fs.writeFileSync(
+    configPath,
+    `import { defineAuth, defineConfig } from "@tailor-platform/sdk";
+import { user } from ${JSON.stringify(exampleTablePath("user"))};
+
+export default defineConfig({
+  id: ${JSON.stringify(crypto.randomUUID())},
+  name: "function-run-e2e",
+  db: {
+    tailordb: { files: ${JSON.stringify(EXAMPLE_TABLE_FILES.map(exampleTablePath))} },
+  },
+  auth: defineAuth(${JSON.stringify(AUTH_NAMESPACE)}, {
+    userProfile: { type: user, usernameField: "email", attributes: { role: true } },
+    machineUsers: { ${JSON.stringify(MACHINE_USER_NAME)}: { attributes: { role: "MANAGER" } } },
+  }),
+});
+`,
+  );
+  return configPath;
+}
 
 interface RunFunctionResult extends ScriptExecutionResult {
   scriptName: string;
@@ -116,69 +150,63 @@ async function runFunction(
 }
 
 describe("E2E: function run", { concurrent: false }, () => {
-  // Setup creates a workspace and deploys the example config; both are slow
-  // enough that this needs the same budget as the other deploying suites.
-  aroundAll(async (runSuite) => {
-    // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
-    const accessToken = await loadAccessToken();
-    client = await initOperatorClient(accessToken);
-    const region = await resolveE2EWorkspaceRegion(client);
+  aroundAll(
+    async (runSuite) => {
+      // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
+      const accessToken = await loadAccessToken();
+      client = await initOperatorClient(accessToken);
+      const region = await resolveE2EWorkspaceRegion(client);
 
-    console.log(`Creating workspace "${testWorkspaceName}" in region "${region}"...`);
-    const createResp = await client.createWorkspace({
-      workspaceName: testWorkspaceName,
-      workspaceRegion: region,
-      deleteProtection: false,
-      organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
-      folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
-    });
-    workspaceId = createResp.workspace!.id;
-    console.log(`Workspace created: ${workspaceId}`);
-    await trackWorkspace(client, workspaceId);
+      console.log(`Creating workspace "${testWorkspaceName}" in region "${region}"...`);
+      const createResp = await client.createWorkspace({
+        workspaceName: testWorkspaceName,
+        workspaceRegion: region,
+        deleteProtection: false,
+        organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
+        folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+      });
+      workspaceId = createResp.workspace!.id;
+      console.log(`Workspace created: ${workspaceId}`);
+      await trackWorkspace(client, workspaceId);
 
-    // Deploy example config to create DB schema, auth, machine users
-    console.log("Deploying example config...");
-    execFileSync(
-      "node",
-      [cliPath, "deploy", "--config", "tailor.config.ts", "--workspace-id", workspaceId, "--yes"],
-      {
-        cwd: exampleDir,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
-        encoding: "utf-8",
-        timeout: 300000,
-      },
-    );
-    console.log("Deploy completed.");
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-run-e2e-"));
+      trackTempDir(tempDir);
+      const tailorPlatformDir = path.join(tempDir, "node_modules", "@tailor-platform");
+      fs.mkdirSync(tailorPlatformDir, { recursive: true });
+      fs.symlinkSync(sdkRoot, path.join(tailorPlatformDir, "sdk"));
+      const configPath = writeFixtureConfig(tempDir);
 
-    // Resolve machine user from API + config
-    let machineUserId = "00000000-0000-0000-0000-000000000000";
-    try {
-      const resp = await client.getAuthMachineUser({
+      await runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], {
+        cwd: tempDir,
+        timeoutMs: CLI_BUDGET_MS.deploy,
+        // Hooks get no test signal; the hook timeout exceeds this budget instead.
+        signal: undefined,
+      });
+
+      const { machineUser: deployedMachineUser } = await client.getAuthMachineUser({
         workspaceId,
         authNamespace: AUTH_NAMESPACE,
         name: MACHINE_USER_NAME,
       });
-      if (resp.machineUser?.id) {
-        machineUserId = resp.machineUser.id;
+      if (!deployedMachineUser?.id) {
+        throw new Error(`Machine user "${MACHINE_USER_NAME}" has no id after the deploy`);
       }
-    } catch {
-      // fallback to nil UUID
-    }
-    machineUser = {
-      name: MACHINE_USER_NAME,
-      id: machineUserId,
-      attributes: { role: "MANAGER" },
-      attributeList: [],
-    };
+      machineUser = {
+        name: MACHINE_USER_NAME,
+        id: deployedMachineUser.id,
+        attributes: { role: "MANAGER" },
+        attributeList: [],
+      };
 
-    invoker = create(AuthInvokerSchema, {
-      namespace: AUTH_NAMESPACE,
-      machineUserName: MACHINE_USER_NAME,
-    });
+      invoker = create(AuthInvokerSchema, {
+        namespace: AUTH_NAMESPACE,
+        machineUserName: MACHINE_USER_NAME,
+      });
 
-    await runSuite();
-  }, 300000);
+      await runSuite();
+    },
+    WORKSPACE_CREATION_ALLOWANCE_MS + cliTestTimeout(CLI_BUDGET_MS.deploy),
+  );
 
   describe("resolver", () => {
     test("runs add resolver with input arguments", async () => {

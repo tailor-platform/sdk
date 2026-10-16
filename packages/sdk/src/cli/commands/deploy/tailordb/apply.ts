@@ -42,6 +42,7 @@ import {
   restoreMigrationRestrictions,
   getDeletedTableNames,
   migrationSnapshotCache,
+  namespacedTableKey,
   processedTables,
   releaseRecordedMaintenanceMode,
   type MigrationPhaseSettings,
@@ -715,7 +716,7 @@ export async function applyTailorDB(
           if (pendingDeletedTables.get(namespaceName)?.has(tableName)) continue;
           // Recorded so the pre-phase GQL-permission fallback does not create
           // the type a second time.
-          processedTables.created.add(tableName);
+          processedTables.created.add(namespacedTableKey(namespaceName, tableName));
           await client.createTailorDBType({
             workspaceId: create.request.workspaceId,
             namespaceName,
@@ -1251,11 +1252,7 @@ export async function applyTailorDB(
       // permissions were just removed above; migration postPhases never see them)
       await Promise.all(
         changeSet.type.deletes
-          .filter(
-            (del) =>
-              isOutsideMigrations(del.request.namespaceName) &&
-              !deletedResources.types.has(del.name),
-          )
+          .filter((del) => isOutsideMigrations(del.request.namespaceName))
           .map((del) => client.deleteTailorDBType(del.request)),
       );
 
@@ -1266,11 +1263,9 @@ export async function applyTailorDB(
       // carries a migration, and the owner's next solo deploy would turn
       // publishing off without asking.
       await Promise.all(
-        [...changeSet.type.creates, ...changeSet.type.updates, ...changeSet.type.unchanged]
-          .filter((entry) => entry.metaRequest && !deletedResources.types.has(entry.name))
-          .flatMap((entry) =>
-            entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
-          ),
+        [...changeSet.type.creates, ...changeSet.type.updates, ...changeSet.type.unchanged].flatMap(
+          (entry) => (entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : []),
+        ),
       );
     } else {
       // Normal create-update flow without migrations

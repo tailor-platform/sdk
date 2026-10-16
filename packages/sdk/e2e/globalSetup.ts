@@ -13,6 +13,9 @@ import { loadAccessToken } from "../src/cli/shared/context";
 // never as the developer's locally configured profile.
 delete process.env.TAILOR_PLATFORM_PROFILE;
 
+/** Time a test or hook allows for creating a workspace while sibling suites contend for the Platform. */
+export const WORKSPACE_CREATION_ALLOWANCE_MS = 180_000;
+
 const TRACKING_DIR = path.join(os.tmpdir(), "e2e-workspaces");
 const TEMPDIR_TRACKING_DIR = path.join(os.tmpdir(), "e2e-tempdirs");
 const WORKSPACE_TTL_MS = 24 * 60 * 60 * 1000;

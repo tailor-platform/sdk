@@ -57,6 +57,7 @@ type MockIdpServiceOpts = {
   gqlOperations?: Record<string, boolean | undefined>;
   omitUserAuthPolicy?: boolean;
   userAuthPolicy?: Record<string, unknown>;
+  permission?: Record<string, unknown>;
 };
 
 function createMockApplication(opts?: {
@@ -104,6 +105,9 @@ function createMockApplication(opts?: {
       }
       if (service.omitUserAuthPolicy) {
         delete result.userAuthPolicy;
+      }
+      if (service.permission) {
+        result.permission = service.permission;
       }
       return result;
     }),
@@ -691,6 +695,60 @@ describe("planIdP and an implicit all-domains policy", () => {
 
     expect(logger.warn).not.toHaveBeenCalledWith(
       expect.stringContaining("leaves userAuthPolicy.allowedEmailDomains empty"),
+    );
+  });
+});
+
+describe("planIdP and a _loggedIn permission", () => {
+  const adminOnly = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }];
+  const loggedInOnly = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }];
+  const permissionWith = (overrides: Record<string, unknown>) => ({
+    create: adminOnly,
+    read: adminOnly,
+    update: adminOnly,
+    delete: adminOnly,
+    sendPasswordResetEmail: adminOnly,
+    unenrollMfa: adminOnly,
+    ...overrides,
+  });
+
+  test("warns with the offending operations and how to restrict them", async () => {
+    using _logger = silenceLogger("warn");
+    const client = createMockClient({ services: [], clients: defaultIdpClientSecret });
+
+    await planIdP({
+      ...createContext(client),
+      application: createMockApplication({
+        idpServices: [
+          {
+            name: "partner-idp",
+            permission: permissionWith({
+              read: loggedInOnly,
+              sendPasswordResetEmail: loggedInOnly,
+            }),
+          },
+        ],
+      }),
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /IdP service "partner-idp" permits every authenticated user .*read\[0\], sendPasswordResetEmail\[0\]/,
+      ),
+    );
+  });
+
+  test("stays quiet when every operation is restricted to an administrator role", async () => {
+    using _logger = silenceLogger("warn");
+    const client = createMockClient({ services: [], clients: defaultIdpClientSecret });
+
+    await planIdP({
+      ...createContext(client),
+      application: createMockApplication({ idpServices: [{ permission: permissionWith({}) }] }),
+    });
+
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("every authenticated user"),
     );
   });
 });
