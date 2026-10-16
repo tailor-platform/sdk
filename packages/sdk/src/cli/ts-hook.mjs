@@ -174,10 +174,10 @@ const IMPORT_NONCE_PARAM = "tailorImportNonce";
 // nonce'd entry module gets a fresh evaluation of its whole project subgraph.
 // Bare specifiers are left alone: node_modules packages (and workspace-linked
 // ones resolving outside node_modules) must stay singletons.
-function propagateImportNonce(resolved, context) {
+function propagateImportNonce(resolved, parentURL) {
   if (!resolved?.url?.startsWith("file:")) return resolved;
-  if (!context.parentURL?.startsWith("file:")) return resolved;
-  const nonce = new URL(context.parentURL).searchParams.get(IMPORT_NONCE_PARAM);
+  if (!parentURL?.startsWith("file:")) return resolved;
+  const nonce = new URL(parentURL).searchParams.get(IMPORT_NONCE_PARAM);
   if (!nonce) return resolved;
   const url = new URL(resolved.url);
   if (url.searchParams.has(IMPORT_NONCE_PARAM) || url.pathname.includes("/node_modules/")) {
@@ -199,11 +199,13 @@ function isProjectLocalSpecifier(specifier) {
 // --- module hooks ---
 
 export async function resolve(specifier, context, nextResolve) {
+  const { parentURL } = context;
   const resolved = await resolveTs(specifier, context, nextResolve);
-  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, context) : resolved;
+  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, parentURL) : resolved;
 }
 
 async function resolveTs(specifier, context, nextResolve) {
+  const { parentURL } = context;
   try {
     return await nextResolve(specifier, context);
   } catch (err) {
@@ -225,8 +227,8 @@ async function resolveTs(specifier, context, nextResolve) {
 
     if (!specifier.startsWith(".") && !specifier.startsWith("/")) {
       // Non-relative: try tsconfig path aliases
-      if (context.parentURL?.startsWith("file://")) {
-        const parentParsed = new URL(context.parentURL);
+      if (parentURL?.startsWith("file://")) {
+        const parentParsed = new URL(parentURL);
         const parentNonce = parentParsed.searchParams.get(IMPORT_NONCE_PARAM) ?? "";
         parentParsed.search = "";
         parentParsed.hash = "";
@@ -236,7 +238,7 @@ async function resolveTs(specifier, context, nextResolve) {
         if (candidates) {
           for (const candidate of candidates) {
             const result = await tryResolveWithExtensions(candidate, context, nextResolve);
-            if (result) return propagateImportNonce(result, context);
+            if (result) return propagateImportNonce(result, parentURL);
           }
         }
       }
@@ -291,11 +293,13 @@ export async function load(url, context, nextLoad) {
 // on require() of scheme-only builtins (node:sqlite, node:test, node:sea) once both
 // resolve and load are registered — nodejs/node#58607, fixed by nodejs/node#58612.
 export function resolveSync(specifier, context, nextResolve) {
+  const { parentURL } = context;
   const resolved = resolveTsSync(specifier, context, nextResolve);
-  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, context) : resolved;
+  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, parentURL) : resolved;
 }
 
 function resolveTsSync(specifier, context, nextResolve) {
+  const { parentURL } = context;
   try {
     return nextResolve(specifier, context);
   } catch (err) {
@@ -317,8 +321,8 @@ function resolveTsSync(specifier, context, nextResolve) {
 
     if (!specifier.startsWith(".") && !specifier.startsWith("/")) {
       // Non-relative: try tsconfig path aliases
-      if (context.parentURL?.startsWith("file://")) {
-        const parentParsed = new URL(context.parentURL);
+      if (parentURL?.startsWith("file://")) {
+        const parentParsed = new URL(parentURL);
         const parentNonce = parentParsed.searchParams.get(IMPORT_NONCE_PARAM) ?? "";
         parentParsed.search = "";
         parentParsed.hash = "";
@@ -328,7 +332,7 @@ function resolveTsSync(specifier, context, nextResolve) {
         if (candidates) {
           for (const candidate of candidates) {
             const result = tryResolveWithExtensionsSync(candidate, context, nextResolve);
-            if (result) return propagateImportNonce(result, context);
+            if (result) return propagateImportNonce(result, parentURL);
           }
         }
       }
