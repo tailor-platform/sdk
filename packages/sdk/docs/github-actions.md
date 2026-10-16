@@ -35,7 +35,8 @@ tailor setup ci tag --name my-app-prod \
 
 After running the command, follow the **Next steps** printed to the terminal:
 run `tailor setup ci env` to get the commands that set the secrets and
-variables each GitHub Environment needs (see
+variables each GitHub Environment needs, and `tailor setup ci env --check` to
+confirm none is missing (see
 [Setting secrets and variables](#setting-secrets-and-variables)), then commit
 the generated files.
 
