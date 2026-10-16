@@ -272,13 +272,36 @@ describe("resolve", () => {
     expect(result).toEqual({ url: "file:///alias-project/tailordb/user.ts?tailorImportNonce=1" });
   });
 
-  test("resolves tsconfig path alias from the original importer when nextResolve leaves a different parentURL on the context", async () => {
+  test("looks up tsconfig from the original importer's directory when nextResolve leaves a parentURL outside the project on the context", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
       .calledWith("/alias-mutated-project/tsconfig.json", { encoding: "utf-8" })
+      .thenReturn(tsconfig);
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce(async (_specifier: string, context: { parentURL?: string }) => {
+        context.parentURL = "file:///global-store/node_modules/x";
+        throw notFound("@/tailordb/user");
+      })
+      .mockResolvedValueOnce({ url: "file:///alias-mutated-project/tailordb/user.ts" });
+    const result = await resolve(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-mutated-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual({ url: "file:///alias-mutated-project/tailordb/user.ts" });
+  });
+
+  test("propagates the original importer's tailorImportNonce when nextResolve leaves a parentURL without it on the context", async () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const nextResolve = vi
       .fn()
@@ -620,13 +643,36 @@ describe("resolveSync", () => {
     });
   });
 
-  test("resolves tsconfig path alias from the original importer when nextResolve leaves a different parentURL on the context", () => {
+  test("looks up tsconfig from the original importer's directory when nextResolve leaves a parentURL outside the project on the context", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
     });
     using _tsconfigRead = vi
       .when(vi.mocked(readFileSync))
       .calledWith("/alias-mutated-sync-project/tsconfig.json", { encoding: "utf-8" })
+      .thenReturn(tsconfig);
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce((_specifier: string, context: { parentURL?: string }) => {
+        context.parentURL = "file:///global-store/node_modules/x";
+        throw notFound("@/tailordb/user");
+      })
+      .mockReturnValueOnce({ url: "file:///alias-mutated-sync-project/tailordb/user.ts" });
+    const result = resolveSync(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-mutated-sync-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual({ url: "file:///alias-mutated-sync-project/tailordb/user.ts" });
+  });
+
+  test("propagates the original importer's tailorImportNonce when nextResolve leaves a parentURL without it on the context", () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
       .thenReturn(tsconfig);
     const nextResolve = vi
       .fn()
