@@ -8,7 +8,7 @@ type DuplicateResourceName = {
   configPaths: string[];
 };
 
-type ResourceNameCheck = {
+export type ResourceNameCheck = {
   resourceLabel: string;
   namesOf: (target: BuiltDeploymentTarget) => Iterable<string>;
 };
@@ -21,7 +21,12 @@ function findDuplicateResourceNames(
     const configPathsByName = new Map<string, string[]>();
     for (const target of targets) {
       for (const name of namesOf(target)) {
-        configPathsByName.set(name, [...(configPathsByName.get(name) ?? []), target.config.path]);
+        const configPaths = configPathsByName.get(name);
+        if (configPaths) {
+          configPaths.push(target.config.path);
+        } else {
+          configPathsByName.set(name, [target.config.path]);
+        }
       }
     }
     return [...configPathsByName]
@@ -60,7 +65,8 @@ export function assertNoDuplicateResourceNames(
       ),
     ].join("\n"),
     suggestion:
-      "Rename the duplicates so each name is defined once across all configs in a single deploy.",
+      "Rename the duplicates so each name is defined once across all configs in a single deploy. " +
+      "To share a service namespace across configs, define it in one config and declare it with `external: true` in the others.",
     context: { duplicates },
   });
 }

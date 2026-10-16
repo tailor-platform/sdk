@@ -1,6 +1,6 @@
 import { logger } from "#/cli/shared/logger";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
-import { assertNoDuplicateResourceNames } from "./duplicate-resource-names";
+import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import type { HasName } from "./change-set";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
@@ -266,11 +266,10 @@ const MANAGED_RESOURCE_NAMESPACE_FIELDS = [
   "staticWebsiteName",
 ] as const;
 
-type DeployManagedResourceDefinition = Omit<ManagedResourceGroup, "changeSet"> & {
-  resourceLabel: string;
-  namesOf: (target: BuiltDeploymentTarget) => Iterable<string>;
-  changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
-};
+type DeployManagedResourceDefinition = Omit<ManagedResourceGroup, "changeSet"> &
+  ResourceNameCheck & {
+    changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
+  };
 
 const DEPLOY_MANAGED_RESOURCE_DEFINITIONS: ReadonlyArray<DeployManagedResourceDefinition> = [
   {

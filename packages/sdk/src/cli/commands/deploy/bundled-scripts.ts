@@ -1,14 +1,15 @@
 import { assertNoDuplicateResourceNames } from "./duplicate-resource-names";
 import type { BuiltDeploymentTarget } from "./deployment-target";
+import type { BundledScripts } from "./function-registry-types";
 
-type BundledScripts = BuiltDeploymentTarget["bundledScripts"];
+const BUNDLE_RESOURCE_LABELS = {
+  resolvers: "Resolver bundle",
+  executors: "Executor bundle",
+  workflowJobs: "Workflow job bundle",
+  authHooks: "Auth hook bundle",
+} satisfies Record<keyof BundledScripts, string>;
 
-const BUNDLE_KINDS: ReadonlyArray<{ key: keyof BundledScripts; resourceLabel: string }> = [
-  { key: "resolvers", resourceLabel: "Resolver bundle" },
-  { key: "executors", resourceLabel: "Executor bundle" },
-  { key: "workflowJobs", resourceLabel: "Workflow job bundle" },
-  { key: "authHooks", resourceLabel: "Auth hook bundle" },
-];
+const BUNDLE_KINDS = Object.keys(BUNDLE_RESOURCE_LABELS) as Array<keyof BundledScripts>;
 
 /**
  * Merge per-config bundled scripts into one build-only result.
@@ -20,13 +21,13 @@ const BUNDLE_KINDS: ReadonlyArray<{ key: keyof BundledScripts; resourceLabel: st
 export function mergeBundledScripts(targets: ReadonlyArray<BuiltDeploymentTarget>): BundledScripts {
   assertNoDuplicateResourceNames(
     targets,
-    BUNDLE_KINDS.map(({ key, resourceLabel }) => ({
-      resourceLabel,
-      namesOf: (target) => target.bundledScripts[key].keys(),
+    BUNDLE_KINDS.map((kind) => ({
+      resourceLabel: BUNDLE_RESOURCE_LABELS[kind],
+      namesOf: (target) => target.bundledScripts[kind].keys(),
     })),
   );
-  const mergeKind = (key: keyof BundledScripts) =>
-    new Map(targets.flatMap((target) => [...target.bundledScripts[key]]));
+  const mergeKind = (kind: keyof BundledScripts) =>
+    new Map(targets.flatMap((target) => [...target.bundledScripts[kind]]));
   return {
     resolvers: mergeKind("resolvers"),
     executors: mergeKind("executors"),

@@ -1605,6 +1605,28 @@ describe("mergeBundledScripts", () => {
     ]);
   });
 
+  test("merges executor and workflow job bundles from every config", () => {
+    const bundledScripts = mergeBundledScripts([
+      fakeTarget({
+        executors: { "sync-buyer": "buyer" },
+        workflowJobs: { "notify-buyer": "buyer" },
+      }),
+      fakeTarget({
+        executors: { "sync-supplier": "supplier" },
+        workflowJobs: { "notify-supplier": "supplier" },
+      }),
+    ]);
+
+    expect([...bundledScripts.executors]).toEqual([
+      ["sync-buyer", "buyer"],
+      ["sync-supplier", "supplier"],
+    ]);
+    expect([...bundledScripts.workflowJobs]).toEqual([
+      ["notify-buyer", "buyer"],
+      ["notify-supplier", "supplier"],
+    ]);
+  });
+
   test("rejects the same resolver bundle key across configs", () => {
     expect(() =>
       mergeBundledScripts([
@@ -1682,7 +1704,8 @@ describe("assertUniqueGlobalResourceNames", () => {
           '  - IdP namespace "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
         ].join("\n"),
         suggestion:
-          "Rename the duplicates so each name is defined once across all configs in a single deploy.",
+          "Rename the duplicates so each name is defined once across all configs in a single deploy. " +
+          "To share a service namespace across configs, define it in one config and declare it with `external: true` in the others.",
         context: {
           duplicates: [
             {
@@ -1696,6 +1719,23 @@ describe("assertUniqueGlobalResourceNames", () => {
             { resourceType: "IdP namespace", name: "default", configPaths },
           ],
         },
+      }),
+    );
+  });
+
+  test("reports every duplicate name of the same resource type", () => {
+    expect(() =>
+      assertUniqueGlobalResourceNames([
+        fakeTarget({ configDir: "apps/a", executorNames: ["sync-user", "sync-order"] }),
+        fakeTarget({ configDir: "apps/b", executorNames: ["sync-user", "sync-order"] }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        message: [
+          "Duplicate resource names in this deploy:",
+          '  - Executor "sync-user": apps/a/tailor.config.ts, apps/b/tailor.config.ts',
+          '  - Executor "sync-order": apps/a/tailor.config.ts, apps/b/tailor.config.ts',
+        ].join("\n"),
       }),
     );
   });
@@ -1776,7 +1816,7 @@ describe("assertUniqueGlobalResourceNames", () => {
     ).not.toThrow();
   });
 
-  test("is a no-op for a single config", () => {
+  test("accepts a single config with unique names", () => {
     expect(() =>
       assertUniqueGlobalResourceNames([fakeTarget({ executorNames: ["sync-user"] })]),
     ).not.toThrow();
