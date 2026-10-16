@@ -297,6 +297,7 @@ describe("when the repository is known from the origin remote", () => {
       "#   terraform import github_repository_environment.production sdk:production",
     );
     expect(hcl).not.toContain('#   repository = "<repository>"');
+    expect(hcl).not.toContain("GITHUB_BASE_URL");
   });
 });
 

@@ -426,6 +426,14 @@ describe("checkEnv when gh cannot read the repository", () => {
     );
   });
 
+  test("refuses a repository from gh whose host is unsafe to put in the printed commands", () => {
+    const gh = fakeGh({ host: "ghe$(id).example.com" });
+
+    expect(() => check(gh, () => null)).toThrow(
+      /Could not tell which GitHub repository to check.*cannot be embedded in commands/,
+    );
+  });
+
   test("says a repository GitHub cannot find may only be hidden from the account", () => {
     const gh = fakeGh({ responses: { "repos/acme/app": httpError(404, "Not Found") } });
 
