@@ -106,4 +106,17 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
     expect(result.changeSet.updates).toHaveLength(1);
     expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(forced ? true : undefined);
   });
+
+  test("reports a policy owned by another app with its resource type and label", async () => {
+    const result = await planPremium({ remoteMaxConcurrentExecutions: 3, owner: "other-app" });
+
+    expect(result.conflicts).toEqual([
+      {
+        resourceType: "workflow_job_function_execution_policy",
+        resourceLabel: "Workflow execution policy",
+        resourceName: "premium",
+        currentOwner: "other-app",
+      },
+    ]);
+  });
 });

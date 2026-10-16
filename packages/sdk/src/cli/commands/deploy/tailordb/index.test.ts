@@ -486,6 +486,28 @@ describe("planTailorDB (service level)", () => {
         );
       },
     );
+
+    test("reports an unmanaged service with its resource type and label", async () => {
+      const client = createMockClient([{ name: "my-tailordb" }]);
+      const application = createMockApplication([createMockTailorDBService("my-tailordb")]);
+
+      const result = await planTailorDB({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      });
+
+      expect(result.unmanaged).toEqual([
+        {
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB service",
+          resourceName: "my-tailordb",
+        },
+      ]);
+    });
   });
 
   describe("nested field manifest mapping", () => {

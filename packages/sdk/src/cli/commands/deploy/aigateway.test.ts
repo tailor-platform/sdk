@@ -155,6 +155,16 @@ describe("planAIGateway", () => {
     expect(result.unmanaged).toHaveLength(expected.unmanaged);
   });
 
+  test("reports an unmanaged gateway with its resource type and label", async () => {
+    const client = createMockClient([{ name: "gateway-a" }]);
+
+    const result = await planAIGateway(createContext(client));
+
+    expect(result.unmanaged).toEqual([
+      { resourceType: "aigateway", resourceLabel: "AIGateway", resourceName: "gateway-a" },
+    ]);
+  });
+
   test.each([
     { name: "only its sdk-version differs", overrides: { sdkVersion: "v0-9-0" }, forced: true },
     {

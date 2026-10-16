@@ -7,12 +7,14 @@ import type { MigrationCheckpointRepair } from "#/cli/commands/tailordb/migrate/
 
 export interface OwnerConflict {
   resourceType: string;
+  resourceLabel: string;
   resourceName: string;
   currentOwner: string;
 }
 
 export interface UnmanagedResource {
   resourceType: string;
+  resourceLabel: string;
   resourceName: string;
 }
 
@@ -122,7 +124,7 @@ function logIdMismatch(heading: string, conflicts: OwnerConflict[]): void {
   logger.newline();
   logger.log(`  ${styles.info("Resources")}:`);
   for (const c of conflicts) {
-    logger.log(`    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`);
+    logger.log(`    • ${styles.bold(c.resourceLabel)} ${styles.info(`"${c.resourceName}"`)}`);
   }
 }
 
@@ -169,7 +171,7 @@ async function confirmNameMismatch(
   logger.newline();
   logger.log(`  ${styles.info("Resources")}:`);
   for (const c of conflicts) {
-    logger.log(`    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`);
+    logger.log(`    • ${styles.bold(c.resourceLabel)} ${styles.info(`"${c.resourceName}"`)}`);
   }
 
   if (yes) {
@@ -216,7 +218,7 @@ export async function confirmUnmanagedResources(
 
   logger.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
-    logger.log(`    • ${styles.bold(r.resourceType)} ${styles.info(`"${r.resourceName}"`)}`);
+    logger.log(`    • ${styles.bold(r.resourceLabel)} ${styles.info(`"${r.resourceName}"`)}`);
   }
   logger.newline();
   logger.log("  These resources may have been created by older SDK versions, Terraform, or CUE.");

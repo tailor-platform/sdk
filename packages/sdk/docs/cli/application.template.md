@@ -186,10 +186,12 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
     }
   ],
   "warnings": [
-    { "type": "unmanaged", "resourceType": "tailorDB", "name": "LegacyType" },
-    { "type": "skippedSecret", "resourceType": "secret", "name": "DB_PASSWORD" }
+    { "type": "unmanaged", "resourceType": "staticwebsite", "name": "legacy-site" },
+    { "type": "skippedSecret", "resourceType": "secret.secret", "name": "my-vault/DB_PASSWORD" }
   ],
-  "conflicts": [{ "resourceType": "tailorDB", "name": "User", "currentOwner": "other-app" }]
+  "conflicts": [
+    { "resourceType": "tailordb.service", "name": "tailordb", "currentOwner": "other-app" }
+  ]
 }
 ```
 
@@ -197,6 +199,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
 - `warnings` — resources not in config (`type: "unmanaged"`) or secrets with missing values (`type: "skippedSecret"`). Unmanaged resources require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
 - `conflicts` — resources owned by another application that conflict with the current config. Require confirmation in apply mode; apply is cancelled if declined.
+- `resourceType` in `warnings` and `conflicts` is a stable identifier of the resource kind, such as `executor`, `tailordb.service`, or `secret.secret`. The human-readable plan shows a display name instead.
 
 **Apply** (`--json`): writes a JSON object to stdout:
 

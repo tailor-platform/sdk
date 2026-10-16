@@ -713,7 +713,11 @@ describe("planSecretManager vault metadata and deletion", () => {
     const result = await planSecretManager(ctx);
 
     expect(result.unmanaged).toEqual([
-      { resourceType: "Secret Manager vault", resourceName: "my-vault" },
+      {
+        resourceType: "secret.vault",
+        resourceLabel: "Secret Manager vault",
+        resourceName: "my-vault",
+      },
     ]);
   });
 
@@ -739,7 +743,8 @@ describe("planSecretManager vault metadata and deletion", () => {
 
     expect(result.conflicts).toEqual([
       {
-        resourceType: "Secret Manager vault",
+        resourceType: "secret.vault",
+        resourceLabel: "Secret Manager vault",
         resourceName: "my-vault",
         currentOwner: "other-app",
       },

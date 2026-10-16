@@ -557,8 +557,9 @@ describe("planExecutor", () => {
       const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Should detect unmanaged resource
-      expect(result.unmanaged).toHaveLength(1);
-      expect(result.unmanaged[0]!.resourceName).toBe("my-executor");
+      expect(result.unmanaged).toEqual([
+        { resourceType: "executor", resourceLabel: "Executor", resourceName: "my-executor" },
+      ]);
     });
 
     test("detects conflict when same name owned by different app", async () => {
@@ -570,9 +571,14 @@ describe("planExecutor", () => {
       const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Should detect conflict
-      expect(result.conflicts).toHaveLength(1);
-      expect(result.conflicts[0]!.resourceName).toBe("my-executor");
-      expect(result.conflicts[0]!.currentOwner).toBe("other-app");
+      expect(result.conflicts).toEqual([
+        {
+          resourceType: "executor",
+          resourceLabel: "Executor",
+          resourceName: "my-executor",
+          currentOwner: "other-app",
+        },
+      ]);
     });
   });
 

@@ -52,6 +52,7 @@ export interface TrackDesiredResourceOwnershipParams {
   appName: string;
   appId: string | undefined;
   resourceType: string;
+  resourceLabel: string;
   resourceName: string;
   conflicts: OwnerConflict[];
   unmanaged: UnmanagedResource[];
@@ -65,7 +66,8 @@ export interface TrackDesiredResourceOwnershipParams {
  * @param params.ownerLabel - Existing `sdk-name` label, when present
  * @param params.appName - Current application name
  * @param params.appId - Current application id, when present
- * @param params.resourceType - Resource kind for confirmation messages
+ * @param params.resourceType - Stable resource kind identifier for machine-readable output
+ * @param params.resourceLabel - Resource kind for confirmation messages
  * @param params.resourceName - Resource name for confirmation messages
  * @param params.conflicts - Conflict accumulator
  * @param params.unmanaged - Unmanaged-resource accumulator
@@ -74,15 +76,25 @@ export interface TrackDesiredResourceOwnershipParams {
 export function trackDesiredResourceOwnership(
   params: TrackDesiredResourceOwnershipParams,
 ): boolean {
-  const { labels, ownerLabel, appName, appId, resourceType, resourceName, conflicts, unmanaged } =
-    params;
+  const {
+    labels,
+    ownerLabel,
+    appName,
+    appId,
+    resourceType,
+    resourceLabel,
+    resourceName,
+    conflicts,
+    unmanaged,
+  } = params;
   const owned = isOwnedByApp(labels, appName, appId);
   if (!owned) {
     if (!ownerLabel) {
-      unmanaged.push({ resourceType, resourceName });
+      unmanaged.push({ resourceType, resourceLabel, resourceName });
     } else {
       conflicts.push({
         resourceType,
+        resourceLabel,
         resourceName,
         currentOwner: ownerLabel,
       });

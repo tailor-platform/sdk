@@ -204,7 +204,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
     })),
     ...results.secretManager.skippedSecrets.map((name) => ({
       type: "skippedSecret" as const,
-      resourceType: "secret",
+      resourceType: "secret.secret",
       name,
     })),
   ];
@@ -235,8 +235,8 @@ function buildPlanReport(results: PlanResults): PlanReport {
 
   if (allUnmanaged.length > 0) {
     allLines.push(styles.bold("Unmanaged resources (not in config):"));
-    for (const { resourceType, resourceName } of allUnmanaged) {
-      allLines.push(`  ${styles.warning("⚠")} ${styles.bold(resourceType)} "${resourceName}"`);
+    for (const { resourceLabel, resourceName } of allUnmanaged) {
+      allLines.push(`  ${styles.warning("⚠")} ${styles.bold(resourceLabel)} "${resourceName}"`);
     }
   }
 
@@ -249,9 +249,9 @@ function buildPlanReport(results: PlanResults): PlanReport {
 
   if (allConflicts.length > 0) {
     allLines.push(styles.bold("Owner conflicts (will require confirmation on apply):"));
-    for (const { resourceType, resourceName, currentOwner } of allConflicts) {
+    for (const { resourceLabel, resourceName, currentOwner } of allConflicts) {
       allLines.push(
-        `  ${styles.warning("!")} ${styles.bold(resourceType)} "${resourceName}" — owned by "${currentOwner}"`,
+        `  ${styles.warning("!")} ${styles.bold(resourceLabel)} "${resourceName}" — owned by "${currentOwner}"`,
       );
     }
   }
