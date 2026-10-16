@@ -1,3 +1,7 @@
+---
+description: "Test SDK applications with Vitest: unit-test resolvers, workflow jobs, and executors with platform API mocks, and run end-to-end tests against a deployed workspace."
+---
+
 # Testing Guide
 
 Tailor Platform SDK applications are tested with [Vitest](https://vitest.dev/) at two layers:

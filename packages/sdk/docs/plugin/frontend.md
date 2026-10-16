@@ -1,3 +1,7 @@
+---
+description: "Build your frontend and upload it to a Static Website on every tailor deploy, with deployed URLs and OAuth client IDs passed in as build variables."
+---
+
 # Frontend Plugin
 
 `frontendPlugin` builds frontend assets and uploads them to Static Websites after

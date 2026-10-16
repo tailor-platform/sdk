@@ -1,3 +1,7 @@
+---
+description: "Log in and out of the Tailor Platform, check authentication status, print access tokens, switch users, and manage personal access tokens."
+---
+
 # User & Auth Commands
 
 Commands for authentication and user management.

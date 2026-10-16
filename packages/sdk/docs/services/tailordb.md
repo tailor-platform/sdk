@@ -1,3 +1,7 @@
+---
+description: "Define TailorDB tables in TypeScript with field types, relations, permissions, hooks, and validations, and get a generated GraphQL API."
+---
+
 # TailorDB
 
 TailorDB is a type-safe database service for defining and managing data models on the Tailor Platform.

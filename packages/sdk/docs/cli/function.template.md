@@ -1,4 +1,5 @@
 ---
+description: "Inspect function registries, view function execution logs, and run one-off functions on the Tailor Platform without deploying."
 politty:
   index:
     title: "Function Commands"

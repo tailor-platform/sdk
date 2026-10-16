@@ -1,3 +1,7 @@
+---
+description: "Generate, test, and apply TailorDB schema migrations with optional data migration scripts, and recover from failed migrations."
+---
+
 # TailorDB Migrations
 
 > **Beta:** The `tailordb migration` command and the migration runtime are beta features. They may introduce breaking changes in future releases. The CLI emits a beta warning on every invocation.

@@ -1,3 +1,7 @@
+---
+description: "Install, sync, list, and remove Tailor SDK agent skills for AI coding assistants."
+---
+
 ## skills
 
 Manage Tailor SDK agent skills.

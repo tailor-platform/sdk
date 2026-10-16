@@ -1,4 +1,5 @@
 ---
+description: "List and inspect executors, view executor jobs, and trigger executors manually with the tailor CLI."
 politty:
   index:
     title: "Executor Commands"

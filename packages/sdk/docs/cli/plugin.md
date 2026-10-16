@@ -1,3 +1,7 @@
+---
+description: "Discover and list tailor CLI plugins, the external tailor-<name> executables found on your PATH or in node_modules/.bin."
+---
+
 ## plugin
 
 Manage and inspect CLI plugins (beta).

@@ -1,3 +1,7 @@
+---
+description: "List and inspect workflows, start and wait for workflow runs, and view and resume workflow executions with the tailor CLI."
+---
+
 # Workflow Commands
 
 Commands for managing workflows and workflow executions.

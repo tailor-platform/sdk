@@ -1,4 +1,5 @@
 ---
+description: "Truncate TailorDB table data and generate, test, validate, and apply TailorDB schema migrations with the tailor CLI."
 politty:
   index:
     title: "TailorDB Commands"
