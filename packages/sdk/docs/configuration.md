@@ -183,13 +183,26 @@ export default defineConfig({
 
 With `false`, a property read whose result is unused is removed, and so is a call that only exists to receive such a read. This also removes a read that exists only for its effect: a getter that initializes something when it is read, or a statement such as `settings.db.url;` that throws when `settings.db` is missing. Keep the default if your code or an installed package relies on a read like that.
 
-`treeshake` also accepts these switches, each overriding the SDK's default. The defaults are tuned for the Tailor Platform runtime and rarely need changing:
+`treeshake` has four switches. The values below are the defaults, which are tuned for the Tailor Platform runtime and rarely need changing:
 
-| Switch                     | Default | Meaning when `true`                                                                 |
-| -------------------------- | ------- | ----------------------------------------------------------------------------------- |
-| `moduleSideEffects`        | `false` | An imported module is kept even when none of its exports is used.                   |
-| `annotations`              | `true`  | `@__PURE__` and `@__NO_SIDE_EFFECTS__` comment annotations are honored.             |
-| `unknownGlobalSideEffects` | `false` | Reading a global the bundle does not define is kept even when its result is unused. |
+```typescript
+export default defineConfig({
+  name: "my-app",
+  buildOptions: {
+    treeshake: {
+      // true: keep an imported module even when none of its exports is used, so code
+      // that runs on import (such as registering something on `globalThis`) stays.
+      moduleSideEffects: false,
+      // true: honor `@__PURE__` and `@__NO_SIDE_EFFECTS__` comment annotations.
+      annotations: true,
+      // true: keep a read of a global the bundle does not define even when its result is unused.
+      unknownGlobalSideEffects: false,
+      // true: keep a property read (`shared.db.company`) even when its result is unused.
+      propertyReadSideEffects: true,
+    },
+  },
+});
+```
 
 The settings apply to resolvers, executors, workflow jobs, auth hooks, HTTP adapters, and `tailor function run`; other bundles are not affected. They are bundle-time settings, so already deployed functions must be redeployed to pick up a change.
 
