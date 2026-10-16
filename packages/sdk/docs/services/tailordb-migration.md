@@ -425,7 +425,7 @@ Because steps commit separately, a failure does not undo the steps that already 
 - If the steps changed since the earlier run, or that run is no longer available, every step runs again from the beginning. See [Editing steps of a migration in progress](#editing-steps-of-a-migration-in-progress).
 - If every step completed but the post-migration schema changes fail (for example, a field the migration makes required still has empty values), the migration also stays in progress with its pre-migration schema, and the next deploy retries those schema changes without running the steps again.
 - To run a completed step again (because it had a bug, or to fix rows the post-migration schema changes reject), change the steps: rename that step and update the `dependsOn` lists that name it, or add a step that fixes the rows. Every step then runs again from the beginning, so this relies on every step being safe to run again; to keep the other completed steps from running again, skip them as described below.
-- While a migration is in progress, `migration set`, `migration sync`, and `migration rebaseline` refuse to run, and `migration test` refuses to use that workspace as its source. Finish the migration with `tailor deploy` first. The one exception is `migration set <N>` with the in-progress migration's own number: it marks that migration as completed and clears its in-progress record. Use it only when the migration's schema changes are already applied, for example after the deploy reported that the checkpoint write could not be confirmed.
+- While a migration is in progress, `migration set`, `migration sync`, and `migration rebaseline` refuse to run, and `migration test` refuses to use that workspace as its source. Finish the migration with `tailor deploy` first, or settle it with `migration resolve` (see [Settling a migration that stays in progress](#settling-a-migration-that-stays-in-progress)). The one exception is `migration set <N>` with the in-progress migration's own number: it marks that migration as completed and clears its in-progress record. Use it only when the migration's schema changes are already applied, for example after the deploy reported that the checkpoint write could not be confirmed.
 
 #### Editing steps of a migration in progress
 
@@ -449,6 +449,15 @@ tailor deploy --migration-skip-steps main-db/backfillUser,main-db/backfillInvoic
 - It takes effect for the deploy you pass it to. If that run fails, the next `tailor deploy` resumes it as usual, and the skipped steps stay completed without passing the option again.
 
 Write every step so that running it again is safe: besides the cases above, a step can run a second time when a deploy is interrupted right after it commits. Use `where` clauses that skip rows a step already migrated, as in the example. Rows written while a migration is in progress are not seen by steps that already completed. [Maintenance mode](#maintenance-mode) blocks GraphQL writes but not the writes your resolvers, executors, or workflows make through Kysely, and without it GraphQL clients can write too, so stop such writers until the migration finishes or write steps that tolerate them.
+
+### Settling a migration that stays in progress
+
+When you do not want to resume the migration with another deploy — you abandoned it, or you repaired the data by hand — settle it with `tailor tailordb migration resolve`. Pass exactly one of two options:
+
+- `--rollback` sends the schema of the migration before the failed one, clears the in-progress record, and leaves the checkpoint where it was. The next `tailor deploy` runs the failed migration again from its first step, so every step must be safe to run again. Data changes made by steps that already completed are not undone, and tables that exist only in the failed migration's schema are deleted with their data.
+- `--complete` sends the schema of the failed migration itself, clears the in-progress record, and moves the checkpoint to that migration, without running its `migrate.ts` again. Repair the data first, for example with `tailor query`, and make sure no record lacks a value for a field the migration makes required: the update is rejected while such a record exists, and the migration stays in progress.
+
+Tables that the failed migration removes are deleted with their data under `--complete`. The command refuses to run while an execution of the failed migration is still running; wait for it to finish first. Both options take the namespace's tables out of [maintenance mode](#maintenance-mode) and remove the temporary resources of the failed run. The command shows what it will change and asks for confirmation (`--yes` skips it). As with `migration sync`, the local migration history must reproduce the current table definitions, so settle the migration before you change the tables. If sending the schema stops partway, run the same command again.
 
 ## Supported Schema Changes
 
