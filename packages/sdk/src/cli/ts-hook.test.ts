@@ -272,6 +272,31 @@ describe("resolve", () => {
     expect(result).toEqual({ url: "file:///alias-project/tailordb/user.ts?tailorImportNonce=1" });
   });
 
+  test("resolves tsconfig path alias from the original importer when nextResolve leaves a different parentURL on the context", async () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith("/alias-mutated-project/tsconfig.json", { encoding: "utf-8" })
+      .thenReturn(tsconfig);
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce(async (_specifier: string, context: { parentURL?: string }) => {
+        context.parentURL = "file:///alias-mutated-project/node_modules/x";
+        throw notFound("@/tailordb/user");
+      })
+      .mockResolvedValueOnce({ url: "file:///alias-mutated-project/tailordb/user.ts" });
+    const result = await resolve(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-mutated-project/tailor.config.ts?tailorImportNonce=1" },
+      nextResolve,
+    );
+    expect(result).toEqual({
+      url: "file:///alias-mutated-project/tailordb/user.ts?tailorImportNonce=1",
+    });
+  });
+
   test("collects paths from same-directory extends (visited key tracks file path, not dir)", async () => {
     const baseConfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
@@ -592,6 +617,31 @@ describe("resolveSync", () => {
     );
     expect(result).toEqual({
       url: "file:///alias-sync-project/tailordb/user.ts?tailorImportNonce=1",
+    });
+  });
+
+  test("resolves tsconfig path alias from the original importer when nextResolve leaves a different parentURL on the context", () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith("/alias-mutated-sync-project/tsconfig.json", { encoding: "utf-8" })
+      .thenReturn(tsconfig);
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce((_specifier: string, context: { parentURL?: string }) => {
+        context.parentURL = "file:///alias-mutated-sync-project/node_modules/x";
+        throw notFound("@/tailordb/user");
+      })
+      .mockReturnValueOnce({ url: "file:///alias-mutated-sync-project/tailordb/user.ts" });
+    const result = resolveSync(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-mutated-sync-project/tailor.config.ts?tailorImportNonce=1" },
+      nextResolve,
+    );
+    expect(result).toEqual({
+      url: "file:///alias-mutated-sync-project/tailordb/user.ts?tailorImportNonce=1",
     });
   });
 
