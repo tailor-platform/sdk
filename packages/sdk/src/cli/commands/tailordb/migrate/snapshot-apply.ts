@@ -7,7 +7,6 @@ import {
   protoGqlPermission,
   type GenerateAllManifestsOptions,
 } from "./snapshot-manifest";
-import { handleOptionalToRequiredError } from "./types";
 import type { SchemaSnapshot } from "./snapshot-types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
@@ -43,7 +42,6 @@ export type ApplySnapshotPlanParams = SnapshotApplyTarget & {
   snapshot: SchemaSnapshot;
   manifestOptions: GenerateAllManifestsOptions;
   plan: SnapshotApplyPlan;
-  requiredFieldGuidance: readonly string[];
 };
 
 async function fetchRemoteGqlPermissions(
@@ -143,11 +141,9 @@ export async function planSnapshotApply(
  * @param params.snapshot - Snapshot the manifests are generated from
  * @param params.manifestOptions - Manifest generation options deploy would use
  * @param params.plan - What {@link planSnapshotApply} returned
- * @param params.requiredFieldGuidance - Lines shown when a field cannot be made required because records have no value for it
  */
 export async function applySnapshotPlan(params: ApplySnapshotPlanParams): Promise<void> {
-  const { client, workspaceId, namespace, snapshot, manifestOptions, plan, requiredFieldGuidance } =
-    params;
+  const { client, workspaceId, namespace, snapshot, manifestOptions, plan } = params;
   const { creates, updates, deletes, desiredGqlPermissions, gqlPermissionDeletes } = plan;
   const manifests = generateAllTypeManifestsFromSnapshot(snapshot, manifestOptions);
 
@@ -166,26 +162,22 @@ export async function applySnapshotPlan(params: ApplySnapshotPlanParams): Promis
   const createManifests = creates.map((tableName) => manifestFor(tableName));
   const updateManifests = updates.map((tableName) => manifestFor(tableName));
 
-  try {
-    await Promise.all([
-      ...createManifests.map((tailordbType) =>
-        client.createTailorDBType({
-          workspaceId,
-          namespaceName: namespace,
-          tailordbType,
-        }),
-      ),
-      ...updateManifests.map((tailordbType) =>
-        client.updateTailorDBType({
-          workspaceId,
-          namespaceName: namespace,
-          tailordbType,
-        }),
-      ),
-    ]);
-  } catch (error) {
-    handleOptionalToRequiredError(error, [...requiredFieldGuidance]);
-  }
+  await Promise.all([
+    ...createManifests.map((tailordbType) =>
+      client.createTailorDBType({
+        workspaceId,
+        namespaceName: namespace,
+        tailordbType,
+      }),
+    ),
+    ...updateManifests.map((tailordbType) =>
+      client.updateTailorDBType({
+        workspaceId,
+        namespaceName: namespace,
+        tailordbType,
+      }),
+    ),
+  ]);
   await Promise.all(
     desiredGqlPermissions.map(({ typeName, permission }) => {
       const request = { workspaceId, namespaceName: namespace, typeName, permission };

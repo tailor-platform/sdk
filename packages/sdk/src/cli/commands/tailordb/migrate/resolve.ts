@@ -35,6 +35,7 @@ import {
 } from "./snapshot";
 import { applySnapshotPlan, planSnapshotApply } from "./snapshot-apply";
 import { assertMigrationsReproduceLocalTypes } from "./sync";
+import { handleOptionalToRequiredError } from "./types";
 
 type Resolution = "rollback" | "complete";
 
@@ -201,18 +202,14 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
 
   await assertMigrationStateUnchanged({ client, workspaceId, namespace, before: state });
   await assertNoActiveMigrationExecution(client, workspaceId, namespace, migrationNumber);
-  await applySnapshotPlan({
-    client,
-    workspaceId,
-    namespace,
-    snapshot,
-    manifestOptions,
-    plan,
-    requiredFieldGuidance: [
+  try {
+    await applySnapshotPlan({ client, workspaceId, namespace, snapshot, manifestOptions, plan });
+  } catch (error) {
+    handleOptionalToRequiredError(error, [
       `The schema of migration ${migrationLabel} marks a field as required, but records still have no value for it.`,
       "Fill in those records first (for example with 'tailor query'), then run the command again; the migration stays in progress until the update goes through.",
-    ],
-  });
+    ]);
+  }
 
   if (state.maintenanceModeCheckpoint !== null) {
     await clearMaintenanceModeRecord(client, workspaceId, namespace);

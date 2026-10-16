@@ -32,6 +32,7 @@ import {
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
 import { applySnapshotPlan, planSnapshotApply } from "./snapshot-apply";
+import { handleOptionalToRequiredError } from "./types";
 import type { GenerateAllManifestsOptions } from "./snapshot-manifest";
 
 interface SyncOptions {
@@ -293,18 +294,21 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     logger.newline();
   }
 
-  await applySnapshotPlan({
-    client,
-    workspaceId,
-    namespace: target.namespace,
-    snapshot,
-    manifestOptions,
-    plan,
-    requiredFieldGuidance: [
+  try {
+    await applySnapshotPlan({
+      client,
+      workspaceId,
+      namespace: target.namespace,
+      snapshot,
+      manifestOptions,
+      plan,
+    });
+  } catch (error) {
+    handleOptionalToRequiredError(error, [
       "The target snapshot marks a field as required, but existing remote records have no value for it.",
       "Populate those records first (e.g. with a migration script applied via 'tailor deploy'), then re-run the sync.",
-    ],
-  });
+    ]);
+  }
 
   const historyId = snapshot.rebaseline?.historyId;
   const labelChanged = await updateMigrationLabel(
