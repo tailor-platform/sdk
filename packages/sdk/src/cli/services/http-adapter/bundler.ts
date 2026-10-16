@@ -6,7 +6,10 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/ca
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import {
+  composeFunctionTreeshakeOptions,
+  createUserTreeshakeOptions,
+} from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import {
@@ -16,7 +19,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
 import { getNodeBuiltinMessage, isNodeBuiltinImport } from "#/utils/node-builtins";
-import type { LogLevel } from "#/configure/config/types";
+import type { LogLevel, TreeshakeOptions } from "#/configure/config/types";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
@@ -46,6 +49,7 @@ export interface HttpAdapterBundleResult {
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
  * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
+ * @param bundleTreeshake - Overrides how unused code is removed from bundled code
  * @returns Bundled scripts keyed by adapter name
  */
 export async function bundleHttpAdapters(
@@ -54,6 +58,7 @@ export async function bundleHttpAdapters(
   cache?: BundleCache,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
+  bundleTreeshake?: TreeshakeOptions,
 ): Promise<HttpAdapterBundleResult> {
   if (adapters.length === 0) {
     return { bundledInputs: new Map(), bundledOutputs: new Map() };
@@ -72,7 +77,15 @@ export async function bundleHttpAdapters(
     return kinds.map((kind) => ({ adapter, kind }));
   });
   const results = await withBundleConcurrency(tasks, ({ adapter, kind }) =>
-    bundleAdapterScript(adapter, kind, tsconfig, cache, bundleLogLevel, tsconfigCache),
+    bundleAdapterScript(
+      adapter,
+      kind,
+      tsconfig,
+      cache,
+      bundleLogLevel,
+      tsconfigCache,
+      bundleTreeshake,
+    ),
   );
 
   const bundledInputs = new Map<string, string>();
@@ -97,6 +110,7 @@ async function bundleAdapterScript(
   cache: BundleCache | undefined,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
+  bundleTreeshake?: TreeshakeOptions,
 ): Promise<[string, "input" | "output", string]> {
   const contextHash = computeBundlerContextHash({
     sourceFile: adapter.sourceFile,
@@ -104,6 +118,7 @@ async function bundleAdapterScript(
     tsconfig,
     inlineSourcemap: false,
     bundleLogLevel,
+    bundleTreeshake,
     prefix: `${kind}:document-query-normalize-v1`,
   });
 
@@ -180,6 +195,7 @@ async function bundleAdapterScript(
         transform: { target: "es2017" },
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
+          createUserTreeshakeOptions(bundleTreeshake),
         ]),
         ...bundleLog.options,
       } as rolldown.BuildOptions);

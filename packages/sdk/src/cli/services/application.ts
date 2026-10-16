@@ -698,6 +698,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
@@ -716,6 +717,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
@@ -740,6 +742,7 @@ export async function loadApplication(
       undefined,
       buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      buildOptions.treeshake,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -758,6 +761,7 @@ export async function loadApplication(
       bundleCache,
       bundleLogLevel,
       tsconfigCache,
+      buildOptions.treeshake,
     );
   }
 
@@ -773,6 +777,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
       dateDefault,
@@ -883,6 +888,7 @@ async function reloadEnvDependentBundles(params: {
       previous.workflowBuildResult,
       buildOptionsOf(config).allowedRuntimeGlobals,
       effectiveDateDefault(config),
+      buildOptionsOf(config).treeshake,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -898,6 +904,7 @@ async function reloadEnvDependentBundles(params: {
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      bundleTreeshake: buildOptionsOf(config).treeshake,
       baseDir,
       tsconfigCache,
       dateDefault: effectiveDateDefault(config),

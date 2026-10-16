@@ -18,6 +18,12 @@ describe("buildOptionsOf", () => {
     });
   });
 
+  test("reads treeshake from buildOptions", () => {
+    expect(
+      buildOptionsOf({ buildOptions: { treeshake: { propertyReadSideEffects: false } } }).treeshake,
+    ).toEqual({ propertyReadSideEffects: false });
+  });
+
   test("falls back to the deprecated top-level inlineSourcemap and logLevel", () => {
     // oxlint-disable-next-line typescript/no-deprecated -- The fallback for the deprecated fields is what this test covers.
     expect(buildOptionsOf({ inlineSourcemap: false, logLevel: "ERROR" })).toEqual({

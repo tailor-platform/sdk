@@ -60,7 +60,7 @@ export default defineConfig({
 
 Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. Because those retained labels count towards the platform's limit of 20 labels per resource, `deploy` reports the overflow and stops before changing the application when the labels it would leave behind exceed that limit. The labels are written when the application itself is deployed, so a config with no TailorDB, Resolver, IdP, or Auth service has no application to carry them.
 
-**Build Options**: `buildOptions` groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `logLevel` (below), `inlineSourcemap` (whether bundled functions embed an inline sourcemap for readable error stack traces; default `true`), and `allowedRuntimeGlobals` (see [Node-only globals](#node-only-globals)). The top-level `logLevel` and `inlineSourcemap` fields still work but are deprecated; `tailor upgrade` moves them into `buildOptions`. Setting the same option both at the top level and in `buildOptions` is rejected.
+**Build Options**: `buildOptions` groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `logLevel` (below), `inlineSourcemap` (whether bundled functions embed an inline sourcemap for readable error stack traces; default `true`), `allowedRuntimeGlobals` (see [Node-only globals](#node-only-globals)), and `treeshake` (see [Removing unused code](#removing-unused-code)). The top-level `logLevel` and `inlineSourcemap` fields still work but are deprecated; `tailor upgrade` moves them into `buildOptions`. Setting the same option both at the top level and in `buildOptions` is rejected.
 
 **Log Level** (`buildOptions.logLevel`): Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`) calls are kept when deployment functions are bundled. Supported values are `"DEBUG"`, `"INFO"`, `"WARN"`, `"ERROR"`, and `"SILENT"`. The default is `"DEBUG"` and keeps all calls. `console.log` is treated as a DEBUG-level call (matching the platform's OpenTelemetry severity mapping), so it is dropped at `"INFO"` and above, alongside `console.debug` and `logger.debug`. `logger.setAttributes` has no severity and is never dropped, regardless of `logLevel`. For production deployments, use `"WARN"` to keep warn/error calls while dropping debug, log, and info calls:
 
@@ -167,6 +167,44 @@ export default defineConfig({
 ```
 
 `buildOptions.allowedRuntimeGlobals` has no effect on your own code. Packages from your own workspace (for example, a pnpm or npm workspace) are bundled from their source directory rather than from `node_modules`, so they count as your own code.
+
+#### Removing unused code
+
+Bundling leaves out code a function never reaches. By default, reading a property such as `shared.db.company` counts as something that may have an effect, so a call like `createService({ db: { company: shared.db.company } })` stays in the bundle even when nothing uses its result, together with every module it imports. When a bundle is larger than expected because of modules the function does not use, set `buildOptions.treeshake.propertyReadSideEffects` to `false`:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  buildOptions: {
+    treeshake: { propertyReadSideEffects: false },
+  },
+});
+```
+
+With `false`, a property read whose result is unused is removed, and so is a call that only exists to receive such a read. This also removes a read that exists only for its effect: a getter that initializes something when it is read, or a statement such as `settings.db.url;` that throws when `settings.db` is missing. Keep the default if your code or an installed package relies on a read like that.
+
+`treeshake` has four switches that control how unused code is removed from bundles. The values below are the SDK's defaults, which are tuned for the Tailor Platform runtime and rarely need changing. Most switches ask whether something has side effects, so `true` keeps it, while `annotations` asks whether to honor annotations, so `true` removes more:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  buildOptions: {
+    treeshake: {
+      // true: keep an imported module even when none of its exports is used, so code
+      // that runs on import (such as registering something on `globalThis`) stays.
+      moduleSideEffects: false,
+      // true: honor `@__PURE__` and `@__NO_SIDE_EFFECTS__` comment annotations.
+      annotations: true,
+      // true: keep a read of a global the bundle does not define even when its result is unused.
+      unknownGlobalSideEffects: false,
+      // true: keep a property read (`shared.db.company`) even when its result is unused.
+      propertyReadSideEffects: true,
+    },
+  },
+});
+```
+
+The settings apply to resolvers, executors, workflow jobs, auth hooks, HTTP adapters, and `tailor function run`; other bundles are not affected. They are bundle-time settings, so already deployed functions must be redeployed to pick up a change.
 
 ### External Resources
 
