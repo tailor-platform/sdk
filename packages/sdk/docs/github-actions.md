@@ -848,9 +848,10 @@ server and its runners first:
 - **Environment settings:** sign `gh` in to the server
   (`gh auth login --hostname <host>`) before you run `tailor setup ci env` in a
   clone of the repository, so that the `gh` commands it prints and its Terraform
-  output target the server. When `gh` cannot tell the repository, the printed
-  commands say to export `GH_HOST=<host>` first, so that `gh api` calls the
-  server instead of github.com.
+  output target the server. When `gh` cannot tell the repository, the output
+  says to export `GH_HOST=<host>` before running the `gh` commands, or
+  `GITHUB_BASE_URL=https://<host>/` before running Terraform, so that they
+  call the server instead of github.com.
 
 With `--erd-preview`, also pass `--ghes`:
 

@@ -341,6 +341,12 @@ describe("renderTerraform", () => {
     expect(hcl).toContain('resource "github_repository_environment" "production" {');
   });
 
+  test("tells GitHub Enterprise Server users to point the provider at their host, since it is unknown", () => {
+    expect(renderTerraform(envs())).toContain(
+      "#   On GitHub Enterprise Server, also export GITHUB_BASE_URL=https://<host>/",
+    );
+  });
+
   test("explains how to get each value above its input variable", () => {
     expect(renderTerraform(envs())).toMatch(
       /# How to get: .*tailor workspace create.*\nvariable "production_tailor_platform_workspace_id" \{/,

@@ -268,6 +268,9 @@ function terraformUsage(
     "# 1. Authenticate the GitHub provider, for example:",
     `#   export GITHUB_TOKEN=<token> GITHUB_OWNER=${repository?.owner ?? "<owner>"}` +
       (repository?.host ? ` GITHUB_BASE_URL=https://${repository.host}/` : ""),
+    ...(repository
+      ? []
+      : ["#   On GitHub Enterprise Server, also export GITHUB_BASE_URL=https://<host>/"]),
     "# 2. Set the non-secret values in terraform.tfvars:",
     ...(repository ? [] : ['#   repository = "<repository>"']),
     ...inputs
