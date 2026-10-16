@@ -7,7 +7,6 @@
  * under the new type. Every assertion here reads the rows back.
  */
 
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -20,6 +19,7 @@ import {
 } from "../src/cli/commands/tailordb/migrate/snapshot";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
+import { CLI_BUDGET_MS, cliTestTimeout, runCli, tryCli } from "./cli";
 import {
   resolveE2ERunId,
   resolveE2EWorkspaceRegion,
@@ -47,29 +47,12 @@ describe("E2E: TailorDB expand-contract field type change", { concurrent: false 
   let tempDir: string;
   let migrationsDir: string;
 
-  function runCli(args: string[], timeout = 300000): void {
-    const cliPath = path.join(path.resolve(__dirname, ".."), "bin", "tailor.mjs");
-    execFileSync("node", [cliPath, ...args], {
-      cwd: tempDir,
-      stdio: ["ignore", "pipe", "pipe"],
-      // A configured editor would open the generated script and block the run.
-      env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules", EDITOR: "", VISUAL: "" },
-      encoding: "utf-8",
-      timeout,
-    });
+  function runInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
+    return runCli(args, { cwd: tempDir, timeoutMs, signal });
   }
 
-  function tryCli(args: string[], timeout = 300000): { ok: boolean; output: string } {
-    try {
-      runCli(args, timeout);
-      return { ok: true, output: "" };
-    } catch (error: unknown) {
-      const e = error as { stdout?: Buffer | string; stderr?: Buffer | string };
-      return {
-        ok: false,
-        output: `${e.stdout?.toString() ?? ""}\n${e.stderr?.toString() ?? ""}`,
-      };
-    }
+  function tryInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
+    return tryCli(args, { cwd: tempDir, timeoutMs, signal });
   }
 
   /**
@@ -129,16 +112,13 @@ export type user = typeof user;
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
-    trackWorkspace(workspaceId);
+    await trackWorkspace(client, workspaceId);
     process.env.TAILOR_PLATFORM_WORKSPACE_ID = workspaceId;
 
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "expand-e2e-"));
     trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
-
-    delete process.env.EDITOR;
-    delete process.env.VISUAL;
 
     fs.mkdirSync(path.join(tempDir, "tailordb"), { recursive: true });
     fs.mkdirSync(migrationsDir, { recursive: true });
@@ -165,19 +145,33 @@ export type user = typeof user;
     await runSuite();
   }, 300000);
 
-  test("seeds integer values under the original type", async () => {
-    updateTypeFile("db.int()", "db.string()");
-    const configPath = createConfig();
+  test(
+    "seeds integer values under the original type",
+    async ({ signal }) => {
+      updateTypeFile("db.int()", "db.string()");
+      const configPath = createConfig();
 
-    runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
-    runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"]);
+      await runInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
+      await runInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.deploy,
+        signal,
+      );
 
-    // A schema change is what earns a migration to hang the seed script on.
-    updateTypeFile("db.int()", "db.string()", "  seedMarker: db.string({ optional: true }),\n");
-    runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
-    fs.writeFileSync(
-      getMigrationFilePath(migrationsDir, 1, "migrate"),
-      `import type { Transaction } from "./db";
+      // A schema change is what earns a migration to hang the seed script on.
+      updateTypeFile("db.int()", "db.string()", "  seedMarker: db.string({ optional: true }),\n");
+      await runInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
+      fs.writeFileSync(
+        getMigrationFilePath(migrationsDir, 1, "migrate"),
+        `import type { Transaction } from "./db";
 
 export async function main(trx: Transaction): Promise<void> {
   await trx
@@ -189,84 +183,136 @@ export async function main(trx: Transaction): Promise<void> {
     .execute();
 }
 `,
-    );
-    runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"]);
+      );
+      await runInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.deploy,
+        signal,
+      );
 
-    expect(reconstructSnapshotFromMigrations(migrationsDir)?.tables.User?.fields.price?.type).toBe(
-      "integer",
-    );
-  }, 900000);
+      expect(
+        reconstructSnapshotFromMigrations(migrationsDir)?.tables.User?.fields.price?.type,
+      ).toBe("integer");
+    },
+    cliTestTimeout(
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.deploy,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.deploy,
+    ),
+  );
 
-  test("rejects the type change until the conversion is requested", async () => {
-    updateTypeFile(
-      "db.bool()",
-      "db.string({ array: true })",
-      "  seedMarker: db.string({ optional: true }),\n",
-    );
-    const configPath = createConfig();
+  test(
+    "rejects the type change until the conversion is requested",
+    async ({ signal }) => {
+      updateTypeFile(
+        "db.bool()",
+        "db.string({ array: true })",
+        "  seedMarker: db.string({ optional: true }),\n",
+      );
+      const configPath = createConfig();
 
-    const result = tryCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
+      const result = await tryInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
 
-    expect(result.ok).toBe(false);
-    expect(result.output).toContain("Unsupported schema changes detected");
-  }, 300000);
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain("Unsupported schema changes detected");
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local),
+  );
 
-  test("marks the generated conversion as needing review", async () => {
-    const configPath = createConfig();
+  test(
+    "marks the generated conversion as needing review",
+    async ({ signal }) => {
+      const configPath = createConfig();
 
-    runCli([
-      "tailordb",
-      "migration",
-      "generate",
-      "--config",
-      configPath,
-      "--yes",
-      "--expand-contract",
-      "User.price",
-      "--expand-contract",
-      "User.tags",
-    ]);
+      await runInTempDir(
+        [
+          "tailordb",
+          "migration",
+          "generate",
+          "--config",
+          configPath,
+          "--yes",
+          "--expand-contract",
+          "User.price",
+          "--expand-contract",
+          "User.tags",
+        ],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
 
-    const script = fs.readFileSync(conversionScriptPath(), "utf8");
-    // The array conversion is mechanical, so only the price conversion asks for review.
-    expect(script).toContain(`["tagsMigrate"]: convertedValue`);
-    expect(script.match(/\bTODO\(/g)).toHaveLength(1);
-  }, 600000);
+      const script = fs.readFileSync(conversionScriptPath(), "utf8");
+      // The array conversion is mechanical, so only the price conversion asks for review.
+      expect(script).toContain(`["tagsMigrate"]: convertedValue`);
+      expect(script.match(/\bTODO\(/g)).toHaveLength(1);
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local),
+  );
 
-  test("reports the unreviewed conversion through migration validate", async () => {
-    const configPath = createConfig();
+  test(
+    "reports the unreviewed conversion through migration validate",
+    async ({ signal }) => {
+      const configPath = createConfig();
 
-    const result = tryCli(["tailordb", "migration", "validate", "--config", configPath]);
+      const result = await tryInTempDir(
+        ["tailordb", "migration", "validate", "--config", configPath],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
 
-    expect(result.ok).toBe(false);
-    expect(result.output).toContain("TODO()");
-  }, 300000);
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain("TODO()");
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local),
+  );
 
-  test("carries the values across when the conversion is filled in", async () => {
-    const configPath = createConfig();
-    const migratePath = conversionScriptPath();
-    const reviewed = fs
-      .readFileSync(migratePath, "utf8")
-      .replace(/const convertedValue = TODO\("[^"]*"\);/, "const convertedValue = row.price > 0;");
-    expect(reviewed).not.toMatch(/\bTODO\(/);
-    fs.writeFileSync(migratePath, reviewed);
+  test(
+    "carries the values across when the conversion is filled in",
+    async ({ signal }) => {
+      const configPath = createConfig();
+      const migratePath = conversionScriptPath();
+      const reviewed = fs
+        .readFileSync(migratePath, "utf8")
+        .replace(
+          /const convertedValue = TODO\("[^"]*"\);/,
+          "const convertedValue = row.price > 0;",
+        );
+      expect(reviewed).not.toMatch(/\bTODO\(/);
+      fs.writeFileSync(migratePath, reviewed);
 
-    runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], 900000);
-  }, 900000);
+      await runInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.migratingDeploy,
+        signal,
+      );
+    },
+    cliTestTimeout(CLI_BUDGET_MS.migratingDeploy),
+  );
 
-  test("reads every row back through the new type", async () => {
-    const configPath = createConfig();
-    updateTypeFile(
-      "db.bool()",
-      "db.string({ array: true })",
-      "  seedMarker: db.string({ optional: true }),\n  readbackMarker: db.string({ optional: true }),\n",
-    );
-    runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
+  test(
+    "reads every row back through the new type",
+    async ({ signal }) => {
+      const configPath = createConfig();
+      updateTypeFile(
+        "db.bool()",
+        "db.string({ array: true })",
+        "  seedMarker: db.string({ optional: true }),\n  readbackMarker: db.string({ optional: true }),\n",
+      );
+      await runInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
 
-    const readbackNumber = Math.max(...getMigrationFiles(migrationsDir).map((f) => f.number));
-    fs.writeFileSync(
-      getMigrationFilePath(migrationsDir, readbackNumber, "migrate"),
-      `import type { Transaction } from "./db";
+      const readbackNumber = Math.max(...getMigrationFiles(migrationsDir).map((f) => f.number));
+      fs.writeFileSync(
+        getMigrationFilePath(migrationsDir, readbackNumber, "migrate"),
+        `import type { Transaction } from "./db";
 
 export async function main(trx: Transaction): Promise<void> {
   const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
@@ -281,16 +327,19 @@ export async function main(trx: Transaction): Promise<void> {
   }
 }
 `,
-    );
+      );
 
-    const result = tryCli(
-      ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
-      900000,
-    );
-    expect(result.output).not.toContain("PROBE_MISMATCH");
-    expect(result.output).not.toContain("PROBE_TEMP_FIELD_REMAINS");
-    expect(result.ok).toBe(true);
-  }, 900000);
+      const result = await tryInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.migratingDeploy,
+        signal,
+      );
+      expect(result.output).not.toContain("PROBE_MISMATCH");
+      expect(result.output).not.toContain("PROBE_TEMP_FIELD_REMAINS");
+      expect(result.ok).toBe(true);
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+  );
 
   test("replays local history to the declared schema", () => {
     const replayed = reconstructSnapshotFromMigrations(migrationsDir);

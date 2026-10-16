@@ -7,7 +7,6 @@ This file provides guidance to coding agents when working with code in this repo
 ## Agent Instruction Sources
 
 - `AGENTS.md` is the shared repository instruction entrypoint for Codex, Claude, and other coding agents.
-- `CLAUDE.md` is a compatibility adapter and must contain only `@AGENTS.md`.
 - Project-scoped skills live under `.agents/skills/`. `.claude/skills/` is a compatibility adapter that points to those same skill directories.
 - Path-scoped rule bodies live under `.agents/rules/`. Rule path scopes live in `.agents/rules.json`.
 - Run `pnpm agent:rules:update` after editing `.agents/rules.json` or `.agents/rules/*.md`. The command regenerates the rule index below and `.claude/rules/*.md`.
@@ -24,6 +23,7 @@ When editing files matching these globs, read and follow the linked rule documen
 - `**`: [Code Comments](.agents/rules/code-comments.md)
 - `packages/sdk/src/**/*.ts`, `packages/sdk-codemod/src/registry.ts`: [Deprecating a Public API](.agents/rules/deprecation.md)
 - `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
+- `packages/sdk/e2e/**`: [SDK E2E Tests](.agents/rules/e2e-tests.md)
 - `packages/sdk/src/**/*.ts`: [JSDoc Parameter Rules (SDK)](.agents/rules/jsdoc.md)
 - `packages/sdk/src/types/**/*.ts`, `packages/sdk/src/parser/**/types.ts`, `packages/sdk/src/configure/**/types.ts`, `packages/sdk/src/configure/**/*.types.ts`, `packages/sdk/src/plugin/types.ts`, `packages/sdk/src/runtime/types.ts`, `packages/sdk/src/parser/**/schema.ts`, `packages/sdk/zinfer.config.ts`: [Schema Types](.agents/rules/schema-types.md)
 - `packages/sdk/src/configure/**/*.ts`, `packages/sdk/src/parser/**/*.ts`, `packages/sdk/src/cli/**/*.ts`, `packages/sdk/src/plugin/**/*.ts`, `packages/sdk/src/types/**/*.ts`: [SDK Internals](.agents/rules/sdk-internals.md)

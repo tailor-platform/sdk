@@ -92,6 +92,7 @@ export interface OperatorFieldConfig {
     start: number;
     maxValue?: number;
     format?: string;
+    gapless?: boolean;
   };
   scale?: number;
   default?: unknown;

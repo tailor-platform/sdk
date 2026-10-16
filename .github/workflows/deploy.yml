@@ -81,7 +81,7 @@ jobs:
       - name: Create workspace
         if: runner.os != 'Windows'
         working-directory: example
-        run: pnpm --silent tailor workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --ttl 24h --json > workspace.json
         env:
           RUN_ID: ${{ github.run_id }}
           SLUG: ${{ matrix.slug }}

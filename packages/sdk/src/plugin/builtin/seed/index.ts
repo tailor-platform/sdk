@@ -42,6 +42,14 @@ export type SeedPluginOptions = {
    * users that do not yet have an IdP credential.
    */
   disableIdpUserSync?: DisableIdpUserSyncDirections;
+  /**
+   * Named combinations of datasets, so `tailor seed apply --dataset preview`
+   * stands for every dataset directory the name lists. A dataset directory is
+   * a directory under `<distPath>/data/` holding JSONL files for some of the
+   * tables; its rows are applied on top of the rows in `<distPath>/data/`.
+   * @example { preview: ["cogs", "shipments"], dev: ["local"] }
+   */
+  datasets?: Record<string, readonly string[]>;
 };
 
 declare module "@tailor-platform/sdk/plugin" {
@@ -66,6 +74,7 @@ function resolveIdpUserSyncFKs(option: SeedPluginOptions["disableIdpUserSync"]):
  * @param options.distPath - Output directory path for generated seed files
  * @param options.machineUserName - Default machine user name for authentication
  * @param options.disableIdpUserSync - Skip emitting individual `_User <-> userProfile` foreign keys. Both directions are emitted by default; set a direction to `true` to relax that side.
+ * @param options.datasets - Named combinations of dataset directories under `<distPath>/data/`, selected with `tailor seed apply --dataset <name>`.
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPluginOptions> {

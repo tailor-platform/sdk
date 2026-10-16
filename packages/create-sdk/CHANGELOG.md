@@ -1,5 +1,19 @@
 # @tailor-platform/create-sdk
 
+## 2.28.0
+
+### Patch Changes
+
+- [#2597](https://github.com/tailor-platform/sdk/pull/2597) [`cb76a09`](https://github.com/tailor-platform/sdk/commit/cb76a09f60041bb8cd24dcc1f3a72efd39d84f4d) Thanks [@toiroakr](https://github.com/toiroakr)! - Accept the project name as `--name` again in `npm create @tailor-platform/sdk -- --name my-app`. After the `@politty/zod` 0.4 update the option was ignored with an `Unknown option` warning and the command asked for the name interactively, which stalled non-interactive scripts. Passing the name positionally, as in `my-app`, is unchanged.
+
+- [#2588](https://github.com/tailor-platform/sdk/pull/2588) [`3de270f`](https://github.com/tailor-platform/sdk/commit/3de270f6bb1d75b74ed4d277593f0e70ecc2b59b) Thanks [@dqn](https://github.com/dqn)! - Update `@politty/zod` to 0.4.3. A positional argument is no longer accepted under its own name as an option, so pass the value positionally: `tailor profile create dev`, not `tailor profile create --name dev`. Most commands report such an option as unknown; a few, such as `tailor completion` and `npm create @tailor-platform/sdk`, only warn and ignore it. `tailor secret vault create --name`, `tailor secret vault delete --name`, and `tailor tailordb truncate --tables`, which the documentation and earlier release notes use, still accept both forms. Mixing the two forms, as in `tailor tailordb truncate --tables User Order`, is rejected; repeat the option for each table, as in `--tables User --tables Order`.
+
+## 2.27.0
+
+### Patch Changes
+
+- [#2550](https://github.com/tailor-platform/sdk/pull/2550) [`18e4dfb`](https://github.com/tailor-platform/sdk/commit/18e4dfbc042582663124d4d70c286ef33e72ee45) Thanks [@toiroakr](https://github.com/toiroakr)! - Restrict the `defineIdp` permission examples in the docs, the `IdPPermission` JSDoc, the `example` project and the `static-web-site` template to an administrator role, and warn in the IdP docs that a `_loggedIn` policy lets every authenticated user read and change other users' login information and send password reset emails
+
 ## 2.26.0
 
 No changes in this release.

@@ -903,13 +903,16 @@ describe("retryInterceptor", () => {
   });
 
   test.each(
-    [OperatorService.method.createWorkspace, OperatorService.method.startWorkflow].flatMap(
-      (method) =>
-        [Code.Unavailable, Code.ResourceExhausted].map((code) => ({
-          method,
-          code,
-          codeName: Code[code],
-        })),
+    [
+      OperatorService.method.cloneApplicationData,
+      OperatorService.method.createWorkspace,
+      OperatorService.method.startWorkflow,
+    ].flatMap((method) =>
+      [Code.Unavailable, Code.ResourceExhausted].map((code) => ({
+        method,
+        code,
+        codeName: Code[code],
+      })),
     ),
   )(
     "does not retry $method.name when the outcome is ambiguous ($codeName)",

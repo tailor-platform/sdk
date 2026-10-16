@@ -1,7 +1,8 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { recoveryContextArgs } from "#/cli/shared/args";
+import { locationIdsWithEnvFile, recoveryContextArgs } from "#/cli/shared/args";
 import {
   getOAuth2ClientId,
   getPlatformBaseUrl,
@@ -15,11 +16,14 @@ import { defineAppCommand } from "#/cli/shared/command";
 import {
   loadAccessToken,
   loadPlatformClientConfig,
+  loadUserWorkspaceDefaults,
   platformConfigFromProfile,
   readPlatformConfig,
   resolveConfigUser,
   writePlatformConfig,
+  type UserWorkspaceDefaults,
 } from "#/cli/shared/context";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
@@ -27,6 +31,7 @@ import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 import { ageArg, parseAge } from "./age";
 import { writeWorkspaceExpiry } from "./expiry";
 import { KNOWN_WORKSPACE_REGIONS } from "./regions";
@@ -58,6 +63,28 @@ const createWorkspaceOptionsSchema = z.object({
 export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
 export type ValidatedCreateWorkspaceOptions = z.output<typeof createWorkspaceOptionsSchema>;
 
+type WorkspaceCreationLocationOptions = Pick<
+  CreateWorkspaceOptions,
+  "organizationId" | "folderId" | "profile"
+>;
+
+/**
+ * Resolve the location for a new workspace. Either explicit ID replaces both user defaults.
+ * @param options - Location and authentication profile
+ * @returns Resolved location and the user defaults used, if any
+ */
+export async function resolveWorkspaceCreationLocation(options: WorkspaceCreationLocationOptions) {
+  const defaults =
+    options.organizationId !== undefined || options.folderId !== undefined
+      ? undefined
+      : await loadUserWorkspaceDefaults({ profile: options.profile });
+  return {
+    organizationId: defaults ? defaults.organizationId : options.organizationId,
+    folderId: defaults ? defaults.folderId : options.folderId,
+    defaults,
+  };
+}
+
 /** A created workspace, plus how recording its prune expiry went when one was requested. */
 export type CreatedWorkspaceInfo = WorkspaceInfo & { ttl?: TtlWriteResult };
 
@@ -88,19 +115,35 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
 }
 
 /**
- * Create a new workspace with the given options.
+ * Create a new workspace with the given options. When neither location ID is provided,
+ * use the selected user's defaults unless an environment token is set.
  * @param options - Workspace creation options
  * @returns Created workspace info
  */
 export async function createWorkspace(
   options: CreateWorkspaceOptions,
 ): Promise<CreatedWorkspaceInfo> {
-  const validated = validateCreateWorkspaceOptions(options);
+  const { client, validated } = await prepareWorkspaceCreation(options);
+  return createValidatedWorkspaceWithClient(client, validated);
+}
+
+type PreparedWorkspaceCreation = {
+  client: OperatorClient;
+  validated: ValidatedCreateWorkspaceOptions;
+  defaults?: UserWorkspaceDefaults;
+};
+
+async function prepareWorkspaceCreation(
+  options: CreateWorkspaceOptions,
+): Promise<PreparedWorkspaceCreation> {
+  const provided = validateCreateWorkspaceOptions(options);
+  const { organizationId, folderId, defaults } = await resolveWorkspaceCreationLocation(provided);
+  const validated = validateCreateWorkspaceOptions({ ...provided, organizationId, folderId });
   const accessToken = await loadAccessToken({ profile: validated.profile });
   const platformConfig = await loadPlatformClientConfig({ profile: validated.profile });
   const client = await initOperatorClient(accessToken, platformConfig);
   await validateRegion(validated.region, client);
-  return createValidatedWorkspaceWithClient(client, validated);
+  return { client, validated, defaults };
 }
 
 /**
@@ -186,7 +229,72 @@ async function recordTtl(
 export function validateCreateWorkspaceOptions(
   options: CreateWorkspaceOptions,
 ): ValidatedCreateWorkspaceOptions {
-  return parseOptions(createWorkspaceOptionsSchema, options);
+  const validated = parseOptions(createWorkspaceOptionsSchema, options);
+  if (validated.folderId !== undefined && validated.organizationId === undefined) {
+    throw CLIError({
+      code: "WORKSPACE_FOLDER_WITHOUT_ORGANIZATION",
+      message: "A folder ID requires an organization ID.",
+      suggestion: "Give the organization that owns the folder as well.",
+    });
+  }
+  return validated;
+}
+
+function describeUserDefaults(defaults: UserWorkspaceDefaults): string {
+  return defaults.folderId
+    ? `folder ${defaults.folderId} in organization ${defaults.organizationId}`
+    : `organization ${defaults.organizationId}`;
+}
+
+/**
+ * Log that a new workspace is about to be created in the user's default location.
+ * @param defaults - User defaults applied to this run
+ */
+export function announceUserDefaults(defaults: UserWorkspaceDefaults): void {
+  logger.info(
+    `Creating the workspace in ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`,
+  );
+}
+
+/**
+ * Name the user defaults a run targeted, for suggestions on failures they shaped.
+ * @param defaults - User defaults applied to this run
+ * @returns Sentence naming the default location
+ */
+export function userDefaultsTarget(defaults: UserWorkspaceDefaults): string {
+  return `This run targeted ${describeUserDefaults(defaults)}, the default set by \`tailor user update\`.`;
+}
+
+/**
+ * Error context fields for the user defaults a run targeted.
+ * @param defaults - User defaults applied to this run
+ * @returns Default organization and folder IDs
+ */
+export function userDefaultsContext(defaults: UserWorkspaceDefaults) {
+  return {
+    defaultOrganizationId: defaults.organizationId,
+    defaultFolderId: defaults.folderId ?? null,
+  };
+}
+
+/**
+ * Point a NotFound or PermissionDenied creation failure at the user defaults it targeted.
+ * @param error - Workspace creation failure
+ * @param defaults - User defaults applied to this run
+ */
+export function pointAtUserDefaults(error: unknown, defaults: UserWorkspaceDefaults): void {
+  if (
+    error instanceof ConnectError &&
+    (error.code === Code.NotFound || error.code === Code.PermissionDenied)
+  ) {
+    withErrorDiagnostics(error, {
+      suggestion: `${userDefaultsTarget(defaults)} Check that it exists and that this user can create workspaces there, or pass --organization-id (and --folder-id) to choose another location.`,
+      context: {
+        ...getErrorDiagnostics(error).context,
+        ...userDefaultsContext(defaults),
+      },
+    });
+  }
 }
 
 export { validateWorkspaceName } from "#/cli/shared/workspace-name";
@@ -194,6 +302,11 @@ export { validateWorkspaceName } from "#/cli/shared/workspace-name";
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
+  notes: ml`
+    Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with \`user update\`, unless TAILOR_PLATFORM_TOKEN is set. Giving either option replaces both defaults, and --folder-id requires --organization-id.
+
+    TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID are also read from --env-file. Command-line options take precedence over the corresponding environment variables. Empty values in the env file are treated as not given.
+  `,
   args: z.strictObject({
     // createWorkspace() re-applies this schema for programmatic callers; here it
     // fails --name during option parsing, before any Platform request.
@@ -293,16 +406,22 @@ export const createCommand = defineAppCommand({
       };
     }
 
-    // Execute workspace create logic
-    const workspace = await createWorkspace({
+    const { client, validated, defaults } = await prepareWorkspaceCreation({
       name: args.name,
       region: args.region,
       deleteProtection: args["delete-protection"],
-      organizationId: args["organization-id"],
-      folderId: args["folder-id"],
+      ...locationIdsWithEnvFile(args),
       ttl: args.ttl,
       profile: args.profile,
     });
+    let workspace: CreatedWorkspaceInfo;
+    try {
+      if (defaults && !args.json) announceUserDefaults(defaults);
+      workspace = await createValidatedWorkspaceWithClient(client, validated);
+    } catch (error) {
+      if (defaults) pointAtUserDefaults(error, defaults);
+      throw error;
+    }
 
     let profileInfo: ProfileInfo | undefined;
     if (profileSetup) {

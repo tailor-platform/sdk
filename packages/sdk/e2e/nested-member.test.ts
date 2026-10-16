@@ -9,7 +9,6 @@
  * migration script.
  */
 
-import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
 import * as os from "node:os";
@@ -26,6 +25,7 @@ import {
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { createKyselyPGlite } from "../src/vitest/pglite-kysely";
+import { CLI_BUDGET_MS, cliTestTimeout, runCli, tryCli } from "./cli";
 import {
   resolveE2ERunId,
   resolveE2EWorkspaceRegion,
@@ -53,27 +53,12 @@ describe("E2E: TailorDB nested member rename", { concurrent: false }, () => {
   let tempDir: string;
   let migrationsDir: string;
 
-  // The CLI logs to stderr, so both streams are needed to see its output.
-  function tryCli(args: string[], timeout = 300000): { ok: boolean; output: string } {
-    const cliPath = path.join(path.resolve(__dirname, ".."), "bin", "tailor.mjs");
-    const result = spawnSync("node", [cliPath, ...args], {
-      cwd: tempDir,
-      stdio: ["ignore", "pipe", "pipe"],
-      // A configured editor would open the generated script and block the run.
-      env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules", EDITOR: "", VISUAL: "" },
-      encoding: "utf-8",
-      timeout,
-    });
-    if (result.error) throw result.error;
-    return { ok: result.status === 0, output: `${result.stdout}\n${result.stderr}` };
+  function runInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
+    return runCli(args, { cwd: tempDir, timeoutMs, signal });
   }
 
-  function runCli(args: string[], timeout = 300000): string {
-    const result = tryCli(args, timeout);
-    if (!result.ok) {
-      throw new Error(`tailor ${args.join(" ")} failed:\n${result.output}`);
-    }
-    return result.output;
+  function tryInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
+    return tryCli(args, { cwd: tempDir, timeoutMs, signal });
   }
 
   function createConfig(): string {
@@ -131,16 +116,13 @@ export type user = typeof user;
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
-    trackWorkspace(workspaceId);
+    await trackWorkspace(client, workspaceId);
     process.env.TAILOR_PLATFORM_WORKSPACE_ID = workspaceId;
 
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nested-e2e-"));
     trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
-
-    delete process.env.EDITOR;
-    delete process.env.VISUAL;
 
     fs.mkdirSync(path.join(tempDir, "tailordb"), { recursive: true });
     fs.mkdirSync(migrationsDir, { recursive: true });
@@ -167,29 +149,47 @@ export type user = typeof user;
     await runSuite();
   }, 300000);
 
-  test("writes nested objects and arrays through the same migration on PGlite and TailorDB", async () => {
-    updateTypeFile("zip");
-    const configPath = createConfig();
+  test(
+    "writes nested objects and arrays through the same migration on PGlite and TailorDB",
+    async ({ signal }) => {
+      updateTypeFile("zip");
+      const configPath = createConfig();
 
-    runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
-    runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"]);
+      await runInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
+      await runInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.deploy,
+        signal,
+      );
 
-    // A schema change is what earns a migration to hang the seed script on.
-    updateTypeFile("zip", "  seedMarker: db.string({ optional: true }),\n");
-    runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
-    const migrationNumber = latestMigrationNumber();
-    runCli([
-      "tailordb",
-      "migration",
-      "script",
-      formatMigrationNumber(migrationNumber),
-      "--config",
-      configPath,
-    ]);
-    const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
-    fs.writeFileSync(
-      scriptPath,
-      `import type { Transaction } from "./db";
+      // A schema change is what earns a migration to hang the seed script on.
+      updateTypeFile("zip", "  seedMarker: db.string({ optional: true }),\n");
+      await runInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
+      const migrationNumber = latestMigrationNumber();
+      await runInTempDir(
+        [
+          "tailordb",
+          "migration",
+          "script",
+          formatMigrationNumber(migrationNumber),
+          "--config",
+          configPath,
+        ],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
+      const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+      fs.writeFileSync(
+        scriptPath,
+        `import type { Transaction } from "./db";
 
 export async function main(trx: Transaction): Promise<void> {
   await trx
@@ -227,101 +227,138 @@ export async function main(trx: Transaction): Promise<void> {
   }
 }
 `,
-    );
-    const schemaPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
-    const { pgliteSchema } = await import(
-      `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(schemaPath, "utf8"))).toString("base64")}`
-    );
-    const { main } = await import(
-      `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(scriptPath, "utf8"))).toString("base64")}`
-    );
-    const pglite = new PGlite();
-    const db = createKyselyPGlite(pglite);
-    try {
-      await pglite.exec(pgliteSchema[tailordbName]);
-      await db.transaction().execute(main);
-    } finally {
-      await db.destroy();
-    }
-    runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"]);
+      );
+      const schemaPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
+      const { pgliteSchema } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(schemaPath, "utf8"))).toString("base64")}`
+      );
+      const { main } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(scriptPath, "utf8"))).toString("base64")}`
+      );
+      const pglite = new PGlite();
+      const db = createKyselyPGlite(pglite);
+      try {
+        await pglite.exec(pgliteSchema[tailordbName]);
+        await db.transaction().execute(main);
+      } finally {
+        await db.destroy();
+      }
+      await runInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.deploy,
+        signal,
+      );
 
-    expect(await nestedMemberNames()).toEqual(["city", "zip"]);
-  }, 900000);
+      expect(await nestedMemberNames()).toEqual(["city", "zip"]);
+    },
+    cliTestTimeout(
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.deploy,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.deploy,
+    ),
+  );
 
-  test("fails on the unresolved rename candidate without --rename", async () => {
-    updateTypeFile("zipCode", "  seedMarker: db.string({ optional: true }),\n");
-    const configPath = createConfig();
+  test(
+    "fails on the unresolved rename candidate without --rename",
+    async ({ signal }) => {
+      updateTypeFile("zipCode", "  seedMarker: db.string({ optional: true }),\n");
+      const configPath = createConfig();
 
-    const result = tryCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
+      const result = await tryInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
 
-    expect(result.ok).toBe(false);
-    expect(result.output).toContain("Possible rename(s) detected");
-    expect(result.output).toContain("User.address.zip → zipCode?");
-  }, 300000);
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain("Possible rename(s) detected");
+      expect(result.output).toContain("User.address.zip → zipCode?");
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local),
+  );
 
-  test("records the rename and scaffolds a copy script with --rename", async () => {
-    const configPath = createConfig();
+  test(
+    "records the rename and scaffolds a copy script with --rename",
+    async ({ signal }) => {
+      const configPath = createConfig();
 
-    runCli([
-      "tailordb",
-      "migration",
-      "generate",
-      "--config",
-      configPath,
-      "--yes",
-      "--rename",
-      "User.address.zip:zipCode",
-    ]);
+      await runInTempDir(
+        [
+          "tailordb",
+          "migration",
+          "generate",
+          "--config",
+          configPath,
+          "--yes",
+          "--rename",
+          "User.address.zip:zipCode",
+        ],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
 
-    const migrationNumber = latestMigrationNumber();
-    const diff = loadDiff(getMigrationFilePath(migrationsDir, migrationNumber, "diff"));
-    expect(diff.changes).toEqual([
-      expect.objectContaining({
-        kind: "field_modified",
-        fieldName: "address",
-        memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
-      }),
-    ]);
-    expect(diff.requiresMigrationScript).toBe(true);
-    expect(diff.warnings).toEqual([]);
-    const script = fs.readFileSync(
-      getMigrationFilePath(migrationsDir, migrationNumber, "migrate"),
-      "utf-8",
-    );
-    expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
-  }, 300000);
+      const migrationNumber = latestMigrationNumber();
+      const diff = loadDiff(getMigrationFilePath(migrationsDir, migrationNumber, "diff"));
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "field_modified",
+          fieldName: "address",
+          memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+        }),
+      ]);
+      expect(diff.requiresMigrationScript).toBe(true);
+      expect(diff.warnings).toEqual([]);
+      const script = fs.readFileSync(
+        getMigrationFilePath(migrationsDir, migrationNumber, "migrate"),
+        "utf-8",
+      );
+      expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local),
+  );
 
-  test("copies the renamed member with the generated script", async () => {
-    const configPath = createConfig();
+  test(
+    "copies the renamed member with the generated script",
+    async ({ signal }) => {
+      const configPath = createConfig();
 
-    const result = tryCli(
-      ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
-      900000,
-    );
-    if (!result.ok) throw new Error(`deploy failed:\n${result.output}`);
-    expect(result.ok).toBe(true);
+      await runInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.migratingDeploy,
+        signal,
+      );
 
-    const resp = await client.getTailorDBType({
-      workspaceId,
-      namespaceName: tailordbName,
-      tailordbTypeName: "User",
-    });
-    const members = resp.tailordbType?.schema?.fields.address?.fields ?? {};
-    expect(Object.keys(members).toSorted()).toEqual(["city", "zipCode"]);
-    expect(members.zipCode?.required).toBe(true);
-  }, 900000);
+      const resp = await client.getTailorDBType({
+        workspaceId,
+        namespaceName: tailordbName,
+        tailordbTypeName: "User",
+      });
+      const members = resp.tailordbType?.schema?.fields.address?.fields ?? {};
+      expect(Object.keys(members).toSorted()).toEqual(["city", "zipCode"]);
+      expect(members.zipCode?.required).toBe(true);
+    },
+    cliTestTimeout(CLI_BUDGET_MS.migratingDeploy),
+  );
 
-  test("reads the copied member back under its new name", async () => {
-    const configPath = createConfig();
-    updateTypeFile(
-      "zipCode",
-      "  seedMarker: db.string({ optional: true }),\n  readbackMarker: db.string({ optional: true }),\n",
-    );
-    runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
+  test(
+    "reads the copied member back under its new name",
+    async ({ signal }) => {
+      const configPath = createConfig();
+      updateTypeFile(
+        "zipCode",
+        "  seedMarker: db.string({ optional: true }),\n  readbackMarker: db.string({ optional: true }),\n",
+      );
+      await runInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
 
-    fs.writeFileSync(
-      getMigrationFilePath(migrationsDir, latestMigrationNumber(), "migrate"),
-      `import type { Transaction } from "./db";
+      fs.writeFileSync(
+        getMigrationFilePath(migrationsDir, latestMigrationNumber(), "migrate"),
+        `import type { Transaction } from "./db";
 
 export async function main(trx: Transaction): Promise<void> {
   const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
@@ -343,14 +380,16 @@ export async function main(trx: Transaction): Promise<void> {
   }
 }
 `,
-    );
+      );
 
-    const result = tryCli(
-      ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
-      900000,
-    );
-    expect(result.output).not.toContain("PROBE_MISMATCH");
-    if (!result.ok) throw new Error(`deploy failed:\n${result.output}`);
-    expect(result.ok).toBe(true);
-  }, 900000);
+      const result = await tryInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.migratingDeploy,
+        signal,
+      );
+      expect(result.output).not.toContain("PROBE_MISMATCH");
+      expect(result.ok).toBe(true);
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+  );
 });

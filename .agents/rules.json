@@ -26,6 +26,11 @@
       "file": ".agents/rules/docs-authoring.md"
     },
     {
+      "name": "e2e-tests",
+      "paths": ["packages/sdk/e2e/**"],
+      "file": ".agents/rules/e2e-tests.md"
+    },
+    {
       "name": "jsdoc",
       "paths": ["packages/sdk/src/**/*.ts"],
       "file": ".agents/rules/jsdoc.md"

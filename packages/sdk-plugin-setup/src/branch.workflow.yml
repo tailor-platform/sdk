@@ -41,16 +41,16 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/install@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
       # __GENERATE_CHECK_START__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/generate-check@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -58,18 +58,18 @@ jobs:
       # __PER_APP_GENERATE_CHECK__
       # __SEED_VALIDATE_START__
       - id: tailor-seed-validate
-        run: __TAILOR_CLI__ seed validate
+        run: __TAILOR_CLI__ seed validate__SEED_VALIDATE_ARGS__
         # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
       # __PER_APP_SEED_VALIDATE__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/drift-check@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/migration-drift-check@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -78,7 +78,7 @@ jobs:
       - id: tailor-plan
         # Fork PRs cannot read secrets; the checks above still run for them.
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-        uses: tailor-platform/actions/plan@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/plan@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
@@ -235,11 +235,11 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/install@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-checkout-base
@@ -261,7 +261,7 @@ jobs:
               echo yarn
             elif [ -f bun.lockb ] || [ -f bun.lock ]; then
               echo bun
-            elif [ -f package-lock.json ]; then
+            elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
               echo npm
             else
               echo "__PACKAGE_MANAGER__"
@@ -312,7 +312,7 @@ jobs:
           run_install: false
       - id: tailor-setup-base-node
         if: steps.tailor-detect-base-package-manager.outputs['package-manager'] != 'bun'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .tailor-erd-base/package.json
       - id: tailor-setup-base-yarn
@@ -349,7 +349,7 @@ jobs:
               ;;
           esac
       - id: tailor-restore-head-setup
-        uses: tailor-platform/actions/setup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-build-erd-preview
@@ -557,38 +557,57 @@ jobs:
             diff_args+=(--base-html "$base_html")
           fi
           run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
+      # __ERD_GITHUB_COM_UPLOAD_START__
       - id: tailor-upload-erd-viewer
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.namespace }}-viewer.html
           path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html
           if-no-files-found: error
           archive: false
           retention-days: 7
+      # __ERD_GITHUB_COM_UPLOAD_END__
+      # __ERD_GHES_UPLOAD_START__
+      - id: tailor-upload-erd-viewer
+        # upload-artifact v3.2.2: GitHub Enterprise Server does not support v4 or later.
+        uses: actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf
+        with:
+          name: ${{ matrix.namespace }}-viewer.html
+          path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html
+          if-no-files-found: error
+          retention-days: 7
+      # __ERD_GHES_UPLOAD_END__
 
   # __ERD_PREVIEW_JOB_END__
   # __ERD_PREVIEW_COMMENT_JOB_START__
   tailor-erd-preview-comment:
-    needs: tailor-erd-preview
+    # __ERD_COMMENT_NEEDS__
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      # __ERD_GITHUB_COM_ACTIONS_READ_START__
       actions: read
+      # __ERD_GITHUB_COM_ACTIONS_READ_END__
       pull-requests: write
     steps:
       - id: tailor-comment-erd-preview
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_ENTERPRISE_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           SERVER: ${{ github.server_url }}
+          # __ERD_GHES_NAMESPACES_START__
+          NAMESPACES: ${{ needs.tailor-erd-preview-matrix.outputs.namespaces }}
+          # __ERD_GHES_NAMESPACES_END__
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MARKER: "<!-- tailor-erd-preview: __WORKSPACE_NAME__ -->"
         run: |
           set -euo pipefail
+          export GH_HOST="${GITHUB_SERVER_URL#*://}"
 
           current_head=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.head.sha')
           if [ "$current_head" != "$HEAD_SHA" ]; then
@@ -597,8 +616,22 @@ jobs:
           fi
 
           body="$MARKER"$'\n'"### TailorDB ERD preview (__WORKSPACE_NAME__)"$'\n\n'
+          # __ERD_GITHUB_COM_LINKS_START__
           body+="Self-contained ERD viewer HTML artifacts for this pull request. Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
+          viewer_artifacts() {
+            gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+              --jq '.artifacts[] | select(.name | endswith("-viewer.html")) | [.name, (.id|tostring)] | @tsv'
+          }
+          artifact_link() { printf '[%s](%s)' "$1" "$SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$2"; }
+          # __ERD_GITHUB_COM_LINKS_END__
+          # __ERD_GHES_LINKS_START__
+          body+="Self-contained ERD viewer HTML files for this pull request, each zipped as an artifact of [the workflow run]($SERVER/$REPO/actions/runs/$RUN_ID). Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
+          # upload-artifact v3 artifacts reach the REST API only after the run completes.
+          viewer_artifacts() { jq -r '.[] | "\(.)-viewer.html"' <<<"$NAMESPACES"; }
+          artifact_link() { printf '%s' "\`$1\`"; }
+          # __ERD_GHES_LINKS_END__
 
+          viewers=$(viewer_artifacts | sort)
           while IFS=$'\t' read -r name id; do
             [ -z "$name" ] && continue
             if [[ "$name" != *-viewer.html ]]; then
@@ -606,9 +639,8 @@ jobs:
             fi
             ns=${name%-viewer.html}
             label="$ns viewer"
-            body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
-          done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select(.name | endswith("-viewer.html")) | [.name, (.id|tostring)] | @tsv' | sort)
+            body+=$'\n'"- **$label**: $(artifact_link "$name" "$id")"
+          done <<<"$viewers"
 
           existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
             --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
@@ -639,15 +671,20 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/install@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __SEED_PREFLIGHT_START__
+      - id: tailor-seed-validate
+        run: __TAILOR_CLI__ seed validate__SEED_VALIDATE_ARGS__
+        # __WORKING_DIRECTORY__
+      # __SEED_PREFLIGHT_END__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/deploy@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
@@ -655,17 +692,15 @@ jobs:
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
-      # __SEED_DATA_START__
-      - id: seed-data
-        if: false
+      # __SEED_START__
+      - id: tailor-seed
         shell: bash
         # __WORKING_DIRECTORY__
+        env:
+          TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
         run: |
-          # Uncomment and implement to seed data on deploy.
-          # Run after apply so the schema is ready.
-          # Example: node scripts/seed.mjs
-          true
-      # __SEED_DATA_END__
+          __TAILOR_CLI__ seed apply --upsert__SEED_ARGS__
+      # __SEED_END__
       - id: tailor-slack-prereq
         if: always()
         shell: bash
@@ -678,7 +713,7 @@ jobs:
           fi
       - id: tailor-notify
         if: always() && steps.tailor-slack-prereq.outputs.ready == 'true'
-        uses: tailor-platform/actions/notify@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/notify@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           provider: slack
           status: ${{ job.status }}

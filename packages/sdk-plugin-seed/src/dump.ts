@@ -14,6 +14,7 @@ import {
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
+import { datasetDumpDirectory } from "./datasets";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import {
@@ -147,6 +148,9 @@ export const seedDumpCommand = defineAppCommand({
     "truncating apply also wipes the app's current IdP users and reseeds `_User` from whatever " +
     "`_User.jsonl` already has on disk, which is stale the moment real users have signed up since " +
     "that file was last written. " +
+    "A dump written into a dataset with --dataset holds every row of the tables it covers, so it " +
+    "is restored on its own: `tailor seed apply --truncate --skip-idp --no-base --dataset <name>`, " +
+    "with the same `--namespace` or table names as the dump. " +
     "Fields the platform assigns rather than the row — `serial` fields — are left out, unless " +
     "another table's relation is keyed to that field: it is kept then, so the relation still " +
     "resolves instead of breaking once `apply --truncate` assigns the field a fresh value. " +
@@ -177,6 +181,11 @@ export const seedDumpCommand = defineAppCommand({
         "Directory to write the JSONL files into (default: the data directory under the seedPlugin distPath)",
       completion: { type: "directory" },
     }),
+    dataset: arg(z.string().optional(), {
+      description:
+        "Dataset directory under the seed data directory to write the JSONL files into, created if missing",
+      completion: { type: "none" },
+    }),
     force: arg(z.boolean().default(false), {
       alias: "f",
       description: "Overwrite JSONL files that already exist in the output directory",
@@ -191,6 +200,9 @@ export const seedDumpCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
+    if (args.dataset !== undefined && args.out !== undefined) {
+      throw new Error("--dataset and --out cannot be combined.");
+    }
     if (args.entities.includes("_User")) {
       throw new Error(
         "IdP `_User` records cannot be dumped: the export would carry authentication data " +
@@ -200,6 +212,8 @@ export const seedDumpCommand = defineAppCommand({
     }
 
     const context = await loadSeedContext({ configPath: args.config });
+    const datasetDir =
+      args.dataset !== undefined ? datasetDumpDirectory(context, args.dataset) : undefined;
 
     const namespaceTables = Object.fromEntries(
       context.namespaces.map((ns) => [ns.namespace, ns.types]),
@@ -238,7 +252,7 @@ export const seedDumpCommand = defineAppCommand({
 
     const dataDir = args.out
       ? path.resolve(process.cwd(), args.out)
-      : path.join(context.distPath, "data");
+      : (datasetDir ?? path.join(context.distPath, "data"));
 
     const namespacesToDump = args.namespace
       ? context.namespaces.filter((ns) => ns.namespace === args.namespace)
@@ -263,7 +277,10 @@ export const seedDumpCommand = defineAppCommand({
       if (existing.length > 0) {
         throw new Error(
           `${String(existing.length)} JSONL file(s) already exist in ${dataDir}: ` +
-            `${existing.join(", ")}. Pass --force to overwrite them, or --out to write elsewhere.`,
+            `${existing.join(", ")}. Pass --force to overwrite them, or ` +
+            (args.dataset !== undefined
+              ? "--dataset with another name."
+              : "--out to write elsewhere."),
         );
       }
     }
@@ -337,7 +354,12 @@ export const seedDumpCommand = defineAppCommand({
 
     logger.newline();
     if (args.json) {
-      logger.out({ success: true, path: dataDir, dumped });
+      logger.out({
+        success: true,
+        path: dataDir,
+        ...(args.dataset !== undefined ? { dataset: args.dataset } : {}),
+        dumped,
+      });
     }
     logger.success("Seed data dump completed successfully");
   },

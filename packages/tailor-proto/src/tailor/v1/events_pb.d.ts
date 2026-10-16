@@ -5,7 +5,7 @@
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Filter, PageDirection } from "./resource_pb";
-import type { ControlplaneActivityLog, DataplaneEvent } from "./events_resource_pb";
+import type { ControlplaneActivityLog, DataplaneEvent, OrganizationActivityLog } from "./events_resource_pb";
 
 /**
  * Describes the file tailor/v1/events.proto.
@@ -135,4 +135,66 @@ export declare type ListControlplaneActivityLogsResponse = Message<"tailor.v1.Li
  * Use `create(ListControlplaneActivityLogsResponseSchema)` to create a new message.
  */
 export declare const ListControlplaneActivityLogsResponseSchema: GenMessage<ListControlplaneActivityLogsResponse>;
+
+/**
+ * @generated from message tailor.v1.ListOrganizationActivityLogsRequest
+ */
+export declare type ListOrganizationActivityLogsRequest = Message<"tailor.v1.ListOrganizationActivityLogsRequest"> & {
+  /**
+   * @generated from field: string page_token = 1;
+   */
+  pageToken: string;
+
+  /**
+   * @generated from field: uint32 page_size = 2;
+   */
+  pageSize: number;
+
+  /**
+   * @generated from field: string organization_id = 3;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: tailor.v1.PageDirection page_direction = 4;
+   */
+  pageDirection: PageDirection;
+
+  /**
+   * @generated from field: tailor.v1.Filter filter = 5;
+   */
+  filter?: Filter;
+};
+
+/**
+ * Describes the message tailor.v1.ListOrganizationActivityLogsRequest.
+ * Use `create(ListOrganizationActivityLogsRequestSchema)` to create a new message.
+ */
+export declare const ListOrganizationActivityLogsRequestSchema: GenMessage<ListOrganizationActivityLogsRequest>;
+
+/**
+ * @generated from message tailor.v1.ListOrganizationActivityLogsResponse
+ */
+export declare type ListOrganizationActivityLogsResponse = Message<"tailor.v1.ListOrganizationActivityLogsResponse"> & {
+  /**
+   * @generated from field: string next_page_token = 1;
+   */
+  nextPageToken: string;
+
+  /**
+   * @generated from field: repeated tailor.v1.OrganizationActivityLog logs = 2;
+   */
+  logs: OrganizationActivityLog[];
+
+  /**
+   * @generated from field: int64 total_count = 3;
+   */
+  totalCount: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListOrganizationActivityLogsResponse.
+ * Use `create(ListOrganizationActivityLogsResponseSchema)` to create a new message.
+ */
+export declare const ListOrganizationActivityLogsResponseSchema: GenMessage<ListOrganizationActivityLogsResponse>;
 

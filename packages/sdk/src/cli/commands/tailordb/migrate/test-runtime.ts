@@ -20,7 +20,9 @@ import {
   type TailorDBDeployInput,
   verifyRemoteSchema,
 } from "#/cli/commands/tailordb/migrate/schema-checks";
+import { parseAge } from "#/cli/commands/workspace/age";
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
+import { writeWorkspaceExpiry } from "#/cli/commands/workspace/expiry";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
@@ -61,8 +63,9 @@ import type {
 } from "./test-types";
 import type { JsonObject, JsonValue } from "type-fest";
 
-const CLONE_POLL_INTERVAL = 1_000;
-const CLONE_TIMEOUT = 5 * 60 * 1_000;
+const CLONE_POLL_INTERVAL = 3_000;
+const CLONE_TIMEOUT = 30 * 60 * 1_000;
+const CLOCK_SKEW_TOLERANCE = 100;
 
 interface RuntimeState {
   client: OperatorClient;
@@ -77,6 +80,8 @@ interface WaitForCloneOptions {
   operationId: string;
   pollInterval?: number;
   timeout?: number;
+  errorCodePrefix?: string;
+  onStatus?: (status: CloneOperationStatus) => void;
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -238,20 +243,37 @@ export async function waitForCloneApplicationData(
 ): Promise<void> {
   const pollInterval = options.pollInterval ?? CLONE_POLL_INTERVAL;
   const timeout = options.timeout ?? CLONE_TIMEOUT;
+  const errorCodePrefix = options.errorCodePrefix ?? "MIGRATION_TEST_CLONE";
   const deadline = Date.now() + timeout;
+  let reportedStatus: CloneOperationStatus | undefined;
 
-  while (Date.now() <= deadline) {
-    const operation = await client.getCloneApplicationDataOperation({
-      sourceWorkspaceId: options.sourceWorkspaceId,
-      targetWorkspaceId: options.targetWorkspaceId,
-      operationId: options.operationId,
-    });
+  for (let remaining = timeout; remaining > 0; remaining = deadline - Date.now()) {
+    let operation;
+    try {
+      operation = await client.getCloneApplicationDataOperation(
+        {
+          sourceWorkspaceId: options.sourceWorkspaceId,
+          targetWorkspaceId: options.targetWorkspaceId,
+          operationId: options.operationId,
+        },
+        Number.isFinite(remaining) ? { timeoutMs: remaining } : undefined,
+      );
+    } catch (error) {
+      if (
+        error instanceof ConnectError &&
+        error.code === Code.DeadlineExceeded &&
+        Date.now() >= deadline - CLOCK_SKEW_TOLERANCE
+      ) {
+        break;
+      }
+      throw error;
+    }
     if (operation.status === CloneOperationStatus.COMPLETED) {
       return;
     }
     if (operation.status === CloneOperationStatus.FAILED) {
       throw CLIError({
-        code: "MIGRATION_TEST_CLONE_FAILED",
+        code: `${errorCodePrefix}_FAILED`,
         message: `Application data clone failed: ${operation.errorMessage || "unknown platform error"}`,
       });
     }
@@ -261,12 +283,21 @@ export async function waitForCloneApplicationData(
     ) {
       throw internalError(`Application data clone returned unexpected status ${operation.status}.`);
     }
-    await delay(pollInterval);
+    if (operation.status !== reportedStatus) {
+      reportedStatus = operation.status;
+      options.onStatus?.(operation.status);
+    }
+    await delay(Math.min(pollInterval, Math.max(deadline - Date.now(), 0)));
   }
 
   throw CLIError({
-    code: "MIGRATION_TEST_CLONE_TIMEOUT",
-    message: `Application data clone timed out after ${Math.round(timeout / 1_000)} seconds.`,
+    code: `${errorCodePrefix}_TIMEOUT`,
+    message: `Application data clone timed out after ${timeout < 1_000 ? `${timeout} ms` : `${Math.round(timeout / 1_000)} seconds`}.`,
+    context: {
+      operationId: options.operationId,
+      sourceWorkspaceId: options.sourceWorkspaceId,
+      targetWorkspaceId: options.targetWorkspaceId,
+    },
   });
 }
 
@@ -789,7 +820,19 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         prepared.temporaryWorkspace,
       );
       logger.info(`Created temporary workspace ${workspace.name} (${workspace.id}).`);
-      return { id: workspace.id, name: workspace.name };
+      return {
+        id: workspace.id,
+        name: workspace.name,
+        ...(workspace.createdAt ? { createdAt: workspace.createdAt } : {}),
+      };
+    },
+    recordWorkspaceExpiry: async (workspaceId, ttl, createdAt = new Date()) => {
+      const state = stateOrThrow(runtimeState);
+      await writeWorkspaceExpiry(
+        state.client,
+        workspaceId,
+        new Date(createdAt.getTime() + parseAge(ttl)),
+      );
     },
     deployBaseline: async ({ prepared, targetWorkspaceId }) => {
       const state = stateOrThrow(runtimeState);
@@ -886,7 +929,13 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         }
       }
     },
-    cloneData: async ({ prepared, sourceWorkspaceId, targetWorkspaceId, applicationName }) => {
+    cloneData: async ({
+      prepared,
+      sourceWorkspaceId,
+      targetWorkspaceId,
+      applicationName,
+      cloneTimeout,
+    }) => {
       const state = stateOrThrow(runtimeState);
       await assertSourceBaselineFresh(state, prepared, sourceWorkspaceId);
       logger.warn(
@@ -919,6 +968,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         sourceWorkspaceId,
         targetWorkspaceId,
         operationId,
+        timeout: cloneTimeout,
       });
     },
     deployMigrations: async ({ prepared, targetWorkspaceId }) => {

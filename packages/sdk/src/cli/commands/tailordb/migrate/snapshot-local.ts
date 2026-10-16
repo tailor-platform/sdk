@@ -81,6 +81,7 @@ function createSnapshotFieldConfigFromOperatorConfig(
       start: fieldConfig.serial.start,
       ...(fieldConfig.serial.maxValue !== undefined && { maxValue: fieldConfig.serial.maxValue }),
       ...(fieldConfig.serial.format && { format: fieldConfig.serial.format }),
+      ...(fieldConfig.serial.gapless && { gapless: true }),
     };
   }
 

@@ -263,6 +263,7 @@ export function convertFieldConfigToProto(
         ...(config.serial.format && {
           format: config.serial.format,
         }),
+        ...(config.serial.gapless && { gapless: true }),
       },
     }),
     ...(config.scale !== undefined && { scale: config.scale }),

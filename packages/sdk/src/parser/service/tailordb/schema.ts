@@ -74,6 +74,7 @@ export const DBFieldMetadataSchema = z.strictObject({
       start: z.number().describe("Starting value for the serial sequence"),
       maxValue: z.number().optional().describe("Maximum value for the serial sequence"),
       format: z.string().optional().describe("Format string for serial value (string type only)"),
+      gapless: z.boolean().optional().describe("Number records without gaps"),
     })
     .optional()
     .describe("Serial (auto-increment) configuration"),

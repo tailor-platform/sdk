@@ -271,3 +271,21 @@ describe("AppConfigSchema defaultDateRepresentation", () => {
     expect(result.error.issues[0]?.path).toEqual(["defaultDateRepresentation"]);
   });
 });
+
+describe("AppConfigSchema maintenanceMode", () => {
+  test.each([false, "migration", "deploy"])("accepts %j", (value) => {
+    expect(AppConfigSchema.safeParse({ name: "my-app", maintenanceMode: value }).success).toBe(
+      true,
+    );
+  });
+
+  test.each([true, "always", null])("rejects %j", (value) => {
+    const result = AppConfigSchema.safeParse({ name: "my-app", maintenanceMode: value });
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("Expected AppConfigSchema parsing to fail");
+    expect(result.error.issues[0]?.path).toEqual(["maintenanceMode"]);
+    expect(result.error.issues[0]?.message).toBe(
+      `'maintenanceMode' must be false, "migration", or "deploy".`,
+    );
+  });
+});

@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { writeWorkspaceExpiry } from "../src/cli/commands/workspace/expiry";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 
@@ -12,16 +13,34 @@ import { loadAccessToken } from "../src/cli/shared/context";
 // never as the developer's locally configured profile.
 delete process.env.TAILOR_PLATFORM_PROFILE;
 
+/** Time a test or hook allows for creating a workspace while sibling suites contend for the Platform. */
+export const WORKSPACE_CREATION_ALLOWANCE_MS = 180_000;
+
 const TRACKING_DIR = path.join(os.tmpdir(), "e2e-workspaces");
 const TEMPDIR_TRACKING_DIR = path.join(os.tmpdir(), "e2e-tempdirs");
+const WORKSPACE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Track a workspace ID for cleanup in globalTeardown
+ * Track a workspace ID for cleanup in globalTeardown and record its prune expiry.
+ * Deletes the workspace and rethrows when the expiry cannot be recorded.
+ * @param client - Operator client that created the workspace
  * @param workspaceId - The workspace ID to track
  */
-export function trackWorkspace(workspaceId: string): void {
+export async function trackWorkspace(client: OperatorClient, workspaceId: string): Promise<void> {
+  const trackingFile = path.join(TRACKING_DIR, workspaceId);
   fs.mkdirSync(TRACKING_DIR, { recursive: true });
-  fs.writeFileSync(path.join(TRACKING_DIR, workspaceId), "");
+  fs.writeFileSync(trackingFile, "");
+  try {
+    await writeWorkspaceExpiry(client, workspaceId, new Date(Date.now() + WORKSPACE_TTL_MS));
+  } catch (e) {
+    try {
+      await client.deleteWorkspace({ workspaceId });
+      fs.rmSync(trackingFile, { force: true });
+    } catch (deleteError) {
+      console.warn(`[e2e] Could not delete workspace ${workspaceId}`, deleteError);
+    }
+    throw e;
+  }
 }
 
 /**
