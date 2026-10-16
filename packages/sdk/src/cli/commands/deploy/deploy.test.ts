@@ -1643,16 +1643,22 @@ describe("mergeBundledScripts", () => {
   });
 
   test("reports every duplicate bundle name in one error with the config paths", () => {
+    const configPaths = [fakeConfigPath("apps/buyer"), fakeConfigPath("apps/supplier")];
+
     expect(() =>
       mergeBundledScripts([
         fakeTarget({
           configDir: "apps/buyer",
+          resolverNamespaces: ["shared"],
+          resolvers: { [resolverBundleKey("shared", "get")]: "buyer" },
           executors: { sync: "buyer" },
           workflowJobs: { notify: "buyer" },
           authHooks: { "auth-hook--shared--before-login": "buyer" },
         }),
         fakeTarget({
           configDir: "apps/supplier",
+          resolverNamespaces: ["shared"],
+          resolvers: { [resolverBundleKey("shared", "get")]: "supplier" },
           executors: { sync: "supplier" },
           workflowJobs: { notify: "supplier" },
           authHooks: { "auth-hook--shared--before-login": "supplier" },
@@ -1663,10 +1669,27 @@ describe("mergeBundledScripts", () => {
         code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
         message: [
           "Duplicate resource names in this deploy:",
+          `  - Resolver bundle "${resolverBundleKey("shared", "get")}": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts`,
           '  - Executor bundle "sync": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts',
           '  - Workflow job bundle "notify": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts',
           '  - Auth hook bundle "auth-hook--shared--before-login": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts',
         ].join("\n"),
+        context: {
+          duplicates: [
+            {
+              resourceType: "pipeline.resolver",
+              name: resolverBundleKey("shared", "get"),
+              configPaths,
+            },
+            { resourceType: "executor", name: "sync", configPaths },
+            { resourceType: "workflow_job_function", name: "notify", configPaths },
+            {
+              resourceType: "auth.hook",
+              name: "auth-hook--shared--before-login",
+              configPaths,
+            },
+          ],
+        },
       }),
     );
   });
@@ -1709,14 +1732,14 @@ describe("assertUniqueGlobalResourceNames", () => {
         context: {
           duplicates: [
             {
-              resourceType: "Executor",
+              resourceType: "executor",
               name: "recompute-on-role-permissions-updated",
               configPaths,
             },
-            { resourceType: "StaticWebsite", name: "default-web", configPaths },
-            { resourceType: "TailorDB namespace", name: "main-db", configPaths },
-            { resourceType: "Auth namespace", name: "default", configPaths },
-            { resourceType: "IdP namespace", name: "default", configPaths },
+            { resourceType: "staticwebsite", name: "default-web", configPaths },
+            { resourceType: "tailordb.service", name: "main-db", configPaths },
+            { resourceType: "auth.service", name: "default", configPaths },
+            { resourceType: "idp.service", name: "default", configPaths },
           ],
         },
       }),

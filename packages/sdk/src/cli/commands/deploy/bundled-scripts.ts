@@ -1,15 +1,15 @@
-import { assertNoDuplicateResourceNames } from "./duplicate-resource-names";
+import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { BundledScripts } from "./function-registry-types";
 
-const BUNDLE_RESOURCE_LABELS = {
-  resolvers: "Resolver bundle",
-  executors: "Executor bundle",
-  workflowJobs: "Workflow job bundle",
-  authHooks: "Auth hook bundle",
-} satisfies Record<keyof BundledScripts, string>;
+const BUNDLE_RESOURCES = {
+  resolvers: { resourceType: "pipeline.resolver", resourceLabel: "Resolver bundle" },
+  executors: { resourceType: "executor", resourceLabel: "Executor bundle" },
+  workflowJobs: { resourceType: "workflow_job_function", resourceLabel: "Workflow job bundle" },
+  authHooks: { resourceType: "auth.hook", resourceLabel: "Auth hook bundle" },
+} satisfies Record<keyof BundledScripts, Omit<ResourceNameCheck, "namesOf">>;
 
-const BUNDLE_KINDS = Object.keys(BUNDLE_RESOURCE_LABELS) as Array<keyof BundledScripts>;
+const BUNDLE_KINDS = Object.keys(BUNDLE_RESOURCES) as Array<keyof BundledScripts>;
 
 /**
  * Merge per-config bundled scripts into one build-only result.
@@ -22,7 +22,7 @@ export function mergeBundledScripts(targets: ReadonlyArray<BuiltDeploymentTarget
   assertNoDuplicateResourceNames(
     targets,
     BUNDLE_KINDS.map((kind) => ({
-      resourceLabel: BUNDLE_RESOURCE_LABELS[kind],
+      ...BUNDLE_RESOURCES[kind],
       namesOf: (target) => target.bundledScripts[kind].keys(),
     })),
   );

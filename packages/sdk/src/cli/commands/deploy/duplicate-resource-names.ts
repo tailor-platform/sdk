@@ -9,6 +9,7 @@ type DuplicateResourceName = {
 };
 
 export type ResourceNameCheck = {
+  resourceType: string;
   resourceLabel: string;
   namesOf: (target: BuiltDeploymentTarget) => Iterable<string>;
 };
@@ -16,8 +17,8 @@ export type ResourceNameCheck = {
 function findDuplicateResourceNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
   checks: ReadonlyArray<ResourceNameCheck>,
-): DuplicateResourceName[] {
-  return checks.flatMap(({ resourceLabel, namesOf }) => {
+): Array<DuplicateResourceName & { resourceLabel: string }> {
+  return checks.flatMap(({ resourceType, resourceLabel, namesOf }) => {
     const configPathsByName = new Map<string, string[]>();
     for (const target of targets) {
       for (const name of namesOf(target)) {
@@ -32,7 +33,8 @@ function findDuplicateResourceNames(
     return [...configPathsByName]
       .filter(([, configPaths]) => configPaths.length > 1)
       .map(([name, configPaths]) => ({
-        resourceType: resourceLabel,
+        resourceType,
+        resourceLabel,
         name,
         configPaths: [...new Set(configPaths)],
       }));
@@ -58,8 +60,8 @@ export function assertNoDuplicateResourceNames(
     message: [
       "Duplicate resource names in this deploy:",
       ...duplicates.map(
-        ({ resourceType, name, configPaths }) =>
-          `  - ${resourceType} "${name}": ${configPaths
+        ({ resourceLabel, name, configPaths }) =>
+          `  - ${resourceLabel} "${name}": ${configPaths
             .map((configPath) => path.relative(process.cwd(), configPath))
             .join(", ")}`,
       ),
@@ -67,6 +69,12 @@ export function assertNoDuplicateResourceNames(
     suggestion:
       "Rename the duplicates so each name is defined once across all configs in a single deploy. " +
       "To share a service namespace across configs, define it in one config and declare it with `external: true` in the others.",
-    context: { duplicates },
+    context: {
+      duplicates: duplicates.map(({ resourceType, name, configPaths }): DuplicateResourceName => ({
+        resourceType,
+        name,
+        configPaths,
+      })),
+    },
   });
 }
