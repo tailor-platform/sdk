@@ -183,7 +183,7 @@ export default defineConfig({
 
 With `false`, a property read whose result is unused is removed, and so is a call that only exists to receive such a read. This also removes a read that exists only for its effect: a getter that initializes something when it is read, or a statement such as `settings.db.url;` that throws when `settings.db` is missing. Keep the default if your code or an installed package relies on a read like that.
 
-`treeshake` takes rolldown's `treeshake` options, with the same names and meanings. Four switches are available. The values below are the SDK's defaults, which are tuned for the Tailor Platform runtime and rarely need changing; most switches ask whether something has side effects, so `true` keeps it, while `annotations` asks whether to honor annotations, so `true` removes more:
+`treeshake` has four switches that control how unused code is removed from bundles. The values below are the SDK's defaults, which are tuned for the Tailor Platform runtime and rarely need changing. Most switches ask whether something has side effects, so `true` keeps it, while `annotations` asks whether to honor annotations, so `true` removes more:
 
 ```typescript
 export default defineConfig({
