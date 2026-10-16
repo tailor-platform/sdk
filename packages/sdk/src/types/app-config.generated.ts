@@ -32,6 +32,14 @@ export type AppConfigParsed = {
               [x: string]: true | string[];
             }
           | undefined;
+        treeshake?:
+          | {
+              moduleSideEffects?: boolean | undefined;
+              annotations?: boolean | undefined;
+              unknownGlobalSideEffects?: boolean | undefined;
+              propertyReadSideEffects?: boolean | undefined;
+            }
+          | undefined;
       }
     | undefined;
   defaultDateRepresentation?: "date" | "temporal" | undefined;

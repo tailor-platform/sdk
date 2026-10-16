@@ -23,6 +23,41 @@ export type LogLevelInput = LogLevel | (string & {});
  */
 export type AllowedRuntimeGlobals = Record<string, true | string[]>;
 
+/**
+ * Switches that control how unused code is removed from bundled functions.
+ * Each one overrides the value the SDK uses by default.
+ */
+export interface TreeshakeOptions {
+  /**
+   * Assume that importing a module has no effect beyond its exports, so a module
+   * whose exports are all unused is left out of the bundle.
+   * @default false
+   */
+  moduleSideEffects?: boolean;
+  /**
+   * Honor `@__PURE__` and `@__NO_SIDE_EFFECTS__` comment annotations when deciding
+   * whether a call can be removed.
+   * @default true
+   */
+  annotations?: boolean;
+  /**
+   * Treat reading a global the bundle does not define as having an effect, so the
+   * read is kept even when its result is unused.
+   * @default false
+   */
+  unknownGlobalSideEffects?: boolean;
+  /**
+   * Treat reading a property (`config.db.company`) as having an effect, so the
+   * read is kept even when its result is unused. Setting this to `false` removes
+   * unused calls whose arguments only read properties, which keeps modules a
+   * function never reaches out of the bundle. It also removes a read that exists
+   * only for its effect, such as a getter with a side effect or a read that
+   * throws when the object is `undefined`.
+   * @default true
+   */
+  propertyReadSideEffects?: boolean;
+}
+
 /** Options for how `defineConfig()` bundles functions. */
 export interface BuildOptions {
   /**
@@ -52,6 +87,13 @@ export interface BuildOptions {
    * }
    */
   allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+  /**
+   * Overrides how unused code is removed from bundled functions. Unset switches
+   * keep the SDK's defaults.
+   * @example
+   * treeshake: { propertyReadSideEffects: false }
+   */
+  treeshake?: TreeshakeOptions;
 }
 
 /** Value an `env` entry resolves to at runtime. */

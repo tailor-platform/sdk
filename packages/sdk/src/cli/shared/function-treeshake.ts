@@ -1,3 +1,4 @@
+import type { TreeshakeOptions } from "#/configure/config/types";
 import type { TreeshakingOptions } from "rolldown";
 
 const BASE_FUNCTION_TREESHAKE_OPTIONS = {
@@ -32,4 +33,17 @@ export function composeFunctionTreeshakeOptions(
   fragments: readonly TreeshakingOptions[] = [],
 ): TreeshakingOptions {
   return mergeFunctionTreeshakeOptions([BASE_FUNCTION_TREESHAKE_OPTIONS, ...fragments]);
+}
+
+export function createUserTreeshakeOptions(options: TreeshakeOptions = {}): TreeshakingOptions {
+  const { moduleSideEffects, annotations, unknownGlobalSideEffects, propertyReadSideEffects } =
+    options;
+  return {
+    ...(moduleSideEffects !== undefined && { moduleSideEffects }),
+    ...(annotations !== undefined && { annotations }),
+    ...(unknownGlobalSideEffects !== undefined && { unknownGlobalSideEffects }),
+    ...(propertyReadSideEffects !== undefined && {
+      propertyReadSideEffects: propertyReadSideEffects ? "always" : false,
+    }),
+  };
 }

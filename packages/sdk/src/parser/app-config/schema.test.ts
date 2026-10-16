@@ -201,6 +201,36 @@ describe("AppConfigSchema", () => {
       expect(parseBuildOptions({ minify: false }).success).toBe(false);
     });
 
+    describe("treeshake", () => {
+      const parseTreeshake = (treeshake: unknown) => parseBuildOptions({ treeshake });
+
+      test("accepts each treeshake switch as a boolean", () => {
+        expect(
+          parseTreeshake({
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+            propertyReadSideEffects: false,
+          }).success,
+        ).toBe(true);
+      });
+
+      test("rejects a treeshake option the SDK does not expose, so a typo cannot silently do nothing", () => {
+        expect(firstIssue(parseTreeshake({ manualPureFunctions: ["db.string"] }))?.path).toEqual([
+          "buildOptions",
+          "treeshake",
+        ]);
+      });
+
+      test("rejects a switch that is not a boolean", () => {
+        expect(firstIssue(parseTreeshake({ propertyReadSideEffects: "false" }))?.path).toEqual([
+          "buildOptions",
+          "treeshake",
+          "propertyReadSideEffects",
+        ]);
+      });
+    });
+
     test("rejects unsupported log levels", () => {
       expect(firstIssue(parseBuildOptions({ logLevel: "OFF" }))?.path).toEqual([
         "buildOptions",

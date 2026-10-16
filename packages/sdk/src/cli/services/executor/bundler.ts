@@ -10,7 +10,10 @@ import {
   checkForbiddenRuntimeGlobals,
   assertPackageRuntimeGlobalsAllowed,
 } from "#/cli/shared/forbidden-runtime-globals";
-import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import {
+  composeFunctionTreeshakeOptions,
+  createUserTreeshakeOptions,
+} from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -23,7 +26,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
-import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
 interface ExecutorInfo {
@@ -47,6 +50,8 @@ export interface BundleExecutorsOptions {
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
+  /** Overrides how unused code is removed from bundled code */
+  bundleTreeshake?: TreeshakeOptions;
   /** Directory the config's file patterns are resolved against */
   baseDir: string;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
@@ -77,6 +82,7 @@ export async function bundleExecutors(
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
+    bundleTreeshake,
     baseDir,
     tsconfigCache,
     allowedRuntimeGlobals,
@@ -135,6 +141,7 @@ export async function bundleExecutors(
       tsconfigCache,
       allowedRuntimeGlobals,
       dateDefault,
+      bundleTreeshake,
     ),
   );
 
@@ -157,6 +164,7 @@ async function bundleSingleExecutor(
   tsconfigCache?: TsconfigLookupCache,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
   dateDefault: EffectiveDateDefault = "legacy",
+  bundleTreeshake?: TreeshakeOptions,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -168,6 +176,7 @@ async function bundleSingleExecutor(
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
+    bundleTreeshake,
   });
 
   const { code, packageRuntimeGlobals } = await withCache({
@@ -227,6 +236,7 @@ async function bundleSingleExecutor(
         plugins,
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
+          createUserTreeshakeOptions(bundleTreeshake),
         ]),
         ...bundleLog.options,
       } as rolldown.BuildOptions);

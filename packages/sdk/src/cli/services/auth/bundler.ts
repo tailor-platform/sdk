@@ -4,7 +4,10 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/ca
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import {
+  composeFunctionTreeshakeOptions,
+  createUserTreeshakeOptions,
+} from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -15,7 +18,7 @@ import {
 } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
-import type { LogLevel } from "#/configure/config/types";
+import type { LogLevel, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
 /**
@@ -38,6 +41,8 @@ export interface BundleAuthHooksOptions {
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
+  /** Overrides how unused code is removed from bundled code */
+  bundleTreeshake?: TreeshakeOptions;
   /** Directory the tsconfig is resolved against */
   baseDir: string;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
@@ -67,6 +72,7 @@ export async function bundleAuthHooks(
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
+    bundleTreeshake,
     baseDir,
     tsconfigCache,
     dateDefault = "legacy",
@@ -93,6 +99,7 @@ export async function bundleAuthHooks(
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
+    bundleTreeshake,
     prefix: sortedEnvPrefix,
   });
 
@@ -154,6 +161,7 @@ export async function bundleAuthHooks(
         },
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
+          createUserTreeshakeOptions(bundleTreeshake),
         ]),
         ...bundleLog.options,
       } as rolldown.BuildOptions);

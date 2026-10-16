@@ -11,7 +11,10 @@ import {
   checkForbiddenRuntimeGlobals,
   assertPackageRuntimeGlobalsAllowed,
 } from "#/cli/shared/forbidden-runtime-globals";
-import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import {
+  composeFunctionTreeshakeOptions,
+  createUserTreeshakeOptions,
+} from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -27,7 +30,7 @@ import { getModuleExportName, type ASTNode } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
-import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
 function safeRealpath(p: string): string {
@@ -297,6 +300,7 @@ export interface BundleWorkflowJobsResult {
  *   e.g. during an interactive confirmation pause before a rebuild)
  * @param allowedRuntimeGlobals - Globals each installed package may reference
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
+ * @param bundleTreeshake - Overrides how unused code is removed from bundled code
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -315,6 +319,7 @@ export async function bundleWorkflowJobs(
   >,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
   dateDefault: EffectiveDateDefault = "legacy",
+  bundleTreeshake?: TreeshakeOptions,
 ): Promise<BundleWorkflowJobsResult> {
   const jobSourceFiles = allJobs.map((job) => job.sourceFile);
   const sourceFileState = hashReachabilitySourceFiles([
@@ -364,6 +369,7 @@ export async function bundleWorkflowJobs(
       tsconfigCache,
       allowedRuntimeGlobals,
       dateDefault,
+      bundleTreeshake,
     ),
   );
 
@@ -617,6 +623,7 @@ async function bundleSingleJob(
   tsconfigCache?: TsconfigLookupCache,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
   dateDefault: EffectiveDateDefault = "legacy",
+  bundleTreeshake?: TreeshakeOptions,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -630,6 +637,7 @@ async function bundleSingleJob(
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
+    bundleTreeshake,
     prefix: sortedEnvPrefix,
   });
 
@@ -744,6 +752,7 @@ async function bundleSingleJob(
         plugins,
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
+          createUserTreeshakeOptions(bundleTreeshake),
         ]),
         ...bundleLog.options,
       } as rolldown.BuildOptions);
