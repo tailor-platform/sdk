@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test, expect } from "vitest";
 import { firstErrorLocation, physicalLineOfRecord } from "./record-lines";
-import type { ValidationErrorDetail } from "@toiroakr/lines-db";
+import type { ValidationErrorDetail } from "lines-db";
 
 describe("physicalLineOfRecord", () => {
   test("maps records to their own lines when the file has no blank lines", () => {
@@ -40,7 +40,7 @@ describe("physicalLineOfRecord", () => {
     expect(physicalLineOfRecord('{"a":1}\n', 5)).toBeUndefined();
   });
 
-  // The reader's own rule, mirrored from @toiroakr/lines-db: records are the
+  // The reader's own rule, mirrored from lines-db: records are the
   // non-blank lines of a trimmed file. A divergence here means reported
   // locations point at the wrong line.
   const readerRecords = (content: string): string[] =>
