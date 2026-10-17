@@ -10,7 +10,18 @@
   "dependencyDashboardApproval": false,
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
+  "constraints": {
+    "ghActionsLock": "v0.2.0"
+  },
   "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update the gh-actions-lock version that Renovate and the actions:lock:* scripts use for .github/workflows/actions.lock",
+      "managerFilePatterns": ["/^renovate\\.json$/"],
+      "matchStrings": ["\"ghActionsLock\": \"(?<currentValue>v[\\d.]+)\""],
+      "depNameTemplate": "github/gh-actions-lock",
+      "datasourceTemplate": "github-releases"
+    },
     {
       "customType": "regex",
       "managerFilePatterns": ["/^packages/sdk-plugin-setup/src/.+\\.ya?ml$/"],

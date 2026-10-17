@@ -95,6 +95,15 @@ jobs:
         if: steps.format.outcome == 'failure'
         run: exit 1
 
+      - name: Check actions.lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pnpm actions:lock:check || {
+            echo "::error file=.github/workflows/actions.lock::actions.lock check failed. If it is out of date, run 'pnpm actions:lock:update' and commit the result."
+            exit 1
+          }
+
       - name: Generate code
         run: pnpm -r run generate
 
