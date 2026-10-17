@@ -640,6 +640,14 @@ tailor tailordb migration test --data clone
 
 The platform clone API is feature-gated and requires editor access to both same-region workspaces. Clone mode copies TailorDB records only: IdP users, file blobs, and metadata labels are not copied, and unlike [`tailor data clone`](../../data-clone.md) it has no `--copy-files` or `--copy-idp-users` option. File fields therefore retain references whose blobs are absent. The command polls the asynchronous operation and reports platform failures; if clone is unavailable, use seed mode.
 
+The command waits up to 30 minutes for the clone to finish and fails the test when it does not. For a large source, raise the limit with `--clone-timeout`, which accepts `ms`, `s`, or `m` units and is valid only with `--data clone`:
+
+```bash
+tailor tailordb migration test --data clone --clone-timeout 90m
+```
+
+With `--target-workspace-id`, the designated target must be in the same region as the source; the command checks this before deploying anything to it.
+
 The source schema is re-verified immediately before cloning; if the source workspace was deployed or otherwise changed after the test started, the command aborts instead of cloning data that no longer matches the deployed baseline.
 
 ### Assertions and retained targets
