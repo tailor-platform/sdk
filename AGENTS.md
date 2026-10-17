@@ -136,7 +136,7 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 - [Getting Started](docs/getting-started.md) - Prerequisites, setup, key commands
 - [Architecture](docs/architecture.md) - Design decisions and non-obvious patterns
 - [Testing](docs/testing.md) - Test strategy and conventions
-- [Changeset Conventions](docs/changeset.md) - Version bump level guidelines
+- [Changeset Conventions](docs/changeset.md) - Whether a PR needs a changeset or the `skip-changeset` label, and the bump level
 - [Telemetry / Performance Profiling](docs/telemetry.md) - OTLP tracing for CLI performance analysis
 
 ## Platform Documentation
