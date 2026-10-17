@@ -683,9 +683,6 @@ importers:
       '@tailor-platform/function-kysely-tailordb':
         specifier: 0.1.3
         version: 0.1.3(kysely@0.29.6)
-      '@toiroakr/lines-db':
-        specifier: 0.15.0
-        version: 0.15.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3)
       '@toiroakr/read-multiline':
         specifier: 0.4.1
         version: 0.4.1
@@ -725,6 +722,9 @@ importers:
       kysely:
         specifier: 0.29.6
         version: 0.29.6
+      lines-db:
+        specifier: 0.15.0
+        version: 0.15.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3)
       mime-types:
         specifier: 3.0.2
         version: 3.0.2
@@ -2667,17 +2667,6 @@ packages:
     peerDependencies:
       kysely: '>= 0.24.0 < 1'
 
-  '@toiroakr/lines-db@0.15.0':
-    resolution: {integrity: sha512-6zjE6W6jNZq+RnWX+Sjso13u4ixxuJEgM2uZO7xijamFE7TjKeARE1PKVpHK0jR3C7FzWWs/s/aMIsVzPVj+4w==}
-    engines: {node: '>=22.12.0'}
-    deprecated: This package has moved to lines-db. Install lines-db instead; add @lines-db/studio if you use Studio. Update imports from @toiroakr/lines-db to lines-db.
-    hasBin: true
-    peerDependencies:
-      typescript: '>=5 <7 || >=7.1.0-0'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-
   '@toiroakr/read-multiline@0.4.1':
     resolution: {integrity: sha512-uuNmzOCjn9nYgIGJe1Ztr3VXxQN5wlspFaCWtcW5qr5KZ3UluHiBvxfjKNplmP4zV25kFl1QkkaQEOoHOrjp8g==}
 
@@ -3713,6 +3702,16 @@ packages:
   lightningcss@1.33.0:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
+
+  lines-db@0.15.0:
+    resolution: {integrity: sha512-Ee0Qahq860Sb9oNIc1EhaBYwGUyQ7deGPOQ7Yv1OLQiFq1XTqecUVRJks47NjUCgxU2WFiRbPBVmA4S8E3GXRw==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      typescript: '>=5 <7 || >=7.1.0-0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
@@ -5604,18 +5603,6 @@ snapshots:
     dependencies:
       kysely: 0.29.6
 
-  '@toiroakr/lines-db@0.15.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3)':
-    dependencies:
-      '@politty/zod': 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.7)
-      '@standard-schema/spec': 1.1.0
-      amaro: 1.2.1
-      zod: 4.6.7
-    optionalDependencies:
-      typescript: 6.0.3
-    transitivePeerDependencies:
-      - '@clack/prompts'
-      - '@inquirer/prompts'
-
   '@toiroakr/read-multiline@0.4.1': {}
 
   '@ts-graphviz/adapter@2.0.6':
@@ -6605,6 +6592,18 @@ snapshots:
       lightningcss-linux-x64-musl: 1.33.0
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
+
+  lines-db@0.15.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3):
+    dependencies:
+      '@politty/zod': 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.7)
+      '@standard-schema/spec': 1.1.0
+      amaro: 1.2.1
+      zod: 4.6.7
+    optionalDependencies:
+      typescript: 6.0.3
+    transitivePeerDependencies:
+      - '@clack/prompts'
+      - '@inquirer/prompts'
 
   locate-path@6.0.0:
     dependencies:

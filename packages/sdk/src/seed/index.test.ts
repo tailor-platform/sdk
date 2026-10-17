@@ -6,7 +6,7 @@ import { validateSeedData } from "./index";
 
 // The data dirs live outside the workspace, so their schema files import
 // lines-db by resolved URL instead of by package name.
-const linesDbUrl = import.meta.resolve("@toiroakr/lines-db");
+const linesDbUrl = import.meta.resolve("lines-db");
 
 function schemaSource(foreignKeys: object[] = []): string {
   return `
