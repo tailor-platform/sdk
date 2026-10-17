@@ -62,7 +62,7 @@ See [packages/sdk/docs/cli-reference.md](packages/sdk/docs/cli-reference.md) for
 
 [politty](https://github.com/toiroakr/politty) generates `packages/sdk/docs/cli-reference.md` and `packages/sdk/docs/cli/<name>.md` from command definitions and the `*.template.md` beside each file, and `docs:update` overwrites the output in full. Edit the template or the command's `description` / `notes` instead.
 
-`docs:check` fails only when a command listed in `templateFiles` (`packages/sdk/src/cli/docs.test.ts`) appears in no template; any other command without a placeholder is silently left out:
+`docs:check` catches a command listed in `templateFiles` (`packages/sdk/src/cli/docs.test.ts`) that appears in no template; any other command without a placeholder is silently left out:
 
 - **New top-level command**: add it to a `templateFiles` entry and put `{{politty:command:<name>}}` in that entry's template.
 - **New doc file**: add a `templateFiles` entry and a `docs/cli/<name>.template.md`, copying an existing template's front matter, which feeds the `cli-reference.md` index.
