@@ -448,6 +448,24 @@ tailor deploy --migration-skip-steps main-db/backfillUser,main-db/backfillInvoic
 - The option applies to the migration an earlier deploy left in progress. Deploy fails before changing anything when an entry names a step that did not succeed, a step the migration does not define, a namespace without a migration in progress, or a namespace that no deployed config defines. It also fails when the earlier run's step results cannot be read, because then it cannot confirm which steps succeeded; deploy again to retry.
 - It takes effect for the deploy you pass it to. If that run fails, the next `tailor deploy` resumes it as usual, and the skipped steps stay completed without passing the option again.
 
+#### Rolling back instead of resuming
+
+By default a failure after another step has completed leaves the migration in progress and the namespace's tables in maintenance mode until you fix the step and deploy again. When you would rather restore the tables first and fix the script afterwards, export `onFailure` next to `steps`:
+
+```typescript
+export const onFailure = "rollback";
+
+export const steps = {
+  // ...
+} satisfies MigrationSteps;
+```
+
+- `onFailure` is `"resume"` (the default, described above) or `"rollback"`. Write it as `export const onFailure = "rollback"` with one of those two string literals; `tailor tailordb migration validate` and `tailor deploy` reject anything else. A script that runs `main` ignores it.
+- With `"rollback"`, a failed step after another step has completed, and post-migration schema changes that fail after every step completed, roll back the pre-migration schema changes like a failing `main` script: tables that already existed are restored to their previous shape and GraphQL permissions, and tables the migration newly introduced are dropped. The in-progress record is cleared, the tables leave maintenance mode, and the checkpoint is not advanced. A migration that an earlier deploy left in progress is rolled back the same way once its script exports `"rollback"`.
+- Steps that already completed stay committed. Their changes to existing fields remain in the database, and nothing is recorded as in progress, so the next deploy runs every step again from the beginning. Every step must be safe to run again, or a rolled-back run applies those changes twice. Do not rely on data a step wrote to a field or table that the rollback removed.
+- If the schema or GraphQL permission of some tables cannot be rolled back, `tailor deploy` fails with `MIGRATION_ROLLBACK_INCOMPLETE` and names those tables in the error's `context.failedTables`. Those tables stay in maintenance mode. Run `tailor tailordb migration validate` to see which tables differ, return the namespace to its checkpoint with `tailor tailordb migration sync <N>`, where `<N>` is the checkpoint `tailor tailordb migration status` reports, fix the script, and deploy again. `sync` is allowed here because the migration is no longer in progress.
+- If the in-progress record cannot be cleared, `tailor deploy` logs a warning and keeps the migration in progress with its tables in maintenance mode. Deploy again to resume it as described above, or settle it without deploying with `tailor tailordb migration resolve --rollback`.
+
 Write every step so that running it again is safe: besides the cases above, a step can run a second time when a deploy is interrupted right after it commits. Use `where` clauses that skip rows a step already migrated, as in the example. Rows written while a migration is in progress are not seen by steps that already completed. [Maintenance mode](#maintenance-mode) blocks GraphQL writes but not the writes your resolvers, executors, or workflows make through Kysely, and without it GraphQL clients can write too, so stop such writers until the migration finishes or write steps that tolerate them.
 
 ### Settling a migration that stays in progress
@@ -885,10 +903,10 @@ Use `tailor tailordb migration rebaseline` rather than combining `migration gene
 
 ## Failure Recovery
 
-A script that exports `steps` follows different rules once one of its steps has completed: the migration stays in progress and the next deploy resumes it. See [Splitting a migration into steps](#splitting-a-migration-into-steps). Otherwise, if the pre-migration phase or `migrate.ts` fails:
+A script that exports `steps` follows different rules once one of its steps has completed: the migration stays in progress and the next deploy resumes it, unless the script exports `onFailure = "rollback"`. See [Splitting a migration into steps](#splitting-a-migration-into-steps) and [Rolling back instead of resuming](#rolling-back-instead-of-resuming). Otherwise, if the pre-migration phase or `migrate.ts` fails:
 
 - **The transaction rolls back** for that migration's script. Database changes the script made are undone.
-- **The pre-migration schema changes are rolled back** to the prior checkpoint: tables that already existed are restored to their previous shape, and tables the migration newly introduced are dropped. The workspace is left at its prior checkpoint and prior schema — not half-applied.
+- **The pre-migration schema changes are rolled back** to the prior checkpoint: tables that already existed are restored to their previous shape and GraphQL permissions, and tables the migration newly introduced are dropped. The workspace is left at its prior checkpoint and prior schema — not half-applied.
 - The whole `apply` aborts and the checkpoint label is not bumped. Subsequent migrations in the same run do not execute.
 
 The rollback is best-effort per table; if reverting a table fails, a warning is logged and the original migration error is still reported. The next deploy then stops with remote schema drift on that table. Run `tailor tailordb migration validate` to see which tables differ, return the namespace to its checkpoint with `tailor tailordb migration sync <N>`, where `<N>` is the checkpoint `tailor tailordb migration status` reports, and deploy again. `sync` deletes the tables and fields that are not in that migration's snapshot, together with any rows the failed migration wrote to them; the next deploy runs the failed migration again.

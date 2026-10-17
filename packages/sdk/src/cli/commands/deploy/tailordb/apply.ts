@@ -27,6 +27,7 @@ import {
   executeMigrations,
   isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
+  rollbackIncompleteError,
   updateMigrationLabel,
   type MigrationContext,
 } from "./migration";
@@ -38,6 +39,7 @@ import {
   executeSingleMigrationPostPhase,
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
+  type GqlPermissionUndo,
   generateMigrationPhaseManifest,
   restoreMigrationRestrictions,
   getDeletedTableNames,
@@ -299,6 +301,7 @@ function includeUndeletedTables(
  * @param migration - Migration whose Post-phase failed
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables the migration's phases touched
+ * @param gqlPermissionUndo - Records how to undo each GraphQL permission the migration wrote
  */
 async function reapplyPrePhaseAfterPostPhaseFailure(
   client: OperatorClient,
@@ -306,6 +309,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
+  gqlPermissionUndo: GqlPermissionUndo,
 ): Promise<void> {
   try {
     await executeSingleMigrationPrePhase(
@@ -314,6 +318,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
       migration,
       phaseSettings,
       attemptedTables,
+      gqlPermissionUndo,
     );
   } catch (error) {
     logger.warn(
@@ -337,6 +342,50 @@ async function removeRunResources(
         `${error instanceof Error ? error.message : String(error)}. A later deploy removes them.`,
     );
   }
+}
+
+async function releaseRolledBackRun(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  migrationNumber: number,
+): Promise<boolean> {
+  try {
+    await clearMigrationInProgress(client, workspaceId, namespace);
+  } catch (error) {
+    logger.warn(
+      `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migrationNumber)}: ` +
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        "The migration stays in progress and its tables stay in maintenance mode; deploy again to resume it.",
+    );
+    return false;
+  }
+  await removeRunResources(client, workspaceId, namespace, migrationNumber);
+  return true;
+}
+
+function withholdTablesFromRestoration(
+  namespaceName: string,
+  tableNames: ReadonlySet<string>,
+  restorationSnapshots: Map<string, SchemaSnapshot>,
+  restorationSettings: MigrationRestrictionState,
+): void {
+  const committed = restorationSnapshots.get(namespaceName);
+  if (!committed) return;
+  restorationSnapshots.set(namespaceName, {
+    ...committed,
+    tables: Object.fromEntries(
+      Object.entries(committed.tables).filter(([tableName]) => !tableNames.has(tableName)),
+    ),
+  });
+  restorationSettings.set(
+    namespaceName,
+    new Map(
+      [...(restorationSettings.get(namespaceName) ?? [])].filter(
+        ([tableName]) => !tableNames.has(tableName),
+      ),
+    ),
+  );
 }
 
 /**
@@ -363,14 +412,11 @@ function keepMigrationTablesRestricted(
     ...getDeletedTableNames(migration),
   ]);
   if (!committed) return restrictedByDeploy(namespaceName, migrationTables, history);
-  restorationSnapshots.set(namespaceName, { ...committed, tables: {} });
-  restorationSettings.set(
+  withholdTablesFromRestoration(
     namespaceName,
-    new Map(
-      [...(restorationSettings.get(namespaceName) ?? [])].filter(
-        ([tableName]) => !migrationTables.has(tableName),
-      ),
-    ),
+    migrationTables,
+    restorationSnapshots,
+    restorationSettings,
   );
   return restrictedByDeploy(namespaceName, migrationTables, history);
 }
@@ -798,9 +844,46 @@ export async function applyTailorDB(
         for (const migration of pendingMigrations) {
           reachedMigrations.add(migration);
           const attemptedTables = new Set<string>();
+          const gqlPermissionUndo: GqlPermissionUndo = new Map();
           touchedTables.push({ namespace: migration.namespace, tables: attemptedTables });
           const inProgress = inProgressMigrations[migration.namespace]?.number === migration.number;
           const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
+          const rollsBackOnFailure =
+            runsSteps &&
+            migration.scriptForm?.kind === "steps" &&
+            migration.scriptForm.rollbackOnFailure === true;
+          const rollBackFailedMigration = async (error: unknown): Promise<unknown> => {
+            const leftRestricted = await rollbackSingleMigrationAfterFailure(
+              client,
+              migration,
+              migrationContext.workspaceId,
+              phaseSettings,
+              attemptedTables,
+              gqlPermissionUndo,
+            );
+            if (!rollsBackOnFailure) {
+              unrolledBack.push({ migration, tables: leftRestricted });
+              return error;
+            }
+            const released = await releaseRolledBackRun(
+              client,
+              migrationContext.workspaceId,
+              migration.namespace,
+              migration.number,
+            );
+            if (!released) {
+              partialMigrations.set(migration.namespace, migration);
+              return error;
+            }
+            if (leftRestricted.length === 0) return error;
+            withholdTablesFromRestoration(
+              migration.namespace,
+              new Set(leftRestricted),
+              restorationSnapshots,
+              restorationSettings,
+            );
+            return rollbackIncompleteError(migration, leftRestricted, error);
+          };
           timeline?.enter("preMigration");
           try {
             // Pre-migration phase: Create/update tables with breaking fields as optional
@@ -811,6 +894,7 @@ export async function applyTailorDB(
                 migration,
                 phaseSettings,
                 attemptedTables,
+                gqlPermissionUndo,
               ),
             );
 
@@ -822,22 +906,13 @@ export async function applyTailorDB(
             }
           } catch (error) {
             const shouldKeepPreMigrationSchema =
-              inProgress || isMigrationPartiallyApplied(error) || isMigrationOutcomeUnknown(error);
+              isMigrationOutcomeUnknown(error) ||
+              (!rollsBackOnFailure && (inProgress || isMigrationPartiallyApplied(error)));
             if (shouldKeepPreMigrationSchema) {
               partialMigrations.set(migration.namespace, migration);
               throw error;
             }
-            unrolledBack.push({
-              migration,
-              tables: await rollbackSingleMigrationAfterFailure(
-                client,
-                migration,
-                migrationContext.workspaceId,
-                phaseSettings,
-                attemptedTables,
-              ),
-            });
-            throw error;
+            throw await rollBackFailedMigration(error);
           }
 
           timeline?.enter("postMigration");
@@ -852,7 +927,7 @@ export async function applyTailorDB(
               ),
             );
           } catch (error) {
-            if (inProgress || runsSteps) {
+            if (!rollsBackOnFailure && (inProgress || runsSteps)) {
               partialMigrations.set(migration.namespace, migration);
               await reapplyPrePhaseAfterPostPhaseFailure(
                 client,
@@ -860,20 +935,11 @@ export async function applyTailorDB(
                 migration,
                 phaseSettings,
                 attemptedTables,
+                gqlPermissionUndo,
               );
               throw error;
             }
-            unrolledBack.push({
-              migration,
-              tables: await rollbackSingleMigrationAfterFailure(
-                client,
-                migration,
-                migrationContext.workspaceId,
-                phaseSettings,
-                attemptedTables,
-              ),
-            });
-            throw error;
+            throw await rollBackFailedMigration(error);
           }
 
           const previousRestorationSnapshot = restorationSnapshots.get(migration.namespace);

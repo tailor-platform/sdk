@@ -53,6 +53,7 @@ vi.mock("./migration", async (importOriginal) => {
     ...original,
     detectPendingMigrations: vi.fn(),
     executeMigrations: vi.fn(),
+    clearMigrationInProgress: vi.fn(original.clearMigrationInProgress),
     updateMigrationLabel: vi
       .fn()
       .mockImplementation(
@@ -617,6 +618,63 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     // The platform does not cascade, so the permission must be deleted first.
     expect(order).toEqual(["perm:StockReservation", "type:StockReservation"]);
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
+  describe("GQL permissions of an existing table", () => {
+    const beforePermission = { policies: [{ description: "before" }] };
+    const afterPermission = { policies: [{ description: "after" }] };
+
+    function planWithPermission(kind: "update" | "create") {
+      const planResult = createUpdatePlanResult();
+      const request = {
+        workspaceId: "test-workspace",
+        namespaceName: "test-ns",
+        typeName: "GoodsReceipt",
+        permission: afterPermission,
+      };
+      if (kind === "update") {
+        planResult.changeSet.gqlPermission.updates = [
+          { name: "GoodsReceipt", request, previousPermission: beforePermission },
+        ];
+      } else {
+        planResult.changeSet.gqlPermission.creates = [{ name: "GoodsReceipt", request }];
+      }
+      return planResult;
+    }
+
+    function failMigration(): void {
+      setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+      vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+        new Error("rpc error: code = Aborted desc = migration failed"),
+      );
+    }
+
+    test("restores the permission the Pre-phase replaced", async () => {
+      const client = createMockClient();
+      failMigration();
+
+      await expect(
+        applyTailorDB(client, planWithPermission("update"), "create-update"),
+      ).rejects.toThrow("migration failed");
+
+      expect(vi.mocked(client.updateTailorDBGQLPermission).mock.calls.map(([req]) => req)).toEqual([
+        expect.objectContaining({ typeName: "GoodsReceipt", permission: afterPermission }),
+        expect.objectContaining({ typeName: "GoodsReceipt", permission: beforePermission }),
+      ]);
+    });
+
+    test("deletes a permission the Pre-phase added to a table that had none", async () => {
+      const client = createMockClient();
+      failMigration();
+
+      await expect(
+        applyTailorDB(client, planWithPermission("create"), "create-update"),
+      ).rejects.toThrow("migration failed");
+
+      expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledWith(
+        expect.objectContaining({ namespaceName: "test-ns", typeName: "GoodsReceipt" }),
+      );
+    });
   });
 
   test("does not create or roll back a permission table absent from the migration snapshot", async () => {
@@ -1952,6 +2010,243 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         update: true,
         delete: true,
         read: false,
+      });
+    });
+
+    describe("a script that asks to roll back on failure", () => {
+      const rollbackForm: MigrationScriptForm = {
+        kind: "steps",
+        order: ["backfill", "recompute"],
+        rollbackOnFailure: true,
+      };
+
+      function mkRollbackMigration(): PendingMigration {
+        return { ...mkAddTypeMigration(1, "StockReservation"), scriptForm: rollbackForm };
+      }
+
+      aroundEach(async (runTest) => {
+        vi.mocked(migrationModule.clearMigrationInProgress).mockClear();
+        await runTest();
+      });
+
+      test("rolls back the Pre-phase schema and drops the run's records when a step fails after another completed", async () => {
+        const client = createMockClient();
+        setPendingMigrations([mkRollbackMigration()]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(partiallyApplied());
+
+        await expect(
+          applyTailorDB(client, withInputs(createMockPlanResult()), "create-update"),
+        ).rejects.toThrow("failed at recompute");
+
+        expect(deletedTableNames(client)).toContain("StockReservation");
+        expect(migrationModule.clearMigrationInProgress).toHaveBeenCalledWith(
+          client,
+          "test-workspace",
+          "test-ns",
+        );
+        expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
+          client,
+          "test-workspace",
+          "test-ns",
+          1,
+        );
+        expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+      });
+
+      test("returns the schema to the state before the migration when the post-phase fails after every step succeeded", async () => {
+        const client = createMockClient();
+        setPendingMigrations([
+          { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: rollbackForm },
+        ]);
+        vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+        const goodsReceiptWrites: unknown[] = [];
+        vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+          goodsReceiptWrites.push(structuredClone(request));
+          if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
+          return {} as never;
+        });
+
+        await expect(
+          applyTailorDB(client, withInputs(createUpdatePlanResult()), "create-update"),
+        ).rejects.toThrow("post-phase constraint violation");
+
+        expect(goodsReceiptWrites[3]).not.toEqual(goodsReceiptWrites[1]);
+        expect(migrationModule.clearMigrationInProgress).toHaveBeenCalledWith(
+          client,
+          "test-workspace",
+          "test-ns",
+        );
+        expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
+          client,
+          "test-workspace",
+          "test-ns",
+          1,
+        );
+        expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+      });
+
+      test("keeps a table whose rollback failed restricted and names it in the error", async () => {
+        const client = createMockClient();
+        setPendingMigrations([
+          { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: rollbackForm },
+        ]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(partiallyApplied());
+        const goodsReceiptWrites: unknown[] = [];
+        vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+          goodsReceiptWrites.push(structuredClone(request));
+          // Restriction, Pre-phase, then the rollback write that fails.
+          if (goodsReceiptWrites.length === 3) throw new Error("rollback rejected");
+          return {} as never;
+        });
+
+        const error = await applyTailorDB(
+          client,
+          withInputs(createUpdatePlanResult()),
+          "create-update",
+        ).catch((caught: unknown) => caught);
+
+        expect(error).toMatchObject({
+          code: "MIGRATION_ROLLBACK_INCOMPLETE",
+          context: { namespace: "test-ns", migrationNumber: 1, failedTables: ["GoodsReceipt"] },
+        });
+        expect((error as Error).message).toContain("failed at recompute");
+        expect(goodsReceiptWrites).toHaveLength(3);
+        expect(migrationModule.clearMigrationInProgress).toHaveBeenCalledWith(
+          client,
+          "test-workspace",
+          "test-ns",
+        );
+      });
+
+      test("keeps the namespace restricted and its run's resources when the in-progress record could not be cleared", async () => {
+        const client = createMockClient();
+        setPendingMigrations([
+          { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: rollbackForm },
+        ]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(partiallyApplied());
+        vi.mocked(migrationModule.clearMigrationInProgress).mockRejectedValueOnce(
+          new Error("label write rejected"),
+        );
+        const goodsReceiptWrites: unknown[] = [];
+        vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+          goodsReceiptWrites.push(structuredClone(request));
+          return {} as never;
+        });
+
+        await expect(
+          applyTailorDB(client, withInputs(createUpdatePlanResult()), "create-update"),
+        ).rejects.toThrow("failed at recompute");
+
+        // Restriction, Pre-phase and the rollback write; the restoring write never comes.
+        expect(goodsReceiptWrites).toHaveLength(3);
+        expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
+      });
+
+      test("does not roll back when the migration's outcome is unknown", async () => {
+        const client = createMockClient();
+        setPendingMigrations([mkRollbackMigration()]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+          CLIError({
+            code: "MIGRATION_OUTCOME_UNKNOWN",
+            message: "Could not confirm whether migration test-ns/0001 started: [unavailable] lost",
+          }),
+        );
+
+        await expect(
+          applyTailorDB(client, withInputs(createMockPlanResult()), "create-update"),
+        ).rejects.toMatchObject({ code: "MIGRATION_OUTCOME_UNKNOWN" });
+
+        expect(deletedTableNames(client)).not.toContain("StockReservation");
+        expect(migrationModule.clearMigrationInProgress).not.toHaveBeenCalled();
+      });
+
+      test("names a table whose GQL permission could not be restored in the error", async () => {
+        const client = createMockClient();
+        const planResult = createUpdatePlanResult();
+        planResult.changeSet.gqlPermission.updates = [
+          {
+            name: "GoodsReceipt",
+            request: {
+              workspaceId: "test-workspace",
+              namespaceName: "test-ns",
+              typeName: "GoodsReceipt",
+              permission: { policies: [{ description: "after" }] },
+            },
+            previousPermission: { policies: [{ description: "before" }] },
+          },
+        ];
+        setPendingMigrations([
+          { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: rollbackForm },
+        ]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(partiallyApplied());
+        vi.mocked(client.updateTailorDBGQLPermission)
+          .mockResolvedValueOnce({} as never)
+          .mockRejectedValueOnce(new Error("permission write rejected"));
+
+        const error = await applyTailorDB(client, planResult, "create-update").catch(
+          (caught: unknown) => caught,
+        );
+
+        expect(error).toMatchObject({
+          code: "MIGRATION_ROLLBACK_INCOMPLETE",
+          context: { failedTables: ["GoodsReceipt"] },
+        });
+      });
+
+      test("names a new table that could not be dropped in the error", async () => {
+        const client = createMockClient();
+        setPendingMigrations([mkRollbackMigration()]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(partiallyApplied());
+        vi.mocked(client.deleteTailorDBType).mockRejectedValue(new Error("drop rejected"));
+
+        const error = await applyTailorDB(
+          client,
+          withInputs(createMockPlanResult()),
+          "create-update",
+        ).catch((caught: unknown) => caught);
+
+        expect(error).toMatchObject({
+          code: "MIGRATION_ROLLBACK_INCOMPLETE",
+          context: { failedTables: ["StockReservation"] },
+        });
+      });
+
+      test("rolls back a migration that an earlier deploy left in progress", async () => {
+        const client = createMockClient();
+        remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+        vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
+          async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
+            remoteStates?.set("test-ns", {
+              metadataExists: true,
+              number: 0,
+              historyId: null,
+              historyIdInvalid: false,
+              inProgress: { number: 1, executionId: "exec-1" },
+              inProgressInvalid: false,
+              maintenanceModeCheckpoint: null,
+            });
+            return [mkRollbackMigration()];
+          },
+        );
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(new Error("still failing"));
+
+        await expect(
+          applyTailorDB(client, withInputs(createMockPlanResult()), "create-update"),
+        ).rejects.toThrow("still failing");
+
+        expect(deletedTableNames(client)).toContain("StockReservation");
+        expect(migrationModule.clearMigrationInProgress).toHaveBeenCalledWith(
+          client,
+          "test-workspace",
+          "test-ns",
+        );
+        expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
       });
     });
 

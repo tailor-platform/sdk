@@ -584,10 +584,12 @@ function unreleasedRecordError(
   const { namespace } = migration;
   const number = formatMigrationNumber(migration.number);
   const checkpoint = formatMigrationNumber(migration.number - 1);
+  const resolveRollback = `'tailor tailordb migration resolve --rollback --namespace ${namespace}'`;
   const next = recordConfirmed
-    ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place and the next deploy runs every step again. Fix the failure and deploy again."
+    ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place and the next deploy runs every step again. " +
+      `Fix the failure and deploy again, or run ${resolveRollback} to clear the record without deploying.`
     : `Whether it is still recorded as in progress could not be confirmed, so its pre-migration schema stays in place. ` +
-      `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, fix the failure and deploy again; ` +
+      `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, fix the failure and deploy again, or run ${resolveRollback} to clear the record without deploying; ` +
       `otherwise run 'tailor tailordb migration sync ${checkpoint} --namespace ${namespace}' to return the schema to migration ${checkpoint}, then deploy again.`;
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
@@ -614,6 +616,40 @@ function unconfirmedStartError(
       migrationNumber: migration.number,
       completedSteps: [],
       failedSteps: [],
+    },
+    cause,
+  });
+}
+
+/**
+ * The failure of a migration that asked to be rolled back, whose pre-migration
+ * schema changes could not be reverted on some tables.
+ * @param migration - Migration whose rollback was incomplete
+ * @param failedTables - Tables whose schema could not be reverted
+ * @param cause - The failure that triggered the rollback
+ * @returns The error to raise instead of the original failure
+ */
+export function rollbackIncompleteError(
+  migration: PendingMigration,
+  failedTables: readonly string[],
+  cause: unknown,
+): Error {
+  const { namespace } = migration;
+  const migrationLabel = `${namespace}/${formatMigrationNumber(migration.number)}`;
+  const checkpoint = formatMigrationNumber(migration.number - 1);
+  return CLIError({
+    code: "MIGRATION_ROLLBACK_INCOMPLETE",
+    message:
+      `Migration ${migrationLabel} failed, and its schema changes could not be rolled back on ${failedTables.join(", ")}: ` +
+      `${cause instanceof Error ? cause.message : String(cause)}`,
+    suggestion:
+      `These tables stay in maintenance mode. Run 'tailor tailordb migration validate --namespace ${namespace}' to see which tables differ, ` +
+      `then 'tailor tailordb migration sync ${checkpoint} --namespace ${namespace}' to return the schema to migration ${checkpoint}. ` +
+      "sync removes the tables and fields that migration's snapshot does not have. Fix the script and deploy again.",
+    context: {
+      namespace,
+      migrationNumber: migration.number,
+      failedTables: [...failedTables],
     },
     cause,
   });
