@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.29.0
+
+### Patch Changes
+
+- [#2613](https://github.com/tailor-platform/sdk/pull/2613) [`91b34da`](https://github.com/tailor-platform/sdk/commit/91b34dae13343e0e8fb8dfd604d350da96565647) Thanks [@toiroakr](https://github.com/toiroakr)! - Record a 24-hour expiry on the workspace that the workflow template's e2e `globalSetup.ts` creates, so `tailor workspace prune --expired` can reclaim it when a run is interrupted before its teardown. When the expiry cannot be recorded, the setup deletes the workspace and fails instead of leaving one that nothing reclaims. Projects scaffolded earlier keep their existing `globalSetup.ts`; add `ttl: "24h"` to its `createWorkspace` call, and delete the workspace and throw when the returned `ttl.state` is `"unconfirmed"`, to get the same behavior.
+
 ## 2.28.0
 
 ### Patch Changes
