@@ -13,8 +13,6 @@ The platform rejects a clone unless all of the following hold:
 - The application is deployed to the target under the same name, with the same namespaces and the same TailorDB schema as the source. Deploy the version that runs in the source to the target first.
 - The target is empty for everything the clone copies: the TailorDB records of the application's namespaces, plus its files with `--copy-files` and its IdP users with `--copy-idp-users`.
 
-The clone API is enabled per platform. Where it is not enabled, the command fails with `DATA_CLONE_UNAVAILABLE`.
-
 ## Cloning into another workspace
 
 1. Deploy the source's version of the application to the target workspace:
