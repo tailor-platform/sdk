@@ -8,16 +8,21 @@ if (!("Temporal" in globalThis)) {
   });
 }
 
-// Tests must not observe TAILOR_* variables exported by the developer's
-// shell (profile, machine user, token, ...); tests that need one set it
-// explicitly. The e2e projects do not load this file: they take workspace
-// credentials from the environment by design.
-export function stripTailorEnv(env: NodeJS.ProcessEnv): void {
+// Tests must not observe variables exported by the developer's shell that
+// change CLI behavior: TAILOR_* (profile, machine user, token, ...),
+// FORCE_COLOR (styles output to non-TTY streams), and EDITOR/VISUAL (select
+// the editor a command spawns, which would block the run). Tests that need
+// one set it explicitly. The e2e projects do not load this file: they take
+// workspace credentials from the environment by design.
+export function stripDeveloperEnv(env: NodeJS.ProcessEnv): void {
   for (const key of Object.keys(env)) {
     if (key.startsWith("TAILOR_")) {
       delete env[key];
     }
   }
+  for (const key of ["FORCE_COLOR", "EDITOR", "VISUAL"]) {
+    delete env[key];
+  }
 }
 
-stripTailorEnv(process.env);
+stripDeveloperEnv(process.env);
