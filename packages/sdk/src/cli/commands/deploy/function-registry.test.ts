@@ -305,9 +305,13 @@ describe("planFunctionRegistry", () => {
 
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
-      expect(result.unmanaged).toHaveLength(1);
-      expect(result.unmanaged[0]!.resourceName).toBe("resolver/ns/getUser");
-      expect(result.unmanaged[0]!.resourceType).toBe("Function registry");
+      expect(result.unmanaged).toEqual([
+        {
+          resourceType: "function_registry",
+          resourceLabel: "Function registry",
+          resourceName: "resolver/ns/getUser",
+        },
+      ]);
     });
 
     test("detects conflict when entry targets function owned by different app", async () => {
@@ -318,9 +322,14 @@ describe("planFunctionRegistry", () => {
 
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
-      expect(result.conflicts).toHaveLength(1);
-      expect(result.conflicts[0]!.resourceName).toBe("resolver/ns/getUser");
-      expect(result.conflicts[0]!.currentOwner).toBe("other-app");
+      expect(result.conflicts).toEqual([
+        {
+          resourceType: "function_registry",
+          resourceLabel: "Function registry",
+          resourceName: "resolver/ns/getUser",
+          currentOwner: "other-app",
+        },
+      ]);
     });
   });
 

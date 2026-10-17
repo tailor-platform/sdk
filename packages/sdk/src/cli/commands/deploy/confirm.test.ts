@@ -3,6 +3,7 @@ import {
   confirmMissingDependentApps,
   confirmMigrationCheckpointRepairs,
   confirmOwnerConflict,
+  confirmUnmanagedResources,
   type MissingDependentApp,
   type OwnerConflict,
 } from "./confirm";
@@ -49,7 +50,12 @@ describe("confirmOwnerConflict", () => {
 
   test("uses the id-regeneration prompt when currentOwner equals appName", async () => {
     const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "ex-1", currentOwner: "my-app" },
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "ex-1",
+        currentOwner: "my-app",
+      },
     ];
     await confirmOwnerConflict(conflicts, "my-app", false, "id-2");
 
@@ -64,7 +70,12 @@ describe("confirmOwnerConflict", () => {
     // Nothing was generated on these paths (a config that re-exports
     // defineConfig(), a local --dry-run, tailor remove) — the id is simply absent.
     const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "ex-1", currentOwner: "my-app" },
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "ex-1",
+        currentOwner: "my-app",
+      },
     ];
     await confirmOwnerConflict(conflicts, "my-app", false, undefined);
 
@@ -76,7 +87,12 @@ describe("confirmOwnerConflict", () => {
 
   test("uses the name-mismatch prompt when currentOwner differs from appName", async () => {
     const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "ex-1", currentOwner: "old-app" },
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "ex-1",
+        currentOwner: "old-app",
+      },
     ];
     await confirmOwnerConflict(conflicts, "new-app", false);
 
@@ -89,8 +105,18 @@ describe("confirmOwnerConflict", () => {
 
   test("prompts twice when both scenarios are present", async () => {
     const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "regenerated", currentOwner: "my-app" },
-      { resourceType: "Resolver", resourceName: "renamed", currentOwner: "old-app" },
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "regenerated",
+        currentOwner: "my-app",
+      },
+      {
+        resourceType: "pipeline.service",
+        resourceLabel: "Pipeline service",
+        resourceName: "renamed",
+        currentOwner: "old-app",
+      },
     ];
     await confirmOwnerConflict(conflicts, "my-app", false, "id-2");
 
@@ -110,7 +136,7 @@ describe("confirmOwnerConflict", () => {
     async (_label, currentOwner, appName, appId, reported) => {
       const { logger } = await import("#/cli/shared/logger");
       const conflicts: OwnerConflict[] = [
-        { resourceType: "Executor", resourceName: "ex-1", currentOwner },
+        { resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1", currentOwner },
       ];
       await confirmOwnerConflict(conflicts, appName, true, appId);
 
@@ -124,10 +150,30 @@ describe("confirmOwnerConflict", () => {
     },
   );
 
+  test.each([
+    ["id regeneration", "my-app", "id-2"],
+    ["missing config id", "my-app", undefined],
+    ["name mismatch", "old-app", undefined],
+  ])("lists conflicting resources by label (%s)", async (_label, currentOwner, appId) => {
+    const { logger } = await import("#/cli/shared/logger");
+    vi.mocked(logger.log).mockClear();
+    const conflicts: OwnerConflict[] = [
+      { resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1", currentOwner },
+    ];
+    await confirmOwnerConflict(conflicts, "my-app", true, appId);
+
+    expect(vi.mocked(logger.log).mock.calls.flat()).toContain('    • Executor "ex-1"');
+  });
+
   test("throws when the id-regeneration prompt is declined", async () => {
     vi.mocked(prompt.confirm).mockResolvedValueOnce(false);
     const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "ex-1", currentOwner: "my-app" },
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "ex-1",
+        currentOwner: "my-app",
+      },
     ];
     await expect(confirmOwnerConflict(conflicts, "my-app", false, "id-2")).rejects.toThrow(
       /tagged with the previous id/,
@@ -137,11 +183,36 @@ describe("confirmOwnerConflict", () => {
   test("throws when the name-mismatch prompt is declined", async () => {
     vi.mocked(prompt.confirm).mockResolvedValueOnce(false);
     const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "ex-1", currentOwner: "old-app" },
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "ex-1",
+        currentOwner: "old-app",
+      },
     ];
     await expect(confirmOwnerConflict(conflicts, "new-app", false)).rejects.toThrow(
       /managed by their current applications/,
     );
+  });
+});
+
+describe("confirmUnmanagedResources", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.restoreAllMocks();
+  });
+
+  test("lists unmanaged resources by label", async () => {
+    const { logger } = await import("#/cli/shared/logger");
+    vi.mocked(logger.log).mockClear();
+
+    await confirmUnmanagedResources(
+      [{ resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1" }],
+      "my-app",
+      true,
+    );
+
+    expect(vi.mocked(logger.log).mock.calls.flat()).toContain('    • Executor "ex-1"');
   });
 });
 

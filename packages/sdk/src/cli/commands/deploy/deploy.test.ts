@@ -738,7 +738,8 @@ describe("confirmDeploymentPlans", () => {
     using _logger = silenceLogger("warn", "log", "success", "newline");
     const renamedTarget = emptyResults();
     renamedTarget.tailorDB.conflicts.push({
-      resourceType: "TailorDB service",
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB service",
       resourceName: "shared",
       currentOwner: "old-app",
     });
@@ -761,13 +762,15 @@ describe("confirmDeploymentPlans", () => {
     using _logger = silenceLogger("warn", "log", "success", "newline");
     const first = emptyResults();
     first.tailorDB.conflicts.push({
-      resourceType: "TailorDB service",
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB service",
       resourceName: "shared",
       currentOwner: "old-app",
     });
     const second = emptyResults();
     second.pipeline.conflicts.push({
-      resourceType: "Pipeline service",
+      resourceType: "pipeline.service",
+      resourceLabel: "Pipeline service",
       resourceName: "shared-pipeline",
       currentOwner: "old-app",
     });
@@ -857,24 +860,24 @@ describe("printPlanResults", () => {
     using _json = jsonMode();
 
     const results = emptyResults();
-    results.tailorDB.unmanaged = [{ resourceType: "tailorDB", resourceName: "OldType" }];
-    results.secretManager.skippedSecrets = ["DB_PASSWORD"];
+    results.tailorDB.unmanaged = [
+      {
+        resourceType: "tailordb.service",
+        resourceLabel: "TailorDB service",
+        resourceName: "legacy",
+      },
+    ];
+    results.secretManager.skippedSecrets = ["my-vault/DB_PASSWORD"];
 
     printPlanResults(results, { dryRun: true });
 
     const payload = outSpy.mock.calls[0]?.[0] as {
       warnings: Array<{ type: string; resourceType: string; name: string }>;
     };
-    expect(payload.warnings).toContainEqual({
-      type: "unmanaged",
-      resourceType: "tailorDB",
-      name: "OldType",
-    });
-    expect(payload.warnings).toContainEqual({
-      type: "skippedSecret",
-      resourceType: "secret",
-      name: "DB_PASSWORD",
-    });
+    expect(payload.warnings).toEqual([
+      { type: "unmanaged", resourceType: "tailordb.service", name: "legacy" },
+      { type: "skippedSecret", resourceType: "secret.secret", name: "my-vault/DB_PASSWORD" },
+    ]);
   });
 
   test("includes owner conflicts in conflicts", () => {
@@ -882,7 +885,12 @@ describe("printPlanResults", () => {
 
     const results = emptyResults();
     results.tailorDB.conflicts = [
-      { resourceType: "tailorDB", resourceName: "User", currentOwner: "other-app" },
+      {
+        resourceType: "tailordb.service",
+        resourceLabel: "TailorDB service",
+        resourceName: "tailordb",
+        currentOwner: "other-app",
+      },
     ];
 
     printPlanResults(results, { dryRun: true });
@@ -890,11 +898,9 @@ describe("printPlanResults", () => {
     const payload = outSpy.mock.calls[0]?.[0] as {
       conflicts: Array<{ resourceType: string; name: string; currentOwner: string }>;
     };
-    expect(payload.conflicts).toContainEqual({
-      resourceType: "tailorDB",
-      name: "User",
-      currentOwner: "other-app",
-    });
+    expect(payload.conflicts).toEqual([
+      { resourceType: "tailordb.service", name: "tailordb", currentOwner: "other-app" },
+    ]);
   });
 
   test("includes migration checkpoint repairs in JSON dry-run changes and summary", () => {
@@ -966,9 +972,20 @@ describe("printPlanResults", () => {
     const results = emptyResults();
     const kinds = Object.keys(results) as Array<keyof PlanResults>;
     for (const kind of kinds) {
-      results[kind].unmanaged = [{ resourceType: kind, resourceName: `unmanaged-${kind}` }];
+      results[kind].unmanaged = [
+        {
+          resourceType: kind,
+          resourceLabel: `${kind} label`,
+          resourceName: `unmanaged-${kind}`,
+        },
+      ];
       results[kind].conflicts = [
-        { resourceType: kind, resourceName: `conflict-${kind}`, currentOwner: "other-app" },
+        {
+          resourceType: kind,
+          resourceLabel: `${kind} label`,
+          resourceName: `conflict-${kind}`,
+          currentOwner: "other-app",
+        },
       ];
     }
 
@@ -994,6 +1011,7 @@ describe("printPlanResults", () => {
       })),
     );
     for (const kind of kinds) {
+      expect(human).toContain(`${kind} label`);
       expect(human).toContain(`"unmanaged-${kind}"`);
       expect(human).toContain(`"conflict-${kind}"`);
     }

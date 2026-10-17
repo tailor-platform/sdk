@@ -726,6 +726,23 @@ describe("planWorkflow", () => {
       expect(result.changeSet.deletes[0]!.name).toBe("my-workflow");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
+
+    test("reports an unmanaged workflow with its resource type and label", async () => {
+      const client = createMockClient([{ id: "1", name: "my-workflow" }]);
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { "my-workflow": createMockWorkflow("my-workflow", "main-job") },
+        { "main-job": ["main-job"] },
+      );
+
+      expect(result.unmanaged).toEqual([
+        { resourceType: "workflow", resourceLabel: "Workflow", resourceName: "my-workflow" },
+      ]);
+    });
   });
 
   describe("no-op detection", () => {

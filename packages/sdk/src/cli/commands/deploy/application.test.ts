@@ -517,7 +517,14 @@ describe("planApplication", () => {
       createContext(client, createMockApplication({ name: appName, id: "id-2" })),
     );
 
-    expect(result.conflicts.map((c) => c.resourceName)).toEqual([appName]);
+    expect(result.conflicts).toEqual([
+      {
+        resourceType: "application",
+        resourceLabel: "Application",
+        resourceName: appName,
+        currentOwner: appName,
+      },
+    ]);
     expect(result.updates.map((u) => u.name)).toEqual([appName]);
   });
 
