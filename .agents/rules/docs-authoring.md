@@ -21,7 +21,7 @@ Never link to or mention private/internal repositories or internal issue tracker
 
 ## CLI docs are generated
 
-`docs/cli-reference.md` and `docs/cli/*.md` are generated in full from command definitions and the `*.template.md` beside each file. Edit the `notes` / `description` strings in `packages/sdk/src/cli/**` or the template, and run `pnpm docs:update`; it overwrites hand edits to the generated files.
+`packages/sdk/docs/cli-reference.md` and `packages/sdk/docs/cli/*.md` are generated. Change them through their templates or command definitions as the "CLI Documentation" section of `AGENTS.md` describes.
 
 ## Keep this rule and the CI check in sync
 
