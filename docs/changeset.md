@@ -80,6 +80,8 @@ Add the `skip-changeset` label to your PR when:
 - Development tooling changes (eslint, lefthook, etc.)
 - Test-only changes with no source code modifications
 
+Internal refactoring of a published package's non-test source still needs a `patch` changeset, even with no observable behavior change; do not use `skip-changeset` for it.
+
 ## Writing the Description
 
 Write from the SDK user's perspective. Focus on what changed for them, not the implementation details.
