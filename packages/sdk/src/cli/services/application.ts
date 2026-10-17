@@ -26,6 +26,7 @@ import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared
 import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { CLIError } from "#/cli/shared/errors";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -34,6 +35,7 @@ import {
   createTsconfigLookupCache,
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
+import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -60,6 +62,7 @@ import type { EffectiveDateDefault } from "#/runtime/types";
 import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
 import type { IdP } from "#/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";
+import type { z } from "zod";
 
 type SecretVault = {
   readonly vaultName: string;
@@ -116,6 +119,41 @@ export interface LoadApplicationResult {
   reusableBuildState: ReusableBuildState;
 }
 
+const SERVICE_KINDS = {
+  db: "TailorDB service",
+  idp: "IdP",
+  auth: "Auth service",
+  staticWebsites: "static website",
+  aiGateways: "AI Gateway",
+  secrets: "secret manager",
+} as const;
+
+interface ServiceConfigTarget {
+  /** `defineConfig` property the service is configured under. */
+  configKey: keyof typeof SERVICE_KINDS;
+  /** Service name, or the namespace for TailorDB. */
+  name?: string;
+}
+
+function parseServiceConfig<Schema extends z.ZodType>(
+  schema: Schema,
+  config: unknown,
+  target: ServiceConfigTarget,
+): z.output<Schema> {
+  const result = schema.safeParse(config);
+  if (result.success) {
+    return result.data;
+  }
+  const { configKey, name } = target;
+  const issues = flattenZodIssues(result.error.issues);
+  throw CLIError({
+    code: "SERVICE_CONFIG_INVALID",
+    message: `Invalid config for ${SERVICE_KINDS[configKey]}${name === undefined ? "" : ` "${name}"`}:\n${formatIssueList(issues)}`,
+    context: { configKey, name, issues },
+    cause: result.error,
+  });
+}
+
 type DefineTailorDBResult = {
   tailorDBServices: TailorDBService[];
   externalTailorDBNamespaces: string[];
@@ -141,7 +179,10 @@ function defineTailorDB(
       externalTailorDBNamespaces.push(namespace);
     } else {
       // Parse config through schema to normalize gqlOperations
-      const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
+      const parsedConfig = parseServiceConfig(TailorDBServiceConfigSchema, serviceConfig, {
+        configKey: "db",
+        name: namespace,
+      });
       const tailorDB = createTailorDBService({
         namespace,
         config: parsedConfig,
@@ -212,7 +253,10 @@ function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
     }
     idpNames.add(name);
     if (!("external" in idpConfig)) {
-      const idp = IdPSchema.parse(stripIdpProviderHelper(idpConfig));
+      const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
+        configKey: "idp",
+        name,
+      });
       idpServices.push(idp);
     }
     subgraphs.push({ Type: "idp", Name: name });
@@ -240,7 +284,10 @@ function defineAuth(
   let authService: AuthService | undefined;
   if (!("external" in config)) {
     authService = createAuthService(
-      AuthConfigSchema.parse(config),
+      parseServiceConfig(AuthConfigSchema, config, {
+        configKey: "auth",
+        name: config.name,
+      }),
       tailorDBServices,
       externalTailorDBNamespaces,
     );
@@ -295,7 +342,10 @@ function defineStaticWebsites(
   const websiteNames = new Set<string>();
 
   (websites ?? []).forEach((config) => {
-    const website = StaticWebsiteSchema.parse(stripStaticWebsiteUrlHelper(config));
+    const website = parseServiceConfig(StaticWebsiteSchema, stripStaticWebsiteUrlHelper(config), {
+      configKey: "staticWebsites",
+      name: config.name,
+    });
     if (websiteNames.has(website.name)) {
       throw new Error(`Static website with name "${website.name}" already defined.`);
     }
@@ -314,7 +364,10 @@ function defineAIGateways(
   const gatewayNames = new Set<string>();
 
   (gateways ?? []).forEach((config) => {
-    const gateway = AIGatewaySchema.parse(config);
+    const gateway = parseServiceConfig(AIGatewaySchema, config, {
+      configKey: "aiGateways",
+      name: config.name,
+    });
     if (gatewayNames.has(gateway.name)) {
       throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
     }
@@ -342,7 +395,9 @@ function parseSecretManager(config: AppConfig["secrets"]): {
     return { secrets: [], ignoreNullishValues: false };
   }
 
-  const parsed = SecretsSchema.parse(config);
+  const parsed = parseServiceConfig(SecretsSchema, config, {
+    configKey: "secrets",
+  });
   const { ignoreNullishValues } = parsed.options;
 
   const secrets = Object.entries(parsed.vaults).map(([vaultName, vaultSecrets]) => ({

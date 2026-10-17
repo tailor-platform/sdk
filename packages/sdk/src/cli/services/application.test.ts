@@ -7,6 +7,7 @@ import { defineConfig } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
+import { defineSecretManager } from "#/configure/services/secrets/index";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
@@ -146,6 +147,188 @@ describe("AI Gateway authNamespace default", () => {
       /AI Gateway "my-aigateway" has no "authNamespace"/,
     );
   });
+});
+
+describe("service config validation", () => {
+  function defineInvalidApplication(serviceConfig: Record<string, unknown>): unknown {
+    const config = {
+      ...defineConfig({ name: "testApp", ...serviceConfig }),
+      path: "tailor.config.ts",
+    };
+    try {
+      defineApplication({ config });
+    } catch (error) {
+      return error;
+    }
+    throw new Error("expected defineApplication to throw");
+  }
+
+  test("names the offending auth field when a machine user attribute is not a db field", () => {
+    const error = defineInvalidApplication({
+      auth: defineAuth("my-auth", {
+        machineUserAttributes: { role: { type: "string" } } as never,
+      }),
+    });
+
+    expect(error).toMatchObject({
+      name: "CLIError",
+      code: "SERVICE_CONFIG_INVALID",
+      message:
+        'Invalid config for Auth service "my-auth":\n' +
+        "  - machineUserAttributes.role.metadata: Invalid input: expected object, received undefined\n" +
+        "  - machineUserAttributes.role.fields: Invalid input: expected record, received undefined",
+      context: {
+        configKey: "auth",
+        name: "my-auth",
+        issues: [
+          {
+            path: ["machineUserAttributes", "role", "metadata"],
+            message: "Invalid input: expected object, received undefined",
+          },
+          {
+            path: ["machineUserAttributes", "role", "fields"],
+            message: "Invalid input: expected record, received undefined",
+          },
+        ],
+      },
+    });
+  });
+
+  test("keeps the auth message for setting both userProfile and machineUserAttributes", () => {
+    const userType = db.table("User", { email: db.string().unique() });
+    const error = defineInvalidApplication({
+      auth: defineAuth("my-auth", {
+        userProfile: { type: userType, usernameField: "email" },
+        machineUserAttributes: { role: db.string() },
+      } as never),
+    });
+
+    expect(error).toMatchObject({
+      context: {
+        issues: [
+          {
+            path: [],
+            message: "Specify either `userProfile` or `machineUserAttributes`, not both.",
+          },
+        ],
+      },
+    });
+  });
+
+  test("reports only an unknown auth key next to a valid userProfile", () => {
+    const userType = db.table("User", { email: db.string().unique() });
+    const error = defineInvalidApplication({
+      auth: {
+        ...defineAuth("my-auth", { userProfile: { type: userType, usernameField: "email" } }),
+        machineUser: {},
+      },
+    });
+
+    expect(error).toMatchObject({
+      context: { issues: [{ path: [], message: 'Unrecognized key: "machineUser"' }] },
+    });
+  });
+
+  test("reports an unknown auth idProvider kind with the accepted kinds", () => {
+    const error = defineInvalidApplication({
+      auth: defineAuth("my-auth", {
+        machineUserAttributes: {},
+        idProvider: { kind: "OAuth", name: "provider" },
+      } as never),
+    });
+
+    expect(error).toMatchObject({
+      context: {
+        issues: [
+          {
+            path: ["idProvider", "kind"],
+            message:
+              "Invalid discriminator value. Expected 'OIDC' | 'SAML' | 'IDToken' | 'BuiltInIdP'",
+          },
+        ],
+      },
+    });
+  });
+
+  test("reports every invalid auth field when both machine user settings are wrong", () => {
+    const error = defineInvalidApplication({
+      auth: defineAuth("my-auth", {
+        machineUserAttributes: { role: { type: "string" } },
+        machineUsers: { admin: { attributes: { role: 1 } } },
+      } as never),
+    });
+
+    expect(error).toMatchObject({
+      context: {
+        issues: [
+          { path: ["machineUsers", "admin", "attributes", "role"], message: "Invalid input" },
+          {
+            path: ["machineUserAttributes", "role", "metadata"],
+            message: "Invalid input: expected object, received undefined",
+          },
+          {
+            path: ["machineUserAttributes", "role", "fields"],
+            message: "Invalid input: expected record, received undefined",
+          },
+        ],
+      },
+    });
+  });
+
+  test.each([
+    {
+      serviceConfig: { db: { main: { files: "tailordb/*.ts" } } },
+      heading: 'TailorDB service "main"',
+      configKey: "db",
+      name: "main",
+      path: ["files"],
+    },
+    {
+      serviceConfig: {
+        idp: [{ ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" }],
+      },
+      heading: 'IdP "my-idp"',
+      configKey: "idp",
+      name: "my-idp",
+      path: ["clients"],
+    },
+    {
+      serviceConfig: {
+        staticWebsites: [{ ...defineStaticWebSite("my-site", {}), customDomains: "example.com" }],
+      },
+      heading: 'static website "my-site"',
+      configKey: "staticWebsites",
+      name: "my-site",
+      path: ["customDomains"],
+    },
+    {
+      serviceConfig: { aiGateways: [defineAIGateway("my-gateway", { cors: "*" } as never)] },
+      heading: 'AI Gateway "my-gateway"',
+      configKey: "aiGateways",
+      name: "my-gateway",
+      path: ["cors"],
+    },
+    {
+      serviceConfig: { secrets: defineSecretManager({ "my-vault": { key: 1 } } as never) },
+      heading: "secret manager",
+      configKey: "secrets",
+      name: undefined,
+      path: ["vaults", "my-vault", "key"],
+    },
+  ])(
+    "reports an invalid $configKey config as SERVICE_CONFIG_INVALID",
+    ({ serviceConfig, heading, configKey, name, path }) => {
+      const error = defineInvalidApplication(serviceConfig);
+
+      expect(error).toMatchObject({
+        code: "SERVICE_CONFIG_INVALID",
+        message: expect.stringMatching(
+          new RegExp(`^Invalid config for ${heading}:\\n  - ${path.join("\\.")}: `),
+        ),
+        context: { configKey, name, issues: [{ path }] },
+      });
+    },
+  );
 });
 
 describe("loadApplication wait point key check", () => {
