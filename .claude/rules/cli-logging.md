@@ -149,8 +149,9 @@ these fields:
   the nested failures instead of parsing them out of `message`.
 
 A schema validation failure on user input lists its issues in `message` and carries them as
-`context.issues`: build it with `cli/shared/validation-errors.ts` (`CONFIG_INVALID` for a config
-file, `DEFINITION_INVALID` for an SDK definition), or with `flattenZodIssues()` and
-`formatIssueList()` from `cli/shared/zod-issues.ts` for other input. Data the SDK or the Platform
-produced goes through `invalidDataError()`, an `internalError()`. `local/no-raw-zod-error` rejects a
-throwing `.parse()` or a rethrown `safeParse` error under `src/cli`.
+`context.issues`: `parseOptions()` does this for options (`OPTIONS_INVALID`), and
+`cli/shared/validation-errors.ts` for a config file (`CONFIG_INVALID`) or an SDK definition
+(`DEFINITION_INVALID`); build other cases from `flattenZodIssues()` and `formatIssueList()` in
+`cli/shared/zod-issues.ts`. Data the SDK or the Platform produced goes through
+`invalidDataError()`, an `internalError()`. `local/no-raw-zod-error` rejects a throwing `.parse()`
+or a rethrown `safeParse` error under `src/cli`.

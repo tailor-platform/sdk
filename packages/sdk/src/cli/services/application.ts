@@ -35,7 +35,6 @@ import {
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
 import { configInvalidError } from "#/cli/shared/validation-errors";
-import { flattenZodIssues } from "#/cli/shared/zod-issues";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -119,7 +118,7 @@ export interface LoadApplicationResult {
   reusableBuildState: ReusableBuildState;
 }
 
-const SERVICE_KINDS = {
+const SERVICE_LABELS = {
   db: "TailorDB service",
   idp: "IdP",
   auth: "Auth service",
@@ -132,7 +131,7 @@ interface ServiceConfigTarget {
   /** Config file the service is defined in. */
   file: string;
   /** `defineConfig` property the service is configured under. */
-  configKey: keyof typeof SERVICE_KINDS;
+  configKey: keyof typeof SERVICE_LABELS;
   /** The service's namespace or list index under `configKey`, when it has one. */
   key?: string | number;
   /** Service name, or the namespace for TailorDB. */
@@ -152,13 +151,10 @@ function parseServiceConfig<Schema extends z.ZodType>(
   throw configInvalidError({
     file,
     exportName: "default",
-    subject: `config for ${SERVICE_KINDS[configKey]}${name === undefined ? "" : ` "${name}"`}`,
-    issues: flattenZodIssues(
-      result.error.issues,
-      key === undefined ? [configKey] : [configKey, key],
-    ),
+    subject: `config for ${SERVICE_LABELS[configKey]}${name === undefined ? "" : ` "${name}"`}`,
+    error: result.error,
+    pathPrefix: key === undefined ? [configKey] : [configKey, key],
     service: { configKey, name },
-    cause: result.error,
   });
 }
 

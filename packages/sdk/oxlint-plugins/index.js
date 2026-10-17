@@ -119,11 +119,9 @@ export default {
       },
     },
 
-    // A ZodError reaching the CLI's top level is reported as UNEXPECTED_ERROR
-    // with its raw issue list as the message. Schemas are recognised by name
-    // (`z` or an identifier ending in `Schema`/`schema`), and a rethrow only
-    // when `X.error` resolves to a variable initialised from a safe parse, so a
-    // destructured `{ error }` or a result returned by a helper goes unreported.
+    // A ZodError reaching the top level is reported as UNEXPECTED_ERROR. Schemas are
+    // recognised by name (`z`, `*Schema`), so a destructured `{ error }` or a parse
+    // result returned by a helper goes unreported.
     "no-raw-zod-error": {
       meta: {
         type: "problem",

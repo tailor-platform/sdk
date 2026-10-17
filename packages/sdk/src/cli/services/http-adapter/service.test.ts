@@ -136,7 +136,7 @@ export const adapter = createHttpAdapter({
     await expect(service.loadAdapters()).rejects.toMatchObject({
       code: "DEFINITION_EXPORT_INVALID",
       message: expect.stringMatching(
-        /^HTTP adapter in .*missing-default\.ts must be the default export, but it is exported as `adapter`\.$/,
+        /^HTTP adapter in .*missing-default\.ts must not be a named export, but it is exported as `adapter`\.$/,
       ),
       context: { kind: "http-adapter", file, exportName: "adapter" },
     });

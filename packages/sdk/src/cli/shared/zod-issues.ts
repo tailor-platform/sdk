@@ -16,9 +16,15 @@ export type FlatIssue = {
  */
 export function flattenZodIssues(
   issues: readonly ZodIssue[],
-  prefix: FlatIssue["path"] = [],
+  prefix: readonly PropertyKey[] = [],
 ): FlatIssue[] {
-  return flattenAt(issues, prefix);
+  return issues.flatMap((issue) => {
+    const path = [...prefix, ...issue.path];
+    if (issue.code === "invalid_union") {
+      return flattenUnion(issue, path);
+    }
+    return [toFlatIssue(issue, path)];
+  });
 }
 
 /**
@@ -30,16 +36,6 @@ export function formatIssueList(issues: readonly FlatIssue[]): string {
   return issues
     .map((issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`)
     .join("\n");
-}
-
-function flattenAt(issues: readonly ZodIssue[], prefix: readonly PropertyKey[]): FlatIssue[] {
-  return issues.flatMap((issue) => {
-    const path = [...prefix, ...issue.path];
-    if (issue.code === "invalid_union") {
-      return flattenUnion(issue, path);
-    }
-    return [toFlatIssue(issue, path)];
-  });
 }
 
 function flattenUnion(
@@ -68,11 +64,11 @@ function flattenUnion(
       closest.own.length === runnerUp.own.length)
   ) {
     return [
-      ...flattenAt(shared, path),
+      ...flattenZodIssues(shared, path),
       { ...toFlatIssue(union, path), message: tiedUnionMessage(union, ranked) },
     ];
   }
-  return [...flattenAt(shared, path), ...flattenAt(closest.own, path)];
+  return [...flattenZodIssues(shared, path), ...flattenZodIssues(closest.own, path)];
 }
 
 // zod's own message for a union; any other message was written for the field.

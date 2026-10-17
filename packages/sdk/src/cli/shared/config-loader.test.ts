@@ -124,7 +124,7 @@ describe("loadConfig", () => {
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
-      message: `Invalid Tailor config in ${configPath}:\n  - name: 'name' must be a non-empty string.`,
+      message: `Invalid Tailor config in ${path.relative(process.cwd(), configPath)}:\n  - name: 'name' must be a non-empty string.`,
       context: {
         file: configPath,
         exportName: "default",
@@ -160,7 +160,7 @@ describe("loadConfig", () => {
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
-      message: `Invalid \`plugins\` export in ${configPath}:\n  - 1: Invalid input: expected object, received null`,
+      message: `Invalid \`plugins\` export in ${path.relative(process.cwd(), configPath)}:\n  - 1: Invalid input: expected object, received null`,
       context: {
         file: configPath,
         exportName: "plugins",

@@ -71,9 +71,25 @@ export const order = brand({ name: "order", mainJob }, "workflow");
       expected: {
         code: "DEFINITION_EXPORT_INVALID",
         message: expect.stringMatching(
-          /^Workflow in .*workflow\.mjs must be the default export, but it is exported as `order`\.$/,
+          /^Workflow in .*workflow\.mjs must not be a named export, but it is exported as `order`\.$/,
         ),
         context: { kind: "workflow", exportName: "order" },
+      },
+    },
+    {
+      case: "a default-exported workflow also exported under a name",
+      source: `
+export const mainJob = brand({ name: "main-job", start: () => {}, body: () => {} }, "workflow-job");
+const workflow = brand({ name: "order", mainJob }, "workflow");
+export const alias = workflow;
+export default workflow;
+`,
+      expected: {
+        code: "DEFINITION_EXPORT_INVALID",
+        message: expect.stringMatching(
+          /^Workflow in .*workflow\.mjs must not be a named export, but it is exported as `alias`\.$/,
+        ),
+        context: { kind: "workflow", exportName: "alias" },
       },
     },
     {
@@ -84,7 +100,7 @@ export default brand({ name: "main-job", start: () => {}, body: () => {} }, "wor
       expected: {
         code: "DEFINITION_EXPORT_INVALID",
         message: expect.stringMatching(
-          /^Workflow job in .*workflow\.mjs must be a named export, but it is the default export\.$/,
+          /^Workflow job in .*workflow\.mjs must not be the default export\.$/,
         ),
         context: { kind: "workflow-job", exportName: "default" },
       },

@@ -9,7 +9,6 @@ import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
 import { configInvalidError } from "./validation-errors";
-import { flattenZodIssues } from "./zod-issues";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
 
@@ -83,8 +82,7 @@ export async function loadConfig(
       file: resolvedPath,
       exportName: "default",
       subject: "Tailor config",
-      issues: flattenZodIssues(validated.error.issues),
-      cause: validated.error,
+      error: validated.error,
     });
   }
 
@@ -119,8 +117,8 @@ export async function loadConfig(
           file: resolvedPath,
           exportName: "plugins",
           subject: "`plugins` export",
-          issues: flattenZodIssues(result.error.issues, [index]),
-          cause: result.error,
+          error: result.error,
+          pathPrefix: [index],
         });
       }
       if (seenIds.has(result.data.id)) {
