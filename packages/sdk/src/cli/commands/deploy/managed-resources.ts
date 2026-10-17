@@ -4,6 +4,7 @@ import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from 
 import type { HasName } from "./change-set";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
+import type { ManagedResourceType } from "./managed-resource-type";
 
 /**
  * Decide which renamed-away applications should be deleted. Excludes the
@@ -88,49 +89,49 @@ export function collectImportantResourceDeletions(
   const importantDeletions: ImportantResourceDeletion[] = [];
   for (const del of results.tailorDB.changeSet.type.deletes) {
     importantDeletions.push({
-      resourceType: "TailorDB table",
+      resourceLabel: "TailorDB table",
       resourceName: del.name,
     });
   }
   for (const del of results.staticWebsite.changeSet.deletes) {
     importantDeletions.push({
-      resourceType: "StaticWebsite",
+      resourceLabel: "StaticWebsite",
       resourceName: del.name,
     });
   }
   for (const del of results.aiGateway.changeSet.deletes) {
     importantDeletions.push({
-      resourceType: "AIGateway",
+      resourceLabel: "AIGateway",
       resourceName: del.name,
     });
   }
   for (const del of results.auth.changeSet.oauth2Client.deletes) {
     importantDeletions.push({
-      resourceType: "OAuth2 client",
+      resourceLabel: "OAuth2 client",
       resourceName: del.name,
     });
   }
   for (const replace of results.auth.changeSet.oauth2Client.replaces) {
     importantDeletions.push({
-      resourceType: "OAuth2 client (client type change)",
+      resourceLabel: "OAuth2 client (client type change)",
       resourceName: replace.name,
     });
   }
   for (const del of results.auth.changeSet.connection.deletes) {
     importantDeletions.push({
-      resourceType: "Auth connection",
+      resourceLabel: "Auth connection",
       resourceName: del.name,
     });
   }
   for (const del of results.secretManager.vaultChangeSet.deletes) {
     importantDeletions.push({
-      resourceType: "Secret Manager vault",
+      resourceLabel: "Secret Manager vault",
       resourceName: del.name,
     });
   }
   for (const del of results.secretManager.secretChangeSet.deletes) {
     importantDeletions.push({
-      resourceType: "Secret Manager secret",
+      resourceLabel: "Secret Manager secret",
       resourceName: del.name,
     });
   }
@@ -150,9 +151,9 @@ type ManagedResourceChangeSet = {
 
 type ManagedResourceGroup = {
   changeSet: ManagedResourceChangeSet;
-  resourceType: string;
+  resourceType: ManagedResourceType;
   namespaceFields?: readonly string[];
-  namespaceOwnerResourceType?: string;
+  namespaceOwnerResourceType?: ManagedResourceType;
   getName?: (item: ManagedResourceItem) => string;
 };
 
