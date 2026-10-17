@@ -54,7 +54,7 @@ jobs:
 
             - `packages/sdk/docs/cli-reference.md` - CLI reference
             - `packages/sdk/docs/cli/*.md` - CLI subcommand docs
-            - `packages/sdk/docs/services/*.md` - Service documentation
+            - `packages/sdk/docs/services/**/*.md` - Service documentation
             - `packages/sdk/docs/configuration.md` - Configuration reference
             - `AGENTS.md` - Developer guide and code patterns
             - `example/` - Working example code
@@ -95,7 +95,7 @@ jobs:
             - Compare source code command definitions with docs
 
             #### API / Config Changes
-            - Read `packages/sdk/docs/services/*.md` and `packages/sdk/docs/configuration.md`
+            - Read `packages/sdk/docs/services/**/*.md` and `packages/sdk/docs/configuration.md`
             - Verify documented function signatures, parameters, and return types match the implementation
             - Check if new exports are documented
 

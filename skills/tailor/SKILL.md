@@ -16,6 +16,7 @@ Use these files as the single source of truth:
 - `node_modules/@tailor-platform/sdk/README.md`
 - `node_modules/@tailor-platform/sdk/docs/configuration.md`
 - `node_modules/@tailor-platform/sdk/docs/services/*.md`
+- `node_modules/@tailor-platform/sdk/docs/services/tailordb/*.md`
 - `node_modules/@tailor-platform/sdk/docs/cli-reference.md`
 - `node_modules/@tailor-platform/sdk/docs/cli/*.md`
 - `node_modules/@tailor-platform/sdk/docs/testing.md`
@@ -36,7 +37,7 @@ Use these files as the single source of truth:
 
 - Setup and first deploy: `docs/quickstart.md`
 - Core config shape: `docs/configuration.md`
-- Service details: `docs/services/*.md`
+- Service details: `docs/services/*.md`; TailorDB and its migrations: `docs/services/tailordb/*.md`
 - CLI commands: `docs/cli-reference.md` and `docs/cli/*.md`
 - Testing patterns: `docs/testing.md`
 - Runtime API wrappers (`tailor.iconv`, `tailor.secretmanager`, `tailor.idp`, `tailor.workflow`, `tailor.context`, `tailor.authconnection`, `tailordb.file`): `docs/runtime.md`
