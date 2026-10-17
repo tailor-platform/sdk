@@ -15,5 +15,5 @@ For **SDK users**, see:
 
 - [Architecture](architecture.md) - Design decisions and non-obvious patterns
 - [Testing](testing.md) - Test strategy and conventions
-- [Changeset Conventions](changeset.md) - Version bump level guidelines
+- [Changeset Conventions](changeset.md) - Whether a PR needs a changeset or the `skip-changeset` label, and the bump level
 - [Telemetry / Performance Profiling](telemetry.md) - OTLP tracing for CLI performance analysis
