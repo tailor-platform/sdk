@@ -4,7 +4,7 @@
 
 The migration system tracks changes to your TailorDB table definitions over time and applies them to deployed workspaces with optional data transformation scripts.
 
-For the CLI command reference, see [`tailordb migration`](../cli/tailordb.md#tailordb-migration). This document covers concepts, workflows, and operational guidance.
+For the CLI command reference, see [`tailordb migration`](../../cli/tailordb.md#tailordb-migration). This document covers concepts, workflows, and operational guidance.
 
 ## Overview
 
@@ -244,7 +244,7 @@ This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skele
 
 The command requires a clean state: if the namespace has schema changes that are not yet in migration files, generate the schema migration first. With multiple namespaces, pass `--namespace` to name the target. `--data-only` cannot be combined with `--init`, `--rename`, `--drop`, or `--expand-contract`.
 
-A data-only migration runs in **every** workspace the history is applied to, including freshly created ones. Write the script so it is safe against tables with no matching rows (a set-based `UPDATE` with a `WHERE` clause is naturally a no-op on an empty table). For a fix that should run in a single environment only, or that is too large for one transaction, run it outside the migration history instead, for example as a one-off script scaffolded with [`tailor function script`](../cli/function.md#function-script) and executed against a single workspace with [`tailor function run`](../cli/function.md#function-run).
+A data-only migration runs in **every** workspace the history is applied to, including freshly created ones. Write the script so it is safe against tables with no matching rows (a set-based `UPDATE` with a `WHERE` clause is naturally a no-op on an empty table). For a fix that should run in a single environment only, or that is too large for one transaction, run it outside the migration history instead, for example as a one-off script scaffolded with [`tailor function script`](../../cli/function.md#function-script) and executed against a single workspace with [`tailor function run`](../../cli/function.md#function-run).
 
 ## Configuration
 
@@ -638,7 +638,7 @@ Clone mode copies TailorDB records from the source workspace after the identical
 tailor tailordb migration test --data clone
 ```
 
-The platform clone API is feature-gated and requires editor access to both same-region workspaces. It copies TailorDB records only: IdP users, file blobs, and metadata labels are not copied. File fields therefore retain references whose blobs are absent. The command polls the asynchronous operation and reports platform failures; if clone is unavailable, use seed mode.
+The platform clone API is feature-gated and requires editor access to both same-region workspaces. Clone mode copies TailorDB records only: IdP users, file blobs, and metadata labels are not copied, and unlike [`tailor data clone`](../../data-clone.md) it has no `--copy-files` or `--copy-idp-users` option. File fields therefore retain references whose blobs are absent. The command polls the asynchronous operation and reports platform failures; if clone is unavailable, use seed mode.
 
 The source schema is re-verified immediately before cloning; if the source workspace was deployed or otherwise changed after the test started, the command aborts instead of cloning data that no longer matches the deployed baseline.
 
@@ -696,7 +696,7 @@ This split is what allows existing rows to be backfilled before the database sta
 | `"migration"` (default) | From before the first pending migration runs until the last one completes.                                                                                                             |
 | `"deploy"`              | From before the first pending migration runs until the deploy has applied every other change, including resolvers, executors, and workflows, and has removed the resources it deletes. |
 
-A deploy without pending migrations never enters maintenance mode. When `maintenanceMode` is unset, it behaves as `"migration"`, preserving the existing deployment behavior. The value is read from the config like any other, so it can differ per environment (see [Multi-Environment Configuration](../multi-environment.md#varying-config-values-per-environment)):
+A deploy without pending migrations never enters maintenance mode. When `maintenanceMode` is unset, it behaves as `"migration"`, preserving the existing deployment behavior. The value is read from the config like any other, so it can differ per environment (see [Multi-Environment Configuration](../../multi-environment.md#varying-config-values-per-environment)):
 
 ```typescript
 export default defineConfig({
@@ -720,7 +720,7 @@ Maintenance mode restricts GraphQL writes and record events only. Resolvers, exe
 
 #### Keeping maintenance mode short
 
-Maintenance mode lasts for the whole migration job, including the time the platform takes to start it, which can far exceed the time `migrate.ts` itself needs. Keep in `migrate.ts` only the work that must be done before the post-migration schema is applied, and move the rest into a workflow that you start after the deploy (for example with [`tailor workflow start`](../cli/workflow.md#workflow-start)).
+Maintenance mode lasts for the whole migration job, including the time the platform takes to start it, which can far exceed the time `migrate.ts` itself needs. Keep in `migrate.ts` only the work that must be done before the post-migration schema is applied, and move the rest into a workflow that you start after the deploy (for example with [`tailor workflow start`](../../cli/workflow.md#workflow-start)).
 
 - **Must stay in `migrate.ts`**: anything the post-migration schema enforces or removes — filling a field that becomes required, resolving duplicates before a unique index, converting values for a field type change, and copying data out of a field or table that the migration renames or removes.
 - **Can move to a workflow**: work the post-migration schema does not depend on, such as filling an optional field, recomputing derived values, or cleaning up rows. Requests that run before the workflow finishes see the data in its unfixed state.
@@ -743,7 +743,7 @@ When [maintenance mode](#maintenance-mode) is on, `tailor deploy` reports how lo
 
 Phases that repeat across several migrations are added up. The report is printed only after the migrations succeed and the tables leave maintenance mode; when a migration fails, deploy reports the error instead (see [Failure Recovery](#failure-recovery)). When deploy resumes a migration that an earlier deploy left in progress, the tables were already in maintenance mode before it started, and the report covers only this deploy. A job can be reported as started on the platform well before its code runs, so deploy tells waiting from running by a line every job of a migration logs before your script: `[tailor-sdk] migration script started`. You may see that line in function execution logs; deploy leaves it out of the logs it prints. A script that exports [`steps`](#splitting-a-migration-into-steps) waits for each step's job to start, and that time counts as `waiting to start` too. Time when deploy cannot tell whether the script is running — because the run or a running job's logs could not be read, or because an older SDK version started the run and it never logs the line — is reported as `waiting to start or running` instead.
 
-Deploy checks the run every few seconds, so a boundary between `waiting to start` and `running` can be off by that much. With `--json`, the same breakdown is in `tailordbMaintenance` (see [Deploy JSON result](../cli/application.md#deploy)). Add `--verbose` to also print how long each phase took and every change in the job's status.
+Deploy checks the run every few seconds, so a boundary between `waiting to start` and `running` can be off by that much. With `--json`, the same breakdown is in `tailordbMaintenance` (see [Deploy JSON result](../../cli/application.md#deploy)). Add `--verbose` to also print how long each phase took and every change in the job's status.
 
 ### Schema verification
 
@@ -1001,11 +1001,11 @@ describe("0005 add required email", () => {
 });
 ```
 
-Stage the rows each query returns with `mock.enqueueResult(...)` or `mock.setQueryResolver(...)` when the script reads before writing; call `main(trx, { env: { ... } })` when the script takes a `MigrationContext`. See [Kysely-layer mock](../testing.md#kysely-layer-mock-createkyselymock) for the full mock API.
+Stage the rows each query returns with `mock.enqueueResult(...)` or `mock.setQueryResolver(...)` when the script reads before writing; call `main(trx, { env: { ... } })` when the script takes a `MigrationContext`. See [Kysely-layer mock](../../testing.md#kysely-layer-mock-createkyselymock) for the full mock API.
 
 These tests need no platform connection and no `tailor-runtime` environment — they run in a plain Vitest setup. Vitest's default `include` pattern already picks up `migrations/**/migrate.test.ts`; if your config narrows `include`, add the migrations directory. The test file is ignored by `tailor deploy` and never ships to the platform.
 
-A migration generated under [`defaultDateRepresentation`](../configuration.md#application-settings) `"temporal"` or `"date"` records that in its `diff.json`, and deploy runs the script with Temporal or `Date` values for `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as`. The scaffold calls `applyDateRepresentation` from `@tailor-platform/sdk/vitest` with the recorded value, or with `"string"` for a migration that records none, and imports `migrate.ts` after that call, so the test runs the script the same way deploy does even after the setting changes in `tailor.config.ts`. Keep that call when editing the test. The record pins the values at run time only: the types of `t` fields declared inside `migrate.ts` follow the current `tailor.d.ts` like everywhere else, so give such fields an explicit `as` to keep their types and values aligned after the setting changes. The helper selects the representation but does not provide `Temporal` itself, so run such a test in the [`tailor-runtime` Vitest environment](../testing.md#temporal), which installs it on Node.js versions without native Temporal; this is the one case where a migration unit test needs that environment (a migration recorded under `"date"`, or without a record, needs no Temporal and runs in a plain Vitest setup).
+A migration generated under [`defaultDateRepresentation`](../../configuration.md#application-settings) `"temporal"` or `"date"` records that in its `diff.json`, and deploy runs the script with Temporal or `Date` values for `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as`. The scaffold calls `applyDateRepresentation` from `@tailor-platform/sdk/vitest` with the recorded value, or with `"string"` for a migration that records none, and imports `migrate.ts` after that call, so the test runs the script the same way deploy does even after the setting changes in `tailor.config.ts`. Keep that call when editing the test. The record pins the values at run time only: the types of `t` fields declared inside `migrate.ts` follow the current `tailor.d.ts` like everywhere else, so give such fields an explicit `as` to keep their types and values aligned after the setting changes. The helper selects the representation but does not provide `Temporal` itself, so run such a test in the [`tailor-runtime` Vitest environment](../../testing.md#temporal), which installs it on Node.js versions without native Temporal; this is the one case where a migration unit test needs that environment (a migration recorded under `"date"`, or without a record, needs no Temporal and runs in a plain Vitest setup).
 
 ### Executing migrate.ts against a local Postgres (PGlite)
 
@@ -1062,14 +1062,14 @@ describe("0005 add required email", () => {
 
 Pass nested field values as JavaScript objects or arrays of objects, without `JSON.stringify`.
 
-When the migration was generated with `kyselyTypePlugin({ temporal: true })`, its `db.ts` types date and datetime fields as `Temporal.PlainDate` and `Temporal.Instant`, and top-level time fields as `Temporal.PlainTime`; nested time fields remain strings. Deploy runs the script with those values. Create the instance with `createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })` so PGlite reads top-level temporal columns back the same way; the scaffold adds the option for such migrations. Run the test in the [`tailor-runtime` Vitest environment](../testing.md#temporal), which provides `Temporal`. A migration generated before `temporal` was enabled still runs with `Date` values on deploy, so its test leaves the option out. As in the Kysely mock scaffold, the test calls `applyDateRepresentation` with the migration's recorded `defaultDateRepresentation` (or `"string"`) so `t` date fields parse the way they do on deploy; a migration recorded under `"temporal"` likewise needs the `tailor-runtime` environment for `Temporal`.
+When the migration was generated with `kyselyTypePlugin({ temporal: true })`, its `db.ts` types date and datetime fields as `Temporal.PlainDate` and `Temporal.Instant`, and top-level time fields as `Temporal.PlainTime`; nested time fields remain strings. Deploy runs the script with those values. Create the instance with `createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })` so PGlite reads top-level temporal columns back the same way; the scaffold adds the option for such migrations. Run the test in the [`tailor-runtime` Vitest environment](../../testing.md#temporal), which provides `Temporal`. A migration generated before `temporal` was enabled still runs with `Date` values on deploy, so its test leaves the option out. As in the Kysely mock scaffold, the test calls `applyDateRepresentation` with the migration's recorded `defaultDateRepresentation` (or `"string"`) so `t` date fields parse the way they do on deploy; a migration recorded under `"temporal"` likewise needs the `tailor-runtime` environment for `Temporal`.
 Generated migration types use `Record<string, unknown>` for each nested object so scripts can
 work with both old and new members during a migration; narrow member values before using them.
 
 Two caveats keep this from replacing a scratch workspace:
 
 - PGlite runs full PostgreSQL, while TailorDB supports [a subset of it](https://docs.tailor.tech/guides/function/accessing-tailordb#supported-sql-queries) — a statement that passes here can still be rejected on deploy.
-- `db.pglite.ts` mirrors the column shape, not the platform: hooks, validations, and permissions do not run, and the limits listed under [Real SQL execution with PGlite](../testing.md#real-sql-execution-with-pglite-mocktailordbwithpglite) apply.
+- `db.pglite.ts` mirrors the column shape, not the platform: hooks, validations, and permissions do not run, and the limits listed under [Real SQL execution with PGlite](../../testing.md#real-sql-execution-with-pglite-mocktailordbwithpglite) apply.
 
 ### Testing a multi-step script
 

@@ -120,3 +120,5 @@ seedPlugin({
 ```
 
 The `tailor seed` commands come from the `@tailor-platform/sdk-plugin-seed` CLI plugin; see its [Datasets](https://github.com/tailor-platform/sdk/tree/main/packages/sdk-plugin-seed#datasets) guide for validating, filling, and dumping datasets.
+
+To fill an environment with the records of another workspace instead of seed data, see [Cloning Application Data](./data-clone.md).

@@ -84,7 +84,7 @@ tailor tailordb truncate User Post --yes
 
 Manage TailorDB schema migrations.
 
-Note: Migration scripts are automatically executed during `tailor deploy`. See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details.
+Note: Migration scripts are automatically executed during `tailor deploy`. See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details.
 
 **Usage**
 
@@ -367,7 +367,7 @@ tailor tailordb migration validate [options]
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-**See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
+**See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb/migration.md).
 
 ### tailordb erd
 
