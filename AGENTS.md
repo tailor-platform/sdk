@@ -60,11 +60,12 @@ See [packages/sdk/docs/cli-reference.md](packages/sdk/docs/cli-reference.md) for
 
 ### CLI Documentation
 
-[politty](https://github.com/toiroakr/politty) generates `packages/sdk/docs/cli-reference.md` and `packages/sdk/docs/cli/<name>.md` in full from command definitions and the `*.template.md` beside each file, so `docs:update` overwrites hand edits. Edit the template or the command's `description` / `notes`, run `docs:update`, and commit the regenerated files with the code.
+[politty](https://github.com/toiroakr/politty) generates `packages/sdk/docs/cli-reference.md` and `packages/sdk/docs/cli/<name>.md` from command definitions and the `*.template.md` beside each file, and `docs:update` overwrites the output in full. Edit the template or the command's `description` / `notes` instead.
 
-A command reaches the docs only through a template placeholder, and `docs:check` still passes when one is missing:
+`docs:check` fails only when a command listed in `templateFiles` (`packages/sdk/src/cli/docs.test.ts`) appears in no template; any other command without a placeholder is silently left out:
 
-- **New top-level command**: add it to a `templateFiles` entry in `packages/sdk/src/cli/docs.test.ts` and put `{{politty:command:<name>}}` in that entry's template. A new doc file needs its own entry and template; copy an existing template's front matter, which feeds the `cli-reference.md` index.
+- **New top-level command**: add it to a `templateFiles` entry and put `{{politty:command:<name>}}` in that entry's template.
+- **New doc file**: add a `templateFiles` entry and a `docs/cli/<name>.template.md`, copying an existing template's front matter, which feeds the `cli-reference.md` index.
 - **New subcommand**: `{{politty:command:<parent>}}` includes every nested subcommand. A parent split into section placeholders (`{{politty:command:tailordb:heading}}`, ...) needs a `{{politty:command:<parent> <sub>}}` for each new child.
 
 ## Code Patterns
