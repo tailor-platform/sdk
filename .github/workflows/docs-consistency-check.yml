@@ -102,7 +102,7 @@ jobs:
             #### Pattern / Example Changes
             - Read relevant files in `example/` directory
             - Verify examples use current API patterns (not deprecated ones)
-            - Check `AGENTS.md` "Code Patterns" and "Non-obvious Rules and Gotchas" sections
+            - Check the `AGENTS.md` "Code Patterns" section
 
             #### Reverse Check (docs changed but implementation not updated)
             - If documentation was changed, verify the implementation matches
