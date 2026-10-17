@@ -1,0 +1,4 @@
+import { sql } from "./sql";
+export function find(role: "ADMIN" | "MEMBER", minimumAge: number) {
+  return sql`SELECT "email" FROM "Account" WHERE "role" = ${role} AND "age" > ${minimumAge}`;
+}

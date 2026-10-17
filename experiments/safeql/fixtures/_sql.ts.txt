@@ -1,0 +1,8 @@
+export interface Query<Row> {
+  readonly text: string;
+  readonly row?: Row;
+}
+export function sql<Row = unknown>(strings: TemplateStringsArray, ...values: unknown[]): Query<Row> {
+  return { text: strings.join("?") + values.length };
+}
+export type RowOf<Q> = Q extends Query<infer Row> ? Row : never;

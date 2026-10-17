@@ -1,0 +1,4 @@
+import { sql } from "./sql";
+export function find(minimumAge: string) {
+  return sql`SELECT "email" FROM "Account" WHERE "age" > ${minimumAge}`;
+}

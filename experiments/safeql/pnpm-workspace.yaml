@@ -1,0 +1,11 @@
+packages: []
+minimumReleaseAge: 4320
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+allowBuilds:
+  esbuild: true
+trustPolicyExclude:
+  - chokidar@4.0.3
+  - synckit@0.10.4
