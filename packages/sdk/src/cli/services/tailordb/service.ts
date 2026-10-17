@@ -3,6 +3,8 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { importUserModule } from "#/cli/shared/user-modules";
+import { definitionInvalidError } from "#/cli/shared/validation-errors";
+import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
 import {
   pickTailorDBTypeSchemaKeys,
   stripTailorDBTypeBuilderHelpers,
@@ -104,11 +106,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   const parsePluginTable = (table: unknown, origin: string): TailorDBTypeSchemaOutput => {
     const result = TailorDBTypeSchema.safeParse(pickTailorDBTypeSchemaKeys(table));
     if (!result.success) {
-      const issues = result.error.issues
-        .map((issue) => `  - ${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`)
-        .join("\n");
       throw new Error(
-        `TailorDB table ${origin} in TailorDB service "${namespace}" failed schema validation:\n${issues}`,
+        `TailorDB table ${origin} in TailorDB service "${namespace}" failed schema validation:\n${formatIssueList(flattenZodIssues(result.error.issues))}`,
         { cause: result.error },
       );
     }
@@ -279,7 +278,12 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         const result = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(exportedValue));
         if (!result.success) {
           if (isSdkBranded(exportedValue, "tailordb-type")) {
-            throw result.error;
+            throw definitionInvalidError({
+              kind: "tailordb-type",
+              file: typeFile,
+              exportName,
+              error: result.error,
+            });
           }
           continue;
         }

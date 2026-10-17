@@ -8,6 +8,8 @@ import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
+import { configInvalidError } from "./validation-errors";
+import { flattenZodIssues } from "./zod-issues";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
 
@@ -77,13 +79,13 @@ export async function loadConfig(
 
   const validated = AppConfigSchema.safeParse(configModule.default);
   if (!validated.success) {
-    const issues = validated.error.issues
-      .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
-      .join("\n");
-    throw atConfigFile(
-      new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`),
-      resolvedPath,
-    );
+    throw configInvalidError({
+      file: resolvedPath,
+      exportName: "default",
+      subject: "Tailor config",
+      issues: flattenZodIssues(validated.error.issues),
+      cause: validated.error,
+    });
   }
 
   const appConfig = configModule.default as AppConfig;
@@ -110,16 +112,16 @@ export async function loadConfig(
       );
     }
     const seenIds = new Set<string>();
-    for (const item of pluginsExport) {
+    for (const [index, item] of pluginsExport.entries()) {
       const result = PluginConfigSchema.safeParse(item);
       if (!result.success) {
-        const issues = result.error.issues
-          .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
-          .join("\n");
-        throw atConfigFile(
-          new Error(`Invalid \`plugins\` export in ${resolvedPath}:\n${issues}`),
-          resolvedPath,
-        );
+        throw configInvalidError({
+          file: resolvedPath,
+          exportName: "plugins",
+          subject: "`plugins` export",
+          issues: flattenZodIssues(result.error.issues, [index]),
+          cause: result.error,
+        });
       }
       if (seenIds.has(result.data.id)) {
         throw atConfigFile(

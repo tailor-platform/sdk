@@ -73,6 +73,37 @@ export const account = db.table("User", {
     );
   });
 
+  test("reports a table that fails validation as DEFINITION_INVALID, naming its export", async () => {
+    const file = writeTypeFile(
+      "user.ts",
+      `
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const user = db.table("User", {
+  name: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+user.name = 1;
+`,
+    );
+
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [file] },
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error");
+    await expect(service.loadTypes()).rejects.toMatchObject({
+      code: "DEFINITION_INVALID",
+      message: expect.stringMatching(/^Invalid TailorDB type `user` in .*user\.ts:\n {2}- name: /),
+      context: {
+        kind: "tailordb-type",
+        file,
+        exportName: "user",
+        issues: [{ path: ["name"] }, { path: ["metadata", "name"] }],
+      },
+    });
+  });
+
   test("allows type names that match Object prototype properties", async () => {
     const typeFile = writeTypeFile(
       "object-prototype.ts",

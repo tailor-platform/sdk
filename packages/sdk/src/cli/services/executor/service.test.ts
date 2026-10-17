@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createExecutorService } from "./service";
 
 describe("createExecutorService.loadExecutors", () => {
@@ -60,6 +61,35 @@ export default createExecutor({
         .map((e) => e.name)
         .toSorted(),
     ).toEqual(["executor-a", "executor-b"]);
+  });
+
+  test("reports an executor that fails validation as DEFINITION_INVALID", async () => {
+    const file = writeExecutor(
+      "invalid.ts",
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+const executor = createExecutor({
+  name: "invalid",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => {} },
+});
+executor.description = 1;
+export default executor;
+`,
+    );
+
+    const service = createExecutorService({ config: { files: [file] }, baseDir: process.cwd() });
+    using _logger = silenceLogger("error");
+    await expect(service.loadExecutors()).rejects.toMatchObject({
+      code: "DEFINITION_INVALID",
+      message: expect.stringMatching(/^Invalid executor in .*invalid\.ts:\n {2}- description: /),
+      context: {
+        kind: "executor",
+        file,
+        exportName: "default",
+        issues: [{ path: ["description"] }],
+      },
+    });
   });
 
   test("rejects two files declaring the same executor name", async () => {

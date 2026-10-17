@@ -2,4 +2,8 @@
 "@tailor-platform/sdk": patch
 ---
 
-Report an invalid TailorDB, IdP, Auth, static website, AI Gateway, or secret manager config as a `SERVICE_CONFIG_INVALID` error that lists each offending field, instead of an `UNEXPECTED_ERROR` carrying the raw validation output. Under `--json`, `error.context` carries `configKey`, `name`, and `issues` (`path` and `message` per field).
+Report invalid configs and SDK definitions with specific error codes that list each offending field, instead of `UNEXPECTED_ERROR` carrying the raw validation output:
+
+- `CONFIG_INVALID`: `tailor.config.ts` fails validation, in its top-level fields, its `plugins` export, or a TailorDB, IdP, Auth, static website, AI Gateway, or secret manager config. Each field is named by its path from the config root (`auth.machineUserAttributes.role`). Under `--json`, `error.context` carries `file`, `exportName`, and `issues` (`path` and `message` per field), plus `configKey` and `name` for a service.
+- `DEFINITION_INVALID`: a resolver, executor, TailorDB type, HTTP adapter, workflow, or workflow job fails validation. `error.context` carries `kind`, `file`, `exportName`, and `issues`.
+- `DEFINITION_EXPORT_INVALID`: a workflow or HTTP adapter is exported under a name, or a workflow job is the default export. A misplaced workflow or job was previously reported with validation errors that did not apply to it.

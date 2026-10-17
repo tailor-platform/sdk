@@ -17,6 +17,7 @@ import { withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
 import { userAgent } from "./user-agent";
+import { invalidDataError } from "./validation-errors";
 import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 
 export const defaultPlatformBaseUrl = "https://api.tailor.tech";
@@ -990,7 +991,11 @@ export async function fetchUserInfo(accessToken: string, config?: PlatformClient
     sub: z.string(),
     email: z.string(),
   });
-  return schema.parse(rawJson);
+  const result = schema.safeParse(rawJson);
+  if (!result.success) {
+    throw invalidDataError("user info response", result.error);
+  }
+  return result.data;
 }
 
 // Converting "name:url" patterns to actual Static Website URLs
@@ -1278,9 +1283,12 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
     access_token: z.string(),
     expires_in: z.number(),
   });
-  const token = schema.parse(rawJson);
-  logger.registerSecret(token.access_token);
-  return token;
+  const result = schema.safeParse(rawJson);
+  if (!result.success) {
+    throw invalidDataError("machine user token response", result.error);
+  }
+  logger.registerSecret(result.data.access_token);
+  return result.data;
 }
 
 function isUndiciConnectTimeout(error: unknown): boolean {

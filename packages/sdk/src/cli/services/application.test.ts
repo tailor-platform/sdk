@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { defineConfig } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
@@ -172,26 +173,29 @@ describe("service config validation", () => {
 
     expect(error).toMatchObject({
       name: "CLIError",
-      code: "SERVICE_CONFIG_INVALID",
+      code: "CONFIG_INVALID",
       message:
-        'Invalid config for Auth service "my-auth":\n' +
-        "  - machineUserAttributes.role.metadata: Invalid input: expected object, received undefined\n" +
-        "  - machineUserAttributes.role.fields: Invalid input: expected record, received undefined",
+        'Invalid config for Auth service "my-auth" in tailor.config.ts:\n' +
+        "  - auth.machineUserAttributes.role.metadata: Invalid input: expected object, received undefined\n" +
+        "  - auth.machineUserAttributes.role.fields: Invalid input: expected record, received undefined",
       context: {
+        file: "tailor.config.ts",
+        exportName: "default",
         configKey: "auth",
         name: "my-auth",
         issues: [
           {
-            path: ["machineUserAttributes", "role", "metadata"],
+            path: ["auth", "machineUserAttributes", "role", "metadata"],
             message: "Invalid input: expected object, received undefined",
           },
           {
-            path: ["machineUserAttributes", "role", "fields"],
+            path: ["auth", "machineUserAttributes", "role", "fields"],
             message: "Invalid input: expected record, received undefined",
           },
         ],
       },
     });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({ file: "tailor.config.ts" });
   });
 
   test("keeps the auth message for setting both userProfile and machineUserAttributes", () => {
@@ -207,7 +211,7 @@ describe("service config validation", () => {
       context: {
         issues: [
           {
-            path: [],
+            path: ["auth"],
             message: "Specify either `userProfile` or `machineUserAttributes`, not both.",
           },
         ],
@@ -225,7 +229,7 @@ describe("service config validation", () => {
     });
 
     expect(error).toMatchObject({
-      context: { issues: [{ path: [], message: 'Unrecognized key: "machineUser"' }] },
+      context: { issues: [{ path: ["auth"], message: 'Unrecognized key: "machineUser"' }] },
     });
   });
 
@@ -241,7 +245,7 @@ describe("service config validation", () => {
       context: {
         issues: [
           {
-            path: ["idProvider", "kind"],
+            path: ["auth", "idProvider", "kind"],
             message:
               "Invalid discriminator value. Expected 'OIDC' | 'SAML' | 'IDToken' | 'BuiltInIdP'",
           },
@@ -261,13 +265,16 @@ describe("service config validation", () => {
     expect(error).toMatchObject({
       context: {
         issues: [
-          { path: ["machineUsers", "admin", "attributes", "role"], message: "Invalid input" },
           {
-            path: ["machineUserAttributes", "role", "metadata"],
+            path: ["auth", "machineUsers", "admin", "attributes", "role"],
+            message: "Invalid input: expected string | boolean | array",
+          },
+          {
+            path: ["auth", "machineUserAttributes", "role", "metadata"],
             message: "Invalid input: expected object, received undefined",
           },
           {
-            path: ["machineUserAttributes", "role", "fields"],
+            path: ["auth", "machineUserAttributes", "role", "fields"],
             message: "Invalid input: expected record, received undefined",
           },
         ],
@@ -281,16 +288,19 @@ describe("service config validation", () => {
       heading: 'TailorDB service "main"',
       configKey: "db",
       name: "main",
-      path: ["files"],
+      path: ["db", "main", "files"],
     },
     {
       serviceConfig: {
-        idp: [{ ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" }],
+        idp: [
+          defineIdp("other-idp", { clients: ["default"] }),
+          { ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" },
+        ],
       },
       heading: 'IdP "my-idp"',
       configKey: "idp",
       name: "my-idp",
-      path: ["clients"],
+      path: ["idp", 1, "clients"],
     },
     {
       serviceConfig: {
@@ -299,33 +309,35 @@ describe("service config validation", () => {
       heading: 'static website "my-site"',
       configKey: "staticWebsites",
       name: "my-site",
-      path: ["customDomains"],
+      path: ["staticWebsites", 0, "customDomains"],
     },
     {
       serviceConfig: { aiGateways: [defineAIGateway("my-gateway", { cors: "*" } as never)] },
       heading: 'AI Gateway "my-gateway"',
       configKey: "aiGateways",
       name: "my-gateway",
-      path: ["cors"],
+      path: ["aiGateways", 0, "cors"],
     },
     {
       serviceConfig: { secrets: defineSecretManager({ "my-vault": { key: 1 } } as never) },
       heading: "secret manager",
       configKey: "secrets",
       name: undefined,
-      path: ["vaults", "my-vault", "key"],
+      path: ["secrets", "vaults", "my-vault", "key"],
     },
   ])(
-    "reports an invalid $configKey config as SERVICE_CONFIG_INVALID",
+    "reports an invalid $configKey config as CONFIG_INVALID",
     ({ serviceConfig, heading, configKey, name, path }) => {
       const error = defineInvalidApplication(serviceConfig);
 
       expect(error).toMatchObject({
-        code: "SERVICE_CONFIG_INVALID",
+        code: "CONFIG_INVALID",
         message: expect.stringMatching(
-          new RegExp(`^Invalid config for ${heading}:\\n  - ${path.join("\\.")}: `),
+          new RegExp(
+            `^Invalid config for ${heading} in tailor\\.config\\.ts:\\n  - ${path.join("\\.")}: `,
+          ),
         ),
-        context: { configKey, name, issues: [{ path }] },
+        context: { file: "tailor.config.ts", configKey, name, issues: [{ path }] },
       });
     },
   );

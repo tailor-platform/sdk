@@ -11,10 +11,14 @@ export type FlatIssue = {
  * Flatten Zod issues into one entry per offending field. A failed union is
  * replaced by the issues of the branch the input came closest to matching.
  * @param issues - Issues from a failed parse
+ * @param prefix - Path of the parsed value, prepended to every issue path
  * @returns Issues with absolute paths
  */
-export function flattenZodIssues(issues: readonly ZodIssue[]): FlatIssue[] {
-  return flattenAt(issues, []);
+export function flattenZodIssues(
+  issues: readonly ZodIssue[],
+  prefix: FlatIssue["path"] = [],
+): FlatIssue[] {
+  return flattenAt(issues, prefix);
 }
 
 /**
@@ -48,7 +52,7 @@ function flattenUnion(
     branchKeys.every((keys) => keys.has(issueKey(issue))),
   );
   const sharedKeys = new Set(shared.map(issueKey));
-  const [closest, runnerUp] = branches
+  const ranked = branches
     .map((branch) => {
       const own = branch.filter((issue) => !sharedKeys.has(issueKey(issue)));
       const depth =
@@ -56,15 +60,49 @@ function flattenUnion(
       return { own, depth };
     })
     .toSorted((a, b) => b.depth - a.depth || a.own.length - b.own.length);
+  const [closest, runnerUp] = ranked;
   if (
     closest === undefined ||
     (runnerUp !== undefined &&
       closest.depth === runnerUp.depth &&
       closest.own.length === runnerUp.own.length)
   ) {
-    return [...flattenAt(shared, path), toFlatIssue(union, path)];
+    return [
+      ...flattenAt(shared, path),
+      { ...toFlatIssue(union, path), message: tiedUnionMessage(union, ranked) },
+    ];
   }
   return [...flattenAt(shared, path), ...flattenAt(closest.own, path)];
+}
+
+// zod's own message for a union; any other message was written for the field.
+const DEFAULT_UNION_MESSAGE = "Invalid input";
+
+function tiedUnionMessage(
+  union: z.core.$ZodIssueInvalidUnion,
+  branches: readonly { own: readonly ZodIssue[] }[],
+): string {
+  if (union.message !== DEFAULT_UNION_MESSAGE) {
+    return union.message;
+  }
+  const expected = new Set<string>();
+  for (const issue of branches.flatMap((branch) => branch.own)) {
+    if (issue.path.length > 0) {
+      return union.message;
+    }
+    if (issue.code === "invalid_type") {
+      expected.add(issue.expected);
+    } else if (issue.code === "invalid_value") {
+      for (const value of issue.values) {
+        expected.add(typeof value === "string" ? JSON.stringify(value) : String(value));
+      }
+    } else {
+      return union.message;
+    }
+  }
+  return expected.size === 0
+    ? union.message
+    : `${union.message}: expected ${[...expected].join(" | ")}`;
 }
 
 function issueKey(issue: ZodIssue): string {

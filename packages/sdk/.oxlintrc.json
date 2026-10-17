@@ -507,6 +507,12 @@
       }
     },
     {
+      "files": ["src/cli/**/*.ts"],
+      "rules": {
+        "local/no-raw-zod-error": "error"
+      }
+    },
+    {
       "files": ["**/*.test.ts"],
       "rules": {
         "no-restricted-imports": "off",
@@ -517,7 +523,8 @@
       "files": ["**/*.test.ts", "e2e/**/*.ts", "**/__test_fixtures__/**"],
       "rules": {
         "typescript/no-non-null-assertion": "off",
-        "local/no-plain-error": "off"
+        "local/no-plain-error": "off",
+        "local/no-raw-zod-error": "off"
       }
     },
     {

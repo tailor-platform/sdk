@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { ZodError } from "zod";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import { WorkflowSchema, WorkflowJobSchema } from "#/parser/service/workflow/index";
 import { type SdkBrandKind, brandValue, isSdkBranded } from "#/utils/brand";
+import type { ZodError } from "zod";
 
 type SafeParseSchema<T> = {
   safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: ZodError };
@@ -12,7 +12,7 @@ type SafeParseSchema<T> = {
 
 /**
  * Simulates the brand-based error categorization pattern used by all service loaders.
- * - Branded value with matching kind + invalid schema -> throws (user's SDK code has a bug)
+ * - Branded value with matching kind + invalid schema -> rejected (user's SDK code has a bug)
  * - Branded value with different kind + invalid schema -> skipped (different SDK object)
  * - Non-branded value + invalid schema -> skipped (unrelated export)
  * - Branded value + valid schema -> returns parsed data
@@ -20,17 +20,17 @@ type SafeParseSchema<T> = {
  * @param schema.safeParse - Safely parses a value and returns a discriminated union result
  * @param value - The value to parse and categorize
  * @param kind - The expected brand kind for this service loader
- * @returns Parsed data or "skipped" if non-branded and invalid
+ * @returns Parsed data, "rejected" if branded and invalid, or "skipped" if non-branded and invalid
  */
 function simulateServiceLoad<T>(
   schema: SafeParseSchema<T>,
   value: unknown,
   kind: SdkBrandKind,
-): T | "skipped" {
+): T | "skipped" | "rejected" {
   const result = schema.safeParse(value);
   if (!result.success) {
     if (isSdkBranded(value, kind)) {
-      throw result.error;
+      return "rejected";
     }
     return "skipped";
   }
@@ -39,7 +39,7 @@ function simulateServiceLoad<T>(
 
 /**
  * Registers the three tests shared by every service loader: a branded value
- * with a valid schema loads, a branded value with an invalid schema throws,
+ * with a valid schema loads, a branded value with an invalid schema is rejected,
  * and a non-branded value with an invalid schema is skipped.
  * @param schema - Zod schema with safeParse method
  * @param schema.safeParse - Safely parses a value and returns a discriminated union result
@@ -64,9 +64,9 @@ function itLoadsBrandedValues<T>(
     expect(result).toHaveProperty("name", validName);
   });
 
-  test("branded value with invalid schema throws ZodError", () => {
+  test("branded value with invalid schema is rejected", () => {
     const invalid = brandValue(invalidValue, kind);
-    expect(() => simulateServiceLoad(schema, invalid, kind)).toThrow(ZodError);
+    expect(simulateServiceLoad(schema, invalid, kind)).toBe("rejected");
   });
 
   test("non-branded value with invalid schema is skipped", () => {
