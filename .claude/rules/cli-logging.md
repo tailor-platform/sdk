@@ -140,7 +140,10 @@ these fields:
   than parse for it.
 - `command` — the owning command path, serialized as an `error.help` action targeting its `--help`.
 - `context` — the machine-usable facts behind the failure (resource names, per-phase causes),
-  never secrets.
+  never secrets. Values that name a kind or type reuse the stable identifier strings the code
+  already has: for a deploy resource, its `ManagedResourceType`
+  (`resourceType: "tailordb.service"`), not its `resourceLabel` ("TailorDB namespace"). Display
+  labels belong in the prose fields (`message`, `suggestion`, `details`).
 - `causes` — `withErrorDiagnostics()` only, for a failure that aggregates others: each entry is
   serialized as its own error envelope and merged into `context` under that key, so a caller reads
   the nested failures instead of parsing them out of `message`.
