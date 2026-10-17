@@ -1,4 +1,4 @@
-import { styles } from "./logger";
+import { redactSecrets, styles } from "./logger";
 import { formatShellCommandLines } from "./shell-quote";
 import type { Jsonifiable } from "type-fest";
 
@@ -50,16 +50,29 @@ type CLIErrorInternal = Error & {
 /**
  * Render a command as a user-facing hint that can be copied into the current platform's shells:
  * one backticked command line, or on Windows, when no single quoting suits both shells, a
- * PowerShell and a cmd.exe line (`` `…` in PowerShell or `…` in cmd.exe ``)
+ * PowerShell and a cmd.exe line (`` `…` in PowerShell or `…` in cmd.exe ``).
+ * Registered secrets are redacted before quoting, which could otherwise split them.
  * @param {CLIErrorNextAction} action - Executable and arguments to suggest
  * @returns {string} The command part of the hint, to follow a verb such as "Run"
  */
 export function formatCommandHint(action: CLIErrorNextAction): string {
-  const commandLines = formatShellCommandLines([action.command, ...action.args]);
+  const commandLines = formatShellCommandLines(
+    [action.command, ...action.args].map((arg) => redactSecrets(arg)),
+  );
   if (commandLines.kind === "shared") {
     return `\`${commandLines.commandLine}\``;
   }
   return `\`${commandLines.powershell}\` in PowerShell or \`${commandLines.cmd}\` in cmd.exe`;
+}
+
+/**
+ * Redact registered secrets, then indent every line after the first.
+ * Redacting first keeps the indent from splitting a multi-line secret.
+ * @param text - Details or suggestion text
+ * @returns Redacted text with its continuation lines indented
+ */
+function redactAndIndent(text: string): string {
+  return redactSecrets(text).split("\n").join("\n  ");
 }
 
 /**
@@ -73,11 +86,11 @@ function formatError(error: CLIError): string {
   ];
 
   if (error.details) {
-    parts.push(`\n  ${styles.dim("Details:")} ${error.details.split("\n").join("\n  ")}`);
+    parts.push(`\n  ${styles.dim("Details:")} ${redactAndIndent(error.details)}`);
   }
 
   if (error.suggestion) {
-    parts.push(`\n  ${styles.info("Suggestion:")} ${error.suggestion.split("\n").join("\n  ")}`);
+    parts.push(`\n  ${styles.info("Suggestion:")} ${redactAndIndent(error.suggestion)}`);
   }
 
   if (error.command) {

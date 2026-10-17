@@ -307,6 +307,23 @@ describe("github-actions", () => {
       expect(output.match(/<redacted>/g)).toHaveLength(4);
     });
 
+    test("redacts secrets that CLIError formatting re-indents or quotes", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+      logger.registerSecret("sk-first\nsk-second");
+      logger.registerSecret("it's-secret");
+      const error = CLIError({
+        message: "boom",
+        code: "AUTH_FAILED",
+        details: "sent sk-first\nsk-second",
+        next: { command: "tailor", args: ["login", "--token", "it's-secret"] },
+      });
+      const output = captureStderr(() => annotateTerminalError(error, { jsonMode: false }));
+      expect(output).not.toMatch(/sk-(first|second)|s-secret/);
+      expect(output).toContain("Details: sent <redacted>");
+      expect(output).toContain("Next: Run `tailor login --token '<redacted>'`.");
+    });
+
     test("writes nothing under JSON mode", () => {
       process.env.GITHUB_ACTIONS = "true";
       const output = captureStderr(() =>

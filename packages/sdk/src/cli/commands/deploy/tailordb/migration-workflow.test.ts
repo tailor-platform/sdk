@@ -27,6 +27,7 @@ vi.mock("#/cli/shared/logger", () => ({
     log: vi.fn(),
   },
   styles: { bold: (s: string) => s },
+  redactSecrets: (s: string) => s,
 }));
 
 vi.mock("../label", async (importOriginal) => ({
