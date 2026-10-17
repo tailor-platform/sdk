@@ -8,6 +8,7 @@ import {
   type ErrorSourceLocation,
 } from "./error-diagnostics";
 import { isCLIError } from "./errors";
+import { redactSecrets } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
 /** Properties attached to a GitHub Actions annotation. */
@@ -118,7 +119,7 @@ export function formatAnnotation(
 ): string {
   const entries: string[] = [];
   if (properties.title !== undefined) {
-    entries.push(`title=${escapeProperty(stripVTControlCharacters(properties.title))}`);
+    entries.push(`title=${escapeProperty(plainRedacted(properties.title))}`);
   }
   if (properties.file !== undefined) {
     entries.push(`file=${escapeProperty(properties.file)}`);
@@ -127,7 +128,19 @@ export function formatAnnotation(
     entries.push(`line=${properties.line}`);
   }
   const propertyList = entries.length > 0 ? ` ${entries.join(",")}` : "";
-  return `::${level}${propertyList}::${escapeData(stripVTControlCharacters(message))}\n`;
+  return `::${level}${propertyList}::${escapeData(plainRedacted(message))}\n`;
+}
+
+/**
+ * Strip colors, then redact registered secrets.
+ *
+ * Runs before the workflow command escapes, so neither inline colors nor the
+ * escapes can split a secret out of a match.
+ * @param text - Annotation title or body
+ * @returns Plain text with registered secrets redacted
+ */
+function plainRedacted(text: string): string {
+  return redactSecrets(stripVTControlCharacters(text));
 }
 
 function formattedMessage(error: Error): string | undefined {
