@@ -1,3 +1,7 @@
+---
+description: "Configure authentication and authorization with defineAuth, including user profiles, machine users, OAuth 2.0 clients, identity providers, auth connections, and before-login hooks."
+---
+
 # Auth
 
 Auth is a service for configuring authentication and authorization in your Tailor Platform application.

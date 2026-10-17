@@ -1,3 +1,7 @@
+---
+description: "Store API keys, tokens, and other credentials in Secret Manager vaults, and read them at runtime from executors and workflows."
+---
+
 # Secret Manager
 
 Secret Manager provides secure storage for sensitive values like API keys, tokens, and credentials that your application needs at runtime.

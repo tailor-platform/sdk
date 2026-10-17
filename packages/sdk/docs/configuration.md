@@ -1,3 +1,7 @@
+---
+description: "Configure your application in tailor.config.ts, including application settings, services, bundling, auth, static websites, secrets, environment variables, workflows, and plugins."
+---
+
 # Configuration
 
 The SDK uses TypeScript for configuration files. By default, it uses `tailor.config.ts` in the project root. You can specify a different path using the `--config` option.

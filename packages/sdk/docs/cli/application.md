@@ -1,3 +1,7 @@
+---
+description: "Create, generate, deploy, inspect, and remove the application defined in tailor.config.ts, and call Tailor Platform APIs directly with tailor api."
+---
+
 # Application Commands
 
 Commands for managing Tailor Platform applications. These commands work with `tailor.config.ts`.

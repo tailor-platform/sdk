@@ -1,4 +1,5 @@
 ---
+description: "Run ad-hoc SQL or GraphQL queries from the tailor CLI, or explore data interactively in the query REPL."
 politty:
   index:
     title: "Query Commands"

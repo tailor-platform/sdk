@@ -1,3 +1,7 @@
+---
+description: "Generate shell completion scripts for the tailor CLI in bash, zsh, and fish."
+---
+
 # Completion
 
 ## completion

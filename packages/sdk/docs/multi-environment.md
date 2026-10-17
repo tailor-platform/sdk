@@ -1,3 +1,7 @@
+---
+description: "Deploy one tailor.config.ts to development, staging, and production workspaces, and vary configuration values, secrets, and seed data per environment."
+---
+
 # Multi-Environment Configuration
 
 A project typically runs in more than one environment — for example, each developer's own workspace, a staging workspace, and a production workspace. The SDK has no separate "environment" concept: an environment is a workspace you deploy to, and all environments share the same `tailor.config.ts`. This guide shows how to switch the deployment target and how to vary configuration values per environment.

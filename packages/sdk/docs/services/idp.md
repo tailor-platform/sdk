@@ -1,3 +1,7 @@
+---
+description: "Set up the built-in identity provider with defineIdp to register and authenticate users and manage OAuth clients for your Auth service."
+---
+
 # IdP (Identity Provider)
 
 IdP is a built-in identity provider service for managing user authentication.

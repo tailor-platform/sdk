@@ -1,3 +1,7 @@
+---
+description: "List and inspect executors, view executor jobs, and trigger executors manually with the tailor CLI."
+---
+
 # Executor Commands
 
 Commands for managing executors and executor jobs.

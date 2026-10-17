@@ -1,3 +1,7 @@
+---
+description: "Create executors that run functions, webhooks, GraphQL operations, or workflows in response to record changes, schedules, incoming webhooks, and resolver events."
+---
+
 # Executor
 
 Executors are event-driven handlers that automatically trigger in response to data changes, schedules, or external events.

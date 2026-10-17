@@ -1,3 +1,7 @@
+---
+description: "Expose REST-style HTTP endpoints that translate each request into a GraphQL operation and shape the response for HTTP clients."
+---
+
 # HTTP Adapter
 
 HTTP adapters expose REST-style HTTP endpoints on your application by translating each request into a GraphQL query and (optionally) reshaping the GraphQL response back into an HTTP response.

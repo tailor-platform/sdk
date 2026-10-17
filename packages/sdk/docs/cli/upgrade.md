@@ -1,3 +1,7 @@
+---
+description: "Upgrade your project to a new SDK version by running codemods that update your code for breaking changes."
+---
+
 ## upgrade
 
 Run codemods to upgrade your project to a newer SDK version.
