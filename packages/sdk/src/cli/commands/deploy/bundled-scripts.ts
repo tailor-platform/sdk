@@ -1,30 +1,15 @@
-import { CLIError } from "#/cli/shared/errors";
+import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import type { BuiltDeploymentTarget } from "./deployment-target";
+import type { BundledScripts } from "./function-registry-types";
 
-function setBundledScript(
-  target: Map<string, string>,
-  name: string,
-  code: string,
-  kind: string,
-): void {
-  if (target.has(name)) {
-    throw CLIError({
-      code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
-      message: `Duplicate ${kind} bundle name "${name}" across config files.`,
-    });
-  }
-  target.set(name, code);
-}
+const BUNDLE_RESOURCES = {
+  resolvers: { resourceType: "pipeline.resolver", resourceLabel: "Resolver bundle" },
+  executors: { resourceType: "executor", resourceLabel: "Executor bundle" },
+  workflowJobs: { resourceType: "workflow_job_function", resourceLabel: "Workflow job bundle" },
+  authHooks: { resourceType: "auth.hook", resourceLabel: "Auth hook bundle" },
+} satisfies Record<keyof BundledScripts, Omit<ResourceNameCheck, "namesOf">>;
 
-function addBundledScripts(
-  target: Map<string, string>,
-  source: ReadonlyMap<string, string>,
-  kind: string,
-): void {
-  for (const [name, code] of source) {
-    setBundledScript(target, name, code, kind);
-  }
-}
+const BUNDLE_KINDS = Object.keys(BUNDLE_RESOURCES) as Array<keyof BundledScripts>;
 
 /**
  * Merge per-config bundled scripts into one build-only result.
@@ -33,26 +18,20 @@ function addBundledScripts(
  * @param targets - Built deployment targets to merge
  * @returns Combined bundled scripts across all targets
  */
-export function mergeBundledScripts(
-  targets: ReadonlyArray<BuiltDeploymentTarget>,
-): BuiltDeploymentTarget["bundledScripts"] {
-  const bundledScripts: BuiltDeploymentTarget["bundledScripts"] = {
-    resolvers: new Map(),
-    executors: new Map(),
-    workflowJobs: new Map(),
-    authHooks: new Map(),
+export function mergeBundledScripts(targets: ReadonlyArray<BuiltDeploymentTarget>): BundledScripts {
+  assertNoDuplicateResourceNames(
+    targets,
+    BUNDLE_KINDS.map((kind) => ({
+      ...BUNDLE_RESOURCES[kind],
+      namesOf: (target) => target.bundledScripts[kind].keys(),
+    })),
+  );
+  const mergeKind = (kind: keyof BundledScripts) =>
+    new Map(targets.flatMap((target) => [...target.bundledScripts[kind]]));
+  return {
+    resolvers: mergeKind("resolvers"),
+    executors: mergeKind("executors"),
+    workflowJobs: mergeKind("workflowJobs"),
+    authHooks: mergeKind("authHooks"),
   };
-
-  for (const target of targets) {
-    addBundledScripts(bundledScripts.resolvers, target.bundledScripts.resolvers, "resolver");
-    addBundledScripts(bundledScripts.executors, target.bundledScripts.executors, "executor");
-    addBundledScripts(
-      bundledScripts.workflowJobs,
-      target.bundledScripts.workflowJobs,
-      "workflow job",
-    );
-    addBundledScripts(bundledScripts.authHooks, target.bundledScripts.authHooks, "auth hook");
-  }
-
-  return bundledScripts;
 }
