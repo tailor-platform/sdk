@@ -272,6 +272,27 @@ interface SeedIdpUserParams {
   upsert: boolean;
 }
 
+async function hookIdpUserRows(
+  schemaDir: string,
+  rows: SeedData[string] | undefined,
+): Promise<SeedData[string]> {
+  const { hookSeedRows } = await import("@tailor-platform/sdk/seed");
+  const source = rows ?? [];
+  const hooked = (await hookSeedRows({
+    schemaDir,
+    table: "_User",
+    rows: source,
+  })) as SeedData[string];
+  // A password the schema hook supplied (not one written in _User.jsonl) only applies when the
+  // user is created, so --upsert does not reset the password of a user that already exists.
+  return hooked.map((row, index) => {
+    const written = source[index]?.password;
+    if (written !== undefined && written !== null) return row;
+    const { password, ...rest } = row;
+    return password === undefined ? row : { ...rest, initialPassword: password };
+  });
+}
+
 async function seedIdpUser(
   params: SeedIdpUserParams,
 ): Promise<{ success: boolean; processed: number; transportError?: unknown }> {
@@ -558,7 +579,10 @@ export const seedApplyCommand = defineAppCommand({
       !args["skip-idp"] &&
       (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
     const idpUserRows = shouldSeedUser
-      ? (loadSeedData(dataDirs, ["_User"], { keyField: "name" })._User ?? [])
+      ? await hookIdpUserRows(
+          dataDir,
+          loadSeedData(dataDirs, ["_User"], { keyField: "name" })._User,
+        )
       : [];
 
     const appInfo = await show({

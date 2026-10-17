@@ -60,18 +60,23 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
 
       for (let i = 0; i < input.users.length; i++) {
         try {
+          const { initialPassword, ...row } = input.users[i];
+          const createInput =
+            initialPassword === undefined || row.password !== undefined
+              ? row
+              : { ...row, password: initialPassword };
           if (upsert) {
             let existing;
             let lookupError;
             try {
-              existing = await client.userByName(input.users[i].name);
+              existing = await client.userByName(row.name);
             } catch (error) {
               existing = undefined;
               lookupError = error instanceof Error ? error.message : String(error);
             }
 
             if (existing) {
-              const { name, ...attributes } = input.users[i];
+              const { name, ...attributes } = row;
               if (Object.keys(attributes).length === 0) {
                 skipped++;
               } else {
@@ -80,7 +85,7 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
               }
             } else {
               try {
-                await client.createUser(input.users[i]);
+                await client.createUser(createInput);
                 created++;
               } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
@@ -90,7 +95,7 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
               }
             }
           } else {
-            await client.createUser(input.users[i]);
+            await client.createUser(createInput);
             created++;
           }
           processed++;
@@ -248,7 +253,7 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
 
   return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
-    import { defineSchema } from "@tailor-platform/sdk/seed";
+    import { defineSchema, fillIdpUserPassword } from "@tailor-platform/sdk/seed";
     import { createStandardSchema } from "@tailor-platform/sdk/test";
 
     const schemaType = t.object({
@@ -256,8 +261,7 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
       password: t.string(),
     });
 
-    // Simple identity hook for _User (no TailorDB backing table)
-    export const hook = <T>(data: unknown) => data as T;
+    export const hook = <T>(data: unknown) => fillIdpUserPassword(data) as T;
 
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook),
