@@ -4,22 +4,15 @@ import {
   collectEnvironmentRequirements,
   renderGhCommands,
   renderTerraform,
+  SECRET_FALLBACK_VARIABLES,
   setupEnv,
   targetRequirements,
 } from "./env";
 import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind, writeLock } from "./lock";
 import { renderBranchWorkflow, renderPreviewWorkflow, renderTagWorkflow } from "./templates";
+import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
-
-const target = (kind: TargetKind, workspaceName: string, environment: string): LockTarget => ({
-  kind,
-  workspaceName,
-  file: `.github/workflows/tailor-${workspaceName}.yml`,
-  templateVersion: 1,
-  inputs: { branch: "main", tagPattern: null, environment, dir: ".", packageManager: "pnpm" },
-  generatedIds: [],
-  contentHash: "sha256:abc",
-});
+import type { GhRunner } from "./gh";
 
 const lockOf = (...targets: LockTarget[]): LockFile => ({ version: LOCK_VERSION, targets });
 
@@ -42,14 +35,21 @@ const namesOf = (kind: TargetKind) =>
     .map((r) => `${r.type} ${r.name}`)
     .toSorted();
 
+function fallbackSecretNames(content: string): string[] {
+  const names = new Set<string>();
+  for (const match of content.matchAll(/\bvars\.([A-Za-z_][A-Za-z0-9_]*) \|\| secrets\.\1\b/g)) {
+    names.add(match[1]!);
+  }
+  return [...names].toSorted();
+}
+
 describe("targetRequirements matches the secrets/vars the rendered templates reference", () => {
   const common = {
     workspaceName: "my-app",
     environment: "my-app",
     packageManager: "pnpm" as const,
   };
-
-  test.each([
+  const renders = [
     ["branch", renderBranchWorkflow({ ...common, branch: "main", erdPreview: null })],
     [
       "branch",
@@ -64,9 +64,20 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     ["tag", renderTagWorkflow({ ...common, tagPattern: "v*" })],
     ["tag", renderTagWorkflow({ ...common, tagPattern: "v*", branch: "main" })],
     ["preview", renderPreviewWorkflow({ ...common, branch: "main", region: "us-west" })],
-  ] as const)("%s", (kind, render) => {
+  ] as const;
+
+  test.each(renders)("%s", (kind, render) => {
     expect(referencedNames(render.content)).toEqual(namesOf(kind));
   });
+
+  test.each(renders)(
+    "%s falls back to a same-name secret only for the listed variables",
+    (_, render) => {
+      expect(fallbackSecretNames(render.content)).toEqual(
+        [...SECRET_FALLBACK_VARIABLES].toSorted(),
+      );
+    },
+  );
 });
 
 describe("how to get each value", () => {
@@ -237,6 +248,11 @@ describe("renderGhCommands", () => {
     expect(renderGhCommands(envs()).split("\n")[0]).toMatch(/^# .*one at a time/);
   });
 
+  test("tells GitHub Enterprise Server users to point gh api at their host, since gh cannot tell it", () => {
+    expect(renderGhCommands(envs())).toMatch(/^# On GitHub Enterprise Server, export GH_HOST=/m);
+    expect(renderGhCommands(envs(), { owner: "acme", name: "app" })).not.toContain("GH_HOST");
+  });
+
   test("keeps every non-command line a shell comment", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
@@ -281,6 +297,33 @@ describe("when the repository is known from the origin remote", () => {
       "#   terraform import github_repository_environment.production sdk:production",
     );
     expect(hcl).not.toContain('#   repository = "<repository>"');
+    expect(hcl).not.toContain("GITHUB_BASE_URL");
+  });
+});
+
+describe("when the repository is on a GitHub Enterprise Server host", () => {
+  const repository = { host: "ghe.example.com", owner: "acme", name: "app" };
+  const envs = () => collectEnvironmentRequirements(lockOf(target("tag", "my-app", "production")));
+
+  test("gh commands send every request to that host instead of gh's default host", () => {
+    const lines = renderGhCommands(envs(), repository).split("\n");
+
+    expect(lines).toContain(
+      'if [ "$(gh api --hostname ghe.example.com -i "repos/acme/app/environments/production" 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then ' +
+        'gh api --hostname ghe.example.com -X PUT "repos/acme/app/environments/production" --silent; fi',
+    );
+    expect(lines).toContain(
+      "gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env=production --repo=ghe.example.com/acme/app",
+    );
+    expect(lines).toContain(
+      "gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env=production --repo=ghe.example.com/acme/app",
+    );
+  });
+
+  test("Terraform instructions point the provider at that host", () => {
+    expect(renderTerraform(envs(), repository)).toContain(
+      "#   export GITHUB_TOKEN=<token> GITHUB_OWNER=acme GITHUB_BASE_URL=https://ghe.example.com/",
+    );
   });
 });
 
@@ -296,6 +339,12 @@ describe("renderTerraform", () => {
     expect(hcl).toContain('resource "github_repository_environment" "stg_eu" {');
     expect(hcl).toContain('  environment = "stg/eu"');
     expect(hcl).toContain('resource "github_repository_environment" "production" {');
+  });
+
+  test("tells GitHub Enterprise Server users to point the provider at their host, since it is unknown", () => {
+    expect(renderTerraform(envs())).toContain(
+      "#   On GitHub Enterprise Server, also export GITHUB_BASE_URL=https://<host>/",
+    );
   });
 
   test("explains how to get each value above its input variable", () => {
@@ -432,6 +481,8 @@ describe("renderTerraform", () => {
 });
 
 describe("setupEnv", () => {
+  const noGh: GhRunner = () => null;
+
   test("fails when no lock exists", () => {
     using tmp = tempDir("setup-env-");
 
@@ -447,7 +498,7 @@ describe("setupEnv", () => {
     writeLock(tmp.dir, lock);
     using out = vi.spyOn(logger, "out").mockImplementation(() => {});
 
-    setupEnv({ outputDir: tmp.dir, format });
+    setupEnv({ outputDir: tmp.dir, format, ghRunner: noGh });
 
     expect(out).toHaveBeenCalledWith(render(collectEnvironmentRequirements(lock)));
   });
@@ -472,13 +523,73 @@ describe("setupEnv", () => {
     );
   });
 
+  test.each([
+    ["gh", renderGhCommands],
+    ["terraform", renderTerraform],
+  ] as const)(
+    "asks gh for the repository and its host when origin is not on github.com (%s)",
+    (format, render) => {
+      using tmp = tempDir("setup-env-");
+      const lock = lockOf(target("branch", "my-app", "stg"));
+      writeLock(tmp.dir, lock);
+      using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+      const ghRunner: GhRunner = (args) =>
+        args.join(" ") === "repo view --json nameWithOwner,url"
+          ? {
+              status: 0,
+              stdout: JSON.stringify({
+                nameWithOwner: "acme/app",
+                url: "https://ghe.example.com/acme/app",
+              }),
+              stderr: "",
+            }
+          : null;
+
+      setupEnv({
+        outputDir: tmp.dir,
+        format,
+        gitRunner: () => "git@ghe.example.com:acme/app.git",
+        ghRunner,
+      });
+
+      expect(out).toHaveBeenCalledWith(
+        render(collectEnvironmentRequirements(lock), {
+          host: "ghe.example.com",
+          owner: "acme",
+          name: "app",
+        }),
+      );
+    },
+  );
+
+  test("leaves the repository to gh at run time when gh cannot tell it", () => {
+    using tmp = tempDir("setup-env-");
+    const lock = lockOf(target("branch", "my-app", "stg"));
+    writeLock(tmp.dir, lock);
+    using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    setupEnv({
+      outputDir: tmp.dir,
+      format: "gh",
+      gitRunner: () => "git@ghe.example.com:acme/app.git",
+      ghRunner: () => ({
+        status: 1,
+        stdout: "",
+        stderr:
+          "none of the git remotes configured for this repository point to a known GitHub host\n",
+      }),
+    });
+
+    expect(out).toHaveBeenCalledWith(renderGhCommands(collectEnvironmentRequirements(lock)));
+  });
+
   test("prints only the environments passed with --environment, ignoring case", () => {
     using tmp = tempDir("setup-env-");
     const lock = lockOf(target("branch", "my-app", "stg"), target("tag", "my-app", "production"));
     writeLock(tmp.dir, lock);
     using out = vi.spyOn(logger, "out").mockImplementation(() => {});
 
-    setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["Production"] });
+    setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["Production"], ghRunner: noGh });
 
     const [, production] = collectEnvironmentRequirements(lock);
     expect(out).toHaveBeenCalledWith(renderGhCommands([production!]));
@@ -490,7 +601,7 @@ describe("setupEnv", () => {
     writeLock(tmp.dir, lock);
     using out = vi.spyOn(logger, "out").mockImplementation(() => {});
 
-    setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["stg", "STG"] });
+    setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["stg", "STG"], ghRunner: noGh });
 
     const [stg] = collectEnvironmentRequirements(lock);
     expect(out).toHaveBeenCalledWith(renderGhCommands([stg!]));

@@ -2434,6 +2434,16 @@ export default defineConfig({
     expect(output).not.toContain("gh secret set");
   });
 
+  test("next steps suggest checking with --check what the environment still lacks", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    printTargetNextSteps(
+      await setupTarget(baseOptions({ workspaceName: "my-app", environment: "stg" })),
+    );
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toMatch(/tailor setup ci env --environment stg --check +# .*still missing/);
+  });
+
   test("next steps leave where each value comes from to `tailor setup ci env`", async () => {
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});
     printTargetNextSteps(
