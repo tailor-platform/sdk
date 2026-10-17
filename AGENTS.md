@@ -131,8 +131,6 @@ Args include `event` (short name like `"created"`) and `rawEvent` (full event ty
 
 ## Developer Guides
 
-See [docs/](docs/README.md) for developer and contributor documentation.
-
 - [Getting Started](docs/getting-started.md) - Prerequisites, setup, key commands
 - [Architecture](docs/architecture.md) - Design decisions and non-obvious patterns
 - [Testing](docs/testing.md) - Test strategy and conventions
