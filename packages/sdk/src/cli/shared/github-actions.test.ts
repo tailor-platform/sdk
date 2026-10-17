@@ -12,6 +12,7 @@ import {
   formatAnnotation,
   workspaceRelativePath,
 } from "./github-actions";
+import { logger, resetSecretRegistry } from "./logger";
 
 function captureStderr(fn: () => void): string {
   using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -30,6 +31,7 @@ describe("github-actions", () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    resetSecretRegistry();
   });
 
   describe("annotationsEnabled", () => {
@@ -172,6 +174,27 @@ describe("github-actions", () => {
       );
     });
 
+    test("redacts registered secrets from the title", () => {
+      logger.registerSecret("sk-title-secret");
+      expect(formatAnnotation("error", "body", { title: "bad sk-title-secret" })).toBe(
+        "::error title=bad <redacted>::body\n",
+      );
+    });
+
+    test("redacts a secret containing characters the escapes rewrite", () => {
+      logger.registerSecret("a%b,c:d\ne");
+      expect(formatAnnotation("error", "got a%b,c:d\ne", { title: "a%b,c:d\ne" })).toBe(
+        "::error title=<redacted>::got <redacted>\n",
+      );
+    });
+
+    test("redacts a secret split by inline colors", () => {
+      logger.registerSecret("sk-colored-secret");
+      expect(formatAnnotation("error", `${color.red("sk-colored")}-secret`)).toBe(
+        "::error::<redacted>\n",
+      );
+    });
+
     test("emits a notice level", () => {
       expect(formatAnnotation("notice", "hi")).toBe("::notice::hi\n");
     });
@@ -259,6 +282,24 @@ describe("github-actions", () => {
       expect(output.endsWith("\n")).toBe(true);
       expect(output.slice(0, -1)).not.toContain("\n");
       expect(output).toContain("%0A");
+    });
+
+    test("redacts registered secrets from every part of a CLIError", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      logger.registerSecret("sk-message-secret");
+      logger.registerSecret("sk-details-secret");
+      logger.registerSecret("sk-suggestion-secret");
+      logger.registerSecret("sk-next-secret");
+      const error = CLIError({
+        message: "token sk-message-secret was rejected",
+        code: "AUTH_FAILED",
+        details: "sent sk-details-secret",
+        suggestion: "rotate sk-suggestion-secret",
+        next: { command: "tailor", args: ["login", "--token", "sk-next-secret"] },
+      });
+      const output = captureStderr(() => annotateTerminalError(error, { jsonMode: false }));
+      expect(output).not.toMatch(/sk-(message|details|suggestion|next)-secret/);
+      expect(output.match(/<redacted>/g)).toHaveLength(4);
     });
 
     test("writes nothing under JSON mode", () => {
