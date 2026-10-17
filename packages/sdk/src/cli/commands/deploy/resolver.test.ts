@@ -423,6 +423,21 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.updates).toHaveLength(1);
       expect(result.changeSet.service.updates[0]).not.toHaveProperty("forcedBySdkVersion");
     });
+
+    test("reports an unmanaged service with its resource type and label", async () => {
+      const client = createMockClient([{ name: "resolver-a" }]);
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+
+      const result = await planPipeline(buildCtx({ client, application }));
+
+      expect(result.unmanaged).toEqual([
+        {
+          resourceType: "pipeline.service",
+          resourceLabel: "Pipeline service",
+          resourceName: "resolver-a",
+        },
+      ]);
+    });
   });
 
   describe("resolver no-op detection", () => {

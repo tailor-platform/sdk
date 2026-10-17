@@ -821,7 +821,9 @@ describe("planAuth", () => {
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
-    expect(result.unmanaged).toHaveLength(1);
+    expect(result.unmanaged).toEqual([
+      { resourceType: "auth.service", resourceLabel: "Auth service", resourceName: "auth-a" },
+    ]);
   });
 
   test("marks auth service updated when config matches but resource is owned by another app", async () => {

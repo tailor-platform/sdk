@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { checkGitHub } from "./check";
 import { setupSubCommands } from "./commands";
 import { setupEnv } from "./env";
+import { checkEnv } from "./env-check";
 import { printTargetNextSteps, setupTarget } from "./generate";
 import { setupUpdate } from "./update";
 
@@ -14,6 +15,7 @@ vi.mock("./generate", async (importOriginal) => ({
 
 vi.mock("./check", () => ({ checkGitHub: vi.fn() }));
 vi.mock("./env", () => ({ setupEnv: vi.fn() }));
+vi.mock("./env-check", () => ({ checkEnv: vi.fn() }));
 vi.mock("./delete", () => ({ setupDelete: vi.fn() }));
 vi.mock("./renovate", () => ({ setupRenovate: vi.fn() }));
 vi.mock("./update", () => ({ setupUpdate: vi.fn() }));
@@ -233,6 +235,29 @@ describe("setup ci subcommand nesting", () => {
     const result = await runCommand(setupCommand, ["ci", "env", "--format", "yaml"]);
 
     expect(result.success).toBe(false);
+    expect(setupEnv).not.toHaveBeenCalled();
+  });
+
+  test("ci env --check checks the narrowed environments instead of printing commands", async () => {
+    const result = await runCommand(setupCommand, ["ci", "env", "--check", "--environment", "stg"]);
+
+    expect(result.success).toBe(true);
+    expect(checkEnv).toHaveBeenCalledWith({ outputDir: process.cwd(), environments: ["stg"] });
+    expect(setupEnv).not.toHaveBeenCalled();
+  });
+
+  test("ci env rejects --check with --format terraform", async () => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      "env",
+      "--check",
+      "--format",
+      "terraform",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toMatch(/--check.*--format terraform/);
+    expect(checkEnv).not.toHaveBeenCalled();
     expect(setupEnv).not.toHaveBeenCalled();
   });
 

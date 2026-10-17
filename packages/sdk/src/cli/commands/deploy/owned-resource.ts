@@ -1,6 +1,7 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { ManagedResourceType } from "./managed-resource-type";
 
 type ResourcePageFetcher<T> = (pageToken: string, maxPageSize: number) => Promise<[T[], string]>;
 
@@ -51,7 +52,8 @@ export interface TrackDesiredResourceOwnershipParams {
   ownerLabel: string | undefined;
   appName: string;
   appId: string | undefined;
-  resourceType: string;
+  resourceType: ManagedResourceType;
+  resourceLabel: string;
   resourceName: string;
   conflicts: OwnerConflict[];
   unmanaged: UnmanagedResource[];
@@ -65,7 +67,8 @@ export interface TrackDesiredResourceOwnershipParams {
  * @param params.ownerLabel - Existing `sdk-name` label, when present
  * @param params.appName - Current application name
  * @param params.appId - Current application id, when present
- * @param params.resourceType - Resource kind for confirmation messages
+ * @param params.resourceType - Stable resource kind identifier for machine-readable output
+ * @param params.resourceLabel - Resource kind for human-readable plan and confirmation messages
  * @param params.resourceName - Resource name for confirmation messages
  * @param params.conflicts - Conflict accumulator
  * @param params.unmanaged - Unmanaged-resource accumulator
@@ -74,15 +77,25 @@ export interface TrackDesiredResourceOwnershipParams {
 export function trackDesiredResourceOwnership(
   params: TrackDesiredResourceOwnershipParams,
 ): boolean {
-  const { labels, ownerLabel, appName, appId, resourceType, resourceName, conflicts, unmanaged } =
-    params;
+  const {
+    labels,
+    ownerLabel,
+    appName,
+    appId,
+    resourceType,
+    resourceLabel,
+    resourceName,
+    conflicts,
+    unmanaged,
+  } = params;
   const owned = isOwnedByApp(labels, appName, appId);
   if (!owned) {
     if (!ownerLabel) {
-      unmanaged.push({ resourceType, resourceName });
+      unmanaged.push({ resourceType, resourceLabel, resourceName });
     } else {
       conflicts.push({
         resourceType,
+        resourceLabel,
         resourceName,
         currentOwner: ownerLabel,
       });

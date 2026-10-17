@@ -338,7 +338,9 @@ describe("planIdP", () => {
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
-    expect(result.unmanaged).toHaveLength(1);
+    expect(result.unmanaged).toEqual([
+      { resourceType: "idp.service", resourceLabel: "IdP service", resourceName: "idp-a" },
+    ]);
   });
 
   test("marks idp service updated when config matches but resource is owned by another app", async () => {

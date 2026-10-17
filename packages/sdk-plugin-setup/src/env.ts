@@ -1,5 +1,6 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { validateEnvironment, validateWorkspaceName } from "./generate";
+import { type GhRunner, viewRepository } from "./gh";
 import { detectRepository, type GitRunner, type Repository } from "./git";
 import { type LockFile, readLock, type TargetKind } from "./lock";
 
@@ -36,6 +37,9 @@ const CLIENT_ID: EnvRequirement = {
     "an editor or admin role on the organization or folder that holds the workspace",
   howTo: `${MACHINE_USER_HOW_TO}; use its client ID`,
 };
+/** Variables the generated workflows also read from a secret of the same name, a deprecated fallback. */
+export const SECRET_FALLBACK_VARIABLES: ReadonlySet<string> = new Set([CLIENT_ID.name]);
+
 const CLIENT_SECRET: EnvRequirement = {
   name: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
   type: "secret",
@@ -160,24 +164,28 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
 
 /**
  * Render `gh` commands that create each missing environment and set its secrets and variables.
- * @param environments - Requirements grouped by environment
+ * @param environments - Requirements grouped by environment; `exists: true` skips creating it
  * @param repository - Target repository; when null, gh resolves it from the current directory
  * @returns Shell script text
  */
 export function renderGhCommands(
-  environments: EnvironmentRequirements[],
+  environments: (EnvironmentRequirements & { exists?: boolean })[],
   repository: Repository | null = null,
 ): string {
   const repoPath = repository ? `${repository.owner}/${repository.name}` : "{owner}/{repo}";
-  const repoFlag = repository ? ` --repo=${repository.owner}/${repository.name}` : "";
-  const blocks = environments.map(({ environment, targets, requirements }) => {
+  const hostPrefix = repository?.host ? `${repository.host}/` : "";
+  const repoFlag = repository ? ` --repo=${hostPrefix}${repoPath}` : "";
+  const ghApi = repository?.host ? `gh api --hostname ${repository.host}` : "gh api";
+  const blocks = environments.map(({ environment, targets, requirements, exists }) => {
     const endpoint = `"repos/${repoPath}/environments/${encodeURIComponent(environment)}"`;
-    const lines = [
-      `# Environment "${environment}" (${targets.join(", ")})`,
-      // PUT also rewrites an existing environment and needs admin access, so only create a missing
-      // one. The status is compared as text so the expected 404 exit does not fail under pipefail.
-      `if [ "$(gh api -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then gh api -X PUT ${endpoint} --silent; fi`,
-    ];
+    const lines = [`# Environment "${environment}" (${targets.join(", ")})`];
+    if (exists !== true) {
+      lines.push(
+        // PUT also rewrites an existing environment and needs admin access, so only create a missing
+        // one. The status is compared as text so the expected 404 exit does not fail under pipefail.
+        `if [ "$(${ghApi} -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then ${ghApi} -X PUT ${endpoint} --silent; fi`,
+      );
+    }
     for (const { required, type, name, description, howTo } of requirements) {
       const command = `gh ${type} set ${name} --env=${environment}${repoFlag}`;
       lines.push(
@@ -190,6 +198,9 @@ export function renderGhCommands(
   });
   const header = [
     "# Run these one at a time: each `gh ... set` prompts for its value.",
+    ...(repository
+      ? []
+      : ["# On GitHub Enterprise Server, export GH_HOST=<host> first so that gh api calls it."]),
     `# ${CONCEPTS_NOTE}`,
   ].join("\n");
   return `${[header, ...blocks].join("\n\n")}\n`;
@@ -255,7 +266,11 @@ function terraformUsage(
     `# ${CONCEPTS_NOTE}`,
     "#",
     "# 1. Authenticate the GitHub provider, for example:",
-    `#   export GITHUB_TOKEN=<token> GITHUB_OWNER=${repository?.owner ?? "<owner>"}`,
+    `#   export GITHUB_TOKEN=<token> GITHUB_OWNER=${repository?.owner ?? "<owner>"}` +
+      (repository?.host ? ` GITHUB_BASE_URL=https://${repository.host}/` : ""),
+    ...(repository
+      ? []
+      : ["#   On GitHub Enterprise Server, also export GITHUB_BASE_URL=https://<host>/"]),
     "# 2. Set the non-secret values in terraform.tfvars:",
     ...(repository ? [] : ['#   repository = "<repository>"']),
     ...inputs
@@ -390,33 +405,49 @@ function selectEnvironments(
 }
 
 /**
- * Print what each GitHub Environment used by the generated workflows needs. Read-only.
- * @param options - Env options
- * @param options.outputDir - Repository root where `.github` lives
- * @param options.format - Output format
- * @param options.environments - Only print these environments; all when empty
- * @param options.gitRunner - Injectable git runner, for testing
+ * Read the lock and group the requirements of its targets by GitHub Environment.
+ * @param outputDir - Repository root where `.github` lives
+ * @param names - Only these environments; all when empty
+ * @returns One entry per selected environment, in lock order
  */
-export function setupEnv(options: {
-  outputDir: string;
-  format: EnvFormat;
-  environments?: string[];
-  gitRunner?: GitRunner;
-}): void {
-  const lock = readLock(options.outputDir);
+export function loadEnvironmentRequirements(
+  outputDir: string,
+  names: string[] = [],
+): EnvironmentRequirements[] {
+  const lock = readLock(outputDir);
   if (!lock || lock.targets.length === 0) {
     throw new Error(
       "No managed workflows found (.github/tailor.lock is missing or empty). " +
         "Run `tailor setup ci branch` (or another setup subcommand) first.",
     );
   }
-  const allEnvironments = collectEnvironmentRequirements(lock);
-  const environments = selectEnvironments(allEnvironments, options.environments ?? []);
+  return selectEnvironments(collectEnvironmentRequirements(lock), names);
+}
+
+/**
+ * Print what each GitHub Environment used by the generated workflows needs. Read-only.
+ * @param options - Env options
+ * @param options.outputDir - Repository root where `.github` lives
+ * @param options.format - Output format
+ * @param options.environments - Only print these environments; all when empty
+ * @param options.gitRunner - Injectable git runner, for testing
+ * @param options.ghRunner - Injectable gh runner, for testing
+ */
+export function setupEnv(options: {
+  outputDir: string;
+  format: EnvFormat;
+  environments?: string[];
+  gitRunner?: GitRunner;
+  ghRunner?: GhRunner;
+}): void {
+  const environments = loadEnvironmentRequirements(options.outputDir, options.environments);
   if (logger.jsonMode) {
     logger.out(environments);
     return;
   }
-  const repository = detectRepository(options.outputDir, options.gitRunner);
+  const repository =
+    detectRepository(options.outputDir, options.gitRunner) ??
+    viewRepository(options.outputDir, options.ghRunner);
   logger.out(
     options.format === "terraform"
       ? renderTerraform(environments, repository)

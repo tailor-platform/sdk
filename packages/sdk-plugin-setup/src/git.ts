@@ -44,11 +44,37 @@ export function detectDefaultBranch(
   return branch;
 }
 
-export type Repository = { owner: string; name: string };
+export type Repository = {
+  owner: string;
+  name: string;
+  /** GitHub Enterprise Server host; absent for github.com. */
+  host?: string;
+};
+
+export const GITHUB_HOST = "github.com";
 
 const GITHUB_REMOTE_RE =
   /^(?:git@github\.com:|https:\/\/github\.com\/|ssh:\/\/git@github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?$/;
 const REPOSITORY_PART_RE = /^[A-Za-z0-9._-]+$/;
+const HOST_RE = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+
+/**
+ * Build a repository from parts that get embedded in shell commands.
+ * @param owner - Repository owner
+ * @param name - Repository name
+ * @param host - Host name; github.com when omitted
+ * @returns The repository, or null when a part is unsafe to embed
+ */
+export function toRepository(
+  owner: string,
+  name: string,
+  host: string = GITHUB_HOST,
+): Repository | null {
+  if (!REPOSITORY_PART_RE.test(owner) || !REPOSITORY_PART_RE.test(name)) return null;
+  const normalizedHost = host.toLowerCase();
+  if (normalizedHost === GITHUB_HOST) return { owner, name };
+  return HOST_RE.test(normalizedHost) ? { owner, name, host: normalizedHost } : null;
+}
 
 /**
  * Detect the GitHub repository from the `origin` remote URL.
@@ -63,6 +89,5 @@ export function detectRepository(
   const match = run(["remote", "get-url", "origin"], cwd)?.match(GITHUB_REMOTE_RE);
   if (!match) return null;
   const [, owner = "", name = ""] = match;
-  if (!REPOSITORY_PART_RE.test(owner) || !REPOSITORY_PART_RE.test(name)) return null;
-  return { owner, name };
+  return toRepository(owner, name);
 }
