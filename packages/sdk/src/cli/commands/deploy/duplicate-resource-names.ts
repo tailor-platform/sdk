@@ -55,6 +55,9 @@ export function assertNoDuplicateResourceNames(
   if (duplicates.length === 0) {
     return;
   }
+  const hasServiceNamespaceAcrossConfigs = duplicates.some(
+    ({ resourceType, configPaths }) => resourceType.endsWith(".service") && configPaths.length > 1,
+  );
   throw CLIError({
     code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
     message: [
@@ -66,9 +69,14 @@ export function assertNoDuplicateResourceNames(
             .join(", ")}`,
       ),
     ].join("\n"),
-    suggestion:
-      "Rename the duplicates so each name is defined once across all configs in a single deploy. " +
-      "To share a service namespace across configs, define it in one config and declare it with `external: true` in the others.",
+    suggestion: [
+      "Rename the duplicates so each name is defined once across all configs in a single deploy.",
+      ...(hasServiceNamespaceAcrossConfigs
+        ? [
+            "To share a service namespace across configs, define it in one config and declare it with `external: true` in the others.",
+          ]
+        : []),
+    ].join(" "),
     context: {
       duplicates: duplicates.map(({ resourceType, name, configPaths }): DuplicateResourceName => ({
         resourceType,

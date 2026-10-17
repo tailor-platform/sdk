@@ -1674,6 +1674,8 @@ describe("mergeBundledScripts", () => {
           '  - Workflow job bundle "notify": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts',
           '  - Auth hook bundle "auth-hook--shared--before-login": apps/buyer/tailor.config.ts, apps/supplier/tailor.config.ts',
         ].join("\n"),
+        suggestion:
+          "Rename the duplicates so each name is defined once across all configs in a single deploy.",
         context: {
           duplicates: [
             {
@@ -1742,6 +1744,38 @@ describe("assertUniqueGlobalResourceNames", () => {
             { resourceType: "idp.service", name: "default", configPaths },
           ],
         },
+      }),
+    );
+  });
+
+  test("suggests only renaming when no service namespace is duplicated", () => {
+    expect(() =>
+      assertUniqueGlobalResourceNames([
+        fakeTarget({ configDir: "apps/a", executorNames: ["sync-user"] }),
+        fakeTarget({ configDir: "apps/b", executorNames: ["sync-user"] }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        suggestion:
+          "Rename the duplicates so each name is defined once across all configs in a single deploy.",
+      }),
+    );
+  });
+
+  test("suggests only renaming when a service namespace is duplicated within one config", () => {
+    expect(() =>
+      assertUniqueGlobalResourceNames([
+        fakeTarget({
+          configDir: "apps/a",
+          executorNames: ["sync-user"],
+          idpNames: ["default", "default"],
+        }),
+        fakeTarget({ configDir: "apps/b", executorNames: ["sync-user"] }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        suggestion:
+          "Rename the duplicates so each name is defined once across all configs in a single deploy.",
       }),
     );
   });
