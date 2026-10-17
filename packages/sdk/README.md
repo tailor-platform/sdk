@@ -14,14 +14,6 @@ Tailor Platform is a headless business platform that provides backend services f
 
 All configurations are written in TypeScript, providing full type safety.
 
-### Important Notes
-
-Some SDK concepts differ from the native Tailor Platform. Be aware of these differences when referring to the official Tailor Platform documentation.
-
-#### Resolver
-
-The SDK's Resolver corresponds to Tailor Platform's [Pipeline Resolver](https://docs.tailor.tech/guides/pipeline). The key difference is that Pipeline steps are replaced with a single `body` function. See [Resolver](./docs/services/resolver.md) for details.
-
 ## Installation
 
 ```bash
