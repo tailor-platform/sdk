@@ -39,6 +39,8 @@ When editing files matching these globs, read and follow the linked rule documen
 - `pnpm check` - Run build, generate, format, lint, typecheck, knip, publint, JSDoc, and agent-rule drift checks
 - `pnpm generate` - Run code generation
 - `pnpm deploy` - Deploy to the Tailor Platform
+- `pnpm actions:lock:update` - Regenerate `.github/workflows/actions.lock` after changing `uses:` in `.github/workflows/` or `.github/actions/`. Plain `gh actions-lock`, which the lockfile header suggests, rewrites the SHA pins that ghalint and zizmor require to tags
+- `pnpm actions:lock:check` - Verify `.github/workflows/actions.lock` is up to date
 
 ### Package-specific (in packages/sdk)
 
