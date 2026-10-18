@@ -132,15 +132,16 @@ export function formatAnnotation(
 }
 
 /**
- * Strip colors, then redact registered secrets.
+ * Redact registered secrets both before and after stripping colors.
  *
  * Runs before the workflow command escapes, so neither inline colors nor the
- * escapes can split a secret out of a match.
+ * escapes can split a secret out of a match, and a secret that itself
+ * contains a control sequence still matches its raw form.
  * @param text - Annotation title or body
  * @returns Plain text with registered secrets redacted
  */
 function plainRedacted(text: string): string {
-  return redactSecrets(stripVTControlCharacters(text));
+  return redactSecrets(stripVTControlCharacters(redactSecrets(text)));
 }
 
 function formattedMessage(error: Error): string | undefined {

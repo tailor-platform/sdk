@@ -195,6 +195,11 @@ describe("github-actions", () => {
       );
     });
 
+    test("redacts a secret that itself contains a control sequence", () => {
+      logger.registerSecret("sk-\x1b[31msecret");
+      expect(formatAnnotation("error", "got sk-\x1b[31msecret")).toBe("::error::got <redacted>\n");
+    });
+
     test("emits a notice level", () => {
       expect(formatAnnotation("notice", "hi")).toBe("::notice::hi\n");
     });
