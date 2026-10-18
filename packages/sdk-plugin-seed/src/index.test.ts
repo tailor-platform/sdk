@@ -108,6 +108,19 @@ describe("seed CLI JSON errors", () => {
   );
 
   test(
+    "exits with 2 for an unknown option",
+    () => {
+      const result = runCli(["validate", "--bogus"]);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(2);
+      expect(result.stdout).toBe("");
+      expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
     "annotates the failure once under GitHub Actions",
     () => {
       const configPath = fileURLToPath(new URL("__fixtures__/missing.config.ts", import.meta.url));
