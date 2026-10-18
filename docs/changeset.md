@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project uses [Changesets](https://github.com/changesets/changesets) for versioning and release management. Every PR that changes SDK behavior must include a changeset with the correct version bump level.
+This project uses [Changesets](https://github.com/changesets/changesets) for versioning and release management. Every PR that changes SDK behavior or non-test source in a package listed in [changeset-check.yml](../.github/workflows/changeset-check.yml), including internal refactoring, must include a changeset with the correct version bump level.
 
 ```bash
 pnpm changeset
@@ -80,7 +80,7 @@ Add the `skip-changeset` label to your PR when:
 - Development tooling changes (eslint, lefthook, etc.)
 - Test-only changes with no source code modifications
 
-Internal refactoring of a published package's non-test source still needs a `patch` changeset, even with no observable behavior change; do not use `skip-changeset` for it.
+Internal refactoring of non-test source in a package listed in [changeset-check.yml](../.github/workflows/changeset-check.yml) still needs a `patch` changeset, even with no observable behavior change; do not use `skip-changeset` for it.
 
 ## Writing the Description
 
