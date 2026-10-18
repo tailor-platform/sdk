@@ -151,6 +151,50 @@ describe("argument errors under JSON output", () => {
   }, 20_000);
 });
 
+describe("options given to a command group without a subcommand", () => {
+  test.each([
+    { name: "`--json=yes`", args: ["--json=yes"], extraEnv: {} },
+    { name: "`TAILOR_JSON_OUTPUT=maybe`", args: [], extraEnv: { TAILOR_JSON_OUTPUT: "maybe" } },
+    { name: "`tailordb --json=yes`", args: ["tailordb", "--json=yes"], extraEnv: {} },
+  ])(
+    "prints help and exits with 0 for $name",
+    ({ args, extraEnv }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-group-options-");
+
+      const result = runCli(args, tmp.dir, extraEnv);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("Usage: tailor ");
+    },
+    20_000,
+  );
+
+  test.each([
+    { name: "`--bogus`", args: ["--bogus"] },
+    { name: "`plugin --bogus`", args: ["plugin", "--bogus"] },
+  ])(
+    "only warns and exits with 0 for $name",
+    ({ args }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-group-options-");
+
+      const result = runCli(args, tmp.dir);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe("");
+      expect(result.stderr.trim()).toBe("Warning: Unexpected positional argument: --bogus");
+    },
+    20_000,
+  );
+});
+
 describe("output under an AI coding agent", () => {
   const agentEnv = { AI_AGENT: "claude_code", POLITTY_NO_AGENT: undefined };
 
