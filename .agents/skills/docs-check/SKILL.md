@@ -32,15 +32,19 @@ Use a two-step approach: discover relevant pages, then fetch their content.
 
 **Option A -- page index** (preferred when you know the topic area):
 
-Fetch `https://docs.tailor.tech/llms.txt` to get the complete page index, with each page's Markdown URL:
+`https://docs.tailor.tech/llms.txt` is the complete page index, with each page's Markdown URL:
 
 `- [Permission](https://docs.tailor.tech/guides/tailordb/permission.md): <description>`
 
-Filter entries by relevant keywords to find candidate pages.
+It is about 47 KB, so filter it by keyword instead of reading it whole:
+
+```bash
+curl -s https://docs.tailor.tech/llms.txt | grep -i <keyword>
+```
 
 **Option B -- web search** (when the topic is broad or unclear):
 
-Use web search with `site:docs.tailor.tech <query>` to find relevant pages. Get a result's Markdown URL by ending its path in `.md`, replacing any trailing `/` or `.html` (`.../tailordb/permission` -> `.../tailordb/permission.md`). If that returns 404, find the page in `llms.txt`.
+Use web search with `site:docs.tailor.tech <query>` to find relevant pages. Get a result's Markdown URL by dropping any query or fragment and ending its path in `.md`, replacing any trailing `/` or `.html` (`.../tailordb/permission#fields` -> `.../tailordb/permission.md`). If that returns 404, find the page in `llms.txt`.
 
 Use both options in parallel when unsure which will yield better results.
 
