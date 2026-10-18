@@ -14,8 +14,8 @@ vi.mock("@politty/zod", async () => {
   return { ...actual, runMain: vi.fn() };
 });
 
-// strip unknown global args to match the CLI runner.
-const testGlobalArgs = z.object(commonArgs);
+// Parse global args the same way the CLI runner does.
+const testGlobalArgs = z.strictObject(commonArgs);
 
 async function resolveCommand(cmd: SubCommandValue): Promise<AnyCommand> {
   if (isLazyCommand(cmd)) {

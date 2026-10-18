@@ -128,8 +128,8 @@ function idpScriptResult(name: string, users: IdpUserRef[], chunk?: unknown[]): 
 
 function runApplyCommand(args: string[]) {
   return runCommand(seedApplyCommand, args, {
-    // Strip unknown global arguments like the plugin entrypoint.
-    globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
+    // Parse global arguments like the plugin entrypoint.
+    globalArgs: z.strictObject(createCommonArgs({ verboseAlias: "v" })),
   });
 }
 

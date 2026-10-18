@@ -42,8 +42,7 @@ const mainCommand = defineCommand({
 
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
-  // strip unknown keys
-  globalArgs: z.object(createCommonArgs()),
+  globalArgs: z.strictObject(createCommonArgs()),
   displayErrors: false,
   // Render the SDK's CLIError format (details/suggestion) like the host CLI does.
   cleanup: ({ error }) => {

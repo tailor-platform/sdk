@@ -34,6 +34,7 @@ describe("CLI error verbosity", () => {
   test.each([
     { name: "default", extraEnv: {}, args: [], stack: false },
     { name: "flag", extraEnv: {}, args: ["--verbose"], stack: true },
+    { name: "negated flag", extraEnv: {}, args: ["--verbose", "--no-verbose"], stack: false },
     { name: "runner", extraEnv: { RUNNER_DEBUG: "1" }, args: [], stack: true },
     { name: "debug", extraEnv: { DEBUG: "true" }, args: [], stack: true },
   ])(
@@ -157,7 +158,7 @@ describe("options given to a command group without a subcommand", () => {
     { name: "`TAILOR_JSON_OUTPUT=maybe`", args: [], extraEnv: { TAILOR_JSON_OUTPUT: "maybe" } },
     { name: "`tailordb --json=yes`", args: ["tailordb", "--json=yes"], extraEnv: {} },
   ])(
-    "prints help and exits with 0 for $name",
+    "rejects an invalid option value with exit 2 for $name",
     ({ args, extraEnv }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
@@ -167,17 +168,21 @@ describe("options given to a command group without a subcommand", () => {
       const result = runCli(args, tmp.dir, extraEnv);
 
       expect(result.error).toBeUndefined();
-      expect(result.status).toBe(0);
-      expect(result.stdout).toContain("Usage: tailor ");
+      expect(result.status).toBe(2);
+      expect(result.stdout).toBe("");
+      expect(result.stderr.trim()).toBe("✖ json: Invalid input: expected boolean, received string");
     },
     20_000,
   );
 
   test.each([
     { name: "`--bogus`", args: ["--bogus"] },
+    { name: "`tailordb --bogus`", args: ["tailordb", "--bogus"] },
+    { name: "`workspace --bogus`", args: ["workspace", "--bogus"] },
+    { name: "`workspace ttl --bogus`", args: ["workspace", "ttl", "--bogus"] },
     { name: "`plugin --bogus`", args: ["plugin", "--bogus"] },
   ])(
-    "only warns and exits with 0 for $name",
+    "rejects an unknown option with exit 2 for $name",
     ({ args }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
@@ -187,12 +192,23 @@ describe("options given to a command group without a subcommand", () => {
       const result = runCli(args, tmp.dir);
 
       expect(result.error).toBeUndefined();
-      expect(result.status).toBe(0);
+      expect(result.status).toBe(2);
       expect(result.stdout).toBe("");
-      expect(result.stderr.trim()).toBe("Warning: Unexpected positional argument: --bogus");
+      expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
     },
     20_000,
   );
+
+  test("suggests a mistyped subcommand followed by an option", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-group-options-");
+
+    const result = runCli(["deplyo", "--dry-run"], tmp.dir);
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(2);
+    expect(result.stderr.trim()).toBe("✖ Unknown subcommand: deplyo. Did you mean: deploy?");
+  }, 20_000);
 });
 
 describe("output under an AI coding agent", () => {
@@ -210,6 +226,12 @@ describe("output under an AI coding agent", () => {
       name: "a detected agent and --json=false",
       extraEnv: agentEnv,
       args: ["--json=false"],
+      json: false,
+    },
+    {
+      name: "a detected agent and --no-json",
+      extraEnv: agentEnv,
+      args: ["--no-json"],
       json: false,
     },
     {

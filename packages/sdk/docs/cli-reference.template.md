@@ -75,9 +75,7 @@ unexpected argument, or an option value that fails validation (including one set
 environment variable), and `1` for other failures, including checks a command makes after reading
 its arguments. A command that only warns about an unknown option or an extra argument keeps
 running. Cancelling an interactive prompt exits with `130`, and a CLI plugin exits with its own
-code. A command group run without a subcommand, such as `tailor` or `tailor tailordb`, can exit
-with `0` after printing its help or a warning even when an option is unknown or its value is
-invalid, so name the subcommand to rely on `2`.
+code.
 
 Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
