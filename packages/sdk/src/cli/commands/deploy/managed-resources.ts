@@ -1,6 +1,6 @@
-import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
+import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import type { HasName } from "./change-set";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
@@ -39,20 +39,7 @@ export function computeRenamedAppDeletions(params: {
 export function assertUniqueGlobalResourceNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): void {
-  for (const check of DEPLOY_MANAGED_RESOURCE_DEFINITIONS) {
-    const seen = new Set<string>();
-    for (const target of targets) {
-      for (const name of check.namesOf(target)) {
-        if (seen.has(name)) {
-          throw CLIError({
-            code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
-            message: `Duplicate ${check.resourceLabel} name "${name}" across config files. ${check.resourceLabel} names must be unique across all configs in a single deploy.`,
-          });
-        }
-        seen.add(name);
-      }
-    }
-  }
+  assertNoDuplicateResourceNames(targets, DEPLOY_MANAGED_RESOURCE_DEFINITIONS);
 }
 type OwnershipTrackedPlan = {
   conflicts: OwnerConflict[];
@@ -280,11 +267,10 @@ const MANAGED_RESOURCE_NAMESPACE_FIELDS = [
   "staticWebsiteName",
 ] as const;
 
-type DeployManagedResourceDefinition = Omit<ManagedResourceGroup, "changeSet"> & {
-  resourceLabel: string;
-  namesOf: (target: BuiltDeploymentTarget) => Iterable<string>;
-  changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
-};
+type DeployManagedResourceDefinition = Omit<ManagedResourceGroup, "changeSet"> &
+  ResourceNameCheck & {
+    changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
+  };
 
 const DEPLOY_MANAGED_RESOURCE_DEFINITIONS: ReadonlyArray<DeployManagedResourceDefinition> = [
   {
