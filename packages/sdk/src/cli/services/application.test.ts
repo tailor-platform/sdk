@@ -328,15 +328,12 @@ describe("service config validation", () => {
   ])(
     "reports an invalid $configKey config as CONFIG_INVALID",
     ({ serviceConfig, heading, configKey, name, path }) => {
-      const error = defineInvalidApplication(serviceConfig);
+      const error = defineInvalidApplication(serviceConfig) as Error;
+      const expectedStart = `Invalid config for ${heading} in tailor.config.ts:\n  - ${path.join(".")}: `;
 
+      expect(error.message.slice(0, expectedStart.length)).toBe(expectedStart);
       expect(error).toMatchObject({
         code: "CONFIG_INVALID",
-        message: expect.stringMatching(
-          new RegExp(
-            `^Invalid config for ${heading} in tailor\\.config\\.ts:\\n  - ${path.join("\\.")}: `,
-          ),
-        ),
         context: { file: "tailor.config.ts", configKey, name, issues: [{ path }] },
       });
     },

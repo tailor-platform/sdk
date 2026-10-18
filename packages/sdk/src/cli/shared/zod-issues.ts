@@ -59,7 +59,8 @@ function flattenUnion(
   const [closest, runnerUp] = ranked;
   if (
     closest === undefined ||
-    (runnerUp !== undefined &&
+    (closest.own.length > 0 &&
+      runnerUp !== undefined &&
       closest.depth === runnerUp.depth &&
       closest.own.length === runnerUp.own.length)
   ) {
