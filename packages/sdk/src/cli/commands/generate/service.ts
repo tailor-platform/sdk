@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import { stripVTControlCharacters } from "node:util";
 import * as path from "pathe";
 import {
   defineApplication,
@@ -13,7 +12,7 @@ import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
-import { logger, styles } from "#/cli/shared/logger";
+import { logger, plainRedacted, styles } from "#/cli/shared/logger";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
@@ -207,7 +206,7 @@ export function createGenerationManager(params: {
         details: failures
           .map(
             ({ plugin, reason }) =>
-              `${plugin}: ${isCLIError(reason) ? stripVTControlCharacters(reason.format()) : String(reason)}`,
+              `${plugin}: ${isCLIError(reason) ? plainRedacted(reason.format()) : String(reason)}`,
           )
           .join("\n"),
         context: {

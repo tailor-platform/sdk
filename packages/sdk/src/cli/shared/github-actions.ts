@@ -1,5 +1,4 @@
 import { realpathSync } from "node:fs";
-import { stripVTControlCharacters } from "node:util";
 import { isAbsolute, relative, resolve, sep } from "pathe";
 import { jsonFlagRequested } from "./args";
 import {
@@ -8,7 +7,7 @@ import {
   type ErrorSourceLocation,
 } from "./error-diagnostics";
 import { isCLIError } from "./errors";
-import { redactSecrets } from "./logger";
+import { plainRedacted } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
 /** Properties attached to a GitHub Actions annotation. */
@@ -129,19 +128,6 @@ export function formatAnnotation(
   }
   const propertyList = entries.length > 0 ? ` ${entries.join(",")}` : "";
   return `::${level}${propertyList}::${escapeData(plainRedacted(message))}\n`;
-}
-
-/**
- * Redact registered secrets both before and after stripping colors.
- *
- * Runs before the workflow command escapes, so neither inline colors nor the
- * escapes can split a secret out of a match, and a secret that itself
- * contains a control sequence still matches its raw form.
- * @param text - Annotation title or body
- * @returns Plain text with registered secrets redacted
- */
-function plainRedacted(text: string): string {
-  return redactSecrets(stripVTControlCharacters(redactSecrets(text)));
 }
 
 function formattedMessage(error: Error): string | undefined {

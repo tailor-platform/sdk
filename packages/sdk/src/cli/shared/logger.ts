@@ -1,4 +1,4 @@
-import { formatWithOptions, type InspectOptions } from "node:util";
+import { formatWithOptions, stripVTControlCharacters, type InspectOptions } from "node:util";
 import { color, renderFor } from "@tailor-platform/shared/color";
 import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
@@ -318,6 +318,44 @@ export function redactSecrets(text: string): string {
 }
 
 /**
+ * Renders styled text with registered secrets redacted.
+ *
+ * Redacts the styled text first, so a secret that itself contains a control sequence
+ * matches its raw form, then checks the text again without colors, so inline colors
+ * cannot split a secret out of a match. When they do, the text is returned without
+ * colors, since redacting around the escapes would leave fragments of the secret visible.
+ * @param text - Styled text
+ * @param render - Removes styling from `text`, or keeps it
+ * @returns Rendered text with registered secrets redacted
+ */
+function renderWithRedaction(text: string, render: (text: string) => string): string {
+  const rendered = render(redactSecrets(text));
+  const plain = stripVTControlCharacters(rendered);
+  const redactedPlain = redactSecrets(plain);
+  return redactedPlain === plain ? rendered : redactedPlain;
+}
+
+/**
+ * Prepares styled diagnostic text for the stream it is written to, with registered
+ * secrets redacted.
+ * @param stream - Stream the text is written to
+ * @param text - Styled text
+ * @returns Text with styling removed when the stream has no color support, and registered secrets redacted
+ */
+export function renderRedacted(stream: NodeJS.WriteStream, text: string): string {
+  return renderWithRedaction(text, (styled) => renderFor(stream, styled));
+}
+
+/**
+ * Removes styling from text, with registered secrets redacted.
+ * @param text - Styled text
+ * @returns Plain text with registered secrets redacted
+ */
+export function plainRedacted(text: string): string {
+  return renderWithRedaction(text, stripVTControlCharacters);
+}
+
+/**
  * Reset the registered-secret redaction state. Used for testing.
  *
  * `_secrets` is process-lifetime, module-level state with no production unregister API
@@ -400,7 +438,7 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const formattedMessage = formatWithOptions(inspectOpts, message);
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
   const output = formatLogLine({ mode, indent, type, message: formattedMessage, timestamp });
-  process.stderr.write(renderFor(process.stderr, redactSecrets(output)));
+  process.stderr.write(renderRedacted(process.stderr, output));
 }
 
 /**

@@ -1,6 +1,14 @@
 import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, test, expect, vi } from "vitest";
-import { CIPromptError, formatLogLine, logger, redactSecrets, resetSecretRegistry } from "./logger";
+import {
+  CIPromptError,
+  formatLogLine,
+  logger,
+  redactSecrets,
+  resetSecretRegistry,
+  styles,
+} from "./logger";
+import { captureStderr as captureRawStderr } from "./test-helpers/capture-output";
 
 function captureStdout(fn: () => void): string {
   using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -14,10 +22,22 @@ function captureStderr(fn: () => void): string {
   return stripVTControlCharacters(stderrSpy.mock.calls.map((call) => String(call[0])).join(""));
 }
 
+function nonTTYStderr(): Disposable {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stderr, "isTTY");
+  Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+  return {
+    [Symbol.dispose]() {
+      if (descriptor) Object.defineProperty(process.stderr, "isTTY", descriptor);
+      else Reflect.deleteProperty(process.stderr, "isTTY");
+    },
+  };
+}
+
 // This file runs in the shared, non-isolated "unit-core" Vitest project, so registered
 // secrets would otherwise leak into unrelated test files run in the same worker.
 afterEach(() => {
   resetSecretRegistry();
+  vi.unstubAllEnvs();
 });
 
 describe("logger", () => {
@@ -231,6 +251,31 @@ describe("logger", () => {
       ]) {
         expect(output).not.toContain("sk-live-abcdef123456");
       }
+    });
+
+    test("redacts a secret split by inline colors when stderr is not a TTY", () => {
+      using _nonTTY = nonTTYStderr();
+      vi.stubEnv("FORCE_COLOR", undefined);
+      logger.registerSecret("sk-colored-secret");
+      using stderr = captureRawStderr();
+      logger.info(`token: ${styles.error("sk-colored")}-secret`);
+      expect(stderr.output).toBe("ℹ token: <redacted>\n");
+    });
+
+    test("drops colors from a line whose secret is split by inline colors when stderr keeps colors", () => {
+      vi.stubEnv("FORCE_COLOR", "1");
+      logger.registerSecret("sk-colored-secret");
+      using stderr = captureRawStderr();
+      logger.info(`token: ${styles.error("sk-colored")}-secret`);
+      expect(stderr.output).toBe("ℹ token: <redacted>\n");
+    });
+
+    test("keeps colors on a line whose secrets are not split by inline colors", () => {
+      vi.stubEnv("FORCE_COLOR", "1");
+      logger.registerSecret("sk-plain-secret");
+      using stderr = captureRawStderr();
+      logger.info(`token: sk-plain-secret ${styles.bold("done")}`);
+      expect(stderr.output).toBe("\x1B[36mℹ token: <redacted> \x1B[1mdone\x1B[22m\x1B[39m\n");
     });
 
     test("ignores a non-string value instead of throwing (e.g. an unvalidated undefined field)", () => {

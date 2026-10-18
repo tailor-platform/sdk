@@ -418,6 +418,21 @@
                 "message": "Use colors/symbols/logger from '#/cli/shared/logger' instead of styleText for consistent styling."
               },
               {
+                "name": "node:util",
+                "importNames": ["stripVTControlCharacters"],
+                "message": "Use plainRedacted from '#/cli/shared/logger' so registered secrets split by inline colors are still redacted."
+              },
+              {
+                "name": "util",
+                "importNames": ["stripVTControlCharacters"],
+                "message": "Use plainRedacted from '#/cli/shared/logger' so registered secrets split by inline colors are still redacted."
+              },
+              {
+                "name": "@tailor-platform/shared/color",
+                "importNames": ["renderFor"],
+                "message": "Use renderRedacted from '#/cli/shared/logger' so registered secrets split by inline colors are still redacted."
+              },
+              {
                 "name": "table",
                 "message": "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '#/cli/shared/format' instead of table for consistent table styling."
               },
@@ -489,12 +504,7 @@
       }
     },
     {
-      "files": [
-        "src/cli/shared/logger.ts",
-        "src/cli/shared/errors.ts",
-        "src/cli/shared/format.ts",
-        "src/cli/shared/prompt.ts"
-      ],
+      "files": ["src/cli/shared/logger.ts"],
       "rules": {
         "no-restricted-imports": "off",
         "no-console": "off"
