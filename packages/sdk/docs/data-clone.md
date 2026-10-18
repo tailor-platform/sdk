@@ -9,7 +9,7 @@ For the full option list, see [`data clone`](./cli/data.md#data-clone).
 The platform rejects a clone unless all of the following hold:
 
 - The source and target workspaces are in the same region.
-- You have access to both workspaces.
+- You have editor access to both workspaces.
 - The application is deployed to the target under the same name, with the same namespaces and the same TailorDB schema as the source. Deploy the version that runs in the source to the target first.
 - The target is empty for everything the clone copies: the TailorDB records of the application's namespaces, plus its files with `--copy-files` and its IdP users with `--copy-idp-users`.
 
@@ -35,7 +35,7 @@ The platform rejects a clone unless all of the following hold:
    tailor data clone --from <source-workspace-id> --to <target-workspace-id>
    ```
 
-   The application name defaults to `name` in `tailor.config.ts`; pass `--name` to clone another application. The command asks for confirmation unless `--yes` is given.
+   The application is the one named by `name` in `tailor.config.ts`, so run all three steps from that application's project. The command asks for confirmation unless `--yes` is given.
 
 ## What is copied
 
