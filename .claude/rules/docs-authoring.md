@@ -27,7 +27,7 @@ Never link to or mention private/internal repositories or internal issue tracker
 
 ## CLI docs are generated
 
-CLI reference content inside `<!-- politty:... -->` markers is generated from command definitions. Edit the `notes` / `description` strings in `packages/sdk/src/cli/**` and run `pnpm docs:update`; do not hand-edit generated regions.
+`packages/sdk/docs/cli-reference.md` and `packages/sdk/docs/cli/*.md` are generated. Change them through their templates or command definitions as the "CLI Documentation" section of `AGENTS.md` describes.
 
 ## Keep this rule and the CI check in sync
 

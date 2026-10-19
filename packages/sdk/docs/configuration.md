@@ -503,6 +503,8 @@ export default defineConfig({
 
 Configure plugins using `definePlugins()`, exported as `export const plugins`.
 
+`kyselyTypePlugin` is required to use `getDB()` in resolvers, executors, and workflows.
+
 ```typescript
 import { definePlugins } from "@tailor-platform/sdk";
 import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
