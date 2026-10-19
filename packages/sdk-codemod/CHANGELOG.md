@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-codemod
 
+## 0.10.0
+
+### Minor Changes
+
+- [#2660](https://github.com/tailor-platform/sdk/pull/2660) [`df71b44`](https://github.com/tailor-platform/sdk/commit/df71b44d2c03d8f767bea5448ee64bb1f114dcfb) Thanks [@dqn](https://github.com/dqn)! - The `tailor` CLI, the setup, seed, and TailorDB ERD plugins, `create-sdk`, and the codemod CLI now exit with code 2 when they reject the command line itself, such as an unknown option or subcommand, an unexpected argument, or an option value that fails validation, so scripts and agents can tell a mistyped command from one that failed while running, which still exits with 1. A command that only warns about an unknown option or an extra argument, such as `create-sdk`, keeps running as before. A script that checks for exactly 1 after a mistyped command needs to accept 2. `runMain` and `runCommand` from `@tailor-platform/sdk/cli` follow the same rule, so a CLI plugin built on them exits with 2 for these errors, and `runCommand` reports them with `exitCode` 2.
+
+### Patch Changes
+
+- [#2622](https://github.com/tailor-platform/sdk/pull/2622) [`0eb4326`](https://github.com/tailor-platform/sdk/commit/0eb4326b6274bbd06f36f4888460b85f547cbb6d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​ast-grep/napi to v0.50.0
+
+- [#2638](https://github.com/tailor-platform/sdk/pull/2638) [`55c8466`](https://github.com/tailor-platform/sdk/commit/55c8466e5830cf9aad029ef65df3049704789f22) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.6.7
+
 ## 0.9.2
 
 ### Patch Changes

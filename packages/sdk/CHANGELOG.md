@@ -1,5 +1,66 @@
 # @tailor-platform/sdk
 
+## 2.29.0
+
+### Minor Changes
+
+- [#2631](https://github.com/tailor-platform/sdk/pull/2631) [`9f617fa`](https://github.com/tailor-platform/sdk/commit/9f617fa247d62dfffe94862775d998ca2a914004) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `buildOptions.treeshake` to `defineConfig` to control how unused code is removed from bundled functions. Set `propertyReadSideEffects: false` to drop calls whose arguments only read properties, which keeps modules a function never reaches out of its bundle. `moduleSideEffects`, `annotations`, and `unknownGlobalSideEffects` override the SDK's defaults. Nothing changes unless you set it.
+
+- [#2584](https://github.com/tailor-platform/sdk/pull/2584) [`78acf8d`](https://github.com/tailor-platform/sdk/commit/78acf8d04a93dbd19ec7c26c91b9986751964350) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor tailordb migration resolve` to settle a migration that a failed deploy left in progress. `--rollback` returns the namespace to the schema before the failed migration and leaves the checkpoint where it was, so the next deploy runs that migration again from its first step. `--complete` applies the schema of the failed migration, moves the checkpoint to it without running its `migrate.ts` again, and is meant for use after you repaired the data by hand. Both options clear the in-progress record, take the namespace's tables out of maintenance mode, and remove the temporary resources of the failed run, so `deploy` and the other migration commands work again.
+
+- [#2635](https://github.com/tailor-platform/sdk/pull/2635) [`9fb24be`](https://github.com/tailor-platform/sdk/commit/9fb24be283e7820e9c7816c513f37140b8b3914f) Thanks [@toiroakr](https://github.com/toiroakr)! - Leave the source text of installed packages (everything under `node_modules`) out of the inline sourcemap in bundled resolvers, executors, workflow jobs, and auth hooks. The sourcemap makes up most of a bundled function's size, so this makes the bundles much smaller: in one project's resolver bundles the median dropped from 5.7 MB to 3.1 MB. Error positions in stack traces still resolve to the original files and lines, and your own source text is still embedded. `tailor function run` and `tailor function logs` show the code snippet for a frame inside an installed package from the package's file in your local `node_modules`. `tailor function logs` also no longer prints the paths of a deployed function's files one folder too high (`../src/handler.ts` instead of `./src/handler.ts`). Set `buildOptions.inlineSourcemapDependencySources: true` to embed the source text of installed packages as before, or list package names (for example `["kysely"]`) to embed only those.
+
+- [#2660](https://github.com/tailor-platform/sdk/pull/2660) [`df71b44`](https://github.com/tailor-platform/sdk/commit/df71b44d2c03d8f767bea5448ee64bb1f114dcfb) Thanks [@dqn](https://github.com/dqn)! - The `tailor` CLI, the setup, seed, and TailorDB ERD plugins, `create-sdk`, and the codemod CLI now exit with code 2 when they reject the command line itself, such as an unknown option or subcommand, an unexpected argument, or an option value that fails validation, so scripts and agents can tell a mistyped command from one that failed while running, which still exits with 1. A command that only warns about an unknown option or an extra argument, such as `create-sdk`, keeps running as before. A script that checks for exactly 1 after a mistyped command needs to accept 2. `runMain` and `runCommand` from `@tailor-platform/sdk/cli` follow the same rule, so a CLI plugin built on them exits with 2 for these errors, and `runCommand` reports them with `exitCode` 2.
+
+### Patch Changes
+
+- [#2649](https://github.com/tailor-platform/sdk/pull/2649) [`e0fb7c0`](https://github.com/tailor-platform/sdk/commit/e0fb7c0ad86391c899fec8daa06a1f2d033414c5) Thanks [@dqn](https://github.com/dqn)! - Fix `tailor deploy --dry-run --json` reporting `resourceType` in `warnings` and `conflicts` as the display name from the human-readable plan, such as `Executor` or `TailorDB service`. It now reports a stable identifier such as `executor` or `tailordb.service`, and the human-readable plan is unchanged. The values change as follows:
+  
+  | Before                      | After                                    |
+  | --------------------------- | ---------------------------------------- |
+  | `Application`               | `application`                            |
+  | `AIGateway`                 | `aigateway`                              |
+  | `Auth connection`           | `auth.connection`                        |
+  | `Auth service`              | `auth.service`                           |
+  | `Executor`                  | `executor`                               |
+  | `Function registry`         | `function_registry`                      |
+  | `IdP service`               | `idp.service`                            |
+  | `Pipeline service`          | `pipeline.service`                       |
+  | `Secret Manager vault`      | `secret.vault`                           |
+  | `StaticWebsite`             | `staticwebsite`                          |
+  | `TailorDB service`          | `tailordb.service`                       |
+  | `Workflow`                  | `workflow`                               |
+  | `Workflow execution policy` | `workflow_job_function_execution_policy` |
+  | `secret` (skipped secrets)  | `secret.secret`                          |
+
+- [#2652](https://github.com/tailor-platform/sdk/pull/2652) [`ac872f3`](https://github.com/tailor-platform/sdk/commit/ac872f3b1f3e68e066c5518b6201c430d7a2c5b3) Thanks [@dqn](https://github.com/dqn)! - Guard the `resourceType` values in `tailor deploy --dry-run --json` output against accidental changes. No observable behavior change.
+
+- [#2640](https://github.com/tailor-platform/sdk/pull/2640) [`4b626ce`](https://github.com/tailor-platform/sdk/commit/4b626cec93b8e2771084927bbb54a64a35256e64) Thanks [@dqn](https://github.com/dqn)! - When `tailor deploy` is given multiple configs that define the same resource name, the `DEPLOY_DUPLICATE_RESOURCE_NAME` error now lists every duplicate in one run, each with its resource type, name, and the config files that define it, instead of stopping at the first one. With `--json`, the duplicates are also available in `error.context.duplicates`.
+
+- [#2659](https://github.com/tailor-platform/sdk/pull/2659) [`3accb07`](https://github.com/tailor-platform/sdk/commit/3accb0734ea6e9f2dd3d1ef671b03ec7a8820393) Thanks [@dqn](https://github.com/dqn)! - Hide secrets in the GitHub Actions `::error::` annotation a failed command writes. Values the CLI already masks as `<redacted>` in its log output, such as client secrets and access tokens, appeared unmasked in the annotation when they were part of the error.
+
+- [#2646](https://github.com/tailor-platform/sdk/pull/2646) [`76d4f9c`](https://github.com/tailor-platform/sdk/commit/76d4f9c8675ac118a008c67bd8f95d1ad823e2c4) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(deps): migrate from @toiroakr/lines-db to lines-db
+
+- [#2626](https://github.com/tailor-platform/sdk/pull/2626) [`c97c8f3`](https://github.com/tailor-platform/sdk/commit/c97c8f3cd17518c4f58e69d555bfb060d8b2ca6d) Thanks [@dqn](https://github.com/dqn)! - Keep `tailor deploy` migrations within their own TailorDB namespace when a table name exists in more than one, such as after moving a table between namespaces. A migration in one namespace could write its own schema over another namespace's table of the same name, fail the deploy by creating that table a second time, delete that table before the other namespace's migration script read it, or skip writing that table's metadata.
+
+- [#2627](https://github.com/tailor-platform/sdk/pull/2627) [`9cc6efb`](https://github.com/tailor-platform/sdk/commit/9cc6efb69cf2dc16e7468c9a215973283b5d27a6) Thanks [@dqn](https://github.com/dqn)! - Find tables in TailorDB namespaces with more than 50 tables in `tailor tailordb truncate <tables...>`, and in `tailor query --engine sql` for apps with more than one TailorDB namespace. Tables created after the first 50 in a namespace were reported as `The following tables were not found in any namespace` or `Could not find namespace for tables in query`. When listing a namespace's tables fails, both commands now stop with that error instead of skipping that namespace and continuing with the others.
+
+- [#2621](https://github.com/tailor-platform/sdk/pull/2621) [`1108cb3`](https://github.com/tailor-platform/sdk/commit/1108cb3519f748714907d14fc69d8cccafacf538) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @​opentelemetry
+
+- [#2638](https://github.com/tailor-platform/sdk/pull/2638) [`55c8466`](https://github.com/tailor-platform/sdk/commit/55c8466e5830cf9aad029ef65df3049704789f22) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.6.7
+
+- [#2641](https://github.com/tailor-platform/sdk/pull/2641) [`5dd5e9c`](https://github.com/tailor-platform/sdk/commit/5dd5e9cddce99c40dc02985a9c73b4acd581ac54) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#2601](https://github.com/tailor-platform/sdk/pull/2601) [`00c5613`](https://github.com/tailor-platform/sdk/commit/00c56132166f4fec563d82b686afc3bad82f8ef2) Thanks [@dqn](https://github.com/dqn)! - The workflows `tailor setup ci` generates now run on GitHub Enterprise Server: the plan comment, change detection, preview deployment, and ERD preview comment call the GitHub API of the server the workflow runs on instead of github.com. Run `tailor setup update` to regenerate existing workflows.
+  
+  GitHub Enterprise Server does not support the artifact upload the ERD preview uses, so pass `--ghes` with `--erd-preview` to `tailor setup ci branch` there: each ERD viewer is then uploaded as a zip file, and the pull request comment links to the workflow run. The GitHub Actions guide lists the runner and action setup GitHub Enterprise Server needs.
+
+- [#2643](https://github.com/tailor-platform/sdk/pull/2643) [`f5c304f`](https://github.com/tailor-platform/sdk/commit/f5c304f8867d6416ccfa315694163d2e77a69e73) Thanks [@dqn](https://github.com/dqn)! - Add `tailor setup ci env --check`, which reads GitHub with `gh` and reports which secrets and variables each GitHub Environment used by the generated workflows still lacks. It fails when a required entry is missing, only reports missing optional ones, and prints the `gh` commands that set the missing entries together with where each value comes from. Entries set on the repository or organization count as registered, and an entry registered as the wrong kind (a secret where the workflow reads a variable) is pointed out. When `gh` is not installed, not logged in, or cannot read the repository's secrets and variables, the check says so instead of reporting entries as missing. The next steps printed after `tailor setup ci branch`, `tag`, and `preview` now suggest running it.
+  
+  When the `origin` remote is not on github.com, `tailor setup ci env` now names the repository that `gh repo view` reports, with its host on GitHub Enterprise Server, instead of leaving it to `gh` at run time: the printed `gh` commands pass that host, and the Terraform output sets `GITHUB_BASE_URL` to it. `--check` prints its commands for the host it checked. When `gh` cannot tell the repository, the output says how to point `gh` and Terraform at a GitHub Enterprise Server host.
+
+- [#2645](https://github.com/tailor-platform/sdk/pull/2645) [`c12410d`](https://github.com/tailor-platform/sdk/commit/c12410d573e9b43b2b84bf5a7d459edb36c83533) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `Cannot find package '@/...'` from commands that load `tailor.config.ts` (for example `tailor generate`) when the project uses tsconfig `paths` aliases together with pnpm 11.23.0 or later and `enableGlobalVirtualStore: true`. pnpm's `NODE_PATH` resolve hook retries a failed import with a different `parentURL` and leaves it on the hook's context, so the TypeScript loader looked for `tsconfig.json` from `node_modules` instead of from the importing file. The loader now reads the importer before resolving and uses that value afterwards.
+
 ## 2.28.0
 
 ### Minor Changes
