@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { getErrorDiagnostics } from "./error-diagnostics";
 import { isCLIError, typeOnlyImportHint, type CLIErrorNextAction } from "./errors";
-import { redactSecrets } from "./logger";
+import { plainRedacted, redactSecrets } from "./logger";
 import type { Jsonifiable } from "type-fest";
 
 /**
@@ -25,10 +25,10 @@ import type { Jsonifiable } from "type-fest";
  * turn a bare matching token into an unquoted `<redacted>`.
  * @param _key - Property key being visited (unused)
  * @param value - Property value being visited
- * @returns `value`, redacted if it is a string, number, boolean, or `null`
+ * @returns `value`, redacted if it is a string, number, boolean, or `null`, and without colors if it is a string
  */
 function redactStringValues(_key: string, value: unknown): unknown {
-  if (typeof value === "string") return redactSecrets(value);
+  if (typeof value === "string") return plainRedacted(value);
   if (typeof value === "number" || typeof value === "boolean" || value === null) {
     const text = JSON.stringify(value);
     const redacted = redactSecrets(text);
@@ -129,6 +129,8 @@ function baseErrorToJson(
 
 /**
  * Serialize a CLI failure into the stable JSON error envelope.
+ *
+ * String values are written without colors.
  *
  * Redacts registered secrets from every string, number, boolean, and `null` *value* in the
  * envelope, however deeply nested, before this function's own `JSON.stringify` call, rather
