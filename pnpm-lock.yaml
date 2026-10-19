@@ -235,8 +235,8 @@ importers:
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))
       '@electric-sql/pglite':
-        specifier: 0.5.9
-        version: 0.5.9
+        specifier: 0.5.10
+        version: 0.5.10
       '@tailor-platform/sdk-plugin-seed':
         specifier: workspace:^
         version: link:../packages/sdk-plugin-seed
@@ -781,8 +781,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@electric-sql/pglite':
-        specifier: 0.5.9
-        version: 0.5.9
+        specifier: 0.5.10
+        version: 0.5.10
       '@opentelemetry/sdk-trace-base':
         specifier: 2.12.0
         version: 2.12.0(@opentelemetry/api@1.9.1)
@@ -1322,8 +1322,8 @@ packages:
     resolution: {integrity: sha512-Xc3VhU02wqZ1HvHRJUwL09HkZSTvidqY5Ya0NXBSYOxAp+Ln9dcJr9fySI+CkONzP3PekQo9WdzCv0PGER/mOA==}
     engines: {node: '>=14.17.0'}
 
-  '@electric-sql/pglite@0.5.9':
-    resolution: {integrity: sha512-GoQTRMZ/o4J3sMW4mLDtDFGNOm1xy5oH+iHDALWll3uERY6OF4BSnL1t7FZH2Mlw+RPceDBlFJgSaecO73c4EA==}
+  '@electric-sql/pglite@0.5.10':
+    resolution: {integrity: sha512-tXc/25U3ulOkiRQuTFdwIv+JhBqtMdAF7Gvo6CfZZWtSB4+hgC4Wr2vwK5ngvvN5PJfAAEGIsfyCVy1JhCOBYw==}
 
   '@emnapi/core@1.11.2':
     resolution: {integrity: sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA==}
@@ -4761,7 +4761,7 @@ snapshots:
 
   '@discoveryjs/json-ext@1.1.0': {}
 
-  '@electric-sql/pglite@0.5.9': {}
+  '@electric-sql/pglite@0.5.10': {}
 
   '@emnapi/core@1.11.2':
     dependencies:
