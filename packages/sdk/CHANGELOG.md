@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 2.29.1
+
+### Patch Changes
+
+- [#2653](https://github.com/tailor-platform/sdk/pull/2653) [`98d8d01`](https://github.com/tailor-platform/sdk/commit/98d8d01b8f4ab80a73ec90df6ec4ca29c8ac55d3) Thanks [@toiroakr](https://github.com/toiroakr)! - Move the TailorDB guides under `docs/services/tailordb/`: the service guide is now `docs/services/tailordb/index.md` and the migration guide `docs/services/tailordb/migration.md`. Add a `docs/data-clone.md` guide for `tailor data clone`, and note that `tailor tailordb migration test --data clone` copies TailorDB records only, without the `--copy-files` and `--copy-idp-users` options of `data clone`.
+
 ## 2.29.0
 
 ### Minor Changes
