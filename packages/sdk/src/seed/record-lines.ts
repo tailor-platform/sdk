@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { ValidationErrorDetail } from "@toiroakr/lines-db";
+import type { ValidationErrorDetail } from "lines-db";
 
 /**
  * Resolve the 1-based physical line a JSONL record occupies.

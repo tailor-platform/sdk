@@ -7,7 +7,7 @@ import type {
   TypeSourceInfoEntry,
 } from "#/parser/service/tailordb/types";
 import type { LinesDbMetadata } from "./types";
-import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
+import type { ForeignKeyDefinition, IndexDefinition } from "lines-db";
 
 /**
  * Processes TailorDB tables to generate lines-db metadata
