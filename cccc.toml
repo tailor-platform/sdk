@@ -1,0 +1,13 @@
+# Paths are command-line only: `cccc packages/*/src`
+exclude = [
+  "*.test.*",
+  "*.test-d.*",
+  "*.d.ts",
+  "*.generated.ts",
+  "*_pb.*",
+  "test-helpers.*",
+  "**/__fixtures__/**",
+  "**/__test_fixtures__/**",
+  "**/fixtures/**",
+  "**/test-helpers/**",
+]

@@ -7,6 +7,8 @@ on:
       - packages/**
       - package.json
       - pnpm-lock.yaml
+      - cccc.toml
+      - .github/scripts/complexity-report*.mjs
       - .github/workflows/sdk-metrics.yml
   push:
     branches: [main]
@@ -175,9 +177,67 @@ jobs:
             packages/sdk/runtime-perf.json
             packages/sdk/runtime-perf-summary.json
 
+  complexity:
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
+    name: Code Complexity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      changes: ${{ steps.report.outputs.changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Fetches the base commit, the first parent of the pull request merge commit
+          fetch-depth: 2
+
+      - name: Test complexity report
+        run: node --test .github/scripts/complexity-report.test.mjs
+
+      - name: Install cccc
+        uses: moznion/cccc-action@1d5313811f8451953e46a268c61791a01e40b7df # v1.1.2
+        with:
+          version: v1.8.3
+
+      - name: Measure complexity
+        run: |
+          measure() { cccc --config "${GITHUB_WORKSPACE}/cccc.toml" packages/*/src; }
+          measure > "${RUNNER_TEMP}/head.json"
+          git worktree add --detach "${RUNNER_TEMP}/base" HEAD^1
+          git diff --name-status -M HEAD^1 HEAD > "${RUNNER_TEMP}/renames.txt"
+          cd "${RUNNER_TEMP}/base"
+          measure > "${RUNNER_TEMP}/base.json"
+
+      - name: Report changed functions
+        id: report
+        run: |
+          node .github/scripts/complexity-report.mjs \
+            --base "${RUNNER_TEMP}/base.json" \
+            --head "${RUNNER_TEMP}/head.json" \
+            --renames "${RUNNER_TEMP}/renames.txt" \
+            --out "${RUNNER_TEMP}/changes.md"
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "changes<<${delimiter}"
+            cat "${RUNNER_TEMP}/changes.md"
+            echo "${delimiter}"
+          } >> "${GITHUB_OUTPUT}"
+
   report-metrics:
     name: Report Metrics
-    needs: [coverage-shard, bundle-size, type-performance, runtime-performance]
+    # Code Complexity runs only on pull requests, and its failure must not drop the rest of the report
+    if: >-
+      ${{ !cancelled() &&
+      needs.coverage-shard.result == 'success' &&
+      needs.bundle-size.result == 'success' &&
+      needs.type-performance.result == 'success' &&
+      needs.runtime-performance.result == 'success' }}
+    needs: [coverage-shard, bundle-size, type-performance, runtime-performance, complexity]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -245,3 +305,4 @@ jobs:
           OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: artifacts/type-perf-results/diagnostics.json
           OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: artifacts/bundle-size-results/bundle-size.json
           OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: artifacts/runtime-perf-results/runtime-perf.json
+          SDK_COMPLEXITY_CHANGES: ${{ needs.complexity.outputs.changes }}
