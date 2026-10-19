@@ -108,7 +108,7 @@ Deploy again to see the response.
 
 ## Next Steps
 
-- Learn about [TailorDB](./services/tailordb.md) for database schema definition
+- Learn about [TailorDB](./services/tailordb/index.md) for database schema definition
 - Create custom [Resolvers](./services/resolver.md) with business logic
 - Set up [Executors](./services/executor.md) for event-driven automation
 - Explore [Templates](https://github.com/tailor-platform/sdk/tree/main/packages/create-sdk#available-templates) for more examples

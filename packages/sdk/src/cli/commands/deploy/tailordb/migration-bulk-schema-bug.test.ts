@@ -4,7 +4,7 @@
  * M must not leak into the prePhase of any earlier migration N (N < M);
  * deletions are owned by M's postPhase only.
  *
- * See `services/tailordb-migration.md` §"Per-migration phases".
+ * See `services/tailordb/migration.md` §"Per-migration phases".
  */
 
 import { describe, test, expect, vi, aroundEach } from "vitest";

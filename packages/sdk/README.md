@@ -66,7 +66,7 @@ into the current project under `.agents/skills` and `.claude/skills`, so rerun
 
 | Service                                            | Description                                  |
 | -------------------------------------------------- | -------------------------------------------- |
-| [TailorDB](./docs/services/tailordb.md)            | Type-safe database schema definition         |
+| [TailorDB](./docs/services/tailordb/index.md)      | Type-safe database schema definition         |
 | [Resolver](./docs/services/resolver.md)            | Custom GraphQL resolvers with business logic |
 | [Executor](./docs/services/executor.md)            | Event-driven handlers for automation         |
 | [Workflow](./docs/services/workflow.md)            | Job orchestration for complex operations     |
@@ -78,6 +78,7 @@ into the current project under `.agents/skills` and `.claude/skills`, so rerun
 ### Guides
 
 - [Multi-Environment Configuration](./docs/multi-environment.md) - Deploying one config to multiple workspaces
+- [Cloning Application Data](./docs/data-clone.md) - Copying an application's data from one workspace to another
 - [Runtime API](./docs/runtime.md) - Typed wrappers for `tailor.iconv`, `tailor.secretmanager`, `tailor.idp`, `tailor.workflow`, `tailor.context`, `tailor.authconnection`, and `tailordb.file`
 - [Testing Guide](./docs/testing.md) - Unit and E2E testing patterns
 - [CLI Reference](./docs/cli-reference.md) - Command-line interface documentation

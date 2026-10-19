@@ -33,7 +33,7 @@ long their tables were in maintenance mode, equal to the sum of `phases`), `phas
 (`restrict`, `preMigration`, `jobSetup`, `waitingToStart`, `running`, `waitingOrRunning`,
 `jobCleanup`, `postMigration`, `remainingDeploy`, `restore`), and `migrations` with each script's `namespace`,
 `migrationNumber`, `startObserved`, `waitingToStartMs`, `runningMs`, and `waitingOrRunningMs`. See
-[Time spent in maintenance mode](../services/tailordb-migration.md#time-spent-in-maintenance-mode).
+[Time spent in maintenance mode](../services/tailordb/migration.md#time-spent-in-maintenance-mode).
 
 ```sh
 tailor deploy --json > deploy-result.json
@@ -120,7 +120,7 @@ When migrations are configured (`db.tailordb.migration` in config), the `deploy`
 3. Runs the pending migration scripts
 4. Updates the migration checkpoint so the same migrations are not re-run
 
-See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details on automatic migration execution.
+See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details on automatic migration execution.
 
 **Concurrent Deploys:**
 

@@ -13,7 +13,7 @@ import type { SnapshotFieldConfig } from "./snapshot-types";
 
 const MIGRATION_DOC = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../../../../docs/services/tailordb-migration.md",
+  "../../../../../docs/services/tailordb/migration.md",
 );
 
 function field(type: string, overrides: Partial<SnapshotFieldConfig> = {}): SnapshotFieldConfig {

@@ -115,7 +115,7 @@ export function generateScriptSkeleton(options: ScriptSkeletonOptions): string {
     " *",
     " * For large tables, batch updates by primary-key range instead of one",
     ' * statement over the whole table; see the "Performance and Large Tables"',
-    " * section in @tailor-platform/sdk's docs/services/tailordb-migration.md.",
+    " * section in @tailor-platform/sdk's docs/services/tailordb/migration.md.",
     " */",
     "",
     `import { getDB } from ${JSON.stringify(getDBImportPath)};`,
