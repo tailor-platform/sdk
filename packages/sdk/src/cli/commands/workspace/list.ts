@@ -6,6 +6,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
 import { fetchWithinLimit, reportTruncation, type LimitedItems } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
 import { fetchReportedExpiries, type ReportedExpiry } from "./expiry";
 import {
@@ -29,7 +30,7 @@ export type WorkspaceInfoWithExpiry = WorkspaceInfo & { expiresAt: ReportedExpir
  * @returns List of workspaces
  */
 export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<WorkspaceInfo[]> {
-  const profile = profileNameSchema.optional().parse(options?.profile);
+  const profile = parseOptions(profileNameSchema.optional(), options?.profile);
   const accessToken = await loadAccessToken({ profile });
   const platformConfig = await loadPlatformClientConfig({ profile });
   const client = await initOperatorClient(accessToken, platformConfig);
@@ -47,7 +48,7 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
 export async function listWorkspacesWithExpiry(
   options?: ListWorkspacesOptions,
 ): Promise<LimitedItems<WorkspaceInfoWithExpiry>> {
-  const profile = profileNameSchema.optional().parse(options?.profile);
+  const profile = parseOptions(profileNameSchema.optional(), options?.profile);
   const accessToken = await loadAccessToken({ profile });
   const platformConfig = await loadPlatformClientConfig({ profile });
   const client = await initOperatorClient(accessToken, platformConfig);

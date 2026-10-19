@@ -117,6 +117,58 @@ describe("loadConfig", () => {
     },
   );
 
+  test("reports an invalid default export as CONFIG_INVALID", async () => {
+    const configPath = writeConfig(`export default { name: "" };`);
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      message: `Invalid Tailor config in ${path.relative(process.cwd(), configPath)}:\n  - name: 'name' must be a non-empty string.`,
+      context: {
+        file: configPath,
+        exportName: "default",
+        issues: [{ path: ["name"], message: "'name' must be a non-empty string." }],
+      },
+    });
+  });
+
+  test("keeps a field's own message for a value outside its allowed set", async () => {
+    const configPath = writeConfig(`export default { name: "test-app", maintenanceMode: "yes" };`);
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      context: {
+        issues: [
+          {
+            path: ["maintenanceMode"],
+            message: `'maintenanceMode' must be false, "migration", or "deploy".`,
+          },
+        ],
+      },
+    });
+  });
+
+  test("reports an invalid `plugins` item as CONFIG_INVALID, naming its index", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = [{ id: "valid", description: "Valid item" }, null];
+    `);
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      message: `Invalid \`plugins\` export in ${path.relative(process.cwd(), configPath)}:\n  - 1: Invalid input: expected object, received null`,
+      context: {
+        file: configPath,
+        exportName: "plugins",
+        issues: [{ path: [1], message: "Invalid input: expected object, received null" }],
+      },
+    });
+  });
+
   test("rejects a module without a default export, pointing at the config file", async () => {
     const configPath = writeConfig(`export const name = "test-app";`);
 

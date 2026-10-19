@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createResolverService } from "./service";
 
 describe("createResolverService.loadResolvers", () => {
@@ -54,6 +55,28 @@ export default createResolver({
         .map((r) => r.name)
         .toSorted(),
     ).toEqual(["resolver-a", "resolver-b"]);
+  });
+
+  test("reports a resolver that fails validation as DEFINITION_INVALID", async () => {
+    const file = writeResolver(
+      "invalid.ts",
+      `
+import { createResolver, t } from "@tailor-platform/sdk";
+const resolver = createResolver({ name: "invalid", operation: "query", body: () => 1, output: t.int() });
+resolver.operation = "bogus";
+export default resolver;
+`,
+    );
+
+    const service = createResolverService("ns", { files: [file] }, process.cwd());
+    using _logger = silenceLogger("error");
+    await expect(service.loadResolvers()).rejects.toMatchObject({
+      code: "DEFINITION_INVALID",
+      message: expect.stringMatching(
+        /^Invalid resolver in .*invalid\.ts:\n {2}- operation: Invalid input: expected "query" \| "mutation"$/,
+      ),
+      context: { kind: "resolver", file, exportName: "default", issues: [{ path: ["operation"] }] },
+    });
   });
 
   test("rejects two files in the same namespace declaring the same resolver name", async () => {

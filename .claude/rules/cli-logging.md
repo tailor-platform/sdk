@@ -147,3 +147,11 @@ these fields:
 - `causes` — `withErrorDiagnostics()` only, for a failure that aggregates others: each entry is
   serialized as its own error envelope and merged into `context` under that key, so a caller reads
   the nested failures instead of parsing them out of `message`.
+
+A schema validation failure on user input lists its issues in `message` and carries them as
+`context.issues`: `parseOptions()` does this for options (`OPTIONS_INVALID`), and
+`cli/shared/validation-errors.ts` for a config file (`CONFIG_INVALID`) or an SDK definition
+(`DEFINITION_INVALID`); build other cases from `flattenZodIssues()` and `formatIssueList()` in
+`cli/shared/zod-issues.ts`. Data the SDK or the Platform produced goes through
+`invalidDataError()`, an `internalError()`. `local/no-raw-zod-error` rejects a throwing `.parse()`
+or a rethrown `safeParse` error under `src/cli`.

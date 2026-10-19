@@ -57,14 +57,15 @@ export function getSecretsStatePath(scope: SecretsStateScope): string {
 function loadPersistedSecretsState(scope: SecretsStateScope): PersistedSecretsState | undefined {
   try {
     const raw = readFileSync(getSecretsStatePath(scope), "utf-8");
-    const persistedState = PersistedSecretsStateSchema.parse(JSON.parse(raw));
+    const parsed = PersistedSecretsStateSchema.safeParse(JSON.parse(raw));
     if (
-      persistedState.workspaceId !== scope.workspaceId ||
-      persistedState.applicationKey !== applicationStateKey(scope)
+      !parsed.success ||
+      parsed.data.workspaceId !== scope.workspaceId ||
+      parsed.data.applicationKey !== applicationStateKey(scope)
     ) {
       return undefined;
     }
-    return persistedState;
+    return parsed.data;
   } catch {
     return undefined;
   }

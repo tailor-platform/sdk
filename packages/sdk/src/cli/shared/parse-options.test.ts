@@ -15,7 +15,18 @@ describe("parseOptions", () => {
   test("throws a single validation issue message as-is", () => {
     const schema = z.strictObject({ value: z.string().min(1, "value is required") });
 
-    expect(() => parseOptions(schema, { value: "" })).toThrow(new Error("value is required"));
+    expect(() => parseOptions(schema, { value: "" })).toThrow(/^value is required$/);
+  });
+
+  test("reports invalid options as OPTIONS_INVALID with the issues in context", () => {
+    const schema = z.strictObject({ value: z.string().min(1, "value is required") });
+
+    expect(() => parseOptions(schema, { value: "" })).toThrow(
+      expect.objectContaining({
+        code: "OPTIONS_INVALID",
+        context: { issues: [{ path: ["value"], message: "value is required" }] },
+      }),
+    );
   });
 
   test("throws every validation issue message", () => {
@@ -25,7 +36,7 @@ describe("parseOptions", () => {
     });
 
     expect(() => parseOptions(schema, { first: "", second: "" })).toThrow(
-      new Error("first issue; second issue"),
+      /^first issue; second issue$/,
     );
   });
 });

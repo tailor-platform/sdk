@@ -2,6 +2,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
+import { definitionExportError, definitionInvalidError } from "#/cli/shared/validation-errors";
 import { WorkflowJobSchema, WorkflowSchema } from "#/parser/service/workflow/index";
 import { isSdkBranded } from "#/utils/brand";
 import type { WorkflowServiceConfig } from "#/configure/config/types";
@@ -197,8 +198,15 @@ async function loadFileContent(filePath: string): Promise<{
         const workflowResult = WorkflowSchema.safeParse(stripRuntimeStart(exportValue));
         if (workflowResult.success) {
           workflow = workflowResult.data;
-        } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
-          throw workflowResult.error;
+        } else if (isSdkBranded(exportValue, "workflow")) {
+          throw definitionInvalidError({
+            kind: "workflow",
+            file: filePath,
+            exportName,
+            error: workflowResult.error,
+          });
+        } else if (isSdkBranded(exportValue, "workflow-job")) {
+          throw definitionExportError({ kind: "workflow-job", file: filePath, exportName });
         }
         continue;
       }
@@ -213,8 +221,15 @@ async function loadFileContent(filePath: string): Promise<{
             ? { publishEvents: jobResult.data.publishEvents }
             : {}),
         });
-      } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
-        throw jobResult.error;
+      } else if (isSdkBranded(exportValue, "workflow-job")) {
+        throw definitionInvalidError({
+          kind: "workflow-job",
+          file: filePath,
+          exportName,
+          error: jobResult.error,
+        });
+      } else if (isSdkBranded(exportValue, "workflow")) {
+        throw definitionExportError({ kind: "workflow", file: filePath, exportName });
       }
     }
   } catch (error) {

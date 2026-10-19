@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { z } from "zod";
 import { CLIError } from "#/cli/shared/errors";
+import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
 import { type MigrationDiff } from "./diff-calculator";
 import { formatMigrationNumber } from "./migration-number";
 import {
@@ -143,9 +143,11 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
   assertSupportedMigrationFileVersion(filePath, raw);
   const result = schemaSnapshotSchema.safeParse(normalizeLegacyTablesKey(raw));
   if (!result.success) {
+    const issues = flattenZodIssues(result.error.issues);
     throw CLIError({
       code: "MIGRATION_FILE_INVALID",
-      message: `Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`,
+      message: `Invalid schema snapshot at ${filePath}:\n${formatIssueList(issues)}`,
+      context: { file: filePath, issues },
       cause: result.error,
     });
   }
@@ -175,9 +177,11 @@ export function loadDiff(filePath: string): MigrationDiff {
     normalizeLegacyFieldNames(normalizeLegacyChangeKinds(raw)),
   );
   if (!result.success) {
+    const issues = flattenZodIssues(result.error.issues);
     throw CLIError({
       code: "MIGRATION_FILE_INVALID",
-      message: `Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`,
+      message: `Invalid migration diff at ${filePath}:\n${formatIssueList(issues)}`,
+      context: { file: filePath, issues },
       cause: result.error,
     });
   }

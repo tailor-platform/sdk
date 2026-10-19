@@ -34,6 +34,7 @@ import {
   createTsconfigLookupCache,
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
+import { configInvalidError } from "#/cli/shared/validation-errors";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -60,6 +61,7 @@ import type { EffectiveDateDefault } from "#/runtime/types";
 import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
 import type { IdP } from "#/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";
+import type { z } from "zod";
 
 type SecretVault = {
   readonly vaultName: string;
@@ -116,6 +118,46 @@ export interface LoadApplicationResult {
   reusableBuildState: ReusableBuildState;
 }
 
+const SERVICE_LABELS = {
+  db: "TailorDB service",
+  idp: "IdP",
+  auth: "Auth service",
+  staticWebsites: "static website",
+  aiGateways: "AI Gateway",
+  secrets: "secret manager",
+} as const;
+
+interface ServiceConfigTarget {
+  /** Config file the service is defined in. */
+  file: string;
+  /** `defineConfig` property the service is configured under. */
+  configKey: keyof typeof SERVICE_LABELS;
+  /** The service's namespace or list index under `configKey`, when it has one. */
+  key?: string | number;
+  /** Service name, or the namespace for TailorDB. */
+  name?: string;
+}
+
+function parseServiceConfig<Schema extends z.ZodType>(
+  schema: Schema,
+  config: unknown,
+  target: ServiceConfigTarget,
+): z.output<Schema> {
+  const result = schema.safeParse(config);
+  if (result.success) {
+    return result.data;
+  }
+  const { file, configKey, key, name } = target;
+  throw configInvalidError({
+    file,
+    exportName: "default",
+    subject: `config for ${SERVICE_LABELS[configKey]}${name === undefined ? "" : ` "${name}"`}`,
+    error: result.error,
+    pathPrefix: key === undefined ? [configKey] : [configKey, key],
+    service: { configKey, name },
+  });
+}
+
 type DefineTailorDBResult = {
   tailorDBServices: TailorDBService[];
   externalTailorDBNamespaces: string[];
@@ -124,6 +166,7 @@ type DefineTailorDBResult = {
 
 function defineTailorDB(
   config: TailorDBServiceInput | undefined,
+  configPath: string,
   baseDir: string,
   dateDefault: EffectiveDateDefault,
   pluginManager?: PluginManager,
@@ -141,7 +184,12 @@ function defineTailorDB(
       externalTailorDBNamespaces.push(namespace);
     } else {
       // Parse config through schema to normalize gqlOperations
-      const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
+      const parsedConfig = parseServiceConfig(TailorDBServiceConfigSchema, serviceConfig, {
+        file: configPath,
+        configKey: "db",
+        key: namespace,
+        name: namespace,
+      });
       const tailorDB = createTailorDBService({
         namespace,
         config: parsedConfig,
@@ -196,7 +244,7 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
   return config;
 }
 
-function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
+function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -205,14 +253,19 @@ function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
   }
 
   const idpNames = new Set<string>();
-  config.forEach((idpConfig) => {
+  config.forEach((idpConfig, index) => {
     const name = idpConfig.name;
     if (idpNames.has(name)) {
       throw new Error(`IdP with name "${name}" already defined.`);
     }
     idpNames.add(name);
     if (!("external" in idpConfig)) {
-      const idp = IdPSchema.parse(stripIdpProviderHelper(idpConfig));
+      const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
+        file: configPath,
+        configKey: "idp",
+        key: index,
+        name,
+      });
       idpServices.push(idp);
     }
     subgraphs.push({ Type: "idp", Name: name });
@@ -228,6 +281,7 @@ type DefineAuthResult = {
 
 function defineAuth(
   config: AuthConfig | undefined,
+  configPath: string,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
 ): DefineAuthResult {
@@ -240,7 +294,11 @@ function defineAuth(
   let authService: AuthService | undefined;
   if (!("external" in config)) {
     authService = createAuthService(
-      AuthConfigSchema.parse(config),
+      parseServiceConfig(AuthConfigSchema, config, {
+        file: configPath,
+        configKey: "auth",
+        name: config.name,
+      }),
       tailorDBServices,
       externalTailorDBNamespaces,
     );
@@ -290,12 +348,18 @@ function stripStaticWebsiteUrlHelper(config: StaticWebsiteInput): StaticWebsiteI
 
 function defineStaticWebsites(
   websites: readonly StaticWebsiteInput[] | undefined,
+  configPath: string,
 ): StaticWebsite[] {
   const staticWebsiteServices: StaticWebsite[] = [];
   const websiteNames = new Set<string>();
 
-  (websites ?? []).forEach((config) => {
-    const website = StaticWebsiteSchema.parse(stripStaticWebsiteUrlHelper(config));
+  (websites ?? []).forEach((config, index) => {
+    const website = parseServiceConfig(StaticWebsiteSchema, stripStaticWebsiteUrlHelper(config), {
+      file: configPath,
+      configKey: "staticWebsites",
+      key: index,
+      name: config.name,
+    });
     if (websiteNames.has(website.name)) {
       throw new Error(`Static website with name "${website.name}" already defined.`);
     }
@@ -308,13 +372,19 @@ function defineStaticWebsites(
 
 function defineAIGateways(
   gateways: readonly AIGatewayInput[] | undefined,
+  configPath: string,
   applicationAuthNamespace: string | undefined,
 ): AIGateway[] {
   const aiGatewayServices: AIGateway[] = [];
   const gatewayNames = new Set<string>();
 
-  (gateways ?? []).forEach((config) => {
-    const gateway = AIGatewaySchema.parse(config);
+  (gateways ?? []).forEach((config, index) => {
+    const gateway = parseServiceConfig(AIGatewaySchema, config, {
+      file: configPath,
+      configKey: "aiGateways",
+      key: index,
+      name: config.name,
+    });
     if (gatewayNames.has(gateway.name)) {
       throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
     }
@@ -334,7 +404,10 @@ function defineAIGateways(
   return aiGatewayServices;
 }
 
-function parseSecretManager(config: AppConfig["secrets"]): {
+function parseSecretManager(
+  config: AppConfig["secrets"],
+  configPath: string,
+): {
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
 } {
@@ -342,7 +415,10 @@ function parseSecretManager(config: AppConfig["secrets"]): {
     return { secrets: [], ignoreNullishValues: false };
   }
 
-  const parsed = SecretsSchema.parse(config);
+  const parsed = parseServiceConfig(SecretsSchema, config, {
+    file: configPath,
+    configKey: "secrets",
+  });
   const { ignoreNullishValues } = parsed.options;
 
   const secrets = Object.entries(parsed.vaults).map(([vaultName, vaultSecrets]) => ({
@@ -379,29 +455,32 @@ type DefineServicesResult = {
 };
 
 function defineServices(
-  config: AppConfig,
+  config: LoadedConfig,
   baseDir: string,
   pluginManager?: PluginManager,
 ): DefineServicesResult {
   const tailordbResult = defineTailorDB(
     config.db,
+    config.path,
     baseDir,
     effectiveDateDefault(config),
     pluginManager,
   );
   const resolverResult = defineResolver(config.resolver, baseDir);
-  const idpResult = defineIdp(config.idp);
+  const idpResult = defineIdp(config.idp, config.path);
   const authResult = defineAuth(
     config.auth,
+    config.path,
     tailordbResult.tailorDBServices,
     tailordbResult.externalTailorDBNamespaces,
   );
-  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
+  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites, config.path);
   const aiGatewayServices = defineAIGateways(
     config.aiGateways,
+    config.path,
     getApplicationAuthNamespace({ authService: authResult.authService, config }),
   );
-  const { secrets, ignoreNullishValues } = parseSecretManager(config.secrets);
+  const { secrets, ignoreNullishValues } = parseSecretManager(config.secrets, config.path);
   return {
     tailordbResult,
     resolverResult,

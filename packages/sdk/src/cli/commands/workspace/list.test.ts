@@ -34,7 +34,7 @@ describe("listWorkspaces", () => {
   });
 
   test("rejects an explicitly empty profile instead of falling back", async () => {
-    await expect(listWorkspaces({ profile: "" })).rejects.toThrow("Profile must not be empty");
+    await expect(listWorkspaces({ profile: "" })).rejects.toThrow(/^Profile must not be empty$/);
     expect(loadAccessToken).not.toHaveBeenCalled();
   });
 });
