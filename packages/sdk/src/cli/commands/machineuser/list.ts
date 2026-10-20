@@ -20,7 +20,6 @@ export interface ListMachineUsersOptions {
 export interface MachineUserInfo {
   name: string;
   clientId: string;
-  clientSecret: string;
   createdAt: Date | null;
   updatedAt: Date | null;
   attributes: Record<string, unknown>;
@@ -35,7 +34,6 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
   return {
     name: user.name,
     clientId: user.clientId,
-    clientSecret: user.clientSecret,
     createdAt: user.createdAt ? timestampDate(user.createdAt) : null,
     updatedAt: user.updatedAt ? timestampDate(user.updatedAt) : null,
     attributes: Object.fromEntries(
