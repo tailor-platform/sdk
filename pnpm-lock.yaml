@@ -723,8 +723,8 @@ importers:
         specifier: 0.29.6
         version: 0.29.6
       lines-db:
-        specifier: 0.15.0
-        version: 0.15.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3)
+        specifier: 0.18.0
+        version: 0.18.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3)
       mime-types:
         specifier: 3.0.2
         version: 3.0.2
@@ -2517,14 +2517,14 @@ packages:
     resolution: {integrity: sha512-pOr5+q1fLYKwFN3LAJuGZEnfXDcQ73zqgDHMtGy+K+uIoUqyY+6MeDCWFwfu+4EFuq76I5EPFofoNAI+Bmmq4A==}
     engines: {node: '>=22.13'}
 
-  '@politty/zod@0.4.3':
-    resolution: {integrity: sha512-QVVsVWulsKgr8ichlqwZNjITqgQuZL6dQAm6tDnVuFd2xrzBPbLfA3nQHA++ibOyCtFq0UW6xxjxFGvEf5urHg==}
-    engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
+  '@politty/loculus@0.1.1':
+    resolution: {integrity: sha512-o1A3UsnRfW93yj9N/maoKQUDqp8yWdkenrupvZrL/AC6O2e2OW5/1P4aFOedRPGwwROlzyvoVIwCCRE17ezn6w==}
+    engines: {node: '>=22.18.0'}
     hasBin: true
     peerDependencies:
       '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
       '@inquirer/prompts': ^8.3.2
-      zod: ^4.2.1
+      loculus: ^0.2.5
     peerDependenciesMeta:
       '@clack/prompts':
         optional: true
@@ -3717,9 +3717,9 @@ packages:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
 
-  lines-db@0.15.0:
-    resolution: {integrity: sha512-Ee0Qahq860Sb9oNIc1EhaBYwGUyQ7deGPOQ7Yv1OLQiFq1XTqecUVRJks47NjUCgxU2WFiRbPBVmA4S8E3GXRw==}
-    engines: {node: '>=22.12.0'}
+  lines-db@0.18.0:
+    resolution: {integrity: sha512-vwSQdFvDBYmNOiiMWZUKlSUGqscU1h/kxdQk8+HHk6QDi2gk9La+6fO/0JcqLsqMaz7nCWi2uW13sp9BwTKpVg==}
+    engines: {node: '>=22.18.0'}
     hasBin: true
     peerDependencies:
       typescript: '>=5 <7 || >=7.1.0-0'
@@ -3730,6 +3730,10 @@ packages:
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
+
+  loculus@0.2.5:
+    resolution: {integrity: sha512-idAO14ke9seznkaPNm4L9l3Ka6DQFJqT8IJZne1W6MtBEfucayu2gmGB+YGP/mgHuvoTteL7iibI6s/ezTDNCA==}
+    engines: {node: '>=22.18.0'}
 
   log-symbols@4.1.0:
     resolution: {integrity: sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg==}
@@ -5529,10 +5533,10 @@ snapshots:
 
   '@pnpm/deps.graph-sequencer@1100.0.1': {}
 
-  '@politty/zod@0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.7)':
+  '@politty/loculus@0.1.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(loculus@0.2.5)':
     dependencies:
+      loculus: 0.2.5
       yaml: 2.9.1
-      zod: 4.6.7
     optionalDependencies:
       '@clack/prompts': 1.8.1
       '@inquirer/prompts': 8.7.3(@types/node@24.19.2)
@@ -6615,11 +6619,12 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
 
-  lines-db@0.15.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3):
+  lines-db@0.18.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(typescript@6.0.3):
     dependencies:
-      '@politty/zod': 0.4.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(zod@4.6.7)
+      '@politty/loculus': 0.1.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.3(@types/node@24.19.2))(loculus@0.2.5)
       '@standard-schema/spec': 1.1.0
       amaro: 1.2.1
+      loculus: 0.2.5
       zod: 4.6.7
     optionalDependencies:
       typescript: 6.0.3
@@ -6630,6 +6635,8 @@ snapshots:
   locate-path@6.0.0:
     dependencies:
       p-locate: 5.0.0
+
+  loculus@0.2.5: {}
 
   log-symbols@4.1.0:
     dependencies:
