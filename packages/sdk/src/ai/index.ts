@@ -1,12 +1,12 @@
 /**
- * Client for semantic decisions through Tailor AI Gateway or a custom transport.
+ * Client for semantic decisions through Tailor AI Gateway.
  *
  * @example
  * import { createSystemOne } from "@tailor-platform/sdk/ai";
  *
  * const systemOne = createSystemOne({
  *   baseURL: "https://my-aigateway.example.com",
- *   token: applicationUserToken,
+ *   token: accessToken,
  * });
  *
  * const decision = await systemOne.choice({
@@ -16,26 +16,11 @@
  * });
  */
 
-import {
-  APIConnectionError,
-  APIError,
-  APITimeoutError,
-  BadRequestError,
-  choice as typeSafeChoice,
-  InternalServerError,
-  noul as typeSafeNoul,
-  RateLimitError,
-  score as typeSafeScore,
-  TypeSafeClient,
-  UnprocessableEntityError,
-  type EntryType,
-  type RetryPolicy,
-} from "@typesafe-ai/sdk";
-
 /** Error codes returned for System One decisions. */
 export type SystemOneErrorCode =
   | "INVALID_REQUEST"
   | "INVALID_ANSWER_SPACE"
+  | "UNAUTHORIZED"
   | "PROVIDER_UNAVAILABLE"
   | "PROVIDER_TIMEOUT"
   | "RATE_LIMITED"
@@ -46,7 +31,7 @@ export class SystemOneError extends Error {
   /** Stable, provider-independent error code. */
   readonly code: SystemOneErrorCode;
 
-  /** HTTP status returned by the selected transport, when available. */
+  /** HTTP status returned by AI Gateway, when available. */
   readonly status?: number;
 
   /**
@@ -68,55 +53,22 @@ export class SystemOneError extends Error {
 }
 
 /** Options used to connect a System One client to Tailor AI Gateway. */
-export interface AIGatewaySystemOneOptions {
+export interface CreateSystemOneOptions {
   /** AI Gateway base URL. */
   baseURL: string | URL;
-  /** Application user token. Omit this inside a Tailor Function. */
+  /** Access token issued by the AI Gateway's auth namespace. Omit this inside a Tailor Function. */
   token?: string | (() => string | Promise<string>);
-  /** Custom Fetch implementation. */
-  fetch?: typeof globalThis.fetch;
-  /** Use the default AI Gateway transport. */
-  transport?: undefined;
-}
-
-/** Options used to create a System One client with a custom transport. */
-export interface CustomSystemOneTransportOptions {
-  /** Transport used to evaluate System One decisions. */
-  transport: SystemOneTransport;
-  /** AI Gateway options cannot be combined with a custom transport. */
-  baseURL?: never;
-  /** AI Gateway options cannot be combined with a custom transport. */
-  token?: never;
-  /** AI Gateway options cannot be combined with a custom transport. */
-  fetch?: never;
-}
-
-/** Options used to create a System One client. */
-export type CreateSystemOneOptions = AIGatewaySystemOneOptions | CustomSystemOneTransportOptions;
-
-/** Options used to connect directly to TypeSafe AI. */
-export interface TypeSafeAITransportOptions {
-  /** TypeSafe AI API key. */
-  apiKey: string;
-  /** TypeSafe AI API root. */
-  baseURL?: string;
-  /** Model used when a decision does not specify one. */
-  defaultModel?: string;
-  /** Request timeout per attempt in milliseconds. */
-  timeout?: number;
-  /** Retry policy overrides. */
-  retry?: Partial<RetryPolicy>;
   /** Custom Fetch implementation. */
   fetch?: typeof globalThis.fetch;
 }
 
 /** Common input shared by all System One decisions. */
 export interface SystemOneInput {
-  /** Data used to make the decision. */
+  /** Data used to make the decision: a JSON object, array, string, or `null`. */
   state: unknown;
   /** Natural-language question to answer. */
   question: string;
-  /** Optional decision model override. */
+  /** Decision model. Defaults to `jev-1.13.0`. */
   model?: string;
 }
 
@@ -124,7 +76,7 @@ export interface SystemOneInput {
 export interface ChoiceInput<
   Choices extends readonly [string, ...string[]],
 > extends SystemOneInput {
-  /** Allowed answers. */
+  /** Allowed answers. Each value must be unique. */
   choices: Choices;
 }
 
@@ -143,7 +95,7 @@ export type BooleanInput = SystemOneInput;
 
 /** Result of a boolean decision. */
 export interface BooleanResult {
-  /** Selected boolean answer. */
+  /** `true` when the probability of "yes" is at least 0.5. */
   value: boolean;
   /** Probability assigned to the selected answer. */
   probability: number;
@@ -153,7 +105,7 @@ export interface BooleanResult {
 export interface ScoreInput<
   Levels extends readonly [string, string, ...string[]],
 > extends SystemOneInput {
-  /** Ordered score levels, from lowest to highest. */
+  /** Ordered score levels, from lowest to highest. Each level must be unique. */
   levels: Levels;
 }
 
@@ -176,7 +128,7 @@ export interface SystemOneClient {
   boolean(input: BooleanInput): Promise<BooleanResult>;
 
   /**
-   * Select one value from an ordered answer space.
+   * Select one value from an ordered answer space. The level with the highest probability is selected.
    * @param input - State, question, and ordered score levels
    * @returns The selected level and its probability distribution
    */
@@ -185,50 +137,20 @@ export interface SystemOneClient {
   ): Promise<ChoiceResult<Levels[number]>>;
 }
 
-type DecisionType = "boolean" | "choice" | "score";
+type DecisionQuestion =
+  | { type: "noul"; instructions: string }
+  | { type: "choice"; instructions: string; criteria: Record<string, null> }
+  | { type: "score"; instructions: string; criteria: readonly string[] };
 
-/** Normalized request passed to a System One transport. */
-export interface SystemOneTransportRequest {
-  model?: string;
-  state: unknown;
-  question: {
-    type: DecisionType;
-    instruction: string;
-    choices: readonly (string | boolean)[];
-    ordered: boolean;
-  };
-}
+type DecisionAnswer = Record<string, unknown>;
 
-/** Normalized result returned by a System One transport. */
-export interface SystemOneTransportResult {
-  value?: unknown;
-  probabilities?: unknown;
-  confidence?: unknown;
-  probability?: unknown;
-}
-
-/** Transport used by a System One client to evaluate decisions. */
-export interface SystemOneTransport {
-  /** Evaluate a normalized System One request. */
-  evaluate(request: SystemOneTransportRequest): Promise<SystemOneTransportResult>;
-}
-
-const errorCodes = new Set<SystemOneErrorCode>([
-  "INVALID_REQUEST",
-  "INVALID_ANSWER_SPACE",
-  "PROVIDER_UNAVAILABLE",
-  "PROVIDER_TIMEOUT",
-  "RATE_LIMITED",
-  "MODEL_ERROR",
-]);
+const defaultModel = "jev-1.13.0";
 
 function endpoint(baseURL: string | URL): string {
-  return `${String(baseURL).replace(/\/+$/, "")}/v1/system-one/evaluate`;
+  return `${String(baseURL).replace(/\/+$/, "")}/v1/systemone`;
 }
 
-async function resolveToken(
-  token: AIGatewaySystemOneOptions["token"],
-): Promise<string | undefined> {
+async function resolveToken(token: CreateSystemOneOptions["token"]): Promise<string | undefined> {
   return typeof token === "function" ? token() : token;
 }
 
@@ -246,15 +168,150 @@ function invalidResponse(message: string): SystemOneError {
   return new SystemOneError(message, "MODEL_ERROR");
 }
 
-function parseChoiceResult<Choices extends readonly [string, ...string[]]>(
-  result: SystemOneTransportResult,
+function assertUniqueAnswers(values: readonly string[]): void {
+  if (new Set(values).size !== values.length) {
+    throw new SystemOneError("System One answer values must be unique.", "INVALID_ANSWER_SPACE");
+  }
+}
+
+function invalidState(options?: ErrorOptions): SystemOneError {
+  return new SystemOneError(
+    "System One state must be a JSON object, array, string, or null.",
+    "INVALID_REQUEST",
+    options,
+  );
+}
+
+function toDecisionState(state: unknown): unknown {
+  let value: unknown;
+  try {
+    const serialized = JSON.stringify(state) as string | undefined;
+    value = serialized === undefined ? undefined : JSON.parse(serialized);
+  } catch (cause) {
+    throw invalidState({ cause });
+  }
+  if (typeof value !== "string" && typeof value !== "object") {
+    throw invalidState();
+  }
+  return value;
+}
+
+function errorCode(status: number): SystemOneErrorCode {
+  if (status === 401 || status === 403) {
+    return "UNAUTHORIZED";
+  }
+  if (status === 408 || status === 504) {
+    return "PROVIDER_TIMEOUT";
+  }
+  if (status === 429) {
+    return "RATE_LIMITED";
+  }
+  if (status >= 500) {
+    return "PROVIDER_UNAVAILABLE";
+  }
+  if (status >= 400) {
+    return "INVALID_REQUEST";
+  }
+  return "MODEL_ERROR";
+}
+
+function errorMessage(payload: unknown): string | undefined {
+  if (typeof payload === "string") {
+    return payload.trim() || undefined;
+  }
+  const root = asObject(payload);
+  const nested = asObject(root?.error)?.message;
+  if (typeof nested === "string") {
+    return nested;
+  }
+  if (typeof root?.message === "string") {
+    return root.message;
+  }
+  if (typeof root?.detail === "string") {
+    return root.detail;
+  }
+  if (Array.isArray(root?.detail)) {
+    const messages = root.detail
+      .map((detail) => asObject(detail)?.msg)
+      .filter((message) => typeof message === "string");
+    return messages.length > 0 ? messages.join("; ") : undefined;
+  }
+  return undefined;
+}
+
+async function readErrorMessage(response: Response): Promise<string | undefined> {
+  const text = await response.text().catch(() => "");
+  try {
+    return errorMessage(JSON.parse(text));
+  } catch {
+    return errorMessage(text);
+  }
+}
+
+async function readJSON(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch (cause) {
+    throw new SystemOneError("AI Gateway returned an invalid JSON response.", "MODEL_ERROR", {
+      cause,
+      status: response.status,
+    });
+  }
+}
+
+async function evaluate(
+  options: CreateSystemOneOptions,
+  input: SystemOneInput,
+  question: DecisionQuestion,
+): Promise<DecisionAnswer> {
+  const body = JSON.stringify({
+    model: input.model ?? defaultModel,
+    state: toDecisionState(input.state),
+    questions: { decision: question },
+  });
+
+  const token = await resolveToken(options.token);
+  const headers = new Headers({ "content-type": "application/json" });
+  if (token) {
+    headers.set("authorization", `Bearer ${token}`);
+  }
+
+  const fetchImplementation = options.fetch ?? globalThis.fetch;
+  let response: Response;
+  try {
+    response = await fetchImplementation(endpoint(options.baseURL), {
+      method: "POST",
+      headers,
+      body,
+    });
+  } catch (cause) {
+    if (cause instanceof Error && cause.name === "TimeoutError") {
+      throw new SystemOneError("AI Gateway request timed out.", "PROVIDER_TIMEOUT", { cause });
+    }
+    throw new SystemOneError("Unable to reach AI Gateway.", "PROVIDER_UNAVAILABLE", { cause });
+  }
+
+  if (!response.ok) {
+    const message = (await readErrorMessage(response)) ?? "System One decision request failed.";
+    throw new SystemOneError(message, errorCode(response.status), { status: response.status });
+  }
+
+  const answer = asObject(asObject(asObject(await readJSON(response))?.answers)?.decision);
+  if (answer?.type !== question.type) {
+    throw invalidResponse("AI Gateway response did not contain a decision answer.");
+  }
+  return answer;
+}
+
+function parseChoiceAnswer<Choices extends readonly [string, ...string[]]>(
+  answer: DecisionAnswer,
   choices: Choices,
 ): ChoiceResult<Choices[number]> {
-  if (typeof result.value !== "string" || !choices.includes(result.value)) {
+  if (typeof answer.choice !== "string" || !choices.includes(answer.choice)) {
     throw invalidResponse("System One returned a value outside the requested answer space.");
   }
 
-  const rawProbabilities = asObject(result.probabilities);
+  const rawProbabilities = asObject(answer.probabilities);
   if (!rawProbabilities) {
     throw invalidResponse("System One returned an invalid probability distribution.");
   }
@@ -269,304 +326,85 @@ function parseChoiceResult<Choices extends readonly [string, ...string[]]>(
     }),
   ) as Record<Choices[number], number>;
 
-  if (!isProbability(result.confidence)) {
+  if (!isProbability(answer.confidence)) {
+    throw invalidResponse("System One returned an invalid confidence value.");
+  }
+
+  return { value: answer.choice, probabilities, confidence: answer.confidence };
+}
+
+function parseBooleanAnswer(answer: DecisionAnswer): BooleanResult {
+  if (!isProbability(answer.noul)) {
+    throw invalidResponse("System One returned an invalid probability.");
+  }
+  const value = answer.noul >= 0.5;
+  return { value, probability: value ? answer.noul : 1 - answer.noul };
+}
+
+function parseScoreAnswer<Levels extends readonly [string, string, ...string[]]>(
+  answer: DecisionAnswer,
+  levels: Levels,
+): ChoiceResult<Levels[number]> {
+  const rawProbabilities = asObject(answer.probabilities);
+  if (!rawProbabilities) {
+    throw invalidResponse("System One returned an invalid probability distribution.");
+  }
+
+  const scores = levels.map((level, index) => {
+    const probability = rawProbabilities[String(index)];
+    if (!isProbability(probability)) {
+      throw invalidResponse(`System One returned an invalid probability for "${level}".`);
+    }
+    return { level, probability };
+  });
+
+  if (!isProbability(answer.confidence)) {
     throw invalidResponse("System One returned an invalid confidence value.");
   }
 
   return {
-    value: result.value,
-    probabilities,
-    confidence: result.confidence,
-  };
-}
-
-function parseBooleanResult(result: SystemOneTransportResult): BooleanResult {
-  if (typeof result.value !== "boolean") {
-    throw invalidResponse("System One returned a non-boolean value for a boolean decision.");
-  }
-
-  const probability = result.probability ?? result.confidence;
-  if (!isProbability(probability)) {
-    throw invalidResponse("System One returned an invalid probability.");
-  }
-
-  return { value: result.value, probability };
-}
-
-function parseErrorPayload(payload: unknown): { code: SystemOneErrorCode; message: string } {
-  const root = asObject(payload);
-  const details = asObject(root?.error) ?? root;
-  const rawCode = details?.code;
-  const code =
-    typeof rawCode === "string" && errorCodes.has(rawCode as SystemOneErrorCode)
-      ? (rawCode as SystemOneErrorCode)
-      : "MODEL_ERROR";
-  const message =
-    typeof details?.message === "string" ? details.message : "System One decision request failed.";
-  return { code, message };
-}
-
-async function readJSON(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch (cause) {
-    throw new SystemOneError("AI Gateway returned an invalid JSON response.", "MODEL_ERROR", {
-      cause,
-      status: response.status,
-    });
-  }
-}
-
-function createAIGatewayTransport(options: AIGatewaySystemOneOptions): SystemOneTransport {
-  const fetchImplementation = options.fetch ?? globalThis.fetch;
-
-  return {
-    async evaluate(request) {
-      let body: string;
-      try {
-        body = JSON.stringify(request);
-      } catch (cause) {
-        throw new SystemOneError("System One input must be JSON-serializable.", "INVALID_REQUEST", {
-          cause,
-        });
-      }
-
-      const token = await resolveToken(options.token);
-      const headers = new Headers({ "content-type": "application/json" });
-      if (token) {
-        headers.set("authorization", `Bearer ${token}`);
-      }
-
-      let response: Response;
-      try {
-        response = await fetchImplementation(endpoint(options.baseURL), {
-          method: "POST",
-          headers,
-          body,
-        });
-      } catch (cause) {
-        throw new SystemOneError("Unable to reach AI Gateway.", "PROVIDER_UNAVAILABLE", { cause });
-      }
-
-      const payload = await readJSON(response);
-      if (!response.ok) {
-        const error = parseErrorPayload(payload);
-        throw new SystemOneError(error.message, error.code, { status: response.status });
-      }
-
-      const result = asObject(asObject(payload)?.result);
-      if (!result) {
-        throw invalidResponse("AI Gateway response did not contain a decision result.");
-      }
-      return result;
-    },
-  };
-}
-
-function mapTypeSafeError(error: unknown): SystemOneError {
-  if (error instanceof SystemOneError) {
-    return error;
-  }
-  if (error instanceof RateLimitError) {
-    return new SystemOneError("System One request was rate limited.", "RATE_LIMITED", {
-      cause: error,
-      status: error.status,
-    });
-  }
-  if (error instanceof APITimeoutError) {
-    return new SystemOneError("System One provider timed out.", "PROVIDER_TIMEOUT", {
-      cause: error,
-    });
-  }
-  if (error instanceof APIConnectionError) {
-    return new SystemOneError("Unable to reach the System One provider.", "PROVIDER_UNAVAILABLE", {
-      cause: error,
-    });
-  }
-  if (error instanceof BadRequestError || error instanceof UnprocessableEntityError) {
-    return new SystemOneError("The System One provider rejected the request.", "INVALID_REQUEST", {
-      cause: error,
-      status: error.status,
-    });
-  }
-  if (error instanceof InternalServerError) {
-    return new SystemOneError("The System One provider is unavailable.", "PROVIDER_UNAVAILABLE", {
-      cause: error,
-      status: error.status,
-    });
-  }
-  if (error instanceof APIError) {
-    return new SystemOneError("The System One provider returned an error.", "MODEL_ERROR", {
-      cause: error,
-      status: error.status,
-    });
-  }
-  return new SystemOneError("The System One provider returned an error.", "MODEL_ERROR", {
-    cause: error,
-  });
-}
-
-function highestProbabilityIndex(probabilities: Readonly<Record<string, number>>): number {
-  let selectedIndex = -1;
-  let selectedProbability = -1;
-  for (const [index, probability] of Object.entries(probabilities)) {
-    if (probability > selectedProbability) {
-      selectedIndex = Number(index);
-      selectedProbability = probability;
-    }
-  }
-  return selectedIndex;
-}
-
-function toTypeSafeState(state: unknown): EntryType {
-  try {
-    const serialized = JSON.stringify(state) as string | undefined;
-    if (serialized === undefined) {
-      throw new TypeError("State is not JSON-serializable.");
-    }
-    const value: unknown = JSON.parse(serialized);
-    if (typeof value === "string" || value === null || typeof value === "object") {
-      return value as EntryType;
-    }
-  } catch (cause) {
-    throw new SystemOneError(
-      "System One state must be a JSON object, array, string, or null.",
-      "INVALID_REQUEST",
-      {
-        cause,
-      },
-    );
-  }
-  throw new SystemOneError(
-    "System One state must be a JSON object, array, string, or null.",
-    "INVALID_REQUEST",
-  );
-}
-
-/**
- * Create a transport that calls TypeSafe AI directly.
- * @param options - TypeSafe AI connection options
- * @returns A System One transport
- */
-export function createTypeSafeAITransport(options: TypeSafeAITransportOptions): SystemOneTransport {
-  const client = new TypeSafeClient({
-    apiKey: options.apiKey,
-    baseURL: options.baseURL,
-    defaultModel: options.defaultModel,
-    timeout: options.timeout,
-    retry: options.retry,
-    fetch: options.fetch,
-  });
-
-  return {
-    async evaluate(request) {
-      try {
-        const state = toTypeSafeState(request.state);
-        if (request.question.type === "choice") {
-          const criteria = Object.fromEntries(
-            request.question.choices.map((value) => [String(value), null]),
-          );
-          const response = await client.systemOne({
-            state,
-            model: request.model,
-            questions: {
-              decision: typeSafeChoice(request.question.instruction, criteria),
-            },
-          });
-          const answer = response.answers.decision;
-          return {
-            value: answer.choice,
-            probabilities: answer.probabilities,
-            confidence: answer.confidence,
-          };
-        }
-
-        if (request.question.type === "boolean") {
-          const response = await client.systemOne({
-            state,
-            model: request.model,
-            questions: { decision: typeSafeNoul(request.question.instruction) },
-          });
-          const yesProbability = response.answers.decision.noul;
-          const value = yesProbability >= 0.5;
-          return {
-            value,
-            probability: value ? yesProbability : 1 - yesProbability,
-          };
-        }
-
-        const levels = request.question.choices.map(String) as [string, string, ...string[]];
-        const response = await client.systemOne({
-          state,
-          model: request.model,
-          questions: {
-            decision: typeSafeScore(request.question.instruction, levels),
-          },
-        });
-        const answer = response.answers.decision;
-        const selectedIndex = highestProbabilityIndex(answer.probabilities);
-        return {
-          value: levels[selectedIndex],
-          probabilities: Object.fromEntries(
-            levels.map((level, index) => [level, answer.probabilities[index]]),
-          ),
-          confidence: answer.confidence,
-        };
-      } catch (error) {
-        throw mapTypeSafeError(error);
-      }
-    },
+    value: scores.reduce((selected, score) =>
+      score.probability > selected.probability ? score : selected,
+    ).level,
+    probabilities: Object.fromEntries(
+      scores.map(({ level, probability }) => [level, probability]),
+    ) as Record<Levels[number], number>,
+    confidence: answer.confidence,
   };
 }
 
 /**
- * Create a provider-independent System One client.
- * @param options - Transport or AI Gateway connection options
+ * Create a System One client that makes decisions through Tailor AI Gateway.
+ * @param options - AI Gateway connection options
  * @returns A semantic decision client
  */
 export function createSystemOne(options: CreateSystemOneOptions): SystemOneClient {
-  const transport = options.transport ?? createAIGatewayTransport(options);
-
   const choice: SystemOneClient["choice"] = async (input) => {
-    const result = await transport.evaluate({
-      model: input.model,
-      state: input.state,
-      question: {
-        type: "choice",
-        instruction: input.question,
-        choices: input.choices,
-        ordered: false,
-      },
+    assertUniqueAnswers(input.choices);
+    const answer = await evaluate(options, input, {
+      type: "choice",
+      instructions: input.question,
+      criteria: Object.fromEntries(input.choices.map((value) => [value, null])),
     });
-    return parseChoiceResult(result, input.choices);
+    return parseChoiceAnswer(answer, input.choices);
   };
 
   const boolean: SystemOneClient["boolean"] = async (input) => {
-    const result = await transport.evaluate({
-      model: input.model,
-      state: input.state,
-      question: {
-        type: "boolean",
-        instruction: input.question,
-        choices: [true, false],
-        ordered: false,
-      },
+    const answer = await evaluate(options, input, {
+      type: "noul",
+      instructions: input.question,
     });
-    return parseBooleanResult(result);
+    return parseBooleanAnswer(answer);
   };
 
   const score: SystemOneClient["score"] = async (input) => {
-    const result = await transport.evaluate({
-      model: input.model,
-      state: input.state,
-      question: {
-        type: "score",
-        instruction: input.question,
-        choices: input.levels,
-        ordered: true,
-      },
+    assertUniqueAnswers(input.levels);
+    const answer = await evaluate(options, input, {
+      type: "score",
+      instructions: input.question,
+      criteria: input.levels,
     });
-    return parseChoiceResult(result, input.levels);
+    return parseScoreAnswer(answer, input.levels);
   };
 
   return { choice, boolean, score };
