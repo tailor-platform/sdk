@@ -1600,7 +1600,7 @@ describe("renderBranchWorkflow migration test job", () => {
     expect(login?.run).toContain("pnpm exec tailor login --machine-user");
     expect(login?.env).toEqual({
       TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:
-        "${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
+        "${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
       TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET:
         "${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
     });

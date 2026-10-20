@@ -151,7 +151,7 @@ describe("collectEnvironmentRequirements", () => {
       expect(environments.map((e) => e.environment)).toEqual(["stg", "prod-source"]);
       expect(dedicated?.targets).toEqual(["branch my-app (migration test)"]);
       expect(dedicated?.requirements.map((r) => [r.type, r.name, r.required])).toEqual([
-        ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID", true],
+        ["variable", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID", true],
         ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET", true],
         ["variable", "TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID", true],
       ]);

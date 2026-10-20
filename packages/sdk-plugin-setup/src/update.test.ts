@@ -44,12 +44,10 @@ describe("planUpdate", () => {
     );
 
     expect(plan).toMatchObject({
-      kind: "target",
-      options: {
-        migrationTest: true,
-        migrationTestLabel: "run-migration-test",
-        migrationTestEnvironment: "prod-source",
-      },
+      kind: "branch",
+      migrationTest: true,
+      migrationTestLabel: "run-migration-test",
+      migrationTestEnvironment: "prod-source",
     });
   });
 
