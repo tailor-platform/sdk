@@ -45,7 +45,9 @@ const key = (name: string) => JSON.stringify(name);
 function collectFieldScriptSources(fields: Record<string, ScriptFieldConfig>): [string, unknown][] {
   const entries: [string, unknown][] = [];
 
-  for (const [name, config] of Object.entries(fields).toSorted(([a], [b]) => a.localeCompare(b))) {
+  for (const [name, config] of Object.entries(fields).toSorted(([a], [b]) =>
+    a.localeCompare(b, "en"),
+  )) {
     const data: Record<string, unknown> = {};
 
     if (config.hooks?.create?.expr) data.hc = config.hooks.create.expr;

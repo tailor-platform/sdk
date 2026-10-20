@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "#/utils/test/internal";
 import { parseFieldConfig } from "./field";
@@ -552,6 +552,26 @@ describe("computeSourceScriptHash", () => {
       alpha: { type: "string", hooks: { create: { expr: "a" } } },
     });
     expect(a).toBe(b);
+  });
+
+  test("does not depend on the runtime's default locale", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      checkedAt: { type: "datetime", hooks: { update: { expr: "_now" } } },
+      hidden: { type: "boolean", default: false },
+    };
+    const expected = computeSourceScriptHash(fields);
+
+    const { localeCompare } = String.prototype;
+    using _czechDefault = vi.spyOn(String.prototype, "localeCompare").mockImplementation(function (
+      this: string,
+      that,
+      locales = "cs",
+      options,
+    ) {
+      return localeCompare.call(this, that, locales, options);
+    });
+
+    expect(computeSourceScriptHash(fields)).toBe(expected);
   });
 
   test("includes nested field scripts in hash", () => {
