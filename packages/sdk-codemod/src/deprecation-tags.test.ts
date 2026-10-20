@@ -307,6 +307,89 @@ export function check(value: string): void {}
   });
 });
 
+describe("checkDeprecationTags with codemod: none", () => {
+  const withVersion = (currentVersion: string) => ({
+    codemodBoundaries: new Map<string, string>(),
+    currentVersion,
+  });
+
+  test("accepts a tag that states no migration exists and gives the reason", () => {
+    const source = `/** @deprecated since ${PENDING_SINCE} — use machineuser token instead. codemod: none (no automatic migration exists) */\n`;
+
+    expect(checkDeprecationTags(source, withVersion("2.28.0"))).toEqual([]);
+  });
+
+  test("rejects none without a reason", () => {
+    const source = `/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: none */\n`;
+
+    expect(checkDeprecationTags(source, withVersion("2.28.0"))).toEqual([
+      { line: 1, message: expect.stringContaining("needs a reason in parentheses") },
+    ]);
+  });
+
+  test("rejects none with an empty reason", () => {
+    const source = `/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: none () */\n`;
+
+    expect(checkDeprecationTags(source, withVersion("2.28.0"))).toEqual([
+      { line: 1, message: expect.stringContaining("needs a reason in parentheses") },
+    ]);
+  });
+
+  test("rejects none combined with a registered codemod id", () => {
+    const source = `/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: none, v2/old-to-new (reason) */\n`;
+
+    expect(
+      checkDeprecationTags(source, {
+        codemodBoundaries: new Map([["v2/old-to-new", "3.0.0"]]),
+        currentVersion: "2.28.0",
+      }),
+    ).toEqual([{ line: 1, message: expect.stringContaining("cannot be combined") }]);
+  });
+
+  test("puts a pending since's removal at the major after the one that will ship it", () => {
+    const source = `/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: none (no automatic migration exists) */\n`;
+
+    expect(checkDeprecationTags(source, withVersion("3.0.0"))).toEqual([]);
+  });
+
+  test("accepts a concrete since while the next major after it is still ahead", () => {
+    const source =
+      "/** @deprecated since 2.29.0 — use newApi. codemod: none (no automatic migration exists) */\n";
+
+    expect(checkDeprecationTags(source, withVersion("2.29.0"))).toEqual([]);
+  });
+
+  test("rejects a concrete since once the next major after it is reached", () => {
+    const source =
+      "/** @deprecated since 2.29.0 — use newApi. codemod: none (no automatic migration exists) */\n";
+
+    expect(checkDeprecationTags(source, withVersion("3.0.0"))).toEqual([
+      { line: 1, message: expect.stringContaining("as of 3.0.0, which 3.0.0 has reached") },
+    ]);
+  });
+
+  test("takes the removal major from the shipped since, not from the current version", () => {
+    const source =
+      "/** @deprecated since 1.50.0 — use newApi. codemod: none (no automatic migration exists) */\n";
+
+    expect(checkDeprecationTags(source, withVersion("2.28.0"))).toEqual([
+      {
+        line: 1,
+        message: expect.stringContaining("as of 2.0.0, which 2.28.0 has reached"),
+      },
+    ]);
+  });
+
+  test("does not look none up in the registry", () => {
+    const source = `/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: none (no automatic migration exists) */\n`;
+
+    expect(checkDeprecationTags(source, withVersion("2.28.0"))).not.toContainEqual({
+      line: 1,
+      message: expect.stringContaining("is not registered"),
+    });
+  });
+});
+
 describe("resolvePendingSince", () => {
   test("rewrites every pending marker", () => {
     const source = `/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new */

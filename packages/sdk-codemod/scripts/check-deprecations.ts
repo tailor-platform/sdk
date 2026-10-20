@@ -46,6 +46,7 @@ process.stderr.write(
   `Found ${failures.length} problem(s) with @deprecated tags in packages/sdk/src.\n` +
     "Every deprecation states the version it shipped in and the codemod that migrates callers:\n" +
     `  @deprecated since ${PENDING_SINCE} — use {@link newApi} instead. codemod: v2/old-to-new\n` +
+    "A deprecation with no replacement and no mechanical migration ends with `codemod: none (<reason>)` instead.\n" +
     "See .agents/rules/deprecation.md.\n\n",
 );
 for (const failure of failures) {
