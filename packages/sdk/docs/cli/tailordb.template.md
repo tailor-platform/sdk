@@ -56,7 +56,7 @@ tailor tailordb truncate User Post --yes
 
 {{politty:command:tailordb migration:description}}
 
-Note: Migration scripts are automatically executed during `tailor deploy`. See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details.
+Note: Migration scripts are automatically executed during `tailor deploy`. See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details.
 
 {{politty:command:tailordb migration:usage}}
 
@@ -65,6 +65,7 @@ Note: Migration scripts are automatically executed during `tailor deploy`. See [
 {{politty:command:tailordb migration:global-options-link}}
 {{politty:command:tailordb migration generate}}
 {{politty:command:tailordb migration rebaseline}}
+{{politty:command:tailordb migration resolve}}
 {{politty:command:tailordb migration script}}
 {{politty:command:tailordb migration set}}
 {{politty:command:tailordb migration status}}
@@ -72,7 +73,7 @@ Note: Migration scripts are automatically executed during `tailor deploy`. See [
 {{politty:command:tailordb migration test}}
 {{politty:command:tailordb migration validate}}
 
-**See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
+**See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb/migration.md).
 
 ### tailordb erd
 

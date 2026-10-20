@@ -10,7 +10,10 @@ import {
   checkForbiddenRuntimeGlobals,
   assertPackageRuntimeGlobalsAllowed,
 } from "#/cli/shared/forbidden-runtime-globals";
-import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import {
+  composeFunctionTreeshakeOptions,
+  createUserTreeshakeOptions,
+} from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -20,6 +23,7 @@ import {
   INVOKER_EXPR,
   resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
+import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -28,7 +32,7 @@ import {
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
-import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
 
@@ -55,8 +59,12 @@ export interface BundleResolversOptions {
   cache?: BundleCache;
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
+  /** Whether inline sourcemaps embed the source text of installed packages */
+  inlineSourcemapDependencySources?: boolean | string[];
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
+  /** Overrides how unused code is removed from bundled code */
+  bundleTreeshake?: TreeshakeOptions;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
   /** Globals each installed package may reference */
@@ -86,7 +94,9 @@ export async function bundleResolvers(
     startContext,
     cache,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel = "DEBUG",
+    bundleTreeshake,
     tsconfigCache,
     allowedRuntimeGlobals,
     dateDefault,
@@ -135,7 +145,9 @@ export async function bundleResolvers(
       startContext,
       cache,
       inlineSourcemap,
+      inlineSourcemapDependencySources,
       bundleLogLevel,
+      bundleTreeshake,
       tsconfigCache,
       allowedRuntimeGlobals,
       dateDefault,
@@ -167,7 +179,9 @@ async function bundleSingleResolver(
     startContext,
     cache,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel = "DEBUG",
+    bundleTreeshake,
     tsconfigCache,
     allowedRuntimeGlobals,
     dateDefault = "legacy",
@@ -184,7 +198,9 @@ async function bundleSingleResolver(
     extraContext: JSON.stringify([serializedStartContext, defaultPermission ?? null, dateDefault]),
     tsconfig,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel,
+    bundleTreeshake,
   });
 
   const { code, packageRuntimeGlobals } = await withCache({
@@ -246,7 +262,7 @@ async function bundleSingleResolver(
         write: false,
         output: {
           format: "esm",
-          sourcemap: inlineSourcemap ? "inline" : true,
+          sourcemap: true,
           minify: inlineSourcemap
             ? {
                 mangle: {
@@ -260,6 +276,7 @@ async function bundleSingleResolver(
         plugins,
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
+          createUserTreeshakeOptions(bundleTreeshake),
         ]),
         ...bundleLog.options,
       } as rolldown.BuildOptions);
@@ -267,7 +284,11 @@ async function bundleSingleResolver(
 
       const [chunk] = result.output;
       return {
-        code: chunk.code,
+        code: chunkCodeWithSourcemap({
+          chunk,
+          inlineSourcemap: inlineSourcemap ?? false,
+          dependencySources: inlineSourcemapDependencySources ?? false,
+        }),
         packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Resolver "${resolver.name}"`),
       };
     },

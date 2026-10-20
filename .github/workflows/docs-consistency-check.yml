@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@a26b07d8c778b0c43f64618e5fd29fd0f8af72e8 # v1.0.250
+        uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Allow PRs opened by the tailor-bobbin GitHub App to run this check
@@ -54,7 +54,7 @@ jobs:
 
             - `packages/sdk/docs/cli-reference.md` - CLI reference
             - `packages/sdk/docs/cli/*.md` - CLI subcommand docs
-            - `packages/sdk/docs/services/*.md` - Service documentation
+            - `packages/sdk/docs/services/**/*.md` - Service documentation
             - `packages/sdk/docs/configuration.md` - Configuration reference
             - `AGENTS.md` - Developer guide and code patterns
             - `example/` - Working example code
@@ -95,14 +95,14 @@ jobs:
             - Compare source code command definitions with docs
 
             #### API / Config Changes
-            - Read `packages/sdk/docs/services/*.md` and `packages/sdk/docs/configuration.md`
+            - Read `packages/sdk/docs/services/**/*.md` and `packages/sdk/docs/configuration.md`
             - Verify documented function signatures, parameters, and return types match the implementation
             - Check if new exports are documented
 
             #### Pattern / Example Changes
             - Read relevant files in `example/` directory
             - Verify examples use current API patterns (not deprecated ones)
-            - Check `AGENTS.md` "Code Patterns" and "Non-obvious Rules and Gotchas" sections
+            - Check the `AGENTS.md` "Code Patterns" section
 
             #### Reverse Check (docs changed but implementation not updated)
             - If documentation was changed, verify the implementation matches
@@ -232,7 +232,7 @@ jobs:
 
       - name: Fix Recommended Actions heading with Claude
         if: always() && steps.validate-heading.outputs.needs_fix == 'true'
-        uses: anthropics/claude-code-action@a26b07d8c778b0c43f64618e5fd29fd0f8af72e8 # v1.0.250
+        uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Allow PRs opened by the tailor-bobbin GitHub App to run this check

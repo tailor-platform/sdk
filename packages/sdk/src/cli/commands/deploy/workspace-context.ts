@@ -3,6 +3,7 @@ import { readFile, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { invalidDataError } from "#/cli/shared/validation-errors";
 
 // strip unknown keys
 const workspaceContextSchema = z.object({
@@ -72,10 +73,14 @@ export async function saveWorkspaceContext(
   configPath = defaultConfigPath(),
   applicationId?: string,
 ): Promise<void> {
-  const validated = workspaceContextSchema.parse({
+  const result = workspaceContextSchema.safeParse({
     ...context,
     ...(applicationId === undefined ? {} : { applicationId }),
   });
+  if (!result.success) {
+    throw invalidDataError("workspace context", result.error);
+  }
+  const validated = result.data;
   const stateDirectory = join(dirname(configPath), getDistDir());
   const targetPath = contextPath(configPath);
   const serialized = `${JSON.stringify(validated, null, 2)}\n`;

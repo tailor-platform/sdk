@@ -119,6 +119,98 @@ export default {
       },
     },
 
+    // A ZodError reaching the top level is reported as UNEXPECTED_ERROR. Schemas are
+    // recognised by name (`z`, `*Schema`), so a destructured `{ error }` or a parse
+    // result returned by a helper goes unreported.
+    "no-raw-zod-error": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Ban throwing Zod parses and rethrown safeParse errors in CLI modules in favour of CLIError({ code }) or internalError().",
+        },
+        messages: {
+          throwingParse:
+            "Use safeParse() and throw CLIError({ code, ... }) for user input (see cli/shared/validation-errors.ts), or internalError() for SDK or Platform data; a ZodError is reported as UNEXPECTED_ERROR under --json.",
+          rethrow:
+            "Wrap the issues in CLIError({ code, ... }) (see cli/shared/validation-errors.ts) or internalError() instead of rethrowing the ZodError.",
+        },
+        schema: [],
+      },
+      create(context) {
+        const throwingMethods = new Set([
+          "parse",
+          "parseAsync",
+          "decode",
+          "decodeAsync",
+          "encode",
+          "encodeAsync",
+        ]);
+        const safeMethods = new Set([
+          "safeParse",
+          "safeParseAsync",
+          "safeDecode",
+          "safeDecodeAsync",
+          "safeEncode",
+          "safeEncodeAsync",
+        ]);
+
+        function methodName(callee) {
+          return callee.type === "MemberExpression" &&
+            !callee.computed &&
+            callee.property.type === "Identifier"
+            ? callee.property.name
+            : undefined;
+        }
+
+        function isSchemaChain(node) {
+          let current = node;
+          while (current.type === "CallExpression" || current.type === "MemberExpression") {
+            current = current.type === "CallExpression" ? current.callee : current.object;
+          }
+          return (
+            current.type === "Identifier" &&
+            (current.name === "z" || /[sS]chema$/.test(current.name))
+          );
+        }
+
+        function isSafeParseCall(node) {
+          const call = node?.type === "AwaitExpression" ? node.argument : node;
+          return call?.type === "CallExpression" && safeMethods.has(methodName(call.callee));
+        }
+
+        function resolveVariable(node, name) {
+          for (let scope = context.sourceCode.getScope(node); scope; scope = scope.upper) {
+            const variable = scope.set.get(name);
+            if (variable) return variable;
+          }
+          return undefined;
+        }
+
+        return {
+          CallExpression(node) {
+            if (throwingMethods.has(methodName(node.callee)) && isSchemaChain(node.callee.object)) {
+              context.report({ node, messageId: "throwingParse" });
+            }
+          },
+          ThrowStatement(node) {
+            const thrown = node.argument;
+            if (
+              thrown?.type !== "MemberExpression" ||
+              methodName(thrown) !== "error" ||
+              thrown.object.type !== "Identifier"
+            ) {
+              return;
+            }
+            const variable = resolveVariable(node, thrown.object.name);
+            if (variable?.defs.some((def) => isSafeParseCall(def.node.init))) {
+              context.report({ node, messageId: "rethrow" });
+            }
+          },
+        };
+      },
+    },
+
     "no-deprecated-type-matcher": {
       meta: {
         type: "problem",

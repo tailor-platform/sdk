@@ -1,14 +1,14 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ok } from "@toiroakr/lines-db";
+import { ok } from "lines-db";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fillSeedData } from "./index";
-import type * as LinesDb from "@toiroakr/lines-db";
+import type * as LinesDb from "lines-db";
 
 const { fillFields } = vi.hoisted(() => ({ fillFields: vi.fn() }));
 
-vi.mock("@toiroakr/lines-db", async (importOriginal) => ({
+vi.mock("lines-db", async (importOriginal) => ({
   ...(await importOriginal<typeof LinesDb>()),
   fillFields,
 }));

@@ -520,9 +520,9 @@ export default createSoftDeletePlugin();
 ```typescript
 // plugins/soft-delete/executors/on-delete.ts
 import { createExecutor, recordDeletedTrigger } from "@tailor-platform/sdk";
-import type { TailorAnyDBType } from "@tailor-platform/sdk";
 import { withPluginContext } from "@tailor-platform/sdk/plugin";
 import { getDB } from "generated/tailordb";
+import type { TailorAnyDBType } from "@tailor-platform/sdk";
 
 interface SoftDeleteContext {
   sourceTable: TailorAnyDBType;

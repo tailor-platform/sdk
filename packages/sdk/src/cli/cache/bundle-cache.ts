@@ -3,6 +3,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { PackageRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
+import type { TreeshakeOptions } from "#/configure/config/types";
 import type { CacheStore } from "./store";
 import type { Plugin } from "rolldown";
 
@@ -66,7 +67,9 @@ type ComputeBundlerContextHashParams = {
   extraContext: string;
   tsconfig?: string;
   inlineSourcemap?: boolean;
+  inlineSourcemapDependencySources?: boolean | string[];
   bundleLogLevel?: string;
+  bundleTreeshake?: TreeshakeOptions;
   prefix?: string;
 };
 
@@ -75,21 +78,43 @@ type ComputeBundlerContextHashParams = {
  *
  * Combines the source file path, a caller-supplied extra context string
  * (e.g. serialized workflow start-call bindings, or an HTTP adapter's method
- * list), tsconfig hash, sourcemap mode, bundle log level, and an optional
- * prefix (e.g., serialized env variables) into a single SHA-256 hash.
+ * list), tsconfig hash, sourcemap mode, whether the sourcemap embeds installed packages'
+ * source text, bundle log level, treeshake options,
+ * and an optional prefix (e.g., serialized env variables) into a single SHA-256 hash.
  * @param params - Context hash computation parameters
  * @returns SHA-256 hex digest of the combined context
  */
 function computeBundlerContextHash(params: ComputeBundlerContextHashParams): string {
-  const { sourceFile, extraContext, tsconfig, inlineSourcemap, bundleLogLevel, prefix } = params;
+  const {
+    sourceFile,
+    extraContext,
+    tsconfig,
+    inlineSourcemap,
+    inlineSourcemapDependencySources,
+    bundleLogLevel,
+    bundleTreeshake,
+    prefix,
+  } = params;
+  const treeshakeEntries = Object.entries(bundleTreeshake ?? {})
+    .filter(([, value]) => value !== undefined)
+    .toSorted(([a], [b]) => a.localeCompare(b));
   return hashContent(
     (prefix ?? "") +
       path.resolve(sourceFile) +
       extraContext +
       (tsconfig ? hashFile(tsconfig) : "") +
       String(inlineSourcemap ?? false) +
-      (bundleLogLevel ?? ""),
+      dependencySourcesKey(inlineSourcemapDependencySources) +
+      (bundleLogLevel ?? "") +
+      (treeshakeEntries.length > 0 ? JSON.stringify(treeshakeEntries) : ""),
   );
+}
+
+function dependencySourcesKey(value: boolean | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value.length === 0 ? "false" : JSON.stringify([...new Set(value)].toSorted());
+  }
+  return String(value ?? false);
 }
 
 type WithCacheParams = {

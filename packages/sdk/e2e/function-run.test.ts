@@ -167,7 +167,7 @@ describe("E2E: function run", { concurrent: false }, () => {
       });
       workspaceId = createResp.workspace!.id;
       console.log(`Workspace created: ${workspaceId}`);
-      trackWorkspace(workspaceId);
+      await trackWorkspace(client, workspaceId);
 
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-run-e2e-"));
       trackTempDir(tempDir);

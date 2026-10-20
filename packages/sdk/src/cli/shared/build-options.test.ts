@@ -18,6 +18,19 @@ describe("buildOptionsOf", () => {
     });
   });
 
+  test("reads treeshake from buildOptions", () => {
+    expect(
+      buildOptionsOf({ buildOptions: { treeshake: { propertyReadSideEffects: false } } }).treeshake,
+    ).toEqual({ propertyReadSideEffects: false });
+  });
+
+  test("reads inlineSourcemapDependencySources from buildOptions", () => {
+    expect(
+      buildOptionsOf({ buildOptions: { inlineSourcemapDependencySources: true } })
+        .inlineSourcemapDependencySources,
+    ).toBe(true);
+  });
+
   test("falls back to the deprecated top-level inlineSourcemap and logLevel", () => {
     // oxlint-disable-next-line typescript/no-deprecated -- The fallback for the deprecated fields is what this test covers.
     expect(buildOptionsOf({ inlineSourcemap: false, logLevel: "ERROR" })).toEqual({
@@ -30,6 +43,7 @@ describe("buildOptionsOf", () => {
   test("leaves every option unset when neither place sets it", () => {
     expect(buildOptionsOf({})).toEqual({
       inlineSourcemap: undefined,
+      inlineSourcemapDependencySources: undefined,
       logLevel: undefined,
       allowedRuntimeGlobals: undefined,
     });

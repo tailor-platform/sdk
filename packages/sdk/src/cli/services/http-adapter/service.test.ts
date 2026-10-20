@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createHttpAdapterService } from "./service";
 
 describe("createHttpAdapterService.loadAdapters", () => {
@@ -131,7 +132,45 @@ export const adapter = createHttpAdapter({
     );
 
     const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
-    await expect(service.loadAdapters()).rejects.toThrow(/must be the default export/);
+    using _logger = silenceLogger("error");
+    await expect(service.loadAdapters()).rejects.toMatchObject({
+      code: "DEFINITION_EXPORT_INVALID",
+      message: expect.stringMatching(
+        /^HTTP adapter in .*missing-default\.ts must not be a named export, but it is exported as `adapter`\.$/,
+      ),
+      context: { kind: "http-adapter", file, exportName: "adapter" },
+    });
+  });
+
+  test("reports an adapter that fails validation as DEFINITION_INVALID", async () => {
+    const file = writeAdapter(
+      "invalid.ts",
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+const adapter = createHttpAdapter({
+  name: "invalid",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}" }) },
+});
+adapter.pathPattern = 1;
+export default adapter;
+`,
+    );
+
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
+    using _logger = silenceLogger("error");
+    await expect(service.loadAdapters()).rejects.toMatchObject({
+      code: "DEFINITION_INVALID",
+      message: expect.stringMatching(
+        /^Invalid HTTP adapter in .*invalid\.ts:\n {2}- pathPattern: /,
+      ),
+      context: {
+        kind: "http-adapter",
+        file,
+        exportName: "default",
+        issues: [{ path: ["pathPattern"] }],
+      },
+    });
   });
 
   test("rejects plain objects that mimic the adapter shape without createHttpAdapter", async () => {

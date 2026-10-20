@@ -1,7 +1,7 @@
 /**
  * Seed integration module for generated seed code.
  *
- * Re-exports `@toiroakr/lines-db` through a single import path
+ * Re-exports `lines-db` through a single import path
  * to avoid phantom dependency issues with pnpm, and provides
  * seed-specific utility functions used by the code generator.
  */
@@ -14,15 +14,15 @@ import {
   findSchemaFile,
   isSchemaFile,
   unwrap,
-} from "@toiroakr/lines-db";
+} from "lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join, normalize } from "pathe";
 import { firstErrorLocation } from "./record-lines";
-import type { JsonlParseError, RowFiller, ValidationErrorDetail } from "@toiroakr/lines-db";
+import type { JsonlParseError, RowFiller, ValidationErrorDetail } from "lines-db";
 
-export { defineSchema } from "@toiroakr/lines-db";
-export type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
+export { defineSchema } from "lines-db";
+export type { ForeignKeyDefinition, IndexDefinition } from "lines-db";
 
 /** Fields `fillSeedData` writes when the caller names none. */
 const DEFAULT_FILL_FIELDS = ["id"];

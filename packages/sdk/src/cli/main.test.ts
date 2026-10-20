@@ -82,7 +82,7 @@ describe("argument errors under JSON output", () => {
       const result = runCli(["workspace", "list", "--bogus", ...args], tmp.dir, extraEnv);
 
       expect(result.error).toBeUndefined();
-      expect(result.status).toBe(1);
+      expect(result.status).toBe(2);
       expect(result.stdout).toBe("");
       expect(JSON.parse(result.stderr)).toEqual({
         error: { code: "INVALID_ARGUMENTS", message: "Unknown flags: bogus" },
@@ -98,7 +98,7 @@ describe("argument errors under JSON output", () => {
     const result = runCli(["workspace", "list", "--limit", "abc", "--json"], tmp.dir);
 
     expect(result.error).toBeUndefined();
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     const envelope = JSON.parse(result.stderr);
     expect(envelope.error.code).toBe("INVALID_ARGUMENTS");
     expect(envelope.error.message).toContain("limit");
@@ -112,7 +112,7 @@ describe("argument errors under JSON output", () => {
       TAILOR_JSON_OUTPUT: "1",
     });
 
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
   }, 20_000);
 
@@ -122,7 +122,7 @@ describe("argument errors under JSON output", () => {
 
     const result = runCli(["workspace", "list", "--bogus"], tmp.dir);
 
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
   }, 20_000);
 
@@ -132,7 +132,7 @@ describe("argument errors under JSON output", () => {
 
     const result = runCli(["workspace", "list", "--bogus", "--json", "--verbose"], tmp.dir);
 
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     const envelope = JSON.parse(result.stderr);
     expect(envelope.error.code).toBe("INVALID_ARGUMENTS");
     expect(envelope.error.stack).toContain("Error: Unknown flags: bogus");
@@ -144,11 +144,55 @@ describe("argument errors under JSON output", () => {
 
     const result = runCli(["workspace", "list", "--bogus"], tmp.dir, { GITHUB_ACTIONS: "true" });
 
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(result.stderr).toBe(
       "✖ Unknown flags: bogus\n::error title=Error::Unknown flags: bogus\n",
     );
   }, 20_000);
+});
+
+describe("options given to a command group without a subcommand", () => {
+  test.each([
+    { name: "`--json=yes`", args: ["--json=yes"], extraEnv: {} },
+    { name: "`TAILOR_JSON_OUTPUT=maybe`", args: [], extraEnv: { TAILOR_JSON_OUTPUT: "maybe" } },
+    { name: "`tailordb --json=yes`", args: ["tailordb", "--json=yes"], extraEnv: {} },
+  ])(
+    "prints help and exits with 0 for $name",
+    ({ args, extraEnv }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-group-options-");
+
+      const result = runCli(args, tmp.dir, extraEnv);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("Usage: tailor ");
+    },
+    20_000,
+  );
+
+  test.each([
+    { name: "`--bogus`", args: ["--bogus"] },
+    { name: "`plugin --bogus`", args: ["plugin", "--bogus"] },
+  ])(
+    "only warns and exits with 0 for $name",
+    ({ args }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-group-options-");
+
+      const result = runCli(args, tmp.dir);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe("");
+      expect(result.stderr.trim()).toBe("Warning: Unexpected positional argument: --bogus");
+    },
+    20_000,
+  );
 });
 
 describe("output under an AI coding agent", () => {
@@ -198,7 +242,7 @@ describe("output under an AI coding agent", () => {
 
     const result = runCli(["workspace", "list", "--bogus"], tmp.dir, agentEnv);
 
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(JSON.parse(result.stderr)).toEqual({
       error: { code: "INVALID_ARGUMENTS", message: "Unknown flags: bogus" },
     });

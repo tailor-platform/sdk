@@ -886,6 +886,9 @@ function printEnvironmentStep(environment: string): void {
   logger.log(
     `   tailor setup ci env --environment ${environment} --format terraform    # or Terraform`,
   );
+  logger.log(
+    `   tailor setup ci env --environment ${environment} --check               # then what is still missing`,
+  );
 }
 
 export type SetupTargetResult = {

@@ -2,6 +2,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
+import { definitionInvalidError } from "#/cli/shared/validation-errors";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { isSdkBranded } from "#/utils/brand";
 import { stripExecutorTriggerArgs } from "./loader";
@@ -68,7 +69,12 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
         return result.data;
       }
       if (isSdkBranded(executorModule.default, "executor")) {
-        throw result.error;
+        throw definitionInvalidError({
+          kind: "executor",
+          file: executorFile,
+          exportName: "default",
+          error: result.error,
+        });
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), executorFile);

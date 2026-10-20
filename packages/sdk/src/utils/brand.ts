@@ -2,6 +2,10 @@
 // avoiding identity mismatches when multiple copies of the SDK are loaded.
 export const SDK_BRAND: unique symbol = Symbol.for("tailor-platform/sdk");
 
+/**
+ * Kind of SDK object. Definition load errors report it as `kind` under
+ * `--json`, so existing values must not change.
+ */
 export type SdkBrandKind =
   | "tailordb-type"
   | "resolver"

@@ -4,6 +4,7 @@
  * Subcommands:
  * - generate: Generate migration files from schema differences
  * - rebaseline: Collapse the full migration history into a new baseline
+ * - resolve:  Settle a migration that a failed deploy left partially applied
  * - script:   Add a migrate.ts template to an existing migration
  * - set:      Set migration checkpoint to a specific number
  * - status:   Show migration status for TailorDB namespaces
@@ -15,6 +16,7 @@
 import { defineCommand } from "@politty/zod";
 import { generateCommand } from "./generate";
 import { rebaselineCommand } from "./rebaseline";
+import { resolveCommand } from "./resolve";
 import { scriptCommand } from "./script";
 import { setCommand } from "./set";
 import { statusCommand } from "./status";
@@ -28,6 +30,7 @@ export const migrationCommand = defineCommand({
   subCommands: {
     generate: generateCommand,
     rebaseline: rebaselineCommand,
+    resolve: resolveCommand,
     script: scriptCommand,
     set: setCommand,
     status: statusCommand,

@@ -39,7 +39,8 @@ tailor setup ci tag --name my-app-prod \
 
 After running the command, follow the **Next steps** printed to the terminal:
 run `tailor setup ci env` to get the commands that set the secrets and
-variables each GitHub Environment needs (see
+variables each GitHub Environment needs, and `tailor setup ci env --check` to
+confirm none is missing (see
 [Setting secrets and variables](#setting-secrets-and-variables)), then commit
 the generated files.
 
@@ -269,8 +270,8 @@ Everything else is yours, and re-running `setup` keeps it:
 - **These inputs of managed steps:** `ignore` on `tailor-generate-check` and
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
-  `tailor-setup`, `label` on `tailor-plan`, and `user-mapping` on
-  `tailor-notify`.
+  `tailor-setup`, `label` on `tailor-plan`, `ttl` on `tailor-preview-deploy`,
+  and `user-mapping` on `tailor-notify`.
 - **Your own jobs in the `needs` of `tailor-result` and
   `tailor-preview-result`**, so they count toward the workflow's result (see
   [Requiring the workflow in branch protection](#requiring-the-workflow-in-branch-protection)).
@@ -300,6 +301,17 @@ that only uses `app-url`, such as end-to-end tests, does not.
 The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
 request is closed, for draft and fork pull requests, and for unlabeled ones with
 `--require-preview-label`.
+
+A preview workspace expires 7 days (`ttl: 7d` on `tailor-preview-deploy`) after
+the last push to its pull request. When a pull request is closed,
+`tailor-preview-cleanup` deletes its workspace and also deletes the other
+expired preview workspaces of the same workspace name in the folder
+(`TAILOR_PLATFORM_FOLDER_ID`, or directly under the organization when unset), so
+a workspace whose own cleanup never ran does not stay forever. A pull request
+that stays idle past the `ttl` can have its workspace deleted while it is still
+open; the next push creates a fresh one. Change `ttl` to keep previews longer or
+shorter. Workflows generated before this was added get these settings the next
+time you run `tailor setup update`.
 
 Each new preview workflow run for a pull request, such as after a push or when
 the pull request is closed, cancels the run still in progress for it, including
@@ -473,14 +485,18 @@ protection rules no longer guard your deploys.
 Environment the generated workflows use, the commands that create the
 environment (only when it does not exist yet) and set its secrets and
 variables. It is read-only, so re-run it whenever you add a target. When the
-`origin` remote points at github.com, the output names that repository, so the
-commands work from any directory; otherwise `gh` resolves the repository from
-the current directory and the Terraform output leaves it as a placeholder.
+`origin` remote points at github.com, the output names that repository;
+otherwise it names the repository `gh repo view` reports for the current
+directory, with its host on GitHub Enterprise Server. Either way the commands
+work from any directory. When neither names a repository, `gh` resolves it from
+the current directory when you run the commands, and the Terraform output leaves
+it as a placeholder.
 
 ```bash
 tailor setup ci env                          # gh CLI commands (default)
 tailor setup ci env --format terraform       # Terraform for the integrations/github provider
 tailor setup ci env --environment my-app-stg # only one environment (repeat for several)
+tailor setup ci env --check                  # check what is registered in GitHub (see below)
 ```
 
 The list follows what each generated workflow actually reads:
@@ -521,6 +537,30 @@ secrets are overwritten. The generated environments ignore changes to their
 protection settings (reviewers, wait timer, branch policy), so importing an
 environment keeps the approval gate you configured; remove the `lifecycle` block
 to manage those settings in Terraform instead.
+
+### Checking what is registered
+
+`tailor setup ci env --check` reads GitHub with `gh` and reports, for each
+environment, which of these entries are registered. It fails when a required
+entry is missing, reports missing optional entries without failing, and prints
+the `gh` commands that set only the missing entries, with where each value comes
+from. It changes nothing, and it checks names only, since GitHub never returns
+secret values.
+
+- An entry set on the repository, or on the organization and shared with the
+  repository, counts as registered, because the workflow reads it from there when
+  the environment does not set it. The report says where each entry was found.
+- An entry registered as the other kind, such as `TAILOR_PLATFORM_WORKSPACE_ID`
+  set as a secret, is reported as missing, because the workflow does not read it.
+  `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` set as a secret still counts, with a
+  reminder to move it to a variable.
+- `gh` must be installed and logged in (`gh auth login`) as an account with write
+  access to the repository, which listing secrets and variables requires. GitHub
+  answers 404 for a private repository the account cannot see, so the check
+  reports that as an access problem, not as missing entries.
+
+`--environment` narrows the check the same way. `--check` cannot be combined with
+`--format terraform`.
 
 ## GitHub Environments (approval gate)
 
@@ -809,10 +849,13 @@ server and its runners first:
   the pinned versions: update them with `actions-sync`, or, with GitHub
   Connect, delete them from the server's `actions` organization (see GitHub's
   [Using the latest version of the official bundled actions](https://docs.github.com/en/enterprise-server@latest/admin/managing-github-actions-for-your-enterprise/managing-access-to-actions-from-githubcom/using-the-latest-version-of-the-official-bundled-actions)).
-- **Environment settings:** run the `gh` commands that `tailor setup ci env`
-  prints from a clone of the repository, with `gh` signed in to the server
-  (`gh auth login --hostname <host>`) and `GH_HOST=<host>` exported, so that
-  `gh api` calls the server instead of github.com.
+- **Environment settings:** sign `gh` in to the server
+  (`gh auth login --hostname <host>`) before you run `tailor setup ci env` in a
+  clone of the repository, so that the `gh` commands it prints and its Terraform
+  output target the server. When `gh` cannot tell the repository, the output
+  says to export `GH_HOST=<host>` before running the `gh` commands, or
+  `GITHUB_BASE_URL=https://<host>/` before running Terraform, so that they
+  call the server instead of github.com.
 
 With `--erd-preview`, also pass `--ghes`:
 

@@ -15,7 +15,10 @@ import {
   resolveBundleLogLevel,
 } from "#/cli/shared/bundle-log-level";
 import { getDistDir } from "#/cli/shared/dist-dir";
-import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import {
+  composeFunctionTreeshakeOptions,
+  createUserTreeshakeOptions,
+} from "#/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -25,11 +28,12 @@ import {
   INVOKER_EXPR,
   resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
+import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import type { LogLevelInput } from "#/configure/config/types";
+import type { LogLevelInput, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
 import type { DetectedFunction } from "./detect";
@@ -57,8 +61,12 @@ interface BundleForRunOptions {
   env?: Record<string, string | number | boolean>;
   /** Inline sourcemap config value from defineConfig */
   inlineSourcemap?: boolean;
+  /** Whether inline sourcemaps embed the source text of installed packages */
+  inlineSourcemapDependencySources?: boolean | string[];
   /** Log level config value from defineConfig */
   logLevel?: LogLevelInput;
+  /** Treeshake config value from defineConfig */
+  treeshake?: TreeshakeOptions;
   /** Machine user info for injecting principal context into the bundle */
   machineUser: ResolvedMachineUser;
   /** Workspace ID for user context */
@@ -130,7 +138,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     write: false,
     output: {
       format: "esm",
-      sourcemap: inlineSourcemap ? "inline" : true,
+      sourcemap: true,
       minify: inlineSourcemap
         ? {
             mangle: {
@@ -146,12 +154,19 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
       dir: process.cwd(),
     },
     tsconfig,
-    treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(bundleLogLevel)]),
+    treeshake: composeFunctionTreeshakeOptions([
+      createLogLevelTreeshakeOptions(bundleLogLevel),
+      createUserTreeshakeOptions(options.treeshake),
+    ]),
     ...bundleLog.options,
   } as rolldown.BuildOptions);
   bundleLog.assertAllResolved();
 
-  const bundledCode = buildResult.output[0].code;
+  const bundledCode = chunkCodeWithSourcemap({
+    chunk: buildResult.output[0],
+    inlineSourcemap,
+    dependencySources: options.inlineSourcemapDependencySources ?? false,
+  });
 
   return { bundledCode, scriptName };
 }

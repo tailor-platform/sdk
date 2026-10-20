@@ -1,5 +1,8 @@
 # Refer for explanation to following link: https://lefthook.dev/configuration/
 
+output:
+  - summary
+
 pre-commit:
   commands:
     format:

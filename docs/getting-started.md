@@ -63,4 +63,6 @@ Steps 2–5 run as a single command, and only when staged files include `.ts`/`.
 
 Post-commit verifies GPG signature.
 
+Hooks print only a summary when they pass; a failing command prints its full output. Set `LEFTHOOK_OUTPUT=meta,summary,skips,execution` to see every command's output.
+
 To customize hooks locally, create `lefthook-local.yml` (gitignored).

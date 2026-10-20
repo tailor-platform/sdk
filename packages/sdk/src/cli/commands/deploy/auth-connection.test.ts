@@ -196,7 +196,13 @@ describe("planAuthConnections", () => {
       authsWith(["adopted-connection"]),
     );
 
-    expect(unmanaged.map((u) => u.resourceName)).toEqual(["adopted-connection"]);
+    expect(unmanaged).toEqual([
+      {
+        resourceType: "auth.connection",
+        resourceLabel: "Auth connection",
+        resourceName: "adopted-connection",
+      },
+    ]);
     expect(changeSet.updates.map((u) => u.name)).toEqual(["adopted-connection"]);
     expect(changeSet.unchanged.map((u) => u.name)).toEqual([]);
     expect(changeSet.replaces.map((r) => r.name)).toEqual([]);

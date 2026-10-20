@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.5.0
+
+### Minor Changes
+
+- [#2660](https://github.com/tailor-platform/sdk/pull/2660) [`df71b44`](https://github.com/tailor-platform/sdk/commit/df71b44d2c03d8f767bea5448ee64bb1f114dcfb) Thanks [@dqn](https://github.com/dqn)! - The `tailor` CLI, the setup, seed, and TailorDB ERD plugins, `create-sdk`, and the codemod CLI now exit with code 2 when they reject the command line itself, such as an unknown option or subcommand, an unexpected argument, or an option value that fails validation, so scripts and agents can tell a mistyped command from one that failed while running, which still exits with 1. A command that only warns about an unknown option or an extra argument, such as `create-sdk`, keeps running as before. A script that checks for exactly 1 after a mistyped command needs to accept 2. `runMain` and `runCommand` from `@tailor-platform/sdk/cli` follow the same rule, so a CLI plugin built on them exits with 2 for these errors, and `runCommand` reports them with `exitCode` 2.
+
+### Patch Changes
+
+- [#2638](https://github.com/tailor-platform/sdk/pull/2638) [`55c8466`](https://github.com/tailor-platform/sdk/commit/55c8466e5830cf9aad029ef65df3049704789f22) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.6.7
+- Updated dependencies [[`9f617fa`](https://github.com/tailor-platform/sdk/commit/9f617fa247d62dfffe94862775d998ca2a914004), [`e0fb7c0`](https://github.com/tailor-platform/sdk/commit/e0fb7c0ad86391c899fec8daa06a1f2d033414c5), [`ac872f3`](https://github.com/tailor-platform/sdk/commit/ac872f3b1f3e68e066c5518b6201c430d7a2c5b3), [`4b626ce`](https://github.com/tailor-platform/sdk/commit/4b626cec93b8e2771084927bbb54a64a35256e64), [`3accb07`](https://github.com/tailor-platform/sdk/commit/3accb0734ea6e9f2dd3d1ef671b03ec7a8820393), [`76d4f9c`](https://github.com/tailor-platform/sdk/commit/76d4f9c8675ac118a008c67bd8f95d1ad823e2c4), [`c97c8f3`](https://github.com/tailor-platform/sdk/commit/c97c8f3cd17518c4f58e69d555bfb060d8b2ca6d), [`78acf8d`](https://github.com/tailor-platform/sdk/commit/78acf8d04a93dbd19ec7c26c91b9986751964350), [`9cc6efb`](https://github.com/tailor-platform/sdk/commit/9cc6efb69cf2dc16e7468c9a215973283b5d27a6), [`1108cb3`](https://github.com/tailor-platform/sdk/commit/1108cb3519f748714907d14fc69d8cccafacf538), [`55c8466`](https://github.com/tailor-platform/sdk/commit/55c8466e5830cf9aad029ef65df3049704789f22), [`5dd5e9c`](https://github.com/tailor-platform/sdk/commit/5dd5e9cddce99c40dc02985a9c73b4acd581ac54), [`00c5613`](https://github.com/tailor-platform/sdk/commit/00c56132166f4fec563d82b686afc3bad82f8ef2), [`f5c304f`](https://github.com/tailor-platform/sdk/commit/f5c304f8867d6416ccfa315694163d2e77a69e73), [`9fb24be`](https://github.com/tailor-platform/sdk/commit/9fb24be283e7820e9c7816c513f37140b8b3914f), [`c12410d`](https://github.com/tailor-platform/sdk/commit/c12410d573e9b43b2b84bf5a7d459edb36c83533), [`df71b44`](https://github.com/tailor-platform/sdk/commit/df71b44d2c03d8f767bea5448ee64bb1f114dcfb)]:
+  - @tailor-platform/sdk@2.29.0
+
 ## 0.4.0
 
 ### Minor Changes

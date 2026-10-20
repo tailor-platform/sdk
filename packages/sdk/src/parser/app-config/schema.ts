@@ -72,10 +72,19 @@ const allowedRuntimeGlobalsSchema = z.record(
   z.union([z.literal(true), z.array(allowedRuntimeGlobalNameSchema)]),
 );
 
+const treeshakeSchema = z.strictObject({
+  moduleSideEffects: z.boolean().optional(),
+  annotations: z.boolean().optional(),
+  unknownGlobalSideEffects: z.boolean().optional(),
+  propertyReadSideEffects: z.boolean().optional(),
+});
+
 const buildOptionsSchema = z.strictObject({
   inlineSourcemap: z.boolean().optional(),
+  inlineSourcemapDependencySources: z.union([z.boolean(), z.array(z.string())]).optional(),
   logLevel: logLevelSchema.optional(),
   allowedRuntimeGlobals: allowedRuntimeGlobalsSchema.optional(),
+  treeshake: treeshakeSchema.optional(),
 });
 
 const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;

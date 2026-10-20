@@ -2,6 +2,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
+import { definitionExportError, definitionInvalidError } from "#/cli/shared/validation-errors";
 import { type HttpAdapterServiceInput } from "#/configure/config/types";
 import {
   HTTP_METHOD_KEYS,
@@ -121,17 +122,19 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
         ([exportName, value]) => exportName !== "default" && isSdkBranded(value, "http-adapter"),
       );
       if (named) {
-        throw new Error(
-          `HTTP adapter must be the default export, but it is exported as \`${named[0]}\`. ` +
-            "Re-export it: `export default createHttpAdapter({...})`.",
-        );
+        throw definitionExportError({ kind: "http-adapter", file: filePath, exportName: named[0] });
       }
       return null;
     }
 
     const parsed = HttpAdapterConfigSchema.safeParse(module.default);
     if (!parsed.success) {
-      throw parsed.error;
+      throw definitionInvalidError({
+        kind: "http-adapter",
+        file: filePath,
+        exportName: "default",
+        error: parsed.error,
+      });
     }
 
     const adapter = parsed.data;

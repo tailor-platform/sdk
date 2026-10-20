@@ -68,6 +68,7 @@ jobs:
           region: "__REGION__"
           organization-id: ${{ vars.TAILOR_PLATFORM_ORGANIZATION_ID }}
           folder-id: ${{ vars.TAILOR_PLATFORM_FOLDER_ID }}
+          ttl: 7d
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
@@ -118,6 +119,9 @@ jobs:
         uses: tailor-platform/actions/preview-cleanup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
+          prune-expired: "true"
+          organization-id: ${{ vars.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          folder-id: ${{ vars.TAILOR_PLATFORM_FOLDER_ID }}
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}

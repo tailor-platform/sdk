@@ -14,14 +14,6 @@ Tailor Platform is a headless business platform that provides backend services f
 
 All configurations are written in TypeScript, providing full type safety.
 
-### Important Notes
-
-Some SDK concepts differ from the native Tailor Platform. Be aware of these differences when referring to the official Tailor Platform documentation.
-
-#### Resolver
-
-The SDK's Resolver corresponds to Tailor Platform's [Pipeline Resolver](https://docs.tailor.tech/guides/pipeline). The key difference is that Pipeline steps are replaced with a single `body` function. See [Resolver](./docs/services/resolver.md) for details.
-
 ## Installation
 
 ```bash
@@ -74,7 +66,7 @@ into the current project under `.agents/skills` and `.claude/skills`, so rerun
 
 | Service                                            | Description                                  |
 | -------------------------------------------------- | -------------------------------------------- |
-| [TailorDB](./docs/services/tailordb.md)            | Type-safe database schema definition         |
+| [TailorDB](./docs/services/tailordb/index.md)      | Type-safe database schema definition         |
 | [Resolver](./docs/services/resolver.md)            | Custom GraphQL resolvers with business logic |
 | [Executor](./docs/services/executor.md)            | Event-driven handlers for automation         |
 | [Workflow](./docs/services/workflow.md)            | Job orchestration for complex operations     |
@@ -86,6 +78,7 @@ into the current project under `.agents/skills` and `.claude/skills`, so rerun
 ### Guides
 
 - [Multi-Environment Configuration](./docs/multi-environment.md) - Deploying one config to multiple workspaces
+- [Cloning Application Data](./docs/data-clone.md) - Copying an application's data from one workspace to another
 - [Runtime API](./docs/runtime.md) - Typed wrappers for `tailor.iconv`, `tailor.secretmanager`, `tailor.idp`, `tailor.workflow`, `tailor.context`, `tailor.authconnection`, and `tailordb.file`
 - [Testing Guide](./docs/testing.md) - Unit and E2E testing patterns
 - [CLI Reference](./docs/cli-reference.md) - Command-line interface documentation

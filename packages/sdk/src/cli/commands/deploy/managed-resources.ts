@@ -1,9 +1,10 @@
-import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
+import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import type { HasName } from "./change-set";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
+import type { ManagedResourceType } from "./managed-resource-type";
 
 /**
  * Decide which renamed-away applications should be deleted. Excludes the
@@ -38,20 +39,7 @@ export function computeRenamedAppDeletions(params: {
 export function assertUniqueGlobalResourceNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): void {
-  for (const check of DEPLOY_MANAGED_RESOURCE_DEFINITIONS) {
-    const seen = new Set<string>();
-    for (const target of targets) {
-      for (const name of check.namesOf(target)) {
-        if (seen.has(name)) {
-          throw CLIError({
-            code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
-            message: `Duplicate ${check.resourceLabel} name "${name}" across config files. ${check.resourceLabel} names must be unique across all configs in a single deploy.`,
-          });
-        }
-        seen.add(name);
-      }
-    }
-  }
+  assertNoDuplicateResourceNames(targets, DEPLOY_MANAGED_RESOURCE_DEFINITIONS);
 }
 type OwnershipTrackedPlan = {
   conflicts: OwnerConflict[];
@@ -88,49 +76,49 @@ export function collectImportantResourceDeletions(
   const importantDeletions: ImportantResourceDeletion[] = [];
   for (const del of results.tailorDB.changeSet.type.deletes) {
     importantDeletions.push({
-      resourceType: "TailorDB table",
+      resourceLabel: "TailorDB table",
       resourceName: del.name,
     });
   }
   for (const del of results.staticWebsite.changeSet.deletes) {
     importantDeletions.push({
-      resourceType: "StaticWebsite",
+      resourceLabel: "StaticWebsite",
       resourceName: del.name,
     });
   }
   for (const del of results.aiGateway.changeSet.deletes) {
     importantDeletions.push({
-      resourceType: "AIGateway",
+      resourceLabel: "AIGateway",
       resourceName: del.name,
     });
   }
   for (const del of results.auth.changeSet.oauth2Client.deletes) {
     importantDeletions.push({
-      resourceType: "OAuth2 client",
+      resourceLabel: "OAuth2 client",
       resourceName: del.name,
     });
   }
   for (const replace of results.auth.changeSet.oauth2Client.replaces) {
     importantDeletions.push({
-      resourceType: "OAuth2 client (client type change)",
+      resourceLabel: "OAuth2 client (client type change)",
       resourceName: replace.name,
     });
   }
   for (const del of results.auth.changeSet.connection.deletes) {
     importantDeletions.push({
-      resourceType: "Auth connection",
+      resourceLabel: "Auth connection",
       resourceName: del.name,
     });
   }
   for (const del of results.secretManager.vaultChangeSet.deletes) {
     importantDeletions.push({
-      resourceType: "Secret Manager vault",
+      resourceLabel: "Secret Manager vault",
       resourceName: del.name,
     });
   }
   for (const del of results.secretManager.secretChangeSet.deletes) {
     importantDeletions.push({
-      resourceType: "Secret Manager secret",
+      resourceLabel: "Secret Manager secret",
       resourceName: del.name,
     });
   }
@@ -150,9 +138,9 @@ type ManagedResourceChangeSet = {
 
 type ManagedResourceGroup = {
   changeSet: ManagedResourceChangeSet;
-  resourceType: string;
+  resourceType: ManagedResourceType;
   namespaceFields?: readonly string[];
-  namespaceOwnerResourceType?: string;
+  namespaceOwnerResourceType?: ManagedResourceType;
   getName?: (item: ManagedResourceItem) => string;
 };
 
@@ -279,11 +267,10 @@ const MANAGED_RESOURCE_NAMESPACE_FIELDS = [
   "staticWebsiteName",
 ] as const;
 
-type DeployManagedResourceDefinition = Omit<ManagedResourceGroup, "changeSet"> & {
-  resourceLabel: string;
-  namesOf: (target: BuiltDeploymentTarget) => Iterable<string>;
-  changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
-};
+type DeployManagedResourceDefinition = Omit<ManagedResourceGroup, "changeSet"> &
+  ResourceNameCheck & {
+    changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
+  };
 
 const DEPLOY_MANAGED_RESOURCE_DEFINITIONS: ReadonlyArray<DeployManagedResourceDefinition> = [
   {

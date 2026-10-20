@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { writeMetadataLabelsDirect } from "../label";
 import {
+  assertNoActiveMigrationExecution,
   assertSkippableSteps,
   executeMigrationStepsAsWorkflow,
   MIGRATION_SCRIPT_STARTED_LOG,
@@ -1194,5 +1195,48 @@ describe("removeMigrationWorkflowResources", () => {
     await removeMigrationWorkflowResources(client, "ws-1", "tailordb", 3);
 
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(`'${RUNNER}'`));
+  });
+});
+
+describe("assertNoActiveMigrationExecution", () => {
+  test("passes when the temporary workflow no longer exists", async () => {
+    const { client } = createStepsClient();
+
+    await expect(
+      assertNoActiveMigrationExecution(client, "ws-1", "tailordb", 3),
+    ).resolves.toBeUndefined();
+  });
+
+  test("refuses while an execution of the migration is still running", async () => {
+    const { client } = createStepsClient({
+      existingWorkflow: { id: "wf-old" },
+      listed: [
+        { id: "exec-done", status: WorkflowExecution_Status.SUCCESS },
+        { id: "exec-live", status: WorkflowExecution_Status.RUNNING },
+      ],
+    });
+
+    await expect(
+      assertNoActiveMigrationExecution(client, "ws-1", "tailordb", 3),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_EXECUTION_ACTIVE",
+      message: "Migration tailordb/0003 has an execution that is still running (exec-live).",
+      suggestion: "Wait for it to finish, then run the command again.",
+      context: { executionId: "exec-live" },
+    });
+  });
+
+  test("passes when every execution of the migration has finished", async () => {
+    const { client } = createStepsClient({
+      existingWorkflow: { id: "wf-old" },
+      listed: [
+        { id: "exec-failed", status: WorkflowExecution_Status.FAILED },
+        { id: "exec-done", status: WorkflowExecution_Status.SUCCESS },
+      ],
+    });
+
+    await expect(
+      assertNoActiveMigrationExecution(client, "ws-1", "tailordb", 3),
+    ).resolves.toBeUndefined();
   });
 });

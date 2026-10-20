@@ -1133,6 +1133,39 @@ async function assertNoActiveExecution(
   }
 }
 
+const RETRY_COMMAND_ACTIVE_ERRORS: ActiveExecutionErrors = {
+  active: (message, executionId) =>
+    CLIError({
+      code: "MIGRATION_EXECUTION_ACTIVE",
+      message,
+      suggestion: "Wait for it to finish, then run the command again.",
+      context: { executionId },
+    }),
+};
+
+/**
+ * Refuse to go on while a run of a multi-step migration is still executing, so a
+ * command that rewrites the schema does not race the steps that run server-side.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ * @param migrationNumber - Migration whose runs are checked
+ */
+export async function assertNoActiveMigrationExecution(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  migrationNumber: number,
+): Promise<void> {
+  await assertNoActiveExecution(
+    client,
+    workspaceId,
+    migrationWorkflowResourceName(namespace, migrationNumber),
+    `${namespace}/${formatMigrationNumber(migrationNumber)}`,
+    RETRY_COMMAND_ACTIVE_ERRORS,
+  );
+}
+
 async function findRecordedExecution(
   client: OperatorClient,
   workspaceId: string,

@@ -605,11 +605,44 @@ describe("computeBundlerContextHash", () => {
     ["extraContext", {}, { extraContext: "other" }],
     ["prefix", { prefix: "ENV_A=1" }, { prefix: "ENV_B=2" }],
     ["bundleLogLevel", { bundleLogLevel: "DEBUG" }, { bundleLogLevel: "WARN" }],
+    [
+      "bundleTreeshake",
+      { bundleTreeshake: { propertyReadSideEffects: true } },
+      { bundleTreeshake: { propertyReadSideEffects: false } },
+    ],
+    [
+      "inlineSourcemapDependencySources",
+      { inlineSourcemapDependencySources: false },
+      { inlineSourcemapDependencySources: true },
+    ],
   ])("returns different hash when %s differs", (_label, overrideA, overrideB) => {
     const a = computeBundlerContextHash({ ...baseParams, ...overrideA });
     const b = computeBundlerContextHash({ ...baseParams, ...overrideB });
 
     expect(a).not.toBe(b);
+  });
+
+  test("returns the same hash when bundleTreeshake is unset, empty, or reordered", () => {
+    expect(computeBundlerContextHash({ ...baseParams, bundleTreeshake: {} })).toBe(
+      computeBundlerContextHash(baseParams),
+    );
+    expect(
+      computeBundlerContextHash({
+        ...baseParams,
+        bundleTreeshake: { moduleSideEffects: undefined },
+      }),
+    ).toBe(computeBundlerContextHash(baseParams));
+    expect(
+      computeBundlerContextHash({
+        ...baseParams,
+        bundleTreeshake: { annotations: true, propertyReadSideEffects: false },
+      }),
+    ).toBe(
+      computeBundlerContextHash({
+        ...baseParams,
+        bundleTreeshake: { propertyReadSideEffects: false, annotations: true },
+      }),
+    );
   });
 
   test("returns different hash when tsconfig content differs", () => {
@@ -629,6 +662,49 @@ describe("computeBundlerContextHash", () => {
     const b = computeBundlerContextHash({ ...baseParams, tsconfig });
 
     expect(a).not.toBe(b);
+  });
+
+  test("returns same hash when inlineSourcemapDependencySources lists the same packages in another order", () => {
+    const a = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: ["kysely", "@scope/lib"],
+    });
+    const b = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: ["@scope/lib", "kysely"],
+    });
+
+    expect(a).toBe(b);
+  });
+
+  test("returns different hash when inlineSourcemapDependencySources lists different packages", () => {
+    const a = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: ["kysely"],
+    });
+    const b = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: ["kysely", "zod"],
+    });
+
+    expect(a).not.toBe(b);
+  });
+
+  test("returns same hash when inlineSourcemapDependencySources is an empty list vs false", () => {
+    const a = computeBundlerContextHash({ ...baseParams, inlineSourcemapDependencySources: [] });
+    const b = computeBundlerContextHash({ ...baseParams, inlineSourcemapDependencySources: false });
+
+    expect(a).toBe(b);
+  });
+
+  test("returns same hash when inlineSourcemapDependencySources is undefined vs false", () => {
+    const a = computeBundlerContextHash({
+      ...baseParams,
+      inlineSourcemapDependencySources: undefined,
+    });
+    const b = computeBundlerContextHash({ ...baseParams, inlineSourcemapDependencySources: false });
+
+    expect(a).toBe(b);
   });
 
   test("returns same hash when prefix is undefined vs empty string", () => {

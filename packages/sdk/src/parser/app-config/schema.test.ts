@@ -197,8 +197,58 @@ describe("AppConfigSchema", () => {
       ).toBe(true);
     });
 
+    test("accepts inlineSourcemapDependencySources", () => {
+      expect(parseBuildOptions({ inlineSourcemapDependencySources: true }).success).toBe(true);
+    });
+
+    test("accepts a package list for inlineSourcemapDependencySources", () => {
+      expect(
+        parseBuildOptions({ inlineSourcemapDependencySources: ["kysely", "@scope/lib"] }).success,
+      ).toBe(true);
+    });
+
+    test("rejects a package list with a non-string entry", () => {
+      expect(parseBuildOptions({ inlineSourcemapDependencySources: [1] }).success).toBe(false);
+    });
+
+    test("rejects a non-boolean inlineSourcemapDependencySources", () => {
+      expect(
+        firstIssue(parseBuildOptions({ inlineSourcemapDependencySources: "yes" }))?.path,
+      ).toEqual(["buildOptions", "inlineSourcemapDependencySources"]);
+    });
+
     test("rejects unknown fields", () => {
       expect(parseBuildOptions({ minify: false }).success).toBe(false);
+    });
+
+    describe("treeshake", () => {
+      const parseTreeshake = (treeshake: unknown) => parseBuildOptions({ treeshake });
+
+      test("accepts each treeshake switch as a boolean", () => {
+        expect(
+          parseTreeshake({
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+            propertyReadSideEffects: false,
+          }).success,
+        ).toBe(true);
+      });
+
+      test("rejects a treeshake option the SDK does not expose, so a typo cannot silently do nothing", () => {
+        expect(firstIssue(parseTreeshake({ manualPureFunctions: ["db.string"] }))?.path).toEqual([
+          "buildOptions",
+          "treeshake",
+        ]);
+      });
+
+      test("rejects a switch that is not a boolean", () => {
+        expect(firstIssue(parseTreeshake({ propertyReadSideEffects: "false" }))?.path).toEqual([
+          "buildOptions",
+          "treeshake",
+          "propertyReadSideEffects",
+        ]);
+      });
     });
 
     test("rejects unsupported log levels", () => {

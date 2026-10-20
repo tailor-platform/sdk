@@ -257,6 +257,37 @@ describe("snapshot", () => {
       expect(loaded.tables.User?.name).toBe("User");
     });
 
+    test("lists each invalid field of a snapshot that fails validation", () => {
+      const filePath = path.join(testDir, "invalid_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          tables: {
+            User: { name: "User", pluralForm: 1, fields: { id: { type: "uuid", required: true } } },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(
+        expect.objectContaining({
+          code: "MIGRATION_FILE_INVALID",
+          message: `Invalid schema snapshot at ${filePath}:\n  - tables.User.pluralForm: Invalid input: expected string, received number`,
+          context: {
+            file: filePath,
+            issues: [
+              {
+                path: ["tables", "User", "pluralForm"],
+                message: "Invalid input: expected string, received number",
+              },
+            ],
+          },
+        }),
+      );
+    });
+
     test("keeps the current key when a snapshot carries both", () => {
       const table = (name: string) => ({
         [name]: {
@@ -590,7 +621,21 @@ describe("snapshot", () => {
       const filePath = path.join(testDir, "malformed_type_name_diff.json");
       fs.writeFileSync(filePath, JSON.stringify(malformed, null, 2));
 
-      expect(() => loadDiff(filePath)).toThrow(/Invalid migration diff/);
+      expect(() => loadDiff(filePath)).toThrow(
+        expect.objectContaining({
+          code: "MIGRATION_FILE_INVALID",
+          message: `Invalid migration diff at ${filePath}:\n  - changes.0.tableName: Invalid input: expected string, received number`,
+          context: {
+            file: filePath,
+            issues: [
+              {
+                path: ["changes", 0, "tableName"],
+                message: "Invalid input: expected string, received number",
+              },
+            ],
+          },
+        }),
+      );
     });
 
     test("derives warnings from removal changes in a legacy diff.json", () => {
@@ -1308,7 +1353,6 @@ describe("snapshot", () => {
       expect(thrownError).toBeInstanceOf(Error);
       const message = (thrownError as Error).message;
       expect(message).toContain(filePath);
-      // z.prettifyError includes the field path ("namespace") in the output
       expect(message).toContain("namespace");
     });
 

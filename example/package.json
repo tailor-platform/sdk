@@ -33,7 +33,7 @@
     "@bufbuild/protobuf": "2.16.0",
     "@connectrpc/connect": "2.2.0",
     "@connectrpc/connect-node": "2.2.0",
-    "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite": "0.5.9",
     "@tailor-platform/sdk-plugin-seed": "workspace:^",
     "@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
     "@types/node": "24.19.2",
@@ -42,13 +42,13 @@
     "graphql": "17.0.2",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
-    "oxfmt": "0.71.0",
-    "oxlint": "1.86.0",
+    "oxfmt": "0.73.0",
+    "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
     "tsdown": "0.23.1",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "vitest": "5.0.3"
+    "vitest": "5.0.4"
   },
   "engines": {
     "node": ">= 22.18.0"

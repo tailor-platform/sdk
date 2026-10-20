@@ -10,4 +10,6 @@ politty:
 
 Commands for managing application data across workspaces.
 
+For prerequisites and a step-by-step walkthrough, see [Cloning Application Data](../data-clone.md).
+
 {{politty:command:data}}

@@ -63,7 +63,7 @@ jobs:
 
       - name: Create workspace
         working-directory: example
-        run: pnpm --silent tailor workspace create --name "sdk-ci-migration-${RUN_ID}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor workspace create --name "sdk-ci-migration-${RUN_ID}" --region asia-northeast --ttl 24h --json > workspace.json
         env:
           RUN_ID: ${{ github.run_id }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}

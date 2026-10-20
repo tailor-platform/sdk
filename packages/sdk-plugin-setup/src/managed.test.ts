@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { parseDocument } from "yaml";
 import {
+  EDITABLE_WITH_KEYS,
   ENVIRONMENT_EDITABLE_JOBS,
   ManagedMergeError,
   RESULT_JOBS,
@@ -124,6 +125,17 @@ describe("RESULT_JOBS", () => {
   });
 });
 
+describe("EDITABLE_WITH_KEYS", () => {
+  test("every editable input is named in the header of a generated workflow", () => {
+    const header = renderBranchWorkflow(branchBase).content.split("\nname:")[0] ?? "";
+    const missing = Object.values(EDITABLE_WITH_KEYS)
+      .flat()
+      .filter((key) => !new RegExp(`\\b${key}\\b`).test(header));
+
+    expect(missing).toEqual([]);
+  });
+});
+
 describe("ENVIRONMENT_EDITABLE_JOBS", () => {
   const jobsOf = (environment: boolean): Set<string> =>
     new Set(
@@ -206,6 +218,22 @@ describe("computeManagedHash", () => {
     const edited = edit(render.content);
     expect(edited).not.toBe(render.content);
     expect(hashOf(edited)).toBe(lockHash);
+  });
+
+  test("keeps the managed hash when the preview ttl is edited", () => {
+    const preview = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const edited = preview.content.replace("ttl: 7d", "ttl: 30d");
+
+    expect(edited).not.toBe(preview.content);
+    expect(computeManagedHash(edited, preview.generatedIds)).toBe(
+      computeManagedHash(preview.content, preview.generatedIds),
+    );
   });
 
   test.each([
@@ -418,6 +446,37 @@ describe("mergeUserContent", () => {
     });
     expect(doc.jobs["tailor-plan"]?.steps.map((s) => s["id"])).toContain("tailor-seed-validate");
     expect(content).toContain("# Authenticate the private registry.\n      - name: Registry auth");
+  });
+
+  describe("the preview ttl", () => {
+    const preview = renderPreviewWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
+      region: "us-west",
+    });
+    const mergePreview = (current: string) =>
+      mergeUserContent({
+        current,
+        rendered: preview.content,
+        previousIds: preview.generatedIds,
+        renderedIds: preview.generatedIds,
+        force: false,
+      });
+
+    test("keeps the user's value when the workflow is regenerated", () => {
+      const edited = preview.content.replace("ttl: 7d", "ttl: 30d");
+
+      expect(mergePreview(edited).content).toContain("ttl: 30d");
+    });
+
+    test("is added to a workflow generated before it existed", () => {
+      const legacy = preview.content.replace(/^ {10}ttl: 7d\n/m, "");
+      expect(legacy).not.toBe(preview.content);
+
+      expect(mergePreview(legacy).content).toContain("ttl: 7d");
+    });
   });
 
   describe("an unmanaged top-level key the template writes", () => {

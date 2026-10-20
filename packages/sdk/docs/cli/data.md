@@ -6,6 +6,8 @@ description: "Clone application data from one workspace to another and inspect a
 
 Commands for managing application data across workspaces.
 
+For prerequisites and a step-by-step walkthrough, see [Cloning Application Data](../data-clone.md).
+
 ## data
 
 Manage application data across workspaces.

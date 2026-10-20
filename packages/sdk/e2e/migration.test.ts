@@ -312,7 +312,7 @@ export async function main(db: Kysely<any>): Promise<void> {
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
-    trackWorkspace(workspaceId);
+    await trackWorkspace(client, workspaceId);
     console.log(`Workspace created: ${workspaceId}`);
 
     // Set workspace ID for apply operations
@@ -569,7 +569,7 @@ export type user = typeof user;
           folderId: sourceWorkspace.folderId,
         });
         const targetWorkspaceId = targetResponse.workspace!.id;
-        trackWorkspace(targetWorkspaceId);
+        await trackWorkspace(client, targetWorkspaceId);
 
         await runMigrationTestCli(
           configPath,

@@ -111,7 +111,7 @@ export async function applyWorkflow(
   } else {
     await deleteAllSettled(
       changeSet.deletes.map((del) => ({
-        resourceType: "workflow",
+        resourceLabel: "workflow",
         resourceName: del.name,
         run: () =>
           client.deleteWorkflow({
@@ -123,7 +123,7 @@ export async function applyWorkflow(
 
     await deleteAllSettled(
       result.jobFunctionDeletes.map((del) => ({
-        resourceType: "workflow job function",
+        resourceLabel: "workflow job function",
         resourceName: del.jobFunctionName,
         run: () =>
           client.deleteWorkflowJobFunction({
@@ -136,7 +136,7 @@ export async function applyWorkflow(
 }
 
 type DeleteOperation = {
-  resourceType: string;
+  resourceLabel: string;
   resourceName: string;
   run: () => Promise<unknown>;
 };
@@ -155,7 +155,7 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
     }
     if (error instanceof ConnectError && error.code === Code.FailedPrecondition) {
       logger.warn(
-        `Skipped deleting ${operation.resourceType} "${operation.resourceName}" because it is still referenced.`,
+        `Skipped deleting ${operation.resourceLabel} "${operation.resourceName}" because it is still referenced.`,
       );
       return;
     }
@@ -637,7 +637,8 @@ export async function planWorkflow(
         ownerLabel: existing.label,
         appName,
         appId,
-        resourceType: "Workflow",
+        resourceType: "workflow",
+        resourceLabel: "Workflow",
         resourceName: workflow.name,
         conflicts,
         unmanaged,

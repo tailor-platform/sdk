@@ -48,9 +48,9 @@ The Tailor Platform function runtime only provides Web Standard APIs. Node.js bu
 ### Setup
 
 ```typescript
+import { tailorRuntime } from "@tailor-platform/sdk/vitest";
 // vitest.config.ts
 import { defineConfig } from "vitest/config";
-import { tailorRuntime } from "@tailor-platform/sdk/vitest";
 
 export default defineConfig({
   plugins: [tailorRuntime()],
@@ -223,7 +223,7 @@ To hand-write DDL instead — for a table not in the schema, or to add a constra
 
 - The PGlite instance is yours: the mock never closes it, so close it in `afterAll`. Reuse one instance across a suite — creating one per test is slow.
 - Pass the same instance under several namespaces to drive them against one shared database. Two namespaces with a same-named table cannot share one instance, because the second script leaves the first table as it is.
-- Seed through `getDB` itself. When a column type rejects a value that only the test must stage, use `createKyselyPGlite<Unmigrated<...>>(pglite)` instead — see [Testing Migrations Locally](./services/tailordb-migration.md#testing-migrations-locally). This only affects test setup; it cannot supply a `.serial()` value for an insert issued by the code under test.
+- Seed through `getDB` itself. When a column type rejects a value that only the test must stage, use `createKyselyPGlite<Unmigrated<...>>(pglite)` instead — see [Testing Migrations Locally](./services/tailordb/migration.md#testing-migrations-locally). This only affects test setup; it cannot supply a `.serial()` value for an insert issued by the code under test.
 - With `kyselyTypePlugin({ temporal: true })`, the generated `getDB` reads top-level date, datetime, and time columns back from PGlite as `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime`, as it does on the platform. Values inside nested objects stay strings in PGlite (see above); on the platform, nested date/datetime fields are Temporal values while nested time fields remain strings.
 - Transactions on a shared instance are serialized: while one is open, queries from other `getDB` instances wait. Do not use `test.concurrent` with a shared instance, and do not query the same instance through a second `getDB` from inside a transaction — that waits on itself.
 - PGlite runs full PostgreSQL while TailorDB supports a subset of it, and TailorDB hooks, validations, and permissions do not run here — a test passing on PGlite can still behave differently on the platform. Keep [`mockTailordb`](#tailordb-mock) or [`createKyselyMock`](#kysely-layer-mock-createkyselymock) tests for query shape and error paths, and E2E tests for platform behavior.
@@ -452,7 +452,7 @@ export default defineConfig({
 
 This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `mockSecretmanager({ secrets: ... })` in individual tests: a per-test overlay applies only within that test, and the config-loaded secrets remain available to every other test.
 
-The same `config` option applies the config's [`defaultDateRepresentation`](./configuration.md#application-settings) to tests: with `"temporal"`, `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as` parse to Temporal values in test files and in the modules they import, as they do in deployed functions, and with `"date"` they parse to `Date` values. The config is read once when Vitest starts, in the Vitest process itself rather than under the `tailor-runtime` restrictions, so restart Vitest after changing the setting. A config file that is missing or does not parse fails the run, as does a value other than `"temporal"` or `"date"`. A config that throws while loading, for example on an environment variable only the deploy environment sets, prints a warning and keeps string values for that run, as the secrets loader already tolerates; the warning notes that tests then disagree with `tailor.d.ts` if the config sets `"temporal"` or `"date"`. Tests that call `resolver.body()` directly bypass the SDK's input conversion and must pass values in the representation the body expects. To apply a representation in a test file regardless of the config, for example in a plain Vitest setup or for a [migration test](./services/tailordb-migration.md#testing-migrations-locally) pinned to the value it was generated under, call `applyDateRepresentation` from `@tailor-platform/sdk/vitest` with `"temporal"`, `"date"`, or `"string"` (the representation of a project that leaves the setting unset); it returns a function that restores the previous representation. The helper only selects the representation: parsing such a field needs `Temporal`, which the `tailor-runtime` environment installs when Node.js lacks it, so outside that environment the test must provide a Temporal implementation itself.
+The same `config` option applies the config's [`defaultDateRepresentation`](./configuration.md#application-settings) to tests: with `"temporal"`, `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as` parse to Temporal values in test files and in the modules they import, as they do in deployed functions, and with `"date"` they parse to `Date` values. The config is read once when Vitest starts, in the Vitest process itself rather than under the `tailor-runtime` restrictions, so restart Vitest after changing the setting. A config file that is missing or does not parse fails the run, as does a value other than `"temporal"` or `"date"`. A config that throws while loading, for example on an environment variable only the deploy environment sets, prints a warning and keeps string values for that run, as the secrets loader already tolerates; the warning notes that tests then disagree with `tailor.d.ts` if the config sets `"temporal"` or `"date"`. Tests that call `resolver.body()` directly bypass the SDK's input conversion and must pass values in the representation the body expects. To apply a representation in a test file regardless of the config, for example in a plain Vitest setup or for a [migration test](./services/tailordb/migration.md#testing-migrations-locally) pinned to the value it was generated under, call `applyDateRepresentation` from `@tailor-platform/sdk/vitest` with `"temporal"`, `"date"`, or `"string"` (the representation of a project that leaves the setting unset); it returns a function that restores the previous representation. The helper only selects the representation: parsing such a field needs `Temporal`, which the `tailor-runtime` environment installs when Node.js lacks it, so outside that environment the test must provide a Temporal implementation itself.
 
 ### Per-Project Configuration
 
@@ -594,9 +594,9 @@ describe("incrementUserAge resolver", () => {
 Once the logic gets more involved, mocking raw SQL calls becomes brittle. Push database access behind a `DbOperations` interface and test the pure function that uses it:
 
 ```typescript
+import type { Namespace } from "../generated/db";
 // src/resolver/decrementUserAge.ts
 import type { Selectable } from "@tailor-platform/sdk/kysely";
-import type { Namespace } from "../generated/db";
 
 export interface DbOperations {
   transaction: <T>(fn: (ops: DbOperations) => Promise<T>) => Promise<T>;
@@ -694,7 +694,7 @@ describe("upsertUsers resolver", () => {
 
 Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer, or [`mockTailordbWithPGlite`](#real-sql-execution-with-pglite-mocktailordbwithpglite) to execute the queries against a real in-memory Postgres.
 
-TailorDB migration scripts (`migrate.ts`) are unit-tested the same way: the generated `db.ts` exports the `Database` interface to type the mock, and `tailor tailordb migration script <N> --with-test` scaffolds a ready-to-fill test. To execute a migration script against real rows in an in-memory Postgres, use `createKyselyPGlite` with `@electric-sql/pglite` and the generated `db.pglite.ts` schema. See [Testing Migrations Locally](./services/tailordb-migration.md#testing-migrations-locally).
+TailorDB migration scripts (`migrate.ts`) are unit-tested the same way: the generated `db.ts` exports the `Database` interface to type the mock, and `tailor tailordb migration script <N> --with-test` scaffolds a ready-to-fill test. To execute a migration script against real rows in an in-memory Postgres, use `createKyselyPGlite` with `@electric-sql/pglite` and the generated `db.pglite.ts` schema. See [Testing Migrations Locally](./services/tailordb/migration.md#testing-migrations-locally).
 
 #### Resolvers that resume a workflow
 

@@ -23,6 +23,45 @@ export type LogLevelInput = LogLevel | (string & {});
  */
 export type AllowedRuntimeGlobals = Record<string, true | string[]>;
 
+/**
+ * Switches that control how unused code is removed from bundled functions.
+ *
+ * Most of them ask whether something has side effects, so `true` keeps it and `false` lets
+ * it be removed when its result is unused. `annotations` is the exception: it asks whether
+ * to honor annotations, so `true` removes more. Each switch overrides the value the SDK
+ * uses by default.
+ */
+export interface TreeshakeOptions {
+  /**
+   * `true` assumes that importing a module may have effects beyond its exports, so the
+   * module is kept even when all of its exports are unused; `false` leaves such a module
+   * out of the bundle.
+   * @default false
+   */
+  moduleSideEffects?: boolean;
+  /**
+   * `true` honors `@__PURE__` and `@__NO_SIDE_EFFECTS__` comment annotations when deciding
+   * whether a call can be removed; `false` ignores them.
+   * @default true
+   */
+  annotations?: boolean;
+  /**
+   * `true` treats reading a global the bundle does not define as having an effect, so the
+   * read is kept even when its result is unused; `false` lets it be removed.
+   * @default false
+   */
+  unknownGlobalSideEffects?: boolean;
+  /**
+   * `true` treats reading a property (`config.db.company`) as having an effect, so the
+   * read is kept even when its result is unused. `false` removes unused calls whose
+   * arguments only read properties, which keeps modules a function never reaches out of
+   * the bundle. It also removes a read that exists only for its effect, such as a getter
+   * with a side effect or a read that throws when the object is `undefined`.
+   * @default true
+   */
+  propertyReadSideEffects?: boolean;
+}
+
 /** Options for how `defineConfig()` bundles functions. */
 export interface BuildOptions {
   /**
@@ -30,6 +69,18 @@ export interface BuildOptions {
    * @default true
    */
   inlineSourcemap?: boolean;
+  /**
+   * Embed the source text of installed packages (everything under `node_modules`) in
+   * the inline sourcemap. By default only your own source text is embedded, which
+   * makes bundled functions much smaller. Set `true` to embed all installed packages,
+   * or list package names (such as `["kysely", "@scope/lib"]`) to embed only those.
+   * A listed package's own dependencies are not embedded unless they are listed too. Error positions still resolve to the
+   * original files and lines; `tailor function run` shows a code snippet for a frame
+   * inside an installed package only when that package's file exists locally.
+   * Only applies when `inlineSourcemap` is enabled.
+   * @default false
+   */
+  inlineSourcemapDependencySources?: boolean | string[];
   /**
    * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
    * calls remain in bundled functions. `logger.setAttributes` has no severity and
@@ -52,6 +103,13 @@ export interface BuildOptions {
    * }
    */
   allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+  /**
+   * Overrides how unused code is removed from bundled functions. Unset switches keep the
+   * SDK's defaults.
+   * @example
+   * treeshake: { propertyReadSideEffects: false }
+   */
+  treeshake?: TreeshakeOptions;
 }
 
 /** Value an `env` entry resolves to at runtime. */

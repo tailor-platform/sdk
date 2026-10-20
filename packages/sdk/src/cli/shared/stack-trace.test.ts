@@ -1,6 +1,9 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { TraceMap } from "@jridgewell/trace-mapping";
-import { describe, test, expect } from "vitest";
+import * as path from "pathe";
+import { afterEach, describe, test, expect } from "vitest";
 import {
   parseStackTrace,
   extractInlineSourcemap,
@@ -558,5 +561,115 @@ describe("formatErrorWithSourcemap", () => {
     const result = formatErrorWithSourcemap(error, bundledCode, "/output");
 
     expect(result).toBeNull();
+  });
+});
+
+describe("formatMappedError without embedded source text", () => {
+  const installedSource = [
+    "export function explode(n) {",
+    "  if (n > 0) {",
+    '    throw new Error("from the installed package");',
+    "  }",
+    "}",
+  ].join("\n");
+  let bundleDir: string | undefined;
+
+  afterEach(() => {
+    if (bundleDir) {
+      fs.rmSync(bundleDir, { recursive: true, force: true });
+      bundleDir = undefined;
+    }
+  });
+
+  function projectWith(files: Record<string, string>): string {
+    bundleDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "stack-trace-snippet-")));
+    for (const [relativePath, content] of Object.entries(files)) {
+      const file = path.join(bundleDir, relativePath);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content);
+    }
+    return bundleDir;
+  }
+
+  function format(source: string, embedded: string | null, dir: string): string {
+    const frames: MappedStackFrame[] = [
+      {
+        original: { functionName: "explode", file: "file:///bundle.js", line: 1, column: 100 },
+        mapped: { source, line: 3, column: 5, name: "explode" },
+      },
+    ];
+    const traceMap = new TraceMap({
+      version: 3,
+      sources: [source],
+      sourcesContent: [embedded],
+      names: [],
+      mappings: "",
+    });
+    return stripVTControlCharacters(formatMappedError("Error: boom", frames, traceMap, dir));
+  }
+
+  test("reads the snippet of an installed package from its file on disk", () => {
+    const dir = projectWith({ "node_modules/lib/index.js": installedSource });
+
+    const plain = format("node_modules/lib/index.js", null, dir);
+
+    expect(plain).toContain('throw new Error("from the installed package")');
+    expect(plain).toContain("> 3");
+  });
+
+  test("prefers the embedded source text over the file on disk", () => {
+    const dir = projectWith({ "node_modules/lib/index.js": installedSource });
+    const embedded = ["a", "b", "embedded text on the error line", "d", "e"].join("\n");
+
+    const plain = format("node_modules/lib/index.js", embedded, dir);
+
+    expect(plain).toContain("embedded text on the error line");
+    expect(plain).not.toContain("from the installed package");
+  });
+
+  test("shows no snippet, and does not fail, when the installed file is missing", () => {
+    const dir = projectWith({});
+
+    const plain = format("node_modules/lib/index.js", null, dir);
+
+    expect(plain).toContain("node_modules/lib/index.js:3:5");
+    expect(plain).not.toContain("> 3");
+  });
+
+  test("does not read a file that is outside node_modules", () => {
+    const dir = projectWith({ "src/own.ts": installedSource });
+
+    const plain = format("src/own.ts", null, dir);
+
+    expect(plain).not.toContain("from the installed package");
+  });
+
+  test("does not read through a symlinked package that points outside node_modules", () => {
+    const dir = projectWith({ "outside/secret.js": installedSource });
+    fs.mkdirSync(path.join(dir, "node_modules"));
+    fs.symlinkSync("../outside", path.join(dir, "node_modules/linked"));
+
+    const plain = format("node_modules/linked/secret.js", null, dir);
+
+    expect(plain).not.toContain("from the installed package");
+  });
+
+  test("reads through a symlinked package whose target is inside node_modules", () => {
+    const dir = projectWith({
+      "node_modules/.pnpm/lib@1.0.0/node_modules/lib/index.js": installedSource,
+    });
+    fs.symlinkSync(".pnpm/lib@1.0.0/node_modules/lib", path.join(dir, "node_modules/lib"));
+
+    const plain = format("node_modules/lib/index.js", null, dir);
+
+    expect(plain).toContain('throw new Error("from the installed package")');
+  });
+
+  test("does not read a file that a node_modules path climbs out of node_modules to reach", () => {
+    const dir = projectWith({ "secret.txt": installedSource });
+
+    const plain = format("node_modules/../secret.txt", null, dir);
+
+    expect(plain).not.toContain("from the installed package");
   });
 });

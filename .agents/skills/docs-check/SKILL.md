@@ -30,23 +30,27 @@ Use a two-step approach: discover relevant pages, then fetch their content.
 
 ### Step 1: Discover pages
 
-**Option A -- hashmap lookup** (preferred when you know the topic area):
+**Option A -- page index** (preferred when you know the topic area):
 
-Fetch `https://docs.tailor.tech/hashmap.json` to get the complete page index. Keys are paths like `guides_tailordb_permission.md`. Convert to URLs by replacing `_` with `/` and dropping `.md`:
+`https://docs.tailor.tech/llms.txt` is the complete page index, with each page's Markdown URL:
 
-`guides_tailordb_permission.md` -> `https://docs.tailor.tech/guides/tailordb/permission`
+`- [Permission](https://docs.tailor.tech/guides/tailordb/permission.md): <description>`
 
-Filter keys by relevant keywords to find candidate pages.
+It is about 47 KB, so filter it by keyword instead of reading it whole:
+
+```bash
+curl -s https://docs.tailor.tech/llms.txt | grep -i <keyword>
+```
 
 **Option B -- web search** (when the topic is broad or unclear):
 
-Use web search with `site:docs.tailor.tech <query>` to find relevant pages.
+Use web search with `site:docs.tailor.tech <query>` to find relevant pages. Get a result's Markdown URL by dropping any query or fragment and ending its path in `.md`, replacing any trailing `/` or `.html` (`.../tailordb/permission#fields` -> `.../tailordb/permission.md`). If that returns 404, find the page in `llms.txt`.
 
 Use both options in parallel when unsure which will yield better results.
 
 ### Step 2: Fetch and summarize
 
-Fetch the most relevant pages (usually 1-3). Extract:
+Fetch the Markdown URL of the most relevant pages (usually 1-3). Extract:
 
 1. The specific specification or behavior the user needs
 2. Code examples if available
@@ -54,7 +58,7 @@ Fetch the most relevant pages (usually 1-3). Extract:
 
 ## Output format
 
-- **Source URLs** -- always include so the user can read the full page
+- **Source URLs** -- always include the page URL (the Markdown URL minus `.md`) so the user can read the full page
 - **Relevant specs** -- concise summary focused on what matters for the current task
 - **Code examples** -- include when they exist and are relevant
 - **Caveats** -- note any limits, edge cases, or non-obvious behavior

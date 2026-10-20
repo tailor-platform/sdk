@@ -201,6 +201,16 @@ describe("planStaticWebsite", () => {
     expect(result.conflicts).toHaveLength(conflicts);
   });
 
+  test("reports an unmanaged website with its resource type and label", async () => {
+    const client = createMockClient([{ name: "site-a" }]);
+
+    const result = await planStaticWebsite(createContext(client));
+
+    expect(result.unmanaged).toEqual([
+      { resourceType: "staticwebsite", resourceLabel: "StaticWebsite", resourceName: "site-a" },
+    ]);
+  });
+
   test.each([
     { name: "only its sdk-version differs", overrides: { sdkVersion: "v0-9-0" }, forced: true },
     {

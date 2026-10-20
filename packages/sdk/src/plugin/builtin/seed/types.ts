@@ -1,5 +1,5 @@
 import type { PluginGeneratedTableSource } from "#/parser/service/tailordb/types";
-import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
+import type { ForeignKeyDefinition, IndexDefinition } from "lines-db";
 
 /**
  * Type definitions for seed generation.

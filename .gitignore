@@ -31,6 +31,10 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 
+# Lefthook local overrides
+lefthook-local.*
+.lefthook-local.*
+
 # Tailor Platform SDK
 **/.tailor/**
 tailor.d.ts

@@ -11,11 +11,15 @@ import {
   checkForbiddenRuntimeGlobals,
   assertPackageRuntimeGlobalsAllowed,
 } from "#/cli/shared/forbidden-runtime-globals";
-import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import {
+  composeFunctionTreeshakeOptions,
+  createUserTreeshakeOptions,
+} from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -27,7 +31,7 @@ import { getModuleExportName, type ASTNode } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
-import type { AllowedRuntimeGlobals, LogLevel } from "#/configure/config/types";
+import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
 function safeRealpath(p: string): string {
@@ -297,6 +301,8 @@ export interface BundleWorkflowJobsResult {
  *   e.g. during an interactive confirmation pause before a rebuild)
  * @param allowedRuntimeGlobals - Globals each installed package may reference
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
+ * @param bundleTreeshake - Overrides how unused code is removed from bundled code
+ * @param inlineSourcemapDependencySources - Whether inline sourcemaps embed the source text of installed packages
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -315,6 +321,8 @@ export async function bundleWorkflowJobs(
   >,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
   dateDefault: EffectiveDateDefault = "legacy",
+  bundleTreeshake?: TreeshakeOptions,
+  inlineSourcemapDependencySources?: boolean | string[],
 ): Promise<BundleWorkflowJobsResult> {
   const jobSourceFiles = allJobs.map((job) => job.sourceFile);
   const sourceFileState = hashReachabilitySourceFiles([
@@ -364,6 +372,8 @@ export async function bundleWorkflowJobs(
       tsconfigCache,
       allowedRuntimeGlobals,
       dateDefault,
+      bundleTreeshake,
+      inlineSourcemapDependencySources,
     ),
   );
 
@@ -617,6 +627,8 @@ async function bundleSingleJob(
   tsconfigCache?: TsconfigLookupCache,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
   dateDefault: EffectiveDateDefault = "legacy",
+  bundleTreeshake?: TreeshakeOptions,
+  inlineSourcemapDependencySources?: boolean | string[],
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -629,7 +641,9 @@ async function bundleSingleJob(
     extraContext: JSON.stringify([serializedStartContext, dateDefault]),
     tsconfig,
     inlineSourcemap,
+    inlineSourcemapDependencySources,
     bundleLogLevel,
+    bundleTreeshake,
     prefix: sortedEnvPrefix,
   });
 
@@ -730,7 +744,7 @@ async function bundleSingleJob(
         write: false,
         output: {
           format: "esm",
-          sourcemap: inlineSourcemap ? "inline" : true,
+          sourcemap: true,
           minify: inlineSourcemap
             ? {
                 mangle: {
@@ -744,6 +758,7 @@ async function bundleSingleJob(
         plugins,
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
+          createUserTreeshakeOptions(bundleTreeshake),
         ]),
         ...bundleLog.options,
       } as rolldown.BuildOptions);
@@ -751,7 +766,11 @@ async function bundleSingleJob(
 
       const [chunk] = result.output;
       return {
-        code: chunk.code,
+        code: chunkCodeWithSourcemap({
+          chunk,
+          inlineSourcemap: inlineSourcemap ?? false,
+          dependencySources: inlineSourcemapDependencySources ?? false,
+        }),
         packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Workflow job "${job.name}"`),
       };
     },

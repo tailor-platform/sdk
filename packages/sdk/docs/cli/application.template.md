@@ -34,7 +34,7 @@ long their tables were in maintenance mode, equal to the sum of `phases`), `phas
 (`restrict`, `preMigration`, `jobSetup`, `waitingToStart`, `running`, `waitingOrRunning`,
 `jobCleanup`, `postMigration`, `remainingDeploy`, `restore`), and `migrations` with each script's `namespace`,
 `migrationNumber`, `startObserved`, `waitingToStartMs`, `runningMs`, and `waitingOrRunningMs`. See
-[Time spent in maintenance mode](../services/tailordb-migration.md#time-spent-in-maintenance-mode).
+[Time spent in maintenance mode](../services/tailordb/migration.md#time-spent-in-maintenance-mode).
 
 ```sh
 tailor deploy --json > deploy-result.json
@@ -108,6 +108,8 @@ tailor deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.t
 
 When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `external: true` during the same deploy.
 
+Names that identify a resource across the whole workspace, such as application, executor, workflow, and static website names and service namespaces, must be unique across all configs in one deploy. Otherwise, `deploy` fails before planning any changes and lists every duplicate with the config files that define it.
+
 Each config's `files` and `ignores` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
 
 **Migration Handling:**
@@ -119,7 +121,7 @@ When migrations are configured (`db.tailordb.migration` in config), the `deploy`
 3. Runs the pending migration scripts
 4. Updates the migration checkpoint so the same migrations are not re-run
 
-See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details on automatic migration execution.
+See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details on automatic migration execution.
 
 **Concurrent Deploys:**
 
@@ -187,10 +189,12 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
     }
   ],
   "warnings": [
-    { "type": "unmanaged", "resourceType": "tailorDB", "name": "LegacyType" },
-    { "type": "skippedSecret", "resourceType": "secret", "name": "DB_PASSWORD" }
+    { "type": "unmanaged", "resourceType": "staticwebsite", "name": "legacy-site" },
+    { "type": "skippedSecret", "resourceType": "secret.secret", "name": "my-vault/DB_PASSWORD" }
   ],
-  "conflicts": [{ "resourceType": "tailorDB", "name": "User", "currentOwner": "other-app" }]
+  "conflicts": [
+    { "resourceType": "tailordb.service", "name": "tailordb", "currentOwner": "other-app" }
+  ]
 }
 ```
 
@@ -198,6 +202,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
 - `warnings` — resources not in config (`type: "unmanaged"`) or secrets with missing values (`type: "skippedSecret"`). Unmanaged resources require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
 - `conflicts` — resources owned by another application that conflict with the current config. Require confirmation in apply mode; apply is cancelled if declined.
+- `resourceType` in `warnings` and `conflicts` is a stable identifier of the resource kind, such as `executor`, `tailordb.service`, or `secret.secret`. The human-readable plan shows a display name instead.
 
 **Apply** (`--json`): writes a JSON object to stdout:
 
