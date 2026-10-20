@@ -748,3 +748,49 @@ describe("reference validation and quoting", { timeout: 30_000 }, () => {
     );
   });
 });
+
+describe("reference triggers see the rows actually written", { timeout: 30_000 }, () => {
+  const parent: DDLTableConfig = {
+    name: "Parent",
+    fields: { id: { type: "uuid" }, code: { type: "string", unique: true } },
+  };
+  const child: DDLTableConfig = {
+    name: "Child",
+    fields: {
+      id: { type: "uuid" },
+      ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Parent" },
+      code: { type: "string", unique: true },
+    },
+  };
+
+  test("a row discarded by ON CONFLICT DO NOTHING is not checked", async () => {
+    const db = newPglite();
+    await db.exec(generateSchemaDDL([parent, child]));
+    await db.exec(`INSERT INTO "Child" (code) VALUES ('c')`);
+    await db.query(
+      `INSERT INTO "Child" (code, ids) VALUES ('c', $1) ON CONFLICT (code) DO NOTHING`,
+      [`{${crypto.randomUUID()}}`],
+    );
+    const { rows } = await db.query(`SELECT 1 FROM "Child"`);
+    expect(rows).toHaveLength(1);
+  });
+
+  test("an array may point at the row being inserted", async () => {
+    const db = newPglite();
+    await db.exec(
+      generateSchemaDDL([
+        {
+          name: "Node",
+          fields: {
+            id: { type: "uuid" },
+            ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Node" },
+          },
+        },
+      ]),
+    );
+    const id = crypto.randomUUID();
+    await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [id, `{${id}}`]);
+    const { rows } = await db.query(`SELECT 1 FROM "Node"`);
+    expect(rows).toHaveLength(1);
+  });
+});

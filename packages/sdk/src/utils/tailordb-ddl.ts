@@ -362,12 +362,12 @@ function referenceTrigger(
     "DECLARE v jsonb;",
     "BEGIN",
     ...checks,
-    "  RETURN NEW;",
+    "  RETURN NULL;",
     "END",
   ].join("\n");
   return [
     `CREATE OR REPLACE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(body)}`,
-    `CREATE OR REPLACE TRIGGER ${name} BEFORE INSERT OR UPDATE ON ${identifier(table.name)} FOR EACH ROW EXECUTE FUNCTION ${name}()`,
+    `CREATE OR REPLACE TRIGGER ${name} AFTER INSERT OR UPDATE ON ${identifier(table.name)} FOR EACH ROW EXECUTE FUNCTION ${name}()`,
   ];
 }
 

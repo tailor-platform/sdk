@@ -68,10 +68,10 @@ BEGIN
       RAISE EXCEPTION 'violates foreign key constraints: % not found in "User"."id"', fk_check.v #>> '{}' USING ERRCODE = 'foreign_key_violation';
     END IF;
   END LOOP;
-  RETURN NEW;
+  RETURN NULL;
 END
 $fk$;
-CREATE OR REPLACE TRIGGER "SalesOrder_references_0e86ceac_fk" BEFORE INSERT OR UPDATE ON "SalesOrder" FOR EACH ROW EXECUTE FUNCTION "SalesOrder_references_0e86ceac_fk"();
+CREATE OR REPLACE TRIGGER "SalesOrder_references_0e86ceac_fk" AFTER INSERT OR UPDATE ON "SalesOrder" FOR EACH ROW EXECUTE FUNCTION "SalesOrder_references_0e86ceac_fk"();
 
 CREATE SEQUENCE IF NOT EXISTS "Invoice_invoiceNumber_3240f76b_seq" START WITH 1000 MINVALUE 1000;
 CREATE TABLE IF NOT EXISTS "Invoice" (
