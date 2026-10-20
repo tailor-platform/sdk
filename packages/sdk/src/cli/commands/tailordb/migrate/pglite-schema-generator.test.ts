@@ -354,6 +354,94 @@ describe("buildPreMigrationTables", () => {
   });
 });
 
+describe("buildPreMigrationTables relations", () => {
+  const owner = (extra: Partial<SnapshotFieldConfig> = {}) =>
+    snapshotField("uuid", { required: true, foreignKey: true, foreignKeyType: "User", ...extra });
+  const post = (fields: Record<string, SnapshotFieldConfig>) => table("Post", fields);
+
+  test("a relation whose target is in the Pre-phase schema keeps its reference", () => {
+    const tables = buildPreMigrationTables(snapshot(user, post({ ownerID: owner() })), diff([]));
+    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({
+      foreignKey: true,
+      foreignKeyType: "User",
+    });
+  });
+
+  test("a relation keeps its reference when the target is only retained for the script", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([{ kind: "table_removed", tableName: "User", before: user }]),
+    );
+    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({ foreignKey: true });
+  });
+
+  test("a relation to a table outside the Pre-phase schema loses its reference", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(post({ ownerID: owner({ foreignKeyType: "Ghost" }) })),
+      diff([]),
+    );
+    const ownerID = tableNamed(tables, "Post").fields.ownerID;
+    expect(ownerID).toMatchObject({ type: "uuid", required: true });
+    expect(ownerID).not.toHaveProperty("foreignKey");
+    expect(ownerID).not.toHaveProperty("foreignKeyType");
+  });
+
+  test("a relation loses its reference while a pending type change leaves it a different type from the target", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([
+        {
+          kind: "field_type_modified",
+          tableName: "Post",
+          fieldName: "ownerID",
+          before: snapshotField("string", {
+            required: true,
+            foreignKey: true,
+            foreignKeyType: "User",
+          }),
+          after: owner(),
+        },
+      ]),
+    );
+    const ownerID = tableNamed(tables, "Post").fields.ownerID;
+    expect(ownerID).toMatchObject({ type: "string" });
+    expect(ownerID).not.toHaveProperty("foreignKey");
+  });
+
+  test("a relation to a field whose unique constraint is still withheld loses its reference", () => {
+    const withUniqueNickname = {
+      ...user,
+      fields: {
+        ...user.fields,
+        nickname: snapshotField("string", { required: true, unique: true }),
+      },
+    };
+    const tables = buildPreMigrationTables(
+      snapshot(
+        withUniqueNickname,
+        post({
+          author: snapshotField("string", {
+            foreignKey: true,
+            foreignKeyType: "User",
+            foreignKeyField: "nickname",
+          }),
+        }),
+      ),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "nickname",
+          before: snapshotField("string", { required: true }),
+          after: snapshotField("string", { required: true, unique: true }),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "User").fields.nickname).toMatchObject({ unique: false });
+    expect(tableNamed(tables, "Post").fields.author).not.toHaveProperty("foreignKey");
+  });
+});
+
 describe("generateMigrationPgliteSchema", () => {
   test("renders the namespace script module", () => {
     const content = generateMigrationPgliteSchema(snapshot(user), diff([]));
@@ -493,5 +581,34 @@ describe("generated DDL on PGlite", () => {
       { email: "unknown@example.com", handle: "n1" },
       { email: "b@example.com", handle: "n2" },
     ]);
+  });
+
+  test("stages children after their parents, and rejects a child whose parent is missing", async () => {
+    const post = table("Post", {
+      ownerID: snapshotField("uuid", { required: true, foreignKey: true, foreignKeyType: "User" }),
+    });
+    const pre = new PGlite();
+    await pre.exec(generateSchemaDDL(buildPreMigrationTables(snapshot(user, post), diff([]))));
+    await expect(
+      pre.exec(`INSERT INTO "Post" ("ownerID") VALUES (gen_random_uuid())`),
+    ).rejects.toThrow(/foreign key/);
+    await pre.close();
+  });
+
+  test("the module still renders when a relation cannot be a foreign key", () => {
+    const content = generateMigrationPgliteSchema(
+      snapshot(
+        table("Post", {
+          ownerID: snapshotField("uuid", {
+            required: true,
+            foreignKey: true,
+            foreignKeyType: "Ghost",
+          }),
+        }),
+      ),
+      diff([]),
+    );
+    expect(content).toContain('CREATE TABLE IF NOT EXISTS "Post"');
+    expect(content).not.toContain("REFERENCES");
   });
 });
