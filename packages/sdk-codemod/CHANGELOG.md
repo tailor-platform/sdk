@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.10.1
+
+### Patch Changes
+
+- [#2675](https://github.com/tailor-platform/sdk/pull/2675) [`4c63cf3`](https://github.com/tailor-platform/sdk/commit/4c63cf38d0058cf55d39bc464827adfc04e52a79) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.5.2
+
 ## 0.10.0
 
 ### Minor Changes
