@@ -23,7 +23,7 @@ export interface MachineUserInfo {
   id: string;
   name: string;
   clientId: string;
-  /** @deprecated since NEXT_RELEASE — the Platform no longer returns the secret from list calls, so this is never set; use `machineuser token` instead. codemod: none (no automatic migration exists) */
+  /** @deprecated since 2.30.0 — the Platform no longer returns the secret from list calls, so this is never set; use `machineuser token` instead. codemod: none (no automatic migration exists) */
   clientSecret?: string;
   createdAt: Date | null;
   updatedAt: Date | null;
