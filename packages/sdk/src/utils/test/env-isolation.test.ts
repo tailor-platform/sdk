@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import vitestConfig from "../../../vitest.config";
-import { stripDeveloperEnv } from "../../../vitest.setup";
+import { STRIPPED_ENV_KEYS, stripDeveloperEnv } from "../../../vitest.setup";
 
 describe("test environment isolation", () => {
   test("stripDeveloperEnv removes TAILOR_*, FORCE_COLOR, EDITOR, and VISUAL and nothing else", () => {
@@ -47,7 +47,7 @@ describe("test environment isolation", () => {
 
   test("does not inherit TAILOR_*, FORCE_COLOR, EDITOR, or VISUAL from the developer shell", () => {
     const inherited = Object.keys(process.env).filter(
-      (key) => key.startsWith("TAILOR_") || ["FORCE_COLOR", "EDITOR", "VISUAL"].includes(key),
+      (key) => key.startsWith("TAILOR_") || STRIPPED_ENV_KEYS.includes(key),
     );
     expect(inherited).toEqual([]);
   });
