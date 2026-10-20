@@ -23,6 +23,8 @@ export interface MachineUserInfo {
   id: string;
   name: string;
   clientId: string;
+  /** @deprecated The Platform no longer returns the secret from list calls, so this is never set. Use `machineuser token` instead. */
+  clientSecret?: string;
   createdAt: Date | null;
   updatedAt: Date | null;
   attributes: Record<string, unknown>;
