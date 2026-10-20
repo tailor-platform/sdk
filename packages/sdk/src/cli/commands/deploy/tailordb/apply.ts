@@ -1186,7 +1186,7 @@ async function commitMigration(
   } catch (error) {
     await confirmCheckpointAfterUpdateFailure(
       flow,
-      migration,
+      attempt,
       error,
       restoration,
       previousRestorationSnapshot,
@@ -1228,7 +1228,7 @@ async function commitMigration(
  * Read a migration's checkpoint back after its update failed, and return only when the
  * remote checkpoint shows the update was committed.
  * @param flow - Migration flow
- * @param migration - Migration whose checkpoint update failed
+ * @param attempt - Attempt whose checkpoint update failed
  * @param updateError - Error the checkpoint update failed with
  * @param restoration - What the tables return to, updated in place
  * @param previousRestorationSnapshot - Snapshot to restore before the migration ran
@@ -1236,12 +1236,13 @@ async function commitMigration(
  */
 async function confirmCheckpointAfterUpdateFailure(
   flow: MigrationFlow,
-  migration: PendingMigration,
+  attempt: MigrationAttempt,
   updateError: unknown,
   restoration: RestorationState,
   previousRestorationSnapshot: SchemaSnapshot | undefined,
   postMigrationSnapshot: SchemaSnapshot,
 ): Promise<void> {
+  const { migration } = attempt;
   const expectedHistoryId = flow.validation.migrationHistoryIds[migration.namespace] ?? null;
   let remoteState: Awaited<ReturnType<typeof fetchRemoteMigrationState>>;
   try {
