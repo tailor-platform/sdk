@@ -196,7 +196,9 @@ production deploy environment: a pull request job runs on the pull request merge
 ref (`refs/pull/<number>/merge`), so if an environment restricts which branches
 may deploy or requires reviewers, check how that affects the pull request job
 before pointing the migration test at it. A required-reviewers rule makes the
-job wait for approval before it can read the environment's secrets.
+job wait for approval before it can read the environment's secrets. The job runs
+the pull request's own code with that environment's credentials, so add one when
+the source workspace holds production data.
 
 Fork pull requests cannot read secrets, so the job is skipped for them.
 `--migration-test` is not available together with several `--dir` values.
