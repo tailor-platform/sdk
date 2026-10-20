@@ -255,6 +255,8 @@ interface Reference {
   path: string;
   table: string;
   field: string;
+  /** TailorDB type of the referencing value */
+  type: string;
 }
 
 function jsonPathKey(key: string): string {
@@ -270,7 +272,13 @@ function referencesWithin(column: string, field: DDLFieldConfig, path: string): 
   }
   if (!field.foreignKey || field.foreignKeyType === undefined) return [];
   return [
-    { column, path: here, table: field.foreignKeyType, field: field.foreignKeyField ?? "id" },
+    {
+      column,
+      path: here,
+      table: field.foreignKeyType,
+      field: field.foreignKeyField ?? "id",
+      type: field.type,
+    },
   ];
 }
 
@@ -297,13 +305,20 @@ function referencedColumnType(
 ): string {
   const target = tables.get(reference.table);
   if (!target) throw new Error(`Field ${label} references unknown table "${reference.table}".`);
-  const type = reference.field === "id" ? "uuid" : target.fields[reference.field]?.type;
-  if (type === undefined) {
+  const targetField =
+    reference.field === "id" ? { type: "uuid", unique: true } : target.fields[reference.field];
+  if (!targetField) {
     throw new Error(
       `Field ${label} references unknown field "${reference.field}" of table "${reference.table}".`,
     );
   }
-  return mapFieldTypeToPostgresType(type);
+  const targetType = mapFieldTypeToPostgresType(targetField.type);
+  if (!targetField.unique || targetType !== mapFieldTypeToPostgresType(reference.type)) {
+    throw new Error(
+      `Field ${label} references "${reference.table}"."${reference.field}", which must be unique and of the same type as the referencing field.`,
+    );
+  }
+  return targetType;
 }
 
 function referenceCheck(

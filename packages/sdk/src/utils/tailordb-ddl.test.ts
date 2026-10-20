@@ -546,6 +546,36 @@ describe("foreign keys", { timeout: 30_000 }, () => {
     await expect(db.exec(script)).resolves.toBeDefined();
   });
 
+  test.each([
+    ["is not unique", { type: "string" }, { type: "string" }],
+    ["has another type", { type: "integer", unique: true }, { type: "string" }],
+  ] as const)("a reference to a field that %s is rejected", (_, targetField, sourceField) => {
+    expect(() =>
+      generateSchemaDDL([
+        { name: "Parent", fields: { id: { type: "uuid" }, code: targetField } },
+        {
+          name: "Child",
+          fields: {
+            id: { type: "uuid" },
+            parentCode: ref("Parent", { ...sourceField, foreignKeyField: "code" }),
+          },
+        },
+      ]),
+    ).toThrow(/"Parent"."code", which must be unique and of the same type/);
+  });
+
+  test("a uuid reference to a non-uuid referencing field is rejected", () => {
+    expect(() =>
+      generateSchemaDDL([
+        parent,
+        {
+          name: "Child",
+          fields: { id: { type: "uuid" }, parentID: ref("Parent", { type: "string" }) },
+        },
+      ]),
+    ).toThrow(/must be unique and of the same type/);
+  });
+
   test("a reference to a table outside the schema is rejected", () => {
     expect(() =>
       generateSchemaDDL([
