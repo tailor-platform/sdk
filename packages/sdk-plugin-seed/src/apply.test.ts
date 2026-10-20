@@ -20,6 +20,10 @@ const jsonl = vi.hoisted(() => ({
   loadSeedData: vi.fn(),
 }));
 
+const seedModule = vi.hoisted(() => ({
+  hookSeedRows: vi.fn(),
+}));
+
 const datasets = vi.hoisted(() => ({
   selectDatasets: vi.fn(),
 }));
@@ -40,6 +44,7 @@ vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
   ...sdk,
   logger,
 }));
+vi.mock("@tailor-platform/sdk/seed", () => seedModule);
 vi.mock("./jsonl", () => jsonl);
 vi.mock("./datasets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./datasets")>()),
@@ -49,6 +54,10 @@ vi.mock("./datasets", async (importOriginal) => ({
 beforeEach(() => {
   vi.resetAllMocks();
   datasets.selectDatasets.mockReturnValue({ names: [], dirs: [] });
+  seedModule.hookSeedRows.mockImplementation(
+    async ({ rows }: { rows: Record<string, unknown>[] }) =>
+      rows.map((row) => ({ password: "pw", ...row })),
+  );
   // Isolate the env-bound args so ambient shell exports cannot leak in.
   vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", undefined);
   vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
@@ -155,6 +164,59 @@ describe("seedApplyCommand", () => {
     expect(logger.out).toHaveBeenCalledWith(
       expect.objectContaining({ success: true, datasets: ["cogs", "local"] }),
     );
+  });
+
+  describe("_User password", () => {
+    const rowsWithoutPassword = () =>
+      jsonl.loadSeedData.mockImplementation((_dirs: string[], typeNames: string[]) =>
+        Object.fromEntries(
+          typeNames.map((typeName) => [typeName, typeName === "_User" ? [{ name: "Ada" }] : []]),
+        ),
+      );
+
+    test("passes the rows through the _User schema hook from the base data directory", async () => {
+      await runApply(["_User"]);
+      expect(seedModule.hookSeedRows).toHaveBeenCalledWith({
+        schemaDir: "/seed/data",
+        table: "_User",
+        rows: [{ name: "Ada" }],
+      });
+    });
+
+    test("sends a password the hook supplied as initialPassword and keeps one written in the file", async () => {
+      jsonl.loadSeedData.mockImplementation((_dirs: string[], typeNames: string[]) =>
+        Object.fromEntries(
+          typeNames.map((typeName) => [
+            typeName,
+            typeName === "_User" ? [{ name: "Ada" }, { name: "Bob", password: "own" }] : [],
+          ]),
+        ),
+      );
+      await runApply(["--upsert", "_User"]);
+      expect(sdk.executeScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "seed-idp-user.ts",
+          arg: expect.objectContaining({
+            users: [
+              { name: "Ada", initialPassword: "pw" },
+              { name: "Bob", password: "own" },
+            ],
+          }),
+        }),
+      );
+    });
+
+    test("still sends a row without password when the environment has none", async () => {
+      rowsWithoutPassword();
+      seedModule.hookSeedRows.mockImplementation(async ({ rows }: { rows: unknown[] }) => rows);
+      await runApply(["_User"]);
+      expect(sdk.executeScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "seed-idp-user.ts",
+          arg: expect.objectContaining({ users: [{ name: "Ada" }] }),
+        }),
+      );
+    });
   });
 
   test("rejects all datasets combined with named datasets before loading context", async () => {

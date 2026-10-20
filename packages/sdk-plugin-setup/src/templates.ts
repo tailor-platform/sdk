@@ -6,7 +6,7 @@ import tagTemplate from "./tag.workflow.yml";
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
 // Released template fingerprint: 0a0aedcf104145eee1c6b5b5ffa4761bcbdf0c410684d7727b3793381dd709af
 const RELEASED_TEMPLATE_VERSION = 19;
-const TEMPLATE_CHANGED_SINCE_RELEASE = false;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
   RELEASED_TEMPLATE_VERSION + (TEMPLATE_CHANGED_SINCE_RELEASE ? 1 : 0);
@@ -290,6 +290,8 @@ function perAppSeedValidateSteps(apps: readonly RenderApp[]): string | undefined
     .flatMap((app) => [
       `- id: tailor-seed-validate-${appSlug(app.dir)}`,
       `  run: __TAILOR_CLI__ seed validate`,
+      `  env:`,
+      `    SEED_USER_PASSWORD: \${{ github.event_name == 'pull_request' && 'validate-only' || secrets.SEED_USER_PASSWORD }}`,
       ...(app.dir === "." ? [] : [`  working-directory: ${app.dir}`]),
     ]);
   return lines.length > 0 ? lines.join("\n") : undefined;
