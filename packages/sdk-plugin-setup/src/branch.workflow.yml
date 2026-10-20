@@ -675,11 +675,11 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@22543e223136ce9b67844bfc7e0b92e88efb5967 # v2.5.0
+        uses: tailor-platform/actions/install@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-migration-test-login
