@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@types/node": "24.19.2",
-    "eslint-plugin-zod": "5.0.0",
+    "eslint-plugin-zod": "5.2.0",
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
     "tsx": "4.23.15",
