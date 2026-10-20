@@ -1,5 +1,27 @@
 # @tailor-platform/sdk
 
+## 2.29.2
+
+### Patch Changes
+
+- [#2639](https://github.com/tailor-platform/sdk/pull/2639) [`48377b3`](https://github.com/tailor-platform/sdk/commit/48377b3d8bcdd76f6a55a9c1c9b96430ba9dce30) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency execa to v10.1.1
+
+- [#2675](https://github.com/tailor-platform/sdk/pull/2675) [`4c63cf3`](https://github.com/tailor-platform/sdk/commit/4c63cf38d0058cf55d39bc464827adfc04e52a79) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.5.2
+
+- [#2676](https://github.com/tailor-platform/sdk/pull/2676) [`d1479d8`](https://github.com/tailor-platform/sdk/commit/d1479d84cfe2f0d330d12733aa3758ae026d73a3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​toiroakr/read-multiline to v0.4.3
+
+- [#2677](https://github.com/tailor-platform/sdk/pull/2677) [`5fd1e48`](https://github.com/tailor-platform/sdk/commit/5fd1e48e226aea6b67b5135cb81a30739f3fcc13) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.2.14
+
+- [#2678](https://github.com/tailor-platform/sdk/pull/2678) [`80d7b54`](https://github.com/tailor-platform/sdk/commit/80d7b548bc9c7c0a2b62ef5df86f1ea6bb7fd35f) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency temporal-polyfill to v1.0.6
+
+- [#2663](https://github.com/tailor-platform/sdk/pull/2663) [`587fd77`](https://github.com/tailor-platform/sdk/commit/587fd773bfee3399e4d773646ed669073101eb21) Thanks [@dqn](https://github.com/dqn)! - Report invalid configs and SDK definitions with specific error codes that list each offending field, instead of `UNEXPECTED_ERROR` carrying the raw validation output:
+  
+  - `CONFIG_INVALID`: `tailor.config.ts` fails validation, in its top-level fields, its `plugins` export, or a TailorDB, IdP, Auth, static website, AI Gateway, or secret manager config. Each field is named by its path in the failing export, such as `auth.machineUserAttributes.role` or a `plugins` item's index. Under `--json`, `error.context` carries `file`, `exportName`, and `issues` (`path` and `message` per field), plus `configKey` and `name` for a service.
+  - `DEFINITION_INVALID`: a resolver, executor, TailorDB type, HTTP adapter, workflow, or workflow job fails validation. `error.context` carries `kind`, `file`, `exportName`, and `issues`.
+  - `OPTIONS_INVALID`: options passed to an SDK function such as `listWorkspaces()` fail validation. The message is unchanged, and `error.context.issues` lists each field.
+  - `MIGRATION_FILE_INVALID`: an invalid schema snapshot or migration diff now lists its fields in the same format, with `error.context.issues`.
+  - `DEFINITION_EXPORT_INVALID`: a workflow or HTTP adapter is exported under a name, or a workflow job is the default export. A misplaced workflow or job was previously reported with validation errors that did not apply to it.
+
 ## 2.29.1
 
 ### Patch Changes
