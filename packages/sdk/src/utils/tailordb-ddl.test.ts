@@ -554,3 +554,51 @@ describe("foreign keys", { timeout: 30_000 }, () => {
     ).toThrow(/unknown table "Parent"/);
   });
 });
+
+describe("foreign keys to a non-id field and edge columns", { timeout: 30_000 }, () => {
+  const byCode = (extra: Partial<DDLFieldConfig>): DDLFieldConfig => ({
+    type: "string",
+    foreignKey: true,
+    foreignKeyType: "Parent",
+    foreignKeyField: "code",
+    ...extra,
+  });
+  const tables = (child: Record<string, DDLFieldConfig>): DDLTableConfig[] => [
+    { name: "Parent", fields: { id: { type: "uuid" }, code: { type: "string", unique: true } } },
+    { name: "Child", fields: { id: { type: "uuid" }, ...child } },
+  ];
+
+  test("scalar and array references to a unique non-id field are enforced", async () => {
+    const db = new PGlite();
+    await db.exec(generateSchemaDDL(tables({ one: byCode({}), many: byCode({ array: true }) })));
+    await db.exec(`INSERT INTO "Parent" (code) VALUES ('a'), ('b')`);
+    await db.exec(`INSERT INTO "Child" (one, many) VALUES ('a', '{a,b}')`);
+    await expect(db.exec(`INSERT INTO "Child" (one) VALUES ('zzz')`)).rejects.toThrow(
+      /foreign key/,
+    );
+    await expect(db.exec(`INSERT INTO "Child" (many) VALUES ('{a,zzz}')`)).rejects.toThrow(
+      /zzz not found in "Parent"."code"/,
+    );
+  });
+
+  test("a NULL element or NULL column in an array reference is accepted", async () => {
+    const db = new PGlite();
+    await db.exec(generateSchemaDDL(tables({ many: byCode({ array: true }) })));
+    await db.exec(`INSERT INTO "Parent" (code) VALUES ('a')`);
+    await db.exec(`INSERT INTO "Child" (many) VALUES ('{a,NULL}'), (NULL)`);
+    const { rows } = await db.query(`SELECT 1 FROM "Child"`);
+    expect(rows).toHaveLength(2);
+  });
+
+  test("a reference declared on id leaves the primary key column unchanged", () => {
+    const script = generateSchemaDDL(
+      tables({}).map((t) =>
+        t.name === "Child"
+          ? { ...t, fields: { id: { type: "uuid", foreignKey: true, foreignKeyType: "Parent" } } }
+          : t,
+      ),
+    );
+    expect(script).toContain('"id" uuid PRIMARY KEY DEFAULT gen_random_uuid()\n');
+    expect(script).not.toContain("REFERENCES");
+  });
+});
