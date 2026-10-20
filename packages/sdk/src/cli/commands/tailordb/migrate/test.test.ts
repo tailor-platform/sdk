@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { runCommand } from "@politty/zod";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { commonArgs } from "#/cli/shared/args";
 import {
@@ -151,9 +151,13 @@ describe("tailordb migration test", () => {
     const folderId = "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb";
     const directories: string[] = [];
 
+    beforeEach(() => {
+      vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", undefined);
+      vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
+    });
+
     afterEach(() => {
-      delete process.env.TAILOR_PLATFORM_ORGANIZATION_ID;
-      delete process.env.TAILOR_PLATFORM_FOLDER_ID;
+      vi.unstubAllEnvs();
       for (const directory of directories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
       }
