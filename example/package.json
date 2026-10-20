@@ -22,7 +22,7 @@
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "pnpm generate && pnpm run typecheck:generated",
     "typecheck:generated": "tsc --noEmit",
-    "typecheck:go": "tsgo --tsBuildInfoFile ./.tsgo.tsbuildinfo"
+    "typecheck:rs": "node ../packages/sdk/scripts/typecheck-native.ts"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^",
@@ -37,7 +37,6 @@
     "@tailor-platform/sdk-plugin-seed": "workspace:^",
     "@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
     "@types/node": "24.19.2",
-    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "eslint-plugin-zod": "5.2.0",
     "graphql": "17.0.2",
     "graphql-request": "7.4.0",
@@ -46,6 +45,7 @@
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
     "tsdown": "0.23.1",
+    "tsrs": "0.16.0-ts7.1.0-dev.20260929",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.0.5"
