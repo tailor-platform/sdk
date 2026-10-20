@@ -1,7 +1,7 @@
-import { stripVTControlCharacters } from "node:util";
 import { getOrNull } from "#/cli/shared/client";
 import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
+import { plainRedacted } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -555,7 +555,7 @@ function applyMetadataLabelWrite(
 
 function metadataRecoveryError(applyError: unknown, flushError: unknown): AggregateError {
   const describeCause = (error: unknown) =>
-    isCLIError(error) ? stripVTControlCharacters(error.format()) : toError(error).message;
+    isCLIError(error) ? plainRedacted(error.format()) : toError(error).message;
   return withErrorDiagnostics(
     new AggregateError(
       [applyError, flushError],

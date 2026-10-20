@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { withErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson, serializeError } from "./error-json";
 import { CLIError } from "./errors";
-import { logger, redactSecrets, resetSecretRegistry } from "./logger";
+import { logger, redactSecrets, resetSecretRegistry, styles } from "./logger";
 
 // This file runs in the shared, non-isolated "unit-core" Vitest project, so registered
 // secrets would otherwise leak into unrelated test files run in the same worker.
@@ -31,6 +31,19 @@ describe("serializeError", () => {
     expect(parsed.error.message).not.toContain(secret);
     expect(parsed.error.message).not.toContain("secret-with-quotes");
     expect(parsed.error.message).toContain("<redacted>");
+  });
+
+  test("redacts a secret split by inline colors", () => {
+    logger.registerSecret("sk-colored-secret");
+    const output = serializeError(new Error(`bad ${styles.error("sk-colored")}-secret`));
+    const parsed = JSON.parse(output) as { error: { message: string } };
+    expect(parsed.error.message).toBe("bad <redacted>");
+  });
+
+  test("writes string values without colors", () => {
+    const output = serializeError(new Error(`bad ${styles.bold("input")}`));
+    const parsed = JSON.parse(output) as { error: { message: string } };
+    expect(parsed.error.message).toBe("bad input");
   });
 
   test("redacts a secret nested inside CLIError.context, an arbitrary record", () => {
