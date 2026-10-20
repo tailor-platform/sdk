@@ -503,6 +503,7 @@ export const deletedResources = {
  * @param workspaceId - Workspace ID
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables the migration's phases touched
+ * @param gqlPermissionUndo - How to undo each GraphQL permission this migration wrote
  * @returns Names of the tables the rollback left in their restricted state
  */
 export async function rollbackSingleMigrationAfterFailure(
