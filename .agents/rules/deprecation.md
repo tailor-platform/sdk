@@ -22,6 +22,12 @@ check:deprecations` enforces the mechanical parts.
   back-filling an already-released deprecation, and then it is looked up the same way — with the same
   limits — as the registry `since` below, never estimated.
 - `codemod: <id>[, <id>]` names entries in `packages/sdk-codemod/src/registry.ts`.
+- `codemod: none (<reason>)` is for a deprecation that has no replacement API and no mechanical
+  migration, where callers can only stop using the API. The reason is required and `none` cannot be
+  combined with ids. No registry entry is added. Removal still lands on a fixed boundary: the next major
+  after the release that ships the deprecation (`<major of since + 1>.0.0`, taken from the current
+  version while `since` is `NEXT_RELEASE`), and `check:deprecations` rejects the declaration once the
+  current version reaches it.
 - Name the replacement in the same sentence. This text is what users read in their editor.
 - The tag starts its own JSDoc line, which is where JSDoc reads a block tag. When a comment only
   talks _about_ deprecation, write the tag name as inline code (`` `@deprecated` ``) so it is not

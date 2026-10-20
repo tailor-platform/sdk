@@ -1,5 +1,5 @@
 import { Lang, parse } from "@ast-grep/napi";
-import { gte, lte, valid } from "semver";
+import { gte, lte, major, valid } from "semver";
 import { NEXT_RELEASE } from "./registry";
 import type { SgNode } from "@ast-grep/napi";
 
@@ -62,6 +62,8 @@ const SINCE = /^since\s+(\S+)/;
 // of swallowing the prose that follows it.
 const CODEMOD_IDS = /codemod:\s*([a-z0-9][\w./-]*(?:\s*,\s*[a-z0-9][\w./-]*)*)/;
 const TRAILING_PUNCTUATION = /[.,;:—-]+$/;
+const NO_CODEMOD = "none";
+const NO_CODEMOD_REASON = /codemod:\s*none\s*\(\s*[^)\s][^)]*\)/;
 
 /** One JSDoc comment, as raw lines plus the same lines with the scaffolding removed. */
 interface JsdocBlock {
@@ -264,6 +266,7 @@ export function checkDeprecationTags(
   }
 
   for (const tag of tags) {
+    let shippedVersion: string | undefined;
     const since = SINCE.exec(tag.text);
     if (since === null) {
       problems.push({
@@ -283,6 +286,8 @@ export function checkDeprecationTags(
             line: tag.line,
             message: `\`since ${version}\` is newer than the current version ${options.currentVersion}; write \`${PENDING_SINCE}\` and let the release workflow resolve it`,
           });
+        } else {
+          shippedVersion = version;
         }
       }
     }
@@ -297,9 +302,37 @@ export function checkDeprecationTags(
       continue;
     }
 
-    for (const id of ids[1]!
+    const idList = ids[1]!
       .split(",")
-      .map((value) => value.trim().replace(TRAILING_PUNCTUATION, ""))) {
+      .map((value) => value.trim().replace(TRAILING_PUNCTUATION, ""));
+
+    if (idList.includes(NO_CODEMOD)) {
+      if (idList.length > 1) {
+        problems.push({
+          line: tag.line,
+          message: `\`codemod: ${NO_CODEMOD}\` cannot be combined with other codemod ids`,
+        });
+        continue;
+      }
+      if (!NO_CODEMOD_REASON.test(tag.text)) {
+        problems.push({
+          line: tag.line,
+          message: `\`codemod: ${NO_CODEMOD}\` needs a reason in parentheses, e.g. \`codemod: ${NO_CODEMOD} (no automatic migration exists)\``,
+        });
+      }
+      // With no codemod to name a boundary, removal falls on the next major
+      // after the release that ships the deprecation.
+      const removal = `${major(shippedVersion ?? options.currentVersion) + 1}.0.0`;
+      if (gte(options.currentVersion, removal)) {
+        problems.push({
+          line: tag.line,
+          message: `\`codemod: ${NO_CODEMOD}\` removes this API as of ${removal}, which ${options.currentVersion} has reached; delete the deprecated declaration`,
+        });
+      }
+      continue;
+    }
+
+    for (const id of idList) {
       const boundary = options.codemodBoundaries.get(id);
       if (boundary === undefined) {
         problems.push({
