@@ -1,7 +1,11 @@
+import { timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
+  type ExecutorJob,
+  ExecutorJobStatus,
   ExecutorTargetType,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import { gql } from "graphql-request";
 import { describe, expect, inject, test } from "vitest";
 import { createGraphQLClient, createOperatorClient } from "./utils";
@@ -177,8 +181,12 @@ describe("controlplane", async () => {
 
 describe("dataplane", () => {
   const graphQLClient = createGraphQLClient(inject("url"), inject("token"));
+  const [client, workspaceId] = createOperatorClient();
 
   describe("sales-order-created", async () => {
+    const executorName = "sales-order-created";
+    const pollTimeoutMs = 90_000;
+    const jobReportTimeoutMs = 20_000;
     let salesOrderId: string;
 
     test("triggered", async () => {
@@ -228,7 +236,7 @@ describe("dataplane", () => {
       salesOrderId = createSalesOrderResult.data.createSalesOrder.id;
     });
 
-    test("event created", { timeout: 90_000 }, async () => {
+    test("event created", { timeout: pollTimeoutMs + jobReportTimeoutMs + 10_000 }, async () => {
       const query = gql`
         query {
           salesOrderCreatedList(query: { salesOrderID: { eq: "${salesOrderId}" } }) {
@@ -249,16 +257,68 @@ describe("dataplane", () => {
           }[];
         };
       }
-      // Use poll to wait until the event is created.
-      await expect
-        .poll(
-          async () => {
-            const result = await graphQLClient.rawRequest<Data>(query);
-            return result.data.salesOrderCreatedList.edges.length;
-          },
-          { timeout: 90_000, interval: 3_000 },
-        )
-        .toEqual(1);
+      try {
+        // Use poll to wait until the event is created.
+        await expect
+          .poll(
+            async () => {
+              const result = await graphQLClient.rawRequest<Data>(query);
+              expect(result.errors).toBeUndefined();
+              return result.data.salesOrderCreatedList.edges.length;
+            },
+            { timeout: pollTimeoutMs, interval: 3_000 },
+          )
+          .toEqual(1);
+      } catch (error) {
+        throw new Error(await fetchJobReport(salesOrderId), { cause: error });
+      }
     });
+
+    async function fetchJobReport(recordId: string): Promise<string> {
+      const signal = AbortSignal.timeout(jobReportTimeoutMs);
+      try {
+        const { jobs } = await client.listExecutorJobs(
+          { workspaceId, executorName, pageSize: 20, pageDirection: PageDirection.DESC },
+          { signal },
+        );
+        const lines = [`${executorName} jobs as of ${new Date().toISOString()}, newest first:`];
+        for (const job of jobs) {
+          lines.push(
+            `  ${job.id} ${ExecutorJobStatus[job.status]} created ${formatTimestamp(job.createdAt)} for record ${jobRecordId(job) ?? "-"}`,
+          );
+        }
+        const recordJob = jobs.find((job) => jobRecordId(job) === recordId);
+        if (!recordJob) {
+          lines.push(`No job for record ${recordId}.`);
+          return lines.join("\n");
+        }
+
+        const { attempts } = await client.listExecutorJobAttempts(
+          { workspaceId, jobId: recordJob.id },
+          { signal },
+        );
+        lines.push(`Job ${recordJob.id} for record ${recordId} has ${attempts.length} attempt(s):`);
+        for (const attempt of attempts) {
+          lines.push(
+            `  ${ExecutorJobStatus[attempt.status]} started ${formatTimestamp(attempt.startedAt)} finished ${formatTimestamp(attempt.finishedAt)}${attempt.error ? `: ${attempt.error}` : ""}`,
+          );
+        }
+        return lines.join("\n");
+      } catch (error) {
+        return `Could not list ${executorName} jobs: ${String(error)}`;
+      }
+    }
   });
 });
+
+function jobRecordId(job: ExecutorJob): string | undefined {
+  const newRecord = job.data?.newRecord;
+  if (typeof newRecord !== "object" || newRecord === null || Array.isArray(newRecord)) {
+    return undefined;
+  }
+  return typeof newRecord.id === "string" ? newRecord.id : undefined;
+}
+
+function formatTimestamp(timestamp: Timestamp | undefined): string {
+  return timestamp ? timestampDate(timestamp).toISOString() : "-";
+}
