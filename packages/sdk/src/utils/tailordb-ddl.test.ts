@@ -1,3 +1,4 @@
+import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "vitest";
 import {
   generateSchemaDDL,
@@ -391,5 +392,165 @@ describe("generateSchemaDDL", () => {
 
   test("is empty for no tables", () => {
     expect(generateSchemaDDL([])).toBe("");
+  });
+});
+
+describe("foreign keys", { timeout: 30_000 }, () => {
+  const parent: DDLTableConfig = { name: "Parent", fields: { id: { type: "uuid" } } };
+  const ref = (foreignKeyType: string, extra: Partial<DDLFieldConfig> = {}): DDLFieldConfig => ({
+    type: "uuid",
+    required: true,
+    foreignKey: true,
+    foreignKeyType,
+    ...extra,
+  });
+
+  async function pglite(script: string): Promise<PGlite> {
+    const db = new PGlite();
+    await db.exec(script);
+    return db;
+  }
+
+  test("a scalar reference column points at the id of its table by default", () => {
+    const script = generateSchemaDDL([
+      parent,
+      { name: "Child", fields: { id: { type: "uuid" }, parentID: ref("Parent") } },
+    ]);
+    expect(script).toContain('"parentID" uuid NOT NULL REFERENCES "Parent" ("id")');
+  });
+
+  test("a scalar reference follows foreignKeyField", () => {
+    const script = generateSchemaDDL([
+      { name: "Parent", fields: { id: { type: "uuid" }, code: { type: "string", unique: true } } },
+      {
+        name: "Child",
+        fields: {
+          id: { type: "uuid" },
+          parentCode: ref("Parent", { type: "string", foreignKeyField: "code" }),
+        },
+      },
+    ]);
+    expect(script).toContain('"parentCode" text NOT NULL REFERENCES "Parent" ("code")');
+  });
+
+  test("tables are created after the tables they reference", () => {
+    const script = generateSchemaDDL([
+      { name: "Child", fields: { id: { type: "uuid" }, parentID: ref("Parent") } },
+      parent,
+    ]);
+    expect(script.indexOf('"Parent" (')).toBeLessThan(script.indexOf('"Child" ('));
+  });
+
+  test("a self reference is inline", () => {
+    const script = generateSchemaDDL([
+      {
+        name: "Node",
+        fields: { id: { type: "uuid" }, parentID: ref("Node", { required: false }) },
+      },
+    ]);
+    expect(script).toContain('"parentID" uuid REFERENCES "Node" ("id")');
+  });
+
+  test("a cycle is closed by a constraint added after both tables exist", async () => {
+    const script = generateSchemaDDL([
+      { name: "A", fields: { id: { type: "uuid" }, bID: ref("B", { required: false }) } },
+      { name: "B", fields: { id: { type: "uuid" }, aID: ref("A", { required: false }) } },
+    ]);
+    expect(script).toContain("ADD CONSTRAINT");
+    const db = await pglite(script);
+    await expect(
+      db.exec(`INSERT INTO "A" (id, "bID") VALUES (gen_random_uuid(), gen_random_uuid())`),
+    ).rejects.toThrow(/foreign key/);
+  });
+
+  test("a scalar reference rejects a missing parent in PGlite", async () => {
+    const db = await pglite(
+      generateSchemaDDL([
+        parent,
+        { name: "Child", fields: { id: { type: "uuid" }, parentID: ref("Parent") } },
+      ]),
+    );
+    await expect(
+      db.exec(`INSERT INTO "Child" ("parentID") VALUES (gen_random_uuid())`),
+    ).rejects.toThrow(/foreign key/);
+  });
+
+  test("an array reference rejects an element with no parent and accepts existing ones", async () => {
+    const db = await pglite(
+      generateSchemaDDL([
+        parent,
+        {
+          name: "Child",
+          fields: {
+            id: { type: "uuid" },
+            parentIDs: ref("Parent", { array: true, required: false }),
+          },
+        },
+      ]),
+    );
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO "Parent" DEFAULT VALUES RETURNING id`,
+    );
+    const id = rows[0]!.id;
+    await db.query(`INSERT INTO "Child" ("parentIDs") VALUES ($1)`, [`{${id}}`]);
+    await expect(
+      db.query(`INSERT INTO "Child" ("parentIDs") VALUES ($1)`, [`{${id},${crypto.randomUUID()}}`]),
+    ).rejects.toThrow(/violates foreign key constraints: .* not found in "Parent"."id"/);
+  });
+
+  test("references inside nested fields, including nested arrays, are checked", async () => {
+    const db = await pglite(
+      generateSchemaDDL([
+        parent,
+        {
+          name: "Child",
+          fields: {
+            id: { type: "uuid" },
+            info: {
+              type: "nested",
+              fields: {
+                owner: ref("Parent", { required: false }),
+                items: { type: "nested", array: true, fields: { parentID: ref("Parent") } },
+              },
+            },
+          },
+        },
+      ]),
+    );
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO "Parent" DEFAULT VALUES RETURNING id`,
+    );
+    const id = rows[0]!.id;
+    const insert = (info: unknown) =>
+      db.query(`INSERT INTO "Child" (info) VALUES ($1::jsonb)`, [JSON.stringify(info)]);
+    await insert({ owner: id, items: [{ parentID: id }] });
+    await expect(insert({ owner: crypto.randomUUID(), items: [] })).rejects.toThrow(/not found/);
+    await expect(
+      insert({ items: [{ parentID: id }, { parentID: crypto.randomUUID() }] }),
+    ).rejects.toThrow(/not found/);
+  });
+
+  test("applying the script twice leaves the database unchanged", async () => {
+    const script = generateSchemaDDL([
+      {
+        name: "A",
+        fields: {
+          id: { type: "uuid" },
+          bID: ref("B", { required: false }),
+          ids: ref("B", { array: true, required: false }),
+        },
+      },
+      { name: "B", fields: { id: { type: "uuid" }, aID: ref("A", { required: false }) } },
+    ]);
+    const db = await pglite(script);
+    await expect(db.exec(script)).resolves.toBeDefined();
+  });
+
+  test("a reference to a table outside the schema is rejected", () => {
+    expect(() =>
+      generateSchemaDDL([
+        { name: "Child", fields: { id: { type: "uuid" }, parentID: ref("Parent") } },
+      ]),
+    ).toThrow(/unknown table "Parent"/);
   });
 });
