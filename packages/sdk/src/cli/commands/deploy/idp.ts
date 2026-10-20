@@ -184,6 +184,12 @@ export async function applyIdP(
           });
         });
         if (vault) return;
+        const { client: idpClient } = await client.getIdPClient({
+          workspaceId: update.workspaceId,
+          namespaceName: update.namespaceName,
+          name: update.name,
+        });
+        if (idpClient?.clientSecret) logger.registerSecret(idpClient.clientSecret);
         await client.createSecretManagerVault({
           workspaceId: update.workspaceId,
           secretmanagerVaultName: vaultName,
@@ -192,7 +198,7 @@ export async function applyIdP(
           workspaceId: update.workspaceId,
           secretmanagerVaultName: vaultName,
           secretmanagerSecretName: secretName,
-          secretmanagerSecretValue: update.clientSecret,
+          secretmanagerSecretValue: idpClient?.clientSecret,
         });
       }),
     ]);
@@ -632,7 +638,6 @@ type UpdateClient = {
   name: string;
   workspaceId: string;
   namespaceName: string;
-  clientSecret: string;
 };
 
 type DeleteClient = {
@@ -668,19 +673,18 @@ async function planClients(
       clientsByIdp[i],
       "clientsByIdp missing entry for idp index",
     );
-    const existingNameMap = new Map<string, string>();
+    const existingNames = new Set<string>();
     existingClients.forEach((client) => {
-      existingNameMap.set(client.name, client.clientSecret);
+      existingNames.add(client.name);
       logger.registerSecret(client.clientSecret);
     });
     for (const name of idp.clients) {
-      if (existingNameMap.has(name)) {
+      if (existingNames.has(name)) {
         if (forceApplyAll) {
           changeSet.updates.push({
             name,
             workspaceId,
             namespaceName,
-            clientSecret: existingNameMap.get(name) ?? "",
             forcedBySdkVersion: true,
           });
         } else {
@@ -688,7 +692,7 @@ async function planClients(
             name,
           });
         }
-        existingNameMap.delete(name);
+        existingNames.delete(name);
       } else {
         changeSet.creates.push({
           name,
@@ -702,7 +706,7 @@ async function planClients(
         });
       }
     }
-    existingNameMap.forEach((_clientSecret, name) => {
+    existingNames.forEach((name) => {
       changeSet.deletes.push({
         name,
         request: {
