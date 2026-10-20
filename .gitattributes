@@ -1,0 +1,32 @@
+# protoc-gen-es
+packages/tailor-proto/src/**/*_pb.js linguist-generated
+packages/tailor-proto/src/**/*_pb.d.ts linguist-generated
+
+# zinfer
+packages/sdk/src/types/*.generated.ts linguist-generated
+
+# tailor generate
+example/generated/*.ts linguist-generated
+packages/sdk/e2e/fixtures/migration/generated/*.ts linguist-generated
+packages/create-sdk/templates/*/src/generated/*.ts linguist-generated
+example/tests/fixtures/expected/** linguist-generated
+
+# tailordb migrate (migrate.ts is hand-written and stays visible)
+example/migrations/*/db.ts linguist-generated
+example/migrations/*/db.pglite.ts linguist-generated
+example/migrations/*/*/db.ts linguist-generated
+example/migrations/*/*/db.pglite.ts linguist-generated
+example/migrations/*/diff.json linguist-generated
+example/migrations/*/schema.json linguist-generated
+example/migrations/*/*/diff.json linguist-generated
+example/migrations/*/*/schema.json linguist-generated
+example/tests/migration-fixtures/app/migrations/*/schema.json linguist-generated
+
+# politty docs (*.template.md is the source and stays visible)
+packages/sdk/docs/cli/*.md linguist-generated
+packages/sdk/docs/cli/*.template.md -linguist-generated
+packages/sdk/docs/cli-reference.md linguist-generated
+
+# lockfiles
+aqua-checksums.json linguist-generated
+pnpm-lock.yaml linguist-generated
