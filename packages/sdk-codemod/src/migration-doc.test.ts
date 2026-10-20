@@ -55,6 +55,9 @@ describe("renderMigrationDoc", () => {
     ]);
 
     expect(doc).toContain("# Migrating to v2");
+    expect(doc).toMatch(
+      /^---\ndescription: "Upgrade your project to Tailor Platform SDK v2 [^"\n]*"\n---\n\n# Migrating to v2\n/,
+    );
     expect(doc).toContain("## executeScript arg");
     expect(doc).toContain("**Migration:** Partially automatic");
     expect(doc).toContain("Before:\n\n```ts\narg: JSON.stringify(x)\n```");

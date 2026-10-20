@@ -1,3 +1,7 @@
+---
+description: "Call Tailor Platform runtime APIs such as secrets, IdP, workflows, file uploads, AI Gateway, and logging from your functions with typed imports from @tailor-platform/sdk/runtime."
+---
+
 # Runtime API
 
 `@tailor-platform/sdk/runtime` provides typed wrappers for the `tailor.*` and `tailordb.file` APIs that the Tailor Platform Function runtime injects into the global scope at execution time. The wrappers are thin and delegate to the platform-provided globals; they exist so that you can:

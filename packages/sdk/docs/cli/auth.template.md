@@ -1,4 +1,5 @@
 ---
+description: "Manage Auth service resources from the tailor CLI: authorize and revoke auth connections, get machine user tokens, and inspect OAuth2 clients."
 politty:
   index:
     title: "Auth Resource Commands"

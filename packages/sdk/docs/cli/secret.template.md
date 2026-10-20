@@ -1,4 +1,5 @@
 ---
+description: "Create and manage Secret Manager vaults and secrets from the tailor CLI."
 politty:
   index:
     title: "Secret Commands"

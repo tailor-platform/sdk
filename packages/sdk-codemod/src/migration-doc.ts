@@ -97,6 +97,10 @@ export function migrationDocMajor(codemod: CodemodPackage): number {
  */
 export function renderMigrationDoc(codemods: CodemodPackage[], major = 2): string {
   const header = [
+    "---",
+    `description: "Upgrade your project to Tailor Platform SDK v${major} by running the codemods and finishing the changes they report as not migrated automatically."`,
+    "---",
+    "",
     `# Migrating to v${major}`,
     "",
     "<!-- Generated from the sdk-codemod registry. Run `pnpm codemod:docs:update` and edit `packages/sdk-codemod/src/registry.ts` instead of this file. -->",

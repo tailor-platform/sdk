@@ -1,3 +1,7 @@
+---
+description: "Create and manage Secret Manager vaults and secrets from the tailor CLI."
+---
+
 # Secret Commands
 
 Commands for managing Secret Manager vaults and secrets.

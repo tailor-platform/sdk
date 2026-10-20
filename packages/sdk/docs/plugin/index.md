@@ -1,3 +1,7 @@
+---
+description: "Extend TailorDB tables with plugins that generate additional tables, executors, and files, and learn how to register, attach, and configure them."
+---
+
 # Plugins (Beta)
 
 > **Beta Feature**: The plugin system is currently in beta. APIs may change in future releases.

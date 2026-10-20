@@ -1,3 +1,7 @@
+---
+description: "Reference for the tailor CLI, including usage, global options, JSON output, workspace selection, and an index of every command."
+---
+
 # tailor
 
 Tailor Platform SDK - The SDK to work with Tailor Platform

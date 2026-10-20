@@ -1,4 +1,5 @@
 ---
+description: "Create, generate, deploy, inspect, and remove the application defined in tailor.config.ts, and call Tailor Platform APIs directly with tailor api."
 politty:
   index:
     title: "Application Commands"

@@ -1,3 +1,7 @@
+---
+description: "Copy the TailorDB records, files, and IdP users of an application from one workspace to another with tailor data clone, and rehearse migrations against cloned data."
+---
+
 # Cloning Application Data
 
 `tailor data clone` copies the data of an application from one workspace to another, for example to fill a staging workspace with production records before testing a release against them. It copies the records of every TailorDB namespace registered in the application, and optionally TailorDB file content and IdP users.

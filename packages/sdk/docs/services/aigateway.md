@@ -1,3 +1,7 @@
+---
+description: "Define AI Gateways that give your app one OpenAI-compatible endpoint for multiple LLMs, with workspace authentication and platform-managed credentials."
+---
+
 # AI Gateway
 
 AI Gateway provides a unified endpoint for accessing a range of large language models through a single OpenAI-compatible API, with platform-managed credentials and workspace-scoped authentication.

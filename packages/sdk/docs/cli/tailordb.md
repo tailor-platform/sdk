@@ -1,3 +1,7 @@
+---
+description: "Truncate TailorDB table data and generate, test, validate, and apply TailorDB schema migrations with the tailor CLI."
+---
+
 # TailorDB Commands
 
 Commands for managing TailorDB tables, data, and schema migrations.

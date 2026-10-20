@@ -1,4 +1,5 @@
 ---
+description: "Deploy static website files and manage static websites with the tailor CLI."
 politty:
   index:
     title: "Static Website Commands"

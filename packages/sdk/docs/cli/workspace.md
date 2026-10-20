@@ -1,3 +1,7 @@
+---
+description: "Create, inspect, and delete workspaces, manage workspace users, apps, and expiry, and manage CLI profiles that pair a user with a workspace."
+---
+
 # Workspace Commands
 
 Commands for managing workspaces and profiles.

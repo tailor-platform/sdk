@@ -1,3 +1,7 @@
+---
+description: "Host static web applications on the Tailor Platform with defineStaticWebSite, including type-safe URL references, IP restrictions, and custom domains."
+---
+
 # Static Website
 
 Static Website is a service for hosting static web applications on the Tailor Platform.

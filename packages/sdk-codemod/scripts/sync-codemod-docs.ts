@@ -19,7 +19,11 @@ function parseMode(args: string[]): "write" | "check" {
 }
 
 const mode = parseMode(process.argv.slice(2));
-const majors = [...new Set(allCodemods.map(migrationDocMajor))];
+// TODO: Remove this filter to publish migration/v3.md when v3 is released.
+const unpublishedMajors = new Set([3]);
+const majors = [...new Set(allCodemods.map(migrationDocMajor))].filter(
+  (major) => !unpublishedMajors.has(major),
+);
 
 let outdated = false;
 for (const major of majors) {

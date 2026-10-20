@@ -1,4 +1,5 @@
 ---
+description: "Upgrade your project to a new SDK version by running codemods that update your code for breaking changes."
 politty:
   index:
     title: "Upgrade Commands"

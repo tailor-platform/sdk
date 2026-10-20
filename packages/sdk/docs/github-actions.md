@@ -1,3 +1,7 @@
+---
+description: "Generate GitHub Actions deploy workflows and Renovate configuration for your app with tailor setup, including approval gates, secrets, monorepos, and rollback."
+---
+
 # GitHub Actions Integration
 
 `tailor setup` generates GitHub repository automation for your Tailor Platform

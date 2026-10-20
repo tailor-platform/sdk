@@ -1,4 +1,5 @@
 ---
+description: "Log in and out of the Tailor Platform, check authentication status, print access tokens, switch users, and manage personal access tokens."
 politty:
   index:
     title: "User & Auth Commands"

@@ -1,3 +1,7 @@
+---
+description: "Orchestrate multi-step jobs with durable workflows, including job dependencies, wait points, retry and concurrency policies, and starting workflows from resolvers."
+---
+
 # Workflow
 
 Workflows orchestrate multiple jobs that can depend on each other, enabling complex multi-step operations with durable execution.

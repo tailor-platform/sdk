@@ -1,3 +1,7 @@
+---
+description: "Run ad-hoc SQL or GraphQL queries from the tailor CLI, or explore data interactively in the query REPL."
+---
+
 ## query
 
 Run SQL/GraphQL query.

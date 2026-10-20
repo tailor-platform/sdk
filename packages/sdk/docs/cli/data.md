@@ -1,3 +1,7 @@
+---
+description: "Clone application data from one workspace to another and inspect asynchronous data operations with the tailor CLI."
+---
+
 # Data Commands
 
 Commands for managing application data across workspaces.

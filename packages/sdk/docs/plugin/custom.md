@@ -1,3 +1,7 @@
+---
+description: "Build your own SDK plugin by implementing the Plugin interface and its definition-time and generation-time hooks."
+---
+
 # Custom Plugins (Beta)
 
 > **Beta Feature**: The custom plugin API is in beta and may change in future releases.

@@ -1,3 +1,7 @@
+---
+description: "Build custom GraphQL queries and mutations in TypeScript with typed input and output schemas, validation, TailorDB access, and permissions."
+---
+
 # Resolver
 
 Resolvers are custom GraphQL endpoints with business logic that execute on the Tailor Platform.

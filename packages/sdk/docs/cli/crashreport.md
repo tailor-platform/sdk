@@ -1,3 +1,7 @@
+---
+description: "List local crash report files and submit crash reports to help improve the Tailor Platform SDK."
+---
+
 # Crash Report Commands
 
 Commands for managing crash reports.

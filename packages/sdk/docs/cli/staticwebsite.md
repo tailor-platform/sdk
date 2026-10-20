@@ -1,3 +1,7 @@
+---
+description: "Deploy static website files and manage static websites with the tailor CLI."
+---
+
 # Static Website Commands
 
 Commands for managing and deploying static websites.

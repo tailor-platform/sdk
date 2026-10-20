@@ -25,6 +25,14 @@ Do not copy detailed API reference — full interface/type definitions or exhaus
 
 Never link to or mention private/internal repositories or internal issue trackers (e.g. a `<org>/<private-repo>` link or an `<org>/<tracker>#NNN` reference) from published docs.
 
+## Every page needs a `description`
+
+Each page under `packages/sdk/docs/**` starts with a YAML frontmatter `description` that says what the user can do on the page. Docs tooling reads it for summaries such as the table of contents in `llms.txt`.
+
+- Hand-written pages: put `description` in the page's own frontmatter.
+- CLI pages: put `description` as a top-level key in the `.template.md`, next to the `politty` block. The generator keeps it and strips only `politty`.
+- Migration guides: the description lives in `renderMigrationDoc` (`packages/sdk-codemod/src/migration-doc.ts`); do not edit `migration/v<major>.md` by hand.
+
 ## CLI docs are generated
 
 `packages/sdk/docs/cli-reference.md` and `packages/sdk/docs/cli/*.md` are generated. Change them through their templates or command definitions as the "CLI Documentation" section of `AGENTS.md` describes.
