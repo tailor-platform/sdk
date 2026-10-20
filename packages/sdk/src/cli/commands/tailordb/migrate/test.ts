@@ -1,7 +1,12 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { ageArg } from "#/cli/commands/workspace/age";
-import { deploymentArgs, durationArg, parseDuration } from "#/cli/shared/args";
+import {
+  deploymentArgs,
+  durationArg,
+  locationIdsWithEnvFile,
+  parseDuration,
+} from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
@@ -270,8 +275,7 @@ export const testCommand = defineAppCommand({
       targetWorkspaceId: args["target-workspace-id"],
       keep: args.keep,
       keepTtl: args["keep-ttl"],
-      organizationId: args["organization-id"],
-      folderId: args["folder-id"],
+      ...locationIdsWithEnvFile(args),
       assertionPath: args.assert,
       assertionNamespace: args["assert-namespace"],
       machineUser: args["machine-user"],
