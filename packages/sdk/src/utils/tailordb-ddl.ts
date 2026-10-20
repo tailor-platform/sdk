@@ -97,6 +97,12 @@ function derivedIdentifier(
   return identifier(derivedName(tableName, memberName, kind));
 }
 
+function dollarQuoted(body: string): string {
+  let tag = "$fk$";
+  while (body.includes(tag)) tag = `${tag.slice(0, -1)}_$`;
+  return `${tag}\n${body}\n${tag}`;
+}
+
 function stringLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
@@ -298,6 +304,10 @@ function referenceClause(reference: Reference): string {
   return `REFERENCES ${identifier(reference.table)} (${identifier(reference.field)})`;
 }
 
+function declaredType(type: string): string {
+  return type === "bool" ? "boolean" : type;
+}
+
 function referencedColumnType(
   reference: Reference,
   tables: ReadonlyMap<string, DDLTableConfig>,
@@ -312,13 +322,12 @@ function referencedColumnType(
       `Field ${label} references unknown field "${reference.field}" of table "${reference.table}".`,
     );
   }
-  const targetType = mapFieldTypeToPostgresType(targetField.type);
-  if (!targetField.unique || targetType !== mapFieldTypeToPostgresType(reference.type)) {
+  if (!targetField.unique || declaredType(targetField.type) !== declaredType(reference.type)) {
     throw new Error(
       `Field ${label} references "${reference.table}"."${reference.field}", which must be unique and of the same type as the referencing field.`,
     );
   }
-  return targetType;
+  return mapFieldTypeToPostgresType(targetField.type);
 }
 
 function referenceCheck(
@@ -348,17 +357,16 @@ function referenceTrigger(
   const checks = references.map((reference) =>
     referenceCheck(reference, tables, `${table.name}.${reference.column}`),
   );
+  const body = [
+    "<<fk_check>>",
+    "DECLARE v jsonb;",
+    "BEGIN",
+    ...checks,
+    "  RETURN NEW;",
+    "END",
+  ].join("\n");
   return [
-    [
-      `CREATE OR REPLACE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $fk$`,
-      "<<fk_check>>",
-      "DECLARE v jsonb;",
-      "BEGIN",
-      ...checks,
-      "  RETURN NEW;",
-      "END",
-      "$fk$",
-    ].join("\n"),
+    `CREATE OR REPLACE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(body)}`,
     `CREATE OR REPLACE TRIGGER ${name} BEFORE INSERT OR UPDATE ON ${identifier(table.name)} FOR EACH ROW EXECUTE FUNCTION ${name}()`,
   ];
 }
@@ -442,13 +450,14 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
 function addForeignKey(table: DDLTableConfig, reference: Reference): string {
   const name = derivedName(table.name, reference.column, "fk");
   const tableIdentifier = identifier(table.name);
-  return [
-    "DO $fk$ BEGIN",
+  const body = [
+    "BEGIN",
     `IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = ${stringLiteral(name)} AND conrelid = ${stringLiteral(tableIdentifier)}::regclass) THEN`,
     `ALTER TABLE ${tableIdentifier} ADD CONSTRAINT ${identifier(name)} FOREIGN KEY (${identifier(reference.column)}) ${referenceClause(reference)};`,
     "END IF;",
-    "END $fk$",
+    "END",
   ].join("\n");
+  return `DO ${dollarQuoted(body)}`;
 }
 
 // Tables come after the tables they reference. Where references form a cycle,
