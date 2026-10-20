@@ -276,40 +276,69 @@ describe("dataplane", () => {
 
     async function fetchJobReport(recordId: string): Promise<string> {
       const signal = AbortSignal.timeout(jobReportTimeoutMs);
+      const listedAt = new Date();
+      const jobs: ExecutorJob[] = [];
+      let recordJob: ExecutorJob | undefined;
+      let listError: string | undefined;
       try {
-        const { jobs } = await client.listExecutorJobs(
-          { workspaceId, executorName, pageSize: 20, pageDirection: PageDirection.DESC },
-          { signal },
-        );
-        const lines = [`${executorName} jobs as of ${new Date().toISOString()}, newest first:`];
-        for (const job of jobs) {
-          lines.push(
-            `  ${job.id} ${ExecutorJobStatus[job.status]} created ${formatTimestamp(job.createdAt)} for record ${jobRecordId(job) ?? "-"}`,
+        let pageToken = "";
+        do {
+          const page = await client.listExecutorJobs(
+            {
+              workspaceId,
+              executorName,
+              pageToken,
+              pageSize: 100,
+              pageDirection: PageDirection.DESC,
+            },
+            { signal },
           );
+          jobs.push(...page.jobs);
+          recordJob = page.jobs.find((job) => jobRecordId(job) === recordId);
+          pageToken = page.nextPageToken;
+        } while (!recordJob && pageToken);
+      } catch (error) {
+        if (jobs.length === 0) {
+          return `Could not list ${executorName} jobs: ${String(error)}`;
         }
-        const recordJob = jobs.find((job) => jobRecordId(job) === recordId);
-        if (!recordJob) {
-          lines.push(`No job for record ${recordId}.`);
-          return lines.join("\n");
-        }
+        listError = String(error);
+      }
 
+      const lines = [`${executorName} jobs as of ${listedAt.toISOString()}, newest first:`];
+      for (const job of jobs.slice(0, 20)) {
+        lines.push(`  ${formatJob(job)}`);
+      }
+      if (!recordJob) {
+        lines.push(
+          listError === undefined
+            ? `No job for record ${recordId}.`
+            : `No job for record ${recordId} in the newest ${jobs.length} jobs; could not list older ones: ${listError}`,
+        );
+        return lines.join("\n");
+      }
+
+      try {
         const { attempts } = await client.listExecutorJobAttempts(
           { workspaceId, jobId: recordJob.id },
           { signal },
         );
-        lines.push(`Job ${recordJob.id} for record ${recordId} has ${attempts.length} attempt(s):`);
+        lines.push(`Job ${formatJob(recordJob)} has ${attempts.length} attempt(s):`);
         for (const attempt of attempts) {
           lines.push(
             `  ${ExecutorJobStatus[attempt.status]} started ${formatTimestamp(attempt.startedAt)} finished ${formatTimestamp(attempt.finishedAt)}${attempt.error ? `: ${attempt.error}` : ""}`,
           );
         }
-        return lines.join("\n");
       } catch (error) {
-        return `Could not list ${executorName} jobs: ${String(error)}`;
+        lines.push(`Could not list attempts of job ${formatJob(recordJob)}: ${String(error)}`);
       }
+      return lines.join("\n");
     }
   });
 });
+
+function formatJob(job: ExecutorJob): string {
+  return `${job.id} ${ExecutorJobStatus[job.status]} created ${formatTimestamp(job.createdAt)} for record ${jobRecordId(job) ?? "-"}`;
+}
 
 function jobRecordId(job: ExecutorJob): string | undefined {
   const newRecord = job.data?.newRecord;
