@@ -632,3 +632,35 @@ describe("foreign keys to a non-id field and edge columns", { timeout: 30_000 },
     expect(script).not.toContain("REFERENCES");
   });
 });
+
+describe("reference triggers", { timeout: 30_000 }, () => {
+  test("a referenced table with a column named v does not make the trigger ambiguous", async () => {
+    const db = new PGlite();
+    await db.exec(
+      generateSchemaDDL([
+        { name: "Parent", fields: { id: { type: "uuid" }, v: { type: "string", unique: true } } },
+        {
+          name: "Child",
+          fields: {
+            id: { type: "uuid" },
+            ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Parent" },
+            byV: {
+              type: "string",
+              array: true,
+              foreignKey: true,
+              foreignKeyType: "Parent",
+              foreignKeyField: "v",
+            },
+          },
+        },
+      ]),
+    );
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO "Parent" (v) VALUES ('x') RETURNING id`,
+    );
+    await db.query(`INSERT INTO "Child" (ids, "byV") VALUES ($1, $2)`, [`{${rows[0]!.id}}`, "{x}"]);
+    await expect(db.query(`INSERT INTO "Child" ("byV") VALUES ($1)`, ["{y}"])).rejects.toThrow(
+      /y not found in "Parent"."v"/,
+    );
+  });
+});

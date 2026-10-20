@@ -331,8 +331,8 @@ function referenceCheck(
   const message = `violates foreign key constraints: % not found in ${target.replaceAll("%", "%%")}`;
   return [
     `  FOR v IN SELECT jsonb_path_query(to_jsonb(NEW.${identifier(reference.column)}), ${stringLiteral(reference.path)}) LOOP`,
-    `    IF jsonb_typeof(v) <> 'null' AND NOT EXISTS (SELECT 1 FROM ${identifier(reference.table)} WHERE ${identifier(reference.field)} = (v #>> '{}')::${pgType}) THEN`,
-    `      RAISE EXCEPTION ${stringLiteral(message)}, v #>> '{}' USING ERRCODE = 'foreign_key_violation';`,
+    `    IF jsonb_typeof(fk_check.v) <> 'null' AND NOT EXISTS (SELECT 1 FROM ${identifier(reference.table)} AS parent WHERE parent.${identifier(reference.field)} = (fk_check.v #>> '{}')::${pgType}) THEN`,
+    `      RAISE EXCEPTION ${stringLiteral(message)}, fk_check.v #>> '{}' USING ERRCODE = 'foreign_key_violation';`,
     "    END IF;",
     "  END LOOP;",
   ].join("\n");
@@ -351,6 +351,7 @@ function referenceTrigger(
   return [
     [
       `CREATE OR REPLACE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $fk$`,
+      "<<fk_check>>",
       "DECLARE v jsonb;",
       "BEGIN",
       ...checks,
