@@ -218,7 +218,7 @@ export const testCommand = defineAppCommand({
   description:
     "Test pending migrations with seed fixtures or cloned data in a temporary workspace.",
   notes:
-    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed.",
+    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed. Organization and folder IDs loaded by --env-file are used the same way as the options; command-line options take precedence, and empty env-file values are ignored.",
   args: z.strictObject({
     ...deploymentArgs,
     yes: arg(z.boolean().default(false), {
