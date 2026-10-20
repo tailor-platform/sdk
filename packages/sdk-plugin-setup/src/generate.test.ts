@@ -1675,6 +1675,8 @@ describe("Tailor Platform action pins", () => {
 
     const contents = [
       renderBranchWorkflow({ ...branchBase, migrationDriftCheck: true }).content,
+      renderBranchWorkflow({ ...branchBase, migrationTest: { label: "tailor:migration-test" } })
+        .content,
       renderTagWorkflow({ ...tagBase, branch: "main" }).content,
       renderPreviewWorkflow({
         workspaceName: "my-app",
