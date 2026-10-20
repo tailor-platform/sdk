@@ -9,45 +9,66 @@ import {
   dropUnresolvableReferences,
   generatePgliteSchemaModule,
   withoutReference,
+  type DDLFieldConfig,
   type DDLTableConfig,
 } from "#/utils/tailordb-ddl";
 import { writeDbTypesFile } from "./db-types-generator";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
+import { collectNestedMemberChanges } from "./nested-members";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import { getMigrationFilePath } from "./snapshot";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { MigrationDiff } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
-import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot-types";
+import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
 
 function toDDLTable(table: TailorDBSnapshotType): DDLTableConfig {
   return { name: table.name, fields: table.fields, indexes: table.indexes };
 }
 
-function retargetedFields(diff: MigrationDiff): Map<string, Set<string>> {
-  const retargeted = new Map<string, Set<string>>();
+type RetargetedMembers = Map<string, Map<string, string[][]>>;
+
+function retargets(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
+  return (
+    before.foreignKeyType !== after.foreignKeyType ||
+    before.foreignKeyField !== after.foreignKeyField
+  );
+}
+
+function retargetedMembers(diff: MigrationDiff): RetargetedMembers {
+  const retargeted: RetargetedMembers = new Map();
   for (const change of diff.changes) {
     if (change.kind !== "field_modified") continue;
-    const { before, after } = change;
-    if (
-      before.foreignKeyType === after.foreignKeyType &&
-      before.foreignKeyField === after.foreignKeyField
-    ) {
-      continue;
+    const paths: string[][] = [];
+    if (retargets(change.before, change.after)) paths.push([]);
+    for (const member of collectNestedMemberChanges(change.before, change.after)) {
+      if (member.kind === "modified" && retargets(member.before, member.after)) {
+        paths.push(member.path);
+      }
     }
-    const fields = retargeted.get(change.tableName) ?? new Set<string>();
-    fields.add(change.fieldName);
+    if (paths.length === 0) continue;
+    const fields = retargeted.get(change.tableName) ?? new Map<string, string[][]>();
+    fields.set(change.fieldName, paths);
     retargeted.set(change.tableName, fields);
   }
   return retargeted;
+}
+
+function withoutReferenceAt(field: DDLFieldConfig, path: readonly string[]): DDLFieldConfig {
+  const [head, ...rest] = path;
+  if (head === undefined) return withoutReference(field);
+  const member = field.fields?.[head];
+  if (!field.fields || !member) return field;
+  return { ...field, fields: { ...field.fields, [head]: withoutReferenceAt(member, rest) } };
 }
 
 /**
  * The tables `migrate.ts` sees: the migration's target schema with the
  * Pre-phase relaxations applied, plus the tables the Pre-phase retains for
  * the script to read (removed tables, and renamed tables under their old name).
- * A relation the migration retargets has no reference, because its stored
- * values still point at the old target until the script repairs them.
+ * A relation the migration retargets, also one inside a nested field, has no
+ * reference, because its stored values still point at the old target until
+ * the script repairs them.
  * @param previousSnapshot - Schema before the migration
  * @param diff - The migration's diff
  * @returns Tables in creation order
@@ -56,7 +77,7 @@ export function buildPreMigrationTables(
   previousSnapshot: SchemaSnapshot,
   diff: MigrationDiff,
 ): DDLTableConfig[] {
-  const retargeted = retargetedFields(diff);
+  const retargeted = retargetedMembers(diff);
   const tables = Object.values(buildPreMigrationSnapshot(previousSnapshot, diff).tables).map(
     (table) => {
       const fields = retargeted.get(table.name);
@@ -66,7 +87,7 @@ export function buildPreMigrationTables(
         fields: Object.fromEntries(
           Object.entries(table.fields).map(([name, field]) => [
             name,
-            fields.has(name) ? withoutReference(field) : field,
+            (fields.get(name) ?? []).reduce<DDLFieldConfig>(withoutReferenceAt, field),
           ]),
         ),
       };

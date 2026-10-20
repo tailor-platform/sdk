@@ -467,6 +467,39 @@ describe("buildPreMigrationTables relations", () => {
     expect(ownerID).not.toHaveProperty("foreignKey");
   });
 
+  test("a relation inside a nested field loses its reference when the migration retargets it, and the other members keep theirs", () => {
+    const person = { ...user, name: "Person", pluralForm: "People" };
+    const nested = (target: string) =>
+      snapshotField("nested", {
+        fields: {
+          owner: owner({ foreignKeyType: target }),
+          editor: owner(),
+        },
+      });
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ info: nested("User") })),
+      diff([
+        {
+          kind: "table_renamed",
+          tableName: "Person",
+          previousTableName: "User",
+          before: user,
+          after: person,
+        },
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "info",
+          before: nested("User"),
+          after: nested("Person"),
+        },
+      ]),
+    );
+    const members = tableNamed(tables, "Post").fields.info!.fields!;
+    expect(members.owner).not.toHaveProperty("foreignKey");
+    expect(members.editor).toMatchObject({ foreignKey: true, foreignKeyType: "User" });
+  });
+
   test("a relation keeps its reference when the migration modifies the field without retargeting it", () => {
     const tables = buildPreMigrationTables(
       snapshot(user, post({ ownerID: owner() })),
@@ -678,6 +711,47 @@ describe("generated DDL on PGlite", () => {
       `INSERT INTO "User" (name, status, nickname, score) VALUES ('a', 'active', 'n', 1) RETURNING id`,
     );
     await pre.query(`INSERT INTO "Order" ("ownerID") VALUES ($1)`, [rows[0]!.id]);
+    const staged = await pre.query(`SELECT 1 FROM "Order"`);
+    expect(staged.rows).toHaveLength(1);
+    await pre.close();
+  });
+
+  test("stages the rows whose nested relation still points at the old parent when the migration retargets it", async () => {
+    const person = { ...user, name: "Person", pluralForm: "People" };
+    const member = (target: string) =>
+      snapshotField("uuid", { foreignKey: true, foreignKeyType: target });
+    const info = (target: string) =>
+      snapshotField("nested", { required: true, fields: { owner: member(target) } });
+    const pre = new PGlite();
+    await pre.exec(
+      generateSchemaDDL(
+        buildPreMigrationTables(
+          snapshot(user, table("Order", { info: info("User") })),
+          diff([
+            {
+              kind: "table_renamed",
+              tableName: "Person",
+              previousTableName: "User",
+              before: user,
+              after: person,
+            },
+            {
+              kind: "field_modified",
+              tableName: "Order",
+              fieldName: "info",
+              before: info("User"),
+              after: info("Person"),
+            },
+          ]),
+        ),
+      ),
+    );
+    const { rows } = await pre.query<{ id: string }>(
+      `INSERT INTO "User" (name, status, nickname, score) VALUES ('a', 'active', 'n', 1) RETURNING id`,
+    );
+    await pre.query(`INSERT INTO "Order" (info) VALUES ($1::jsonb)`, [
+      JSON.stringify({ owner: rows[0]!.id }),
+    ]);
     const staged = await pre.query(`SELECT 1 FROM "Order"`);
     expect(staged.rows).toHaveLength(1);
     await pre.close();
