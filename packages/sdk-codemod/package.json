@@ -27,7 +27,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@ast-grep/napi": "0.50.0",
+    "@ast-grep/napi": "0.51.0",
     "@politty/zod": "0.5.2",
     "diff": "9.0.0",
     "pathe": "2.0.3",
