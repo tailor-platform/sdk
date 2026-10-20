@@ -743,7 +743,7 @@ async function applyWithMigrations(
     migratingNamespaces,
   );
 
-  // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
+  // Create/update services once at the beginning (services don't need per-migration handling)
   await executeServicesCreation(client, changeSet);
 
   const pending = indexPendingMigrations(validation.pendingMigrations);
@@ -761,24 +761,8 @@ async function applyWithMigrations(
     timeline: phaseSettings.restricted ? new MaintenanceTimeline() : undefined,
   };
 
-  // Step 1.5: The migration loop (Step 3) only touches the types named by
-  // some pending migration's diff; changes planned for every other
-  // namespace must go through the normal flow or they would be silently
-  // dropped. A migrating namespace's planned creates that already exist
-  // in the schema state before its first pending migration — the whole
-  // baseline on a fresh-workspace replay, and every table when the
-  // pending migration is data-only — are equally dropped by the loop and
-  // run here too, built from that snapshot so scripts see the checkpoint
-  // state rather than the final schema. Updates of types no pending diff
-  // names stay skipped: applying the final schema outside the
-  // per-migration phases could enforce a change whose migration has not
-  // run. Snapshot-backed creates run before the loop so scripts see the
-  // checkpoint world. Under --no-schema-check, planned tables absent from
-  // every snapshot are deferred until migrations settle. Deletes are
-  // irreversible and stay last (Step 5).
   const deferred = await applyChangesBeforeMigrations(flow);
 
-  // Step 3: Execute each migration sequentially: pre -> script -> post
   if (flow.migrationsRequiringScripts.length > 0) {
     logger.info(`Executing ${flow.migrationsRequiringScripts.length} data migration(s)...`);
     logger.newline();
@@ -843,7 +827,7 @@ async function applyWithMigrations(
   await applyDeferredChanges(flow, deferred);
   await applyRemainingDeletions(flow);
 
-  // Step 6: Write table metadata, which the migration phases above do not.
+  // Write table metadata, which the migration phases above do not.
   // Tables inside migrating namespaces only exist once their phases have run,
   // so this waits until every table in the change set is present. Skipping it
   // would leave a cross-config dependency record unwritten on any deploy that
@@ -930,6 +914,21 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
   return namespaceName !== undefined && !flow.migratingNamespaces.has(namespaceName);
 }
 
+/**
+ * Apply the planned changes the migration loop would otherwise drop. The loop only
+ * touches the types named by some pending migration's diff; changes planned for every
+ * other namespace must go through the normal flow or they would be silently dropped.
+ * A migrating namespace's planned creates that already exist in the schema state before
+ * its first pending migration — the whole baseline on a fresh-workspace replay, and
+ * every table when the pending migration is data-only — are equally dropped by the loop
+ * and run here too, built from that snapshot so scripts see the checkpoint state rather
+ * than the final schema. Updates of types no pending diff names stay skipped: applying
+ * the final schema outside the per-migration phases could enforce a change whose
+ * migration has not run. Under --no-schema-check, planned tables absent from every
+ * snapshot are deferred until migrations settle. Deletes are irreversible and stay last.
+ * @param flow - Migration flow
+ * @returns Changes to apply once migrations settle
+ */
 async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<DeferredChanges> {
   const { client, changeSet, migrationContext, phaseSettings, pending } = flow;
   const deferred: DeferredChanges = {
@@ -1591,7 +1590,7 @@ async function applyDeferredChanges(flow: MigrationFlow, deferred: DeferredChang
 
 async function applyRemainingDeletions(flow: MigrationFlow): Promise<void> {
   const { client, changeSet } = flow;
-  // Step 4: Delete remaining GQL permissions that weren't deleted with their tables
+  // Delete remaining GQL permissions that weren't deleted with their tables
   const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter((del) => {
     const permKey = `${del.request.namespaceName}/${del.name}`;
     return !deletedResources.gqlPermissions.has(permKey);
@@ -1602,7 +1601,7 @@ async function applyRemainingDeletions(flow: MigrationFlow): Promise<void> {
     );
   }
 
-  // Step 5: Delete tables outside the migrating namespaces (their GQL
+  // Delete tables outside the migrating namespaces (their GQL
   // permissions were just removed above; migration postPhases never see them)
   await Promise.all(
     changeSet.type.deletes
