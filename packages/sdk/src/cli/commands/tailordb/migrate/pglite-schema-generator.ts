@@ -8,6 +8,7 @@ import * as fs from "node:fs/promises";
 import {
   dropUnresolvableReferences,
   generatePgliteSchemaModule,
+  withoutReference,
   type DDLTableConfig,
 } from "#/utils/tailordb-ddl";
 import { writeDbTypesFile } from "./db-types-generator";
@@ -23,10 +24,30 @@ function toDDLTable(table: TailorDBSnapshotType): DDLTableConfig {
   return { name: table.name, fields: table.fields, indexes: table.indexes };
 }
 
+function retargetedFields(diff: MigrationDiff): Map<string, Set<string>> {
+  const retargeted = new Map<string, Set<string>>();
+  for (const change of diff.changes) {
+    if (change.kind !== "field_modified") continue;
+    const { before, after } = change;
+    if (
+      before.foreignKeyType === after.foreignKeyType &&
+      before.foreignKeyField === after.foreignKeyField
+    ) {
+      continue;
+    }
+    const fields = retargeted.get(change.tableName) ?? new Set<string>();
+    fields.add(change.fieldName);
+    retargeted.set(change.tableName, fields);
+  }
+  return retargeted;
+}
+
 /**
  * The tables `migrate.ts` sees: the migration's target schema with the
  * Pre-phase relaxations applied, plus the tables the Pre-phase retains for
  * the script to read (removed tables, and renamed tables under their old name).
+ * A relation the migration retargets has no reference, because its stored
+ * values still point at the old target until the script repairs them.
  * @param previousSnapshot - Schema before the migration
  * @param diff - The migration's diff
  * @returns Tables in creation order
@@ -35,9 +56,23 @@ export function buildPreMigrationTables(
   previousSnapshot: SchemaSnapshot,
   diff: MigrationDiff,
 ): DDLTableConfig[] {
-  return dropUnresolvableReferences(
-    Object.values(buildPreMigrationSnapshot(previousSnapshot, diff).tables).map(toDDLTable),
+  const retargeted = retargetedFields(diff);
+  const tables = Object.values(buildPreMigrationSnapshot(previousSnapshot, diff).tables).map(
+    (table) => {
+      const fields = retargeted.get(table.name);
+      if (!fields) return toDDLTable(table);
+      return {
+        ...toDDLTable(table),
+        fields: Object.fromEntries(
+          Object.entries(table.fields).map(([name, field]) => [
+            name,
+            fields.has(name) ? withoutReference(field) : field,
+          ]),
+        ),
+      };
+    },
   );
+  return dropUnresolvableReferences(tables);
 }
 
 /**

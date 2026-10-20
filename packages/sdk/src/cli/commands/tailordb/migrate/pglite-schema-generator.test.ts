@@ -440,6 +440,48 @@ describe("buildPreMigrationTables relations", () => {
     expect(tableNamed(tables, "User").fields.nickname).toMatchObject({ unique: false });
     expect(tableNamed(tables, "Post").fields.author).not.toHaveProperty("foreignKey");
   });
+
+  test("a relation the migration retargets loses its reference, since its stored values still point at the old target", () => {
+    const person = { ...user, name: "Person", pluralForm: "People" };
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([
+        {
+          kind: "table_renamed",
+          tableName: "Person",
+          previousTableName: "User",
+          before: user,
+          after: person,
+        },
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "ownerID",
+          before: owner(),
+          after: owner({ foreignKeyType: "Person" }),
+        },
+      ]),
+    );
+    const ownerID = tableNamed(tables, "Post").fields.ownerID;
+    expect(ownerID).toMatchObject({ type: "uuid", required: true });
+    expect(ownerID).not.toHaveProperty("foreignKey");
+  });
+
+  test("a relation keeps its reference when the migration modifies the field without retargeting it", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "ownerID",
+          before: owner({ required: false }),
+          after: owner(),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({ foreignKey: true });
+  });
 });
 
 describe("generateMigrationPgliteSchema", () => {
@@ -592,6 +634,52 @@ describe("generated DDL on PGlite", () => {
     await expect(
       pre.exec(`INSERT INTO "Post" ("ownerID") VALUES (gen_random_uuid())`),
     ).rejects.toThrow(/foreign key/);
+    await pre.close();
+  });
+
+  test("stages the rows that still point at the old parent while the migration retargets a relation to its renamed table", async () => {
+    const person = { ...user, name: "Person", pluralForm: "People" };
+    const order = table("Order", {
+      ownerID: snapshotField("uuid", { required: true, foreignKey: true, foreignKeyType: "User" }),
+    });
+    const pre = new PGlite();
+    await pre.exec(
+      generateSchemaDDL(
+        buildPreMigrationTables(
+          snapshot(user, order),
+          diff([
+            {
+              kind: "table_renamed",
+              tableName: "Person",
+              previousTableName: "User",
+              before: user,
+              after: person,
+            },
+            {
+              kind: "field_modified",
+              tableName: "Order",
+              fieldName: "ownerID",
+              before: snapshotField("uuid", {
+                required: true,
+                foreignKey: true,
+                foreignKeyType: "User",
+              }),
+              after: snapshotField("uuid", {
+                required: true,
+                foreignKey: true,
+                foreignKeyType: "Person",
+              }),
+            },
+          ]),
+        ),
+      ),
+    );
+    const { rows } = await pre.query<{ id: string }>(
+      `INSERT INTO "User" (name, status, nickname, score) VALUES ('a', 'active', 'n', 1) RETURNING id`,
+    );
+    await pre.query(`INSERT INTO "Order" ("ownerID") VALUES ($1)`, [rows[0]!.id]);
+    const staged = await pre.query(`SELECT 1 FROM "Order"`);
+    expect(staged.rows).toHaveLength(1);
     await pre.close();
   });
 

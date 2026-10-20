@@ -332,6 +332,21 @@ function referencedColumnType(
   return check.pgType;
 }
 
+/**
+ * The field without the relation it declares.
+ * @param field - A field config
+ * @returns The field with its foreign key settings removed
+ */
+export function withoutReference(field: DDLFieldConfig): DDLFieldConfig {
+  const {
+    foreignKey: _foreignKey,
+    foreignKeyType: _type,
+    foreignKeyField: _field,
+    ...rest
+  } = field;
+  return rest;
+}
+
 function withoutUnresolvableReference(
   field: DDLFieldConfig,
   tables: ReadonlyMap<string, DDLTableConfig>,
@@ -355,14 +370,7 @@ function withoutUnresolvableReference(
     field: field.foreignKeyField ?? "id",
     type: field.type,
   };
-  if (!("problem" in checkReference(reference, tables))) return field;
-  const {
-    foreignKey: _foreignKey,
-    foreignKeyType: _type,
-    foreignKeyField: _field,
-    ...rest
-  } = field;
-  return rest;
+  return "problem" in checkReference(reference, tables) ? withoutReference(field) : field;
 }
 
 /**
