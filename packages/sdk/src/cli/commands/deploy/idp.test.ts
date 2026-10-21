@@ -84,6 +84,33 @@ describe("applyIdP phase separation", () => {
     expect(client.deleteSecretManagerVault).toHaveBeenCalledTimes(vaultCalls);
     expect(client.deleteIdPService).toHaveBeenCalledTimes(serviceCalls);
   });
+
+  test("delete-resources phase ignores a client vault that is already gone", async () => {
+    const client = createMockClientWithSpies();
+    vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
+      new ConnectError("vault not found", Code.NotFound),
+    );
+
+    await expect(
+      applyIdP(client, createMockPlanResult(), "delete-resources"),
+    ).resolves.toBeUndefined();
+
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      secretmanagerVaultName: "idp-test-idp-test-client",
+    });
+  });
+
+  test("delete-resources phase propagates other errors from deleting a client vault", async () => {
+    const client = createMockClientWithSpies();
+    vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
+      new ConnectError("denied", Code.PermissionDenied),
+    );
+
+    await expect(applyIdP(client, createMockPlanResult(), "delete-resources")).rejects.toThrow(
+      "denied",
+    );
+  });
 });
 
 describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
