@@ -25,6 +25,35 @@ describe("EnumConstantsPlugin", () => {
     });
   });
 
+  test.each<[string, [string, string]]>([
+    ["different values", ["PENDING", "SHIPPED"]],
+    ["identical values", ["OPEN", "CLOSED"]],
+  ])("should reject colliding table and field names with %s", async (_, values) => {
+    const order = parseTailorDBType(
+      toSchemaOutput(db.table("Order", { itemStatus: db.enum(["OPEN", "CLOSED"]) })),
+    );
+    const orderItem = parseTailorDBType(
+      toSchemaOutput(db.table("OrderItem", { status: db.enum(values) })),
+    );
+    const plugin = enumConstantsPlugin({ distPath: testDistPath });
+
+    await expect(
+      plugin.onTailorDBReady!({
+        tailordb: [
+          {
+            namespace: "test",
+            tables: { Order: order, OrderItem: orderItem },
+            sourceInfo: new Map(),
+            pluginAttachments: new Map(),
+          },
+        ],
+        baseDir: "/test",
+        configPath: "/test/tailor.config.ts",
+        pluginConfig: { distPath: testDistPath },
+      }),
+    ).rejects.toThrow('Duplicate enum constant name "OrderItemStatus"');
+  });
+
   describe("enum collection", () => {
     test("should collect top-level enum fields", async () => {
       const type = db.table("User", {
@@ -275,25 +304,15 @@ describe("EnumConstantsPlugin", () => {
       expect(result).not.toContain(" * @property");
     });
 
-    test("should deduplicate enums by name", () => {
+    test("should reject duplicate enum names", () => {
       const allEnums = [
-        {
-          name: "UserRole",
-          values: [{ value: "admin" }, { value: "user" }],
-        },
-        {
-          name: "UserRole", // Duplicate name
-          values: [{ value: "superadmin" }],
-        },
+        { name: "UserRole", values: [{ value: "admin" }] },
+        { name: "UserRole", values: [{ value: "superadmin" }] },
       ];
 
-      const result = generateUnifiedEnumConstants(allEnums);
-
-      // Should only contain one UserRole definition (the last one wins)
-      const matches = result.match(/export const UserRole = {/g);
-      expect(matches).toHaveLength(1);
-      expect(result).toContain('  "superadmin": "superadmin"');
-      expect(result).not.toContain('  "admin": "admin"');
+      expect(() => generateUnifiedEnumConstants(allEnums)).toThrow(
+        'Duplicate enum constant name "UserRole"',
+      );
     });
   });
 });

@@ -12,6 +12,11 @@ export function generateUnifiedEnumConstants(allEnums: EnumDefinition[]): string
 
   const enumMap = new Map<string, EnumDefinition>();
   for (const enumDef of allEnums) {
+    if (enumMap.has(enumDef.name)) {
+      throw new Error(
+        `Duplicate enum constant name "${enumDef.name}". Rename the conflicting tables or fields to produce unique enum constant names.`,
+      );
+    }
     enumMap.set(enumDef.name, enumDef);
   }
 
