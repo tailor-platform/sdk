@@ -50,6 +50,9 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         extraPaths: inputs.paths,
         erdPreview: inputs.erdPreview ?? false,
         ghes: inputs.ghes ?? false,
+        migrationTest: inputs.migrationTest,
+        migrationTestLabel: inputs.migrationTestLabel,
+        migrationTestEnvironment: inputs.migrationTestEnvironment,
         restrictDispatch: inputs.restrictDispatch ?? false,
       };
     case "tag":
