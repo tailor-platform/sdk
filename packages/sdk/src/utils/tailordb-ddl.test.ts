@@ -577,18 +577,6 @@ describe("foreign keys", { timeout: 30_000 }, () => {
     ).toThrow(/"Parent"."code", which must be unique and of the same type/);
   });
 
-  test("a uuid reference to a non-uuid referencing field is rejected", () => {
-    expect(() =>
-      generateSchemaDDL([
-        parent,
-        {
-          name: "Child",
-          fields: { id: { type: "uuid" }, parentID: ref("Parent", { type: "string" }) },
-        },
-      ]),
-    ).toThrow(/must be unique and of the same type/);
-  });
-
   test("a reference to a table outside the schema is rejected", () => {
     expect(() =>
       generateSchemaDDL([
@@ -837,5 +825,48 @@ describe("reference triggers see the rows actually written", { timeout: 30_000 }
     await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [id, `{${id}}`]);
     const { rows } = await db.query(`SELECT 1 FROM "Node"`);
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe("a string field related to id", { timeout: 30_000 }, () => {
+  const tables: DDLTableConfig[] = [
+    { name: "Parent", fields: { id: { type: "uuid" } } },
+    {
+      name: "Child",
+      fields: {
+        id: { type: "uuid" },
+        parentRef: {
+          type: "string",
+          foreignKey: true,
+          foreignKeyType: "Parent",
+          foreignKeyField: "id",
+        },
+      },
+    },
+  ];
+
+  test("is accepted by the generator, as the platform accepts it", () => {
+    expect(() => generateSchemaDDL(tables)).not.toThrow();
+  });
+
+  test("rejects an id with no parent, including a value that is not a uuid", async () => {
+    const db = newPglite();
+    await db.exec(generateSchemaDDL(tables));
+    for (const value of [crypto.randomUUID(), "abc"]) {
+      await expect(
+        db.query(`INSERT INTO "Child" ("parentRef") VALUES ($1)`, [value]),
+      ).rejects.toThrow(/not found in "Parent"."id"/);
+    }
+  });
+
+  test("accepts an existing id and null", async () => {
+    const db = newPglite();
+    await db.exec(generateSchemaDDL(tables));
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO "Parent" DEFAULT VALUES RETURNING id`,
+    );
+    await db.query(`INSERT INTO "Child" ("parentRef") VALUES ($1), (NULL)`, [rows[0]!.id]);
+    const { rows: written } = await db.query(`SELECT 1 FROM "Child"`);
+    expect(written).toHaveLength(2);
   });
 });

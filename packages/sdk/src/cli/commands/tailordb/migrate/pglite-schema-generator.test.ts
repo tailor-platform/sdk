@@ -387,25 +387,52 @@ describe("buildPreMigrationTables relations", () => {
   });
 
   test("a relation loses its reference while a pending type change leaves it a different type from the target", () => {
+    const toNickname = (type: string) =>
+      snapshotField(type, {
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "nickname",
+      });
     const tables = buildPreMigrationTables(
-      snapshot(user, post({ ownerID: owner() })),
+      snapshot(user, post({ author: toNickname("string") })),
       diff([
         {
           kind: "field_type_modified",
           tableName: "Post",
-          fieldName: "ownerID",
-          before: snapshotField("string", {
-            required: true,
-            foreignKey: true,
-            foreignKeyType: "User",
-          }),
-          after: owner(),
+          fieldName: "author",
+          before: toNickname("integer"),
+          after: toNickname("string"),
         },
       ]),
     );
-    const ownerID = tableNamed(tables, "Post").fields.ownerID;
-    expect(ownerID).toMatchObject({ type: "string" });
-    expect(ownerID).not.toHaveProperty("foreignKey");
+    const author = tableNamed(tables, "Post").fields.author;
+    expect(author).toMatchObject({ type: "integer" });
+    expect(author).not.toHaveProperty("foreignKey");
+  });
+
+  test("a relation keeps its reference while a pending type change leaves it the type of its target", () => {
+    const toNickname = (type: string) =>
+      snapshotField(type, {
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "nickname",
+      });
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ author: toNickname("string") })),
+      diff([
+        {
+          kind: "field_type_modified",
+          tableName: "Post",
+          fieldName: "author",
+          before: toNickname("string"),
+          after: toNickname("string"),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "Post").fields.author).toMatchObject({
+      foreignKey: true,
+      foreignKeyField: "nickname",
+    });
   });
 
   test("a relation to a field whose unique constraint is still withheld loses its reference", () => {
