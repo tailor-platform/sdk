@@ -18,6 +18,7 @@ import {
   resolveE2EWorkspaceRegion,
   trackWorkspace,
   trackTempDir,
+  WORKSPACE_CREATION_ALLOWANCE_MS,
 } from "./globalSetup";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -91,7 +92,7 @@ export class MigrationWorkspace {
       this.copyFixture();
 
       await runSuite();
-    }, 120000);
+    }, WORKSPACE_CREATION_ALLOWANCE_MS);
   }
 
   private copyFixture(): void {
