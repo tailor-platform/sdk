@@ -62,7 +62,7 @@ pnpm --filter @tailor-platform/sdk perf:attest
 
 - Add a case by writing `.types()` with no argument and running the command locally; attest records the count in place. The recorded number is attest's own bookkeeping and is not used for the comparison below.
 - `primeTypeCaches` is not called. It warms the SDK's shared types so each case counts only its own expression.
-- In pull requests, CI runs the same bench file against the base commit's `packages/sdk` and lists the cases whose count differs, largest relative change first, each with the measured code, in the PR comment and the step summary.
+- In pull requests, CI runs the same bench file against the base commit's `packages/sdk` and lists the cases whose count differs, largest relative change first, each with the measured code, in the PR comment and the step summary. Both runs resolve dependencies from the pull request's `node_modules`, so a change caused only by a dependency update (for example `zod`) shows no difference.
 
 ## Local Execution
 
