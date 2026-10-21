@@ -13,6 +13,8 @@ export interface MigrationTestOptions {
   targetWorkspaceId?: string;
   keep?: boolean;
   keepTtl?: string;
+  organizationId?: string;
+  folderId?: string;
   assertionPath?: string;
   assertionNamespace?: string;
   machineUser?: string;

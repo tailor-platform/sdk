@@ -1,5 +1,16 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.6.0
+
+### Minor Changes
+
+- [#2647](https://github.com/tailor-platform/sdk/pull/2647) [`e45ca2b`](https://github.com/tailor-platform/sdk/commit/e45ca2b23835ba8e86f8707f270ade8039ec30c6) Thanks [@toiroakr](https://github.com/toiroakr)! - The password of IdP users (`_User`) can now come from the `SEED_USER_PASSWORD` environment variable. A `_User` row without a `password` gets it from the variable: a plain string is used for every such user, and a JSON object such as `{"alice@example.com":"..."}` sets it per user name. A password written in `_User.jsonl` is kept, and with `--upsert` the variable only sets the password of users that do not exist yet. `tailor seed validate` and `tailor seed apply` both apply it, and the generated `_User.schema.ts` calls it from its `hook`, so run `tailor generate` to update existing projects. The workflows `tailor setup ci` generates pass the `SEED_USER_PASSWORD` secret to the seed steps; run `tailor setup update` to regenerate them.
+
+### Patch Changes
+
+- Updated dependencies [[`2905c85`](https://github.com/tailor-platform/sdk/commit/2905c85821d7371ccda4c467460a2b1bd1364009), [`ad679fa`](https://github.com/tailor-platform/sdk/commit/ad679fa432e9d50a714529bb68239dca495acabc), [`b77ebdd`](https://github.com/tailor-platform/sdk/commit/b77ebddfebc3e7472f17c31bb03f340ba4f21ce6), [`9bffa6e`](https://github.com/tailor-platform/sdk/commit/9bffa6ed8a44d12c2ab8bdc607f8fcd53921e037), [`ae44247`](https://github.com/tailor-platform/sdk/commit/ae44247178e8fabb21762f552e50525da046a2e0), [`e45ca2b`](https://github.com/tailor-platform/sdk/commit/e45ca2b23835ba8e86f8707f270ade8039ec30c6), [`373dafd`](https://github.com/tailor-platform/sdk/commit/373dafdac2b5da3bcf172f9a48a6c530b410f21b)]:
+  - @tailor-platform/sdk@2.30.0
+
 ## 0.5.1
 
 ### Patch Changes

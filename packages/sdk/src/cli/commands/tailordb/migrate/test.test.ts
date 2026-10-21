@@ -1,5 +1,10 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { runCommand } from "@politty/zod";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { z } from "zod";
+import { commonArgs } from "#/cli/shared/args";
 import {
   runMigrationTest,
   testCommand,
@@ -139,6 +144,46 @@ describe("tailordb migration test", () => {
     expect(dependencies.cloneData).toHaveBeenCalledWith(
       expect.objectContaining({ cloneTimeout: 600_000 }),
     );
+  });
+
+  describe("organization and folder from an --env-file", () => {
+    const organizationId = "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa";
+    const folderId = "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb";
+    const directories: string[] = [];
+
+    beforeEach(() => {
+      vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", undefined);
+      vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      for (const directory of directories.splice(0)) {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
+    test("passes the IDs loaded by --env-file to the preparation step", async () => {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-env-"));
+      directories.push(directory);
+      const envFile = path.join(directory, "location.env");
+      fs.writeFileSync(
+        envFile,
+        `TAILOR_PLATFORM_ORGANIZATION_ID=${organizationId}\nTAILOR_PLATFORM_FOLDER_ID=${folderId}\n`,
+      );
+      const dependencies = createDependencies([]);
+      mocks.dependencies = dependencies;
+
+      const result = await runCommand(testCommand, ["--env-file", envFile], {
+        // strip unknown keys
+        globalArgs: z.object(commonArgs),
+      });
+
+      expect(result.success).toBe(true);
+      expect(dependencies.prepare).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId, folderId }),
+      );
+    });
   });
 
   test("rejects a clone timeout with seed data before creating a workspace", async () => {

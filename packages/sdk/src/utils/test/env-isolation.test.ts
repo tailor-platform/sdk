@@ -1,27 +1,35 @@
 import { describe, expect, test } from "vitest";
 import vitestConfig from "../../../vitest.config";
-import { stripTailorEnv } from "../../../vitest.setup";
+import { STRIPPED_ENV_KEYS, stripDeveloperEnv } from "../../../vitest.setup";
 
 describe("test environment isolation", () => {
-  // Developer shells commonly export TAILOR_* variables (profile, machine
-  // user, token, ...) that change CLI behavior under test. Tests must
-  // start from a clean environment and set what they need explicitly.
-  test("stripTailorEnv removes every TAILOR_* variable and nothing else", () => {
+  test("stripDeveloperEnv removes TAILOR_*, FORCE_COLOR, EDITOR, and VISUAL and nothing else", () => {
     const env: NodeJS.ProcessEnv = {
       TAILOR_PLATFORM_PROFILE: "dev",
       TAILOR_PLATFORM_MACHINE_USER_NAME: "developer",
       TAILOR_TOKEN: "tpp_secret",
+      FORCE_COLOR: "3",
+      EDITOR: "code --wait",
+      VISUAL: "code --wait",
       PATH: "/usr/bin",
       TAILORING: "not a TAILOR_ prefix",
+      NO_COLOR: "1",
+      TERM: "xterm-256color",
     };
 
-    stripTailorEnv(env);
+    stripDeveloperEnv(env);
 
-    expect(env).toEqual({ PATH: "/usr/bin", TAILORING: "not a TAILOR_ prefix" });
+    expect(env).toEqual({
+      PATH: "/usr/bin",
+      TAILORING: "not a TAILOR_ prefix",
+      NO_COLOR: "1",
+      TERM: "xterm-256color",
+    });
   });
 
-  // Guards the wiring on machines without TAILOR_* variables (including CI),
-  // where the runtime assertion below cannot detect a removed registration.
+  // Guards the wiring on machines that export none of the stripped variables
+  // (including CI), where the runtime assertion below cannot detect a
+  // removed registration.
   test("every non-e2e project registers the env isolation setup file", () => {
     const projects = vitestConfig.test?.projects ?? [];
     const projectTests = projects.flatMap((project) =>
@@ -37,8 +45,10 @@ describe("test environment isolation", () => {
     }
   });
 
-  test("does not inherit TAILOR_* variables from the developer shell", () => {
-    const inherited = Object.keys(process.env).filter((key) => key.startsWith("TAILOR_"));
+  test("does not inherit TAILOR_*, FORCE_COLOR, EDITOR, or VISUAL from the developer shell", () => {
+    const inherited = Object.keys(process.env).filter(
+      (key) => key.startsWith("TAILOR_") || STRIPPED_ENV_KEYS.includes(key),
+    );
     expect(inherited).toEqual([]);
   });
 });

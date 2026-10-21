@@ -80,6 +80,7 @@ jobs:
         # __WORKING_DIRECTORY__
         env:
           TAILOR_PLATFORM_WORKSPACE_ID: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
+          SEED_USER_PASSWORD: ${{ secrets.SEED_USER_PASSWORD }}
         run: |
           __TAILOR_CLI__ seed validate__SEED_ARGS__
           __TAILOR_CLI__ seed apply --truncate --yes__SEED_ARGS__

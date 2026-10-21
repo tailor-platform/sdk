@@ -1,4 +1,5 @@
-import { describe, test, expect, vi, aroundEach } from "vitest";
+import { afterEach, describe, test, expect, vi, aroundEach } from "vitest";
+import { logger, resetSecretRegistry } from "./logger";
 import { Spinner } from "./spinner";
 import { stripAnsi } from "./test-helpers/strip-ansi";
 
@@ -43,6 +44,10 @@ describe("Spinner", () => {
     vi.useFakeTimers();
     await runTest();
     vi.useRealTimers();
+  });
+
+  afterEach(() => {
+    resetSecretRegistry();
   });
 
   describe("TTY mode", () => {
@@ -156,9 +161,42 @@ describe("Spinner", () => {
       expect(stream.output).toContain("\x1B[2K");
       expect(stream.output).toContain("\x1B[?25h");
     });
+
+    test("redacts registered secrets from rendered frames", () => {
+      logger.registerSecret("sk-spinner-frame-secret");
+      const { stream, spinner } = createStartedSpinner({
+        isTTY: true,
+        columns: 80,
+        text: "token: sk-spinner-frame-secret",
+      });
+      vi.advanceTimersByTime(200);
+      spinner.stop();
+      expect(stream.output).toContain("token: <redacted>");
+      expect(stripAnsi(stream.output)).not.toContain("sk-spinner-frame-secret");
+    });
+
+    test("sizes the clear by the redacted frame, not the registered secret", () => {
+      logger.registerSecret("sk-a-secret-long-enough-to-wrap-a-narrow-terminal");
+      const { stream, spinner } = createStartedSpinner({
+        isTTY: true,
+        columns: 20,
+        text: "sk-a-secret-long-enough-to-wrap-a-narrow-terminal",
+      });
+      spinner.stop();
+      expect(stream.output).not.toContain("\x1B[1A");
+    });
   });
 
   describe("non-TTY mode", () => {
+    test("redacts registered secrets from the written lines", () => {
+      logger.registerSecret("sk-spinner-line-secret");
+      const stream = createFakeStream({ isTTY: false });
+      const spinner = new Spinner({ stream: stream as unknown as NodeJS.WriteStream });
+      spinner.start("token: sk-spinner-line-secret");
+      spinner.succeed("sent sk-spinner-line-secret");
+      expect(stream.output).toBe("- token: <redacted>\n✓ sent <redacted>\n");
+    });
+
     test("start writes a single line and stays idle", () => {
       const stream = createFakeStream({ isTTY: false });
       const spinner = new Spinner({ stream: stream as unknown as NodeJS.WriteStream });
