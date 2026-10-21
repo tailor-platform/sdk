@@ -66,44 +66,47 @@ function renamedType(tableName: string, fieldName: string): ReturnType<typeof pa
   return type;
 }
 
-describe("tailordb migration generate with warning-tier changes", () => {
-  let tmpDir: string;
+let tmpDir: string;
 
+beforeEach(() => {
+  vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+  // A configured editor would be spawned after a migrate.ts is scaffolded
+  // and block the test run.
+  vi.stubEnv("EDITOR", undefined);
+  vi.stubEnv("VISUAL", undefined);
+  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-test-"));
+  state.namespaces = [];
+  vi.mocked(loadConfig).mockImplementation(
+    async () =>
+      ({
+        config: {
+          path: path.join(tmpDir, "tailor.config.ts"),
+          db: Object.fromEntries(
+            state.namespaces.map(({ namespace, migrationsDir }) => [
+              namespace,
+              { migration: { directory: migrationsDir } },
+            ]),
+          ),
+        },
+        plugins: [],
+      }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+  );
+  vi.mocked(canPrompt).mockReturnValue(false);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe("tailordb migration generate with warning-tier changes", () => {
   beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would be spawned after a migrate.ts is scaffolded
-    // and block the test run.
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-test-"));
-    state.namespaces = [];
     const userWithoutName = parsedType("User");
     delete userWithoutName.fields.name;
     addNamespace(tmpDir, "tailordb", "User", userWithoutName);
-
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
     vi.mocked(canPrompt).mockReturnValue(true);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   function generatedDiffPath(): string {
@@ -168,41 +171,6 @@ describe("tailordb migration generate with warning-tier changes", () => {
 });
 
 describe("tailordb migration generate field rename preflight", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would be spawned after a migrate.ts is scaffolded
-    // and block the test run.
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-rename-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
   test("reports every unresolved namespace and writes no migration", async () => {
     const first = addNamespace(tmpDir, "tailordb", "User", renamedType("User", "displayName"));
     const second = addNamespace(tmpDir, "analyticsdb", "User", renamedType("User", "displayName"));
@@ -279,45 +247,12 @@ describe("tailordb migration generate field rename preflight", () => {
 });
 
 describe("tailordb migration generate with an unsupported field type change", () => {
-  let tmpDir: string;
-
   function retypedType(tableName: string, type: string): ReturnType<typeof parsedType> {
     const parsed = parsedType(tableName);
     const field = parsed.fields.name!;
     parsed.fields.name = { ...field, config: { ...field.config, type } };
     return parsed;
   }
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-expand-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
 
   test("still fails with the manual guidance when the conversion is not requested", async () => {
     const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
@@ -601,8 +536,6 @@ describe("tailordb migration generate with an unsupported field type change", ()
 });
 
 describe("tailordb migration generate nested member rename preflight", () => {
-  let tmpDir: string;
-
   function nestedType(memberName: string): ReturnType<typeof parsedType> {
     const type = parsedType("User");
     type.fields.address = {
@@ -633,38 +566,6 @@ describe("tailordb migration generate nested member rename preflight", () => {
     state.namespaces.push(entry);
     return entry;
   }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-nested-rename-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
 
   test("fails on an unresolved nested member rename candidate and writes no migration", async () => {
     const entry = addNestedNamespace("tailordb", "zipCode");
@@ -789,41 +690,6 @@ describe("tailordb migration generate nested member rename preflight", () => {
 });
 
 describe("tailordb migration generate type rename preflight", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would be spawned after a migrate.ts is scaffolded
-    // and block the test run.
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-type-rename-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
   function addRenamedTypeNamespace(namespace: string): TestNamespace {
     const migrationsDir = path.join(tmpDir, namespace);
     writeInitialSchema(migrationsDir, { User: snapshotType("User") });
@@ -919,41 +785,6 @@ describe("tailordb migration generate type rename preflight", () => {
 });
 
 describe("tailordb migration generate --data-only", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would be spawned after a migrate.ts is scaffolded
-    // and block the test run.
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-data-only-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
   test("creates a script-only migration when the schema is unchanged", async () => {
     const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 
@@ -1117,38 +948,9 @@ describe("tailordb migration generate --data-only", () => {
 });
 
 describe("tailordb migration generate declined confirmations", () => {
-  let tmpDir: string;
-
   beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-decline-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
     vi.mocked(canPrompt).mockReturnValue(true);
     vi.mocked(prompt.confirm).mockResolvedValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   test("fails without deleting migrations when --init is declined", async () => {
@@ -1211,39 +1013,6 @@ describe("tailordb migration generate declined confirmations", () => {
 });
 
 describe("tailordb migration generate JSON output", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-json-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
   function migrationFile(entry: TestNamespace, number: string, name: string): string {
     return path.join(entry.migrationsDir, number, name);
   }
