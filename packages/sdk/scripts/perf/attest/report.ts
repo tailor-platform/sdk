@@ -6,29 +6,6 @@ export type BenchResult = {
   baseline: number;
 };
 
-export const parseBenchOutput = (stdout: string): BenchResult[] => {
-  const results: BenchResult[] = [];
-  let name: string | undefined;
-  let instantiations: number | undefined;
-  for (const line of stdout.split("\n")) {
-    const nameMatch = /^🏌\S*\s+(.+)$/u.exec(line);
-    if (nameMatch) {
-      name = nameMatch[1];
-      continue;
-    }
-    const resultMatch = /^⛳\s+Result: (\d+) instantiations$/u.exec(line);
-    if (resultMatch) {
-      instantiations = Number(resultMatch[1]);
-      continue;
-    }
-    const baselineMatch = /^🎯\s+Baseline: (\d+) instantiations$/u.exec(line);
-    if (baselineMatch && name !== undefined && instantiations !== undefined) {
-      results.push({ name, instantiations, baseline: Number(baselineMatch[1]) });
-    }
-  }
-  return results;
-};
-
 const dedent = (text: string, indent: number): string =>
   text
     .split("\n")
@@ -63,12 +40,40 @@ export const extractBenchSources = (source: string): Record<string, string> => {
   return sources;
 };
 
-export const compareToBase = (results: BenchResult[], base: BenchResult[]): BenchResult[] => {
-  const measuredAny = base.some(({ instantiations }) => instantiations > 0);
-  const measured = new Map(base.map(({ name, instantiations }) => [name, instantiations]));
-  return results.map((result) => ({
-    ...result,
-    baseline: (measuredAny ? measured.get(result.name) : undefined) ?? result.instantiations,
+export const extractBaselines = (source: string): Record<string, number> => {
+  const file = ts.createSourceFile("bench.ts", source, ts.ScriptTarget.Latest, true);
+  const baselines: Record<string, number> = {};
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "types" &&
+      ts.isCallExpression(node.expression.expression) &&
+      ts.isIdentifier(node.expression.expression.expression) &&
+      node.expression.expression.expression.text === "bench"
+    ) {
+      const [title] = node.expression.expression.arguments;
+      const [snapshot] = node.arguments;
+      const count = snapshot && ts.isArrayLiteralExpression(snapshot) && snapshot.elements[0];
+      if (title && ts.isStringLiteral(title) && count && ts.isNumericLiteral(count)) {
+        baselines[title.text] = Number(count.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return baselines;
+};
+
+export const compareToBase = (
+  current: Record<string, number>,
+  base: Record<string, number>,
+): BenchResult[] => {
+  const baseMeasured = Object.values(base).some((count) => count > 0);
+  return Object.entries(current).map(([name, instantiations]) => ({
+    name,
+    instantiations,
+    baseline: (baseMeasured ? base[name] : undefined) ?? instantiations,
   }));
 };
 
@@ -114,13 +119,13 @@ export const renderChanges = (results: BenchResult[], sources: Record<string, st
   ].join("\n");
 };
 
-export const toOctocovMetrics = (results: BenchResult[]) => ({
-  key: "attest-type-performance",
-  name: "Type Performance (attest instantiations)",
-  metrics: results.map(({ name, instantiations }) => ({
+export const toOctocovMetrics = (current: Record<string, number>) => ({
+  key: "type-performance",
+  name: "Type Performance (instantiations)",
+  metrics: Object.entries(current).map(([name, value]) => ({
     key: name,
     name,
-    value: instantiations,
+    value,
     unit: "",
   })),
 });

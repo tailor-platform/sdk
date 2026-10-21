@@ -143,29 +143,22 @@ jobs:
       - name: Install deps
         uses: $/.github/actions/install-deps
 
-      - name: Run type check performance
-        run: pnpm --filter @tailor-platform/sdk perf:typecheck
-
-      - name: Measure base type instantiations
+      - name: Prepare the base commit
         if: github.event_name == 'pull_request'
         run: |
           base_dir="${RUNNER_TEMP}/attest-base"
-          bench_dir=packages/sdk/scripts/perf/attest
           mkdir -p "${base_dir}"
           git archive HEAD^1 tsconfig.json packages/sdk | tar -x -C "${base_dir}"
-          mkdir -p "${base_dir}/${bench_dir}"
-          cp "${bench_dir}/type-instantiations.bench.ts" "${base_dir}/${bench_dir}/"
           ln -s "${PWD}/node_modules" "${base_dir}/node_modules"
           ln -s "${PWD}/packages/sdk/node_modules" "${base_dir}/packages/sdk/node_modules"
-          (cd "${base_dir}/packages/sdk" && node --experimental-strip-types scripts/perf/attest/type-instantiations.bench.ts --benchErrorOnThresholdExceeded false) > "${RUNNER_TEMP}/base-bench.txt" || rm -f "${RUNNER_TEMP}/base-bench.txt"
 
       - name: Run type instantiation benches
         run: |
-          base_output=()
-          if [ -s "${RUNNER_TEMP}/base-bench.txt" ]; then
-            base_output=(--base-output "${RUNNER_TEMP}/base-bench.txt")
+          base_root=()
+          if [ -d "${RUNNER_TEMP}/attest-base" ]; then
+            base_root=(--base-root "${RUNNER_TEMP}/attest-base/packages/sdk")
           fi
-          pnpm --filter @tailor-platform/sdk perf:attest "${base_output[@]}"
+          pnpm --filter @tailor-platform/sdk perf:attest "${base_root[@]}"
 
       - name: Report instantiation changes
         id: attest-report
@@ -187,8 +180,6 @@ jobs:
         with:
           name: type-perf-results
           path: |
-            packages/sdk/diagnostics.json
-            packages/sdk/diagnostics-summary.json
             packages/sdk/attest-metrics.json
 
   runtime-performance:
@@ -322,18 +313,11 @@ jobs:
             jq -r '.metrics[] | "| \(.name) | \(.value) \(.unit) |"' artifacts/bundle-size-results/bundle-size.json
             echo ""
 
-            echo "## Type Check Performance"
+            echo "## Type Performance (instantiations)"
             echo ""
-            echo "| Feature | Instantiations | Types |"
-            echo "|---------|---------------:|------:|"
-            jq -r 'sort_by(.instantiations) | reverse | .[] | "| \(.key) | \(.instantiations) | \(.types) |"' artifacts/type-perf-results/diagnostics-summary.json
-            echo ""
-
-            echo "## Type Instantiations (attest)"
-            echo ""
-            echo "| Bench | Instantiations |"
-            echo "|-------|---------------:|"
-            jq -r '.metrics[] | "| \(.name) | \(.value) |"' artifacts/type-perf-results/attest-metrics.json
+            echo "| Case | Instantiations |"
+            echo "|------|---------------:|"
+            jq -r '.metrics | sort_by(.value) | reverse | .[] | "| \(.name) | \(.value) |"' artifacts/type-perf-results/attest-metrics.json
             echo ""
 
             echo "## Runtime Performance"
@@ -350,8 +334,7 @@ jobs:
         with:
           config: packages/sdk/.octocov.yml
         env:
-          OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: artifacts/type-perf-results/diagnostics.json
-          OCTOCOV_CUSTOM_METRICS_ATTEST_TYPE_PERFORMANCE: artifacts/type-perf-results/attest-metrics.json
+          OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: artifacts/type-perf-results/attest-metrics.json
           OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: artifacts/bundle-size-results/bundle-size.json
           OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: artifacts/runtime-perf-results/runtime-perf.json
           SDK_COMPLEXITY_CHANGES: ${{ needs.complexity.outputs.changes }}

@@ -1,89 +1,55 @@
 import { describe, expect, test } from "vitest";
 import {
   compareToBase,
+  extractBaselines,
   extractBenchSources,
-  parseBenchOutput,
   renderChanges,
   toOctocovMetrics,
   type BenchResult,
 } from "./report";
 
-const cleanOutput = `🏌️  tailordb-basic
-⛳ Result: 2314 instantiations
-🎯 Baseline: 2314 instantiations
-📊 Delta: 0.00%
-
-🏌️  resolver-basic
-⛳ Result: 1020 instantiations
-🎯 Baseline: 1020 instantiations
-📊 Delta: 0.00%
+describe("extractBaselines", () => {
+  test("maps each bench name to the count attest recorded in its types snapshot", () => {
+    const source = `
+bench("tailordb-basic", () => db.table("Type0", {})).types([2314, "instantiations"]);
+bench("resolver-basic", () => createResolver({})).types([1020,"instantiations"]);
 `;
-
-const regressionOutput = `🏌️  tailordb-basic
-⛳ Result: 2314 instantiations
-🎯 Baseline: 1000 instantiations
-📈 'tailordb-basic' exceeded baseline by 131.40% (threshold is 20%).
-
-🏌️  resolver-basic
-⛳ Result: 1020 instantiations
-🎯 Baseline: 1000 instantiations
-📊 Delta: +2.00%
-
-❌ 'tailordb-basic' exceeded baseline by 131.40% (threshold is 20%).
-`;
-
-const improvementOutput = `🏌️  tailordb-basic
-⛳ Result: 2314 instantiations
-🎯 Baseline: 3000 instantiations
-📉 tailordb-basic was under baseline by 22.87%! Consider setting a new baseline.
-`;
-
-const benchSource = `import { bench } from "@ark/attest";
-
-bench("tailordb-basic", () => {
-  return db.table("Type0", {
-    stringField: db.string(),
-  });
-}).types([2314, "instantiations"]);
-
-bench("resolver-basic", () => {
-  return createResolver({ name: "resolver0" });
-}).types([1020, "instantiations"]);
-`;
-
-describe("parseBenchOutput", () => {
-  test("reads the measured and baseline instantiations of each bench", () => {
-    expect(parseBenchOutput(cleanOutput)).toEqual([
-      { name: "tailordb-basic", instantiations: 2314, baseline: 2314 },
-      { name: "resolver-basic", instantiations: 1020, baseline: 1020 },
-    ]);
+    expect(extractBaselines(source)).toEqual({ "tailordb-basic": 2314, "resolver-basic": 1020 });
   });
 
-  test("keeps the numbers when the delta line is replaced by an exceeded-threshold message", () => {
-    expect(parseBenchOutput(regressionOutput)).toEqual([
-      { name: "tailordb-basic", instantiations: 2314, baseline: 1000 },
-      { name: "resolver-basic", instantiations: 1020, baseline: 1000 },
-    ]);
+  test("skips a bench whose types snapshot is not recorded yet", () => {
+    expect(extractBaselines(`bench("new", () => 1).types();`)).toEqual({});
   });
 
-  test("keeps the numbers when the delta line is replaced by an under-baseline message", () => {
-    expect(parseBenchOutput(improvementOutput)).toEqual([
-      { name: "tailordb-basic", instantiations: 2314, baseline: 3000 },
-    ]);
-  });
-
-  test("returns no results for output without benches", () => {
-    expect(parseBenchOutput("error: something failed\n")).toEqual([]);
+  test("ignores a call that is not a bench", () => {
+    expect(extractBaselines(`other("x", () => 1).types([1, "instantiations"]);`)).toEqual({});
   });
 });
 
 describe("extractBenchSources", () => {
   test("maps each bench name to the body of its callback", () => {
-    expect(extractBenchSources(benchSource)).toEqual({
+    const source = `
+bench("tailordb-basic", () => {
+  return db.table("Type0", {
+    stringField: db.string(),
+  });
+}).types([1, "instantiations"]);
+
+bench("resolver-basic", () => {
+  return createResolver({ name: "resolver0" });
+}).types([2, "instantiations"]);
+`;
+    expect(extractBenchSources(source)).toEqual({
       "tailordb-basic": `return db.table("Type0", {
   stringField: db.string(),
 });`,
       "resolver-basic": `return createResolver({ name: "resolver0" });`,
+    });
+  });
+
+  test("uses the expression itself for a callback without a block", () => {
+    expect(extractBenchSources(`bench("keyword", () => type("string")).types();`)).toEqual({
+      keyword: `type("string")`,
     });
   });
 
@@ -93,44 +59,31 @@ describe("extractBenchSources", () => {
 });
 
 describe("compareToBase", () => {
-  const results: BenchResult[] = [
-    { name: "tailordb-basic", instantiations: 2314, baseline: 2314 },
-    { name: "resolver-basic", instantiations: 1020, baseline: 1020 },
-  ];
+  const current = { "tailordb-basic": 2314, "resolver-basic": 1020 };
 
-  test("takes each baseline from the instantiations measured on the base", () => {
-    const base: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2000, baseline: 2000 },
-      { name: "resolver-basic", instantiations: 1000, baseline: 1000 },
-    ];
-    expect(compareToBase(results, base)).toEqual([
+  test("takes each baseline from the count measured on the base", () => {
+    expect(compareToBase(current, { "tailordb-basic": 2000, "resolver-basic": 1000 })).toEqual([
       { name: "tailordb-basic", instantiations: 2314, baseline: 2000 },
       { name: "resolver-basic", instantiations: 1020, baseline: 1000 },
     ]);
   });
 
-  test("treats a bench missing on the base as unchanged", () => {
-    const base: BenchResult[] = [{ name: "tailordb-basic", instantiations: 2000, baseline: 2000 }];
-    expect(compareToBase(results, base)).toEqual([
+  test("treats a case missing on the base as unchanged", () => {
+    expect(compareToBase(current, { "tailordb-basic": 2000 })).toEqual([
       { name: "tailordb-basic", instantiations: 2314, baseline: 2000 },
       { name: "resolver-basic", instantiations: 1020, baseline: 1020 },
     ]);
   });
 
   test("treats a base where every case measured zero as not measured", () => {
-    const base: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 0, baseline: 0 },
-      { name: "resolver-basic", instantiations: 0, baseline: 0 },
-    ];
-    expect(compareToBase(results, base)).toEqual(results);
+    expect(compareToBase(current, { "tailordb-basic": 0, "resolver-basic": 0 })).toEqual([
+      { name: "tailordb-basic", instantiations: 2314, baseline: 2314 },
+      { name: "resolver-basic", instantiations: 1020, baseline: 1020 },
+    ]);
   });
 
   test("keeps a zero measured on the base for one case while other cases measured", () => {
-    const base: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 0, baseline: 0 },
-      { name: "resolver-basic", instantiations: 1000, baseline: 1000 },
-    ];
-    expect(compareToBase(results, base)).toEqual([
+    expect(compareToBase(current, { "tailordb-basic": 0, "resolver-basic": 1000 })).toEqual([
       { name: "tailordb-basic", instantiations: 2314, baseline: 0 },
       { name: "resolver-basic", instantiations: 1020, baseline: 1000 },
     ]);
@@ -142,44 +95,53 @@ describe("renderChanges", () => {
     "tailordb-basic": `return db.table("Type0", {});`,
     "resolver-basic": `return createResolver({});`,
   };
+  const changed = (overrides: Partial<BenchResult> = {}): BenchResult => ({
+    name: "tailordb-basic",
+    instantiations: 2314,
+    baseline: 2000,
+    ...overrides,
+  });
 
-  test("renders nothing when every bench matches its baseline", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2314, baseline: 2314 },
-    ];
-    expect(renderChanges(results, sources)).toBe("");
+  test("renders nothing when every case matches its baseline", () => {
+    expect(renderChanges([changed({ baseline: 2314 })], sources)).toBe("");
   });
 
   test("marks an increase with the base, result, percentage and count", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2314, baseline: 2000 },
-    ];
-    expect(renderChanges(results, sources)).toContain(
+    expect(renderChanges([changed()], sources)).toContain(
       "| 🔺 | tailordb-basic | 2000 | 2314 | **+15.70%** (+314) |",
     );
   });
 
+  test("marks a decrease with a minus sign", () => {
+    expect(renderChanges([changed({ instantiations: 1500 })], sources)).toContain(
+      "| 🔻 | tailordb-basic | 2000 | 1500 | **-25.00%** (-500) |",
+    );
+  });
+
+  test("shows an increase from zero without a percentage", () => {
+    expect(renderChanges([changed({ instantiations: 100, baseline: 0 })], sources)).toContain(
+      "| 🔺 | tailordb-basic | 0 | 100 | **n/a** (+100) |",
+    );
+  });
+
   test("headlines how many cases changed", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2314, baseline: 2000 },
-      { name: "resolver-basic", instantiations: 1220, baseline: 1020 },
+    const results = [
+      changed(),
+      changed({ name: "resolver-basic", instantiations: 1220, baseline: 1020 }),
     ];
     expect(renderChanges(results, sources)).toContain("### Type instantiations changed in 2 cases");
   });
 
   test("headlines a single changed case in the singular", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2314, baseline: 2000 },
-    ];
-    expect(renderChanges(results, sources)).toContain(
+    expect(renderChanges([changed()], sources)).toContain(
       "### Type instantiations changed in 1 case\n",
     );
   });
 
   test("lists the case with the largest relative change first", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2100, baseline: 2000 },
-      { name: "resolver-basic", instantiations: 1500, baseline: 1000 },
+    const results = [
+      changed({ instantiations: 2100 }),
+      changed({ name: "resolver-basic", instantiations: 1500, baseline: 1000 }),
     ];
     const rendered = renderChanges(results, sources);
     expect(rendered.indexOf("| resolver-basic |")).toBeLessThan(
@@ -187,34 +149,10 @@ describe("renderChanges", () => {
     );
   });
 
-  test("shows the measured code of a changed bench, expanded", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2314, baseline: 2000 },
-    ];
-    expect(renderChanges(results, sources)).toContain(
-      '<details open><summary>tailordb-basic</summary>\n\n```ts\nreturn db.table("Type0", {});\n```',
-    );
-  });
-
-  test("omits benches that did not change", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2314, baseline: 2000 },
-      { name: "resolver-basic", instantiations: 1020, baseline: 1020 },
-    ];
-    expect(renderChanges(results, sources)).not.toContain("resolver-basic");
-  });
-
-  test("shows an increase from zero without a percentage", () => {
-    const results: BenchResult[] = [{ name: "tailordb-basic", instantiations: 100, baseline: 0 }];
-    expect(renderChanges(results, sources)).toContain(
-      "| 🔺 | tailordb-basic | 0 | 100 | **n/a** (+100) |",
-    );
-  });
-
   test("lists an increase from zero before percentage changes", () => {
-    const results: BenchResult[] = [
-      { name: "resolver-basic", instantiations: 5000, baseline: 1000 },
-      { name: "tailordb-basic", instantiations: 100, baseline: 0 },
+    const results = [
+      changed({ name: "resolver-basic", instantiations: 5000, baseline: 1000 }),
+      changed({ instantiations: 100, baseline: 0 }),
     ];
     const rendered = renderChanges(results, sources);
     expect(rendered.indexOf("| tailordb-basic |")).toBeLessThan(
@@ -222,24 +160,26 @@ describe("renderChanges", () => {
     );
   });
 
-  test("marks a decrease with a minus sign", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 1500, baseline: 2000 },
-    ];
-    expect(renderChanges(results, sources)).toContain(
-      "| 🔻 | tailordb-basic | 2000 | 1500 | **-25.00%** (-500) |",
+  test("shows the measured code of a changed case, expanded", () => {
+    expect(renderChanges([changed()], sources)).toContain(
+      '<details open><summary>tailordb-basic</summary>\n\n```ts\nreturn db.table("Type0", {});\n```',
     );
+  });
+
+  test("omits cases that did not change", () => {
+    const results = [
+      changed(),
+      changed({ name: "resolver-basic", instantiations: 1020, baseline: 1020 }),
+    ];
+    expect(renderChanges(results, sources)).not.toContain("resolver-basic");
   });
 });
 
 describe("toOctocovMetrics", () => {
-  test("reports each bench's measured instantiations as a custom metric", () => {
-    const results: BenchResult[] = [
-      { name: "tailordb-basic", instantiations: 2314, baseline: 2000 },
-    ];
-    expect(toOctocovMetrics(results)).toEqual({
-      key: "attest-type-performance",
-      name: "Type Performance (attest instantiations)",
+  test("reports each case's measured count as a custom metric", () => {
+    expect(toOctocovMetrics({ "tailordb-basic": 2314 })).toEqual({
+      key: "type-performance",
+      name: "Type Performance (instantiations)",
       metrics: [{ key: "tailordb-basic", name: "tailordb-basic", value: 2314, unit: "" }],
     });
   });
