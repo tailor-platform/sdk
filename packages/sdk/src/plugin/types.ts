@@ -200,8 +200,11 @@ type PluginGeneratedTables = Record<string, PluginGeneratedTable>;
 export interface PluginGeneratedResolver {
   name: string;
   operation: "query" | "mutation";
+  /** Resolver input fields defined with `t` field builders. */
   inputFields?: Record<string, unknown>;
+  /** Fields of the resolver's object response, defined with `t` field builders. */
   outputFields: Record<string, unknown>;
+  /** JavaScript statements run asynchronously with the resolver's `context` (input, caller, invoker, env). Cannot reference plugin-local variables. */
   body: string;
 }
 

@@ -26,6 +26,7 @@ import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared
 import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { CLIError } from "#/cli/shared/errors";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -213,23 +214,53 @@ type DefineResolverResult = {
 function defineResolver(
   config: ResolverServiceInput | undefined,
   baseDir: string,
+  configPath: string,
+  pluginManager?: PluginManager,
 ): DefineResolverResult {
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  if (!config) {
-    return { resolverServices, subgraphs };
-  }
-
-  for (const [namespace, serviceConfig] of Object.entries(config)) {
+  for (const [namespace, serviceConfig] of Object.entries(config ?? {})) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(namespace, serviceConfig, baseDir);
+      const resolverService = createResolverService(
+        namespace,
+        serviceConfig,
+        baseDir,
+        pluginManager,
+        configPath,
+      );
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
   }
 
-  return { resolverServices, subgraphs };
+  const registerGeneratedNamespaces = () => {
+    for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
+      if (config?.[namespace] && "external" in config[namespace]) {
+        throw CLIError({
+          code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
+          message: `Plugin "${pluginId}" cannot generate resolvers in external namespace "${namespace}".`,
+          context: { pluginId, namespace, resourceType: "pipeline.service" },
+        });
+      }
+      if (resolverServices.some((service) => service.namespace === namespace)) continue;
+      resolverServices.push(
+        createResolverService(namespace, { files: [] }, baseDir, pluginManager, configPath),
+      );
+      subgraphs.push({ Type: "pipeline", Name: namespace });
+    }
+  };
+
+  return {
+    get resolverServices() {
+      registerGeneratedNamespaces();
+      return resolverServices;
+    },
+    get subgraphs() {
+      registerGeneratedNamespaces();
+      return subgraphs;
+    },
+  };
 }
 
 type DefineIdpResult = {
@@ -466,7 +497,7 @@ function defineServices(
     effectiveDateDefault(config),
     pluginManager,
   );
-  const resolverResult = defineResolver(config.resolver, baseDir);
+  const resolverResult = defineResolver(config.resolver, baseDir, config.path, pluginManager);
   const idpResult = defineIdp(config.idp, config.path);
   const authResult = defineAuth(
     config.auth,
@@ -512,15 +543,19 @@ function buildApplication(params: {
     name: params.config.name,
     id: params.config.id,
     config: params.config,
-    subgraphs: [
-      ...params.tailordbResult.subgraphs,
-      ...params.resolverResult.subgraphs,
-      ...params.idpResult.subgraphs,
-      ...params.authResult.subgraphs,
-    ],
+    get subgraphs() {
+      return [
+        ...params.tailordbResult.subgraphs,
+        ...params.resolverResult.subgraphs,
+        ...params.idpResult.subgraphs,
+        ...params.authResult.subgraphs,
+      ];
+    },
     tailorDBServices: params.tailordbResult.tailorDBServices,
     externalTailorDBNamespaces: params.tailordbResult.externalTailorDBNamespaces,
-    resolverServices: params.resolverResult.resolverServices,
+    get resolverServices() {
+      return params.resolverResult.resolverServices;
+    },
     idpServices: params.idpResult.idpServices,
     authService: params.authResult.authService,
     executorService: params.executorService,
@@ -770,9 +805,10 @@ export async function loadApplication(
 
   // 10. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
+    await pipeline.loadResolvers();
     const resolverBundles = await bundleResolvers({
       namespace: pipeline.namespace,
-      config: pipeline.config,
+      config: { files: Object.keys(pipeline.resolvers), ignores: [] },
       baseDir,
       defaultPermission: pipeline.defaultPermission,
       startContext,
