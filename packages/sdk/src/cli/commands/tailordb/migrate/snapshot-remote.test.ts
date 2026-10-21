@@ -1601,6 +1601,55 @@ describe("snapshot", () => {
       }
     });
 
+    describe("unique field inside a nested field", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        tables: {
+          Order: {
+            name: "Order",
+            pluralForm: "Orders",
+            fields: {
+              id: { type: "uuid", required: true },
+              info: {
+                type: "nested",
+                required: true,
+                fields: { code: { type: "string", required: true, unique: true, index: true } },
+              },
+            },
+          },
+        },
+      };
+
+      function remoteWithInnerCode(code: MockRemoteFieldConfig) {
+        return [
+          createMockRemoteType("Order", {
+            id: { type: "uuid", required: true },
+            info: { type: "nested", required: true, fields: { code } },
+          }),
+        ];
+      }
+
+      test("reports no drift when the remote stores the inner field as unique", () => {
+        const drifts = compareRemoteWithSnapshot(
+          remoteWithInnerCode({ type: "string", required: true, unique: true, index: true }),
+          snapshot,
+        );
+
+        expect(drifts).toEqual([]);
+      });
+
+      test("reports drift when the remote stores the inner field as non-unique", () => {
+        const drifts = compareRemoteWithSnapshot(
+          remoteWithInnerCode({ type: "string", required: true }),
+          snapshot,
+        );
+
+        expect(drifts).not.toEqual([]);
+      });
+    });
+
     test("detects script drift when remote has scripts but snapshot does not", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,

@@ -254,6 +254,44 @@ describe("snapshot-manifest", () => {
       expect(inner?.note?.foreignKey).toBe(false);
     });
 
+    test("sends a unique field inside a nested field as unique and indexed", () => {
+      const snapshotType = createTestSnapshotType("Order", {
+        fields: {
+          id: { type: "uuid", required: true },
+          items: {
+            type: "nested",
+            required: true,
+            array: true,
+            fields: {
+              code: { type: "string", required: true, unique: true, index: true },
+              note: { type: "string", required: false },
+            },
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      const inner = manifest.schema?.fields?.items?.fields;
+      expect(inner?.code).toMatchObject({ unique: true, index: true });
+      expect(inner?.note).toMatchObject({ unique: false, index: false });
+    });
+
+    test("carries .unique() written inside db.object() from the table definition to the manifest", () => {
+      const order = db.table("Order", {
+        info: db.object({ code: db.string().unique() }),
+      });
+
+      const parsed = parseTypes(toSchemaOutputs({ Order: order }), "tailordb");
+      const { tables } = createSnapshotFromLocalTypes(parsed, "tailordb");
+      const manifest = generateTailorDBTypeManifestFromSnapshot(tables.Order!);
+
+      expect(manifest.schema?.fields?.info?.fields?.code).toMatchObject({
+        unique: true,
+        index: true,
+      });
+    });
+
     test("carries a relation written inside db.object() from the table definition to the manifest", () => {
       const user = db.table("User", { name: db.string() });
       const order = db.table("Order", {
