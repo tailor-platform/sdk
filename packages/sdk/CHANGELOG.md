@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 2.31.1
+
+### Patch Changes
+
+- [#2714](https://github.com/tailor-platform/sdk/pull/2714) [`5db635d`](https://github.com/tailor-platform/sdk/commit/5db635dad2db0e333a94998c59b83ecffe696506) Thanks [@dragon3](https://github.com/dragon3)! - List `europe-west` in the workspace regions shown by `tailor workspace create --help`, matching the regions the Platform now offers for workspace creation (`asia-northeast, us-west, europe-west`).
+
 ## 2.31.0
 
 ### Minor Changes
