@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "2.30.0",
+  "version": "2.31.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -185,9 +185,10 @@
     "@jridgewell/trace-mapping": "0.3.31",
     "@napi-rs/keyring": "2.1.1",
     "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/context-async-hooks": "2.12.0",
     "@opentelemetry/exporter-trace-otlp-proto": "0.223.0",
     "@opentelemetry/resources": "2.12.0",
-    "@opentelemetry/sdk-trace-node": "2.12.0",
+    "@opentelemetry/sdk-trace": "2.12.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
     "@oxc-project/types": "0.154.0",
     "@politty/zod": "0.5.2",
@@ -230,7 +231,6 @@
   "devDependencies": {
     "@ark/attest": "0.57.0",
     "@electric-sql/pglite": "0.5.10",
-    "@opentelemetry/sdk-trace-base": "2.12.0",
     "@tailor-platform/shared": "workspace:^",
     "@tailor-platform/tailor-proto": "workspace:^",
     "@types/mime-types": "3.0.1",
