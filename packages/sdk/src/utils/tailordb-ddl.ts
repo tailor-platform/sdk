@@ -97,6 +97,12 @@ function derivedIdentifier(
   return identifier(derivedName(tableName, memberName, kind));
 }
 
+function dollarQuoted(body: string): string {
+  let tag = "$fk$";
+  while (body.includes(tag)) tag = `${tag.slice(0, -1)}_$`;
+  return `${tag}\n${body}\n${tag}`;
+}
+
 function stringLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
@@ -298,6 +304,10 @@ function referenceClause(reference: Reference): string {
   return `REFERENCES ${identifier(reference.table)} (${identifier(reference.field)})`;
 }
 
+function declaredType(type: string): string {
+  return type === "bool" ? "boolean" : type;
+}
+
 type ReferenceCheck = { pgType: string } | { problem: string };
 
 function checkReference(
@@ -313,13 +323,12 @@ function checkReference(
       problem: `references unknown field "${reference.field}" of table "${reference.table}".`,
     };
   }
-  const pgType = mapFieldTypeToPostgresType(targetField.type);
-  if (!targetField.unique || pgType !== mapFieldTypeToPostgresType(reference.type)) {
+  if (!targetField.unique || declaredType(targetField.type) !== declaredType(reference.type)) {
     return {
       problem: `references "${reference.table}"."${reference.field}", which must be unique and of the same type as the referencing field.`,
     };
   }
-  return { pgType };
+  return { pgType: mapFieldTypeToPostgresType(targetField.type) };
 }
 
 function referencedColumnType(
@@ -404,8 +413,8 @@ function referenceCheck(
   const message = `violates foreign key constraints: % not found in ${target.replaceAll("%", "%%")}`;
   return [
     `  FOR v IN SELECT jsonb_path_query(to_jsonb(NEW.${identifier(reference.column)}), ${stringLiteral(reference.path)}) LOOP`,
-    `    IF jsonb_typeof(v) <> 'null' AND NOT EXISTS (SELECT 1 FROM ${identifier(reference.table)} WHERE ${identifier(reference.field)} = (v #>> '{}')::${pgType}) THEN`,
-    `      RAISE EXCEPTION ${stringLiteral(message)}, v #>> '{}' USING ERRCODE = 'foreign_key_violation';`,
+    `    IF jsonb_typeof(fk_check.v) <> 'null' AND NOT EXISTS (SELECT 1 FROM ${identifier(reference.table)} AS parent WHERE parent.${identifier(reference.field)} = (fk_check.v #>> '{}')::${pgType}) THEN`,
+    `      RAISE EXCEPTION ${stringLiteral(message)}, fk_check.v #>> '{}' USING ERRCODE = 'foreign_key_violation';`,
     "    END IF;",
     "  END LOOP;",
   ].join("\n");
@@ -421,17 +430,17 @@ function referenceTrigger(
   const checks = references.map((reference) =>
     referenceCheck(reference, tables, `${table.name}.${reference.column}`),
   );
+  const body = [
+    "<<fk_check>>",
+    "DECLARE v jsonb;",
+    "BEGIN",
+    ...checks,
+    "  RETURN NULL;",
+    "END",
+  ].join("\n");
   return [
-    [
-      `CREATE OR REPLACE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $fk$`,
-      "DECLARE v jsonb;",
-      "BEGIN",
-      ...checks,
-      "  RETURN NEW;",
-      "END",
-      "$fk$",
-    ].join("\n"),
-    `CREATE OR REPLACE TRIGGER ${name} BEFORE INSERT OR UPDATE ON ${identifier(table.name)} FOR EACH ROW EXECUTE FUNCTION ${name}()`,
+    `CREATE OR REPLACE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(body)}`,
+    `CREATE OR REPLACE TRIGGER ${name} AFTER INSERT OR UPDATE ON ${identifier(table.name)} FOR EACH ROW EXECUTE FUNCTION ${name}()`,
   ];
 }
 
@@ -514,13 +523,14 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
 function addForeignKey(table: DDLTableConfig, reference: Reference): string {
   const name = derivedName(table.name, reference.column, "fk");
   const tableIdentifier = identifier(table.name);
-  return [
-    "DO $fk$ BEGIN",
+  const body = [
+    "BEGIN",
     `IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = ${stringLiteral(name)} AND conrelid = ${stringLiteral(tableIdentifier)}::regclass) THEN`,
     `ALTER TABLE ${tableIdentifier} ADD CONSTRAINT ${identifier(name)} FOREIGN KEY (${identifier(reference.column)}) ${referenceClause(reference)};`,
     "END IF;",
-    "END $fk$",
+    "END",
   ].join("\n");
+  return `DO ${dollarQuoted(body)}`;
 }
 
 // Tables come after the tables they reference. Where references form a cycle,

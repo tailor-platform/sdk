@@ -43,17 +43,18 @@ CREATE TABLE IF NOT EXISTS "SalesOrder" (
   "updatedAt" timestamptz
 );
 CREATE OR REPLACE FUNCTION "SalesOrder_references_0e86ceac_fk"() RETURNS trigger LANGUAGE plpgsql AS $fk$
+<<fk_check>>
 DECLARE v jsonb;
 BEGIN
   FOR v IN SELECT jsonb_path_query(to_jsonb(NEW."approvedByUserIDs"), '$[*]') LOOP
-    IF jsonb_typeof(v) <> 'null' AND NOT EXISTS (SELECT 1 FROM "User" WHERE "id" = (v #>> '{}')::uuid) THEN
-      RAISE EXCEPTION 'violates foreign key constraints: % not found in "User"."id"', v #>> '{}' USING ERRCODE = 'foreign_key_violation';
+    IF jsonb_typeof(fk_check.v) <> 'null' AND NOT EXISTS (SELECT 1 FROM "User" AS parent WHERE parent."id" = (fk_check.v #>> '{}')::uuid) THEN
+      RAISE EXCEPTION 'violates foreign key constraints: % not found in "User"."id"', fk_check.v #>> '{}' USING ERRCODE = 'foreign_key_violation';
     END IF;
   END LOOP;
-  RETURN NEW;
+  RETURN NULL;
 END
 $fk$;
-CREATE OR REPLACE TRIGGER "SalesOrder_references_0e86ceac_fk" BEFORE INSERT OR UPDATE ON "SalesOrder" FOR EACH ROW EXECUTE FUNCTION "SalesOrder_references_0e86ceac_fk"();
+CREATE OR REPLACE TRIGGER "SalesOrder_references_0e86ceac_fk" AFTER INSERT OR UPDATE ON "SalesOrder" FOR EACH ROW EXECUTE FUNCTION "SalesOrder_references_0e86ceac_fk"();
 
 CREATE SEQUENCE IF NOT EXISTS "Invoice_invoiceNumber_3240f76b_seq" START WITH 1000 MINVALUE 1000;
 CREATE TABLE IF NOT EXISTS "Invoice" (

@@ -603,7 +603,7 @@ describe("agreement with db.ts", () => {
   });
 });
 
-describe("generated DDL on PGlite", () => {
+describe("generated DDL on PGlite", { timeout: 30_000 }, () => {
   const pglite = new PGlite();
   // oxlint-disable-next-line typescript/no-explicit-any -- rows are asserted by shape below
   const db = createKyselyPGlite<any>(pglite);

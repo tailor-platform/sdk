@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import {
   generateSchemaDDL,
   generateTableDDL,
@@ -8,6 +8,18 @@ import {
   type DDLTableConfig,
   dropUnresolvableReferences,
 } from "./tailordb-ddl";
+
+const openDatabases: PGlite[] = [];
+
+function newPglite(): PGlite {
+  const db = new PGlite();
+  openDatabases.push(db);
+  return db;
+}
+
+afterEach(async () => {
+  await Promise.all(openDatabases.splice(0).map((db) => db.close()));
+});
 
 function table(
   fields: Record<string, DDLFieldConfig>,
@@ -407,7 +419,7 @@ describe("foreign keys", { timeout: 30_000 }, () => {
   });
 
   async function pglite(script: string): Promise<PGlite> {
-    const db = new PGlite();
+    const db = newPglite();
     await db.exec(script);
     return db;
   }
@@ -600,7 +612,7 @@ describe("foreign keys to a non-id field and edge columns", { timeout: 30_000 },
   ];
 
   test("scalar and array references to a unique non-id field are enforced", async () => {
-    const db = new PGlite();
+    const db = newPglite();
     await db.exec(generateSchemaDDL(tables({ one: byCode({}), many: byCode({ array: true }) })));
     await db.exec(`INSERT INTO "Parent" (code) VALUES ('a'), ('b')`);
     await db.exec(`INSERT INTO "Child" (one, many) VALUES ('a', '{a,b}')`);
@@ -613,7 +625,7 @@ describe("foreign keys to a non-id field and edge columns", { timeout: 30_000 },
   });
 
   test("a NULL element or NULL column in an array reference is accepted", async () => {
-    const db = new PGlite();
+    const db = newPglite();
     await db.exec(generateSchemaDDL(tables({ many: byCode({ array: true }) })));
     await db.exec(`INSERT INTO "Parent" (code) VALUES ('a')`);
     await db.exec(`INSERT INTO "Child" (many) VALUES ('{a,NULL}'), (NULL)`);
@@ -675,5 +687,155 @@ describe("dropUnresolvableReferences", () => {
     expect(child!.fields.ghost).toEqual({ type: "uuid" });
     expect(child!.fields.info!.fields!.owner).toMatchObject({ foreignKey: true });
     expect(child!.fields.info!.fields!.ghost).toEqual({ type: "uuid" });
+  });
+});
+
+describe("reference triggers", { timeout: 30_000 }, () => {
+  test("a referenced table with a column named v does not make the trigger ambiguous", async () => {
+    const db = newPglite();
+    await db.exec(
+      generateSchemaDDL([
+        { name: "Parent", fields: { id: { type: "uuid" }, v: { type: "string", unique: true } } },
+        {
+          name: "Child",
+          fields: {
+            id: { type: "uuid" },
+            ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Parent" },
+            byV: {
+              type: "string",
+              array: true,
+              foreignKey: true,
+              foreignKeyType: "Parent",
+              foreignKeyField: "v",
+            },
+          },
+        },
+      ]),
+    );
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO "Parent" (v) VALUES ('x') RETURNING id`,
+    );
+    await db.query(`INSERT INTO "Child" (ids, "byV") VALUES ($1, $2)`, [`{${rows[0]!.id}}`, "{x}"]);
+    await expect(db.query(`INSERT INTO "Child" ("byV") VALUES ($1)`, ["{y}"])).rejects.toThrow(
+      /y not found in "Parent"."v"/,
+    );
+  });
+});
+
+describe("reference validation and quoting", { timeout: 30_000 }, () => {
+  test.each([
+    ["an enum field referencing a string field", "enum", "string"],
+    ["a string field referencing an enum field", "string", "enum"],
+  ] as const)("%s is rejected as a type mismatch", (_, sourceType, targetType) => {
+    expect(() =>
+      generateSchemaDDL([
+        {
+          name: "Parent",
+          fields: { id: { type: "uuid" }, code: { type: targetType, unique: true } },
+        },
+        {
+          name: "Child",
+          fields: {
+            id: { type: "uuid" },
+            parentCode: {
+              type: sourceType,
+              foreignKey: true,
+              foreignKeyType: "Parent",
+              foreignKeyField: "code",
+            },
+          },
+        },
+      ]),
+    ).toThrow(/must be unique and of the same type/);
+  });
+
+  test("a table name that contains the dollar-quote delimiter still yields valid trigger SQL", async () => {
+    const db = newPglite();
+    await db.exec(
+      generateSchemaDDL([
+        { name: "Parent$fk$", fields: { id: { type: "uuid" } } },
+        {
+          name: "Child",
+          fields: {
+            id: { type: "uuid" },
+            ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Parent$fk$" },
+          },
+        },
+      ]),
+    );
+    await expect(
+      db.query(`INSERT INTO "Child" (ids) VALUES ($1)`, [`{${crypto.randomUUID()}}`]),
+    ).rejects.toThrow(/not found/);
+  });
+
+  test("a table name that contains the dollar-quote delimiter still yields a valid deferred constraint", async () => {
+    const db = newPglite();
+    await db.exec(
+      generateSchemaDDL([
+        {
+          name: "A$fk$",
+          fields: {
+            id: { type: "uuid" },
+            bID: { type: "uuid", foreignKey: true, foreignKeyType: "B" },
+          },
+        },
+        {
+          name: "B",
+          fields: {
+            id: { type: "uuid" },
+            aID: { type: "uuid", foreignKey: true, foreignKeyType: "A$fk$" },
+          },
+        },
+      ]),
+    );
+    await expect(db.exec(`INSERT INTO "A$fk$" ("bID") VALUES (gen_random_uuid())`)).rejects.toThrow(
+      /foreign key/,
+    );
+  });
+});
+
+describe("reference triggers see the rows actually written", { timeout: 30_000 }, () => {
+  const parent: DDLTableConfig = {
+    name: "Parent",
+    fields: { id: { type: "uuid" }, code: { type: "string", unique: true } },
+  };
+  const child: DDLTableConfig = {
+    name: "Child",
+    fields: {
+      id: { type: "uuid" },
+      ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Parent" },
+      code: { type: "string", unique: true },
+    },
+  };
+
+  test("a row discarded by ON CONFLICT DO NOTHING is not checked", async () => {
+    const db = newPglite();
+    await db.exec(generateSchemaDDL([parent, child]));
+    await db.exec(`INSERT INTO "Child" (code) VALUES ('c')`);
+    await db.query(
+      `INSERT INTO "Child" (code, ids) VALUES ('c', $1) ON CONFLICT (code) DO NOTHING`,
+      [`{${crypto.randomUUID()}}`],
+    );
+    const { rows } = await db.query(`SELECT 1 FROM "Child"`);
+    expect(rows).toHaveLength(1);
+  });
+
+  test("an array may point at the row being inserted", async () => {
+    const db = newPglite();
+    await db.exec(
+      generateSchemaDDL([
+        {
+          name: "Node",
+          fields: {
+            id: { type: "uuid" },
+            ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Node" },
+          },
+        },
+      ]),
+    );
+    const id = crypto.randomUUID();
+    await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [id, `{${id}}`]);
+    const { rows } = await db.query(`SELECT 1 FROM "Node"`);
+    expect(rows).toHaveLength(1);
   });
 });
