@@ -1468,7 +1468,7 @@ type WorkflowJob = {
   environment?: string;
   "timeout-minutes"?: number;
   permissions?: Record<string, string>;
-  concurrency?: { group: string; "cancel-in-progress": boolean; queue?: string };
+  concurrency?: { group: string; "cancel-in-progress": boolean };
   steps: { id?: string; if?: string; env?: Record<string, string>; run?: string }[];
 };
 type Workflow = {
@@ -1638,8 +1638,17 @@ describe("renderBranchWorkflow migration test job", () => {
     expect(workflow.jobs["tailor-migration-test"]?.concurrency).toEqual({
       group: "tailor-migration-test-my-app-${{ github.event.pull_request.number }}",
       "cancel-in-progress": false,
-      queue: "max",
     });
+  });
+
+  test("removes the label through the server the workflow runs on", () => {
+    const { workflow } = render();
+    const unlabel = workflow.jobs["tailor-migration-test"]!.steps.find(
+      (step) => step.id === "tailor-migration-test-unlabel",
+    );
+
+    expect(unlabel?.env?.GH_ENTERPRISE_TOKEN).toBe("${{ github.token }}");
+    expect(unlabel?.run).toContain('export GH_HOST="${GITHUB_SERVER_URL#*://}"');
   });
 
   test("records the job and its steps as managed ids", () => {
