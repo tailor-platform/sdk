@@ -111,12 +111,22 @@ function collectExports(program: Program): ExportedNames {
       if (statement.exportKind === "type") continue;
       if (!statement.exported) result.hasUnreadableExports = true;
       else if (propertyName(statement.exported) === "main") result.hasMain = true;
+      else if (propertyName(statement.exported) === "onFailure") {
+        result.onFailureExportedIndirectly = true;
+      }
       continue;
     }
     if (statement.type !== "ExportNamedDeclaration" || statement.exportKind === "type") continue;
     const declaration = statement.declaration;
     if (declaration?.type === "FunctionDeclaration" && declaration.id?.name === "main") {
       result.hasMain = true;
+    }
+    if (
+      declaration?.type === "TSModuleDeclaration" &&
+      declaration.id.type === "Identifier" &&
+      declaration.id.name === "onFailure"
+    ) {
+      result.onFailureExportedIndirectly = true;
     }
     if (
       (declaration?.type === "FunctionDeclaration" ||

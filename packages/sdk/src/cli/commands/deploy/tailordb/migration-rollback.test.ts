@@ -2460,6 +2460,31 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         expect(deletedTableNames(client)).toContain("StockReservation");
       });
 
+      test.each([
+        ["the checkpoint moved on", { "sdk-migration": "m0001" }],
+        [
+          "another migration is recorded as in progress",
+          { "sdk-migration": "m0000", "sdk-migration-in-progress": "m0002" },
+        ],
+      ])("does not roll back when clearing the record failed and %s", async (_label, labels) => {
+        const client = createMockClient();
+        setPendingMigrations([mkRollbackMigration()]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(runEndedPartiallyApplied());
+        vi.mocked(migrationModule.clearMigrationInProgress).mockRejectedValueOnce(
+          new Error("response lost"),
+        );
+        vi.mocked(client.getMetadata).mockResolvedValue({ metadata: { labels } } as never);
+
+        const error = await applyTailorDB(
+          client,
+          withInputs(createMockPlanResult()),
+          "create-update",
+        ).catch((caught: unknown) => caught);
+
+        expect(error).toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
+        expect(deletedTableNames(client)).not.toContain("StockReservation");
+      });
+
       test("restores the permission the final settings installed even when the failing migration's snapshot has the checkpoint's", async () => {
         const client = createMockClient();
         const checkpointGql = [{ conditions: [], actions: ["all"], permit: "allow" }];

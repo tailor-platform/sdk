@@ -121,6 +121,8 @@ describe("analyzeMigrationScriptSource", () => {
     ["a function", 'export function onFailure() { return "rollback"; }'],
     ["a class", "export class onFailure {}"],
     ["an enum", 'export enum onFailure { rollback = "rollback" }'],
+    ["a namespace", 'export namespace onFailure { export const mode = "rollback"; }'],
+    ["a namespace re-export", 'export * as onFailure from "./policy";'],
   ])("rejects onFailure written as %s", (_label, declaration) => {
     expect(() =>
       analyze(ml`

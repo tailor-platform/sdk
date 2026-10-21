@@ -350,12 +350,13 @@ async function removeRunResources(
 }
 
 /**
- * Whether the migration is no longer recorded as in progress. A clear whose response was lost
- * can have taken effect, and rolling back then is still right: the record is gone.
+ * Whether the migration's record is gone and its checkpoint is still the one before it. A clear
+ * whose response was lost can have taken effect, and rolling back then is still right. A record
+ * of another migration, or a checkpoint that moved on, means a concurrent deploy owns the schema.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param migration - Migration whose record was being cleared
- * @returns True only when the remote state confirms the record is absent
+ * @returns True only when the remote state confirms no record and the prior checkpoint
  */
 async function isRecordCleared(
   client: OperatorClient,
@@ -367,7 +368,10 @@ async function isRecordCleared(
       client,
       resourceTrn(workspaceId, "tailordb", migration.namespace),
     );
-    return !state.inProgressInvalid && state.inProgress?.number !== migration.number;
+    const checkpoint = state.number ?? (migration.number === 1 ? 0 : null);
+    return (
+      !state.inProgressInvalid && state.inProgress === null && checkpoint === migration.number - 1
+    );
   } catch {
     return false;
   }
