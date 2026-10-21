@@ -277,6 +277,26 @@ describe("snapshot-manifest", () => {
       expect(inner?.note).toMatchObject({ unique: false, index: false });
     });
 
+    test("sends an indexed field inside a nested field as indexed but not unique", () => {
+      const snapshotType = createTestSnapshotType("Order", {
+        fields: {
+          id: { type: "uuid", required: true },
+          info: {
+            type: "nested",
+            required: true,
+            fields: { tag: { type: "string", required: true, index: true } },
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      expect(manifest.schema?.fields?.info?.fields?.tag).toMatchObject({
+        index: true,
+        unique: false,
+      });
+    });
+
     test("carries .unique() written inside db.object() from the table definition to the manifest", () => {
       const order = db.table("Order", {
         info: db.object({ code: db.string().unique() }),

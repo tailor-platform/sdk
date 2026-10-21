@@ -313,7 +313,7 @@ export function processNestedFieldsFromSnapshot(
         description: fieldConfig.description || "",
         required: fieldConfig.required,
         array: fieldConfig.array ?? false,
-        index: fieldConfig.unique ?? false,
+        index: (fieldConfig.index ?? false) || (fieldConfig.unique ?? false),
         unique: fieldConfig.unique ?? false,
         foreignKey: fieldConfig.foreignKey ?? false,
         foreignKeyType: fieldConfig.foreignKeyType,
