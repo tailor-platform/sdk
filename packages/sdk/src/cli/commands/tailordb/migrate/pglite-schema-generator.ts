@@ -5,7 +5,11 @@
  */
 
 import * as fs from "node:fs/promises";
-import { generatePgliteSchemaModule, type DDLTableConfig } from "#/utils/tailordb-ddl";
+import {
+  generatePgliteSchemaModule,
+  type DDLFieldConfig,
+  type DDLTableConfig,
+} from "#/utils/tailordb-ddl";
 import { writeDbTypesFile } from "./db-types-generator";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
@@ -15,8 +19,26 @@ import type { MigrationDiff } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot-types";
 
+// The Pre-phase leaves removed and renamed tables in place for the script to
+// read, so their references may point at tables the script's database lacks.
 function toDDLTable(table: TailorDBSnapshotType): DDLTableConfig {
-  return { name: table.name, fields: table.fields, indexes: table.indexes };
+  return {
+    name: table.name,
+    fields: Object.fromEntries(
+      Object.entries(table.fields).map(([name, field]) => [name, withoutReference(field)]),
+    ),
+    indexes: table.indexes,
+  };
+}
+
+function withoutReference<T extends DDLFieldConfig>(field: T): T {
+  const { foreignKey: _a, foreignKeyType: _b, foreignKeyField: _c, fields, ...rest } = field;
+  return {
+    ...rest,
+    ...(fields && {
+      fields: Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, withoutReference(f)])),
+    }),
+  } as T;
 }
 
 /**
