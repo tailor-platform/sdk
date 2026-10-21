@@ -1,9 +1,9 @@
-import { context, trace, SpanStatusCode, type Span } from "@opentelemetry/api";
+import { context, trace, SpanStatusCode, type Span, type TracerProvider } from "@opentelemetry/api";
 import { parseTelemetryConfig, type TelemetryConfig } from "./config";
 
 let _config: TelemetryConfig | undefined;
 let _initialized = false;
-let _provider: { shutdown: () => Promise<void> } | undefined;
+let _provider: (TracerProvider & { shutdown: () => Promise<void> }) | undefined;
 
 /**
  * Check whether telemetry is currently enabled.
@@ -56,7 +56,7 @@ export async function initTelemetry(): Promise<void> {
 
   _provider = new TracerProvider({
     resource,
-    spanProcessors: [new BatchSpanProcessor(exporter)],
+    spanProcessors: [new BatchSpanProcessor({ exporter })],
   });
 
   context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());

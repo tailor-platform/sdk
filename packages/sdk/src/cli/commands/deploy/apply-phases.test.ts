@@ -117,7 +117,7 @@ describe("applyDeploymentPlans", () => {
       await import("@opentelemetry/sdk-trace");
     const exporter = new InMemorySpanExporter();
     const provider = new TracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
+      spanProcessors: [new SimpleSpanProcessor({ exporter })],
     });
     context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
     trace.setGlobalTracerProvider(provider);
