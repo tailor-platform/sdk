@@ -529,6 +529,20 @@ export function isMigrationOutcomeUnknown(error: unknown): boolean {
   return isCLIError(error) && error.code === "MIGRATION_OUTCOME_UNKNOWN";
 }
 
+/**
+ * Whether a partially applied migration's run was observed in a final state, so
+ * rolling back its schema cannot race a step that is still writing.
+ * @param error - Failure raised while executing migrations
+ * @returns True when the run ended
+ */
+export function isMigrationRunEnded(error: unknown): boolean {
+  return (
+    isCLIError(error) &&
+    error.code === "MIGRATION_PARTIALLY_APPLIED" &&
+    error.context?.runEnded === true
+  );
+}
+
 function withMaintenanceModeNote(
   suggestion: string | undefined,
   namespace: string,
@@ -542,7 +556,10 @@ function withMaintenanceModeNote(
 
 function partiallyAppliedError(
   migration: PendingMigration,
-  result: Pick<MigrationStepsWorkflowResult, "completedSteps" | "failedSteps" | "executionId">,
+  result: Pick<
+    MigrationStepsWorkflowResult,
+    "completedSteps" | "failedSteps" | "executionId" | "runEnded"
+  >,
   cause: unknown,
   maintenanceMode: boolean,
 ): Error {
@@ -570,7 +587,59 @@ function partiallyAppliedError(
       completedSteps: result.completedSteps,
       failedSteps: result.failedSteps,
       ...(result.executionId ? { executionId: result.executionId } : {}),
+      ...(result.runEnded ? { runEnded: true } : {}),
     },
+    cause,
+  });
+}
+
+/**
+ * The failure of a migration that asked to be rolled back and was.
+ * @param migration - Migration whose schema changes were rolled back
+ * @param cause - The failure that triggered the rollback
+ * @returns The error to raise in place of the original failure
+ */
+export function rolledBackError(migration: PendingMigration, cause: unknown): Error {
+  const { namespace } = migration;
+  const checkpoint = formatMigrationNumber(migration.number - 1);
+  return CLIError({
+    code: "MIGRATION_ROLLED_BACK",
+    message: cause instanceof Error ? cause.message : String(cause),
+    suggestion:
+      `Migration ${namespace}/${formatMigrationNumber(migration.number)} was rolled back to migration ${checkpoint} and is no longer in progress; ` +
+      "a table the rollback could not revert is listed in the warning above. " +
+      "Fix the failure in migrate.ts and deploy again: the next deploy runs every step again from the beginning.",
+    context: { namespace, migrationNumber: migration.number },
+    cause,
+  });
+}
+
+/**
+ * The failure of a migration that asked to be rolled back but whose in-progress
+ * record could not be cleared, so its schema was left as it is.
+ * @param migration - Migration that stays in progress
+ * @param cause - The failure that triggered the rollback
+ * @param maintenanceMode - Whether the namespace's tables stay in maintenance mode
+ * @returns The error to raise in place of the original failure
+ */
+export function rollbackSkippedError(
+  migration: PendingMigration,
+  cause: unknown,
+  maintenanceMode: boolean,
+): Error {
+  const { namespace } = migration;
+  const resolveRollback = `'tailor tailordb migration resolve --rollback --namespace ${namespace}'`;
+  return CLIError({
+    code: "MIGRATION_PARTIALLY_APPLIED",
+    message: cause instanceof Error ? cause.message : String(cause),
+    suggestion: withMaintenanceModeNote(
+      "Its in-progress record could not be cleared, so its schema was not rolled back and the migration stays in progress. " +
+        `Deploy again to resume it, or run ${resolveRollback} to roll it back without deploying.`,
+      namespace,
+      maintenanceMode,
+      "Until then",
+    ),
+    context: { namespace, migrationNumber: migration.number },
     cause,
   });
 }
