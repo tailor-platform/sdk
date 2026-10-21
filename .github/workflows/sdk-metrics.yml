@@ -317,7 +317,7 @@ jobs:
             echo ""
             echo "| Case | Instantiations |"
             echo "|------|---------------:|"
-            jq -r '.metrics | sort_by(.value) | reverse | .[] | "| \(.name) | \(.value) |"' artifacts/type-perf-results/attest-metrics.json
+            jq -r '.metrics[] | "| \(.name) | \(.value) |"' artifacts/type-perf-results/attest-metrics.json
             echo ""
 
             echo "## Runtime Performance"
