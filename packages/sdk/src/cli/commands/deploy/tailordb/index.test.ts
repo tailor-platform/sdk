@@ -1518,7 +1518,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
       type: "string",
       required: true,
       description: "Postal code",
-      index: false,
+      index: true,
     });
     expect(Object.keys(address.fields!.geo!.fields ?? {})).toEqual(["lat", "lng"]);
     expect(address.fields!.geo!.fields!.lng).toMatchObject({ type: "float", required: true });

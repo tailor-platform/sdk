@@ -65,7 +65,13 @@ describe("E2E: unique field inside a nested field", { concurrent: false }, () =>
       `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const order = db.table("Order", {
-  info: db.object({ code: db.string({ optional: true }).unique() }, { optional: true }),
+  info: db.object(
+    {
+      code: db.string({ optional: true }).unique(),
+      tag: db.string({ optional: true }).index(),
+    },
+    { optional: true },
+  ),
 ${extraFields}}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 
 export type order = typeof order;
@@ -128,7 +134,7 @@ export type order = typeof order;
   }, 300000);
 
   test(
-    "stores the unique constraint on the inner field of a nested field",
+    "stores the unique and index settings on the inner fields of a nested field",
     async ({ signal }) => {
       writeOrderType();
       const configPath = createConfig();
@@ -149,10 +155,9 @@ export type order = typeof order;
         namespaceName: tailordbName,
         tailordbTypeName: "Order",
       });
-      expect(resp.tailordbType?.schema?.fields.info?.fields.code).toMatchObject({
-        unique: true,
-        index: true,
-      });
+      const inner = resp.tailordbType?.schema?.fields.info?.fields;
+      expect(inner?.code).toMatchObject({ unique: true, index: true });
+      expect(inner?.tag).toMatchObject({ unique: false, index: true });
     },
     cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.deploy),
   );
