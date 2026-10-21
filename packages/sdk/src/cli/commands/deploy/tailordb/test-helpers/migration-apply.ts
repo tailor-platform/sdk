@@ -12,8 +12,10 @@ import type { TailorDBPlanResult } from "../plan";
 
 const WORKSPACE_ID = "test-workspace";
 const NAMESPACE = "test-ns";
+const MIGRATIONS_DIR = "/test/migrations";
+const APP_NAME = "test-app";
 
-// Each test file gets its own copy: files that call vi.mock run in isolation.
+// One copy per test file: vitest.config.ts isolates the files that call vi.mock.
 export const remoteCheckpoint = { number: null as number | null, historyId: null as string | null };
 
 export function resetRemoteCheckpoint(number: number | null): void {
@@ -91,7 +93,7 @@ function changeGroup(entries: ChangeEntries = {}) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createPlanResult(options: PlanResultOptions = {}): any {
   const namespacesWithMigrations: NamespaceWithMigrations[] = options.context
-    ?.namespacesWithMigrations ?? [{ namespace: NAMESPACE, migrationsDir: "/test/migrations" }];
+    ?.namespacesWithMigrations ?? [{ namespace: NAMESPACE, migrationsDir: MIGRATIONS_DIR }];
   return {
     changeSet: {
       service: changeGroup(),
@@ -101,7 +103,7 @@ export function createPlanResult(options: PlanResultOptions = {}): any {
     context: {
       workspaceId: WORKSPACE_ID,
       application: {
-        name: "test-app",
+        name: APP_NAME,
         authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
         ...options.application,
       },
@@ -120,7 +122,7 @@ export function createPlanResult(options: PlanResultOptions = {}): any {
 export function typeMetaRequest(tableName: string, namespace = NAMESPACE) {
   return {
     trn: `trn:v1:workspace:${WORKSPACE_ID}:tailordb:${namespace}:type:${tableName}`,
-    labels: { "sdk-name": "test-app" },
+    labels: { "sdk-name": APP_NAME },
   };
 }
 
@@ -186,7 +188,7 @@ export function mkPendingMigration(
   const number = options.number ?? 1;
   const hasScript = options.hasScript ?? true;
   const namespace = options.namespace ?? NAMESPACE;
-  const migrationsDir = options.migrationsDir ?? "/test/migrations";
+  const migrationsDir = options.migrationsDir ?? MIGRATIONS_DIR;
   const label = String(number).padStart(4, "0");
   return {
     number,
