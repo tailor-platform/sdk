@@ -294,10 +294,20 @@ function tableReferences(table: DDLTableConfig): Reference[] {
     .flatMap(([fieldName, field]) => referencesWithin(fieldName, field, "$"));
 }
 
-// Postgres cannot reference from an array or jsonb column, so only a plain
-// column's reference becomes a FOREIGN KEY constraint.
-function isConstraintReference(reference: Reference): boolean {
-  return reference.path === "$";
+// Postgres cannot reference from an array or jsonb column, nor from a column
+// whose type differs from the referenced one (a string field related to id),
+// so only a plain column of the same storage type becomes a FOREIGN KEY constraint.
+function isConstraintReference(
+  reference: Reference,
+  tables: ReadonlyMap<string, DDLTableConfig>,
+): boolean {
+  if (reference.path !== "$") return false;
+  const targetType =
+    reference.field === "id" ? "uuid" : tables.get(reference.table)?.fields[reference.field]?.type;
+  return (
+    targetType === undefined ||
+    mapFieldTypeToPostgresType(targetType) === mapFieldTypeToPostgresType(reference.type)
+  );
 }
 
 function referenceClause(reference: Reference): string {
@@ -322,7 +332,9 @@ function referencedColumnType(
       `Field ${label} references unknown field "${reference.field}" of table "${reference.table}".`,
     );
   }
-  if (!targetField.unique || declaredType(targetField.type) !== declaredType(reference.type)) {
+  const sameType =
+    reference.field === "id" || declaredType(targetField.type) === declaredType(reference.type);
+  if (!targetField.unique || !sameType) {
     throw new Error(
       `Field ${label} references "${reference.table}"."${reference.field}", which must be unique and of the same type as the referencing field.`,
     );
@@ -336,11 +348,15 @@ function referenceCheck(
   label: string,
 ): string {
   const pgType = referencedColumnType(reference, tables, label);
+  const comparison =
+    pgType === mapFieldTypeToPostgresType(reference.type)
+      ? `parent.${identifier(reference.field)} = (fk_check.v #>> '{}')::${pgType}`
+      : `parent.${identifier(reference.field)}::text = (fk_check.v #>> '{}')`;
   const target = `${identifier(reference.table)}.${identifier(reference.field)}`;
   const message = `violates foreign key constraints: % not found in ${target.replaceAll("%", "%%")}`;
   return [
     `  FOR v IN SELECT jsonb_path_query(to_jsonb(NEW.${identifier(reference.column)}), ${stringLiteral(reference.path)}) LOOP`,
-    `    IF jsonb_typeof(fk_check.v) <> 'null' AND NOT EXISTS (SELECT 1 FROM ${identifier(reference.table)} AS parent WHERE parent.${identifier(reference.field)} = (fk_check.v #>> '{}')::${pgType}) THEN`,
+    `    IF jsonb_typeof(fk_check.v) <> 'null' AND NOT EXISTS (SELECT 1 FROM ${identifier(reference.table)} AS parent WHERE ${comparison}) THEN`,
     `      RAISE EXCEPTION ${stringLiteral(message)}, fk_check.v #>> '{}' USING ERRCODE = 'foreign_key_violation';`,
     "    END IF;",
     "  END LOOP;",
@@ -403,7 +419,7 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
   const columns = [`  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid()`];
   const references = tableReferences(table);
   const constraintReferences = new Map(
-    references.filter(isConstraintReference).map((r) => [r.column, r]),
+    references.filter((r) => isConstraintReference(r, tables)).map((r) => [r.column, r]),
   );
 
   for (const [fieldName, field] of Object.entries(table.fields)) {
@@ -441,7 +457,7 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
     ...indexes,
     ...referenceTrigger(
       table,
-      references.filter((r) => !isConstraintReference(r)),
+      references.filter((r) => !isConstraintReference(r, tables)),
       tables,
     ),
   ];
@@ -468,13 +484,14 @@ function planCreation(tables: readonly DDLTableConfig[]): {
   deferred: Map<DDLTableConfig, Reference[]>;
 } {
   const names = new Set(tables.map((table) => table.name));
+  const byName = new Map(tables.map((table) => [table.name, table]));
   const created = new Set<string>();
   const remaining = [...tables];
   const ordered: DDLTableConfig[] = [];
   const deferred = new Map<DDLTableConfig, Reference[]>();
   const pendingOf = (table: DDLTableConfig) =>
     tableReferences(table)
-      .filter(isConstraintReference)
+      .filter((r) => isConstraintReference(r, byName))
       .filter((r) => names.has(r.table) && r.table !== table.name && !created.has(r.table));
   while (remaining.length > 0) {
     const index = remaining.findIndex((table) => pendingOf(table).length === 0);
