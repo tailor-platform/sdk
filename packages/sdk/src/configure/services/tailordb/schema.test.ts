@@ -6,7 +6,6 @@ import type { FieldOptions, FieldValidateInput } from "#/configure/types/field.t
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
-import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 describe("TailorDBField enum field tests", () => {
   test("set enum field by passing string", () => {
@@ -1466,14 +1465,6 @@ describe("TailorDBField runtime validation tests", () => {
   };
   const data = {};
 
-  function expectParsedValue<T>(result: StandardSchemaV1.Result<T>, expected: T) {
-    expect(result.issues).toBeUndefined();
-    if (result.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(result.value).toEqual(expected);
-  }
-
   test.each([
     ["uuid", db.uuid()],
     ["string", db.string()],
@@ -1485,7 +1476,7 @@ describe("TailorDBField runtime validation tests", () => {
     ["time", db.time()],
     ["enum", db.enum(["a"])],
     ["nested", db.object({ name: db.string() })],
-  ])("sets runtime type %s", (type, field) => {
+  ])("sets field.type to %s", (type, field) => {
     expect(field.type).toBe(type);
   });
 
@@ -1494,9 +1485,8 @@ describe("TailorDBField runtime validation tests", () => {
       name: db.string(),
       age: db.int({ optional: true }),
     });
-    expectParsedValue(field.parse({ value: { name: "test", age: 30 }, data, invoker }), {
-      name: "test",
-      age: 30,
+    expect(field.parse({ value: { name: "test", age: 30 }, data, invoker })).toEqual({
+      value: { name: "test", age: 30 },
     });
 
     const bad = field.parse({ value: { name: 123 }, data, invoker });
