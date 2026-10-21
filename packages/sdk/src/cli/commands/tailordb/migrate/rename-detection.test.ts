@@ -1046,6 +1046,30 @@ describe("nested member rename specs", () => {
     expect(nestedMemberDropSpecApplies({ ...drop, path: ["geo"] }, previous, current)).toBe(true);
   });
 
+  test.each(["root array", "parent array", "parent type"])(
+    "rejects a rename with a changed %s",
+    (kind) => {
+      const previous = nestedSnapshot({
+        geo: stringField({ type: "nested", fields: { zip: stringField() } }),
+      });
+      const current = nestedSnapshot({
+        geo: stringField({ type: "nested", fields: { zipCode: stringField() } }),
+      });
+      if (kind === "root array") current.tables.User!.fields.address!.array = true;
+      if (kind === "parent array") current.tables.User!.fields.address!.fields!.geo!.array = true;
+      if (kind === "parent type") current.tables.User!.fields.address!.fields!.geo!.type = "string";
+      expect(() =>
+        assertValidNestedMemberRenames(previous, current, [
+          {
+            ...spec,
+            previousPath: ["geo", "zip"],
+            path: ["geo", "zipCode"],
+          },
+        ]),
+      ).toThrow("ancestor");
+    },
+  );
+
   test("assertValidNestedMemberRenames accepts a compatible pair", () => {
     expect(() =>
       assertValidNestedMemberRenames(

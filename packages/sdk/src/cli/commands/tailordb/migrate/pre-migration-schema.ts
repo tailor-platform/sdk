@@ -12,7 +12,8 @@
  *   value removed: keep the looser side until Post-phase. Members removed
  *   from a nested field are re-inserted so migrate.ts can read them, and the
  *   new member of a confirmed nested rename is relaxed to optional until the
- *   copy script has filled it.
+ *   copy script has filled it. Required additions, requiredness changes, and
+ *   enum removals inside nested fields are relaxed until Post-phase.
  * - `field_renamed`: keep the old field (readable by migrate.ts) and relax
  *   the new field's required/unique constraints until Post-phase.
  * - `field_type_modified`: keep the complete previous field config until
@@ -244,6 +245,7 @@ interface PreMigrationField {
   required?: boolean;
   unique?: boolean;
   allowedValues?: { value?: string; description?: string }[];
+  fields?: Record<string, PreMigrationField>;
 }
 
 interface PreMigrationFieldStrategy<F extends PreMigrationField> {
@@ -300,35 +302,56 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
     const { before, after } = change;
 
     strategy.adjustNestedMembers?.(field, change);
-
-    if (!before.required && after.required) {
-      relaxed.required = false;
+    for (const member of collectNestedMemberChanges(before, after)) {
+      if (member.kind === "removed") continue;
+      const target = member.path.reduce<PreMigrationField | undefined>(
+        (current, segment) => current?.fields?.[segment],
+        field,
+      );
+      if (!target) continue;
+      if (member.kind === "added") {
+        if (member.after.required) target.required = false;
+      } else {
+        relaxModifiedFieldConstraints(target, member.before, member.after);
+      }
     }
 
-    if (!(before.unique ?? false) && (after.unique ?? false)) {
-      relaxed.unique = false;
-    }
+    relaxModifiedFieldConstraints(relaxed, before, after);
+  }
+}
 
-    // Snapshots omit allowedValues when an enum has no values left.
-    const beforeAllowed = before.allowedValues ?? [];
-    const afterAllowed = after.allowedValues ?? [];
-    const afterValues = new Set(afterAllowed.map((v) => v.value));
-    const removedValues = beforeAllowed.filter((v) => !afterValues.has(v.value));
-    if (removedValues.length > 0) {
-      const valueMap = new Map<string, string>();
-      for (const v of beforeAllowed) {
+function relaxModifiedFieldConstraints(
+  relaxed: PreMigrationField,
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): void {
+  if (!before.required && after.required) {
+    relaxed.required = false;
+  }
+
+  if (!(before.unique ?? false) && (after.unique ?? false)) {
+    relaxed.unique = false;
+  }
+
+  // Snapshots omit allowedValues when an enum has no values left.
+  const beforeAllowed = before.allowedValues ?? [];
+  const afterAllowed = after.allowedValues ?? [];
+  const afterValues = new Set(afterAllowed.map((v) => v.value));
+  const removedValues = beforeAllowed.filter((v) => !afterValues.has(v.value));
+  if (removedValues.length > 0) {
+    const valueMap = new Map<string, string>();
+    for (const v of beforeAllowed) {
+      valueMap.set(v.value, v.description ?? "");
+    }
+    for (const v of afterAllowed) {
+      if (!valueMap.has(v.value)) {
         valueMap.set(v.value, v.description ?? "");
       }
-      for (const v of afterAllowed) {
-        if (!valueMap.has(v.value)) {
-          valueMap.set(v.value, v.description ?? "");
-        }
-      }
-      relaxed.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
-        value,
-        description,
-      }));
     }
+    relaxed.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
+      value,
+      description,
+    }));
   }
 }
 
