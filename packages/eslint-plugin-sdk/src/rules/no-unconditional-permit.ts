@@ -39,7 +39,9 @@ function isDbTypeReceiver(
     if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
       return false;
     }
-    if (memberName(callee) === "type" && isDbReference(imports, callee.object)) return true;
+    const method = memberName(callee);
+    if ((method === "type" || method === "table") && isDbReference(imports, callee.object))
+      return true;
     current = resolveValue(context, callee.object);
   }
   return false;

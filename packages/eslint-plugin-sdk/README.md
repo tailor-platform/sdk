@@ -104,7 +104,7 @@ the `unsafeAllowAll*` constants. Use them only during local development.
 Incorrect:
 
 ```ts
-export default db.type("User", fields).permission({
+export default db.table("User", fields).permission({
   create: [{ conditions: [], permit: true }],
   // ...
 });
@@ -115,13 +115,13 @@ export const defaultPermission = unsafeAllowAllTypePermission;
 Correct:
 
 ```ts
-export default db.type("User", fields).permission({
+export default db.table("User", fields).permission({
   create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
   // ...
 });
 ```
 
-The rule checks `.permission()` / `.gqlPermission()` on `db.type()` chains and the `permission`
+The rule checks `.permission()` / `.gqlPermission()` on `db.table()` and `db.type()` chains and the `permission`
 option of `defineIdp()`, including values defined as `const` in the same file.
 
 ### `valid-workflow-job-definition` (warning)
