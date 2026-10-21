@@ -6,13 +6,23 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { applyTailorDB, captureMigrationFileState } from "./index";
+import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
+import * as migrationModule from "./migration";
+import {
+  createMockClient as createBaseMockClient,
+  createPlanResult,
+  gqlPermissionDeletion,
+  mkPendingMigration as createPendingMigration,
+  snapshotAt,
+  snapshotTable,
+  typeDeletion,
+  typeEntry,
+  typeMetaRequest,
+} from "./test-helpers/migration-apply";
+import { applyTailorDB } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { Application } from "#/cli/services/application";
-import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 const MAIN = "main-ns";
 const SUB = "sub-ns";
@@ -23,16 +33,12 @@ const state = vi.hoisted(() => ({
   tablesByDir: {} as Record<string, Record<number, unknown>>,
 }));
 
-vi.mock("./migration", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./migration");
-  return {
-    ...original,
-    detectPendingMigrations: vi.fn(),
-    executeMigrations: vi.fn().mockResolvedValue(undefined),
-    updateMigrationLabel: vi.fn(),
-  };
-});
+vi.mock("./migration", async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectPendingMigrations: vi.fn(),
+  executeMigrations: vi.fn().mockResolvedValue(undefined),
+  updateMigrationLabel: vi.fn(),
+}));
 
 vi.mock("#/cli/commands/tailordb/migrate/config", () => ({
   getNamespacesWithMigrations: vi.fn(() =>
@@ -43,30 +49,12 @@ vi.mock("#/cli/commands/tailordb/migrate/config", () => ({
   ),
 }));
 
-vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
-  const original =
-    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/snapshot");
-  return {
-    ...original,
-    assertValidMigrationFiles: vi.fn(),
-    reconstructSnapshotFromMigrations: vi.fn((migrationsDir: string, maxVersion?: number) => {
-      const tablesByVersion = state.tablesByDir[migrationsDir] ?? {};
-      const number = maxVersion ?? Math.max(...Object.keys(tablesByVersion).map(Number));
-      const tables = tablesByVersion[number];
-      if (!tables) {
-        throw new Error(`No snapshot fixture for ${migrationsDir} migration ${number}`);
-      }
-      return { version: 1, namespace: "", createdAt: "2026-01-01T00:00:00.000Z", tables };
-    }),
-  };
-});
+vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
+  ...(await importOriginal()),
+  assertValidMigrationFiles: vi.fn(),
+  reconstructSnapshotFromMigrations: vi.fn(),
+}));
 
-import * as migrationModule from "./migration";
-
-const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
-
-type Fields = Record<string, { type: string; required: boolean }>;
 type TypeWrite = {
   namespaceName?: string;
   tailordbType?: { name?: string; schema?: { fields?: object } };
@@ -78,43 +66,10 @@ function migrationsDirOf(namespace: string) {
   return `/test/${namespace}/migrations`;
 }
 
-function snapshotTable(name: string, fields: Fields) {
-  return { name, pluralForm: `${name.toLowerCase()}s`, fields };
-}
-
-function metaRequest(namespace: string, tableName: string) {
-  return {
-    trn: `trn:v1:workspace:test-workspace:tailordb:${namespace}:type:${tableName}`,
-    labels: { "sdk-name": "test-app" },
-  };
-}
-
-function typeEntry(namespace: string, tableName: string, fields: Fields) {
-  return {
-    name: tableName,
-    request: {
-      workspaceId: "test-workspace",
-      namespaceName: namespace,
-      tailordbType: { name: tableName, schema: { fields } },
-    },
-    metaRequest: metaRequest(namespace, tableName),
-  };
-}
-
 function deleteEntry(namespace: string, tableName: string) {
   return {
-    type: {
-      name: tableName,
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: namespace,
-        tailordbTypeName: tableName,
-      },
-    },
-    gqlPermission: {
-      name: tableName,
-      request: { workspaceId: "test-workspace", namespaceName: namespace, typeName: tableName },
-    },
+    type: typeDeletion(tableName, namespace),
+    gqlPermission: gqlPermissionDeletion(tableName, namespace),
   };
 }
 
@@ -124,65 +79,22 @@ function createMockPlanResult(options: {
   unchanged?: Omit<TypeEntry, "request">[];
   deletes?: DeleteEntry[];
 }) {
-  const service = (namespace: string) =>
-    ({
-      namespace,
-      loadTypes: vi.fn().mockResolvedValue({}),
-      types: {},
-    }) as unknown as TailorDBService;
-  const namespacesWithMigrations = state.migratingNamespaces.map((namespace) => ({
-    namespace,
-    migrationsDir: migrationsDirOf(namespace),
-  }));
   const deletes = options.deletes ?? [];
-  return {
-    changeSet: {
-      service: {
-        creates: [],
-        updates: [],
-        deletes: [],
-        title: "TailorDB Services",
-        isEmpty: () => true,
-        lines: () => [],
-      },
-      type: {
-        creates: options.creates ?? [],
-        updates: options.updates ?? [],
-        deletes: deletes.map((entry) => entry.type),
-        unchanged: options.unchanged ?? [],
-        title: "TailorDB tables",
-        isEmpty: () => false,
-        lines: () => [],
-      },
-      gqlPermission: {
-        creates: [],
-        updates: [],
-        deletes: deletes.map((entry) => entry.gqlPermission),
-        title: "TailorDB GQL Permissions",
-        isEmpty: () => false,
-        lines: () => [],
-      },
+  return createPlanResult({
+    type: {
+      creates: options.creates,
+      updates: options.updates,
+      deletes: deletes.map((entry) => entry.type),
+      unchanged: options.unchanged,
     },
-    conflicts: [],
-    unmanaged: [],
-    resourceOwners: new Set<string>(),
+    gqlPermission: { deletes: deletes.map((entry) => entry.gqlPermission) },
     context: {
-      workspaceId: "test-workspace",
-      application: {
-        name: "test-app",
-        tailorDBServices: [service(MAIN), service(SUB)],
-        authService: { config: { name: "test-auth", machineUsers: { admin: {} } } },
-      } as unknown as Application,
-      tailorDBInputs: [],
-      executorUsedTables: new Set<string>(),
-      config: mockConfig,
-      noSchemaCheck: true,
-      checkpointRepairs: [],
-      namespacesWithMigrations,
-      migrationFileState: captureMigrationFileState(namespacesWithMigrations),
+      namespacesWithMigrations: state.migratingNamespaces.map((namespace) => ({
+        namespace,
+        migrationsDir: migrationsDirOf(namespace),
+      })),
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+  });
 }
 
 function mkPendingMigration(
@@ -191,28 +103,12 @@ function mkPendingMigration(
   changes: DiffChange[],
   hasScript = true,
 ): PendingMigration {
-  const migrationsDir = migrationsDirOf(namespace);
-  const label = String(number).padStart(4, "0");
-  return {
-    number,
-    scriptPath: `${migrationsDir}/${label}/migrate.ts`,
-    diffPath: `${migrationsDir}/${label}/diff.json`,
+  return createPendingMigration(changes, {
     namespace,
-    migrationsDir,
+    migrationsDir: migrationsDirOf(namespace),
+    number,
     hasScript,
-    scriptForm: hasScript ? { kind: "main" } : null,
-    diff: {
-      version: 1,
-      namespace,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      changes,
-      hasBreakingChanges: false,
-      breakingChanges: [],
-      hasWarnings: false,
-      warnings: [],
-      requiresMigrationScript: hasScript,
-    },
-  };
+  });
 }
 
 function tableAdded(tableName: string): DiffChange {
@@ -236,9 +132,7 @@ function requiredFieldAdded(tableName: string, fieldName: string): DiffChange {
 }
 
 function createMockClient() {
-  return {
-    createTailorDBService: vi.fn().mockResolvedValue({}),
-    setMetadata: vi.fn().mockResolvedValue({}),
+  return createBaseMockClient({
     getMetadata: vi.fn().mockImplementation(async ({ trn }: { trn: string }) => {
       const checkpoint = state.checkpoints.get(trn.split(":").at(-1) ?? "");
       return {
@@ -250,15 +144,7 @@ function createMockClient() {
         },
       };
     }),
-    listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
-    createTailorDBType: vi.fn().mockResolvedValue({}),
-    updateTailorDBType: vi.fn().mockResolvedValue({}),
-    createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-    updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-    deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-    deleteTailorDBType: vi.fn().mockResolvedValue({}),
-    deleteTailorDBService: vi.fn().mockResolvedValue({}),
-  } as unknown as OperatorClient;
+  });
 }
 
 function typeWritesOf(mock: { calls: unknown[][] }, namespace: string, tableName: string) {
@@ -337,13 +223,15 @@ describe("migration flow: a table name shared across namespaces", () => {
     state.checkpoints.clear();
     state.migratingNamespaces = [MAIN, SUB];
     state.tablesByDir = {};
-    vi.mocked(migrationModule.executeMigrations).mockClear();
     vi.mocked(migrationModule.updateMigrationLabel).mockReset();
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
       async (_client, _workspaceId, namespace, number) => {
         state.checkpoints.set(namespace, number);
         return true;
       },
+    );
+    vi.mocked(reconstructSnapshotFromMigrations).mockImplementation((migrationsDir, maxVersion) =>
+      snapshotAt(state.tablesByDir[migrationsDir] ?? {}, maxVersion),
     );
   });
 
@@ -396,7 +284,7 @@ describe("migration flow: a table name shared across namespaces", () => {
       for (const namespace of migrating) state.checkpoints.set(namespace, 0);
       vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(pending);
       const client = createMockClient();
-      const subEntry = typeEntry(SUB, "Item", subItem);
+      const subEntry = typeEntry("Item", { namespace: SUB, fields: subItem });
 
       await applyTailorDB(
         client,
@@ -486,7 +374,7 @@ describe("migration flow: a table name shared across namespaces", () => {
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
     ]);
     const client = createMockClient();
-    const unchanged = { name: "Legacy", metaRequest: metaRequest(SUB, "Legacy") };
+    const unchanged = { name: "Legacy", metaRequest: typeMetaRequest("Legacy", SUB) };
 
     await applyTailorDB(
       client,

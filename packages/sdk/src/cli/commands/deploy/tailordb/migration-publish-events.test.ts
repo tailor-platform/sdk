@@ -5,127 +5,56 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { errorToJson } from "#/cli/shared/error-json";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
-import { applyTailorDB, captureMigrationFileState, type MaintenanceModeRelease } from "./index";
-import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { Application } from "#/cli/services/application";
-import type { TailorDBService } from "#/cli/services/tailordb/service";
+import * as migrationModule from "./migration";
+import {
+  createMockClient as createBaseMockClient,
+  createPlanResult,
+  gqlPermissionEntry,
+  mkPendingMigration,
+  mockConfig,
+  snapshotAt,
+  snapshotTable,
+  typeEntry,
+} from "./test-helpers/migration-apply";
+import { applyTailorDB, type MaintenanceModeRelease } from "./index";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
-const remoteCheckpoint = vi.hoisted(() => ({
+vi.mock("./migration", async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectPendingMigrations: vi.fn(),
+  executeMigrations: vi.fn().mockResolvedValue(undefined),
+  updateMigrationLabel: vi.fn(),
+}));
+
+vi.mock("#/cli/commands/tailordb/migrate/config", () => ({
+  getNamespacesWithMigrations: vi.fn(() => [
+    { namespace: "test-ns", migrationsDir: "/test/migrations" },
+  ]),
+}));
+
+vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
+  ...(await importOriginal()),
+  assertValidMigrationFiles: vi.fn(),
+  reconstructSnapshotFromMigrations: vi.fn(),
+}));
+
+const remoteCheckpoint = {
   number: 0 as number | null,
   historyId: null as string | null,
   maintenanceMode: null as string | null,
   maintenanceModeChanges: [] as Array<string | null>,
-}));
-
-// Mock label.ts to suppress real metadata building
-vi.mock("../label", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../label");
-  return {
-    ...original,
-    buildMetaRequest: vi.fn().mockImplementation(async () => ({
-      trn: "trn:v1:workspace:test-workspace:tailordb:test-ns",
-      labels: {},
-    })),
-  };
-});
-
-// Mock createChangeSet to suppress output in tests
-vi.mock("../change-set", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../change-set");
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...original.createChangeSet(title),
-      lines: () => [],
-    }),
-  };
-});
-
-// Mock the migration helpers so applyTailorDB enters the migration flow without
-// touching the filesystem or the remote workspace.
-vi.mock("./migration", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./migration");
-  return {
-    ...original,
-    detectPendingMigrations: vi.fn(),
-    executeMigrations: vi.fn().mockResolvedValue(undefined),
-    updateMigrationLabel: vi
-      .fn()
-      .mockImplementation(
-        async (
-          _client: unknown,
-          _workspaceId: string,
-          _namespace: string,
-          number: number,
-          historyId?: string,
-        ) => {
-          remoteCheckpoint.number = number;
-          remoteCheckpoint.historyId = historyId ?? null;
-        },
-      ),
-  };
-});
-
-// Mock migration config / snapshot helpers (called inside validateAndDetectMigrations)
-vi.mock("#/cli/commands/tailordb/migrate/config", () => ({
-  getNamespacesWithMigrations: vi.fn().mockReturnValue([
-    {
-      namespace: "test-ns",
-      migrationsDir: "/test/migrations",
-    },
-  ]),
-}));
+};
 
 // Per-test schema states keyed by migration number, so reconstruction returns
 // the state as of the requested checkpoint like the real replay does.
-const snapshotState = vi.hoisted(() => ({
+const snapshotState = {
   tablesByVersion: {} as Record<number, unknown>,
   historyId: null as string | null,
-}));
-
-vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
-  const original =
-    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/snapshot");
-  return {
-    ...original,
-    assertValidMigrationFiles: vi.fn(),
-    reconstructSnapshotFromMigrations: vi.fn((migrationsDir: string, maxVersion?: number) => {
-      void migrationsDir;
-      const versions = Object.keys(snapshotState.tablesByVersion).map(Number);
-      const number = maxVersion ?? Math.max(...versions);
-      const tables = snapshotState.tablesByVersion[number];
-      if (!tables) {
-        throw new Error(`No snapshot fixture configured for migration number: ${number}`);
-      }
-      return {
-        version: 1,
-        namespace: "test-ns",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        tables,
-        ...(snapshotState.historyId && {
-          rebaseline: {
-            historyId: snapshotState.historyId,
-            replacedHistoryId: null,
-            replacedLatestMigration: 0,
-          },
-        }),
-      };
-    }),
-  };
-});
-
-import * as migrationModule from "./migration";
-
-const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
+};
 
 describe("migration flow: namespace restrictions while migrations run", () => {
   type WrittenSettings = {
@@ -145,8 +74,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       existingTableNames?: string[];
     } = {},
   ) {
-    return {
-      createTailorDBService: vi.fn().mockResolvedValue({}),
+    return createBaseMockClient({
       setMetadata: vi.fn(async (request: { trn: string; labels: Record<string, string> }) => {
         const maintenanceMode = request.labels["sdk-maintenance-mode"] ?? null;
         if (
@@ -216,51 +144,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         });
         return { tailordbTypes };
       }),
-      createTailorDBType: vi.fn().mockResolvedValue({}),
-      updateTailorDBType: vi.fn().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn().mockResolvedValue({}),
-      deleteTailorDBService: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
-  }
-
-  function snapshotTable(
-    name: string,
-    fields: Record<string, { type: string; required: boolean }>,
-    settings?: {
-      bulkUpsert?: boolean;
-      publishEvents?: boolean;
-      gqlOperations?: {
-        create?: boolean;
-        update?: boolean;
-        delete?: boolean;
-        read?: boolean;
-      };
-    },
-  ) {
-    return { name, pluralForm: `${name.toLowerCase()}s`, fields, ...(settings && { settings }) };
-  }
-
-  function typeCreate(tableName: string) {
-    return {
-      name: tableName,
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        tailordbType: {
-          name: tableName,
-          schema: {
-            fields: { name: { type: "string", required: true } },
-          },
-        },
-      },
-      metaRequest: {
-        trn: `trn:v1:workspace:test-workspace:tailordb:test-ns:type:${tableName}`,
-        labels: { "sdk-name": "test-app" },
-      },
-    };
+    });
   }
 
   function createMockPlanResult(options: {
@@ -272,60 +156,15 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     /** Defaults to "migration"; pass `undefined` explicitly to leave it unset. */
     maintenanceMode?: LoadedConfig["maintenanceMode"];
   }) {
-    const migratedService = {
-      namespace: "test-ns",
-      loadTypes: vi.fn().mockResolvedValue({}),
-      types: {},
-    } as unknown as TailorDBService;
-
-    return {
-      changeSet: {
-        service: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB Services",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-        type: {
-          creates: options.creates.map(typeCreate),
-          updates: (options.updates ?? []).map(typeCreate),
-          deletes: [],
-          unchanged: [],
-          title: "TailorDB Types",
-          isEmpty: () => false,
-          lines: () => [],
-        },
-        gqlPermission: {
-          creates: (options.gqlPermissionTypes ?? []).map((tableName) => ({
-            name: tableName,
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              typeName: tableName,
-              permission: {},
-            },
-          })),
-          updates: [],
-          deletes: [],
-          title: "TailorDB GQL Permissions",
-          isEmpty: () => false,
-          lines: () => [],
-        },
+    return createPlanResult({
+      type: {
+        creates: options.creates.map((name) => typeEntry(name)),
+        updates: (options.updates ?? []).map((name) => typeEntry(name)),
       },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      gqlPermission: {
+        creates: (options.gqlPermissionTypes ?? []).map((name) => gqlPermissionEntry(name)),
+      },
       context: {
-        workspaceId: "test-workspace",
-        application: {
-          name: "test-app",
-          tailorDBServices: [migratedService],
-          authService: {
-            config: { name: "test-auth", machineUsers: { admin: {} } },
-          },
-        } as unknown as Application,
         // The restore step reads the final schema from here, the way the real
         // plan supplies it.
         tailorDBInputs: [
@@ -345,44 +184,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           ...mockConfig,
           maintenanceMode: "maintenanceMode" in options ? options.maintenanceMode : "migration",
         },
-        noSchemaCheck: true,
-        checkpointRepairs: [],
-        namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
-        migrationFileState: captureMigrationFileState([
-          { namespace: "test-ns", migrationsDir: "/test/migrations" },
-        ]),
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
-  }
-
-  function mkPendingMigration(
-    changes: DiffChange[],
-    options: { number?: number; hasScript?: boolean } = {},
-  ): PendingMigration {
-    const number = options.number ?? 1;
-    const label = String(number).padStart(4, "0");
-    return {
-      number,
-      scriptPath: `/test/migrations/${label}/migrate.ts`,
-      diffPath: `/test/migrations/${label}/diff.json`,
-      namespace: "test-ns",
-      migrationsDir: "/test/migrations",
-      hasScript: options.hasScript ?? true,
-      scriptForm: (options.hasScript ?? true) ? { kind: "main" } : null,
-      diff: {
-        version: 1,
-        namespace: "test-ns",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        changes,
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        hasWarnings: false,
-        warnings: [],
-        requiresMigrationScript: true,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    };
+    });
   }
 
   function typeSettingWrites(client: OperatorClient) {
@@ -431,6 +234,18 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     remoteCheckpoint.historyId = null;
     remoteCheckpoint.maintenanceMode = null;
     remoteCheckpoint.maintenanceModeChanges = [];
+    vi.mocked(reconstructSnapshotFromMigrations).mockImplementation(
+      (_migrationsDir, maxVersion) => ({
+        ...snapshotAt(snapshotState.tablesByVersion, maxVersion),
+        ...(snapshotState.historyId && {
+          rebaseline: {
+            historyId: snapshotState.historyId,
+            replacedHistoryId: null,
+            replacedLatestMigration: 0,
+          },
+        }),
+      }),
+    );
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
       async (_client, _workspaceId, _namespace, number, historyId, recordMaintenanceMode) => {
         remoteCheckpoint.number = number;
