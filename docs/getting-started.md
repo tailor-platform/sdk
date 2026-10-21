@@ -59,10 +59,10 @@ pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 4. **Typecheck** — Run tsgo
 5. **Knip** — Detect unused dependencies and exports
 
-Steps 2–5 run as a single command, and only when staged files include `.ts`/`.js`.
+Steps 2–5 run as separate jobs in this order, only when staged files include `.ts`/`.js`, and stop at the first failing job.
 
 Post-commit verifies GPG signature.
 
-Hooks print only a summary when they pass; a failing command prints its full output. Set `LEFTHOOK_OUTPUT=meta,summary,skips,execution` to see every command's output.
+Hooks print only a summary when they pass; a failing job prints its full output. Set `LEFTHOOK_OUTPUT=meta,summary,skips,execution` to see every job's output.
 
 To customize hooks locally, create `lefthook-local.yml` (gitignored).
