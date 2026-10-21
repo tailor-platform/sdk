@@ -115,6 +115,9 @@ const e2eEnv = { POLITTY_NO_AGENT: "1" };
 // CPU-derived worker cap only leaves runners idle.
 const e2eMaxWorkers = 8;
 
+// Vitest rejects projects that differ in maxWorkers but share a groupOrder.
+const e2eGroupOrder = 1;
+
 export default defineConfig({
   resolve: {
     alias: [
@@ -187,6 +190,7 @@ export default defineConfig({
           testTimeout: 120000,
           hookTimeout: 300000,
           maxWorkers: e2eMaxWorkers,
+          sequence: { groupOrder: e2eGroupOrder },
           globalSetup: ["e2e/globalSetup.ts"],
           env: e2eEnv,
         },
@@ -200,6 +204,7 @@ export default defineConfig({
           testTimeout: 120000,
           hookTimeout: 300000,
           maxWorkers: e2eMaxWorkers,
+          sequence: { groupOrder: e2eGroupOrder },
           globalSetup: ["e2e/globalSetup.ts"],
           env: e2eEnv,
           typecheck: { enabled: false },
