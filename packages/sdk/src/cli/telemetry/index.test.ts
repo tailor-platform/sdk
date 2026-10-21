@@ -1,15 +1,17 @@
 import { describe, test, expect, aroundEach, vi } from "vitest";
 
 async function registerTestProvider() {
-  const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
-  const { InMemorySpanExporter, SimpleSpanProcessor } =
-    await import("@opentelemetry/sdk-trace-base");
+  const { context, trace } = await import("@opentelemetry/api");
+  const { AsyncLocalStorageContextManager } = await import("@opentelemetry/context-async-hooks");
+  const { TracerProvider, InMemorySpanExporter, SimpleSpanProcessor } =
+    await import("@opentelemetry/sdk-trace");
 
   const exporter = new InMemorySpanExporter();
-  const provider = new NodeTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  const provider = new TracerProvider({
+    spanProcessors: [new SimpleSpanProcessor({ exporter })],
   });
-  provider.register();
+  context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+  trace.setGlobalTracerProvider(provider);
   return { exporter, provider };
 }
 
@@ -21,8 +23,9 @@ describe("telemetry", () => {
     vi.resetModules();
     await runTest();
     process.env = originalEnv;
-    const { trace } = await import("@opentelemetry/api");
+    const { context, trace } = await import("@opentelemetry/api");
     trace.disable();
+    context.disable();
   });
 
   test("withSpan executes fn with noop span when no provider is registered", async () => {
