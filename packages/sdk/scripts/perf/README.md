@@ -53,7 +53,7 @@ Each feature is tested with 10 items to measure relative type inference cost:
 
 ## Type Instantiation Benches (attest)
 
-`attest/type-instantiations.bench.ts` measures the instantiations that a single expression (a "case") contributes, using `@ark/attest`. The benches never fail CI.
+`attest/type-instantiations.bench.ts` measures the instantiations that a single expression (a "case") contributes, using `@ark/attest`. A change in a count never fails CI; a bench that crashes does, so the broken measurement is noticed.
 
 ```bash
 # Run the benches and write attest-metrics.json / attest-changes.md
