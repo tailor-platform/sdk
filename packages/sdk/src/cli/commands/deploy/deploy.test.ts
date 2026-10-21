@@ -1898,7 +1898,7 @@ describe("assertUniqueGlobalResourceNames", () => {
     ).not.toThrow();
   });
 
-  test("accepts the same resolver name and bundle key in different namespaces", () => {
+  test("accepts the same resolver name in different namespaces", () => {
     expect(() =>
       assertUniqueGlobalResourceNames([
         fakeTarget({ resolverNamespaces: ["buyer"], resolvers: { get: "buyer" } }),
