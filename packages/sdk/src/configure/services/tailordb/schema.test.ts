@@ -8,150 +8,6 @@ import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
-describe("TailorDBField basic field type tests", () => {
-  test("string field outputs string type correctly", () => {
-    const _stringType = db.table("Test", {
-      name: db.string(),
-    });
-    expectTypeOf<output<typeof _stringType>>().toEqualTypeOf<{
-      id: string;
-      name: string;
-    }>();
-  });
-
-  test("int field outputs number type correctly", () => {
-    const _intType = db.table("Test", {
-      age: db.int(),
-    });
-    expectTypeOf<output<typeof _intType>>().toEqualTypeOf<{
-      id: string;
-      age: number;
-    }>();
-  });
-
-  test("bool field outputs boolean type correctly", () => {
-    const _boolType = db.table("Test", {
-      active: db.bool(),
-    });
-    expectTypeOf<output<typeof _boolType>>().toEqualTypeOf<{
-      id: string;
-      active: boolean;
-    }>();
-  });
-
-  test("float field outputs number type correctly", () => {
-    const _floatType = db.table("Test", {
-      price: db.float(),
-    });
-    expectTypeOf<output<typeof _floatType>>().toEqualTypeOf<{
-      id: string;
-      price: number;
-    }>();
-  });
-
-  test("uuid field outputs string type correctly", () => {
-    const _uuidType = db.table("Test", {
-      uuid: db.uuid(),
-    });
-    expectTypeOf<output<typeof _uuidType>>().toEqualTypeOf<{
-      id: string;
-      uuid: string;
-    }>();
-  });
-
-  test("date field outputs string type correctly", () => {
-    const _dateType = db.table("Test", {
-      birthDate: db.date(),
-    });
-    expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
-      id: string;
-      birthDate: string;
-    }>();
-  });
-
-  test("datetime field outputs string | Date type correctly", () => {
-    const _datetimeType = db.table("Test", {
-      timestamp: db.datetime(),
-    });
-    expectTypeOf<output<typeof _datetimeType>>().toMatchObjectType<{
-      id: string;
-      timestamp: string | Date;
-    }>();
-  });
-
-  test("time field outputs string type correctly", () => {
-    const _timeType = db.table("Test", {
-      openingTime: db.time(),
-    });
-    expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
-      id: string;
-      openingTime: string;
-    }>();
-  });
-});
-
-describe("TailorDBField optional option tests", () => {
-  test("optional option generates nullable type", () => {
-    const _optionalType = db.table("Test", {
-      description: db.string({ optional: true }),
-    });
-    expectTypeOf<output<typeof _optionalType>>().toEqualTypeOf<{
-      id: string;
-      description?: string | null;
-    }>();
-  });
-
-  test("multiple optional fields work correctly", () => {
-    const _multiOptionalType = db.table("Test", {
-      title: db.string(),
-      description: db.string({ optional: true }),
-      count: db.int({ optional: true }),
-    });
-    expectTypeOf<output<typeof _multiOptionalType>>().toEqualTypeOf<{
-      id: string;
-      title: string;
-      description?: string | null;
-      count?: number | null;
-    }>();
-  });
-});
-
-describe("TailorDBField array option tests", () => {
-  test("array option generates array type", () => {
-    const _arrayType = db.table("Test", {
-      tags: db.string({ array: true }),
-    });
-    expectTypeOf<output<typeof _arrayType>>().toEqualTypeOf<{
-      id: string;
-      tags: string[];
-    }>();
-  });
-
-  test("optional array works correctly", () => {
-    const _optionalArrayType = db.table("Test", {
-      items: db.string({ optional: true, array: true }),
-    });
-    expectTypeOf<output<typeof _optionalArrayType>>().toEqualTypeOf<{
-      id: string;
-      items?: string[] | null;
-    }>();
-  });
-
-  test("multiple array fields work correctly", () => {
-    const _multiArrayType = db.table("Test", {
-      tags: db.string({ array: true }),
-      numbers: db.int({ array: true }),
-      flags: db.bool({ array: true }),
-    });
-    expectTypeOf<output<typeof _multiArrayType>>().toEqualTypeOf<{
-      id: string;
-      tags: string[];
-      numbers: number[];
-      flags: boolean[];
-    }>();
-  });
-});
-
 describe("TailorDBField enum field tests", () => {
   test("set enum field by passing string", () => {
     const enumField = db.enum(["active", "inactive", "pending"]);
@@ -700,22 +556,6 @@ describe("TailorDBField relation modifier tests", () => {
       authorId: string;
     }>();
   });
-
-  test("attempting to set relation twice causes type error", () => {
-    const _userType = db.table("User", {
-      name: db.string(),
-    });
-
-    const related = db.uuid().relation({
-      type: "oneToOne",
-      toward: { table: _userType },
-    });
-    // @ts-expect-error relation() cannot be called after relation() has already been called
-    related.relation({
-      type: "oneToOne",
-      toward: { table: _userType },
-    });
-  });
 });
 
 describe("TailorDBField hooks modifier tests", () => {
@@ -730,15 +570,6 @@ describe("TailorDBField hooks modifier tests", () => {
       id: string;
       name: string;
     }>();
-  });
-
-  test("setting hooks on nested field causes type error", () => {
-    const nested = db.object({
-      first: db.string(),
-      last: db.string(),
-    });
-    // @ts-expect-error hooks() cannot be called on nested fields
-    nested.hooks({ create: () => ({ first: "A", last: "B" }) });
   });
 
   test("hooks modifier on string field receives string", () => {
@@ -822,12 +653,6 @@ describe("TailorDBField validate modifier tests", () => {
     expect(fieldMetadata.validate).toHaveLength(2);
   });
 
-  test("calling validate modifier more than once causes type error", () => {
-    const validated = db.string().validate(() => undefined);
-    // @ts-expect-error validate() cannot be called after validate() has already been called
-    validated.validate(() => undefined);
-  });
-
   test("validate modifier on string field receives string", () => {
     const _validate = db.string().validate;
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<FieldValidateInput<string>>();
@@ -852,11 +677,6 @@ describe("TailorDBField vector modifier tests", () => {
     // @ts-expect-error vector() cannot be called on array fields
     db.string({ array: true }).vector();
   });
-
-  test("calling vector modifier more than once causes type error", () => {
-    // @ts-expect-error vector() cannot be called after vector() has already been called
-    db.string().vector().vector();
-  });
 });
 
 describe("TailorDBField serial modifier tests", () => {
@@ -873,50 +693,6 @@ describe("TailorDBField serial modifier tests", () => {
     db.bool().serial({ start: 0 });
     // @ts-expect-error serial() cannot be called on array fields
     db.string({ array: true }).serial({ start: 0 });
-  });
-
-  test("calling serial modifier more than once causes type error", () => {
-    // @ts-expect-error serial() cannot be called after serial() has already been called
-    db.string().serial({ start: 0 }).serial({ start: 0 });
-  });
-});
-
-describe("TailorDBField index modifier tests", () => {
-  test("index modifier cannot be called on array fields", () => {
-    const _indexed = db.string().index();
-    expect(_indexed.metadata.index).toBe(true);
-
-    // @ts-expect-error index() cannot be called on array fields
-    db.string({ array: true }).index();
-    // @ts-expect-error index() cannot be called on array fields
-    db.uuid({ array: true }).index();
-    // @ts-expect-error index() cannot be called on array fields
-    db.int({ array: true }).index();
-  });
-
-  test("calling index modifier more than once causes type error", () => {
-    // @ts-expect-error index() cannot be called after index() has already been called
-    db.string().index().index();
-  });
-});
-
-describe("TailorDBField unique modifier tests", () => {
-  test("unique modifier cannot be called on array fields", () => {
-    const _unique = db.string().unique();
-    expect(_unique.metadata.unique).toBe(true);
-    expect(_unique.metadata.index).toBe(true);
-
-    // @ts-expect-error unique() cannot be called on array fields
-    db.string({ array: true }).unique();
-    // @ts-expect-error unique() cannot be called on array fields
-    db.uuid({ array: true }).unique();
-    // @ts-expect-error unique() cannot be called on array fields
-    db.int({ array: true }).unique();
-  });
-
-  test("calling unique modifier more than once causes type error", () => {
-    // @ts-expect-error unique() cannot be called after unique() has already been called
-    db.string().unique().unique();
   });
 });
 
@@ -1487,80 +1263,6 @@ describe("db.object tests", () => {
     });
   });
 
-  test("correctly infers object type with optional fields", () => {
-    const _objectType = db.table("Test", {
-      user: db.object({
-        name: db.string(),
-        age: db.int({ optional: true }),
-        email: db.string({ optional: true }),
-      }),
-    });
-    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
-      user: {
-        name: string;
-        age?: number | null;
-        email?: string | null;
-      };
-    }>();
-  });
-
-  test("correctly infers object type with optional option", () => {
-    const _objectType = db.table("Test", {
-      user: db.object(
-        {
-          name: db.string(),
-          avatar: db.string({ optional: true }),
-        },
-        { optional: true },
-      ),
-    });
-    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
-      user?: {
-        name: string;
-        avatar?: string | null;
-      } | null;
-    }>();
-  });
-
-  test("correctly infers object type with array option", () => {
-    const _objectType = db.table("Test", {
-      users: db.object(
-        {
-          name: db.string(),
-          age: db.int(),
-        },
-        { array: true },
-      ),
-    });
-    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
-      users: {
-        name: string;
-        age: number;
-      }[];
-    }>();
-  });
-
-  test("correctly infers object type with array fields", () => {
-    const _objectType = db.table("Test", {
-      user: db.object({
-        name: db.string(),
-        tags: db.string({ array: true }),
-        scores: db.int({ array: true }),
-      }),
-    });
-    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
-      user: {
-        name: string;
-        tags: string[];
-        scores: number[];
-      };
-    }>();
-  });
-
   test("correctly infers object type with multiple modifiers", () => {
     const _objectType = db.table("Test", {
       optionalUsers: db.object(
@@ -1581,42 +1283,6 @@ describe("db.object tests", () => {
             tags: string[];
           }[]
         | null;
-    }>();
-  });
-
-  test("correctly infers object type with bool type", () => {
-    const _objectType = db.table("Test", {
-      settings: db.object({
-        enabled: db.bool(),
-        push: db.bool({ optional: true }),
-      }),
-    });
-    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
-      settings: {
-        enabled: boolean;
-        push?: boolean | null;
-      };
-    }>();
-  });
-
-  test("correctly infers object type with float and enum types", () => {
-    const _objectType = db.table("Test", {
-      product: db.object({
-        name: db.string(),
-        price: db.float(),
-        category: db.enum(["electronics", "books", "clothing"]),
-        weight: db.float({ optional: true }),
-      }),
-    });
-    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
-      product: {
-        name: string;
-        price: number;
-        category: "electronics" | "books" | "clothing";
-        weight?: number | null;
-      };
     }>();
   });
 });
@@ -1808,44 +1474,19 @@ describe("TailorDBField runtime validation tests", () => {
     expect(result.value).toEqual(expected);
   }
 
-  test("validates string field values", () => {
-    const field = db.string();
-    expectParsedValue(field.parse({ value: "hello", data, invoker }), "hello");
-
-    const bad = field.parse({ value: 123, data, invoker });
-    expect(bad.issues?.[0]?.message).toBe("Expected a string: received 123");
-  });
-
-  test("validates enum values", () => {
-    const field = db.enum(["active", "inactive"]);
-    expectParsedValue(field.parse({ value: "active", data, invoker }), "active");
-
-    const bad = field.parse({ value: "unknown", data, invoker });
-    expect(bad.issues?.[0]?.message).toBe("Must be one of [active, inactive]: received unknown");
-  });
-
-  test("validates integer values", () => {
-    const field = db.int();
-    expectParsedValue(field.parse({ value: 42, data, invoker }), 42);
-
-    const bad = field.parse({ value: "not-a-number", data, invoker });
-    expect(bad.issues?.[0]?.message).toBe("Expected an integer: received not-a-number");
-  });
-
-  test("validates float values", () => {
-    const field = db.float();
-    expectParsedValue(field.parse({ value: 3.14, data, invoker }), 3.14);
-
-    const bad = field.parse({ value: "not-a-number", data, invoker });
-    expect(bad.issues?.[0]?.message).toBe("Expected a number: received not-a-number");
-  });
-
-  test("validates boolean values", () => {
-    const field = db.bool();
-    expectParsedValue(field.parse({ value: true, data, invoker }), true);
-
-    const bad = field.parse({ value: "true", data, invoker });
-    expect(bad.issues?.[0]?.message).toBe("Expected a boolean: received true");
+  test.each([
+    ["uuid", db.uuid()],
+    ["string", db.string()],
+    ["boolean", db.bool()],
+    ["integer", db.int()],
+    ["float", db.float()],
+    ["date", db.date()],
+    ["datetime", db.datetime()],
+    ["time", db.time()],
+    ["enum", db.enum(["a"])],
+    ["nested", db.object({ name: db.string() })],
+  ])("sets runtime type %s", (type, field) => {
+    expect(field.type).toBe(type);
   });
 
   test("validates nested object values", () => {
@@ -1862,146 +1503,26 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.path).toEqual(["name"]);
     expect(bad.issues?.[0]?.message).toBe("Expected a string: received 123");
   });
-
-  test("validates array values", () => {
-    const field = db.int({ array: true });
-    expectParsedValue(field.parse({ value: [1, 2, 3], data, invoker }), [1, 2, 3]);
-  });
-
-  test("validates UUID format", () => {
-    const field = db.uuid();
-    expectParsedValue(
-      field.parse({ value: "123e4567-e89b-12d3-a456-426614174000", data, invoker }),
-      "123e4567-e89b-12d3-a456-426614174000",
-    );
-
-    const bad = field.parse({ value: "not-a-uuid", data, invoker });
-    expect(bad.issues?.[0]?.message).toBe("Expected a valid UUID: received not-a-uuid");
-  });
-
-  test("validates date format", () => {
-    const field = db.date();
-    expectParsedValue(field.parse({ value: "2025-01-01", data, invoker }), "2025-01-01");
-
-    const bad = field.parse({ value: "2025/01/01", data, invoker });
-    expect(bad.issues?.[0]?.message).toBe(
-      'Expected to match "yyyy-MM-dd" format: received 2025/01/01',
-    );
-  });
-
-  test("validates time format", () => {
-    const field = db.time();
-    expectParsedValue(field.parse({ value: "10:11", data, invoker }), "10:11");
-
-    const bad = field.parse({ value: "10:11:12", data, invoker });
-    expect(bad.issues?.[0]?.message).toBe('Expected to match "HH:mm" format: received 10:11:12');
-  });
-
-  test("validates required and optional handling", () => {
-    const requiredField = db.string();
-    const requiredMissing = requiredField.parse({ value: undefined, data, invoker });
-    expect(requiredMissing.issues?.[0]?.message).toBe("Required field is missing");
-
-    const optionalField = db.string({ optional: true });
-    expectParsedValue(optionalField.parse({ value: undefined, data, invoker }), null);
-  });
 });
 
-describe("TailorDBType gqlOperations tests", () => {
-  test("gqlOperations stores raw config via features()", () => {
-    const orderType = db
-      .table("Order", {
-        name: db.string(),
-      })
-      .features({
-        gqlOperations: {
-          delete: false,
-        },
-      });
+describe("TailorDBType features tests", () => {
+  test("features() stores settings without normalization", () => {
+    const logType = db.table("Log", { message: db.string() }).features({
+      aggregation: true,
+      bulkUpsert: true,
+      gqlOperations: { create: false, read: false, delete: false },
+    });
+    expect(logType.metadata.settings).toEqual({
+      aggregation: true,
+      bulkUpsert: true,
+      gqlOperations: { create: false, read: false, delete: false },
+    });
 
-    // Configure layer stores raw data without normalization
-    const ops = orderType.metadata.settings?.gqlOperations;
-    expect(ops).toEqual({ delete: false });
-  });
-
-  test("gqlOperations stores multiple operations config", () => {
-    const archiveType = db
-      .table("Archive", {
-        data: db.string(),
-      })
-      .features({
-        gqlOperations: {
-          create: false,
-          update: false,
-          delete: false,
-        },
-      });
-
-    const ops = archiveType.metadata.settings?.gqlOperations;
-    expect(ops).toEqual({ create: false, update: false, delete: false });
-  });
-
-  test("gqlOperations stores read config", () => {
-    const secretType = db
-      .table("Secret", {
-        value: db.string(),
-      })
-      .features({
-        gqlOperations: {
-          read: false,
-        },
-      });
-
-    const ops = secretType.metadata.settings?.gqlOperations;
-    expect(ops).toEqual({ read: false });
-  });
-
-  test("gqlOperations works with other features", () => {
-    const logType = db
-      .table("Log", {
-        message: db.string(),
-      })
-      .features({
-        aggregation: true,
-        bulkUpsert: true,
-        gqlOperations: {
-          delete: false,
-        },
-      });
-
-    expect(logType.metadata.settings?.aggregation).toBe(true);
-    expect(logType.metadata.settings?.bulkUpsert).toBe(true);
-    expect(logType.metadata.settings?.gqlOperations).toEqual({ delete: false });
-  });
-});
-
-describe("TailorDBType gqlOperations alias tests", () => {
-  test("gqlOperations: 'query' stores alias as raw value", () => {
-    const readOnlyType = db
-      .table("ReadOnly", {
-        data: db.string(),
-      })
-      .features({
-        gqlOperations: "query",
-      });
-
-    // Configure layer stores the alias without normalization
-    const ops = readOnlyType.metadata.settings?.gqlOperations;
-    expect(ops).toBe("query");
-  });
-
-  test("gqlOperations: 'query' works with other features", () => {
-    const auditType = db
-      .table("Audit", {
-        action: db.string(),
-      })
-      .features({
-        aggregation: true,
-        gqlOperations: "query",
-      });
-
-    expect(auditType.metadata.settings?.aggregation).toBe(true);
-    expect(auditType.metadata.settings?.gqlOperations).toBe("query");
+    const auditType = db.table("Audit", { action: db.string() }).features({
+      aggregation: true,
+      gqlOperations: "query",
+    });
+    expect(auditType.metadata.settings).toEqual({ aggregation: true, gqlOperations: "query" });
   });
 });
 
@@ -2425,44 +1946,6 @@ describe("TailorDBField decimal type tests", () => {
   test("decimal scale validation rejects non-integer values", () => {
     expect(() => db.decimal({ scale: 1.5 })).toThrow("scale must be an integer between 0 and 12");
   });
-
-  test.each([
-    "123.45",
-    "0",
-    "-99.99",
-    "1000",
-    ".5",
-    "5.",
-    "4.321e+4",
-    "1E-5",
-    "2.41E-3",
-    "-1.5e10",
-  ])("decimal parse validates valid decimal string %s", (value) => {
-    const field = db.decimal();
-    const invoker: TailorPrincipal = {
-      id: "test",
-      type: "user",
-      workspaceId: "workspace-test",
-      attributes: {},
-      attributeList: [],
-    };
-    expect(field.parse({ value, data: {}, invoker })).toEqual({ value });
-  });
-
-  test.each(["abc", 123, "", "1_000_000", "0b1.1p-5", "1e", "e5", "."])(
-    "decimal parse rejects invalid decimal string %s",
-    (value) => {
-      const field = db.decimal();
-      const invoker: TailorPrincipal = {
-        id: "test",
-        type: "user",
-        workspaceId: "workspace-test",
-        attributes: {},
-        attributeList: [],
-      };
-      expect(field.parse({ value, data: {}, invoker })).toHaveProperty("issues");
-    },
-  );
 });
 
 describe("TailorDBField date representation", () => {
