@@ -566,6 +566,15 @@ describe("buildPreMigrationTables relations", () => {
     });
   });
 
+  test("a unique member inside a nested field stays unique in the Pre-phase tables", () => {
+    const info = snapshotField("nested", {
+      fields: { code: snapshotField("string", { unique: true, index: true }) },
+    });
+    const tables = buildPreMigrationTables(snapshot(user, post({ info })), diff([]));
+
+    expect(tableNamed(tables, "Post").fields.info!.fields!.code).toMatchObject({ unique: true });
+  });
+
   test("a relation keeps its reference when the migration modifies the field without retargeting it", () => {
     const tables = buildPreMigrationTables(
       snapshot(user, post({ ownerID: owner() })),
