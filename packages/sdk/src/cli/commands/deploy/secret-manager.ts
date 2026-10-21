@@ -126,11 +126,6 @@ function validateIdPClientVaultNames(
         suggestion: "Rename the vault in defineSecretManager().",
       });
     }
-    if (vaultName.startsWith("idp-")) {
-      logger.warn(
-        `Vault "${vaultName}" starts with "idp-", which the SDK uses for IdP client secret vaults. A name matching an IdP client's vault is rejected.`,
-      );
-    }
   }
 }
 

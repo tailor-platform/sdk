@@ -1117,7 +1117,7 @@ describe("applySecretManager ignoreNullishValues state persistence", () => {
 describe("planSecretManager and vault names reserved for IdP client secrets", () => {
   const idpServices = [{ name: "my-idp", clients: ["web"] }];
 
-  test("warns about a vault name starting with idp- that no IdP client uses", async () => {
+  test("accepts a vault name starting with idp- that no IdP client uses without a warning", async () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const context = createPlanContext(
       createMockPlanClient([], "idp-my-vault"),
@@ -1127,7 +1127,7 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
 
     await expect(planSecretManager(context)).resolves.toBeDefined();
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"idp-my-vault"'));
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   test("rejects a vault named like the vault the SDK creates for an IdP client", async () => {
@@ -1138,20 +1138,5 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
     );
 
     await expect(planSecretManager(context)).rejects.toThrow(/idp-my-idp-web/);
-  });
-
-  test("does not warn about a vault name that does not start with idp-", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const context = createPlanContext(
-      createMockPlanClient(),
-      [{ vaultName: "my-vault", secrets: [] }],
-      {
-        idpServices,
-      },
-    );
-
-    await planSecretManager(context);
-
-    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
