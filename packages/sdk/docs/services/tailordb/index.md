@@ -175,6 +175,8 @@ db.string().index();
 db.string().unique();
 ```
 
+`.unique()` also works on a field inside a `db.object()` that is not an array: the value must be unique across rows. `.index()` on a field inside `db.object()` is not applied.
+
 ### Relations
 
 Add a relation to field with automatic index and foreign key constraint:
