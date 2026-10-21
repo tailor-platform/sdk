@@ -1139,4 +1139,14 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
 
     await expect(planSecretManager(context)).rejects.toThrow(/idp-my-idp-web/);
   });
+
+  test("keeps a managed vault used by an IdP client when it is no longer declared", async () => {
+    const client = createMockPlanClient(["client-secret-my-idp-web"], "idp-my-idp-web");
+    const context = createPlanContext(client, [], { appName: "test-app", idpServices });
+
+    const result = await planSecretManager(context);
+
+    expect(result.vaultChangeSet.deletes).toHaveLength(0);
+    expect(result.secretChangeSet.deletes).toHaveLength(0);
+  });
 });

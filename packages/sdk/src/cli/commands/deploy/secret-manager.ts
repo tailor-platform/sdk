@@ -111,13 +111,16 @@ export function secretUpdateRequest(
   };
 }
 
-function validateIdPClientVaultNames(
-  secretVaults: ReadonlyArray<{ vaultName: string }>,
-  idpServices: Application["idpServices"],
-) {
-  const idpClientVaultNames = new Set(
+function collectIdPClientVaultNames(idpServices: Application["idpServices"]) {
+  return new Set(
     idpServices.flatMap((idp) => idp.clients.map((name) => idpClientVaultName(idp.name, name))),
   );
+}
+
+function validateIdPClientVaultNames(
+  secretVaults: ReadonlyArray<{ vaultName: string }>,
+  idpClientVaultNames: ReadonlySet<string>,
+) {
   for (const { vaultName } of secretVaults) {
     if (idpClientVaultNames.has(vaultName)) {
       throw CLIError({
@@ -137,7 +140,8 @@ function validateIdPClientVaultNames(
 export async function planSecretManager(context: PlanContext) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
-  validateIdPClientVaultNames(secretVaults, application.idpServices);
+  const idpClientVaultNames = collectIdPClientVaultNames(application.idpServices);
+  validateIdPClientVaultNames(secretVaults, idpClientVaultNames);
 
   const vaultChangeSet = createChangeSet<CreateVault, ExistingVault, DeleteVault>(
     "Secret Manager vaults",
@@ -286,7 +290,7 @@ export async function planSecretManager(context: PlanContext) {
 
   // Remaining existing vaults not in config - mark managed ones for deletion
   for (const [name, entry] of Object.entries(existingVaults)) {
-    if (!entry) continue;
+    if (!entry || idpClientVaultNames.has(name)) continue;
     const owned = trackRemainingResourceOwner({
       labels: entry.allLabels,
       ownerLabel: entry.label,
