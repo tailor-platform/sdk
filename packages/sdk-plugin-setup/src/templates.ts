@@ -517,11 +517,16 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   out = line(out, "CHANGES_GUARD", changesGuard(patterns));
 
   if (migrationTest) {
+    out = out.replace(
+      "name: tailor-result (__WORKSPACE_NAME__)",
+      `name: "\${{ github.event.action == 'labeled' && 'tailor-result (__WORKSPACE_NAME__) [label]' || 'tailor-result (__WORKSPACE_NAME__)' }}"`,
+    );
+  }
+
+  out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
+
+  if (migrationTest) {
     out = out
-      .replace(
-        "name: tailor-result (__WORKSPACE_NAME__)",
-        `name: "\${{ github.event.action == 'labeled' && 'tailor-result (__WORKSPACE_NAME__) [label]' || 'tailor-result (__WORKSPACE_NAME__)' }}"`,
-      )
       .replaceAll("__MIGRATION_TEST_LABEL__", () => migrationTest.label)
       .replaceAll(
         "__MIGRATION_TEST_ENVIRONMENT__",
@@ -533,8 +538,6 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
           : "TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID",
       );
   }
-
-  out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
 
   const generatedIds: string[] = [
     ...changesIds(patterns),
