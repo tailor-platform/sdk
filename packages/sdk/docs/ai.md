@@ -6,7 +6,17 @@ description: "Make choice, boolean, and ordered score decisions from application
 
 System One makes semantic decisions from application state, a question, and a fixed answer space. It returns the selected answer and its probability without requiring prompt construction or structured-output parsing.
 
-Create a client for your [AI Gateway](services/aigateway.md):
+Create a client with the URL the platform assigns to your deployed [AI Gateway](services/aigateway.md). Inside a Tailor Function, `aigateway.get()` returns it as `url`. Omit `token`; the platform authenticates the request:
+
+```typescript
+import { createSystemOne } from "@tailor-platform/sdk/ai";
+import { aigateway } from "@tailor-platform/sdk/runtime";
+
+const { url } = await aigateway.get("my-aigateway");
+const systemOne = createSystemOne({ baseURL: url });
+```
+
+External clients pass the same URL, which `tailor show` lists, directly with an access token issued by the AI Gateway's auth namespace:
 
 ```typescript
 import { createSystemOne } from "@tailor-platform/sdk/ai";
@@ -15,16 +25,6 @@ const systemOne = createSystemOne({
   baseURL: "https://my-aigateway-{WORKSPACE_HASH}.ai.erp.dev",
   token: accessToken,
 });
-```
-
-External clients pass an access token issued by the AI Gateway's auth namespace. Inside a Tailor Function, resolve the Gateway URL with `aigateway.get()` and omit `token`; the platform authenticates the request:
-
-```typescript
-import { createSystemOne } from "@tailor-platform/sdk/ai";
-import { aigateway } from "@tailor-platform/sdk/runtime";
-
-const { url } = await aigateway.get("my-aigateway");
-const systemOne = createSystemOne({ baseURL: url });
 ```
 
 ## Choice decisions
