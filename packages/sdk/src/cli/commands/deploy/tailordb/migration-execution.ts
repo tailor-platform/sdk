@@ -518,12 +518,20 @@ export interface RollbackLeftovers {
 }
 
 /**
- * Derive how to undo a migration's GraphQL permission changes from its snapshots, for a
- * run whose Pre-phase an earlier deploy wrote and so left no undo record in this one.
+ * Derive how to undo a migration's GraphQL permission changes from its snapshots. A Pre-phase
+ * installs the permission of the final deployment for every table of its snapshot, so the
+ * permission to undo is the one that differs between the prior checkpoint and the last pending
+ * migration, not only between two adjacent snapshots. This covers a run an earlier deploy wrote,
+ * which left no undo record here, and a permission an earlier migration of this deploy installed.
  * @param migration - The migration to roll back
+ * @param finalMigration - The last pending migration of the namespace, whose snapshot the
+ * deployment ends at
  * @returns Per table, the permission of the prior checkpoint, or none when it had none
  */
-export function gqlPermissionUndoFromSnapshots(migration: PendingMigration): GqlPermissionUndo {
+export function gqlPermissionUndoFromSnapshots(
+  migration: PendingMigration,
+  finalMigration: PendingMigration = migration,
+): GqlPermissionUndo {
   const undo: GqlPermissionUndo = new Map();
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return undo;
   const priorSnapshot = reconstructSnapshotFromMigrations(
@@ -532,10 +540,12 @@ export function gqlPermissionUndoFromSnapshots(migration: PendingMigration): Gql
   );
   if (!priorSnapshot) return undo;
   const currentTables = migrationSnapshotCache.load(migration).tables;
+  const finalTables = migrationSnapshotCache.load(finalMigration).tables;
   for (const [tableName, priorTable] of Object.entries(priorSnapshot.tables)) {
     const currentTable = currentTables[tableName];
     if (!currentTable) continue;
-    if (isDeepStrictEqual(priorTable.permissions?.gql, currentTable.permissions?.gql)) continue;
+    const finalTable = finalTables[tableName] ?? currentTable;
+    if (isDeepStrictEqual(priorTable.permissions?.gql, finalTable.permissions?.gql)) continue;
     undo.set(
       tableName,
       priorTable.permissions?.gql

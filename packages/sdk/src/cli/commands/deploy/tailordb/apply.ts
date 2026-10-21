@@ -349,6 +349,30 @@ async function removeRunResources(
   }
 }
 
+/**
+ * Whether the migration is no longer recorded as in progress. A clear whose response was lost
+ * can have taken effect, and rolling back then is still right: the record is gone.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param migration - Migration whose record was being cleared
+ * @returns True only when the remote state confirms the record is absent
+ */
+async function isRecordCleared(
+  client: OperatorClient,
+  workspaceId: string,
+  migration: PendingMigration,
+): Promise<boolean> {
+  try {
+    const state = await fetchRemoteMigrationState(
+      client,
+      resourceTrn(workspaceId, "tailordb", migration.namespace),
+    );
+    return !state.inProgressInvalid && state.inProgress?.number !== migration.number;
+  } catch {
+    return false;
+  }
+}
+
 async function clearRolledBackRecord(
   client: OperatorClient,
   workspaceId: string,
@@ -358,6 +382,7 @@ async function clearRolledBackRecord(
   try {
     await clearMigrationInProgress(client, workspaceId, namespace);
   } catch (error) {
+    if (await isRecordCleared(client, workspaceId, migration)) return true;
     logger.warn(
       `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migration.number)}: ` +
         `${error instanceof Error ? error.message : String(error)}. ` +
@@ -1222,10 +1247,15 @@ async function rollbackMigration(
     return rollbackSkippedError(migration, error, phaseSettings.restricted);
   }
   const attemptedTables = new Set(attempt.attemptedTables);
-  if (rollsBackOnFailure && inProgress) {
-    for (const tableName of readResumedRollbackScope(migration, gqlPermissionUndo)) {
-      attemptedTables.add(tableName);
-    }
+  const resumedRollback = rollsBackOnFailure && inProgress;
+  const finalMigration = flow.pending.lastByNamespace.get(migration.namespace) ?? migration;
+  for (const tableName of readRollbackScope(
+    migration,
+    finalMigration,
+    gqlPermissionUndo,
+    resumedRollback,
+  )) {
+    attemptedTables.add(tableName);
   }
   runLog.unrolledBack.push({
     migration,
@@ -1245,23 +1275,28 @@ async function rollbackMigration(
 }
 
 /**
- * Read what an earlier deploy's Pre-phase wrote, which this deploy has no record of: the tables
- * it changed, and the GraphQL permission each of them had at the prior checkpoint. The permissions
- * replace this deploy's undo records, because a forced update after an SDK upgrade records the
- * permission the earlier Pre-phase installed as the one to restore. A failure to read the prior
- * checkpoint is logged, so the rollback of this deploy's own writes and the original error go ahead.
+ * Read what the rollback has to undo beyond what this attempt recorded: the GraphQL permission each
+ * table had at the prior checkpoint, and for a resumed migration also the tables an earlier deploy's
+ * Pre-phase wrote. A resumed migration's snapshot-derived permissions replace this deploy's undo
+ * records, because a forced update after an SDK upgrade records the permission the earlier Pre-phase
+ * installed as the one to restore. A failure to read the prior checkpoint is logged, so the rollback
+ * of this deploy's own writes and the original error go ahead.
  * @param migration - The migration being rolled back
+ * @param finalMigration - The last pending migration of the namespace
  * @param gqlPermissionUndo - Undo records of this attempt, updated in place
+ * @param resumed - Whether an earlier deploy left the migration in progress
  * @returns The tables to roll back besides those this deploy wrote
  */
-function readResumedRollbackScope(
+function readRollbackScope(
   migration: PendingMigration,
+  finalMigration: PendingMigration,
   gqlPermissionUndo: GqlPermissionUndo,
+  resumed: boolean,
 ): ReadonlySet<string> {
   try {
-    const tables = getPreMigrationTargetTableNames(migration);
-    for (const [tableName, undo] of gqlPermissionUndoFromSnapshots(migration)) {
-      gqlPermissionUndo.set(tableName, undo);
+    const tables = resumed ? getPreMigrationTargetTableNames(migration) : new Set<string>();
+    for (const [tableName, undo] of gqlPermissionUndoFromSnapshots(migration, finalMigration)) {
+      if (resumed || !gqlPermissionUndo.has(tableName)) gqlPermissionUndo.set(tableName, undo);
     }
     return tables;
   } catch (error) {
@@ -1291,14 +1326,18 @@ function settleRolledBackRestorationSettings(
   );
   const committedSnapshot = restoration.snapshots.get(migration.namespace);
   if (!input || !committedSnapshot) return;
-  restoration.settings.set(
-    migration.namespace,
-    resolveMigrationSnapshotSettings(
-      committedSnapshot,
-      input,
-      flow.migrationContext.executorUsedTables,
-    ),
+  const settings = resolveMigrationSnapshotSettings(
+    committedSnapshot,
+    input,
+    flow.migrationContext.executorUsedTables,
   );
+  const migrationTables = migrationSnapshotCache.load(migration).tables;
+  for (const [tableName, captured] of restoration.settings.get(migration.namespace) ?? []) {
+    if (!committedSnapshot.tables[tableName] && !migrationTables[tableName]) {
+      settings.set(tableName, captured);
+    }
+  }
+  restoration.settings.set(migration.namespace, settings);
 }
 
 async function commitMigration(
