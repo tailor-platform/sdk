@@ -33,8 +33,8 @@ const SQL_STYLE_MAP: Record<string, string> = {
 
 type Piece = { text: string; literal: boolean; comment?: boolean };
 
-function splitSqlLine(line: string, startsInBlockComment: boolean) {
-  let inBlockComment = startsInBlockComment;
+function splitSqlLine(line: string, startDepth: number) {
+  let depth = startDepth;
   const pieces: Piece[] = [];
   let code = "";
   let i = 0;
@@ -42,18 +42,28 @@ function splitSqlLine(line: string, startsInBlockComment: boolean) {
     if (code) pieces.push({ text: code, literal: false });
     code = "";
   };
-  const takeBlockComment = (searchFrom: number) => {
-    const end = line.indexOf("*/", searchFrom);
-    const stop = end === -1 ? line.length : end + 2;
-    pieces.push({ text: line.slice(i, stop), literal: true });
-    i = stop;
-    inBlockComment = end === -1;
+  const takeBlockComment = (from: number) => {
+    let j = from;
+    while (j < line.length && depth > 0) {
+      if (line.startsWith("/*", j)) {
+        depth++;
+        j += 2;
+      } else if (line.startsWith("*/", j)) {
+        depth--;
+        j += 2;
+      } else {
+        j++;
+      }
+    }
+    pieces.push({ text: line.slice(i, j), literal: true });
+    i = j;
   };
   while (i < line.length) {
-    if (inBlockComment) {
+    if (depth > 0) {
       takeBlockComment(i);
     } else if (line.startsWith("/*", i)) {
       flushCode();
+      depth = 1;
       takeBlockComment(i + 2);
     } else if (line.startsWith("--", i)) {
       flushCode();
@@ -71,7 +81,7 @@ function splitSqlLine(line: string, startsInBlockComment: boolean) {
     }
   }
   flushCode();
-  return { pieces, inBlockComment };
+  return { pieces, depth };
 }
 
 /**
@@ -80,10 +90,10 @@ function splitSqlLine(line: string, startsInBlockComment: boolean) {
  * @returns ANSI-decorated lines, one per input line
  */
 export function highlightSqlLines(lines: readonly string[]): string[] {
-  let inBlockComment = false;
+  let depth = 0;
   return lines.map((line) => {
-    const split = splitSqlLine(line, inBlockComment);
-    inBlockComment = split.inBlockComment;
+    const split = splitSqlLine(line, depth);
+    depth = split.depth;
     return split.pieces
       .map((piece) =>
         piece.literal ? `${DIM}${piece.text}${RESET}` : highlightSqlCode(piece.text),

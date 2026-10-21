@@ -51,6 +51,12 @@ describe("highlightSqlLines (multi-line)", () => {
     expect(out[1]).toContain("\x1b[34mFROM\x1b[0m");
   });
 
+  test("keeps a nested block comment open until every level is closed", () => {
+    const out = highlightSqlLines(["/* a /* b */", "c */ SELECT 1"]);
+    expect(out[1]).toContain("\x1b[90mc */\x1b[0m");
+    expect(out[1]).toContain("\x1b[34mSELECT\x1b[0m");
+  });
+
   test("keeps the line count and text", () => {
     const lines = ["SELECT 1 /* a", "b */ 'x'", "FROM t"];
     expect(highlightSqlLines(lines).map(stripAnsi)).toEqual(lines);
