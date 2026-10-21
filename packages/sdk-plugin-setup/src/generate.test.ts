@@ -1657,6 +1657,29 @@ describe("renderBranchWorkflow migration test job", () => {
     expect(workflow.jobs["tailor-migration-test"]?.environment).toBe("__WORKSPACE_NAME__");
   });
 
+  test("keeps a label that looks like a migration test placeholder literal", () => {
+    const { workflow } = render({
+      migrationTest: { label: "test __MIGRATION_TEST_ENVIRONMENT__" },
+    });
+
+    expect(workflow.jobs["tailor-migration-test"]?.if).toContain(
+      "github.event.label.name == 'test __MIGRATION_TEST_ENVIRONMENT__'",
+    );
+  });
+
+  test("keeps a dedicated environment that looks like a migration test placeholder literal", () => {
+    const { workflow } = render({
+      migrationTest: {
+        label: "tailor:migration-test",
+        environment: "__MIGRATION_TEST_SOURCE_VARIABLE__",
+      },
+    });
+
+    expect(workflow.jobs["tailor-migration-test"]?.environment).toBe(
+      "__MIGRATION_TEST_SOURCE_VARIABLE__",
+    );
+  });
+
   test("removes the label through the server the workflow runs on", () => {
     const { workflow } = render();
     const unlabel = workflow.jobs["tailor-migration-test"]!.steps.find(

@@ -526,17 +526,18 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
 
   if (migrationTest) {
-    out = out
-      .replaceAll("__MIGRATION_TEST_LABEL__", () => migrationTest.label)
-      .replaceAll(
-        "__MIGRATION_TEST_ENVIRONMENT__",
-        () => migrationTest.environment ?? params.environment,
-      )
-      .replaceAll("__MIGRATION_TEST_SOURCE_VARIABLE__", () =>
+    const migrationTestValues: Record<string, string> = {
+      __MIGRATION_TEST_LABEL__: migrationTest.label,
+      __MIGRATION_TEST_ENVIRONMENT__: migrationTest.environment ?? params.environment,
+      __MIGRATION_TEST_SOURCE_VARIABLE__:
         migrationTest.environment === undefined
           ? "TAILOR_PLATFORM_WORKSPACE_ID"
           : "TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID",
-      );
+    };
+    out = out.replaceAll(
+      /__MIGRATION_TEST_(?:LABEL|ENVIRONMENT|SOURCE_VARIABLE)__/g,
+      (marker) => migrationTestValues[marker]!,
+    );
   }
 
   const generatedIds: string[] = [
