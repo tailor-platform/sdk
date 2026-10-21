@@ -1,7 +1,7 @@
 import { describe, test, expectTypeOf, expect } from "vitest";
 import { definePlugins } from "#/configure/config/index";
 import { PluginConfigSchema } from "#/parser/plugin-config/schema";
-import { hasGenerationHooks, getPluginGenerationDependencies } from "./guards";
+import { hasGenerationHooks } from "./guards";
 import type {
   PluginGeneratedTable,
   PluginExecutorContextBase,
@@ -44,7 +44,6 @@ test("accepts a deploy-only plugin without importPath", () => {
 test("deploy-only plugins do not introduce generation dependencies", () => {
   const plugin: Plugin = { id: "deploy", description: "deploy", onDeployed: () => {} };
   expect(hasGenerationHooks(plugin)).toBe(false);
-  expect(getPluginGenerationDependencies(plugin)).toEqual(new Set());
 });
 
 test("accepts only JSON values as deploy hook outputs", () => {

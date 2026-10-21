@@ -1444,27 +1444,3 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
     }
   }`;
 }
-
-/**
- * Check if a migration script exists for a given migration number
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} migrationNumber - Migration number
- * @returns {Promise<boolean>} True if script exists
- */
-export async function migrationScriptExists(
-  migrationsDir: string,
-  migrationNumber: number,
-): Promise<boolean> {
-  const filePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
-  return fileExists(filePath);
-}
-
-/**
- * Get the migration script path for a given migration number
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} migrationNumber - Migration number
- * @returns {string} Full path to migration script
- */
-export function getMigrationScriptPath(migrationsDir: string, migrationNumber: number): string {
-  return getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
-}

@@ -12,7 +12,7 @@ import {
   normalizeSchemaSnapshot,
 } from "./snapshot-normalization";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
-import { type NormalizedSchemaSnapshot, type SchemaSnapshot } from "./snapshot-types";
+import { type NormalizedSchemaSnapshot } from "./snapshot-types";
 import { deriveWarningsFromChanges } from "./snapshot-warnings";
 
 // ============================================================================
@@ -304,42 +304,4 @@ export function assertMigrationNumberExists(
     });
   }
   return latestMigrationNumber(files);
-}
-
-// ============================================================================
-// Snapshot Writing
-// ============================================================================
-
-/**
- * Write a schema snapshot to a file (creates directory structure)
- * @param {SchemaSnapshot} snapshot - Snapshot to write
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} num - Migration number
- * @returns {string} Path to the written file
- */
-export function writeSnapshot(
-  snapshot: SchemaSnapshot,
-  migrationsDir: string,
-  num: number,
-): string {
-  const migrationDir = getMigrationDirPath(migrationsDir, num);
-  fs.mkdirSync(migrationDir, { recursive: true });
-  const filePath = getMigrationFilePath(migrationsDir, num, "schema");
-  fs.writeFileSync(filePath, JSON.stringify(snapshot, null, 2));
-  return filePath;
-}
-
-/**
- * Write a migration diff to a file (creates directory structure)
- * @param {MigrationDiff} diff - Diff to write
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} num - Migration number
- * @returns {string} Path to the written file
- */
-export function writeDiff(diff: MigrationDiff, migrationsDir: string, num: number): string {
-  const migrationDir = getMigrationDirPath(migrationsDir, num);
-  fs.mkdirSync(migrationDir, { recursive: true });
-  const filePath = getMigrationFilePath(migrationsDir, num, "diff");
-  fs.writeFileSync(filePath, JSON.stringify(diff, null, 2));
-  return filePath;
 }
