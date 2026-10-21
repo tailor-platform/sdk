@@ -37,7 +37,9 @@ In `packages/sdk/`:
 | `pnpm docs:check`           | Verify CLI docs match commands |
 | `pnpm docs:update`          | Regenerate CLI docs            |
 
-The native compiler check is `pnpm typecheck:rs`; `pnpm typecheck` uses stable TypeScript. See [compiler measurements and reproduction steps](typecheck-performance.md) for timing results and platform support.
+The native compiler check is `pnpm typecheck:rs`; `pnpm typecheck` uses stable TypeScript.
+On Windows and Intel macOS, `typecheck:rs` uses `tsc` because this tsrs release has no binary for them.
+On supported platforms, compiler errors and startup failures fail the check without falling back.
 
 ## Example App
 
