@@ -24,13 +24,13 @@ const bench = spawnSync(
 process.stdout.write(bench.stdout);
 
 const results = parseBenchOutput(bench.stdout);
-const comparedResults = baseOutputFile
-  ? compareToBase(results, parseBenchOutput(readFileSync(baseOutputFile, "utf8")))
-  : results;
+const changes = baseOutputFile
+  ? renderChanges(
+      compareToBase(results, parseBenchOutput(readFileSync(baseOutputFile, "utf8"))),
+      extractBenchSources(readFileSync(benchFile, "utf8")),
+    )
+  : "";
 writeFileSync("attest-metrics.json", JSON.stringify(toOctocovMetrics(results), null, 2));
-writeFileSync(
-  "attest-changes.md",
-  renderChanges(comparedResults, extractBenchSources(readFileSync(benchFile, "utf8"))),
-);
+writeFileSync("attest-changes.md", changes);
 
 process.exit(bench.status ?? 1);
