@@ -212,7 +212,7 @@
     "globals": "17.13.0",
     "graphql": "17.0.2",
     "inflection": "3.0.2",
-    "kysely": "0.29.6",
+    "kysely": "0.29.7",
     "lines-db": "0.18.0",
     "mime-types": "3.0.2",
     "open": "11.0.4",
