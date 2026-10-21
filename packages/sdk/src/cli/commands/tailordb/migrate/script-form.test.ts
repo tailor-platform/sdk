@@ -118,6 +118,9 @@ describe("analyzeMigrationScriptSource", () => {
     ["a reassignable declaration", 'export let onFailure = "rollback";'],
     ["an export specifier", 'const onFailure = "rollback";\nexport { onFailure };'],
     ["a destructured declaration", "export const { onFailure } = defineOptions();"],
+    ["a function", 'export function onFailure() { return "rollback"; }'],
+    ["a class", "export class onFailure {}"],
+    ["an enum", 'export enum onFailure { rollback = "rollback" }'],
   ])("rejects onFailure written as %s", (_label, declaration) => {
     expect(() =>
       analyze(ml`

@@ -113,6 +113,18 @@ function getAffectedTableNames(migration: PendingMigration): Set<string> {
 }
 
 /**
+ * Get the tables a migration's Pre-phase writes: the affected tables its snapshot defines.
+ * A resumed migration's rollback needs these, because a table an earlier deploy already
+ * wrote can match the desired schema now and never enter this deploy's attempted set.
+ * @param {PendingMigration} migration - Pending migration
+ * @returns {Set<string>} Names of the tables the Pre-phase writes
+ */
+export function getPreMigrationTargetTableNames(migration: PendingMigration): Set<string> {
+  const snapshotTables = migrationSnapshotCache.load(migration).tables;
+  return new Set([...getAffectedTableNames(migration)].filter((name) => name in snapshotTables));
+}
+
+/**
  * Get the set of table names to be deleted by a migration. A renamed table's
  * old name is included: the old table survives the Pre-phase and the script
  * (which copies its rows into the new table), then is dropped here.

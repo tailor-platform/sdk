@@ -53,6 +53,7 @@ import {
   sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
 import { type OperatorClient } from "#/cli/shared/client";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { protoEnumName } from "#/cli/shared/proto-enum";
@@ -602,13 +603,18 @@ function partiallyAppliedError(
 export function rolledBackError(migration: PendingMigration, cause: unknown): Error {
   const { namespace } = migration;
   const checkpoint = formatMigrationNumber(migration.number - 1);
+  const causeHint =
+    cause instanceof Error && !isCLIError(cause)
+      ? getErrorDiagnostics(cause).suggestion
+      : undefined;
   return CLIError({
     code: "MIGRATION_ROLLED_BACK",
     message: cause instanceof Error ? cause.message : String(cause),
     suggestion:
       `Migration ${namespace}/${formatMigrationNumber(migration.number)} was rolled back to migration ${checkpoint} and is no longer in progress; ` +
-      "a table the rollback could not revert is listed in the warning above. " +
-      "Fix the failure in migrate.ts and deploy again: the next deploy runs every step again from the beginning.",
+      "any table the rollback could not revert is listed in a warning above. " +
+      "Fix the failure in migrate.ts and deploy again: the next deploy runs every step again from the beginning." +
+      (causeHint ? ` ${causeHint}` : ""),
     context: { namespace, migrationNumber: migration.number },
     cause,
   });

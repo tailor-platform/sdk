@@ -118,6 +118,14 @@ function collectExports(program: Program): ExportedNames {
     if (declaration?.type === "FunctionDeclaration" && declaration.id?.name === "main") {
       result.hasMain = true;
     }
+    if (
+      (declaration?.type === "FunctionDeclaration" ||
+        declaration?.type === "ClassDeclaration" ||
+        declaration?.type === "TSEnumDeclaration") &&
+      declaration.id?.name === "onFailure"
+    ) {
+      result.onFailureExportedIndirectly = true;
+    }
     if (declaration?.type === "VariableDeclaration") {
       for (const declarator of declaration.declarations) {
         if (declarator.id.type !== "Identifier") {

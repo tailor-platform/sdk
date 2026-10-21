@@ -45,6 +45,7 @@ import {
   type GqlPermissionUndo,
   restoreMigrationRestrictions,
   getDeletedTableNames,
+  getPreMigrationTargetTableNames,
   gqlPermissionUndoFromSnapshots,
   migrationSnapshotCache,
   namespacedTableKey,
@@ -1127,14 +1128,28 @@ async function runPreMigrationPhase(
     const shouldKeepPreMigrationSchema =
       isMigrationOutcomeUnknown(error) ||
       (rollsBackOnFailure
-        ? isMigrationPartiallyApplied(error) && !isMigrationRunEnded(error)
+        ? !isRollbackSafe(error, inProgress)
         : inProgress || isMigrationPartiallyApplied(error));
     if (shouldKeepPreMigrationSchema) {
       runLog.partial.set(migration.namespace, migration);
       throw error;
     }
-    throw await rollbackMigration(flow, attempt, restoration, runLog, error);
+    const recordMayExist = inProgress || isMigrationPartiallyApplied(error);
+    throw await rollbackMigration(flow, attempt, restoration, runLog, error, recordMayExist);
   }
+}
+
+/**
+ * Whether a failure of a migration that asked to be rolled back leaves no step writing. A resumed
+ * migration's earlier workflow execution is only known to have ended when the runner observed it,
+ * so a failure that happened before the runner (a Pre-phase or bundling error) does not count.
+ * @param error - The failure of the Pre-phase or the script
+ * @param inProgress - Whether an earlier deploy left the migration in progress
+ * @returns True when rolling back cannot race a running step
+ */
+function isRollbackSafe(error: unknown, inProgress: boolean): boolean {
+  if (isMigrationRunEnded(error)) return true;
+  return !inProgress && !isMigrationPartiallyApplied(error);
 }
 
 async function runPostMigrationPhase(
@@ -1170,7 +1185,7 @@ async function runPostMigrationPhase(
       );
       throw error;
     }
-    throw await rollbackMigration(flow, attempt, restoration, runLog, error);
+    throw await rollbackMigration(flow, attempt, restoration, runLog, error, true);
   }
 }
 
@@ -1183,6 +1198,8 @@ async function runPostMigrationPhase(
  * @param restoration - What the tables return to, updated in place
  * @param runLog - Receives what the rollback could not revert
  * @param error - The failure that triggered the rollback
+ * @param recordMayExist - Whether the migration may still be recorded as in progress; a failure that
+ * settled the record itself, such as a Pre-phase schema error, leaves nothing to clear
  * @returns The error to raise in place of the failure
  */
 async function rollbackMigration(
@@ -1191,17 +1208,23 @@ async function rollbackMigration(
   restoration: RestorationState,
   runLog: MigrationRunLog,
   error: unknown,
+  recordMayExist: boolean,
 ): Promise<unknown> {
   const { client, migrationContext, phaseSettings } = flow;
   const { migration, rollsBackOnFailure, inProgress, gqlPermissionUndo } = attempt;
   const { workspaceId } = migrationContext;
-  if (rollsBackOnFailure && !(await clearRolledBackRecord(client, workspaceId, migration))) {
+  if (
+    rollsBackOnFailure &&
+    recordMayExist &&
+    !(await clearRolledBackRecord(client, workspaceId, migration))
+  ) {
     runLog.partial.set(migration.namespace, migration);
     return rollbackSkippedError(migration, error, phaseSettings.restricted);
   }
+  const attemptedTables = new Set(attempt.attemptedTables);
   if (rollsBackOnFailure && inProgress) {
-    for (const [tableName, undo] of gqlPermissionUndoFromSnapshots(migration)) {
-      if (!gqlPermissionUndo.has(tableName)) gqlPermissionUndo.set(tableName, undo);
+    for (const tableName of readResumedRollbackScope(migration, gqlPermissionUndo)) {
+      attemptedTables.add(tableName);
     }
   }
   runLog.unrolledBack.push({
@@ -1211,7 +1234,7 @@ async function rollbackMigration(
       migration,
       workspaceId,
       phaseSettings,
-      attempt.attemptedTables,
+      attemptedTables,
       gqlPermissionUndo,
     )),
   });
@@ -1219,6 +1242,35 @@ async function rollbackMigration(
   await removeRunResources(client, workspaceId, migration.namespace, migration.number);
   if (inProgress) settleRolledBackRestorationSettings(flow, migration, restoration);
   return rolledBackError(migration, error);
+}
+
+/**
+ * Read what an earlier deploy's Pre-phase wrote, which this deploy has no record of: the tables
+ * it changed, and the GraphQL permission each of them had at the prior checkpoint. The permissions
+ * replace this deploy's undo records, because a forced update after an SDK upgrade records the
+ * permission the earlier Pre-phase installed as the one to restore. A failure to read the prior
+ * checkpoint is logged, so the rollback of this deploy's own writes and the original error go ahead.
+ * @param migration - The migration being rolled back
+ * @param gqlPermissionUndo - Undo records of this attempt, updated in place
+ * @returns The tables to roll back besides those this deploy wrote
+ */
+function readResumedRollbackScope(
+  migration: PendingMigration,
+  gqlPermissionUndo: GqlPermissionUndo,
+): ReadonlySet<string> {
+  try {
+    const tables = getPreMigrationTargetTableNames(migration);
+    for (const [tableName, undo] of gqlPermissionUndoFromSnapshots(migration)) {
+      gqlPermissionUndo.set(tableName, undo);
+    }
+    return tables;
+  } catch (error) {
+    logger.warn(
+      `Could not read migration ${migration.namespace}/${formatMigrationNumber(migration.number)} or its prior checkpoint: ` +
+        `${error instanceof Error ? error.message : String(error)}. Only what this deploy wrote is rolled back.`,
+    );
+    return new Set();
+  }
 }
 
 /**

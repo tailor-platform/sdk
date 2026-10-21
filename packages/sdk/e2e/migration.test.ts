@@ -1318,5 +1318,122 @@ export const steps = {
       },
       DEPLOY_TEST_TIMEOUT_MS,
     );
+
+    /**
+     * Scenario 11: a steps migration whose script exports onFailure = "rollback" gives its
+     * Pre-phase schema back, clears the in-progress record and removes its workflow when a
+     * later step fails.
+     */
+    test(
+      "rolls a multi-step migration back when a later step fails and its script asks for it",
+      async ({ signal }) => {
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.string({ optional: true }),
+  phone: db.string({ optional: true }),
+  loyaltyTier: db.string(),
+  sourceUuid: db.string(),
+  sourceEnum: db.string(),
+  sourceDecimal: db.string(),
+  sourceInteger: db.float(),
+  indexedUuid: db.string().index(),
+  indexedEnum: db.string().index(),
+  indexedDecimal: db.string().index(),
+  indexedInteger: db.float().index(),
+  verificationMarker: db.string(),
+  stepTier: db.string(),
+  rollbackTier: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+
+export type user = typeof user;
+`);
+
+        const configPath = createConfig();
+        await runGenerateCli(configPath, tempDir, signal);
+        expect(getMigrationFiles(migrationsDir).length).toBe(11);
+
+        overwriteMigrationScript(
+          10,
+          `import type { Transaction } from "./db";
+
+export const onFailure = "rollback";
+
+export const steps = {
+  backfill: {
+    run: async (trx: Transaction) => {
+      await trx.updateTable("User").set({ rollbackTier: "bronze" }).where("rollbackTier", "is", null).execute();
+    },
+  },
+  verify: {
+    dependsOn: ["backfill"],
+    run: async () => {
+      throw new Error("simulated step failure for rollback e2e");
+    },
+  },
+};
+`,
+        );
+
+        const result = await tryDeployCli(configPath, workspaceId, tempDir, signal);
+
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("MIGRATION_ROLLED_BACK");
+        expect(result.output).toContain("simulated step failure for rollback e2e");
+        expect(await getMigrationCheckpoint(tailordbName)).toBe(9);
+        expect(await getTailorDBTypeFields(tailordbName, "User")).not.toContain("rollbackTier");
+        const labels = await namespaceLabels();
+        expect(labels).not.toHaveProperty("sdk-migration-in-progress");
+        expect(labels).not.toHaveProperty("sdk-migration-execution");
+        expect(await migrationWorkflowExists(10)).toBe(false);
+      },
+      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
+    );
+
+    /**
+     * Scenario 11b: nothing is in progress after the rollback, so the next deploy runs every
+     * step again from the beginning and commits the checkpoint.
+     */
+    test(
+      "runs every step again on the next deploy after a rollback",
+      async ({ signal }) => {
+        overwriteMigrationScript(
+          10,
+          `import type { Transaction } from "./db";
+
+export const onFailure = "rollback";
+
+export const steps = {
+  backfill: {
+    run: async (trx: Transaction) => {
+      await trx.updateTable("User").set({ rollbackTier: "bronze" }).where("rollbackTier", "is", null).execute();
+    },
+  },
+  verify: {
+    dependsOn: ["backfill"],
+    run: async (trx: Transaction) => {
+      const rows = await trx.selectFrom("User").select(["id", "rollbackTier"]).execute();
+      if (rows.length === 0 || rows.some((row) => row.rollbackTier !== "bronze")) {
+        throw new Error("backfill did not run again after the rollback");
+      }
+    },
+  },
+};
+`,
+        );
+
+        const configPath = createConfig();
+        await runDeployCli(configPath, workspaceId, tempDir, signal);
+
+        expect(await getMigrationCheckpoint(tailordbName)).toBe(10);
+        expect(await getTailorDBTypeFields(tailordbName, "User")).toContain("rollbackTier");
+        const labels = await namespaceLabels();
+        expect(labels).not.toHaveProperty("sdk-migration-in-progress");
+        expect(await migrationWorkflowExists(10)).toBe(false);
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
   });
 });

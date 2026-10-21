@@ -31,6 +31,7 @@ import {
   groupMigrationsByNamespace,
   executeMigrations,
   isMigrationPartiallyApplied,
+  rolledBackError,
   type MigrationContext,
 } from "./migration";
 import { MaintenanceTimeline } from "./migration-timing";
@@ -1694,5 +1695,36 @@ describe("migration", () => {
         expect(text).toBe("Running migration tailordb/0001 (0/1 steps completed, 5.0s)...");
       });
     });
+  });
+});
+
+describe("rolledBackError", () => {
+  test("keeps the recovery advice of a Platform failure next to what the rollback did", () => {
+    const error = rolledBackError(
+      createMockMigration({ number: 3 }),
+      new ConnectError("connection lost", Code.Unavailable),
+    );
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_ROLLED_BACK",
+      message: expect.stringContaining("connection lost"),
+      suggestion: expect.stringMatching(
+        /rolled back to migration 0002.*runs every step again.*Check network connectivity/s,
+      ),
+    });
+  });
+
+  test("replaces the resume advice of a partially applied failure", () => {
+    const error = rolledBackError(
+      createMockMigration({ number: 3 }),
+      CLIError({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        message: "Migration tailordb/0003 failed at recompute: boom",
+        suggestion:
+          "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again.",
+      }),
+    );
+
+    expect((error as { suggestion?: string }).suggestion).not.toContain("do not run again");
   });
 });
