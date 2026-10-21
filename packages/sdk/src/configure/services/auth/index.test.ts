@@ -160,7 +160,7 @@ describe("defineAuth", () => {
     expect(authConfig.machineUsers?.nullified.attributes.nickname).toBeNull();
 
     // role derives from a required field and must be set
-    // (structural check — overload resolution differs in tsgo)
+    // (structural check — overload resolution differs in tsrs)
     expectTypeOf<{ attributes: { nickname: string } }>().not.toExtend<
       NonNullable<typeof authConfig.machineUsers>["omitted"]
     >();
@@ -179,11 +179,18 @@ describe("defineAuth", () => {
 
     expect(authConfig.machineUsers?.worker.attributes.role).toBe("WORKER");
 
-    // role is a required field and must be set
-    // (structural check — overload resolution differs in tsgo)
-    expectTypeOf<{ attributes: { note: string } }>().not.toExtend<
-      NonNullable<typeof authConfig.machineUsers>["worker"]
-    >();
+    defineAuth("machine-only-missing-role", {
+      machineUserAttributes: {
+        role: t.string(),
+        note: t.string({ optional: true }),
+      },
+      machineUsers: {
+        worker: {
+          // @ts-expect-error - role is required
+          attributes: { note: "note" },
+        },
+      },
+    });
   });
 
   test("allows omitting attributes entirely when all machineUserAttributes fields are optional", () => {
@@ -258,7 +265,7 @@ describe("defineAuth", () => {
 
     test("constrains invoker to machine user names at the type level", () => {
       // BeforeLoginHook<MachineUserNames> constrains invoker to MachineUserNames.
-      // We verify this structurally rather than via overload resolution (which differs in tsgo).
+      // We verify this structurally rather than via overload resolution (which differs in tsrs).
       type Hook = BeforeLoginHook<"admin" | "worker">;
       expectTypeOf<Hook["invoker"]>().toEqualTypeOf<"admin" | "worker">();
     });

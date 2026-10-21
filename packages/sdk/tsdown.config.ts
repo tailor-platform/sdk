@@ -1,24 +1,20 @@
 import { cpSync } from "node:fs";
 import path from "node:path";
 import Sonda from "sonda/rolldown";
-import { defineConfig, type TsdownPluginOption } from "tsdown";
+import { defineConfig } from "tsdown";
 import { entry } from "./scripts/build-entries.mjs";
 
 function copyToOutDir(outDir: string, source: string, dest: string): void {
   cpSync(path.resolve(source), path.join(outDir, dest));
 }
 
-// Annotate as TsdownPluginOption[] to work around a tsgo TS2321 caused by
-// rolldown's Plugin type appearing under two paths in node_modules (root
-// rc.17 from tsdown's pin, packages/sdk rc.18 from our direct dep). tsc
-// handles this fine; tsgo's recursive Plugin comparison gets stuck.
-const jsPlugins: TsdownPluginOption[] = [
+const jsPlugins = [
   Sonda({
     open: false,
     format: "json",
     filename: "bundle-analysis.json",
     deep: true,
-  }) as TsdownPluginOption,
+  }),
 ];
 
 const externalDeps = ["vite", "vitest", /^@tailor-platform\/sdk$/];
