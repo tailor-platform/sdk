@@ -90,6 +90,7 @@ describe("tailordb migration test", () => {
     expect(events).toEqual([
       "prepare",
       "create",
+      "expiry",
       "baseline",
       "seed",
       "migrate",
@@ -113,7 +114,15 @@ describe("tailordb migration test", () => {
 
     await runMigrationTest({ data: "clone" }, dependencies);
 
-    expect(events).toEqual(["prepare", "create", "baseline", "clone", "migrate", "delete"]);
+    expect(events).toEqual([
+      "prepare",
+      "create",
+      "expiry",
+      "baseline",
+      "clone",
+      "migrate",
+      "delete",
+    ]);
     expect(dependencies.cloneData).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceWorkspaceId: prepared.sourceWorkspaceId,
@@ -331,12 +340,49 @@ describe("tailordb migration test", () => {
     expect(dependencies.deleteWorkspace).not.toHaveBeenCalled();
   });
 
-  test("does not record an expiry unless --keep-ttl is passed", async () => {
+  test("does not record an expiry on a kept workspace unless --keep-ttl is passed", async () => {
     const dependencies = createDependencies([]);
 
     await runMigrationTest({ data: "seed", keep: true }, dependencies);
 
     expect(dependencies.recordWorkspaceExpiry).not.toHaveBeenCalled();
+  });
+
+  test("records a 24h expiry on a temporary workspace before any deployment starts", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+
+    await runMigrationTest({ data: "seed" }, dependencies);
+
+    expect(events.slice(0, 4)).toEqual(["prepare", "create", "expiry", "baseline"]);
+    expect(dependencies.recordWorkspaceExpiry).toHaveBeenCalledWith(
+      "44444444-4444-4444-8444-444444444444",
+      "24h",
+      new Date("2026-01-01T00:00:00Z"),
+    );
+  });
+
+  test("does not record an expiry on a designated target workspace", async () => {
+    const dependencies = createDependencies([]);
+
+    await runMigrationTest(
+      { data: "seed", targetWorkspaceId: "55555555-5555-4555-8555-555555555555", yes: true },
+      dependencies,
+    );
+
+    expect(dependencies.recordWorkspaceExpiry).not.toHaveBeenCalled();
+  });
+
+  test("still deletes the temporary workspace when the default expiry could not be recorded", async () => {
+    const dependencies = createDependencies([]);
+    vi.mocked(dependencies.recordWorkspaceExpiry).mockRejectedValue(
+      new Error("label write failed"),
+    );
+
+    const result = await runMigrationTest({ data: "seed" }, dependencies);
+
+    expect(result.deleted).toBe(true);
+    expect(dependencies.deleteWorkspace).toHaveBeenCalledTimes(1);
   });
 
   test("keeps the workspace and finishes when recording the expiry fails", async () => {
@@ -398,7 +444,15 @@ describe("tailordb migration test", () => {
       "migration failed",
     );
 
-    expect(events).toEqual(["prepare", "create", "baseline", "seed", "migrate", "delete"]);
+    expect(events).toEqual([
+      "prepare",
+      "create",
+      "expiry",
+      "baseline",
+      "seed",
+      "migrate",
+      "delete",
+    ]);
   });
 
   test("does not mask the migration error when temporary-workspace deletion also fails", async () => {
