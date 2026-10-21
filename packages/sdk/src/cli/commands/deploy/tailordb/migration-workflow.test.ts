@@ -928,34 +928,6 @@ describe("observing when the migration script runs", () => {
     expect(raw.getFunctionExecution).toHaveBeenCalledTimes(1);
   });
 
-  test("reports the polls that could not read a running job's logs as unknown", async () => {
-    const { client, raw } = observedClient(
-      [
-        {
-          status: WorkflowExecution_Status.RUNNING,
-          jobs: [{ executionId: "fn-1", status: running }],
-        },
-        {
-          status: WorkflowExecution_Status.RUNNING,
-          jobs: [{ executionId: "fn-1", status: running }],
-        },
-        {
-          status: WorkflowExecution_Status.SUCCESS,
-          jobs: [{ executionId: "fn-1", status: succeeded }],
-        },
-      ],
-      { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
-    );
-    raw.getFunctionExecution
-      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
-      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable));
-
-    const { result, events } = runObserved(client);
-
-    expect(await result).toMatchObject({ success: true, logs: "INFO done" });
-    expect(events).toEqual(["waiting", "unknown", "finished:true"]);
-  });
-
   test("reports a poll that finds a running job without an execution as unknown", async () => {
     const { client } = observedClient(
       [

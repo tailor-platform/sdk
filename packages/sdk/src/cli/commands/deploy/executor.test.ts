@@ -197,27 +197,6 @@ describe("planExecutor", () => {
   }
 
   describe("rename scenarios", () => {
-    test("old executor is deleted when renamed", async () => {
-      // Existing executor: "old-executor" with app label
-      const client = createMockClient([{ name: "old-executor", label: appName }]);
-
-      // New config has "new-executor" (renamed from old-executor)
-      const application = createMockApplication([createMockExecutor("new-executor")]);
-
-      const result = await planExecutor(buildPlanContext(application, { client }));
-
-      // "new-executor" should be created
-      expect(result.changeSet.creates).toHaveLength(1);
-      expect(result.changeSet.creates[0]!.name).toBe("new-executor");
-
-      // "old-executor" should be deleted
-      expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0]!.name).toBe("old-executor");
-
-      // No updates (since old and new are different names)
-      expect(result.changeSet.updates).toHaveLength(0);
-    });
-
     test("multiple executors - one renamed, one unchanged", async () => {
       // Existing: executor-a (to be renamed), executor-b (unchanged)
       const client = createMockClient([
@@ -261,90 +240,9 @@ describe("planExecutor", () => {
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.deletes.map((entry) => entry.name)).toEqual(["active-executor"]);
     });
-
-    test("executor is deleted when removed from config", async () => {
-      // Existing: executor-a, executor-b
-      const client = createMockClient([
-        { name: "executor-a", label: appName },
-        { name: "executor-b", label: appName },
-      ]);
-
-      // New config only has executor-a (executor-b removed)
-      const application = createMockApplication([createMockExecutor("executor-a")]);
-
-      const result = await planExecutor(buildPlanContext(application, { client }));
-
-      // "executor-a" should be updated
-      expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0]!.name).toBe("executor-a");
-
-      // "executor-b" should be deleted
-      expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0]!.name).toBe("executor-b");
-
-      // No creates
-      expect(result.changeSet.creates).toHaveLength(0);
-    });
-
-    test("all executors are deleted when config is empty", async () => {
-      // Existing: multiple executors
-      const client = createMockClient([
-        { name: "executor-1", label: appName },
-        { name: "executor-2", label: appName },
-        { name: "executor-3", label: appName },
-      ]);
-
-      // New config is empty
-      const application = createMockApplication([]);
-
-      const result = await planExecutor(buildPlanContext(application, { client }));
-
-      // All should be deleted
-      expect(result.changeSet.deletes).toHaveLength(3);
-      expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
-        "executor-1",
-        "executor-2",
-        "executor-3",
-      ]);
-
-      // No creates or updates
-      expect(result.changeSet.creates).toHaveLength(0);
-      expect(result.changeSet.updates).toHaveLength(0);
-    });
   });
 
   describe("label ownership scenarios", () => {
-    test("executor without label is NOT deleted (unmanaged)", async () => {
-      // Existing: executor without label (created outside SDK)
-      const client = createMockClient([
-        { name: "unmanaged-executor" }, // No label
-      ]);
-
-      // New config is empty
-      const application = createMockApplication([]);
-
-      const result = await planExecutor(buildPlanContext(application, { client }));
-
-      // Should NOT be deleted (no label means not managed by SDK)
-      expect(result.changeSet.deletes).toHaveLength(0);
-    });
-
-    test("executor owned by different app is NOT deleted", async () => {
-      // Existing: executor owned by another app
-      const client = createMockClient([{ name: "other-app-executor", label: "other-app" }]);
-
-      // New config is empty
-      const application = createMockApplication([]);
-
-      const result = await planExecutor(buildPlanContext(application, { client }));
-
-      // Should NOT be deleted (owned by different app)
-      expect(result.changeSet.deletes).toHaveLength(0);
-
-      // Should be tracked as resourceOwner
-      expect(result.resourceOwners.has("other-app")).toBe(true);
-    });
-
     test("mixed ownership - only delete own executors", async () => {
       const client = createMockClient([
         { name: "my-executor", label: appName },

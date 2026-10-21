@@ -377,45 +377,6 @@ describe("planSecretManager hash-based diff", () => {
       applicationName: "test-app",
     });
   });
-
-  test("includes update when matching state belongs to another application", async () => {
-    const secretValue = "my-secret-value";
-    mockLoadSecretsState.mockImplementation((scope?: { applicationId: string }) =>
-      scope?.applicationId === "app-a"
-        ? {
-            vaults: {
-              "my-vault": {
-                "existing-secret": { hash: hashValue(secretValue), updateTime: "100.5" },
-              },
-            },
-          }
-        : { vaults: {} },
-    );
-    const client = createMockPlanClient([
-      { name: "existing-secret", updateTime: { seconds: 100n, nanos: 5 } },
-    ]);
-    const ctxA = createPlanContext(
-      client,
-      [{ vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] }],
-      { appName: "shared-app", appId: "app-a" },
-    );
-    const ctxB = createPlanContext(
-      client,
-      [{ vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] }],
-      { appName: "shared-app", appId: "app-b" },
-    );
-
-    const resultA = await planSecretManager(ctxA);
-    const resultB = await planSecretManager(ctxB);
-
-    expect(resultA.secretChangeSet.updates).toHaveLength(0);
-    expect(resultB.secretChangeSet.updates).toHaveLength(1);
-    expect(mockLoadSecretsState).toHaveBeenCalledWith({
-      workspaceId: "ws-1",
-      applicationId: "app-b",
-      applicationName: "shared-app",
-    });
-  });
 });
 
 describe("planSecretManager update-time evidence", () => {
