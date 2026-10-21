@@ -28,14 +28,71 @@ const SQL_STYLE_MAP: Record<string, string> = {
   number: CYAN,
   bracket: DIM_YELLOW,
   special: DIM,
+  comment: DIM,
 };
 
+type Piece = { text: string; literal: boolean; comment?: boolean };
+
+function splitSqlLine(line: string, startsInBlockComment: boolean) {
+  let inBlockComment = startsInBlockComment;
+  const pieces: Piece[] = [];
+  let code = "";
+  let i = 0;
+  const flushCode = () => {
+    if (code) pieces.push({ text: code, literal: false });
+    code = "";
+  };
+  const takeBlockComment = (searchFrom: number) => {
+    const end = line.indexOf("*/", searchFrom);
+    const stop = end === -1 ? line.length : end + 2;
+    pieces.push({ text: line.slice(i, stop), literal: true });
+    i = stop;
+    inBlockComment = end === -1;
+  };
+  while (i < line.length) {
+    if (inBlockComment) {
+      takeBlockComment(i);
+    } else if (line.startsWith("/*", i)) {
+      flushCode();
+      takeBlockComment(i + 2);
+    } else if (line.startsWith("--", i)) {
+      flushCode();
+      pieces.push({ text: line.slice(i), literal: true });
+      i = line.length;
+    } else if (line[i] === "'" || line[i] === '"') {
+      const quote = line[i];
+      let j = i + 1;
+      while (j < line.length && line[j] !== quote) j++;
+      code += line.slice(i, j + 1);
+      i = j + 1;
+    } else {
+      code += line[i];
+      i++;
+    }
+  }
+  flushCode();
+  return { pieces, inBlockComment };
+}
+
 /**
- * Highlight a single SQL line using the `sql-highlight` tokenizer.
- * @param line - SQL text for a single editor line
- * @returns ANSI-decorated line safe for terminal output
+ * Highlight SQL lines, tracking block comments that span lines.
+ * @param lines - SQL text split into editor lines
+ * @returns ANSI-decorated lines, one per input line
  */
-export function highlightSqlLine(line: string): string {
+export function highlightSqlLines(lines: readonly string[]): string[] {
+  let inBlockComment = false;
+  return lines.map((line) => {
+    const split = splitSqlLine(line, inBlockComment);
+    inBlockComment = split.inBlockComment;
+    return split.pieces
+      .map((piece) =>
+        piece.literal ? `${DIM}${piece.text}${RESET}` : highlightSqlCode(piece.text),
+      )
+      .join("");
+  });
+}
+
+function highlightSqlCode(line: string): string {
   const segments = getSegments(line);
   let result = "";
   for (const seg of segments) {
@@ -68,18 +125,79 @@ const GQL_DEF_KEYWORDS = new Set(["query", "mutation", "subscription", "fragment
 
 const GQL_BUILTINS = new Set(["true", "false", "null"]);
 
+function splitGraphqlLine(line: string, startsInBlockString: boolean) {
+  let inBlockString = startsInBlockString;
+  const pieces: Piece[] = [];
+  let code = "";
+  let i = 0;
+  const flushCode = () => {
+    if (code) pieces.push({ text: code, literal: false });
+    code = "";
+  };
+  const takeBlockString = (from: number) => {
+    let j = from;
+    while (j < line.length) {
+      if (line.startsWith('\\"""', j)) j += 4;
+      else if (line.startsWith('"""', j)) break;
+      else j++;
+    }
+    const closed = j < line.length;
+    const stop = closed ? j + 3 : line.length;
+    pieces.push({ text: line.slice(i, stop), literal: true });
+    i = stop;
+    inBlockString = !closed;
+  };
+  while (i < line.length) {
+    if (inBlockString) {
+      takeBlockString(i);
+    } else if (line.startsWith('"""', i)) {
+      flushCode();
+      takeBlockString(i + 3);
+    } else if (line[i] === '"') {
+      let j = i + 1;
+      while (j < line.length && line[j] !== '"') j += line[j] === "\\" ? 2 : 1;
+      code += line.slice(i, j + 1);
+      i = j + 1;
+    } else if (line[i] === "#") {
+      flushCode();
+      pieces.push({ text: line.slice(i), literal: true, comment: true });
+      i = line.length;
+    } else {
+      code += line[i];
+      i++;
+    }
+  }
+  flushCode();
+  return { pieces, inBlockString };
+}
+
 /**
- * Highlight a single GraphQL line using the official `graphql` Lexer. Tracks
- * paren depth and the previous token to provide semantic-level colouring
+ * Highlight GraphQL lines, tracking block strings that span lines.
+ * @param lines - GraphQL text split into editor lines
+ * @returns ANSI-decorated lines, one per input line
+ */
+export function highlightGraphqlLines(lines: readonly string[]): string[] {
+  let inBlockString = false;
+  return lines.map((line) => {
+    const split = splitGraphqlLine(line, inBlockString);
+    inBlockString = split.inBlockString;
+    return split.pieces
+      .map((piece) => {
+        if (!piece.literal) return highlightGraphqlCode(piece.text);
+        return `${piece.comment ? DIM : GREEN}${piece.text}${RESET}`;
+      })
+      .join("");
+  });
+}
+
+/**
+ * Highlight a single GraphQL code fragment using the official `graphql` Lexer.
+ * Tracks paren depth and the previous token to provide semantic-level colouring
  * (field names vs argument names vs types).
- * @param line - GraphQL text for a single editor line
+ * @param line - GraphQL text without comments or block strings
  * @returns ANSI-decorated line, or the input unchanged when the lexer rejects it
  */
-export function highlightGraphqlLine(line: string): string {
-  if (line.trimStart().startsWith("#")) {
-    return `${DIM}${line}${RESET}`;
-  }
-
+function highlightGraphqlCode(line: string): string {
   try {
     const source = new Source(line);
     const lexer = new Lexer(source);
@@ -265,7 +383,11 @@ export function replTransform(
       return { lines: newLines, row, col: indent.length };
     }
     if (baseIndent && col === 0) {
-      return { lines: lines.with(row, baseIndent + currentLine), row, col: baseIndent.length };
+      return {
+        lines: lines.with(row, baseIndent + currentLine),
+        row,
+        col: baseIndent.length,
+      };
     }
   }
 

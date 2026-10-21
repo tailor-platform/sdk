@@ -1,9 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { stripAnsi } from "../shared/test-helpers/strip-ansi";
-import { highlightGraphqlLine, highlightSqlLine, replTransform } from "./repl-editor";
+import { highlightGraphqlLines, highlightSqlLines, replTransform } from "./repl-editor";
 import type { TransformEvent, TransformState } from "@toiroakr/read-multiline";
 
-describe("highlightSqlLine", () => {
+const highlightSqlLine = (line: string) => highlightSqlLines([line])[0] ?? "";
+const highlightGraphqlLine = (line: string) => highlightGraphqlLines([line])[0] ?? "";
+
+describe("highlightSqlLines", () => {
   test("wraps SQL keywords in ANSI colour", () => {
     const out = highlightSqlLine("SELECT * FROM users WHERE id = 1");
     expect(out).not.toBe("SELECT * FROM users WHERE id = 1");
@@ -25,7 +28,61 @@ describe("highlightSqlLine", () => {
   });
 });
 
-describe("highlightGraphqlLine", () => {
+describe("highlightSqlLines (multi-line)", () => {
+  test("dims every line of a block comment spanning lines", () => {
+    const out = highlightSqlLines(["SELECT 1 /* a", "b", " c */ AND 2"]);
+    expect(out[0]).toContain("\x1b[90m/* a\x1b[0m");
+    expect(out[1]).toBe("\x1b[90mb\x1b[0m");
+    expect(out[2]).toContain("\x1b[90m c */\x1b[0m");
+    expect(out[2]).toContain("\x1b[36m2\x1b[0m");
+  });
+
+  test("dims a -- line comment", () => {
+    expect(highlightSqlLine("SELECT 1 -- note")).toContain("\x1b[90m-- note\x1b[0m");
+  });
+
+  test("does not open a block comment from /* inside a string literal", () => {
+    const out = highlightSqlLines(["SELECT '/*'", "FROM users"]);
+    expect(out[1]).toContain("\x1b[34mFROM\x1b[0m");
+  });
+
+  test("does not open a block comment from /* inside a -- comment", () => {
+    const out = highlightSqlLines(["SELECT 1 -- /*", "FROM users"]);
+    expect(out[1]).toContain("\x1b[34mFROM\x1b[0m");
+  });
+
+  test("keeps the line count and text", () => {
+    const lines = ["SELECT 1 /* a", "b */ 'x'", "FROM t"];
+    expect(highlightSqlLines(lines).map(stripAnsi)).toEqual(lines);
+  });
+});
+
+describe("highlightGraphqlLines (multi-line)", () => {
+  test("colours every line of a block string spanning lines", () => {
+    const out = highlightGraphqlLines(['a(s: """doc', "mid", 'more""") { b }']);
+    expect(out[0]).toContain('\x1b[32m"""doc\x1b[0m');
+    expect(out[1]).toBe("\x1b[32mmid\x1b[0m");
+    expect(out[2]).toContain('\x1b[32mmore"""\x1b[0m');
+    expect(out[2]).toContain("\x1b[94mb\x1b[0m");
+  });
+
+  test('does not open a block string from """ inside a comment', () => {
+    const out = highlightGraphqlLines(['# """', "query Q { a }"]);
+    expect(out[1]).toContain("\x1b[34mquery\x1b[0m");
+  });
+
+  test('does not open a block string from """ inside a regular string', () => {
+    const out = highlightGraphqlLines([String.raw`a(s: "x\"\"\"")`, "query Q { a }"]);
+    expect(out[1]).toContain("\x1b[34mquery\x1b[0m");
+  });
+
+  test("keeps the line count and text", () => {
+    const lines = ['a(s: """doc', "mid", 'more""")'];
+    expect(highlightGraphqlLines(lines).map(stripAnsi)).toEqual(lines);
+  });
+});
+
+describe("highlightGraphqlLines", () => {
   test("dims GraphQL comment lines", () => {
     const out = highlightGraphqlLine("# this is a comment");
     expect(out).toBe("\x1b[90m# this is a comment\x1b[0m");
