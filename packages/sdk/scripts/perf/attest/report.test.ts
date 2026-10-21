@@ -117,9 +117,23 @@ describe("compareToBase", () => {
     ]);
   });
 
-  test("treats a base measurement of zero as unchanged", () => {
-    const base: BenchResult[] = [{ name: "tailordb-basic", instantiations: 0, baseline: 0 }];
+  test("treats a base where every case measured zero as not measured", () => {
+    const base: BenchResult[] = [
+      { name: "tailordb-basic", instantiations: 0, baseline: 0 },
+      { name: "resolver-basic", instantiations: 0, baseline: 0 },
+    ];
     expect(compareToBase(results, base)).toEqual(results);
+  });
+
+  test("keeps a zero measured on the base for one case while other cases measured", () => {
+    const base: BenchResult[] = [
+      { name: "tailordb-basic", instantiations: 0, baseline: 0 },
+      { name: "resolver-basic", instantiations: 1000, baseline: 1000 },
+    ];
+    expect(compareToBase(results, base)).toEqual([
+      { name: "tailordb-basic", instantiations: 2314, baseline: 0 },
+      { name: "resolver-basic", instantiations: 1020, baseline: 1000 },
+    ]);
   });
 });
 
@@ -188,6 +202,24 @@ describe("renderChanges", () => {
       { name: "resolver-basic", instantiations: 1020, baseline: 1020 },
     ];
     expect(renderChanges(results, sources)).not.toContain("resolver-basic");
+  });
+
+  test("shows an increase from zero without a percentage", () => {
+    const results: BenchResult[] = [{ name: "tailordb-basic", instantiations: 100, baseline: 0 }];
+    expect(renderChanges(results, sources)).toContain(
+      "| 🔺 | tailordb-basic | 0 | 100 | **n/a** (+100) |",
+    );
+  });
+
+  test("lists an increase from zero before percentage changes", () => {
+    const results: BenchResult[] = [
+      { name: "resolver-basic", instantiations: 5000, baseline: 1000 },
+      { name: "tailordb-basic", instantiations: 100, baseline: 0 },
+    ];
+    const rendered = renderChanges(results, sources);
+    expect(rendered.indexOf("| tailordb-basic |")).toBeLessThan(
+      rendered.indexOf("| resolver-basic |"),
+    );
   });
 
   test("marks a decrease with a minus sign", () => {

@@ -64,28 +64,39 @@ export const extractBenchSources = (source: string): Record<string, string> => {
 };
 
 export const compareToBase = (results: BenchResult[], base: BenchResult[]): BenchResult[] => {
+  const measuredAny = base.some(({ instantiations }) => instantiations > 0);
   const measured = new Map(base.map(({ name, instantiations }) => [name, instantiations]));
   return results.map((result) => ({
     ...result,
-    baseline: measured.get(result.name) || result.instantiations,
+    baseline: (measuredAny ? measured.get(result.name) : undefined) ?? result.instantiations,
   }));
 };
 
 const percentChange = ({ instantiations, baseline }: BenchResult): number =>
-  ((instantiations - baseline) / baseline) * 100;
+  baseline === 0 ? Infinity : ((instantiations - baseline) / baseline) * 100;
 
 const signed = (value: number, text: string): string => `${value > 0 ? "+" : ""}${text}`;
+
+const formatPercent = (result: BenchResult): string => {
+  const percent = percentChange(result);
+  if (!Number.isFinite(percent)) return "n/a";
+  return signed(percent, `${percent.toFixed(2)}%`);
+};
+
+const magnitude = (result: BenchResult): number => {
+  const percent = percentChange(result);
+  return Number.isFinite(percent) ? Math.abs(percent) : Number.MAX_VALUE;
+};
 
 export const renderChanges = (results: BenchResult[], sources: Record<string, string>): string => {
   const changed = results
     .filter(({ instantiations, baseline }) => instantiations !== baseline)
-    .toSorted((a, b) => Math.abs(percentChange(b)) - Math.abs(percentChange(a)));
+    .toSorted((a, b) => magnitude(b) - magnitude(a));
   if (changed.length === 0) return "";
 
   const rows = changed.map((result) => {
     const count = result.instantiations - result.baseline;
-    const percent = percentChange(result);
-    return `| ${count > 0 ? "🔺" : "🔻"} | ${result.name} | ${result.baseline} | ${result.instantiations} | **${signed(percent, `${percent.toFixed(2)}%`)}** (${signed(count, String(count))}) |`;
+    return `| ${count > 0 ? "🔺" : "🔻"} | ${result.name} | ${result.baseline} | ${result.instantiations} | **${formatPercent(result)}** (${signed(count, String(count))}) |`;
   });
   const details = changed.flatMap(({ name }) => {
     const code = sources[name];
