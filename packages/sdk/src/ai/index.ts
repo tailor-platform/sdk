@@ -58,6 +58,8 @@ export interface CreateSystemOneOptions {
   baseURL: string | URL;
   /** Access token issued by the AI Gateway's auth namespace. Omit this inside a Tailor Function. */
   token?: string | (() => string | Promise<string>);
+  /** Milliseconds, as a non-negative integer, to wait for AI Gateway to respond before failing with `PROVIDER_TIMEOUT`. Omit to wait until AI Gateway responds. */
+  timeoutMs?: number;
   /** Custom Fetch implementation. */
   fetch?: typeof globalThis.fetch;
 }
@@ -248,10 +250,24 @@ async function readErrorMessage(response: Response): Promise<string | undefined>
   }
 }
 
+function isTimeout(cause: unknown): boolean {
+  return cause instanceof Error && cause.name === "TimeoutError";
+}
+
+function timeoutError(cause: unknown, status?: number): SystemOneError {
+  return new SystemOneError("AI Gateway request timed out.", "PROVIDER_TIMEOUT", {
+    cause,
+    status,
+  });
+}
+
 async function readJSON(response: Response): Promise<unknown> {
   try {
     return await response.json();
   } catch (cause) {
+    if (isTimeout(cause)) {
+      throw timeoutError(cause, response.status);
+    }
     throw new SystemOneError("AI Gateway returned an invalid JSON response.", "MODEL_ERROR", {
       cause,
       status: response.status,
@@ -277,16 +293,19 @@ async function evaluate(
   }
 
   const fetchImplementation = options.fetch ?? globalThis.fetch;
+  const signal =
+    options.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
   let response: Response;
   try {
     response = await fetchImplementation(endpoint(options.baseURL), {
       method: "POST",
       headers,
       body,
+      signal,
     });
   } catch (cause) {
-    if (cause instanceof Error && cause.name === "TimeoutError") {
-      throw new SystemOneError("AI Gateway request timed out.", "PROVIDER_TIMEOUT", { cause });
+    if (isTimeout(cause)) {
+      throw timeoutError(cause);
     }
     throw new SystemOneError("Unable to reach AI Gateway.", "PROVIDER_UNAVAILABLE", { cause });
   }

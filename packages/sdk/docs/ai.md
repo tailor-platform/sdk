@@ -84,3 +84,9 @@ const result = await systemOne.boolean({
 ## Errors
 
 Failures throw `SystemOneError` with a provider-independent `code`. Applications can handle stable codes such as `UNAUTHORIZED`, `RATE_LIMITED`, `PROVIDER_TIMEOUT`, and `PROVIDER_UNAVAILABLE` without depending on a model provider.
+
+A decision waits until AI Gateway responds. To fail with `PROVIDER_TIMEOUT` instead, pass `timeoutMs`:
+
+```typescript
+const systemOne = createSystemOne({ baseURL: url, timeoutMs: 10_000 });
+```

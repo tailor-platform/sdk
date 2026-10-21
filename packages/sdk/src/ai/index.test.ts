@@ -267,6 +267,56 @@ describe("createSystemOne", () => {
   });
 
   test.each([
+    {
+      label: "a response",
+      respond: (signal: AbortSignal) =>
+        new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason as DOMException));
+        }),
+    },
+    {
+      label: "a response body",
+      respond: async (signal: AbortSignal) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              signal.addEventListener("abort", () => controller.error(signal.reason));
+            },
+          }),
+        ),
+    },
+  ])("aborts waiting for $label after timeoutMs as a provider timeout", async ({ respond }) => {
+    const fetchMock = vi.fn<typeof fetch>((_url, init) => respond(init!.signal!));
+    const client = createSystemOne({
+      baseURL: "https://gateway.example.com",
+      timeoutMs: 10,
+      fetch: fetchMock,
+    });
+
+    const promise = client.boolean({ state: {}, question: "Continue?" });
+
+    await expect(promise).rejects.toMatchObject({
+      name: "SystemOneError",
+      code: "PROVIDER_TIMEOUT",
+      cause: { name: "TimeoutError" },
+    });
+  });
+
+  test("rejects an invalid timeoutMs without reporting an unavailable provider", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const client = createSystemOne({
+      baseURL: "https://gateway.example.com",
+      timeoutMs: -1,
+      fetch: fetchMock,
+    });
+
+    await expect(client.boolean({ state: {}, question: "Continue?" })).rejects.toBeInstanceOf(
+      RangeError,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
     { label: "non-serializable", state: { amount: 1n } },
     { label: "a number", state: 1 },
   ])("reports $label state as an invalid request", async ({ state }) => {
