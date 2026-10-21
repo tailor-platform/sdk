@@ -1,4 +1,5 @@
 import { parse, Lang } from "@ast-grep/napi";
+import { isInsideImportStatement } from "../../../../src/ast-grep-helpers";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
@@ -35,15 +36,6 @@ const ACTOR_TYPE_LITERAL_RENAME_MAP: Record<string, string> = {
 function quickFilter(source: string): boolean {
   if (!source.includes("@tailor-platform/sdk")) return false;
   return QUICK_FILTER_NEEDLES.some((needle) => source.includes(needle));
-}
-
-function isInsideImportStatement(node: SgNode): boolean {
-  let current: SgNode | null = node.parent();
-  while (current) {
-    if (current.kind() === "import_statement") return true;
-    current = current.parent();
-  }
-  return false;
 }
 
 function memberObjectParent(node: SgNode): SgNode | null {

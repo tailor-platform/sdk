@@ -1,4 +1,5 @@
 import { parse, Lang } from "@ast-grep/napi";
+import { isInsideImportStatement } from "../../../../src/ast-grep-helpers";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const SDK_MODULE = "@tailor-platform/sdk";
@@ -7,15 +8,6 @@ const RENAMES: Record<string, string> = {
   defineWaitPoint: "createWaitPoint",
   defineWaitPoints: "createWaitPoints",
 };
-
-function isInsideImportStatement(node: SgNode): boolean {
-  let current: SgNode | null = node.parent();
-  while (current) {
-    if (current.kind() === "import_statement") return true;
-    current = current.parent();
-  }
-  return false;
-}
 
 /**
  * Rename `defineWaitPoint` and `defineWaitPoints` imported from `@tailor-platform/sdk`
