@@ -225,6 +225,8 @@ jobs:
           {
             echo "changes<<${delimiter}"
             cat "${RUNNER_TEMP}/changes.md"
+            # Keeps the trailing newline that separates the message from octocov's tables
+            echo
             echo "${delimiter}"
           } >> "${GITHUB_OUTPUT}"
 
