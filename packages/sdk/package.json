@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "2.31.0",
+  "version": "2.31.1",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -82,6 +82,11 @@
       "import": "./dist/seed/index.mjs",
       "default": "./dist/seed/index.mjs"
     },
+    "./ai": {
+      "types": "./dist/ai/index.d.mts",
+      "import": "./dist/ai/index.mjs",
+      "default": "./dist/ai/index.mjs"
+    },
     "./vitest": {
       "types": "./dist/vitest/index.d.mts",
       "import": "./dist/vitest/index.mjs",
@@ -162,7 +167,7 @@
     "check:import-cycles": "node --experimental-strip-types scripts/check-import-cycles.ts",
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
-    "typecheck:go": "tsgo --tsBuildInfoFile ./.tsgo.tsbuildinfo",
+    "typecheck:rs": "node scripts/typecheck-native.ts",
     "perf:attest": "tsx scripts/perf/attest/run.ts",
     "perf:runtime": "bash scripts/perf/runtime-perf.sh",
     "prepublishOnly": "pnpm run build",
@@ -207,7 +212,7 @@
     "globals": "17.13.0",
     "graphql": "17.0.2",
     "inflection": "3.0.2",
-    "kysely": "0.29.6",
+    "kysely": "0.29.7",
     "lines-db": "0.18.0",
     "mime-types": "3.0.2",
     "open": "11.0.4",
@@ -216,7 +221,7 @@
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.3",
-    "rolldown": "1.2.13",
+    "rolldown": "1.2.14",
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
     "std-env": "4.3.0",
@@ -235,7 +240,6 @@
     "@types/mime-types": "3.0.1",
     "@types/node": "24.19.2",
     "@types/semver": "7.8.0",
-    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "5.0.5",
     "eslint-plugin-zod": "5.2.0",
     "oxfmt": "0.73.0",
@@ -243,6 +247,7 @@
     "oxlint-tsgolint": "7.0.2004",
     "sonda": "0.14.0",
     "tsdown": "0.23.1",
+    "tsrs": "0.16.0-ts7.1.0-dev.20260929",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.0.5",

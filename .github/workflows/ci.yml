@@ -111,8 +111,8 @@ jobs:
       # GitHub caps a job at 10 concurrent background steps; this group is at
       # that cap, so adding another check here needs a second group.
       - parallel:
-          - name: Check type by tsgo
-            run: pnpm -r run typecheck:go
+          - name: Check type by tsrs
+            run: pnpm -r run typecheck:rs
 
           - name: Check type
             run: pnpm -r run typecheck

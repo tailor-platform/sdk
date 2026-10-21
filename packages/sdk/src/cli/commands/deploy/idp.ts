@@ -20,6 +20,7 @@ import {
 import {
   fetchAllTolerant,
   getOrNull,
+  isNotFoundError,
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
@@ -210,11 +211,18 @@ export async function applyIdP(
         await client.deleteIdPClient(del.request);
 
         // Delete the secret manager vault and secret
-        const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
-        await client.deleteSecretManagerVault({
-          workspaceId: del.request.workspaceId,
-          secretmanagerVaultName: vaultName,
-        });
+        const vaultName = idpClientVaultName(
+          assertDefined(del.request.namespaceName, "request missing namespaceName"),
+          del.name,
+        );
+        try {
+          await client.deleteSecretManagerVault({
+            workspaceId: del.request.workspaceId,
+            secretmanagerVaultName: vaultName,
+          });
+        } catch (error) {
+          if (!isNotFoundError(error)) throw error;
+        }
       }),
     );
   } else {

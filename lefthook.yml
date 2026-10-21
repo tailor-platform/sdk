@@ -4,8 +4,8 @@ output:
   - summary
 
 pre-commit:
-  commands:
-    format:
+  jobs:
+    - name: format
       glob: "*.{ts,js,json,md,yml,yaml}"
       exclude:
         - "node_modules/**"
@@ -30,16 +30,25 @@ pre-commit:
         - "packages/sdk-codemod/codemods/**/tests/**"
       run: pnpm oxfmt --check {staged_files}
 
-    checks:
+    - name: checks
       glob: "*.{ts,js}"
-      run: >-
-        pnpm --filter=@tailor-platform/sdk run build &&
-        pnpm --filter=@tailor-platform/sdk --filter=example run generate &&
-        pnpm --filter=@tailor-platform/sdk --filter=example run lint &&
-        pnpm run lint:vitest &&
-        pnpm --filter=@tailor-platform/sdk --filter=example run typecheck:go &&
-        pnpm --filter=@tailor-platform/sdk run knip &&
-        pnpm --filter='./packages/create-sdk/templates/*' run lint
+      group:
+        piped: true
+        jobs:
+          - name: build
+            run: pnpm --filter=@tailor-platform/sdk run build
+          - name: generate
+            run: pnpm --filter=@tailor-platform/sdk --filter=example run generate
+          - name: lint
+            run: pnpm --filter=@tailor-platform/sdk --filter=example run lint
+          - name: lint-vitest
+            run: pnpm run lint:vitest
+          - name: lint-templates
+            run: pnpm --filter='./packages/create-sdk/templates/*' run lint
+          - name: typecheck
+            run: pnpm --filter=@tailor-platform/sdk --filter=example run typecheck:rs
+          - name: knip
+            run: pnpm --filter=@tailor-platform/sdk run knip
 
 post-commit:
   commands:
