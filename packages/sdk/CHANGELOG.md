@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 2.31.0
+
+### Minor Changes
+
+- [#2563](https://github.com/tailor-platform/sdk/pull/2563) [`8fdb4e8`](https://github.com/tailor-platform/sdk/commit/8fdb4e81d1dd362f0ad1ad5608885d9df5c9651c) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor tailordb migration test` now accepts `--organization-id` and `--folder-id` to choose where the temporary workspace is created. With only `--organization-id` it is created at that organization's root; with `--folder-id` it is created in that folder, and the command fails before creating anything if the folder is not found in the organization (`--folder-id` alone also fails when the source workspace is not in an organization, so pass `--organization-id` with it). Without either option it still follows the source workspace's organization and folder. With `--target-workspace-id`, the given organization and folder must match the ones the target workspace is already in; otherwise the command fails and names the mismatch.
+
+### Patch Changes
+
+- [#2705](https://github.com/tailor-platform/sdk/pull/2705) [`d579565`](https://github.com/tailor-platform/sdk/commit/d579565ff260258c0fa96b331204160539d28500) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor deploy` no longer reads an IdP client's `clientSecret` from the list response. When a deploy forced by an SDK version change finds that an IdP client's secret vault is missing, it now fetches the client with `getIdPClient` and creates the secret from that value. This keeps the deploy working when the platform stops returning `clientSecret` from the list API.
+
+- [#2715](https://github.com/tailor-platform/sdk/pull/2715) [`6b9b5b2`](https://github.com/tailor-platform/sdk/commit/6b9b5b290ed7aae3a606263223d7863155fc61a5) Thanks [@toiroakr](https://github.com/toiroakr)! - Replace the `@opentelemetry/sdk-trace-node` dependency with `@opentelemetry/sdk-trace` for CLI telemetry.
+
 ## 2.30.0
 
 ### Minor Changes
