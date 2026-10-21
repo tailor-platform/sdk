@@ -111,14 +111,16 @@ describe("applyDeploymentPlans", () => {
   // The documented span tree in docs/telemetry.md drifted from the emitted spans
   // once already, so the names and their nesting are pinned here.
   test("emits a span per apply phase and per service", async () => {
-    const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
-    const { InMemorySpanExporter, SimpleSpanProcessor } =
-      await import("@opentelemetry/sdk-trace-base");
+    const { context, trace } = await import("@opentelemetry/api");
+    const { AsyncLocalStorageContextManager } = await import("@opentelemetry/context-async-hooks");
+    const { TracerProvider, InMemorySpanExporter, SimpleSpanProcessor } =
+      await import("@opentelemetry/sdk-trace");
     const exporter = new InMemorySpanExporter();
-    const provider = new NodeTracerProvider({
+    const provider = new TracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
     });
-    provider.register();
+    context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+    trace.setGlobalTracerProvider(provider);
 
     try {
       await applyDeploymentPlans({} as never, "workspace-id", [deployment("supplier")]);
