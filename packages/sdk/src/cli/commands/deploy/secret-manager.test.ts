@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { applySecretManager, planSecretManager } from "./secret-manager";
@@ -827,6 +828,37 @@ describe("applySecretManager metadata update", () => {
       workspaceId: "ws-1",
       secretmanagerVaultName: "removed-vault",
     });
+  });
+
+  test("delete phase ignores a vault and secrets that are already gone", async () => {
+    const client = createMockApplyClient();
+    const notFound = new ConnectError("not found", Code.NotFound);
+    vi.mocked(client.deleteSecretManagerSecret).mockRejectedValue(notFound);
+    vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(notFound);
+
+    const planResult = {
+      vaultChangeSet: {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "removed-vault", workspaceId: "ws-1" }],
+        replaces: [],
+      },
+      secretChangeSet: {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "removed-vault/secret-a",
+            secretName: "secret-a",
+            workspaceId: "ws-1",
+            vaultName: "removed-vault",
+          },
+        ],
+        replaces: [],
+      },
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
+
+    await expect(applySecretManager(client, planResult, "delete")).resolves.toBeUndefined();
   });
 });
 

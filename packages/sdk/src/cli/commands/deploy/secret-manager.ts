@@ -1,4 +1,4 @@
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
@@ -109,6 +109,14 @@ export function secretUpdateRequest(
     secretmanagerSecretName: update.secretName,
     secretmanagerSecretValue: update.value,
   };
+}
+
+async function ignoreNotFound(deletion: Promise<unknown>) {
+  try {
+    await deletion;
+  } catch (error) {
+    if (!isNotFoundError(error)) throw error;
+  }
 }
 
 function collectIdPClientVaultNames(idpServices: Application["idpServices"]) {
@@ -428,21 +436,25 @@ export async function applySecretManager(
       // Delete orphan secrets
       await Promise.all(
         secretChangeSet.deletes.map((del) =>
-          client.deleteSecretManagerSecret({
-            workspaceId: del.workspaceId,
-            secretmanagerVaultName: del.vaultName,
-            secretmanagerSecretName: del.secretName,
-          }),
+          ignoreNotFound(
+            client.deleteSecretManagerSecret({
+              workspaceId: del.workspaceId,
+              secretmanagerVaultName: del.vaultName,
+              secretmanagerSecretName: del.secretName,
+            }),
+          ),
         ),
       );
 
       // Delete orphan vaults
       await Promise.all(
         vaultChangeSet.deletes.map((del) =>
-          client.deleteSecretManagerVault({
-            workspaceId: del.workspaceId,
-            secretmanagerVaultName: del.name,
-          }),
+          ignoreNotFound(
+            client.deleteSecretManagerVault({
+              workspaceId: del.workspaceId,
+              secretmanagerVaultName: del.name,
+            }),
+          ),
         ),
       );
 
