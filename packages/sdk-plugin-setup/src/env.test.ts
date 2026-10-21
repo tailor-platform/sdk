@@ -50,7 +50,10 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     packageManager: "pnpm" as const,
   };
   const renders = [
-    ["branch", renderBranchWorkflow({ ...common, branch: "main", erdPreview: null })],
+    [
+      "branch",
+      renderBranchWorkflow({ ...common, branch: "main", erdPreview: null, seed: { datasets: [] } }),
+    ],
     [
       "branch",
       renderBranchWorkflow({
@@ -59,11 +62,23 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
         erdPreview: { namespaces: ["tailordb"] },
         seedValidate: true,
         migrationDriftCheck: true,
+        seed: { datasets: [] },
       }),
     ],
-    ["tag", renderTagWorkflow({ ...common, tagPattern: "v*" })],
-    ["tag", renderTagWorkflow({ ...common, tagPattern: "v*", branch: "main" })],
-    ["preview", renderPreviewWorkflow({ ...common, branch: "main", region: "us-west" })],
+    ["tag", renderTagWorkflow({ ...common, tagPattern: "v*", seed: { datasets: [] } })],
+    [
+      "tag",
+      renderTagWorkflow({ ...common, tagPattern: "v*", branch: "main", seed: { datasets: [] } }),
+    ],
+    [
+      "preview",
+      renderPreviewWorkflow({
+        ...common,
+        branch: "main",
+        region: "us-west",
+        seed: { datasets: [] },
+      }),
+    ],
   ] as const;
 
   test.each(renders)("%s", (kind, render) => {
@@ -126,6 +141,7 @@ describe("collectEnvironmentRequirements", () => {
       "TAILOR_PLATFORM_FAIL_ON_DRIFT",
       "TAILOR_SLACK_BOT_TOKEN",
       "TAILOR_SLACK_CHANNEL_ID",
+      "SEED_USER_PASSWORD",
       "TAILOR_SLACK_USER_MAPPING",
     ]);
   });

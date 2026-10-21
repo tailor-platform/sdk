@@ -643,6 +643,12 @@ and apply the data after deploy.
 | branch, tag | `tailor seed apply --upsert`         | The fields of each committed seed row are written; other rows are kept        |
 | preview     | `tailor seed apply --truncate --yes` | The preview workspace is emptied, IdP users included, and seeded from scratch |
 
+The seed steps read the optional `SEED_USER_PASSWORD` secret of the GitHub
+Environment and pass it to `tailor seed`, which uses it as the password of `_User`
+rows that have none. Set it with `tailor setup ci env`. Validation on pull
+requests gets a fixed placeholder instead of the secret, since it only checks that
+a password exists.
+
 Setup stops unless the config uses `seedPlugin` with `machineUserName`, which
 names the machine user that seeds, and an existing `<distPath>/data/` directory.
 Every `--seed-dataset` must name an entry of

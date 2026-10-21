@@ -89,6 +89,10 @@ A table's rows are the rows of its base file followed by the rows of its file in
 
 **A row is defined in exactly one place.** An `id` (or a `_User` `name`) that appears in two of the selected files — the base data and a dataset, or two datasets — is an error in both `validate` and `apply`, never a silent override. A table whose rows differ per environment belongs in the per-environment datasets only, not in the base data.
 
+### IdP user passwords from the environment
+
+A `_User` row without a `password` gets one from the `SEED_USER_PASSWORD` environment variable, in `validate` and in `apply`. A plain string is the password of every such user; a JSON object maps each `name` to its password (`{"alice@example.com":"..."}`), and a user missing from it still has none. A `password` written in `_User.jsonl` is never replaced. The variable only sets the password when a user is created: with `--upsert`, a user that already exists keeps its password.
+
 A file in a dataset selected with `--dataset` that does not match a seeded table is rejected, so a misspelled file name does not silently seed nothing.
 
 ### Selecting every dataset

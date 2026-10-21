@@ -22,7 +22,8 @@ import { logger, styles } from "../shared/logger";
 - `logger.log(message)` - Raw output without prefix (output to stderr)
 - `logger.debug(message)` - Debug messages in dim color (output to stderr)
 - `logger.out(data)` - Primary output for stdout (string, object, or object[])
-- `logger.registerSecret(value)` - Registers a value to be redacted (`<redacted>`) from stderr diagnostic output (`info`/`success`/`warn`/`error`/`log`/`debug`). Does not affect `out()`. Call this as soon as a secret value (token, client secret, etc.) enters the process, not at each call site that later logs it.
+- `logger.registerSecret(value)` - Registers a value to be redacted (`<redacted>`) from stderr diagnostic output (`info`/`success`/`warn`/`error`/`log`/`debug` and spinner lines). Does not affect `out()`. Call this as soon as a secret value (token, client secret, etc.) enters the process, not at each call site that later logs it.
+- `plainRedacted(text)` / `renderRedacted(stream, text)` - Strip colors from styled text, or prepare it for a stream, with registered secrets redacted even when inline colors split them. Use these instead of `stripVTControlCharacters` / `renderFor`, which lint rejects outside `logger.ts`.
 
 **LogMode Options:**
 

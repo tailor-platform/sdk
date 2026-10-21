@@ -405,6 +405,92 @@ describe("snapshot", () => {
       });
       const str: SnapshotFieldConfig = { type: "string", required: false };
 
+      test("requires a migration for a required member added inside an object array", () => {
+        const diff = compareRawSnapshots(
+          userWithAddress({ city: str }, { array: true }),
+          userWithAddress({ city: str, zip: { ...str, required: true } }, { array: true }),
+        );
+
+        expect(diff.requiresMigrationScript).toBe(true);
+        expect(diff.breakingChanges).toEqual([
+          { tableName: "User", fieldName: "address.zip", reason: "Required field added" },
+        ]);
+      });
+
+      test.each<[string, SnapshotFieldConfig, SnapshotFieldConfig, string | undefined]>([
+        [
+          "requiredness",
+          str,
+          { ...str, required: true },
+          "Field changed from optional to required",
+        ],
+        [
+          "enum removal",
+          { type: "enum", required: false, allowedValues: [{ value: "old" }, { value: "keep" }] },
+          { type: "enum", required: false, allowedValues: [{ value: "keep" }] },
+          "Enum values removed: old",
+        ],
+        [
+          "all enum values removed",
+          { type: "enum", required: false, allowedValues: [{ value: "old" }] },
+          { type: "enum", required: false },
+          "Enum values removed: old",
+        ],
+        ["requiredness relaxed", { ...str, required: true }, str, undefined],
+        [
+          "enum addition",
+          { type: "enum", required: false, allowedValues: [{ value: "keep" }] },
+          { type: "enum", required: false, allowedValues: [{ value: "keep" }, { value: "new" }] },
+          undefined,
+        ],
+        ["description", str, { ...str, description: "New description" }, undefined],
+      ])("classifies a deeply nested %s change", (_name, before, after, reason) => {
+        const diff = compareRawSnapshots(
+          userWithAddress({
+            geo: { type: "nested", required: false, array: true, fields: { value: before } },
+          }),
+          userWithAddress({
+            geo: { type: "nested", required: false, array: true, fields: { value: after } },
+          }),
+        );
+        expect(diff.requiresMigrationScript).toBe(reason !== undefined);
+        expect(diff.breakingChanges).toEqual(
+          reason === undefined
+            ? []
+            : [{ tableName: "User", fieldName: "address.geo.value", reason }],
+        );
+      });
+
+      test.each<[string, SnapshotFieldConfig, SnapshotFieldConfig]>([
+        ["scalar type", { type: "integer", required: false }, { type: "string", required: false }],
+        ["object type", { type: "nested", required: false, fields: { zip: str } }, str],
+        ["array", str, { ...str, array: true }],
+        ["reverse array", { ...str, array: true }, str],
+        [
+          "scale",
+          { type: "decimal", required: false, scale: 2 },
+          { type: "decimal", required: false, scale: 4 },
+        ],
+      ])("rejects nested %s changes even inside object arrays", (_name, before, after) => {
+        const diff = compareRawSnapshots(
+          userWithAddress(
+            { geo: { type: "nested", required: false, fields: { value: before } } },
+            { array: true },
+          ),
+          userWithAddress(
+            { geo: { type: "nested", required: false, fields: { value: after } } },
+            { array: true },
+          ),
+        );
+        expect(diff.breakingChanges).toEqual([
+          expect.objectContaining({
+            tableName: "User",
+            fieldName: "address.geo.value",
+            unsupported: true,
+          }),
+        ]);
+      });
+
       test("warns when a nested member is removed", () => {
         const diff = compareRawSnapshots(
           userWithAddress({ city: str, zip: str }),

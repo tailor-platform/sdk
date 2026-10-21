@@ -1,5 +1,6 @@
+import { stripVTControlCharacters } from "node:util";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { describe, expect, expectTypeOf, test, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { errorToJson, serializeError } from "./error-json";
 import {
   CLIError,
@@ -10,8 +11,13 @@ import {
   toError,
   typeOnlyImportHint,
 } from "./errors";
-import { CIPromptError } from "./logger";
+import { CIPromptError, logger, resetSecretRegistry } from "./logger";
+import { captureStderr } from "./test-helpers/capture-output";
 import type { Jsonifiable } from "type-fest";
+
+afterEach(() => {
+  resetSecretRegistry();
+});
 
 describe("typeOnlyImportHint", () => {
   test("suggests import type for a missing named export", () => {
@@ -266,6 +272,77 @@ describe("CLIError formatting", () => {
     const detailsLineIndex = lines.findIndex((line) => line.includes("Details:"));
     expect(lines[detailsLineIndex]).toContain("first line");
     expect(lines[detailsLineIndex + 1]).toMatch(/^\s{2}second line$/);
+  });
+});
+
+describe("CLIError redaction", () => {
+  test("redacts a multi-line secret in details and suggestion", () => {
+    logger.registerSecret("sk-first\nsk-second");
+    const error = CLIError({
+      code: "AUTH_FAILED",
+      message: "Authentication failed.",
+      details: "sent sk-first\nsk-second",
+      suggestion: "rotate sk-first\nsk-second",
+    });
+
+    using stderr = captureStderr();
+    logger.error(error.format());
+    const output = stripVTControlCharacters(stderr.output);
+
+    expect(output).not.toMatch(/sk-(first|second)/);
+    expect(output).toContain("Details: sent <redacted>");
+    expect(output).toContain("Suggestion: rotate <redacted>");
+  });
+
+  test("redacts a secret that POSIX quoting rewrites in next args", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+    logger.registerSecret("it's-secret");
+    const error = CLIError({
+      code: "AUTH_FAILED",
+      message: "Authentication failed.",
+      next: { command: "tailor", args: ["login", "--token", "it's-secret"] },
+    });
+
+    using stderr = captureStderr();
+    logger.error(error.format());
+    const output = stripVTControlCharacters(stderr.output);
+
+    expect(output).not.toContain("s-secret");
+    expect(output).toContain("Next: Run `tailor login --token '<redacted>'`.");
+  });
+
+  test("redacts a secret that PowerShell and cmd.exe quoting rewrite in next args", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    logger.registerSecret("it's-%secret%");
+    const error = CLIError({
+      code: "AUTH_FAILED",
+      message: "Authentication failed.",
+      next: { command: "tailor", args: ["login", "--token", "it's-%secret%"] },
+    });
+
+    using stderr = captureStderr();
+    logger.error(error.format());
+    const output = stripVTControlCharacters(stderr.output);
+
+    expect(output).not.toContain("secret%");
+    expect(output).toContain('Next: Run `tailor login --token "<redacted>"`.');
+  });
+
+  test("redacts a secret in a command hint embedded in the suggestion", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+    logger.registerSecret("it's-secret");
+    const error = CLIError({
+      code: "AUTH_FAILED",
+      message: "Authentication failed.",
+      suggestion: `Run ${formatCommandHint({ command: "tailor", args: ["login", "--token", "it's-secret"] })}.`,
+    });
+
+    using stderr = captureStderr();
+    logger.error(error.format());
+    const output = stripVTControlCharacters(stderr.output);
+
+    expect(output).not.toContain("s-secret");
+    expect(output).toContain("Suggestion: Run `tailor login --token '<redacted>'`.");
   });
 });
 

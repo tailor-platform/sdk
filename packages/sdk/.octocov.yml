@@ -31,6 +31,7 @@ diff:
 # Post comment on PRs
 comment:
   if: is_pull_request
+  message: ${SDK_COMPLEXITY_CHANGES}
 
 # Always generate summary
 summary:
@@ -39,3 +40,4 @@ summary:
 # - OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: diagnostics.json
 # - OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: bundle-size.json
 # - OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: runtime-perf.json
+# SDK_COMPLEXITY_CHANGES lists the functions whose complexity a PR changes.

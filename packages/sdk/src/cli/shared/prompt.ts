@@ -1,4 +1,6 @@
+// eslint-disable-next-line no-restricted-imports -- this module is the wrapper the rule points to
 import { ExitPromptError } from "@inquirer/core";
+// eslint-disable-next-line no-restricted-imports -- this module is the wrapper the rule points to
 import { confirm, input, password, select } from "@inquirer/prompts";
 import { CIPromptError, interactiveTerminal, logger } from "./logger";
 

@@ -1,9 +1,9 @@
-import { trace, SpanStatusCode, type Span } from "@opentelemetry/api";
+import { context, trace, SpanStatusCode, type Span, type TracerProvider } from "@opentelemetry/api";
 import { parseTelemetryConfig, type TelemetryConfig } from "./config";
 
 let _config: TelemetryConfig | undefined;
 let _initialized = false;
-let _provider: { register: () => void; shutdown: () => Promise<void> } | undefined;
+let _provider: (TracerProvider & { shutdown: () => Promise<void> }) | undefined;
 
 /**
  * Check whether telemetry is currently enabled.
@@ -27,13 +27,15 @@ export async function initTelemetry(): Promise<void> {
 
   // Dynamic imports - only loaded when tracing is enabled
   const [
-    { NodeTracerProvider, BatchSpanProcessor },
+    { TracerProvider, BatchSpanProcessor },
+    { AsyncLocalStorageContextManager },
     { OTLPTraceExporter },
     { resourceFromAttributes },
     { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION },
     { readPackageJson },
   ] = await Promise.all([
-    import("@opentelemetry/sdk-trace-node"),
+    import("@opentelemetry/sdk-trace"),
+    import("@opentelemetry/context-async-hooks"),
     import("@opentelemetry/exporter-trace-otlp-proto"),
     import("@opentelemetry/resources"),
     import("@opentelemetry/semantic-conventions"),
@@ -52,12 +54,13 @@ export async function initTelemetry(): Promise<void> {
     url: `${_config.endpoint}/v1/traces`,
   });
 
-  _provider = new NodeTracerProvider({
+  _provider = new TracerProvider({
     resource,
-    spanProcessors: [new BatchSpanProcessor(exporter)],
+    spanProcessors: [new BatchSpanProcessor({ exporter })],
   });
 
-  _provider.register();
+  context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+  trace.setGlobalTracerProvider(_provider);
 }
 
 /**

@@ -31,7 +31,7 @@ type SeedResult = {
   errors: string[];
 };
 
-type SeedUser = { name: string; password?: string };
+type SeedUser = { name: string; password?: string; initialPassword?: string };
 
 type IdpUserPage = {
   users: Array<{ id: string; name: string }>;
@@ -208,6 +208,31 @@ describe("generateIdpSeedScriptCode", () => {
       updated: 0,
     });
     expect(result.errors).toHaveLength(1);
+  });
+
+  test("uses initialPassword only when creating a user, never to update an existing one", async () => {
+    const calls = stubIdp({ existing: { id: "existing-id" } });
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+    await main({
+      upsert: true,
+      users: [
+        { name: "fresh", initialPassword: "env" },
+        { name: "existing", initialPassword: "env" },
+      ],
+    });
+
+    expect(calls.created).toEqual([{ name: "fresh", password: "env" }]);
+    expect(calls.updated).toEqual([]);
+  });
+
+  test("keeps a password written in the row over initialPassword", async () => {
+    const calls = stubIdp({});
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+    await main({ users: [{ name: "fresh", password: "own", initialPassword: "env" }] });
+
+    expect(calls.created).toEqual([{ name: "fresh", password: "own" }]);
   });
 
   test("reports row numbers relative to the chunk offset", async () => {
@@ -536,5 +561,15 @@ describe("generateIdpTruncateScriptCode", () => {
       "User 2 (u2): deleteUser failed: permission denied",
       "User 3 (u3): deleteUser failed: code: 'Some requested entity was not found', message: \"namespace not found: test-ns\"",
     ]);
+  });
+});
+
+describe("generateIdpUserSchemaFile password source", () => {
+  test("hook fills the password from the environment", () => {
+    const output = generateIdpUserSchemaFile({ usernameField: "email", userTableName: "User" });
+    expect(output).toContain(
+      'import { defineSchema, fillIdpUserPassword } from "@tailor-platform/sdk/seed"',
+    );
+    expect(output).toContain("fillIdpUserPassword(data)");
   });
 });

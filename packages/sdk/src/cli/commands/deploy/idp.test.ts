@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -82,6 +83,33 @@ describe("applyIdP phase separation", () => {
     expect(client.deleteIdPClient).toHaveBeenCalledTimes(clientCalls);
     expect(client.deleteSecretManagerVault).toHaveBeenCalledTimes(vaultCalls);
     expect(client.deleteIdPService).toHaveBeenCalledTimes(serviceCalls);
+  });
+
+  test("delete-resources phase ignores a client vault that is already gone", async () => {
+    const client = createMockClientWithSpies();
+    vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
+      new ConnectError("vault not found", Code.NotFound),
+    );
+
+    await expect(
+      applyIdP(client, createMockPlanResult(), "delete-resources"),
+    ).resolves.toBeUndefined();
+
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      secretmanagerVaultName: "idp-test-idp-test-client",
+    });
+  });
+
+  test("delete-resources phase propagates other errors from deleting a client vault", async () => {
+    const client = createMockClientWithSpies();
+    vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
+      new ConnectError("denied", Code.PermissionDenied),
+    );
+
+    await expect(applyIdP(client, createMockPlanResult(), "delete-resources")).rejects.toThrow(
+      "denied",
+    );
   });
 });
 
@@ -222,5 +250,89 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
       ),
     ).rejects.toThrow(/1 of 2 entries could not be resolved/);
     expect(client.updateIdPService).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyIdP client updates forced by the SDK version", () => {
+  function createPlanResult(): Awaited<ReturnType<typeof planIdP>> {
+    return {
+      changeSet: {
+        service: {
+          creates: [],
+          updates: [],
+          unchanged: [],
+          deletes: [],
+          title: "IdP Services",
+          isEmpty: () => true,
+          print: () => {},
+        },
+        client: {
+          creates: [],
+          updates: [
+            {
+              name: "test-client",
+              workspaceId: "test-workspace",
+              namespaceName: "test-idp",
+              forcedBySdkVersion: true,
+            },
+          ],
+          deletes: [],
+          title: "IdP Clients",
+          isEmpty: () => false,
+          print: () => {},
+        },
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    } as unknown as Awaited<ReturnType<typeof planIdP>>;
+  }
+
+  function createClient(opts: { vaultExists: boolean }) {
+    return {
+      getIdPClient: vi.fn().mockResolvedValue({ client: { clientSecret: "secret-from-get" } }),
+      getSecretManagerVault: vi
+        .fn()
+        .mockImplementation(async () =>
+          opts.vaultExists ? {} : Promise.reject(new ConnectError("not found", Code.NotFound)),
+        ),
+      createSecretManagerVault: vi.fn().mockResolvedValue({}),
+      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+  }
+
+  test("creates the missing secret from the value returned by getIdPClient", async () => {
+    const client = createClient({ vaultExists: false });
+
+    await applyIdP(client, createPlanResult(), "create-update");
+
+    expect(client.getIdPClient).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      namespaceName: "test-idp",
+      name: "test-client",
+    });
+    expect(client.createSecretManagerVault).toHaveBeenCalledTimes(1);
+    expect(client.createSecretManagerSecret).toHaveBeenCalledWith(
+      expect.objectContaining({ secretmanagerSecretValue: "secret-from-get" }),
+    );
+  });
+
+  test("registers the secret returned by getIdPClient for log masking", async () => {
+    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
+    const client = createClient({ vaultExists: false });
+
+    await applyIdP(client, createPlanResult(), "create-update");
+
+    expect(registerSecretSpy).toHaveBeenCalledWith("secret-from-get");
+  });
+
+  test("does not call getIdPClient or create anything when the vault already exists", async () => {
+    const client = createClient({ vaultExists: true });
+
+    await applyIdP(client, createPlanResult(), "create-update");
+
+    expect(client.getIdPClient).not.toHaveBeenCalled();
+    expect(client.createSecretManagerVault).not.toHaveBeenCalled();
+    expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,7 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
+import { collectBreakingNestedMemberChanges } from "./snapshot-comparison";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
@@ -943,6 +944,13 @@ function generateChangeScripts(
     scripts.push(generateFieldTypeChangeScript(change));
   }
 
+  if (change.kind === "field_modified") {
+    for (const memberChange of collectBreakingNestedMemberChanges(change, typeRenameTargets)) {
+      const message = `migrate ${memberChange.tableName}.${memberChange.fieldName}: ${memberChange.reason}`;
+      scripts.push(`  void TODO(${JSON.stringify(message)});`);
+    }
+  }
+
   if (change.kind === "field_modified" && change.memberRenames?.length) {
     scripts.push(generateNestedMemberRenameCopyScript(change));
   }
@@ -977,12 +985,56 @@ function generateChangeScripts(
     const removedValues = beforeValues.filter((v) => !afterValues.includes(v));
     if (removedValues.length > 0) {
       const choices = afterValues.length > 0 ? ` (${afterValues.join(", ")})` : "";
-      scripts.push(`  // Migrate records with removed enum values: ${removedValues.join(", ")}
+      const replacement = `TODO(${JSON.stringify(`choose the ${change.tableName}.${change.fieldName} value that replaces ${removedValues.join(", ")}${choices}`)})`;
+      if (before.array) {
+        const table = JSON.stringify(change.tableName);
+        const column = JSON.stringify(change.fieldName);
+        scripts.push(`  // Migrate array elements with removed enum values: ${removedValues.join(", ")}
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom(${table})
+        .select(["id", ${column}])
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        const values = row[${column}];
+        if (values === null) continue;
+        let changed = false;
+        const converted = values.map((value) => {
+          switch (value) {
+${removedValues.map((value) => `            case ${JSON.stringify(value)}:`).join("\n")}
+              changed = true;
+              return ${replacement};
+            default:
+              return value;
+          }
+        });
+        if (!changed) continue;
+        await trx
+          .updateTable(${table})
+          .set({ [${column}]: converted })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }`);
+      } else {
+        scripts.push(`  // Migrate records with removed enum values: ${removedValues.join(", ")}
   await trx
     .updateTable("${change.tableName}")
-    .set({ ${change.fieldName}: TODO(${JSON.stringify(`choose the ${change.tableName}.${change.fieldName} value that replaces ${removedValues.join(", ")}${choices}`)}) })
+    .set({ ${change.fieldName}: ${replacement} })
     .where("${change.fieldName}", "in", [${removedValues.map((v) => JSON.stringify(v)).join(", ")}])
     .execute();`);
+      }
     }
   }
 

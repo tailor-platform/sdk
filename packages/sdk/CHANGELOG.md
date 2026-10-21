@@ -1,5 +1,45 @@
 # @tailor-platform/sdk
 
+## 2.31.1
+
+### Patch Changes
+
+- [#2714](https://github.com/tailor-platform/sdk/pull/2714) [`5db635d`](https://github.com/tailor-platform/sdk/commit/5db635dad2db0e333a94998c59b83ecffe696506) Thanks [@dragon3](https://github.com/dragon3)! - List `europe-west` in the workspace regions shown by `tailor workspace create --help`, matching the regions the Platform now offers for workspace creation (`asia-northeast, us-west, europe-west`).
+
+## 2.31.0
+
+### Minor Changes
+
+- [#2563](https://github.com/tailor-platform/sdk/pull/2563) [`8fdb4e8`](https://github.com/tailor-platform/sdk/commit/8fdb4e81d1dd362f0ad1ad5608885d9df5c9651c) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor tailordb migration test` now accepts `--organization-id` and `--folder-id` to choose where the temporary workspace is created. With only `--organization-id` it is created at that organization's root; with `--folder-id` it is created in that folder, and the command fails before creating anything if the folder is not found in the organization (`--folder-id` alone also fails when the source workspace is not in an organization, so pass `--organization-id` with it). Without either option it still follows the source workspace's organization and folder. With `--target-workspace-id`, the given organization and folder must match the ones the target workspace is already in; otherwise the command fails and names the mismatch.
+
+### Patch Changes
+
+- [#2705](https://github.com/tailor-platform/sdk/pull/2705) [`d579565`](https://github.com/tailor-platform/sdk/commit/d579565ff260258c0fa96b331204160539d28500) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor deploy` no longer reads an IdP client's `clientSecret` from the list response. When a deploy forced by an SDK version change finds that an IdP client's secret vault is missing, it now fetches the client with `getIdPClient` and creates the secret from that value. This keeps the deploy working when the platform stops returning `clientSecret` from the list API.
+
+- [#2715](https://github.com/tailor-platform/sdk/pull/2715) [`6b9b5b2`](https://github.com/tailor-platform/sdk/commit/6b9b5b290ed7aae3a606263223d7863155fc61a5) Thanks [@toiroakr](https://github.com/toiroakr)! - Replace the `@opentelemetry/sdk-trace-node` dependency with `@opentelemetry/sdk-trace` for CLI telemetry.
+
+## 2.30.0
+
+### Minor Changes
+
+- [#2686](https://github.com/tailor-platform/sdk/pull/2686) [`b77ebdd`](https://github.com/tailor-platform/sdk/commit/b77ebddfebc3e7472f17c31bb03f340ba4f21ce6) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor machineuser list` no longer outputs `clientSecret`, and `MachineUserInfo.clientSecret` returned by `listMachineUsers` is now an optional property that is never set and is marked `@deprecated`. The Platform is moving to return a machine user's secret only from the single-user get call, so that a read-only credential can list machine users. TypeScript code that reads `MachineUserInfo.clientSecret` keeps compiling but receives `undefined`; scripts that read `clientSecret` from the JSON output of `machineuser list` no longer find the key. Use `tailor machineuser token <name>` to obtain an access token for a machine user instead.
+
+- [#2647](https://github.com/tailor-platform/sdk/pull/2647) [`e45ca2b`](https://github.com/tailor-platform/sdk/commit/e45ca2b23835ba8e86f8707f270ade8039ec30c6) Thanks [@toiroakr](https://github.com/toiroakr)! - The password of IdP users (`_User`) can now come from the `SEED_USER_PASSWORD` environment variable. A `_User` row without a `password` gets it from the variable: a plain string is used for every such user, and a JSON object such as `{"alice@example.com":"..."}` sets it per user name. A password written in `_User.jsonl` is kept, and with `--upsert` the variable only sets the password of users that do not exist yet. `tailor seed validate` and `tailor seed apply` both apply it, and the generated `_User.schema.ts` calls it from its `hook`, so run `tailor generate` to update existing projects. The workflows `tailor setup ci` generates pass the `SEED_USER_PASSWORD` secret to the seed steps; run `tailor setup update` to regenerate them.
+
+### Patch Changes
+
+- [#2683](https://github.com/tailor-platform/sdk/pull/2683) [`2905c85`](https://github.com/tailor-platform/sdk/commit/2905c85821d7371ccda4c467460a2b1bd1364009) Thanks [@dqn](https://github.com/dqn)! - Hide secrets that contain a line break or a quote in CLI errors and suggested commands. Values the CLI masks as `<redacted>`, such as client secrets and access tokens, appeared unmasked in multi-line error details and suggestions, in suggested commands, and in the matching GitHub Actions annotation.
+
+- [#2668](https://github.com/tailor-platform/sdk/pull/2668) [`ad679fa`](https://github.com/tailor-platform/sdk/commit/ad679fa432e9d50a714529bb68239dca495acabc) Thanks [@dqn](https://github.com/dqn)! - Hide secrets in CLI log output and `--json` error output when only part of the value is highlighted, and in progress spinner lines. Values the CLI masks as `<redacted>`, such as client secrets and access tokens, appeared unmasked in these cases. `--json` error output no longer includes color codes in its string values.
+
+- [#2689](https://github.com/tailor-platform/sdk/pull/2689) [`9bffa6e`](https://github.com/tailor-platform/sdk/commit/9bffa6ed8a44d12c2ab8bdc607f8fcd53921e037) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency lines-db to v0.18.0
+
+- [#2699](https://github.com/tailor-platform/sdk/pull/2699) [`ae44247`](https://github.com/tailor-platform/sdk/commit/ae44247178e8fabb21762f552e50525da046a2e0) Thanks [@haru0017](https://github.com/haru0017)! - Revert "fix(deps): update dependency rolldown to v1.2.14"
+  
+  rolldown 1.2.14 can emit a malformed source map (a negative source line) for bundled functions, which can crash the platform runtime on debug builds while source-mapping a thrown error's stack trace. Downgrade to 1.2.13 as a temporary measure until the rolldown regression is resolved.
+
+- [#2693](https://github.com/tailor-platform/sdk/pull/2693) [`373dafd`](https://github.com/tailor-platform/sdk/commit/373dafdac2b5da3bcf172f9a48a6c530b410f21b) Thanks [@toiroakr](https://github.com/toiroakr)! - Stop `tailor deploy` from reporting `Table '<name>' scripts differ between remote and snapshot` when machines with different system locales deploy the same schema. The TailorDB script hash ordered field names by the machine's default locale (for example, Czech sorts `ch` after `h`), so the same schema could hash differently and fail the deploy with remote schema drift. Hashes from en-US, ja-JP and C locales are unchanged. A table with scripts that was last deployed from a locale that orders its field names differently from English (for example cs-CZ, sk-SK, lt-LT or et-EE) may report this drift after upgrading, because the hash stored on the remote was computed in that locale's order.
+
 ## 2.29.2
 
 ### Patch Changes

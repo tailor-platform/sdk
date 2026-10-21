@@ -4,6 +4,7 @@ import {
   type MigrationDiff,
   type DiffChange,
   type FieldDiffChange,
+  type FieldModifiedChange,
   type BreakingChangeInfo,
   type SnapshotTypeSettingsState,
   type TypeScriptsState,
@@ -67,6 +68,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
  * @param {SnapshotFieldConfig | undefined} oldField - Old field configuration
  * @param {SnapshotFieldConfig | undefined} newField - New field configuration
  * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed table renames (old name → new name)
+ * @param nestedMember - Whether the field is a member of a nested object
  * @returns {BreakingChangeInfo[]} Breaking change information
  */
 function getBreakingFieldChanges(
@@ -75,6 +77,7 @@ function getBreakingFieldChanges(
   oldField: SnapshotFieldConfig | undefined,
   newField: SnapshotFieldConfig | undefined,
   typeRenameTargets?: ReadonlyMap<string, string>,
+  nestedMember = false,
 ): BreakingChangeInfo[] {
   const breakingChanges: BreakingChangeInfo[] = [];
 
@@ -90,7 +93,7 @@ function getBreakingFieldChanges(
   // Compatible scalar type changes use a phased in-place migration. Other
   // pairs still require expand-contract migration support.
   if (oldField && newField && oldField.type !== newField.type) {
-    const supported = supportsInPlaceFieldTypeChange(oldField, newField);
+    const supported = !nestedMember && supportsInPlaceFieldTypeChange(oldField, newField);
     breakingChanges.push({
       tableName,
       fieldName,
@@ -131,6 +134,7 @@ function getBreakingFieldChanges(
       tableName,
       fieldName,
       reason: `Foreign key target type changed from ${oldField.foreignKeyType} to ${newField.foreignKeyType}`,
+      ...(nestedMember && { unsupported: true, showThreeStepHint: true }),
     });
   }
 
@@ -154,6 +158,7 @@ function getBreakingFieldChanges(
       tableName,
       fieldName,
       reason: `Decimal scale changed from ${oldField.scale} to ${newField.scale}`,
+      ...(nestedMember && { unsupported: true, showThreeStepHint: true }),
     });
   }
 
@@ -174,6 +179,38 @@ function getBreakingFieldChanges(
   }
 
   return breakingChanges;
+}
+
+/**
+ * Collect breaking changes inside a modified nested field.
+ * @param change - Field change containing nested members
+ * @param typeRenameTargets - Confirmed table renames
+ * @returns Breaking changes with dotted member paths
+ */
+export function collectBreakingNestedMemberChanges(
+  change: FieldModifiedChange,
+  typeRenameTargets?: ReadonlyMap<string, string>,
+): BreakingChangeInfo[] {
+  return collectNestedMemberChanges(change.before, change.after).flatMap((member) => {
+    if (member.kind === "removed") return [];
+    if (
+      member.kind === "added" &&
+      change.memberRenames?.some(
+        (rename) =>
+          rename.path.length === member.path.length &&
+          rename.path.every((segment, index) => segment === member.path[index]),
+      )
+    )
+      return [];
+    return getBreakingFieldChanges(
+      change.tableName,
+      [change.fieldName, ...member.path].join("."),
+      member.kind === "modified" ? member.before : undefined,
+      member.after,
+      typeRenameTargets,
+      true,
+    );
+  });
 }
 
 /**
@@ -200,6 +237,7 @@ function addChange(
   // A removed nested member is data loss regardless of any breaking change on the field.
   if (change.kind === "field_modified") {
     ctx.warnings.push(...collectNestedMemberRemovalWarnings(change));
+    ctx.breakingChanges.push(...collectBreakingNestedMemberChanges(change, ctx.typeRenameTargets));
   }
 
   const breakingChanges = getBreakingFieldChanges(

@@ -2,12 +2,12 @@ import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { runCommand } from "@politty/zod";
 import { MachineUserSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { listCommand, listMachineUsers } from "./list";
+import { listCommand, listMachineUsers, type MachineUserInfo } from "./list";
 
 vi.mock("#/cli/shared/operator-context", () => ({
   loadOperatorWorkspaceContext: vi.fn(),
@@ -61,7 +61,6 @@ describe("machineuser list", () => {
         id: "9f1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
         name: "ci-bot",
         clientId: "client-id",
-        clientSecret: "client-secret",
         createdAt,
         updatedAt,
         attributes: {},
@@ -79,6 +78,27 @@ describe("machineuser list", () => {
     expect(JSON.parse(stdout.output)).toEqual([
       expect.objectContaining({ id: "9f1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d", name: "ci-bot" }),
     ]);
+  });
+
+  test("omits clientSecret from json output", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+
+    const result = await runCommand(listCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(stdout.output).not.toContain("clientSecret");
+    expect(stdout.output).not.toContain("client-secret");
+  });
+
+  test("keeps clientSecret as an optional property of MachineUserInfo so existing code compiles", () => {
+    expectTypeOf<MachineUserInfo["clientSecret"]>().toEqualTypeOf<string | undefined>();
+  });
+
+  test("never sets clientSecret on the listed machine users", async () => {
+    const machineUsers = await listMachineUsers();
+
+    expect(machineUsers[0]).not.toHaveProperty("clientSecret");
   });
 
   test("prints the id column in table output", async () => {
