@@ -177,6 +177,8 @@ db.string().unique();
 
 `.unique()` also works on a field inside a `db.object()` that is not an array: the value must be unique across rows. `.index()` on a field inside `db.object()` is not applied.
 
+A project whose `db.object()` field already uses `.unique()` was deployed with the constraint stored as non-unique, so its next `tailor deploy` stops with `MIGRATION_REMOTE_DRIFT`. Run `tailor deploy --no-schema-check` once to apply the constraint. If stored rows already hold duplicate values for the field, that deploy fails and the schema stays unchanged until the duplicates are resolved.
+
 ### Relations
 
 Add a relation to field with automatic index and foreign key constraint:
