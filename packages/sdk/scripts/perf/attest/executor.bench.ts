@@ -9,6 +9,8 @@ declare const createWorkflow: typeof sdk.createWorkflow;
 declare const createWorkflowJob: typeof sdk.createWorkflowJob;
 declare const incomingWebhookTrigger: typeof sdk.incomingWebhookTrigger;
 declare const recordCreatedTrigger: typeof sdk.recordCreatedTrigger;
+declare const recordDeletedTrigger: typeof sdk.recordDeletedTrigger;
+declare const recordUpdatedTrigger: typeof sdk.recordUpdatedTrigger;
 declare const resolverExecutedTrigger: typeof sdk.resolverExecutedTrigger;
 declare const scheduleTrigger: typeof sdk.scheduleTrigger;
 
@@ -80,11 +82,39 @@ bench("executor-webhook", () => {
   });
 }).types([47, "instantiations"]);
 
-bench("executor-record", () => {
+bench("executor-record-created", () => {
   return createExecutor({
     name: "executor0",
     description: "Record created trigger executor 0",
     trigger: recordCreatedTrigger({ type: dummyType }),
+    operation: {
+      kind: "graphql",
+      appName: "my-app",
+      query: `mutation { log(message: "executed") }`,
+      variables: () => ({}),
+    },
+  });
+}).types([3219, "instantiations"]);
+
+bench("executor-record-updated", () => {
+  return createExecutor({
+    name: "executor0",
+    description: "Record updated trigger executor 0",
+    trigger: recordUpdatedTrigger({ type: dummyType }),
+    operation: {
+      kind: "graphql",
+      appName: "my-app",
+      query: `mutation { log(message: "executed") }`,
+      variables: () => ({}),
+    },
+  });
+}).types([3219, "instantiations"]);
+
+bench("executor-record-deleted", () => {
+  return createExecutor({
+    name: "executor0",
+    description: "Record deleted trigger executor 0",
+    trigger: recordDeletedTrigger({ type: dummyType }),
     operation: {
       kind: "graphql",
       appName: "my-app",

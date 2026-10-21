@@ -8,12 +8,12 @@
 
 Each case is one `bench("<name>", () => …)` call. The files group the cases by area, and each file has its own `bench.baseline(…)` expression that warms the types the cases of that file share, so a case counts only its own expression.
 
-| File                | Cases                                                                                                                                                                                                 |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `baseline.bench.ts` | `tailordb-baseline`, `resolver-baseline`, `executor-baseline`                                                                                                                                         |
-| `tailordb.bench.ts` | `tailordb-basic`, `tailordb-optional`, `tailordb-relation`, `tailordb-validate`, `tailordb-hooks`, `tailordb-object`, `tailordb-enum`                                                                 |
-| `resolver.bench.ts` | `resolver-basic`, `resolver-nested`, `resolver-array`                                                                                                                                                 |
-| `executor.bench.ts` | `executor-schedule`, `executor-webhook`, `executor-record`, `executor-resolver`, `executor-operation-function`, `executor-operation-gql`, `executor-operation-webhook`, `executor-operation-workflow` |
+| File                | Cases                                                                                                                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseline.bench.ts` | `tailordb-baseline`, `resolver-baseline`, `executor-baseline`                                                                                                                                                                                                       |
+| `tailordb.bench.ts` | `tailordb-basic`, `tailordb-optional`, `tailordb-relation`, `tailordb-validate`, `tailordb-hooks`, `tailordb-object`, `tailordb-enum`                                                                                                                               |
+| `resolver.bench.ts` | `resolver-basic`, `resolver-nested`, `resolver-array`                                                                                                                                                                                                               |
+| `executor.bench.ts` | `executor-schedule`, `executor-webhook`, `executor-record-created`, `executor-record-updated`, `executor-record-deleted`, `executor-resolver`, `executor-operation-function`, `executor-operation-gql`, `executor-operation-webhook`, `executor-operation-workflow` |
 
 Executor trigger cases use a `graphql` operation, and executor operation cases use `incomingWebhookTrigger`, so each case isolates one of the two.
 
@@ -36,7 +36,7 @@ To add a case, write `bench("<name>", () => …).types()` in the file of its are
 The `Type Performance` job of `.github/workflows/sdk-metrics.yml` runs the same command. A change in a count never fails CI; a bench that crashes does, so the broken measurement is noticed.
 
 - The measured counts go to octocov as the `type-performance` custom metric and to the step summary, so the PR comment shows the difference from `main`.
-- In pull requests, the job also runs the bench files, copied from the pull request, against the base commit's `packages/sdk`. The cases whose count differs are listed in the PR comment and the step summary, largest relative change first, each with the measured code.
+- In pull requests, the job also runs the bench files, copied from the pull request, against the base commit's `packages/sdk`. The cases whose count differs are listed in the PR comment and the step summary, in the order above, each with the measured code.
 - Both runs resolve dependencies from the pull request's `node_modules`, so a change caused only by a dependency update (for example `zod`) shows no difference.
 
 ## When a case gets heavier
