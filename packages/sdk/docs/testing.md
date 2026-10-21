@@ -214,7 +214,7 @@ The generated columns follow the Kysely types, not TailorDB's storage: `text` fo
 What the script cannot reproduce:
 
 - Hooks, validations, and permissions do not run. A required field whose value only its own field-level create hook supplies is created nullable, so inserts that omit it succeed; give it a `.default()` if the test reads it back. A field filled by a table-level hook stays `NOT NULL`, as its Kysely type still requires it on insert.
-- Relations on array fields, and relations from a field whose type is not `uuid` (such as a `string` field related to `id`), are checked only when a row is written. Deleting a parent that such a row still points at, or changing its `id`, is not rejected, so a test must not rely on that.
+- Relations on array fields, and relations from a field whose type differs from the field it points at (such as a `string` field related to `id`), are checked only when a row is written. Deleting a parent that such a row still points at, or changing its `id`, is not rejected, so a test must not rely on that.
 - Serial formats are reproduced for a single `%d`, `%x`, or `%X` specifier with an optional zero-padded width; an octal `%o` format fails generation with an error naming the field.
 - `gapless` is not reproduced: the numbers come from a sequence, so an insert that fails still uses up its number.
 - A date or datetime inside a nested object reads back as a string from `jsonb`, not a `Date`, or a `Temporal.PlainDate` or `Temporal.Instant` under `kyselyTypePlugin({ temporal: true })`, although the platform returns those types.
