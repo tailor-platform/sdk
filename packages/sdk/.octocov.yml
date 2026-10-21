@@ -31,13 +31,15 @@ diff:
 # Post comment on PRs
 comment:
   if: is_pull_request
-  message: ${SDK_COMPLEXITY_CHANGES}
+  message: ${SDK_COMPLEXITY_CHANGES}${SDK_TYPE_PERF_CHANGES}
 
 # Always generate summary
 summary:
   if: true
 # Custom metrics are specified via environment variables:
 # - OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: diagnostics.json
+# - OCTOCOV_CUSTOM_METRICS_ATTEST_TYPE_PERFORMANCE: attest-metrics.json
 # - OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: bundle-size.json
 # - OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: runtime-perf.json
 # SDK_COMPLEXITY_CHANGES lists the functions whose complexity a PR changes.
+# SDK_TYPE_PERF_CHANGES lists the benches whose type instantiations a PR changes.

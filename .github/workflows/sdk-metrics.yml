@@ -130,17 +130,57 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      changes: ${{ steps.attest-report.outputs.changes }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Fetches the base commit, the first parent of the pull request merge commit
+          fetch-depth: 2
 
       - name: Install deps
         uses: $/.github/actions/install-deps
 
       - name: Run type check performance
         run: pnpm --filter @tailor-platform/sdk perf:typecheck
+
+      - name: Measure base type instantiations
+        if: github.event_name == 'pull_request'
+        run: |
+          base_dir="${RUNNER_TEMP}/attest-base"
+          bench_dir=packages/sdk/scripts/perf/attest
+          mkdir -p "${base_dir}"
+          git archive HEAD^1 tsconfig.json packages/sdk | tar -x -C "${base_dir}"
+          mkdir -p "${base_dir}/${bench_dir}"
+          cp "${bench_dir}/type-instantiations.bench.ts" "${base_dir}/${bench_dir}/"
+          ln -s "${PWD}/node_modules" "${base_dir}/node_modules"
+          ln -s "${PWD}/packages/sdk/node_modules" "${base_dir}/packages/sdk/node_modules"
+          (cd "${base_dir}/packages/sdk" && node --experimental-strip-types scripts/perf/attest/type-instantiations.bench.ts --benchErrorOnThresholdExceeded false) > "${RUNNER_TEMP}/base-bench.txt" || rm -f "${RUNNER_TEMP}/base-bench.txt"
+
+      - name: Run type instantiation benches
+        run: |
+          base_output=()
+          if [ -s "${RUNNER_TEMP}/base-bench.txt" ]; then
+            base_output=(--base-output "${RUNNER_TEMP}/base-bench.txt")
+          fi
+          pnpm --filter @tailor-platform/sdk perf:attest "${base_output[@]}"
+
+      - name: Report instantiation changes
+        id: attest-report
+        run: |
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "changes<<${delimiter}"
+            if [ -s packages/sdk/attest-changes.md ]; then
+              echo ""
+              cat packages/sdk/attest-changes.md
+              echo ""
+            fi
+            echo "${delimiter}"
+          } >> "${GITHUB_OUTPUT}"
+          cat packages/sdk/attest-changes.md >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload results
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -149,6 +189,7 @@ jobs:
           path: |
             packages/sdk/diagnostics.json
             packages/sdk/diagnostics-summary.json
+            packages/sdk/attest-metrics.json
 
   runtime-performance:
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
@@ -288,6 +329,13 @@ jobs:
             jq -r 'sort_by(.instantiations) | reverse | .[] | "| \(.key) | \(.instantiations) | \(.types) |"' artifacts/type-perf-results/diagnostics-summary.json
             echo ""
 
+            echo "## Type Instantiations (attest)"
+            echo ""
+            echo "| Bench | Instantiations |"
+            echo "|-------|---------------:|"
+            jq -r '.metrics[] | "| \(.name) | \(.value) |"' artifacts/type-perf-results/attest-metrics.json
+            echo ""
+
             echo "## Runtime Performance"
             echo ""
             echo "| Command | Max | Median |"
@@ -303,6 +351,8 @@ jobs:
           config: packages/sdk/.octocov.yml
         env:
           OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: artifacts/type-perf-results/diagnostics.json
+          OCTOCOV_CUSTOM_METRICS_ATTEST_TYPE_PERFORMANCE: artifacts/type-perf-results/attest-metrics.json
           OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: artifacts/bundle-size-results/bundle-size.json
           OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: artifacts/runtime-perf-results/runtime-perf.json
           SDK_COMPLEXITY_CHANGES: ${{ needs.complexity.outputs.changes }}
+          SDK_TYPE_PERF_CHANGES: ${{ needs.type-performance.outputs.changes }}

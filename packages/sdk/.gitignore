@@ -7,6 +7,9 @@ diagnostics-summary.json
 runtime-perf.json
 runtime-perf-summary.json
 bundle-size.json
+attest-metrics.json
+attest-changes.md
+.attest/
 scripts/perf/tsconfig.temp.json
 
 # Integration test fixtures output
