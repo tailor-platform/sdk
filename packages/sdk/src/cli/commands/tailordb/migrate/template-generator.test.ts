@@ -1,8 +1,12 @@
 import * as fs from "node:fs/promises";
+import { stripTypeScriptTypes } from "node:module";
 import * as os from "node:os";
+import { PGlite } from "@electric-sql/pglite";
 import * as path from "pathe";
 import ts from "typescript";
 import { describe, expect, test, aroundEach } from "vitest";
+import { runMigrationSteps } from "#/vitest/migration-steps";
+import { createKyselyPGlite } from "#/vitest/pglite-kysely";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
 import {
@@ -2127,6 +2131,93 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("CANCELLED");
       expect(scriptContent).toContain("removed enum values");
     });
+
+    test.each([false, true])(
+      "replaces removed enum array elements while preserving other elements and empty arrays (required: %s)",
+      async (required) => {
+        const before: SnapshotFieldConfig = {
+          type: "enum",
+          array: true,
+          required,
+          allowedValues: ["ACTIVE", "ARCHIVED", "DRAFT", "CANCELLED"].map((value) => ({ value })),
+        };
+        const after: SnapshotFieldConfig = {
+          ...before,
+          allowedValues: [{ value: "ACTIVE" }, { value: "ARCHIVED" }],
+        };
+        const snapshot = createTestSnapshot({
+          Task: { name: "Task", pluralForm: "Tasks", fields: { status: before } },
+        });
+        const diff = createMockMigrationDiff({
+          changes: [
+            { kind: "field_modified", tableName: "Task", fieldName: "status", before, after },
+          ],
+          hasBreakingChanges: true,
+          requiresMigrationScript: true,
+        });
+        const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
+        const source = await fs.readFile(result.migrateFilePath!, "utf8");
+        expect(countUnresolvedTodos(source, "migrate.ts")).toBe(1);
+        const ast = ts.createSourceFile("migrate.ts", source, ts.ScriptTarget.Latest, true);
+        let edited = source;
+        function replaceTodo(node: ts.Node) {
+          if (
+            ts.isCallExpression(node) &&
+            ts.isIdentifier(node.expression) &&
+            node.expression.text === "TODO"
+          ) {
+            edited =
+              source.slice(0, node.getStart(ast)) +
+              JSON.stringify("ACTIVE") +
+              source.slice(node.end);
+          }
+          ts.forEachChild(node, replaceTodo);
+        }
+        replaceTodo(ast);
+        edited = edited.replace(
+          'import { TODO, type MigrationSteps, type Transaction } from "./db";',
+          'import type { MigrationSteps, Transaction } from "./db";',
+        );
+        await fs.writeFile(result.migrateFilePath!, edited);
+        const { steps } = await import(
+          `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(edited)).toString("base64")}`
+        );
+        const { pgliteSchema } = await import(
+          `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(await fs.readFile(result.pgliteSchemaFilePath!, "utf8"))).toString("base64")}`
+        );
+        const pglite = new PGlite();
+        const db = createKyselyPGlite<{ Task: { id: string; status: string[] | null } }>(pglite);
+        try {
+          await pglite.exec(pgliteSchema.tailordb);
+          await db
+            .insertInto("Task")
+            .values([
+              {
+                id: "00000000-0000-0000-0000-000000000001",
+                status: ["DRAFT", "ARCHIVED", "CANCELLED", "DRAFT"],
+              },
+              {
+                id: "00000000-0000-0000-0000-000000000002",
+                status: ["ARCHIVED", "ACTIVE", "ARCHIVED"],
+              },
+              { id: "00000000-0000-0000-0000-000000000003", status: [] },
+              ...(required ? [] : [{ id: "00000000-0000-0000-0000-000000000004", status: null }]),
+            ])
+            .execute();
+          await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+          expect(await db.selectFrom("Task").select("status").orderBy("id").execute()).toEqual([
+            { status: ["ACTIVE", "ARCHIVED", "ACTIVE", "ACTIVE"] },
+            { status: ["ARCHIVED", "ACTIVE", "ARCHIVED"] },
+            { status: [] },
+            ...(required ? [] : [{ status: null }]),
+          ]);
+        } finally {
+          await db.destroy();
+        }
+        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+      },
+      30_000,
+    );
 
     test("leaves the replacement of removed enum values to a TODO call when the field also becomes required", async () => {
       const before = {
