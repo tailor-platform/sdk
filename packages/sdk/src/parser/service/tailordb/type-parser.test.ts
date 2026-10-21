@@ -84,6 +84,19 @@ describe("parseTypes", () => {
       );
     });
 
+    test.each([
+      ["unique", () => db.string().unique().clone({ array: true })],
+      ["index", () => db.string().index().clone({ array: true })],
+    ] as const)("rejects %s on a member that is itself an array", (modifier, buildField) => {
+      const testType = db.table("Test", {
+        info: db.object({ codes: buildField() as never }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        `Field "info.codes" on table "Test": ${modifier} cannot be set on array fields`,
+      );
+    });
+
     test("allows unique and index on members of an object that is not an array", () => {
       const testType = db.table("Test", {
         info: db.object({ code: db.string().unique(), tag: db.string().index() }),

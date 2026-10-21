@@ -29,13 +29,15 @@ function assertNoUniqueOrIndexInsideObjectArray(
   const underArray = insideArray || fieldConfig.array === true;
   for (const [memberName, member] of Object.entries(fieldConfig.fields ?? {})) {
     const memberPath = [...path, memberName];
-    if (underArray) {
-      for (const modifier of ["unique", "index"] as const) {
-        if (member[modifier]) {
-          throw new Error(
-            `Field "${memberPath.join(".")}" on table "${tableName}": ${modifier} cannot be set on a field inside an array of objects`,
-          );
-        }
+    for (const modifier of ["unique", "index"] as const) {
+      if (!member[modifier]) continue;
+      const reason = member.array
+        ? `${modifier} cannot be set on array fields`
+        : underArray
+          ? `${modifier} cannot be set on a field inside an array of objects`
+          : undefined;
+      if (reason) {
+        throw new Error(`Field "${memberPath.join(".")}" on table "${tableName}": ${reason}`);
       }
     }
     assertNoUniqueOrIndexInsideObjectArray(member, memberPath, tableName, underArray);
