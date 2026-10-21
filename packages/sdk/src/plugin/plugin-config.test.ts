@@ -41,7 +41,7 @@ test("accepts a deploy-only plugin without importPath", () => {
   const plugin: Plugin = { id: "deploy", description: "deploy", onDeployed: () => {} };
   expect(PluginConfigSchema.parse(definePlugins(plugin)[0]).onDeployed).toBe(plugin.onDeployed);
 });
-test("deploy-only plugins do not introduce generation dependencies", () => {
+test("deploy-only plugins have no generation hooks", () => {
   const plugin: Plugin = { id: "deploy", description: "deploy", onDeployed: () => {} };
   expect(hasGenerationHooks(plugin)).toBe(false);
 });
