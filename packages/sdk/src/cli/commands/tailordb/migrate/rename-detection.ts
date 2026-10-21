@@ -528,6 +528,21 @@ export function assertValidNestedMemberRenames(
         message: `Cannot rename ${label}: "${tableName}.${fieldName}" must be a nested field in both the previous and the current schema.`,
       });
     }
+    for (let depth = 0; depth < previousPath.length; depth++) {
+      const ancestorPath = previousPath.slice(0, depth);
+      const prevAncestor = getNestedMember(prevField, ancestorPath);
+      const currAncestor = getNestedMember(currField, ancestorPath);
+      if (
+        prevAncestor?.type !== "nested" ||
+        currAncestor?.type !== "nested" ||
+        (prevAncestor.array ?? false) !== (currAncestor.array ?? false)
+      ) {
+        throw CLIError({
+          code: "MIGRATION_RENAME_INVALID",
+          message: `Cannot rename ${label}: ancestor "${[tableName, fieldName, ...ancestorPath].join(".")}" must keep its nested type and array-ness. Split the ancestor change and rename into separate migrations.`,
+        });
+      }
+    }
     const prevMember = getNestedMember(prevField, previousPath);
     if (!prevMember) {
       throw CLIError({

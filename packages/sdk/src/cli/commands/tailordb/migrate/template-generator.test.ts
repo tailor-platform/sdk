@@ -1026,6 +1026,66 @@ describe("template-generator", () => {
       expect(dbTypesContent).toContain("displayName: string | null;");
     });
 
+    test("keeps constraint TODOs alongside a nested rename copy", () => {
+      const before: SnapshotFieldConfig = {
+        type: "nested",
+        required: false,
+        fields: {
+          zip: { type: "string", required: true },
+          geo: {
+            type: "nested",
+            required: false,
+            array: true,
+            fields: {
+              lat: { type: "float", required: false },
+              status: {
+                type: "enum",
+                required: false,
+                allowedValues: [{ value: "old" }, { value: "keep" }],
+              },
+            },
+          },
+        },
+      };
+      const after: SnapshotFieldConfig = {
+        type: "nested",
+        required: false,
+        fields: {
+          zipCode: { type: "string", required: true },
+          geo: {
+            type: "nested",
+            required: false,
+            array: true,
+            fields: {
+              lat: { type: "float", required: true },
+              lng: { type: "float", required: true },
+              status: { type: "enum", required: false, allowedValues: [{ value: "keep" }] },
+            },
+          },
+        },
+      };
+      const script = generateMigrationScript(
+        createMockMigrationDiff({
+          changes: [
+            {
+              kind: "field_modified",
+              tableName: "User",
+              fieldName: "address",
+              before,
+              after,
+              memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+            },
+          ],
+          requiresMigrationScript: true,
+        }),
+      );
+      expect(countUnresolvedTodos(script, "migrate.ts")).toBe(3);
+      expect(script).toContain("User.address.geo.lat");
+      expect(script).toContain("User.address.geo.lng");
+      expect(script).toContain("User.address.geo.status");
+      expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
+    });
+
     test("should generate a batched copy script for nested member renames", async () => {
       const previousSnapshot = createTestSnapshot({
         User: {

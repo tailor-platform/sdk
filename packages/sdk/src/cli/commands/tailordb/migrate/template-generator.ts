@@ -22,6 +22,7 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
+import { collectBreakingNestedMemberChanges } from "./snapshot-comparison";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
@@ -941,6 +942,13 @@ function generateChangeScripts(
 
   if (change.kind === "field_type_modified") {
     scripts.push(generateFieldTypeChangeScript(change));
+  }
+
+  if (change.kind === "field_modified") {
+    for (const memberChange of collectBreakingNestedMemberChanges(change, typeRenameTargets)) {
+      const message = `migrate ${memberChange.tableName}.${memberChange.fieldName}: ${memberChange.reason}`;
+      scripts.push(`  void TODO(${JSON.stringify(message)});`);
+    }
   }
 
   if (change.kind === "field_modified" && change.memberRenames?.length) {
