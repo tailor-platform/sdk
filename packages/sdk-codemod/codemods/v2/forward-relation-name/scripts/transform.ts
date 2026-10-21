@@ -1,5 +1,11 @@
 import { parse } from "@ast-grep/napi";
-import { callArgument, pairValue, sourceLang } from "../../../../src/ast-grep-helpers";
+import {
+  callArgument,
+  excerptOf,
+  lineOf,
+  pairValue,
+  sourceLang,
+} from "../../../../src/ast-grep-helpers";
 import {
   hasDynamicProperties,
   isRelationCall,
@@ -55,8 +61,8 @@ export function reviewFindings(
     .filter((call) => isRelationCall(call, aliases) && needsReview(call))
     .map((call) => ({
       file: relativePath,
-      line: call.range().start.line + 1,
+      line: lineOf(call),
       message: "Review the v2 forward GraphQL field name or add an explicit toward.as.",
-      excerpt: call.text().split("\n", 1)[0]!.trim(),
+      excerpt: excerptOf(call),
     }));
 }

@@ -1,7 +1,9 @@
 import {
   callArgument,
+  excerptOf,
   findImportStatements,
   importBindings,
+  lineOf,
   localDeclarationNames,
   pairValue,
   parseRoot,
@@ -258,9 +260,9 @@ export function reviewFindings(
       ? [
           {
             file: relativePath,
-            line: result.node.range().start.line + 1,
+            line: lineOf(result.node),
             message: `Move inlineSourcemap and logLevel into buildOptions by hand: ${result.reason}.`,
-            excerpt: result.node.text().split("\n", 1)[0]!.trim(),
+            excerpt: excerptOf(result.node),
           },
         ]
       : [],
