@@ -18,7 +18,7 @@ describe("loadSync", () => {
     expect(nextLoad).not.toHaveBeenCalled();
   });
 
-  test("strips hash before fileURLToPath", () => {
+  test("transforms a .mts URL that carries a hash fragment", () => {
     const nextLoad = vi.fn();
     const result = loadSync("file:///path/to/foo.mts#anchor", {}, nextLoad);
     expect(result).toMatchObject({ format: "module", shortCircuit: true });
