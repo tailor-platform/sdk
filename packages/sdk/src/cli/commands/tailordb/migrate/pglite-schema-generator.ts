@@ -30,8 +30,9 @@ type RetargetedMembers = Map<string, Map<string, string[][]>>;
 
 function retargets(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
   return (
-    before.foreignKeyType !== after.foreignKeyType ||
-    before.foreignKeyField !== after.foreignKeyField
+    before.foreignKeyType !== undefined &&
+    (before.foreignKeyType !== after.foreignKeyType ||
+      before.foreignKeyField !== after.foreignKeyField)
   );
 }
 

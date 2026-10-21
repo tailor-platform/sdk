@@ -527,6 +527,45 @@ describe("buildPreMigrationTables relations", () => {
     expect(members.editor).toMatchObject({ foreignKey: true, foreignKeyType: "User" });
   });
 
+  test("a relation the migration adds to an existing field keeps its reference, since there is no old target to repair", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "ownerID",
+          before: snapshotField("uuid", { required: true }),
+          after: owner(),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({
+      foreignKey: true,
+      foreignKeyType: "User",
+    });
+  });
+
+  test("a relation the migration adds to a member of a nested field keeps its reference", () => {
+    const nested = (member: SnapshotFieldConfig) =>
+      snapshotField("nested", { fields: { owner: member } });
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ info: nested(owner()) })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "info",
+          before: nested(snapshotField("uuid", { required: true })),
+          after: nested(owner()),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "Post").fields.info!.fields!.owner).toMatchObject({
+      foreignKey: true,
+    });
+  });
+
   test("a relation keeps its reference when the migration modifies the field without retargeting it", () => {
     const tables = buildPreMigrationTables(
       snapshot(user, post({ ownerID: owner() })),
