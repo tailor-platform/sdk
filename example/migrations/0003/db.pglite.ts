@@ -119,6 +119,15 @@ CREATE TABLE IF NOT EXISTS "User" (
   "createdAt" timestamptz,
   "updatedAt" timestamptz
 );
+CREATE OR REPLACE FUNCTION "User_referenced_bc25d710_fk"() RETURNS trigger LANGUAGE plpgsql AS $fk$
+BEGIN
+  IF (TG_OP = 'DELETE' OR NEW."id" IS DISTINCT FROM OLD."id") AND EXISTS (SELECT 1 FROM "SalesOrder" AS child WHERE OLD."id" = ANY(child."approvedByUserIDs")) THEN
+    RAISE EXCEPTION 'update or delete on table \`User\` violates foreign key constraint: some record is still referenced from table \`SalesOrder\`' USING ERRCODE = 'foreign_key_violation';
+  END IF;
+  RETURN NULL;
+END
+$fk$;
+CREATE OR REPLACE TRIGGER "User_referenced_bc25d710_fk" AFTER DELETE OR UPDATE ON "User" FOR EACH ROW EXECUTE FUNCTION "User_referenced_bc25d710_fk"();
 
 CREATE TABLE IF NOT EXISTS "UserLog" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
