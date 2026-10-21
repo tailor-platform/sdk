@@ -2523,6 +2523,59 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         });
       });
 
+      test("restores the checkpoint's permission over the one an earlier Pre-phase installed when the checkpoint and the final settings agree", async () => {
+        const client = createMockClient();
+        const checkpointGql = [{ conditions: [], actions: ["read"], permit: "allow" }];
+        const installedGql = [{ conditions: [], actions: ["all"], permit: "allow" }];
+        const planResult = createUpdatePlanResult();
+        planResult.changeSet.gqlPermission.updates = [
+          {
+            name: "GoodsReceipt",
+            request: {
+              workspaceId: "test-workspace",
+              namespaceName: "test-ns",
+              typeName: "GoodsReceipt",
+              permission: protoGqlPermission(checkpointGql as SnapshotGqlPermission),
+            },
+            previousPermission: protoGqlPermission(installedGql as SnapshotGqlPermission),
+          },
+        ];
+        leaveInProgress({
+          ...mkAddFieldMigration(1, "GoodsReceipt", "note"),
+          scriptForm: rollbackForm,
+        });
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(runEndedPartiallyApplied());
+
+        await withOverriddenSnapshot(
+          (migrationsDir, maxVersion) => {
+            const snapshot = snapshotFixtures.reconstructSnapshotFromMigrations(
+              migrationsDir,
+              maxVersion,
+            ) as SchemaSnapshot;
+            return {
+              ...snapshot,
+              tables: {
+                ...snapshot.tables,
+                GoodsReceipt: {
+                  ...snapshot.tables.GoodsReceipt,
+                  permissions: { gql: checkpointGql },
+                },
+              },
+            } as SchemaSnapshot;
+          },
+          async () => {
+            await expect(
+              applyTailorDB(client, withInputs(planResult), "create-update"),
+            ).rejects.toMatchObject({ code: "MIGRATION_ROLLED_BACK" });
+          },
+        );
+
+        expect(vi.mocked(client.updateTailorDBGQLPermission).mock.calls.at(-1)?.[0]).toMatchObject({
+          typeName: "GoodsReceipt",
+          permission: protoGqlPermission(checkpointGql as SnapshotGqlPermission),
+        });
+      });
+
       test("keeps restoring a table outside the migration snapshots when it rolls back a resumed migration", async () => {
         const client = createMockClient();
         leaveInProgress({

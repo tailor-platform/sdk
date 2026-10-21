@@ -1299,7 +1299,12 @@ function readRollbackScope(
 ): ReadonlySet<string> {
   try {
     const tables = resumed ? getPreMigrationTargetTableNames(migration) : new Set<string>();
-    for (const [tableName, undo] of gqlPermissionUndoFromSnapshots(migration, finalMigration)) {
+    const recordedTables = resumed ? new Set(gqlPermissionUndo.keys()) : undefined;
+    for (const [tableName, undo] of gqlPermissionUndoFromSnapshots(
+      migration,
+      finalMigration,
+      recordedTables,
+    )) {
       if (resumed || !gqlPermissionUndo.has(tableName)) gqlPermissionUndo.set(tableName, undo);
     }
     return tables;
