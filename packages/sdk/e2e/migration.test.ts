@@ -18,10 +18,9 @@
  *
  * Test Groups:
  * - Initial Setup: Workspace creation and initial migration
- * - Optional Field Addition (Non-breaking): Adding optional fields
+ * - Optional Field and Table Addition (Non-breaking): Adding an optional field and a table together
  * - Required Field Addition (Breaking): Adding required fields
  * - Stability and Verification: No changes detection
- * - Table Addition (Non-breaking): Adding new tables
  * - Field Removal (Non-breaking): Removing fields
  * - Final Schema Reconstruction: Complete migration chain verification (skipped)
  *
@@ -139,18 +138,18 @@ export async function main(db: Kysely<any>): Promise<void> {
     );
   });
 
-  describe("Optional Field Addition (Non-breaking)", () => {
+  describe("Optional Field and Table Addition (Non-breaking)", () => {
     /**
-     * Scenario 2: Non-breaking change (adding optional field)
+     * Scenario 2: Non-breaking changes (adding an optional field and a table in one migration)
      */
     test(
-      "detects non-breaking change when adding optional field",
+      "detects non-breaking changes when adding an optional field and a table",
       async ({ signal }) => {
-        // Update table to add optional field
         ws.writeUserTable([
           "role: db.string({ optional: true })",
           "phone: db.string({ optional: true })",
         ]);
+        ws.addTableFixture("post.ts");
 
         // Generate migration via CLI
         await ws.runGenerate(signal);
@@ -165,8 +164,13 @@ export async function main(db: Kysely<any>): Promise<void> {
         const diffPath = getMigrationFilePath(ws.migrationsDir, 1, "diff");
         const diff = loadDiff(diffPath);
         expect(diff.hasBreakingChanges).toBe(false);
-        expect(diff.changes.length).toBe(1);
-        expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
+        expect(diff.changes).toHaveLength(2);
+        expect(diff.changes).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ kind: "field_added", fieldName: "phone" }),
+            expect.objectContaining({ kind: "table_added", tableName: "Post" }),
+          ]),
+        );
       },
       GENERATE_TEST_TIMEOUT_MS,
     );
@@ -215,9 +219,8 @@ export async function main(db: Kysely<any>): Promise<void> {
       async ({ signal }) => {
         await ws.runDeploy(signal);
 
-        // Verify: phone field should be added to User table
-        const fields = await ws.getTailorDBTypeFields("User");
-        expect(fields).toContain("phone");
+        expect(await ws.getTailorDBTypeFields("User")).toContain("phone");
+        expect(await ws.listTailorDBTypeNames()).toContain("Post");
       },
       DEPLOY_TEST_TIMEOUT_MS,
     );
@@ -306,54 +309,6 @@ export async function main(db: Kysely<any>): Promise<void> {
     );
   });
 
-  describe("Type Addition (Non-breaking)", () => {
-    /**
-     * Scenario 6: Table addition (non-breaking)
-     *
-     * Adds a new Post table to the schema
-     */
-    test(
-      "detects table addition as non-breaking change",
-      async ({ signal }) => {
-        // Copy Post table fixture
-        ws.addTableFixture("post.ts");
-
-        // Generate migration
-        await ws.runGenerate(signal);
-
-        // Verify diff was created
-        const files = getMigrationFiles(ws.migrationsDir);
-        expect(files.length).toBe(4);
-        expect(files[3]!.type).toBe("diff");
-        expect(files[3]!.number).toBe(3);
-
-        // Verify diff content
-        const diffPath = getMigrationFilePath(ws.migrationsDir, 3, "diff");
-        const diff = loadDiff(diffPath);
-        expect(diff.hasBreakingChanges).toBe(false);
-        expect(diff.changes.some((c) => c.kind === "table_added" && c.tableName === "Post")).toBe(
-          true,
-        );
-      },
-      GENERATE_TEST_TIMEOUT_MS,
-    );
-
-    /**
-     * Scenario 6b: Apply table addition
-     */
-    test(
-      "applies table addition to workspace",
-      async ({ signal }) => {
-        await ws.runDeploy(signal);
-
-        // Verify: Post table should be added
-        const types = await ws.listTailorDBTypeNames();
-        expect(types).toContain("Post");
-      },
-      DEPLOY_TEST_TIMEOUT_MS,
-    );
-  });
-
   describe("Field Removal (Non-breaking)", () => {
     /**
      * Scenario 7: Field removal (non-breaking change)
@@ -373,12 +328,12 @@ export async function main(db: Kysely<any>): Promise<void> {
 
         // Verify diff was created
         const files = getMigrationFiles(ws.migrationsDir);
-        expect(files.length).toBe(5);
-        expect(files[4]!.type).toBe("diff");
-        expect(files[4]!.number).toBe(4);
+        expect(files.length).toBe(4);
+        expect(files[3]!.type).toBe("diff");
+        expect(files[3]!.number).toBe(3);
 
         // Verify diff shows field removal as non-breaking change
-        const diffPath = getMigrationFilePath(ws.migrationsDir, 4, "diff");
+        const diffPath = getMigrationFilePath(ws.migrationsDir, 3, "diff");
         const diff = loadDiff(diffPath);
         expect(diff.hasBreakingChanges).toBe(false);
         expect(
