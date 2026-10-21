@@ -163,7 +163,6 @@
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
     "typecheck:go": "tsgo --tsBuildInfoFile ./.tsgo.tsbuildinfo",
-    "perf:typecheck": "bash scripts/perf/exec.sh",
     "perf:attest": "tsx scripts/perf/attest/run.ts",
     "perf:runtime": "bash scripts/perf/runtime-perf.sh",
     "prepublishOnly": "pnpm run build",

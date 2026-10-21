@@ -49,8 +49,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "typecheck": "pnpm run generate && pnpm -r run typecheck",
-    "typecheck:root": "tsc --noEmit",
-    "perf:typecheck": "pnpm --filter example perf:typecheck"
+    "typecheck:root": "tsc --noEmit"
   },
   "devDependencies": {
     "@changesets/changelog-github": "1.0.1",
