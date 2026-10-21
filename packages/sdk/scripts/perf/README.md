@@ -10,11 +10,16 @@ Each case is one `bench("<name>", () => …)` call. The files group the cases by
 
 | File                | Cases                                                                                                                                                                                                 |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseline.bench.ts` | `tailordb-baseline`, `resolver-baseline`, `executor-baseline`                                                                                                                                         |
 | `tailordb.bench.ts` | `tailordb-basic`, `tailordb-optional`, `tailordb-relation`, `tailordb-validate`, `tailordb-hooks`, `tailordb-object`, `tailordb-enum`                                                                 |
 | `resolver.bench.ts` | `resolver-basic`, `resolver-nested`, `resolver-array`                                                                                                                                                 |
 | `executor.bench.ts` | `executor-schedule`, `executor-webhook`, `executor-record`, `executor-resolver`, `executor-operation-function`, `executor-operation-gql`, `executor-operation-webhook`, `executor-operation-workflow` |
 
 Executor trigger cases use a `graphql` operation, and executor operation cases use `incomingWebhookTrigger`, so each case isolates one of the two.
+
+The `*-baseline` cases measure the `bench.baseline` expression of each area on its own, without any warm-up. Because the other cases do not pay for what the baseline already instantiated, growth in the shared types shows up in these cases. If you change a `bench.baseline` expression, change its `*-baseline` case in `baseline.bench.ts` to match.
+
+Results are listed in this order: baseline, tailordb, resolver, executor, and in definition order within a file.
 
 ## Running locally
 

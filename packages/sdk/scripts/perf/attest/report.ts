@@ -88,15 +88,8 @@ const formatPercent = (result: BenchResult): string => {
   return signed(percent, `${percent.toFixed(2)}%`);
 };
 
-const magnitude = (result: BenchResult): number => {
-  const percent = percentChange(result);
-  return Number.isFinite(percent) ? Math.abs(percent) : Number.MAX_VALUE;
-};
-
 export const renderChanges = (results: BenchResult[], sources: Record<string, string>): string => {
-  const changed = results
-    .filter(({ instantiations, baseline }) => instantiations !== baseline)
-    .toSorted((a, b) => magnitude(b) - magnitude(a));
+  const changed = results.filter(({ instantiations, baseline }) => instantiations !== baseline);
   if (changed.length === 0) return "";
 
   const rows = changed.map((result) => {

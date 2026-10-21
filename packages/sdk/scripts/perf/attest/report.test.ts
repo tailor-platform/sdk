@@ -138,21 +138,10 @@ describe("renderChanges", () => {
     );
   });
 
-  test("lists the case with the largest relative change first", () => {
+  test("lists the changed cases in the order they were measured", () => {
     const results = [
       changed({ instantiations: 2100 }),
       changed({ name: "resolver-basic", instantiations: 1500, baseline: 1000 }),
-    ];
-    const rendered = renderChanges(results, sources);
-    expect(rendered.indexOf("| resolver-basic |")).toBeLessThan(
-      rendered.indexOf("| tailordb-basic |"),
-    );
-  });
-
-  test("lists an increase from zero before percentage changes", () => {
-    const results = [
-      changed({ name: "resolver-basic", instantiations: 5000, baseline: 1000 }),
-      changed({ instantiations: 100, baseline: 0 }),
     ];
     const rendered = renderChanges(results, sources);
     expect(rendered.indexOf("| tailordb-basic |")).toBeLessThan(

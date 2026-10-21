@@ -11,9 +11,14 @@ import {
 
 const benchRelativeDir = "scripts/perf/attest";
 const benchDir = import.meta.dirname;
+const benchOrder = ["baseline", "tailordb", "resolver", "executor"];
+const orderOf = (file: string) => {
+  const index = benchOrder.indexOf(file.replace(".bench.ts", ""));
+  return index === -1 ? benchOrder.length : index;
+};
 const benchFiles = readdirSync(benchDir)
   .filter((file) => file.endsWith(".bench.ts"))
-  .toSorted();
+  .toSorted((a, b) => orderOf(a) - orderOf(b) || a.localeCompare(b));
 
 const baseRootIndex = process.argv.indexOf("--base-root");
 const baseRoot = baseRootIndex === -1 ? undefined : process.argv[baseRootIndex + 1];
@@ -47,16 +52,18 @@ const measure = (root: string, formatCmd: string | undefined) => {
 const head = measure(process.cwd(), "pnpm exec oxfmt --write");
 
 let changes = "";
+let baseFailed = false;
 if (baseRoot) {
   mkdirSync(path.join(baseRoot, benchRelativeDir), { recursive: true });
   for (const file of benchFiles) {
     copyFileSync(path.join(benchDir, file), path.join(baseRoot, benchRelativeDir, file));
   }
   const base = measure(baseRoot, undefined);
-  if (!base.failed) changes = renderChanges(compareToBase(head.counts, base.counts), head.sources);
+  baseFailed = base.failed;
+  if (!baseFailed) changes = renderChanges(compareToBase(head.counts, base.counts), head.sources);
 }
 
 writeFileSync("attest-metrics.json", JSON.stringify(toOctocovMetrics(head.counts), null, 2));
 writeFileSync("attest-changes.md", changes);
 
-process.exit(head.failed ? 1 : 0);
+process.exit(head.failed || baseFailed ? 1 : 0);
