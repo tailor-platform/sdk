@@ -28,14 +28,103 @@ const SQL_STYLE_MAP: Record<string, string> = {
   number: CYAN,
   bracket: DIM_YELLOW,
   special: DIM,
+  comment: DIM,
 };
 
+type Piece = { text: string; literal: boolean; comment?: boolean };
+
+function createPieceBuffer() {
+  const pieces: Piece[] = [];
+  let code = "";
+  const flushCode = () => {
+    if (code) pieces.push({ text: code, literal: false });
+    code = "";
+  };
+  return {
+    addCode(text: string) {
+      code += text;
+    },
+    addLiteral(text: string, comment?: boolean) {
+      flushCode();
+      pieces.push({ text, literal: true, comment });
+    },
+    finish() {
+      flushCode();
+      return pieces;
+    },
+  };
+}
+
+const DOLLAR_QUOTE_TAG = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/;
+
+function splitSqlLine(line: string, startDepth: number) {
+  let depth = startDepth;
+  const buffer = createPieceBuffer();
+  let i = 0;
+  const takeBlockComment = (from: number) => {
+    let j = from;
+    while (j < line.length && depth > 0) {
+      if (line.startsWith("/*", j)) {
+        depth++;
+        j += 2;
+      } else if (line.startsWith("*/", j)) {
+        depth--;
+        j += 2;
+      } else {
+        j++;
+      }
+    }
+    buffer.addLiteral(line.slice(i, j));
+    i = j;
+  };
+  while (i < line.length) {
+    const dollarTag = line[i] === "$" ? line.slice(i).match(DOLLAR_QUOTE_TAG)?.[0] : undefined;
+    if (depth > 0) {
+      takeBlockComment(i);
+    } else if (line.startsWith("/*", i)) {
+      depth = 1;
+      takeBlockComment(i + 2);
+    } else if (line.startsWith("--", i)) {
+      buffer.addLiteral(line.slice(i));
+      i = line.length;
+    } else if (dollarTag) {
+      const close = line.indexOf(dollarTag, i + dollarTag.length);
+      const stop = close === -1 ? line.length : close + dollarTag.length;
+      buffer.addCode(line.slice(i, stop));
+      i = stop;
+    } else if (line[i] === "'" || line[i] === '"') {
+      const quote = line[i];
+      let j = i + 1;
+      while (j < line.length && line[j] !== quote) j++;
+      buffer.addCode(line.slice(i, j + 1));
+      i = j + 1;
+    } else {
+      buffer.addCode(line.charAt(i));
+      i++;
+    }
+  }
+  return { pieces: buffer.finish(), depth };
+}
+
 /**
- * Highlight a single SQL line using the `sql-highlight` tokenizer.
- * @param line - SQL text for a single editor line
- * @returns ANSI-decorated line safe for terminal output
+ * Highlight SQL lines, tracking block comments that span lines.
+ * @param lines - SQL text split into editor lines
+ * @returns ANSI-decorated lines, one per input line
  */
-export function highlightSqlLine(line: string): string {
+export function highlightSqlLines(lines: readonly string[]): string[] {
+  let depth = 0;
+  return lines.map((line) => {
+    const split = splitSqlLine(line, depth);
+    depth = split.depth;
+    return split.pieces
+      .map((piece) =>
+        piece.literal ? `${DIM}${piece.text}${RESET}` : highlightSqlCode(piece.text),
+      )
+      .join("");
+  });
+}
+
+function highlightSqlCode(line: string): string {
   const segments = getSegments(line);
   let result = "";
   for (const seg of segments) {
@@ -68,28 +157,95 @@ const GQL_DEF_KEYWORDS = new Set(["query", "mutation", "subscription", "fragment
 
 const GQL_BUILTINS = new Set(["true", "false", "null"]);
 
+function splitGraphqlLine(line: string, startsInBlockString: boolean) {
+  let inBlockString = startsInBlockString;
+  const buffer = createPieceBuffer();
+  let i = 0;
+  const takeBlockString = (from: number) => {
+    let j = from;
+    while (j < line.length) {
+      if (line.startsWith('\\"""', j)) j += 4;
+      else if (line.startsWith('"""', j)) break;
+      else j++;
+    }
+    const closed = j < line.length;
+    const stop = closed ? j + 3 : line.length;
+    buffer.addLiteral(line.slice(i, stop));
+    i = stop;
+    inBlockString = !closed;
+  };
+  while (i < line.length) {
+    if (inBlockString) {
+      takeBlockString(i);
+    } else if (line.startsWith('"""', i)) {
+      takeBlockString(i + 3);
+    } else if (line[i] === '"') {
+      let j = i + 1;
+      while (j < line.length && line[j] !== '"') j += line[j] === "\\" ? 2 : 1;
+      buffer.addCode(line.slice(i, j + 1));
+      i = j + 1;
+    } else if (line[i] === "#") {
+      buffer.addLiteral(line.slice(i), true);
+      i = line.length;
+    } else {
+      buffer.addCode(line.charAt(i));
+      i++;
+    }
+  }
+  return { pieces: buffer.finish(), inBlockString };
+}
+
 /**
- * Highlight a single GraphQL line using the official `graphql` Lexer. Tracks
- * paren depth and the previous token to provide semantic-level colouring
+ * Highlight GraphQL lines, tracking block strings that span lines.
+ * @param lines - GraphQL text split into editor lines
+ * @returns ANSI-decorated lines, one per input line
+ */
+export function highlightGraphqlLines(lines: readonly string[]): string[] {
+  let inBlockString = false;
+  return lines.map((line) => {
+    const split = splitGraphqlLine(line, inBlockString);
+    inBlockString = split.inBlockString;
+    const context: GraphqlContext = {
+      parenDepth: 0,
+      prevKind: "",
+      prevText: "",
+      afterColon: false,
+    };
+    return split.pieces
+      .map((piece) => {
+        if (!piece.literal) return highlightGraphqlCode(piece.text, context);
+        if (!piece.comment) {
+          context.prevKind = TokenKind.BLOCK_STRING;
+          context.prevText = piece.text;
+          context.afterColon = false;
+        }
+        return `${piece.comment ? DIM : GREEN}${piece.text}${RESET}`;
+      })
+      .join("");
+  });
+}
+
+type GraphqlContext = {
+  parenDepth: number;
+  prevKind: string;
+  prevText: string;
+  afterColon: boolean;
+};
+
+/**
+ * Highlight a single GraphQL code fragment using the official `graphql` Lexer.
+ * Tracks paren depth and the previous token to provide semantic-level colouring
  * (field names vs argument names vs types).
- * @param line - GraphQL text for a single editor line
+ * @param line - GraphQL text without comments or block strings
+ * @param context - Lexer state shared by the fragments of one editor line; updated in place
  * @returns ANSI-decorated line, or the input unchanged when the lexer rejects it
  */
-export function highlightGraphqlLine(line: string): string {
-  if (line.trimStart().startsWith("#")) {
-    return `${DIM}${line}${RESET}`;
-  }
-
+function highlightGraphqlCode(line: string, context: GraphqlContext): string {
   try {
     const source = new Source(line);
     const lexer = new Lexer(source);
     let result = "";
     let pos = 0;
-
-    let parenDepth = 0;
-    let prevKind: string = "";
-    let prevText = "";
-    let afterColon = false;
 
     let token = lexer.advance();
     while (token.kind !== TokenKind.EOF) {
@@ -100,65 +256,65 @@ export function highlightGraphqlLine(line: string): string {
       const text = line.slice(token.start, token.end);
       switch (token.kind) {
         case TokenKind.NAME: {
-          if (prevKind === TokenKind.DOLLAR) {
+          if (context.prevKind === TokenKind.DOLLAR) {
             result += `${MAGENTA}${text}${RESET}`;
-          } else if (prevKind === TokenKind.AT) {
+          } else if (context.prevKind === TokenKind.AT) {
             result += `${BOLD_MAGENTA}${text}${RESET}`;
           } else if (GQL_BUILTINS.has(text) || GQL_KEYWORDS.has(text)) {
             result += `${BLUE}${text}${RESET}`;
-          } else if (GQL_DEF_KEYWORDS.has(prevText)) {
+          } else if (GQL_DEF_KEYWORDS.has(context.prevText)) {
             result += `${BOLD_CYAN}${text}${RESET}`;
-          } else if (afterColon) {
+          } else if (context.afterColon) {
             result += `${CYAN}${text}${RESET}`;
-          } else if (parenDepth > 0) {
+          } else if (context.parenDepth > 0) {
             result += `${ITALIC_YELLOW}${text}${RESET}`;
           } else {
             result += `${BRIGHT_BLUE}${text}${RESET}`;
           }
-          afterColon = false;
+          context.afterColon = false;
           break;
         }
         case TokenKind.INT:
         case TokenKind.FLOAT:
           result += `${BLUE}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.STRING:
         case TokenKind.BLOCK_STRING:
           result += `${GREEN}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.DOLLAR:
           result += `${MAGENTA}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.AT:
           result += `${BOLD_MAGENTA}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.BRACE_L:
         case TokenKind.BRACE_R:
           result += `${YELLOW}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.PAREN_L:
-          parenDepth += 1;
+          context.parenDepth += 1;
           result += `${DIM_YELLOW}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.PAREN_R:
-          parenDepth = Math.max(0, parenDepth - 1);
+          context.parenDepth = Math.max(0, context.parenDepth - 1);
           result += `${DIM_YELLOW}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.BRACKET_L:
         case TokenKind.BRACKET_R:
           result += `${DIM_YELLOW}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.COLON:
           result += `${DIM}${text}${RESET}`;
-          afterColon = true;
+          context.afterColon = true;
           break;
         case TokenKind.BANG:
         case TokenKind.EQUALS:
@@ -166,15 +322,15 @@ export function highlightGraphqlLine(line: string): string {
         case TokenKind.AMP:
         case TokenKind.SPREAD:
           result += `${DIM}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         default:
           result += text;
-          afterColon = false;
+          context.afterColon = false;
       }
 
-      prevKind = token.kind;
-      prevText = text;
+      context.prevKind = token.kind;
+      context.prevText = text;
       pos = token.end;
       token = lexer.advance();
     }
@@ -265,7 +421,11 @@ export function replTransform(
       return { lines: newLines, row, col: indent.length };
     }
     if (baseIndent && col === 0) {
-      return { lines: lines.with(row, baseIndent + currentLine), row, col: baseIndent.length };
+      return {
+        lines: lines.with(row, baseIndent + currentLine),
+        row,
+        col: baseIndent.length,
+      };
     }
   }
 
