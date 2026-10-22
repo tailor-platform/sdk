@@ -945,6 +945,10 @@ interface RenameQuestion {
   added: string[];
   /** Dotted key of a sibling with the given name. */
   keyOf: (name: string) => string;
+  /** Keys of this kind that a confirmed rename already uses. */
+  claimed: Set<string>;
+  /** Keys of this kind whose removal `--drop` confirmed. */
+  dropped: ReadonlySet<string>;
   /** What the prompt calls the added siblings. */
   noun: "tables" | "fields" | "members";
   /** What the prompt says the added sibling shares with the removed item. */
@@ -1008,24 +1012,26 @@ async function resolveRenames(
   const fieldRenames = [...specs.fieldRenames];
   const typeRenames = [...specs.typeRenames];
   const nestedMemberRenames = [...specs.nestedMemberRenames];
-  // TailorDB names contain no dots, so keys of different kinds cannot collide:
-  // a table key has none, a field key one, and a nested member key two or more.
-  const claimed = new Set([
-    ...typeRenames.flatMap((spec) => [spec.previousTableName, spec.tableName]),
-    ...fieldRenames.flatMap((spec) => [
+  const claimedTypes = new Set(
+    typeRenames.flatMap((spec) => [spec.previousTableName, spec.tableName]),
+  );
+  const droppedTypes = new Set(specs.typeDrops.map((spec) => spec.tableName));
+  const claimedFields = new Set(
+    fieldRenames.flatMap((spec) => [
       fieldKey(spec.tableName, spec.previousFieldName),
       fieldKey(spec.tableName, spec.fieldName),
     ]),
-    ...nestedMemberRenames.flatMap((spec) => [
+  );
+  const droppedFields = new Set(
+    specs.fieldDrops.map((spec) => fieldKey(spec.tableName, spec.fieldName)),
+  );
+  const claimedMembers = new Set(
+    nestedMemberRenames.flatMap((spec) => [
       nestedMemberKey({ ...spec, path: spec.previousPath }),
       nestedMemberKey(spec),
     ]),
-  ]);
-  const dropped = new Set([
-    ...specs.typeDrops.map((spec) => spec.tableName),
-    ...specs.fieldDrops.map((spec) => fieldKey(spec.tableName, spec.fieldName)),
-    ...specs.nestedMemberDrops.map((spec) => nestedMemberKey(spec)),
-  ]);
+  );
+  const droppedMembers = new Set(specs.nestedMemberDrops.map((spec) => nestedMemberKey(spec)));
 
   const questions: RenameQuestion[] = [
     ...findTypeRenameCandidates(diff).map(({ removed, added }): RenameQuestion => ({
@@ -1033,6 +1039,8 @@ async function resolveRenames(
       oldName: removed.tableName,
       added: added.map((change) => change.tableName),
       keyOf: (name) => name,
+      claimed: claimedTypes,
+      dropped: droppedTypes,
       noun: "tables",
       compatibility: "schema",
       record: (tableName) => {
@@ -1044,6 +1052,8 @@ async function resolveRenames(
       oldName: removed.fieldName,
       added: added.map((change) => change.fieldName),
       keyOf: (name) => fieldKey(tableName, name),
+      claimed: claimedFields,
+      dropped: droppedFields,
       noun: "fields",
       compatibility: "type",
       record: (fieldName) => {
@@ -1058,6 +1068,8 @@ async function resolveRenames(
         oldName: previousPath[previousPath.length - 1] ?? "",
         added: candidate.added,
         keyOf: (name) => nestedMemberKey({ tableName, fieldName, path: [...parent, name] }),
+        claimed: claimedMembers,
+        dropped: droppedMembers,
         noun: "members",
         compatibility: "type",
         record: (name) => {
@@ -1068,11 +1080,11 @@ async function resolveRenames(
   ];
 
   const availableTargets = (question: RenameQuestion): string[] =>
-    question.added.filter((name) => !claimed.has(question.keyOf(name)));
+    question.added.filter((name) => !question.claimed.has(question.keyOf(name)));
   const pending = questions.filter(
     (question) =>
-      !dropped.has(question.label) &&
-      !claimed.has(question.label) &&
+      !question.dropped.has(question.label) &&
+      !question.claimed.has(question.label) &&
       availableTargets(question).length > 0,
   );
 
@@ -1092,7 +1104,8 @@ async function resolveRenames(
       const newName = await promptRename(question, addedNames);
       if (newName) {
         question.record(newName);
-        claimed.add(question.keyOf(newName));
+        question.claimed.add(question.label);
+        question.claimed.add(question.keyOf(newName));
       }
     }
   }

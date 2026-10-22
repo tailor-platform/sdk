@@ -1044,6 +1044,51 @@ describe("tailordb migration generate rename candidates of each kind", () => {
     });
   });
 
+  test("still offers a table whose dotted name matches a field that --rename claimed", async () => {
+    addSchemas({
+      baseline: { Account: snapshotType("Account"), User: snapshotType("User") },
+      local: {
+        "User.displayName": parsedType("User.displayName"),
+        User: renamedType("User", "displayName"),
+      },
+    });
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User.name:displayName",
+    ]);
+
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      message:
+        "Possible rename(s) detected:\n  - Account → User.displayName? (namespace: tailordb)",
+    });
+  });
+
+  test("does not offer a field whose dotted key matches a field renamed earlier in the run", async () => {
+    const snapshotWithField = (tableName: string, fieldName: string) => {
+      const type = snapshotType(tableName);
+      type.fields[fieldName] = type.fields.name!;
+      delete type.fields.name;
+      return type;
+    };
+    addSchemas({
+      baseline: { A: snapshotWithField("A", "b.c"), "A.b": snapshotWithField("A.b", "x") },
+      local: { A: renamedType("A", "d"), "A.b": renamedType("A.b", "c") },
+    });
+
+    await runCommand(generateCommand, []);
+
+    expect(prompt.confirm).toHaveBeenCalledWith({
+      message: "A.b.c was removed and d was added with a compatible type. Was it renamed to d?",
+      default: true,
+    });
+    expect(prompt.confirm).not.toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("A.b.x was removed") }),
+    );
+  });
+
   test("reports unresolved tables, then fields, then nested members", async () => {
     addEveryKind();
 
