@@ -242,6 +242,10 @@ export function buildNamespaceChunks(
   return { namespace, tables, chunks, hash: hashChunkArgs(chunks.map((chunk) => chunk.arg)) };
 }
 
+const UNKNOWN_OUTCOME_WARNING =
+  "  It is not known whether this chunk was applied, so it cannot be retried, and running it again may insert its rows twice. " +
+  "Check the data in the database, then run `tailor seed apply --upsert`.";
+
 interface RunSeedChunksParams {
   built: NamespaceChunks;
   upsert: boolean;
@@ -268,7 +272,13 @@ export async function runSeedChunks(params: RunSeedChunksParams): Promise<boolea
     if (index < startIndex) continue;
     logChunkProgress(index, chunk.tables.join(", "));
 
-    const result = await run(chunk.arg);
+    let result: Awaited<ReturnType<RunScript>>;
+    try {
+      result = await run(chunk.arg);
+    } catch (error) {
+      logger.warn(UNKNOWN_OUTCOME_WARNING, { mode: "plain" });
+      throw error;
+    }
 
     const { success, parsed, errors, outcomeUnknown } = parseExecutionResult(result, "    ");
     const processed = (parsed.processed ?? {}) as Record<
@@ -285,12 +295,9 @@ export async function runSeedChunks(params: RunSeedChunksParams): Promise<boolea
     }
     if (!success) {
       logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, { mode: "plain" });
-      if (outcomeUnknown || !result.executionId) {
-        logger.warn(
-          "  It is not known whether this chunk was applied, so it cannot be retried. " +
-            "Check the data in the database, then run `tailor seed apply --upsert`.",
-          { mode: "plain" },
-        );
+      const reportedFailure = !outcomeUnknown && parsed.success === false;
+      if (!reportedFailure || !result.executionId) {
+        logger.warn(UNKNOWN_OUTCOME_WARNING, { mode: "plain" });
       } else {
         retain(
           toRetryLabels({
