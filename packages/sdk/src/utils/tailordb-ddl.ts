@@ -82,18 +82,16 @@ function fnv1aHex(value: string): string {
   return hash.toString(16).padStart(8, "0");
 }
 
-function derivedName(tableName: string, memberName: string, kind: "seq" | "idx" | "fk"): string {
+type DerivedNameKind = "seq" | "idx" | "nested_idx" | "fk";
+
+function derivedName(tableName: string, memberName: string, kind: DerivedNameKind): string {
   const suffix = `_${fnv1aHex(JSON.stringify([tableName, memberName, kind]))}_${kind}`;
   let head = `${tableName}_${memberName}`;
   while (utf8.encode(head + suffix).length > MAX_IDENTIFIER_BYTES) head = head.slice(0, -1);
   return head + suffix;
 }
 
-function derivedIdentifier(
-  tableName: string,
-  memberName: string,
-  kind: "seq" | "idx" | "fk",
-): string {
+function derivedIdentifier(tableName: string, memberName: string, kind: DerivedNameKind): string {
   return identifier(derivedName(tableName, memberName, kind));
 }
 
@@ -296,7 +294,7 @@ const CASTABLE_UNIQUE_TYPES = new Set(["integer", "float", "decimal", "boolean",
 interface NestedUniqueMember {
   column: string;
   path: string[];
-  type: string;
+  field: DDLFieldConfig;
 }
 
 function nestedUniqueMembers(
@@ -310,16 +308,20 @@ function nestedUniqueMembers(
       nestedUniqueMembers(column, child, [...path, key]),
     );
   }
-  return field.unique && path.length > 0 ? [{ column, path, type: field.type }] : [];
+  return field.unique && path.length > 0 ? [{ column, path, field }] : [];
 }
 
 function nestedUniqueIndex(tableName: string, member: NestedUniqueMember): string {
   const keys = member.path.map(stringLiteral).join(", ");
   const value = `${identifier(member.column)} #>> ARRAY[${keys}]`;
-  const indexed = CASTABLE_UNIQUE_TYPES.has(member.type)
-    ? `CAST(${value} AS ${mapFieldTypeToPostgresType(member.type)})`
+  const indexed = CASTABLE_UNIQUE_TYPES.has(member.field.type)
+    ? `CAST(${value} AS ${columnType(member.field)})`
     : value;
-  const name = derivedIdentifier(tableName, `${member.column}.${member.path.join(".")}`, "idx");
+  const name = derivedIdentifier(
+    tableName,
+    `${member.column}.${member.path.join(".")}`,
+    "nested_idx",
+  );
   return `CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${identifier(tableName)} ((${indexed}))`;
 }
 

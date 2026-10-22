@@ -578,6 +578,50 @@ describe("foreign keys", { timeout: 30_000 }, () => {
       await expect(insertInfo(db, info)).rejects.toThrow(/duplicate key value violates unique/);
     });
 
+    test("compares a decimal member at its scale", async () => {
+      const db = await pglite(
+        generateSchemaDDL([
+          {
+            name: "Order",
+            fields: {
+              id: { type: "uuid" },
+              info: {
+                type: "nested",
+                fields: { amount: { type: "decimal", scale: 2, unique: true } },
+              },
+            },
+          },
+        ]),
+      );
+
+      await insertInfo(db, { amount: "1.231" });
+      await expect(insertInfo(db, { amount: "1.234" })).rejects.toThrow(
+        /duplicate key value violates unique/,
+      );
+      await expect(insertInfo(db, { amount: "1.24" })).resolves.toBeDefined();
+    });
+
+    test("is not skipped by a table index that has the same name as the member path", async () => {
+      const db = await pglite(
+        generateSchemaDDL([
+          {
+            name: "Order",
+            fields: {
+              id: { type: "uuid" },
+              other: { type: "string", required: false },
+              info: { type: "nested", fields: { code: { type: "string", unique: true } } },
+            },
+            indexes: { "info.code": { fields: ["other"], unique: true } },
+          },
+        ]),
+      );
+
+      await insertInfo(db, { code: "dup" });
+      await expect(insertInfo(db, { code: "dup" })).rejects.toThrow(
+        /duplicate key value violates unique/,
+      );
+    });
+
     test("accepts distinct values, and rows that leave the member out", async () => {
       const db = await pglite(generateSchemaDDL([nestedUnique()]));
 
