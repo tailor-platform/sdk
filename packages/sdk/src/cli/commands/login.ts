@@ -197,9 +197,9 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(
           renderCallbackPage({
+            status: "success",
             title: "Authentication successful",
             message: "You can close this tab and return to the terminal.",
-            closeWindow: true,
           }),
         );
         resolve({ user: userInfo.sub, email: userInfo.email });
@@ -207,6 +207,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
         res.end(
           renderCallbackPage({
+            status: "failure",
             title: "Authentication failed",
             message:
               isCLIError(error) && error.code === "PROFILE_USER_MISMATCH"

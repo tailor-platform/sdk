@@ -1,7 +1,7 @@
 type CallbackPageOptions = {
+  status: "success" | "failure";
   title: string;
   message: string;
-  closeWindow?: boolean;
 };
 
 const htmlEscapes = {
@@ -16,6 +16,35 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => htmlEscapes[char as keyof typeof htmlEscapes]);
 }
 
+const icons = {
+  success:
+    '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  failure:
+    '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+};
+
+const styles = `
+:root{color-scheme:light dark;--bg:#f5f6f8;--card:#fff;--text:#16181d;--muted:#5d6470;--border:#e2e5ea;--ok:#15803d;--ok-bg:#dcfce7;--ng:#b91c1c;--ng-bg:#fee2e2;--btn:#16181d;--btn-text:#fff}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1115;--card:#181b21;--text:#f2f4f8;--muted:#9aa3b2;--border:#2a2f38;--ok:#4ade80;--ok-bg:#12301d;--ng:#f87171;--ng-bg:#3a1717;--btn:#f2f4f8;--btn-text:#0f1115}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{width:100%;max-width:420px;padding:32px 28px;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:16px}
+.icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%}
+.success .icon{color:var(--ok);background:var(--ok-bg)}
+.failure .icon{color:var(--ng);background:var(--ng-bg)}
+h1{margin:16px 0 8px;font-size:20px}
+p{margin:0;color:var(--muted);overflow-wrap:anywhere}
+button{margin-top:24px;padding:10px 20px;font:inherit;font-weight:600;color:var(--btn-text);background:var(--btn);border:0;border-radius:8px;cursor:pointer}
+.note{margin-top:16px;font-size:14px}
+[hidden]{display:none}
+`.replace(/\n/g, "");
+
+const closeScript = `<script>
+function closeTab(){window.close();setTimeout(function(){document.getElementById("note").hidden=false},300)}
+document.getElementById("close").addEventListener("click",closeTab);
+window.close();
+</script>`;
+
 /**
  * Render the HTML page shown in the browser after a local OAuth2 callback.
  * @param options - Page content. `title` and `message` are HTML-escaped.
@@ -24,6 +53,10 @@ function escapeHtml(value: string) {
 export function renderCallbackPage(options: CallbackPageOptions) {
   const title = escapeHtml(options.title);
   const message = escapeHtml(options.message);
-  const script = options.closeWindow ? "<script>window.close()</script>" : "";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title></head><body><h1>${title}</h1><p>${message}</p>${script}</body></html>`;
+  const closeControls =
+    options.status === "success"
+      ? '<button type="button" id="close">Close this tab</button><p class="note" id="note" hidden>Your browser did not allow closing this tab. Please close it manually.</p>'
+      : "";
+  const script = options.status === "success" ? closeScript : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${styles}</style></head><body class="${options.status}"><main><div class="icon">${icons[options.status]}</div><h1>${title}</h1><p>${message}</p>${closeControls}</main>${script}</body></html>`;
 }

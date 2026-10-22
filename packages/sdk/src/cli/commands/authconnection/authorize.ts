@@ -179,9 +179,9 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
           res.end(
             renderCallbackPage({
+              status: "success",
               title: "Authorization successful",
               message: "You can close this tab and return to the terminal.",
-              closeWindow: true,
             }),
           );
           server.close();
@@ -190,6 +190,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
           res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
           res.end(
             renderCallbackPage({
+              status: "failure",
               title: "Authorization failed",
               message: isCLIError(err) ? err.message : "Return to the terminal for details.",
             }),
