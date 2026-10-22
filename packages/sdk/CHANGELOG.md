@@ -1,5 +1,35 @@
 # @tailor-platform/sdk
 
+## 2.32.0
+
+### Minor Changes
+
+- [#2697](https://github.com/tailor-platform/sdk/pull/2697) [`8706209`](https://github.com/tailor-platform/sdk/commit/870620945d19e068add0092c01c2bbbb68c2061b) Thanks [@dqn](https://github.com/dqn)! - Add a provider-independent System One client for boolean, choice, and ordered score decisions through AI Gateway.
+
+- [#2727](https://github.com/tailor-platform/sdk/pull/2727) [`cc8a577`](https://github.com/tailor-platform/sdk/commit/cc8a5777314ac9daaf32b9659b182d1585f5a173) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailordb migration test` now records a 24-hour expiry on every temporary workspace it creates, right after creating it. If the run is interrupted (for example, a cancelled CI job), the workspace stays and `tailor workspace prune --expired` deletes it once the expiry has passed. A workspace given with `--target-workspace-id` gets no expiry, and `--keep` without `--keep-ttl` still records none.
+
+- [#2696](https://github.com/tailor-platform/sdk/pull/2696) [`dc605c2`](https://github.com/tailor-platform/sdk/commit/dc605c207e6af179dc000b747def7f41fefedc66) Thanks [@toiroakr](https://github.com/toiroakr)! - `kyselyTypePlugin`'s `pgliteSchemaPath` script now enforces relations: a row pointing at a parent that does not exist is rejected, as on the platform. Tests that insert child rows before their parents must create the parents first.
+  
+  A relation to a field other than `id` that is not unique, or whose type differs from the referencing field, fails generation, as the platform rejects it on deploy.
+
+### Patch Changes
+
+- [#2725](https://github.com/tailor-platform/sdk/pull/2725) [`c85d2d8`](https://github.com/tailor-platform/sdk/commit/c85d2d8f27be5a02117f1d6197390b159b36df15) Thanks [@dqn](https://github.com/dqn)! - Fix migration detection and Pre-phase relaxation for nested required and enum constraints, and reject unsupported nested shape changes and rename combinations.
+
+- [#2724](https://github.com/tailor-platform/sdk/pull/2724) [`6152316`](https://github.com/tailor-platform/sdk/commit/615231674d129ca888b5c8be599b1f54bdea4fdc) Thanks [@dqn](https://github.com/dqn)! - `tailor deploy` and `tailor remove` no longer fail when deleting an IdP client whose Secret Manager vault (`idp-<namespace>-<client>`) has already been deleted.
+
+- [`127454d`](https://github.com/tailor-platform/sdk/commit/127454d6cd9d4fe20ccc3504f44430650874df71) Thanks [@haru0017](https://github.com/haru0017)! - Re-apply rolldown 1.2.14
+  
+  rolldown's output was fine; the crash came from another platform dependency, which has been fixed, so the temporary downgrade to 1.2.13 is no longer needed.
+
+- [#2685](https://github.com/tailor-platform/sdk/pull/2685) [`3b21d1c`](https://github.com/tailor-platform/sdk/commit/3b21d1c36e8eaa282374b9e9601e95537ac00377) Thanks [@dqn](https://github.com/dqn)! - Split how `tailor deploy` applies TailorDB changes and migrations into smaller steps. No observable behavior change.
+
+- [#2707](https://github.com/tailor-platform/sdk/pull/2707) [`ab7cb70`](https://github.com/tailor-platform/sdk/commit/ab7cb704ece975c7e3b7a2868ec71077643e26ac) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.29.7
+
+- [#2716](https://github.com/tailor-platform/sdk/pull/2716) [`698343b`](https://github.com/tailor-platform/sdk/commit/698343bbcc0fedfa790e2a3e085423f19b0e608c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency execa to v10.2.0
+
+- [#2726](https://github.com/tailor-platform/sdk/pull/2726) [`bfea8a3`](https://github.com/tailor-platform/sdk/commit/bfea8a3c5653017fc9b798e30e674b0e0a4f9859) Thanks [@dqn](https://github.com/dqn)! - Fix migration templates to replace removed enum values within array fields while preserving other elements.
+
 ## 2.31.1
 
 ### Patch Changes
