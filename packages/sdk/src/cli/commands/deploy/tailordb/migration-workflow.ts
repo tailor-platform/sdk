@@ -16,7 +16,6 @@
  */
 
 import * as crypto from "node:crypto";
-import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
@@ -35,6 +34,7 @@ import {
   teardownTemporaryWorkflow,
   uploadTemporaryFunction,
   findTemporaryWorkflowId,
+  listTemporaryWorkflowExecutions,
 } from "#/cli/shared/temporary-workflow";
 import { formatWaitError } from "#/cli/shared/wait-error";
 import { resourceTrn } from "../label";
@@ -170,6 +170,7 @@ async function reclaimLeftovers(
 }
 
 const findMigrationWorkflowId = findTemporaryWorkflowId;
+const listMigrationExecutions = listTemporaryWorkflowExecutions;
 
 interface CreateMigrationWorkflowParams {
   client: OperatorClient;
@@ -897,22 +898,6 @@ function describeRerun(params: RerunDescriptionParams): { message: string; sugge
       `To skip succeeded steps on a deploy that changes the steps of a migration in progress, pass ${skipOption(rerunningSkippable)}. ` +
       "A renamed step cannot be skipped.",
   };
-}
-
-async function listMigrationExecutions(
-  client: OperatorClient,
-  workspaceId: string,
-  name: string,
-): Promise<WorkflowExecution[]> {
-  const response = await getOrNull(() =>
-    client.listWorkflowExecutions({
-      workspaceId,
-      workflowName: name,
-      pageSize: 20,
-      pageDirection: PageDirection.DESC,
-    }),
-  );
-  return response?.executions ?? [];
 }
 
 interface ActiveExecutionErrors {

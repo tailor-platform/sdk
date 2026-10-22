@@ -10,6 +10,7 @@
 
 import * as crypto from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import {
   buildMetaRequest,
@@ -173,6 +174,29 @@ export async function findTemporaryWorkflowId(
     client.getWorkflowByName({ workspaceId, workflowName: name }),
   );
   return response?.workflow?.id;
+}
+
+/**
+ * List the newest executions of a temporary workflow.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param name - Shared resource name
+ * @returns Executions, newest first; empty when the workflow does not exist
+ */
+export async function listTemporaryWorkflowExecutions(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<WorkflowExecution[]> {
+  const response = await getOrNull(() =>
+    client.listWorkflowExecutions({
+      workspaceId,
+      workflowName: name,
+      pageSize: 20,
+      pageDirection: PageDirection.DESC,
+    }),
+  );
+  return response?.executions ?? [];
 }
 
 /**
