@@ -243,14 +243,14 @@ export async function prepareFixtures<T>(
   const scope = fixtureScopes.get(client) ?? { active: 0, previous: uncheckRelations(client) };
   scope.active += 1;
   fixtureScopes.set(client, scope);
+  let previous: string | undefined;
   try {
-    await scope.previous;
+    previous = await scope.previous;
     return await prepare();
   } finally {
     scope.active -= 1;
     if (scope.active === 0) {
       fixtureScopes.delete(client);
-      const previous = await scope.previous.catch(() => undefined);
       if (previous !== undefined) await setReplicationRole(client, previous);
     }
   }

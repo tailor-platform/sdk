@@ -291,6 +291,34 @@ describe("prepareFixtures", () => {
     expect(queries.map((q) => q.params)).toEqual([[], [ROLE, "replica"], [ROLE, "origin"]]);
   });
 
+  test.each([0, 1, 2, 3, 4, 5, 6, 7, 8])(
+    "leaves relations checked when another preparation starts %i ticks after the last one's callback settles",
+    async (ticks) => {
+      let role = "origin";
+      const client: PGliteClient = {
+        query: (sql, params) => {
+          if (sql.startsWith("SHOW")) return Promise.resolve({ rows: [{ [ROLE]: role }] });
+          if (sql.startsWith("SELECT set_config")) role = String(params?.[1]);
+          return Promise.resolve({ rows: [] });
+        },
+        close: () => Promise.resolve(),
+      };
+      let second: Promise<void> | undefined;
+      const startSecond = (remaining: number) => {
+        if (remaining === 0) second = prepareFixtures(client, () => Promise.resolve());
+        else void Promise.resolve().then(() => startSecond(remaining - 1));
+      };
+
+      await prepareFixtures(client, () => {
+        startSecond(ticks);
+        return Promise.resolve();
+      });
+      await second;
+
+      expect(role).toBe("origin");
+    },
+  );
+
   describe("on PGlite", { timeout: 30_000 }, () => {
     async function setup() {
       const pglite = new PGlite();
