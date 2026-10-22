@@ -93,7 +93,7 @@ export { applyDateRepresentation } from "./date-representation";
 export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";
 export {
   createKyselyPGlite,
-  prepareRecords,
+  prepareFixtures,
   type CreateKyselyPGliteOptions,
   type PGliteClient,
   type PGliteQueryResult,

@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { Temporal } from "#/runtime/temporal";
 import {
   createKyselyPGlite,
-  prepareRecords,
+  prepareFixtures,
   type PGliteClient,
   type PGliteQueryResult,
 } from "./pglite-kysely";
@@ -231,14 +231,14 @@ describe("createKyselyPGlite Temporal support", () => {
   });
 });
 
-describe("prepareRecords", () => {
+describe("prepareFixtures", () => {
   const REPLICA = "SET session_replication_role = replica";
   const ORIGIN = "SET session_replication_role = origin";
 
   test("runs the preparation between the statements that unchecks and rechecks relations, and returns its result", async () => {
     const { client, queries } = createStubClient();
 
-    const result = await prepareRecords(client, async () => {
+    const result = await prepareFixtures(client, async () => {
       await client.query("INSERT INTO prepared");
       return "done";
     });
@@ -251,7 +251,7 @@ describe("prepareRecords", () => {
     const { client, queries } = createStubClient();
     const failure = new Error("insert failed");
 
-    await expect(prepareRecords(client, () => Promise.reject(failure))).rejects.toBe(failure);
+    await expect(prepareFixtures(client, () => Promise.reject(failure))).rejects.toBe(failure);
 
     expect(queries.map((q) => q.sql)).toEqual([REPLICA, ORIGIN]);
   });
@@ -269,7 +269,7 @@ describe("prepareRecords", () => {
     test("prepares a row whose parent is missing, and checks the relation again afterwards", async () => {
       const pglite = await setup();
       try {
-        await prepareRecords(pglite, () =>
+        await prepareFixtures(pglite, () =>
           pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`),
         );
         const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
@@ -287,7 +287,7 @@ describe("prepareRecords", () => {
       const pglite = await setup();
       try {
         await expect(
-          prepareRecords(pglite, () => pglite.query(`INSERT INTO "Missing" DEFAULT VALUES`)),
+          prepareFixtures(pglite, () => pglite.query(`INSERT INTO "Missing" DEFAULT VALUES`)),
         ).rejects.toThrow(/Missing/);
 
         await expect(

@@ -2294,7 +2294,7 @@ describe("template-generator", () => {
 
       expect(script).toContain('import { PGlite } from "@electric-sql/pglite"');
       expect(script).toContain(
-        'import { applyDateRepresentation, createKyselyPGlite, prepareRecords, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+        'import { applyDateRepresentation, createKyselyPGlite, prepareFixtures, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('import type { Database } from "./db"');
       expect(script).toContain('import { pgliteSchema } from "./db.pglite"');
@@ -2311,12 +2311,12 @@ describe("template-generator", () => {
       "prepares the records with relations unchecked before the %s script runs against checked ones",
       (scriptKind) => {
         const script = generateMigrationPgliteTestScript(createMockMigrationDiff(), scriptKind);
-        const prepare = script.indexOf("await prepareRecords(pglite, async () => {");
+        const prepare = script.indexOf("await prepareFixtures(pglite, async () => {");
         const run = script.indexOf(scriptKind === "main" ? "main(trx)" : "runMigrationSteps(steps");
 
-        expect(script).toContain("prepareRecords");
+        expect(script).toContain("prepareFixtures");
         expect(script).toMatch(
-          /import \{[^}]*\bprepareRecords\b[^}]*\} from "@tailor-platform\/sdk\/vitest"/,
+          /import \{[^}]*\bprepareFixtures\b[^}]*\} from "@tailor-platform\/sdk\/vitest"/,
         );
         expect(prepare).toBeGreaterThan(-1);
         expect(run).toBeGreaterThan(prepare);
@@ -2339,7 +2339,7 @@ describe("template-generator", () => {
       );
 
       expect(script).toContain(
-        'import { applyDateRepresentation, createKyselyPGlite, prepareRecords, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+        'import { applyDateRepresentation, createKyselyPGlite, prepareFixtures, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('applyDateRepresentation("temporal")');
       expect(script).toContain("tailor-runtime");

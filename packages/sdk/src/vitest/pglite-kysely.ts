@@ -208,13 +208,13 @@ export function createKyselyPGlite<DB = Record<string, never>>(
  * @returns Whatever `prepare` returns
  * @example
  * ```typescript
- * await prepareRecords(pglite, async () => {
+ * await prepareFixtures(pglite, async () => {
  *   await db.insertInto("Order").values([{ ownerID: crypto.randomUUID() }]).execute();
  * });
  * await db.transaction().execute((trx) => main(trx));
  * ```
  */
-export async function prepareRecords<T>(
+export async function prepareFixtures<T>(
   client: PGliteClient,
   prepare: () => Promise<T>,
 ): Promise<T> {
