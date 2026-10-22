@@ -58,8 +58,10 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 
 type CallbackResponse = { status: number; contentType: string | null; body: string };
 
-async function fetchCallbackResponse(): Promise<CallbackResponse> {
-  const res = await fetch("http://localhost:8085/callback?code=browser-code&state=s");
+async function fetchCallbackResponse(
+  path = "/callback?code=browser-code&state=s",
+): Promise<CallbackResponse> {
+  const res = await fetch(`http://localhost:8085${path}`, { headers: { connection: "close" } });
   return {
     status: res.status,
     contentType: res.headers.get("content-type"),
@@ -258,11 +260,7 @@ describe("login --profile", () => {
     getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
     let pending: Promise<CallbackResponse> | undefined;
     openMock.mockImplementation(async () => {
-      pending = fetch("http://localhost:8085/other").then(async (res) => ({
-        status: res.status,
-        contentType: res.headers.get("content-type"),
-        body: await res.text(),
-      }));
+      pending = fetchCallbackResponse("/other");
       await pending;
     });
 
