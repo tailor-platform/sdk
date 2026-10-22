@@ -28,7 +28,7 @@ function isDbReference(imports: ImportTracker, node: AstNode | null | undefined)
   return false;
 }
 
-function isDbTypeReceiver(
+function isDbTableReceiver(
   context: Rule.RuleContext,
   imports: ImportTracker,
   node: AstNode | null | undefined,
@@ -63,7 +63,7 @@ function permissionArgument(
   }
   const method = memberName(callee);
   if (method !== "permission" && method !== "gqlPermission") return null;
-  if (!isDbTypeReceiver(context, imports, callee.object)) return null;
+  if (!isDbTableReceiver(context, imports, callee.object)) return null;
   return call.arguments[0] ?? null;
 }
 
