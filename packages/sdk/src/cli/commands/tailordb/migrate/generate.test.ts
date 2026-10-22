@@ -28,7 +28,7 @@ vi.mock("#/cli/shared/config-loader", () => ({
 
 vi.mock("#/cli/shared/prompt", () => ({
   canPrompt: vi.fn(),
-  prompt: { confirm: vi.fn(), text: vi.fn() },
+  prompt: { confirm: vi.fn(), select: vi.fn(), text: vi.fn() },
 }));
 
 vi.mock("#/cli/services/application", () => ({
@@ -781,6 +781,284 @@ describe("tailordb migration generate type rename preflight", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("--drop does not match a removed table: Ghost");
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+});
+
+describe("tailordb migration generate rename candidates of each kind", () => {
+  interface Schemas {
+    baseline: Record<string, ReturnType<typeof snapshotType>>;
+    local: Record<string, ReturnType<typeof parsedType>>;
+  }
+
+  function addressMembers(names: readonly string[]) {
+    return Object.fromEntries(names.map((name) => [name, { type: "string", required: false }]));
+  }
+
+  const kinds = [
+    {
+      kind: "table",
+      removed: ["User", "Account", "Order"],
+      added: ["Person", "Member", "Purchase"],
+      target: (name: string) => name,
+      schemas: (removed: readonly string[], added: readonly string[]): Schemas => ({
+        baseline: Object.fromEntries(removed.map((name) => [name, snapshotType(name)])),
+        local: Object.fromEntries(added.map((name) => [name, parsedType(name)])),
+      }),
+      renamed: (previous: string, next: string) =>
+        expect.objectContaining({
+          kind: "table_renamed",
+          previousTableName: previous,
+          tableName: next,
+        }),
+      conflictMessage: "--rename and --drop conflict for: User, Account",
+      unresolvedMessage:
+        "Possible rename(s) detected:\n  - Order → Member, Purchase? (namespace: tailordb)",
+      confirmMessage:
+        "User was removed and Person was added with a compatible schema. Was it renamed to Person?",
+      selectPrompt: {
+        message: "User was removed. Was it renamed to one of these added tables?",
+        choices: [
+          { name: "Yes, renamed to Person", value: "Person" },
+          { name: "Yes, renamed to Member", value: "Member" },
+          { name: "No, User was removed", value: null },
+        ],
+      },
+    },
+    {
+      kind: "field",
+      removed: ["name", "email", "phone"],
+      added: ["displayName", "mail", "tel"],
+      target: (name: string) => `User.${name}`,
+      schemas: (removed: readonly string[], added: readonly string[]): Schemas => {
+        const baseline = snapshotType("User");
+        const local = parsedType("User");
+        delete baseline.fields.name;
+        delete local.fields.name;
+        for (const name of removed) baseline.fields[name] = { type: "string", required: true };
+        for (const name of added) {
+          local.fields[name] = { name, config: { type: "string", required: true } };
+        }
+        return { baseline: { User: baseline }, local: { User: local } };
+      },
+      renamed: (previous: string, next: string) =>
+        expect.objectContaining({
+          kind: "field_renamed",
+          tableName: "User",
+          previousFieldName: previous,
+          fieldName: next,
+        }),
+      conflictMessage: "--rename and --drop conflict for: User.name, User.email",
+      unresolvedMessage:
+        "Possible rename(s) detected:\n  - User.phone → mail, tel? (namespace: tailordb)",
+      confirmMessage:
+        "User.name was removed and displayName was added with a compatible type. Was it renamed to displayName?",
+      selectPrompt: {
+        message: "User.name was removed. Was it renamed to one of these added fields?",
+        choices: [
+          { name: "Yes, renamed to displayName", value: "displayName" },
+          { name: "Yes, renamed to mail", value: "mail" },
+          { name: "No, name was removed", value: null },
+        ],
+      },
+    },
+    {
+      kind: "nested member",
+      removed: ["zip", "city", "street"],
+      added: ["zipCode", "town", "road"],
+      target: (name: string) => `User.address.${name}`,
+      schemas: (removed: readonly string[], added: readonly string[]): Schemas => {
+        const baseline = snapshotType("User");
+        baseline.fields.address = {
+          type: "nested",
+          required: false,
+          fields: addressMembers(removed),
+        };
+        const local = parsedType("User");
+        local.fields.address = {
+          name: "address",
+          config: { type: "nested", required: false, fields: addressMembers(added) },
+        };
+        return { baseline: { User: baseline }, local: { User: local } };
+      },
+      renamed: (previous: string, next: string) =>
+        expect.objectContaining({
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          memberRenames: [{ previousPath: [previous], path: [next] }],
+        }),
+      conflictMessage: "--rename and --drop conflict for: User.address.zip, User.address.city",
+      unresolvedMessage:
+        "Possible rename(s) detected:\n  - User.address.street → town, road? (namespace: tailordb)",
+      confirmMessage:
+        "User.address.zip was removed and zipCode was added with a compatible type. Was it renamed to zipCode?",
+      selectPrompt: {
+        message: "User.address.zip was removed. Was it renamed to one of these added members?",
+        choices: [
+          { name: "Yes, renamed to zipCode", value: "zipCode" },
+          { name: "Yes, renamed to town", value: "town" },
+          { name: "No, zip was removed", value: null },
+        ],
+      },
+    },
+  ];
+
+  function addSchemas({ baseline, local }: Schemas): string {
+    const migrationsDir = path.join(tmpDir, "tailordb");
+    writeInitialSchema(migrationsDir, baseline);
+    state.namespaces.push({ namespace: "tailordb", migrationsDir, localTypes: local });
+    return migrationsDir;
+  }
+
+  function addEveryKind(): string {
+    const baselineUser = snapshotType("User");
+    baselineUser.fields.address = {
+      type: "nested",
+      required: false,
+      fields: addressMembers(["zip"]),
+    };
+    const localUser = renamedType("User", "displayName");
+    localUser.fields.address = {
+      name: "address",
+      config: { type: "nested", required: false, fields: addressMembers(["zipCode"]) },
+    };
+    return addSchemas({
+      baseline: { Account: snapshotType("Account"), User: baselineUser },
+      local: { Person: parsedType("Person"), User: localUser },
+    });
+  }
+
+  function generatedChanges(migrationsDir: string) {
+    return loadDiff(path.join(migrationsDir, "0001", "diff.json")).changes;
+  }
+
+  beforeEach(() => {
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+  });
+
+  test.each(kinds)(
+    "rejects every $kind that both --rename and --drop name",
+    async ({ removed, added, target, schemas, conflictMessage }) => {
+      const migrationsDir = addSchemas(schemas(removed, added));
+
+      const result = await runCommand(generateCommand, [
+        "--yes",
+        "--rename",
+        `${target(removed[0]!)}:${added[0]}`,
+        "--rename",
+        `${target(removed[1]!)}:${added[1]}`,
+        "--drop",
+        target(removed[0]!),
+        "--drop",
+        target(removed[1]!),
+      ]);
+
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RENAME_DROP_CONFLICT",
+        message: conflictMessage,
+      });
+      expect(fs.existsSync(path.join(migrationsDir, "0001"))).toBe(false);
+    },
+  );
+
+  test.each(kinds)(
+    "reports only the $kind candidates and targets that flags leave open",
+    async ({ removed, added, target, schemas, unresolvedMessage }) => {
+      addSchemas(schemas(removed, added));
+
+      const result = await runCommand(generateCommand, [
+        "--yes",
+        "--rename",
+        `${target(removed[0]!)}:${added[0]}`,
+        "--drop",
+        target(removed[1]!),
+      ]);
+
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RENAME_UNRESOLVED",
+        message: unresolvedMessage,
+      });
+    },
+  );
+
+  test.each(kinds)(
+    "does not ask about a $kind whose only target an earlier answer claimed",
+    async ({ removed, added, target, schemas, renamed, confirmMessage }) => {
+      const migrationsDir = addSchemas(schemas(removed.slice(0, 2), added.slice(0, 1)));
+
+      const result = await runCommand(generateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(prompt.confirm).toHaveBeenCalledWith({ message: confirmMessage, default: true });
+      expect(prompt.confirm).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining(`${target(removed[1]!)} was removed`),
+        }),
+      );
+      expect(generatedChanges(migrationsDir)).toEqual(
+        expect.arrayContaining([renamed(removed[0]!, added[0]!)]),
+      );
+    },
+  );
+
+  test.each(kinds)(
+    "offers every compatible target of a $kind to choose from",
+    async ({ removed, added, schemas, renamed, selectPrompt }) => {
+      const migrationsDir = addSchemas(schemas(removed.slice(0, 1), added.slice(0, 2)));
+      vi.mocked(prompt.select).mockResolvedValue(added[1]);
+
+      const result = await runCommand(generateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(prompt.select).toHaveBeenCalledWith(selectPrompt);
+      expect(generatedChanges(migrationsDir)).toEqual(
+        expect.arrayContaining([renamed(removed[0]!, added[1]!)]),
+      );
+    },
+  );
+
+  test("reports unresolved tables, then fields, then nested members", async () => {
+    addEveryKind();
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      message: [
+        "Possible rename(s) detected:",
+        "  - Account → Person? (namespace: tailordb)",
+        "  - User.name → displayName? (namespace: tailordb)",
+        "  - User.address.zip → zipCode? (namespace: tailordb)",
+      ].join("\n"),
+    });
+  });
+
+  test("asks about tables, then fields, then nested members", async () => {
+    const [table, field, member] = kinds;
+    const migrationsDir = addEveryKind();
+
+    const result = await runCommand(generateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(vi.mocked(prompt.confirm).mock.calls.slice(0, 3)).toEqual([
+      [
+        {
+          message:
+            "Account was removed and Person was added with a compatible schema. Was it renamed to Person?",
+          default: true,
+        },
+      ],
+      [{ message: field!.confirmMessage, default: true }],
+      [{ message: member!.confirmMessage, default: true }],
+    ]);
+    expect(generatedChanges(migrationsDir)).toEqual(
+      expect.arrayContaining([
+        table!.renamed("Account", "Person"),
+        field!.renamed("name", "displayName"),
+        member!.renamed("zip", "zipCode"),
+      ]),
+    );
   });
 });
 
