@@ -3,6 +3,7 @@ import * as http from "node:http";
 import open from "open";
 import { z } from "zod";
 import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
+import { renderCallbackPage } from "#/cli/shared/callback-page";
 import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
@@ -175,9 +176,13 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
             redirectUri,
           });
 
-          res.writeHead(200, { "Content-Type": "text/html" });
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
           res.end(
-            "<html><body><h1>Authorization successful</h1><p>You can close this window.</p></body></html>",
+            renderCallbackPage({
+              title: "Authorization successful",
+              message: "You can close this tab and return to the terminal.",
+              closeWindow: true,
+            }),
           );
           server.close();
           resolve();

@@ -4,6 +4,7 @@ import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import { arg } from "@politty/zod";
 import open from "open";
 import { z } from "zod";
+import { renderCallbackPage } from "#/cli/shared/callback-page";
 import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
@@ -21,7 +22,7 @@ import {
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError, toError } from "#/cli/shared/errors";
+import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { prompt } from "#/cli/shared/prompt";
@@ -193,17 +194,26 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         await removeLegacyUserAlias(pfConfig, userInfo.email, userInfo.sub, args.platformConfig);
         writePlatformConfig(pfConfig);
 
-        res.writeHead(200, { "Content-Type": "application/json" });
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(
-          JSON.stringify({
-            status: "ok",
-            message: "Successfully authenticated. Please close this window.",
+          renderCallbackPage({
+            title: "Authentication successful",
+            message: "You can close this tab and return to the terminal.",
+            closeWindow: true,
           }),
         );
         resolve({ user: userInfo.sub, email: userInfo.email });
       } catch (error) {
-        res.writeHead(401);
-        res.end("Authentication failed");
+        res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          renderCallbackPage({
+            title: "Authentication failed",
+            message:
+              isCLIError(error) && error.code === "PROFILE_USER_MISMATCH"
+                ? error.message
+                : "Return to the terminal for details.",
+          }),
+        );
         reject(toError(error));
       } finally {
         // Close the server after handling one request.
