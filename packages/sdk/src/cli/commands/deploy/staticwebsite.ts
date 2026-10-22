@@ -1,5 +1,4 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type AddCustomDomainRequestSchema,
   type CancelCustomDomainTransferRequestSchema,
@@ -14,7 +13,6 @@ import {
   CustomDomainTransferStatus,
 } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -424,37 +422,18 @@ export async function planStaticWebsite(context: PlanContext) {
   // Live offers this workspace made, read once. The RPC also returns offers made
   // *to* this workspace; cancelling one of those from the source lane would
   // withdraw someone else's offer, so filter to our own.
-  const planningAnyDomains = desiredDomainsByWebsite.size > 0;
-  const hasTransferIntent = [...desiredDomainsByWebsite.values()].some((entries) =>
-    [...entries.values()].some((entry) => entry.transferToWorkspaceId !== undefined),
-  );
-  const fetchLiveOffers = planningAnyDomains
-    ? fetchAllTolerant<CustomDomainTransfer>(async (pageToken, pageSize) => {
-        const { transfers, nextPageToken } = await client.listCustomDomainTransfers({
-          workspaceId,
-          status: CustomDomainTransferStatus.PENDING,
-          pageToken,
-          pageSize,
-        });
-        return [transfers, nextPageToken];
-      }).catch((error: unknown) => {
-        // An older platform has no transfer RPCs. Configs that only list plain
-        // domains must keep deploying; a transfer intent cannot be honoured.
-        if (error instanceof ConnectError && error.code === Code.Unimplemented) {
-          if (hasTransferIntent) {
-            throw CLIError({
-              code: "CUSTOM_DOMAIN_TRANSFER_UNSUPPORTED",
-              message: "This Platform does not support custom domain transfers.",
-              suggestion: "Remove the `transferTo` entries from `customDomains`.",
-              cause: error,
-            });
-          }
-          logger.debug("Platform does not support custom domain transfers; skipping.");
-          return [];
-        }
-        throw error;
-      })
-    : Promise.resolve<CustomDomainTransfer[]>([]);
+  const fetchLiveOffers =
+    desiredDomainsByWebsite.size > 0
+      ? fetchAllTolerant<CustomDomainTransfer>(async (pageToken, pageSize) => {
+          const { transfers, nextPageToken } = await client.listCustomDomainTransfers({
+            workspaceId,
+            status: CustomDomainTransferStatus.PENDING,
+            pageToken,
+            pageSize,
+          });
+          return [transfers, nextPageToken];
+        })
+      : Promise.resolve<CustomDomainTransfer[]>([]);
 
   const [, liveOffers] = await Promise.all([fetchExistingDomains, fetchLiveOffers]);
   const liveOffersByDomain = new Map(

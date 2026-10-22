@@ -72,11 +72,7 @@ function createMockApplication(
   } as unknown as Application;
 }
 
-function createMockClient(
-  websites: MockWebsite[],
-  transfers: MockTransfer[] = [],
-  opts: { transfersUnimplemented?: boolean } = {},
-): OperatorClient {
+function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = []): OperatorClient {
   const asTransfer = (t: MockTransfer) => ({
     domain: t.domain,
     status: t.status,
@@ -141,9 +137,6 @@ function createMockClient(
     listCustomDomainTransfers: vi
       .fn()
       .mockImplementation(({ status }: { status: CustomDomainTransferStatus }) => {
-        if (opts.transfersUnimplemented) {
-          throw new ConnectError("unimplemented", Code.Unimplemented);
-        }
         return {
           transfers: transfers.filter((t) => t.status === status).map(asTransfer),
           nextPageToken: "",
@@ -693,26 +686,6 @@ describe("planStaticWebsite custom domain transfers", () => {
     expect(client.listCustomDomainTransfers).not.toHaveBeenCalled();
     expect(result.customDomainTransferChangeSet.creates).toHaveLength(0);
     expect(result.customDomainTransferChangeSet.deletes).toHaveLength(0);
-  });
-
-  test("an older Platform keeps plain custom domains deploying", async () => {
-    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [], {
-      transfersUnimplemented: true,
-    });
-    const result = await plan(client, ["example.com"]);
-
-    expect(result.customDomainChangeSet.unchanged).toHaveLength(1);
-    expect(result.customDomainTransferChangeSet.creates).toHaveLength(0);
-  });
-
-  test("an older Platform refuses a transfer intent", async () => {
-    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [], {
-      transfersUnimplemented: true,
-    });
-
-    await expect(plan(client, [transferTo("example.com")])).rejects.toMatchObject({
-      code: "CUSTOM_DOMAIN_TRANSFER_UNSUPPORTED",
-    });
   });
 });
 
