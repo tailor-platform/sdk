@@ -273,6 +273,24 @@ describe("prepareFixtures", () => {
     expect(queries.at(-1)).toEqual(setRole("replica"));
   });
 
+  test("changes the setting once for preparations that overlap, and restores it when the last one finishes", async () => {
+    const { client, queries } = createStubClient(callerRole("origin"));
+    let releaseFirst!: () => void;
+    const first = prepareFixtures(
+      client,
+      () => new Promise<void>((resolve) => (releaseFirst = resolve)),
+    );
+    await Promise.resolve();
+    const second = prepareFixtures(client, () => Promise.resolve());
+    await second;
+    expect(queries.map((q) => q.params)).toEqual([[], [ROLE, "replica"]]);
+
+    releaseFirst();
+    await first;
+
+    expect(queries.map((q) => q.params)).toEqual([[], [ROLE, "replica"], [ROLE, "origin"]]);
+  });
+
   describe("on PGlite", { timeout: 30_000 }, () => {
     async function setup() {
       const pglite = new PGlite();
@@ -321,6 +339,35 @@ describe("prepareFixtures", () => {
         const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
         expect(prepared.rows).toHaveLength(2);
 
+        await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
+      } finally {
+        await pglite.close();
+      }
+    });
+
+    test("keeps relations unchecked while preparations overlap, and checks them again after the last one", async () => {
+      const pglite = await setup();
+      try {
+        let releaseFirst!: () => void;
+        let releaseSecond!: () => void;
+        const first = prepareFixtures(
+          pglite,
+          () => new Promise<void>((resolve) => (releaseFirst = resolve)),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const second = prepareFixtures(pglite, async () => {
+          await new Promise<void>((resolve) => (releaseSecond = resolve));
+          await orphan(pglite);
+        });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        releaseFirst();
+        await first;
+        releaseSecond();
+        await second;
+
+        const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
+        expect(prepared.rows).toHaveLength(1);
         await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
       } finally {
         await pglite.close();
