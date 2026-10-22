@@ -1,7 +1,7 @@
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
-import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/shared/function-bundle";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import {

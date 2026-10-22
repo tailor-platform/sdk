@@ -1,6 +1,6 @@
 import * as path from "pathe";
+import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
-import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/shared/function-bundle";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import ml from "#/utils/multiline";

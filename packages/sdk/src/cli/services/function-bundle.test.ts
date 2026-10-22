@@ -108,6 +108,25 @@ describe("buildFunctionBundle runtime globals", () => {
   });
 });
 
+describe("buildFunctionBundle cache", () => {
+  test("rebuilds a cached bundle when the env its entry embeds changes", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cached-env-");
+    const sourceFile = writeFunction(tmp.dir, `export default async (env) => env;\n`);
+    const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
+    const bundleWithEnv = (env: Record<string, string>) =>
+      bundle(sourceFile, {
+        cache,
+        env,
+        entry: (absoluteSourcePath) =>
+          `import fn from "${absoluteSourcePath}";\n` +
+          `export const main = () => fn(${JSON.stringify(env)});\n`,
+      });
+
+    expect(await bundleWithEnv({ STAGE: "FIRST_ENV" })).toContain("FIRST_ENV");
+    expect(await bundleWithEnv({ STAGE: "SECOND_ENV" })).toContain("SECOND_ENV");
+  });
+});
+
 describe("buildFunctionBundle inline sourcemaps", () => {
   async function embeddedSourceTexts(
     options: Partial<BuildFunctionBundleOptions>,

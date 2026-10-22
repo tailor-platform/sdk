@@ -72,9 +72,9 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   entry: (absoluteSourcePath: string) => string;
   /** Creates the plugin that rewrites the function's sources before path resolution */
   transform?: () => rolldown.Plugin | undefined;
-  /** Config values the entry embeds besides the start context and date default */
+  /** Config values the entry embeds, added to the cache key besides the start context and date default */
   entryContext?: unknown[];
-  /** Environment variables the entry embeds */
+  /** Environment variables the entry embeds, added to the cache key */
   env?: Record<string, string | number | boolean>;
   /** Date representations whose conversion code the bundle keeps */
   dateRepresentations?: BundledDateRepresentations;
