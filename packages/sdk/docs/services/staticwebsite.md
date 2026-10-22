@@ -78,7 +78,37 @@ defineStaticWebSite("my-website", {
 
 After deploying, use `tailor staticwebsite domain get <domain>` to check domain status and retrieve the CNAME targets required for DNS configuration.
 
-A domain can be associated with only one workspace at a time. To set custom domains only in the workspace that owns the domain, see [Multi-Environment Configuration](../multi-environment.md#settings-that-belong-to-a-single-environment).
+A domain can be associated with only one workspace at a time. To set custom domains only in the workspace that owns the domain, see [Multi-Environment Configuration](../multi-environment.md#settings-that-belong-to-a-single-environment). To hand a domain to another site or workspace without taking it offline, see [Moving a domain](#moving-a-domain).
+
+### Moving a domain
+
+A domain already serving traffic can be moved to another static website — in this workspace or another one — without downtime, without reissuing its certificate and without changing DNS. The site that currently holds the domain offers it; the receiving site accepts by listing the domain normally.
+
+On the side giving the domain up, replace the plain entry with the destination:
+
+```typescript
+defineStaticWebSite("my-website", {
+  customDomains: [{ domain: "app.example.com", transferTo: { workspaceId: "..." } }],
+});
+```
+
+Deploying opens the offer. On the receiving side, list the domain as usual and deploy:
+
+```typescript
+defineStaticWebSite("new-website", {
+  customDomains: ["app.example.com"],
+});
+```
+
+That deploy completes the move. The next plan on the giving side reports that the domain moved, and the entry should then be deleted — it describes a move that already happened, not ongoing state.
+
+The two deploys must be separate runs, even when both sites live in the same workspace: the receiving side cannot accept an offer that the same run is still opening, and `tailor deploy` says so rather than failing partway.
+
+Three rules apply while an offer is open:
+
+- An offer expires after 7 days. Deploying the entry again after that opens a fresh offer.
+- The domain cannot be removed while its offer is open. Change the entry back to a plain string and deploy to withdraw the offer first.
+- Briefly after the offer opens, the receiving side cannot accept it yet while the edge cache clears. The plan says so; deploy again a few minutes later.
 
 ## Type-safe URL References
 

@@ -142,6 +142,9 @@ function emptyResults(): PlanResults {
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
       customDomainChangeSet: createChangeSet("CustomDomains"),
+      customDomainTransferChangeSet: createChangeSet("CustomDomainTransfers"),
+      customDomainNotes: [],
+      customDomainLiveOffers: new Map(),
       ...emptyOwnership(),
     },
     aiGateway: {

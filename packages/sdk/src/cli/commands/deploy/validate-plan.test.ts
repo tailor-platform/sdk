@@ -63,6 +63,9 @@ function emptyInput(): ValidatePlanInput {
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
       customDomainChangeSet: createChangeSet("CustomDomains"),
+      customDomainTransferChangeSet: createChangeSet("CustomDomainTransfers"),
+      customDomainNotes: [],
+      customDomainLiveOffers: new Map(),
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set(),
