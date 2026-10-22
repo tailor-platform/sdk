@@ -578,7 +578,7 @@ describe("foreign keys", { timeout: 30_000 }, () => {
       await expect(insertInfo(db, info)).rejects.toThrow(/duplicate key value violates unique/);
     });
 
-    test("compares a decimal member at its scale", async () => {
+    test("compares a decimal member as a number without rounding it to its scale, as the platform does", async () => {
       const db = await pglite(
         generateSchemaDDL([
           {
@@ -595,10 +595,10 @@ describe("foreign keys", { timeout: 30_000 }, () => {
       );
 
       await insertInfo(db, { amount: "1.231" });
-      await expect(insertInfo(db, { amount: "1.234" })).rejects.toThrow(
+      await expect(insertInfo(db, { amount: "1.234" })).resolves.toBeDefined();
+      await expect(insertInfo(db, { amount: "1.231" })).rejects.toThrow(
         /duplicate key value violates unique/,
       );
-      await expect(insertInfo(db, { amount: "1.24" })).resolves.toBeDefined();
     });
 
     test("is not skipped by a table index that has the same name as the member path", async () => {

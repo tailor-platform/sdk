@@ -315,7 +315,7 @@ function nestedUniqueIndex(tableName: string, member: NestedUniqueMember): strin
   const keys = member.path.map(stringLiteral).join(", ");
   const value = `${identifier(member.column)} #>> ARRAY[${keys}]`;
   const indexed = CASTABLE_UNIQUE_TYPES.has(member.field.type)
-    ? `CAST(${value} AS ${columnType(member.field)})`
+    ? `CAST(${value} AS ${mapFieldTypeToPostgresType(member.field.type)})`
     : value;
   const name = derivedIdentifier(
     tableName,
