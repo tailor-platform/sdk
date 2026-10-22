@@ -750,7 +750,6 @@ async function bundleSingleJob(
         output: {
           format: "esm",
           sourcemap: true,
-          dir: process.cwd(),
           minify: inlineSourcemap
             ? {
                 mangle: {

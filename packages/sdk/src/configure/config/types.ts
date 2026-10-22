@@ -83,9 +83,10 @@ export interface BuildOptions {
   inlineSourcemapDependencySources?: boolean | string[];
   /**
    * Choose which of your own source files embed their text in the inline sourcemap.
-   * `include` and `exclude` are globs relative to the project root (such as
-   * `["src/**"]` or `["src/generated/**"]`). Only files matching `include` (all files
-   * when omitted) and not matching `exclude` keep their text. Files under
+   * `include` and `exclude` are globs relative to the directory containing the config
+   * file, without a leading `./` (such as `["src/**"]` or `["src/generated/**"]`). Only
+   * files matching `include` (all files when omitted) and not matching `exclude` keep
+   * their text. `**` does not match a dot-directory such as `src/.cache`. Files under
    * `node_modules` are controlled by `inlineSourcemapDependencySources` instead.
    * Error positions still resolve to the original files and lines; `tailor function
    * run` shows no code snippet for a frame in a file whose text is left out.

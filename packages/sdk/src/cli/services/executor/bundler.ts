@@ -235,7 +235,6 @@ async function bundleSingleExecutor(
         output: {
           format: "esm",
           sourcemap: true,
-          dir: process.cwd(),
           minify: inlineSourcemap
             ? {
                 mangle: {

@@ -168,6 +168,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     inlineSourcemap,
     dependencySources: options.inlineSourcemapDependencySources ?? false,
     projectSources: options.inlineSourcemapProjectSources,
+    sourcesDir: process.cwd(),
   });
 
   return { bundledCode, scriptName };

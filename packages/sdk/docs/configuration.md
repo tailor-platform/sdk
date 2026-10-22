@@ -79,7 +79,7 @@ export default defineConfig({
 
 This is a bundle-time setting. It affects newly bundled deployments; already deployed functions keep the sourcemap they were deployed with until they are redeployed.
 
-**Project Sourcemap Sources** (`buildOptions.inlineSourcemapProjectSources`): Which of your own source files embed their text in the inline sourcemap. By default all of them do. `include` and `exclude` are globs relative to the project root. Only files matching `include` (all files when omitted) and not matching `exclude` keep their text. Files under `node_modules` are controlled by `inlineSourcemapDependencySources` instead. Error positions still resolve to the original files and lines, but `tailor function run` shows no code snippet for a frame in a file whose text is left out. It has no effect when `inlineSourcemap` is `false`.
+**Project Sourcemap Sources** (`buildOptions.inlineSourcemapProjectSources`): Which of your own source files embed their text in the inline sourcemap. By default all of them do. `include` and `exclude` are globs relative to the directory containing your config file, written without a leading `./` (a `./` prefix is ignored). Only files matching `include` (all files when omitted) and not matching `exclude` keep their text. `**` does not match a dot-directory such as `src/.cache`. Files under `node_modules` are controlled by `inlineSourcemapDependencySources` instead. Error positions still resolve to the original files and lines, but `tailor function run` shows no code snippet for a frame in a file whose text is left out. It has no effect when `inlineSourcemap` is `false`.
 
 ```typescript
 export default defineConfig({

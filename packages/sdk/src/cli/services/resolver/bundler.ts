@@ -268,7 +268,6 @@ async function bundleSingleResolver(
         output: {
           format: "esm",
           sourcemap: true,
-          dir: process.cwd(),
           minify: inlineSourcemap
             ? {
                 mangle: {

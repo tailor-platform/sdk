@@ -123,7 +123,7 @@ function dependencySourcesKey(value: boolean | string[] | undefined): string {
 
 function projectSourcesKey(value: ProjectSourcesFilter | undefined): string {
   if (!value?.include && !value?.exclude) return "";
-  return JSON.stringify([value.include ?? null, value.exclude ?? null]);
+  return JSON.stringify([value.root ?? null, value.include ?? null, value.exclude ?? null]);
 }
 
 type WithCacheParams = {

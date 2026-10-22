@@ -111,6 +111,7 @@ describe("omitSourcesContent", () => {
 });
 
 describe("omitProjectSourcesContent", () => {
+  const sourcesDir = "/work/app";
   function createProjectMap(): SourcemapData {
     return {
       version: 3,
@@ -124,7 +125,8 @@ describe("omitProjectSourcesContent", () => {
   test("drops the content of a project source matching an exclude glob", () => {
     const result = omitProjectSourcesContent({
       map: createProjectMap(),
-      projectSources: { exclude: ["src/generated/**"] },
+      projectSources: { root: sourcesDir, exclude: ["src/generated/**"] },
+      sourcesDir,
     });
 
     expect(result.sourcesContent).toEqual(["app source", null, "plain source"]);
@@ -133,7 +135,8 @@ describe("omitProjectSourcesContent", () => {
   test("keeps only the project sources matching an include glob", () => {
     const result = omitProjectSourcesContent({
       map: createProjectMap(),
-      projectSources: { include: ["src/generated/**"] },
+      projectSources: { root: sourcesDir, include: ["src/generated/**"] },
+      sourcesDir,
     });
 
     expect(result.sourcesContent).toEqual([null, "generated source", "plain source"]);
@@ -142,7 +145,8 @@ describe("omitProjectSourcesContent", () => {
   test("drops a source that matches both include and exclude", () => {
     const result = omitProjectSourcesContent({
       map: createProjectMap(),
-      projectSources: { include: ["src/**"], exclude: ["src/generated/**"] },
+      projectSources: { root: sourcesDir, include: ["src/**"], exclude: ["src/generated/**"] },
+      sourcesDir,
     });
 
     expect(result.sourcesContent).toEqual(["app source", null, "plain source"]);
@@ -151,7 +155,8 @@ describe("omitProjectSourcesContent", () => {
   test("never touches the content of a source under node_modules", () => {
     const result = omitProjectSourcesContent({
       map: createProjectMap(),
-      projectSources: { include: ["nothing/**"], exclude: ["**"] },
+      projectSources: { root: sourcesDir, include: ["nothing/**"], exclude: ["**"] },
+      sourcesDir,
     });
 
     expect(result.sourcesContent).toEqual([null, null, "plain source"]);
@@ -160,7 +165,34 @@ describe("omitProjectSourcesContent", () => {
   test("returns the input map itself when no rule is given", () => {
     const map = createProjectMap();
 
-    expect(omitProjectSourcesContent({ map, projectSources: {} })).toBe(map);
+    expect(omitProjectSourcesContent({ map, projectSources: {}, sourcesDir })).toBe(map);
+  });
+
+  test("matches globs against the path from the project root, not from the sourcemap directory", () => {
+    const map = createProjectMap();
+    map.sources = [
+      "../apps/foo/src/app.ts",
+      "../apps/foo/src/generated/types.ts",
+      "node_modules/plain/index.js",
+    ];
+
+    const result = omitProjectSourcesContent({
+      map,
+      projectSources: { root: "/work/apps/foo", exclude: ["src/generated/**"] },
+      sourcesDir: "/work/dist",
+    });
+
+    expect(result.sourcesContent).toEqual(["app source", null, "plain source"]);
+  });
+
+  test("ignores a leading ./ in a glob", () => {
+    const result = omitProjectSourcesContent({
+      map: createProjectMap(),
+      projectSources: { root: sourcesDir, exclude: ["./src/generated/**"] },
+      sourcesDir,
+    });
+
+    expect(result.sourcesContent).toEqual(["app source", null, "plain source"]);
   });
 });
 
@@ -285,7 +317,8 @@ describe("chunkCodeWithSourcemap", () => {
       chunk: { code, map: createMap() },
       inlineSourcemap: true,
       dependencySources: false,
-      projectSources: { exclude: ["../p/src/**"] },
+      projectSources: { root: "/work/p", exclude: ["src/**"] },
+      sourcesDir: "/work/dist",
     });
 
     expect(contentOf(result, "src/app.ts")).toBeNull();

@@ -1,12 +1,15 @@
+import * as fs from "node:fs";
 import { matchesGlob } from "node:path/posix";
+import * as path from "pathe";
+import type { BuildOptions } from "#/configure/config/types";
 
-/** Which of the project's own sources keep their embedded text, as globs relative to the project root. */
-export interface ProjectSourcesFilter {
-  /** Only matching sources keep their text. All sources when omitted. */
-  include?: readonly string[];
-  /** Matching sources lose their text, even when included. */
-  exclude?: readonly string[];
-}
+/** The `buildOptions.inlineSourcemapProjectSources` setting, with the absolute directory its globs are relative to. */
+export type ProjectSourcesFilter = Readonly<
+  NonNullable<BuildOptions["inlineSourcemapProjectSources"]>
+> & {
+  /** The directory containing the config file. The working directory when omitted. */
+  root?: string;
+};
 
 /** The fields of a sourcemap that this module reads or rewrites. */
 export interface SourcemapData {
@@ -36,6 +39,8 @@ export interface OmitProjectSourcesContentParams {
   map: SourcemapData;
   /** Which of the project's own sources keep their embedded text. */
   projectSources: ProjectSourcesFilter;
+  /** Absolute directory the sourcemap's `sources` are relative to. */
+  sourcesDir: string;
 }
 
 /** Parameters for {@link toInlineSourcemapCode}. */
@@ -97,9 +102,18 @@ export function omitSourcesContent(params: OmitSourcesContentParams): SourcemapD
   return { ...map, sourcesContent };
 }
 
-function keepsProjectSource(source: string, filter: ProjectSourcesFilter): boolean {
-  const normalized = source.replaceAll("\\", "/");
-  const matches = (globs: readonly string[]) => globs.some((glob) => matchesGlob(normalized, glob));
+// `sourcesDir` derives from the working directory, which the OS reports as a real path, while a config path may go through a symlink.
+function realpathOrSelf(dir: string): string {
+  try {
+    return fs.realpathSync(dir);
+  } catch {
+    return dir;
+  }
+}
+
+function keepsProjectSource(relativePath: string, filter: ProjectSourcesFilter): boolean {
+  const matches = (globs: readonly string[]) =>
+    globs.some((glob) => matchesGlob(relativePath, glob.replace(/^\.\//, "")));
   if (filter.include && !matches(filter.include)) return false;
   return !(filter.exclude && matches(filter.exclude));
 }
@@ -107,18 +121,20 @@ function keepsProjectSource(source: string, filter: ProjectSourcesFilter): boole
 /**
  * Drop the embedded source text of the project's own files from a sourcemap.
  * Sources under `node_modules` are left to {@link omitSourcesContent}.
- * @param params - The map and the filter selecting which project sources keep their text
+ * @param params - The map, the filter selecting which project sources keep their text, and the directory the map's sources are relative to
  * @returns A new map, or the input map itself when the filter has no rule
  */
 export function omitProjectSourcesContent(params: OmitProjectSourcesContentParams): SourcemapData {
-  const { map, projectSources } = params;
+  const { map, projectSources, sourcesDir } = params;
   if (!projectSources.include && !projectSources.exclude) return map;
   if (!map.sourcesContent) return map;
 
+  const root = realpathOrSelf(projectSources.root ?? process.cwd());
   const sourcesContent = map.sourcesContent.map((content, index) => {
     const source = map.sources[index];
     if (source === undefined || sourcePackageName(source) !== undefined) return content;
-    return keepsProjectSource(source, projectSources) ? content : null;
+    const projectPath = path.relative(root, path.resolve(sourcesDir, source));
+    return keepsProjectSource(projectPath, projectSources) ? content : null;
   });
   return { ...map, sourcesContent };
 }
@@ -152,6 +168,8 @@ export interface ChunkCodeWithSourcemapParams {
   dependencySources: boolean | readonly string[];
   /** Which of the project's own sources keep their embedded text. All of them when omitted. */
   projectSources?: ProjectSourcesFilter;
+  /** Absolute directory the chunk's sourcemap `sources` are relative to. Rolldown's default output folder when omitted. */
+  sourcesDir?: string;
 }
 
 /**
@@ -163,10 +181,16 @@ export interface ChunkCodeWithSourcemapParams {
  * @returns The chunk code, with the inline sourcemap when enabled
  */
 export function chunkCodeWithSourcemap(params: ChunkCodeWithSourcemapParams): string {
-  const { chunk, inlineSourcemap, dependencySources, projectSources = {} } = params;
+  const {
+    chunk,
+    inlineSourcemap,
+    dependencySources,
+    projectSources = {},
+    sourcesDir = path.join(process.cwd(), "dist"),
+  } = params;
   if (!inlineSourcemap || !chunk.map) return chunk.code;
 
-  const projectMap = omitProjectSourcesContent({ map: chunk.map, projectSources });
+  const projectMap = omitProjectSourcesContent({ map: chunk.map, projectSources, sourcesDir });
   if (dependencySources === true)
     return toInlineSourcemapCode({ code: chunk.code, map: projectMap });
 

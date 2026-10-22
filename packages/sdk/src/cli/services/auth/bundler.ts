@@ -151,7 +151,6 @@ export async function bundleAuthHooks(
         output: {
           format: "esm",
           sourcemap: true,
-          dir: process.cwd(),
           minify: inlineSourcemap
             ? {
                 mangle: {

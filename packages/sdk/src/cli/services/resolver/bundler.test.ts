@@ -418,7 +418,10 @@ describe("bundleResolvers", () => {
 
     async function sourceTexts(
       projectDir: string,
-      options: { inlineSourcemapDependencySources?: boolean },
+      options: {
+        inlineSourcemapDependencySources?: boolean;
+        inlineSourcemapProjectSources?: { root?: string; include?: string[]; exclude?: string[] };
+      },
     ): Promise<string[]> {
       const bundles = await bundleResolvers({
         namespace: "sourcemap",
@@ -450,6 +453,19 @@ describe("bundleResolvers", () => {
       const texts = await sourceTexts(tmp.dir, {});
 
       expect(texts.some((text) => text.includes("OWN_SOURCE"))).toBe(true);
+    });
+
+    test("leaves out the source text of project files matching an exclude glob", async () => {
+      using tmp = tempCwd("sdk-bundler-sourcemap-exclude-");
+      writeResolverUsingInstalledPackage(tmp.dir);
+
+      const texts = await sourceTexts(tmp.dir, {
+        inlineSourcemapDependencySources: true,
+        inlineSourcemapProjectSources: { root: tmp.dir, exclude: ["resolver/**"] },
+      });
+
+      expect(texts.some((text) => text.includes("OWN_SOURCE"))).toBe(false);
+      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(true);
     });
 
     test("embeds the source text of installed packages when asked to", async () => {

@@ -759,7 +759,10 @@ export async function loadApplication(
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
-  const inlineSourcemapProjectSources = buildOptions.inlineSourcemapProjectSources ?? {};
+  const inlineSourcemapProjectSources = {
+    ...buildOptions.inlineSourcemapProjectSources,
+    root: baseDir,
+  };
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
 

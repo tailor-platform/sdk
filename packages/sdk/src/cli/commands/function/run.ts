@@ -209,7 +209,10 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
         env: config.env ?? {},
         inlineSourcemap: buildOptions.inlineSourcemap,
         inlineSourcemapDependencySources: buildOptions.inlineSourcemapDependencySources,
-        inlineSourcemapProjectSources: buildOptions.inlineSourcemapProjectSources,
+        inlineSourcemapProjectSources: {
+          ...buildOptions.inlineSourcemapProjectSources,
+          root: baseDir,
+        },
         logLevel: buildOptions.logLevel,
         treeshake: buildOptions.treeshake,
         dateDefault: effectiveDateDefault(config),
