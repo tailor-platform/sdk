@@ -90,8 +90,11 @@ interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
 | `executors` | `PluginGeneratedExecutor[]`                     | Additional executors to generate                       |
 | `extends`   | `{ fields?: Record<string, TailorAnyDBField> }` | Fields to add to the source table                      |
 
-Resolvers returned by `onTableLoaded` or `onNamespaceLoaded` are loaded, bundled, and deployed in
-the hook's namespace. If you configure a resolver namespace with the same name, generated resolvers
+Resolvers returned by `onTableLoaded` or `onNamespaceLoaded` are loaded, bundled, and deployed to
+the resolver namespace (a `resolver` key in your config) with the same name as the hook's TailorDB
+namespace (a `db` key). These are separate namespaces that only share the name: with
+`db: { main: ... }` and `resolver: { billing: ... }`, generated resolvers go to a `main` resolver
+namespace, not `billing`. If you configure a resolver namespace with that name, generated resolvers
 join its configured files and use its `defaultPermission`. Otherwise, a resolver namespace is created
 automatically. Configure `defaultPermission` to restrict access; without it, generated resolvers are
 accessible to anonymous callers, like regular resolvers with no permission declared. Generating into
