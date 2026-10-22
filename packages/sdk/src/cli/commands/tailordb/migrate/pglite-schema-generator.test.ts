@@ -276,6 +276,31 @@ describe("buildPreMigrationTables", () => {
     expect(fields.details!.fields!.code).toMatchObject({ unique: false });
   });
 
+  test("a renamed object member defers the unique members inside its new name", () => {
+    const member = () =>
+      snapshotField("nested", {
+        fields: { code: snapshotField("string", { unique: true, index: true }) },
+      });
+    const before = snapshotField("nested", { fields: { geo: member() } });
+    const after = snapshotField("nested", { fields: { location: member() } });
+    const tables = buildPreMigrationTables(
+      snapshot(user, table("Post", { address: after })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "address",
+          before,
+          after,
+          memberRenames: [{ previousPath: ["geo"], path: ["location"] }],
+        },
+      ]),
+    );
+    const address = tableNamed(tables, "Post").fields.address!.fields!;
+    expect(address.location!.fields!.code).toMatchObject({ unique: false });
+    expect(address.geo!.fields!.code).toMatchObject({ unique: true });
+  });
+
   test("a removed field stays readable with the config the diff recorded", () => {
     const tables = buildPreMigrationTables(
       snapshot(user),

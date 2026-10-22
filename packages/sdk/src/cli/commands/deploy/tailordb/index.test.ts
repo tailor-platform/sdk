@@ -1909,6 +1909,40 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.code!.unique).toBe(false);
   });
 
+  test("defers the unique members inside a renamed object member while the old member stays unique", () => {
+    const member = (): SnapshotFieldConfig => ({
+      type: "nested",
+      required: false,
+      fields: { code: { type: "string", required: false, unique: true, index: true } },
+    });
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: { location: structuredClone(member()) as unknown as ProtoField },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: { type: "nested", required: false, fields: { geo: member() } },
+          after: { type: "nested", required: false, fields: { location: member() } },
+          memberRenames: [{ previousPath: ["geo"], path: ["location"] }],
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(address.fields!.location!.fields!.code).toMatchObject({ unique: false, index: true });
+    expect(address.fields!.geo!.fields!.code).toMatchObject({ unique: true });
+  });
+
   test("defers the unique members of a renamed object field until the copy script has filled them", () => {
     const members = {
       type: "nested",
