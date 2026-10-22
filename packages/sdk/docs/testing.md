@@ -218,6 +218,7 @@ What the script cannot reproduce:
 - Serial formats are reproduced for a single `%d`, `%x`, or `%X` specifier with an optional zero-padded width; an octal `%o` format fails generation with an error naming the field.
 - `gapless` is not reproduced: the numbers come from a sequence, so an insert that fails still uses up its number.
 - A date or datetime inside a nested object reads back as a string from `jsonb`, not a `Date`, or a `Temporal.PlainDate` or `Temporal.Instant` under `kyselyTypePlugin({ temporal: true })`, although the platform returns those types.
+- A `.unique()` date, datetime, or time inside a nested object compares the stored text, so two spellings of the same instant (`2026-01-01T00:00:00Z` and `2026-01-01T01:00:00+01:00`) are both accepted, although the platform rejects the second. Use one spelling in tests.
 - On a persistent PGlite (`dataDir`), tables created by an earlier run are kept as they were; drop them or start from an empty directory after changing a table definition.
 
 To hand-write DDL instead — for a table not in the schema, or to add a constraint — run your own statements after the script, or without it.
