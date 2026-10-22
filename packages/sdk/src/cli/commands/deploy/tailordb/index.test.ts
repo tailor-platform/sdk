@@ -1908,6 +1908,44 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.code!.required).toBe(false);
     expect(fields.code!.unique).toBe(false);
   });
+
+  test("defers the unique members of a renamed object field until the copy script has filled them", () => {
+    const members = {
+      type: "nested",
+      required: false,
+      fields: {
+        code: { type: "string", required: true, unique: true, index: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { token: { type: "uuid", required: false, unique: true, index: true } },
+        },
+      },
+    } as const;
+    const fields: Record<string, ProtoField> = {
+      details: structuredClone(members),
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "details",
+        {
+          kind: "field_renamed",
+          tableName: "Item",
+          fieldName: "details",
+          previousFieldName: "info",
+          before: structuredClone(members) as unknown as SnapshotFieldConfig,
+          after: structuredClone(members) as unknown as SnapshotFieldConfig,
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.info).toBeDefined();
+    const details = fields.details!;
+    expect(details.fields!.code).toMatchObject({ unique: false, index: true });
+    expect(details.fields!.geo!.fields!.token).toMatchObject({ unique: false, index: true });
+  });
 });
 
 describe("applyPreMigrationIndexAdjustments", () => {

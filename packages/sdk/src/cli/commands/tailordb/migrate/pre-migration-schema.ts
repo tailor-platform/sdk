@@ -255,6 +255,13 @@ interface PreMigrationFieldStrategy<F extends PreMigrationField> {
   adjustNestedMembers?: (field: F, change: FieldModifiedChange) => void;
 }
 
+function relaxNestedUnique(field: PreMigrationField): void {
+  for (const member of Object.values(field.fields ?? {})) {
+    if (member.unique) member.unique = false;
+    relaxNestedUnique(member);
+  }
+}
+
 function relaxFieldsForPreMigration<F extends PreMigrationField>(
   fields: Record<string, F>,
   typeChanges: Map<string, FieldDiffChange>,
@@ -278,6 +285,7 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
       if (newField) {
         if (change.after.required) newField.required = false;
         if (change.after.unique ?? false) newField.unique = false;
+        relaxNestedUnique(newField);
       }
       continue;
     }
