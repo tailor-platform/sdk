@@ -159,7 +159,6 @@ type DesiredCustomDomain = {
 /** Why a custom domain produced no change in this plan. */
 export type CustomDomainNoteKind =
   | "transfer-pending"
-  | "transfer-purge-outstanding"
   | "transfer-completed"
   | "transfer-not-completed"
   | "transfer-source-removing";
@@ -587,22 +586,17 @@ export async function planStaticWebsite(context: PlanContext) {
       }
 
       if (offer && offer.targetWorkspaceId === target) {
-        // A live offer is never extended.
-        if (offer.requestPurgedAt) {
-          customDomainNotes.push({
-            kind: "transfer-pending",
-            staticWebsiteName: name,
-            domain,
-            message: `transfer to workspace ${target} is pending`,
-          });
-        } else {
-          customDomainNotes.push({
-            kind: "transfer-purge-outstanding",
-            staticWebsiteName: name,
-            domain,
-            message: `transfer to workspace ${target} is pending; edge purge outstanding — the platform retries every 5 min; the target cannot accept until then`,
-          });
-        }
+        // A live offer is never extended. requestPurgedAt reports how far the
+        // platform has prepared the offer; all the reader needs is whether the
+        // receiving site can act on it.
+        customDomainNotes.push({
+          kind: "transfer-pending",
+          staticWebsiteName: name,
+          domain,
+          message: offer.requestPurgedAt
+            ? `transfer to workspace ${target} is pending`
+            : `transfer to workspace ${target} is pending; the receiving site cannot accept it yet`,
+        });
         continue;
       }
 

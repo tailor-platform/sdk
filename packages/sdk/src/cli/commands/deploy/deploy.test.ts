@@ -2106,10 +2106,10 @@ describe("custom domain notes", () => {
   function resultsWithNote(): PlanResults {
     const results = emptyResults();
     results.staticWebsite.customDomainNotes.push({
-      kind: "transfer-purge-outstanding",
+      kind: "transfer-pending",
       staticWebsiteName: "site-a",
       domain: "app.example.com",
-      message: "transfer to workspace ws-b is pending; edge purge outstanding",
+      message: "transfer to workspace ws-b is pending; the receiving site cannot accept it yet",
     });
     return results;
   }
@@ -2128,7 +2128,7 @@ describe("custom domain notes", () => {
     const printed = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
     expect(printed).toContain("Custom domains (no change):");
     expect(printed).toContain("app.example.com");
-    expect(printed).toContain("edge purge outstanding");
+    expect(printed).toContain("cannot accept it yet");
   });
 
   test("the JSON payload carries the same notes", () => {
@@ -2142,10 +2142,10 @@ describe("custom domain notes", () => {
     };
     expect(payload.notes).toEqual([
       {
-        type: "transfer-purge-outstanding",
+        type: "transfer-pending",
         resourceType: "staticwebsite.custom_domain_transfer",
         name: "app.example.com",
-        message: "transfer to workspace ws-b is pending; edge purge outstanding",
+        message: "transfer to workspace ws-b is pending; the receiving site cannot accept it yet",
       },
     ]);
   });

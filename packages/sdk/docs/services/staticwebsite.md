@@ -108,7 +108,7 @@ Three rules apply while an offer is open:
 
 - An offer expires after 7 days. Deploying the entry again after that opens a fresh offer.
 - The domain cannot be removed while its offer is open. Change the entry back to a plain string and deploy to withdraw the offer first.
-- Briefly after the offer opens, the receiving side cannot accept it yet while the edge cache clears. The plan says so; deploy again a few minutes later.
+- An offer takes a moment to become ready. Until it is, the receiving side cannot accept it and its deploy is refused; the giving side's plan says so.
 
 ## Type-safe URL References
 

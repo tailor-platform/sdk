@@ -531,7 +531,7 @@ describe("planStaticWebsite custom domain transfers", () => {
     ]);
   });
 
-  test("live offer whose purge is unconfirmed says the target cannot accept yet", async () => {
+  test("a live offer not yet ready says the receiving site cannot accept it", async () => {
     const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
       {
         domain: "example.com",
@@ -542,8 +542,10 @@ describe("planStaticWebsite custom domain transfers", () => {
     ]);
     const result = await plan(client, [transferTo("example.com")]);
 
-    expect(result.customDomainNotes[0]!.kind).toBe("transfer-purge-outstanding");
-    expect(result.customDomainNotes[0]!.message).toContain("edge purge outstanding");
+    expect(result.customDomainNotes[0]!.kind).toBe("transfer-pending");
+    expect(result.customDomainNotes[0]!.message).toContain("cannot accept it yet");
+    // The platform's internal readiness mechanism is not a user-facing concept.
+    expect(result.customDomainNotes[0]!.message).not.toContain("purge");
   });
 
   test("live offer to a different target: cancels, then requests", async () => {
