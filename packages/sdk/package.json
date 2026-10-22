@@ -168,7 +168,7 @@
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
     "typecheck:rs": "node scripts/typecheck-native.ts",
-    "perf:typecheck": "bash scripts/perf/exec.sh",
+    "perf:attest": "tsx scripts/perf/attest/run.ts",
     "perf:runtime": "bash scripts/perf/runtime-perf.sh",
     "prepublishOnly": "pnpm run build",
     "postinstall": "node postinstall.mjs",
@@ -233,6 +233,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@ark/attest": "0.57.0",
     "@electric-sql/pglite": "0.5.10",
     "@tailor-platform/shared": "workspace:^",
     "@tailor-platform/tailor-proto": "workspace:^",
@@ -247,6 +248,7 @@
     "sonda": "0.14.0",
     "tsdown": "0.23.1",
     "tsrs": "0.16.0-ts7.1.0-dev.20260929",
+    "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.0.5",
     "zinfer": "0.4.7"

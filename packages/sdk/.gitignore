@@ -2,12 +2,12 @@
 
 
 # Performance measurement results
-diagnostics.json
-diagnostics-summary.json
 runtime-perf.json
 runtime-perf-summary.json
 bundle-size.json
-scripts/perf/tsconfig.temp.json
+attest-metrics.json
+attest-changes.md
+.attest/
 
 # Integration test fixtures output
 src/cli/commands/deploy/__test_fixtures__/dist/

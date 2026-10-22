@@ -42,6 +42,12 @@ overrides:
   brace-expansion@>=5.0.5 <5.0.8: 5.0.12
   esbuild@>=0.17.0 <0.28.1: 0.28.2
 
+packageExtensions:
+  # make-synchronized (via @ark/attest) imports prettier without declaring it.
+  make-synchronized@*:
+    dependencies:
+      prettier: 3.6.2
+
 peerDependencyRules:
   allowedVersions:
     # madge@8 still declares typescript ^5.4.4, but its parser
