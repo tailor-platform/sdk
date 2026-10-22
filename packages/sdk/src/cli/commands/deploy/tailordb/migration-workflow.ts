@@ -99,6 +99,8 @@ export interface LongRunningMigrationResult {
 }
 
 const MIGRATION_SUBJECT = "migration";
+const MIGRATION_LEFTOVER_NOTE =
+  "It is labeled as owned by this app and can be removed by a later deploy.";
 
 /**
  * Upload the bundled migration script to the function registry, behind a line logging
@@ -147,6 +149,7 @@ async function teardown(
     workflowId,
     jobFunctionNames,
     subject: MIGRATION_SUBJECT,
+    leftoverNote: MIGRATION_LEFTOVER_NOTE,
   });
 }
 
@@ -162,6 +165,7 @@ async function reclaimLeftovers(
     name,
     jobFunctionNames,
     subject: MIGRATION_SUBJECT,
+    leftoverNote: MIGRATION_LEFTOVER_NOTE,
   });
 }
 

@@ -79,6 +79,7 @@ function withSeedWorkflow<T>(
         machineUserName: execution.machineUserName,
       },
       appName: execution.appName,
+      leftoverNote: "It is removed by the next `tailor seed apply` for this namespace.",
     },
     use,
   );
@@ -235,6 +236,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
             mode: "plain",
           });
           success = false;
+          break;
         }
       }
     },
@@ -363,48 +365,53 @@ async function seedIdpUser(
       { mode: "plain" },
     );
   };
-  const interrupted = await withSeedWorkflow(
-    {
-      execution,
-      kind: "idp-seed",
-      namespace: idpNamespace,
-      description: `Temporary function for seeding IdP namespace ${idpNamespace}`,
-      code: scriptCode,
-    },
-    async (runScript) => {
-      for (const [index, chunk] of chunks.entries()) {
-        logChunkProgress(index, `${chunk.length} rows`);
-        let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
-        try {
-          run = await runIdpScript({
-            runScript,
-            arg: {
-              users: chunk,
-              upsert,
-              offset: index * IDP_USER_CHUNK_SIZE,
-              total: rows.length,
-            },
-            indent: "    ",
-            reportSuccess: reportChunkCounts,
-          });
-        } catch (error) {
-          warnInterruptedChunk();
-          return { transportError: error };
+  let interrupted: { transportError?: unknown } | undefined;
+  try {
+    interrupted = await withSeedWorkflow(
+      {
+        execution,
+        kind: "idp-seed",
+        namespace: idpNamespace,
+        description: `Temporary function for seeding IdP namespace ${idpNamespace}`,
+        code: scriptCode,
+      },
+      async (runScript) => {
+        for (const [index, chunk] of chunks.entries()) {
+          logChunkProgress(index, `${chunk.length} rows`);
+          let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
+          try {
+            run = await runIdpScript({
+              runScript,
+              arg: {
+                users: chunk,
+                upsert,
+                offset: index * IDP_USER_CHUNK_SIZE,
+                total: rows.length,
+              },
+              indent: "    ",
+              reportSuccess: reportChunkCounts,
+            });
+          } catch (error) {
+            warnInterruptedChunk();
+            return { transportError: error };
+          }
+          if (run.outcomeUnknown) {
+            warnInterruptedChunk();
+            return {};
+          }
+          totals.processed += readCount(run.parsed, "processed");
+          totals.created += readCount(run.parsed, "created");
+          totals.updated += readCount(run.parsed, "updated");
+          if (!run.success) {
+            success = false;
+          }
         }
-        if (run.outcomeUnknown) {
-          warnInterruptedChunk();
-          return {};
-        }
-        totals.processed += readCount(run.parsed, "processed");
-        totals.created += readCount(run.parsed, "created");
-        totals.updated += readCount(run.parsed, "updated");
-        if (!run.success) {
-          success = false;
-        }
-      }
-      return undefined;
-    },
-  );
+        return undefined;
+      },
+    );
+  } catch (error) {
+    return { success: false, processed: totals.processed, transportError: error };
+  }
   if (interrupted) {
     return { success: false, processed: totals.processed, ...interrupted };
   }

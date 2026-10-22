@@ -17,9 +17,11 @@ import {
   teardownTemporaryWorkflow,
   uploadTemporaryFunction,
 } from "#/cli/shared/temporary-workflow";
+import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-executor";
 import type { CreatedTemporaryWorkflow } from "#/cli/shared/temporary-workflow";
+import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
@@ -50,6 +52,8 @@ export interface ScriptWorkflowOptions {
   invoker: ScriptInvoker;
   /** Name of the owning application, recorded in the resources' labels */
   appName: string;
+  /** Sentence telling how a resource left behind after a failed removal gets removed */
+  leftoverNote: string;
   /** Poll interval in milliseconds (default: 3000ms) */
   pollIntervalMs?: number;
 }
@@ -71,12 +75,19 @@ export async function withScriptWorkflow<T>(
   options: ScriptWorkflowOptions,
   use: (run: RunScript) => Promise<T>,
 ): Promise<T> {
-  const { client, workspaceId, name, appName, invoker } = options;
+  const { client, workspaceId, name, appName, invoker, leftoverNote } = options;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
-  await reclaimTemporaryWorkflow({ client, workspaceId, name, subject: SUBJECT });
+  await reclaimTemporaryWorkflow({
+    client,
+    workspaceId,
+    name,
+    subject: SUBJECT,
+    leftoverNote,
+  });
 
   const created: CreatedTemporaryWorkflow = {};
+  let workflowId: string;
   try {
     await uploadTemporaryFunction({
       client,
@@ -87,7 +98,7 @@ export async function withScriptWorkflow<T>(
       appName,
       appId: undefined,
     });
-    await createTemporaryWorkflow(
+    workflowId = await createTemporaryWorkflow(
       {
         client,
         workspaceId,
@@ -106,12 +117,9 @@ export async function withScriptWorkflow<T>(
       name,
       workflowId: created.workflowId,
       subject: SUBJECT,
+      leftoverNote,
     });
     throw error;
-  }
-  const workflowId = created.workflowId;
-  if (!workflowId) {
-    throw new Error(`Temporary ${SUBJECT} workflow '${name}' was created without an id.`);
   }
 
   const run: RunScript = async (arg) => {
@@ -128,33 +136,56 @@ export async function withScriptWorkflow<T>(
       pollInterval,
       subject: "Script",
     });
-    return await readOutcome(client, workspaceId, execution);
+    return await readOutcome({ client, workspaceId, execution, pollInterval });
   };
 
   try {
     return await use(run);
   } finally {
-    await teardownTemporaryWorkflow({ client, workspaceId, name, workflowId, subject: SUBJECT });
+    await teardownTemporaryWorkflow({
+      client,
+      workspaceId,
+      name,
+      workflowId,
+      subject: SUBJECT,
+      leftoverNote,
+    });
   }
+}
+
+/** Reads of the job's function execution tried through transient errors. */
+const READ_ATTEMPTS = 3;
+
+interface ReadOutcomeParams {
+  client: OperatorClient;
+  workspaceId: string;
+  /** Workflow execution in a terminal state */
+  execution: WorkflowExecution;
+  /** Wait between reads in milliseconds */
+  pollInterval: number;
 }
 
 /**
  * Read the logs and result of the job that ran the script. A workflow
- * execution carries neither; both live on the job's function execution.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param execution - Workflow execution in a terminal state
+ * execution carries neither; both live on the job's function execution, and
+ * the run's outcome is lost if they cannot be read, so a transient error is
+ * retried.
+ * @param params - Execution to read the outcome of
  * @returns Result in the shape synchronous execution reports
  */
-async function readOutcome(
-  client: OperatorClient,
-  workspaceId: string,
-  execution: WorkflowExecution,
-): Promise<ScriptExecutionResult> {
+async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionResult> {
+  const { client, workspaceId, execution, pollInterval } = params;
   const executionId = execution.jobExecutions.at(-1)?.executionId;
-  const { execution: job } = executionId
-    ? await client.getFunctionExecution({ workspaceId, executionId })
-    : { execution: undefined };
+  let job: FunctionExecution | undefined;
+  for (let attempt = 1; executionId && attempt <= READ_ATTEMPTS; attempt++) {
+    try {
+      ({ execution: job } = await client.getFunctionExecution({ workspaceId, executionId }));
+      break;
+    } catch (error) {
+      if (attempt === READ_ATTEMPTS || !isRetryableWaitError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+  }
   const logs = job ? joinFunctionLogMessages(job.logEntries) : "";
   const result = job?.result ?? "";
 

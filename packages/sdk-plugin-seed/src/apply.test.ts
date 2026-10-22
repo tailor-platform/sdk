@@ -538,6 +538,21 @@ describe("seedApplyCommand", () => {
     expect(logger.out).toHaveBeenCalledWith({ success: true, processed: { _User: 51 } });
   });
 
+  test("reports the processed counts before rethrowing when the _User workflow cannot be registered", async () => {
+    const rows = Array.from({ length: 3 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    const setupError = new Error("permission denied: create workflow");
+    sdk.withScriptWorkflow.mockRejectedValue(setupError);
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--json"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toBe(setupError);
+    expect(logger.out).toHaveBeenCalledWith({ success: false, processed: {} });
+  });
+
   test("reports confirmed progress before rethrowing a _User chunk transport error", async () => {
     const rows = Array.from({ length: 30 }, (_, i) => ({ name: `user-${i}` }));
     jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
@@ -784,6 +799,32 @@ describe("seedApplyCommand", () => {
         arg: expect.objectContaining({ upsert: true }),
       }),
     );
+  });
+
+  test("stops running the remaining TailorDB chunks after one fails", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([
+      { data: { User: [{ id: "u1" }] }, order: ["User"], index: 0 },
+      { data: { User: [{ id: "u2" }] }, order: ["User"], index: 1 },
+    ]);
+    workflow.runScript.mockResolvedValue({
+      error: undefined,
+      logs: "",
+      result: '{"success":false,"processed":{},"errors":["User: duplicate id"]}',
+      success: true,
+    });
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--skip-idp"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(workflow.runScript).toHaveBeenCalledTimes(1);
   });
 
   test("sorts a self-referencing table's full record set before it reaches chunkSeedData", async () => {

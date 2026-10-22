@@ -112,6 +112,8 @@ export interface TeardownTemporaryWorkflowParams {
   jobFunctionNames?: readonly string[];
   /** What the resources run, used in warnings (e.g. `migration`). */
   subject: string;
+  /** Sentence of the warning telling how a resource left behind gets removed. */
+  leftoverNote: string;
 }
 
 /**
@@ -125,7 +127,7 @@ export interface TeardownTemporaryWorkflowParams {
 export async function teardownTemporaryWorkflow(
   params: TeardownTemporaryWorkflowParams,
 ): Promise<void> {
-  const { client, workspaceId, name, workflowId, subject } = params;
+  const { client, workspaceId, name, workflowId, subject, leftoverNote } = params;
   const jobFunctionNames = params.jobFunctionNames ?? [name];
   const steps: [label: string, resource: string, run: () => Promise<unknown>][] = [];
   if (workflowId) {
@@ -149,8 +151,7 @@ export async function teardownTemporaryWorkflow(
       if (isNotFoundError(error)) continue;
       logger.warn(
         `Could not remove the temporary ${subject} ${label} '${resource}': ` +
-          `${error instanceof Error ? error.message : String(error)}. ` +
-          "It is labeled as owned by this app and can be removed by a later deploy.",
+          `${error instanceof Error ? error.message : String(error)}. ${leftoverNote}`,
       );
     }
   }

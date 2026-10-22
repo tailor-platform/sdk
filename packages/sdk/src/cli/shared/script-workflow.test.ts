@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
+import { logger } from "./logger";
 import { withScriptWorkflow } from "./script-workflow";
 import type { OperatorClient } from "./client";
 import type { ScriptInvoker } from "./script-executor";
@@ -82,6 +83,7 @@ const baseOptions = {
   code: "export async function main() {}",
   invoker,
   appName: "my-app",
+  leftoverNote: "It is removed by the next run.",
   pollIntervalMs: 1,
 };
 
@@ -158,6 +160,33 @@ describe("withScriptWorkflow", () => {
 
     expect(mocks.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-1" });
     expect(calls.at(-1)).toBe("deleteFunctionRegistry");
+  });
+
+  test("reads the job's outcome again after a transient error", async () => {
+    const { client, mocks } = createMockClient({ result: '{"success":true}' });
+    mocks.getFunctionExecution
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockImplementation(() =>
+        Promise.resolve({
+          execution: { logEntries: [], error: undefined, result: '{"success":true}' },
+        }),
+      );
+
+    const outcome = await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    expect(outcome).toMatchObject({ success: true, result: '{"success":true}' });
+    expect(mocks.getFunctionExecution).toHaveBeenCalledTimes(2);
+  });
+
+  test("tells how a resource that could not be removed gets removed", async () => {
+    const { client, mocks } = createMockClient();
+    mocks.deleteWorkflow.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+
+    await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    expect(vi.mocked(logger.warn).mock.calls.map(([message]) => message)).toEqual([
+      expect.stringContaining("It is removed by the next run."),
+    ]);
   });
 
   test("reclaims the leftovers of an interrupted run before registering the script", async () => {
