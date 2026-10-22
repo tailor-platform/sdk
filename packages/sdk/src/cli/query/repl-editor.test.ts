@@ -46,6 +46,16 @@ describe("highlightSqlLines (multi-line)", () => {
     expect(out[1]).toContain("\x1b[34mFROM\x1b[0m");
   });
 
+  test("does not open a block comment from /* inside a dollar-quoted string", () => {
+    const out = highlightSqlLines(["SELECT $$/*$$ AS value,", "1 AS n;"]);
+    expect(out[1]).toContain("\x1b[36m1\x1b[0m");
+  });
+
+  test("does not open a block comment from /* inside a tagged dollar-quoted string", () => {
+    const out = highlightSqlLines(["SELECT $body$/*$body$ AS value,", "1 AS n;"]);
+    expect(out[1]).toContain("\x1b[36m1\x1b[0m");
+  });
+
   test("does not open a block comment from /* inside a -- comment", () => {
     const out = highlightSqlLines(["SELECT 1 -- /*", "FROM users"]);
     expect(out[1]).toContain("\x1b[34mFROM\x1b[0m");

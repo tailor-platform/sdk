@@ -55,6 +55,8 @@ function createPieceBuffer() {
   };
 }
 
+const DOLLAR_QUOTE_TAG = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/;
+
 function splitSqlLine(line: string, startDepth: number) {
   let depth = startDepth;
   const buffer = createPieceBuffer();
@@ -76,6 +78,7 @@ function splitSqlLine(line: string, startDepth: number) {
     i = j;
   };
   while (i < line.length) {
+    const dollarTag = line[i] === "$" ? line.slice(i).match(DOLLAR_QUOTE_TAG)?.[0] : undefined;
     if (depth > 0) {
       takeBlockComment(i);
     } else if (line.startsWith("/*", i)) {
@@ -84,6 +87,11 @@ function splitSqlLine(line: string, startDepth: number) {
     } else if (line.startsWith("--", i)) {
       buffer.addLiteral(line.slice(i));
       i = line.length;
+    } else if (dollarTag) {
+      const close = line.indexOf(dollarTag, i + dollarTag.length);
+      const stop = close === -1 ? line.length : close + dollarTag.length;
+      buffer.addCode(line.slice(i, stop));
+      i = stop;
     } else if (line[i] === "'" || line[i] === '"') {
       const quote = line[i];
       let j = i + 1;
