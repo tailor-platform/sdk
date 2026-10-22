@@ -767,22 +767,21 @@ describe("seedApplyCommand", () => {
       typesIncluded: ["User"],
     });
     sdk.chunkSeedData.mockReturnValue([{ data: { User: [{ id: "u1" }] }, order: ["User"] }]);
-    workflow.runScript.mockResolvedValue({
-      error: undefined,
-      logs: "",
-      result:
-        '{"success":true,"processed":{"User":{"inserted":0,"updated":1,"skipped":0}},"errors":[]}',
-      success: true,
-    });
-    workflow.runScript.mockResolvedValue({
-      error: undefined,
-      logs: "",
-      result: '{"success":true,"processed":1,"created":0,"updated":1,"skipped":0,"errors":[]}',
-      success: true,
-    });
+    workflow.runScript.mockImplementation(({ name }: { name: string }) =>
+      Promise.resolve({
+        error: undefined,
+        logs: "",
+        result:
+          name === "tailor-seed-idp-seed--idp"
+            ? '{"success":true,"processed":1,"created":0,"updated":1,"skipped":0,"errors":[]}'
+            : '{"success":true,"processed":{"User":{"inserted":0,"updated":1,"skipped":0}},"errors":[]}',
+        success: true,
+      }),
+    );
 
-    await runApply(["--upsert"]);
+    await runApply(["--upsert", "--json"]);
 
+    expect(logger.out).toHaveBeenCalledWith({ success: true, processed: { User: 1, _User: 1 } });
     expect(sdk.withScriptWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({ name: "tailor-seed-tailordb--tailordb", code: "code" }),
       expect.any(Function),
