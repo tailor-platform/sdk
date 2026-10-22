@@ -198,11 +198,18 @@ export function createKyselyPGlite<DB = Record<string, never>>(
   return new Kysely<DB>({ dialect });
 }
 
+const REPLICATION_ROLE = "session_replication_role";
+
+function setReplicationRole(client: PGliteClient, value: string): Promise<PGliteQueryResult> {
+  return client.query("SELECT set_config($1, $2, false)", [REPLICATION_ROLE, value]);
+}
+
 /**
  * Run `prepare` with relations unchecked, so a test can stage rows that predate a relation (for
- * example rows whose parent does not exist, which the migration under test repairs). Relations are
- * checked again when `prepare` returns or throws, so the script under test still runs against
- * checked relations. NOT NULL, UNIQUE, and CHECK constraints stay enforced.
+ * example rows whose parent does not exist, which the migration under test repairs). The setting
+ * from before the call is restored when `prepare` returns or throws, so the script under test still
+ * runs against checked relations, and a call inside another `prepareFixtures` leaves the outer one
+ * unchecked. NOT NULL, UNIQUE, and CHECK constraints stay enforced.
  * @param client - The PGlite instance the rows are written to
  * @param prepare - Writes the rows, for example with the Kysely instance of the same client
  * @returns Whatever `prepare` returns
@@ -218,10 +225,12 @@ export async function prepareFixtures<T>(
   client: PGliteClient,
   prepare: () => Promise<T>,
 ): Promise<T> {
-  await client.query("SET session_replication_role = replica");
+  const found = await client.query(`SHOW ${REPLICATION_ROLE}`);
+  const previous = (found.rows[0] as Record<string, unknown> | undefined)?.[REPLICATION_ROLE];
+  await setReplicationRole(client, "replica");
   try {
     return await prepare();
   } finally {
-    await client.query("SET session_replication_role = origin");
+    await setReplicationRole(client, typeof previous === "string" ? previous : "origin");
   }
 }

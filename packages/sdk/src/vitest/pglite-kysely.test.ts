@@ -232,11 +232,15 @@ describe("createKyselyPGlite Temporal support", () => {
 });
 
 describe("prepareFixtures", () => {
-  const REPLICA = "SET session_replication_role = replica";
-  const ORIGIN = "SET session_replication_role = origin";
+  const ROLE = "session_replication_role";
+  const setRole = (value: string) => ({
+    sql: "SELECT set_config($1, $2, false)",
+    params: [ROLE, value],
+  });
+  const callerRole = (value: string) => [{ [ROLE]: value }];
 
-  test("runs the preparation between the statements that unchecks and rechecks relations, and returns its result", async () => {
-    const { client, queries } = createStubClient();
+  test("runs the preparation with relations unchecked, restores the caller's setting, and returns its result", async () => {
+    const { client, queries } = createStubClient(callerRole("origin"));
 
     const result = await prepareFixtures(client, async () => {
       await client.query("INSERT INTO prepared");
@@ -244,16 +248,29 @@ describe("prepareFixtures", () => {
     });
 
     expect(result).toBe("done");
-    expect(queries.map((q) => q.sql)).toEqual([REPLICA, "INSERT INTO prepared", ORIGIN]);
+    expect(queries).toEqual([
+      { sql: `SHOW ${ROLE}`, params: [] },
+      setRole("replica"),
+      { sql: "INSERT INTO prepared", params: [] },
+      setRole("origin"),
+    ]);
   });
 
-  test("rechecks relations and rethrows when the preparation fails", async () => {
-    const { client, queries } = createStubClient();
+  test("restores the caller's setting and rethrows when the preparation fails", async () => {
+    const { client, queries } = createStubClient(callerRole("origin"));
     const failure = new Error("insert failed");
 
     await expect(prepareFixtures(client, () => Promise.reject(failure))).rejects.toBe(failure);
 
-    expect(queries.map((q) => q.sql)).toEqual([REPLICA, ORIGIN]);
+    expect(queries.map((q) => q.params)).toEqual([[], [ROLE, "replica"], [ROLE, "origin"]]);
+  });
+
+  test("hands back the setting it found, which is not always origin", async () => {
+    const { client, queries } = createStubClient(callerRole("replica"));
+
+    await prepareFixtures(client, () => Promise.resolve());
+
+    expect(queries.at(-1)).toEqual(setRole("replica"));
   });
 
   describe("on PGlite", { timeout: 30_000 }, () => {
@@ -265,19 +282,17 @@ describe("prepareFixtures", () => {
       `);
       return pglite;
     }
+    const orphan = (pglite: PGlite) =>
+      pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`);
 
     test("prepares a row whose parent is missing, and checks the relation again afterwards", async () => {
       const pglite = await setup();
       try {
-        await prepareFixtures(pglite, () =>
-          pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`),
-        );
+        await prepareFixtures(pglite, () => orphan(pglite));
         const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
         expect(prepared.rows).toHaveLength(1);
 
-        await expect(
-          pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`),
-        ).rejects.toThrow(/foreign key/);
+        await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
       } finally {
         await pglite.close();
       }
@@ -290,9 +305,23 @@ describe("prepareFixtures", () => {
           prepareFixtures(pglite, () => pglite.query(`INSERT INTO "Missing" DEFAULT VALUES`)),
         ).rejects.toThrow(/Missing/);
 
-        await expect(
-          pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`),
-        ).rejects.toThrow(/foreign key/);
+        await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
+      } finally {
+        await pglite.close();
+      }
+    });
+
+    test("keeps relations unchecked for the rest of an outer preparation after a nested one returns", async () => {
+      const pglite = await setup();
+      try {
+        await prepareFixtures(pglite, async () => {
+          await prepareFixtures(pglite, () => orphan(pglite));
+          await orphan(pglite);
+        });
+        const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
+        expect(prepared.rows).toHaveLength(2);
+
+        await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
       } finally {
         await pglite.close();
       }
