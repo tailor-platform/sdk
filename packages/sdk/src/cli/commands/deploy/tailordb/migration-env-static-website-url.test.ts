@@ -10,7 +10,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import * as migrationModule from "./migration";
 import {
-  createMockClient,
+  createMockClient as createBaseMockClient,
   createPlanResult,
   mkPendingMigration,
   recordRemoteCheckpoint,
@@ -46,8 +46,8 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
 }));
 
 describe("applyTailorDB: env static website URL resolution for migration scripts", () => {
-  function createStaticWebsiteClient() {
-    return createMockClient({
+  function createMockClient() {
+    return createBaseMockClient({
       getStaticWebsite: vi.fn().mockResolvedValue({
         staticwebsite: { url: "https://my-site.tailor.tech" },
       }),
@@ -87,7 +87,7 @@ describe("applyTailorDB: env static website URL resolution for migration scripts
   });
 
   test("re-resolves an env static website placeholder before executing the migration script", async () => {
-    const client = createStaticWebsiteClient();
+    const client = createMockClient();
     const planResult = buildPlanResult({ siteUrl: "my-site:url" });
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkAddTypeMigration()]);
 
@@ -103,7 +103,7 @@ describe("applyTailorDB: env static website URL resolution for migration scripts
   });
 
   test("leaves env untouched, with no platform lookup, when it holds no placeholder", async () => {
-    const client = createStaticWebsiteClient();
+    const client = createMockClient();
     const planResult = buildPlanResult({ plain: "value" });
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkAddTypeMigration()]);
 

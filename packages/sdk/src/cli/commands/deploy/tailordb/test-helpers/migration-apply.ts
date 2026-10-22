@@ -1,9 +1,15 @@
 import { assert, vi } from "vitest";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
+import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/migration-number";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { DiffChange, MigrationDiff } from "#/cli/commands/tailordb/migrate/diff-calculator";
-import type { NormalizedSchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot";
+import type {
+  NormalizedSchemaSnapshot,
+  SnapshotFieldConfig,
+  SnapshotSettings,
+  TailorDBSnapshotType,
+} from "#/cli/commands/tailordb/migrate/snapshot";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -128,7 +134,7 @@ export function typeMetaRequest(tableName: string, namespace = NAMESPACE) {
 
 interface TypeEntryOptions {
   namespace?: string;
-  fields?: Record<string, { type: string; required: boolean }>;
+  fields?: Record<string, SnapshotFieldConfig>;
 }
 
 export function typeEntry(tableName: string, options: TypeEntryOptions = {}) {
@@ -189,7 +195,7 @@ export function mkPendingMigration(
   const hasScript = options.hasScript ?? true;
   const namespace = options.namespace ?? NAMESPACE;
   const migrationsDir = options.migrationsDir ?? MIGRATIONS_DIR;
-  const label = String(number).padStart(4, "0");
+  const label = formatMigrationNumber(number);
   return {
     number,
     scriptPath: `${migrationsDir}/${label}/migrate.ts`,
@@ -209,9 +215,9 @@ export function mkPendingMigration(
 
 export function snapshotTable(
   name: string,
-  fields: Record<string, { type: string; required: boolean }>,
-  settings?: Record<string, unknown>,
-) {
+  fields: Record<string, SnapshotFieldConfig>,
+  settings?: SnapshotSettings,
+): TailorDBSnapshotType {
   return { name, pluralForm: `${name.toLowerCase()}s`, fields, ...(settings && { settings }) };
 }
 
