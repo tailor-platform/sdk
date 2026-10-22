@@ -354,6 +354,235 @@ describe("buildPreMigrationTables", () => {
   });
 });
 
+describe("buildPreMigrationTables relations", () => {
+  const owner = (extra: Partial<SnapshotFieldConfig> = {}) =>
+    snapshotField("uuid", { required: true, foreignKey: true, foreignKeyType: "User", ...extra });
+  const post = (fields: Record<string, SnapshotFieldConfig>) => table("Post", fields);
+
+  test("a relation whose target is in the Pre-phase schema keeps its reference", () => {
+    const tables = buildPreMigrationTables(snapshot(user, post({ ownerID: owner() })), diff([]));
+    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({
+      foreignKey: true,
+      foreignKeyType: "User",
+    });
+  });
+
+  test("a relation keeps its reference when the target is only retained for the script", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([{ kind: "table_removed", tableName: "User", before: user }]),
+    );
+    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({ foreignKey: true });
+  });
+
+  test("a relation to a table outside the Pre-phase schema loses its reference", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(post({ ownerID: owner({ foreignKeyType: "Ghost" }) })),
+      diff([]),
+    );
+    const ownerID = tableNamed(tables, "Post").fields.ownerID;
+    expect(ownerID).toMatchObject({ type: "uuid", required: true });
+    expect(ownerID).not.toHaveProperty("foreignKey");
+    expect(ownerID).not.toHaveProperty("foreignKeyType");
+  });
+
+  test("a relation loses its reference while a pending type change leaves it a different type from the target", () => {
+    const toNickname = (type: string) =>
+      snapshotField(type, {
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "nickname",
+      });
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ author: toNickname("string") })),
+      diff([
+        {
+          kind: "field_type_modified",
+          tableName: "Post",
+          fieldName: "author",
+          before: toNickname("integer"),
+          after: toNickname("string"),
+        },
+      ]),
+    );
+    const author = tableNamed(tables, "Post").fields.author;
+    expect(author).toMatchObject({ type: "integer" });
+    expect(author).not.toHaveProperty("foreignKey");
+  });
+
+  test("a relation keeps its reference while a pending type change leaves it the type of its target", () => {
+    const toNickname = (type: string) =>
+      snapshotField(type, {
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "nickname",
+      });
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ author: toNickname("string") })),
+      diff([
+        {
+          kind: "field_type_modified",
+          tableName: "Post",
+          fieldName: "author",
+          before: toNickname("string"),
+          after: toNickname("string"),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "Post").fields.author).toMatchObject({
+      foreignKey: true,
+      foreignKeyField: "nickname",
+    });
+  });
+
+  test("a relation to a field whose unique constraint is still withheld loses its reference", () => {
+    const withUniqueNickname = {
+      ...user,
+      fields: {
+        ...user.fields,
+        nickname: snapshotField("string", { required: true, unique: true }),
+      },
+    };
+    const tables = buildPreMigrationTables(
+      snapshot(
+        withUniqueNickname,
+        post({
+          author: snapshotField("string", {
+            foreignKey: true,
+            foreignKeyType: "User",
+            foreignKeyField: "nickname",
+          }),
+        }),
+      ),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "nickname",
+          before: snapshotField("string", { required: true }),
+          after: snapshotField("string", { required: true, unique: true }),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "User").fields.nickname).toMatchObject({ unique: false });
+    expect(tableNamed(tables, "Post").fields.author).not.toHaveProperty("foreignKey");
+  });
+
+  test("a relation the migration retargets loses its reference, since its stored values still point at the old target", () => {
+    const person = { ...user, name: "Person", pluralForm: "People" };
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([
+        {
+          kind: "table_renamed",
+          tableName: "Person",
+          previousTableName: "User",
+          before: user,
+          after: person,
+        },
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "ownerID",
+          before: owner(),
+          after: owner({ foreignKeyType: "Person" }),
+        },
+      ]),
+    );
+    const ownerID = tableNamed(tables, "Post").fields.ownerID;
+    expect(ownerID).toMatchObject({ type: "uuid", required: true });
+    expect(ownerID).not.toHaveProperty("foreignKey");
+  });
+
+  test("a relation inside a nested field loses its reference when the migration retargets it, and the other members keep theirs", () => {
+    const person = { ...user, name: "Person", pluralForm: "People" };
+    const nested = (target: string) =>
+      snapshotField("nested", {
+        fields: {
+          owner: owner({ foreignKeyType: target }),
+          editor: owner(),
+        },
+      });
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ info: nested("User") })),
+      diff([
+        {
+          kind: "table_renamed",
+          tableName: "Person",
+          previousTableName: "User",
+          before: user,
+          after: person,
+        },
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "info",
+          before: nested("User"),
+          after: nested("Person"),
+        },
+      ]),
+    );
+    const members = tableNamed(tables, "Post").fields.info!.fields!;
+    expect(members.owner).not.toHaveProperty("foreignKey");
+    expect(members.editor).toMatchObject({ foreignKey: true, foreignKeyType: "User" });
+  });
+
+  test("a relation the migration adds to an existing field keeps its reference, since there is no old target to repair", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "ownerID",
+          before: snapshotField("uuid", { required: true }),
+          after: owner(),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({
+      foreignKey: true,
+      foreignKeyType: "User",
+    });
+  });
+
+  test("a relation the migration adds to a member of a nested field keeps its reference", () => {
+    const nested = (member: SnapshotFieldConfig) =>
+      snapshotField("nested", { fields: { owner: member } });
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ info: nested(owner()) })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "info",
+          before: nested(snapshotField("uuid", { required: true })),
+          after: nested(owner()),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "Post").fields.info!.fields!.owner).toMatchObject({
+      foreignKey: true,
+    });
+  });
+
+  test("a relation keeps its reference when the migration modifies the field without retargeting it", () => {
+    const tables = buildPreMigrationTables(
+      snapshot(user, post({ ownerID: owner() })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "ownerID",
+          before: owner({ required: false }),
+          after: owner(),
+        },
+      ]),
+    );
+    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({ foreignKey: true });
+  });
+});
+
 describe("generateMigrationPgliteSchema", () => {
   test("renders the namespace script module", () => {
     const content = generateMigrationPgliteSchema(snapshot(user), diff([]));
@@ -440,7 +669,7 @@ describe("agreement with db.ts", () => {
   });
 });
 
-describe("generated DDL on PGlite", () => {
+describe("generated DDL on PGlite", { timeout: 30_000 }, () => {
   const pglite = new PGlite();
   // oxlint-disable-next-line typescript/no-explicit-any -- rows are asserted by shape below
   const db = createKyselyPGlite<any>(pglite);
@@ -493,5 +722,121 @@ describe("generated DDL on PGlite", () => {
       { email: "unknown@example.com", handle: "n1" },
       { email: "b@example.com", handle: "n2" },
     ]);
+  });
+
+  test("stages children after their parents, and rejects a child whose parent is missing", async () => {
+    const post = table("Post", {
+      ownerID: snapshotField("uuid", { required: true, foreignKey: true, foreignKeyType: "User" }),
+    });
+    const pre = new PGlite();
+    await pre.exec(generateSchemaDDL(buildPreMigrationTables(snapshot(user, post), diff([]))));
+    await expect(
+      pre.exec(`INSERT INTO "Post" ("ownerID") VALUES (gen_random_uuid())`),
+    ).rejects.toThrow(/foreign key/);
+    await pre.close();
+  });
+
+  test("stages the rows that still point at the old parent while the migration retargets a relation to its renamed table", async () => {
+    const person = { ...user, name: "Person", pluralForm: "People" };
+    const order = table("Order", {
+      ownerID: snapshotField("uuid", { required: true, foreignKey: true, foreignKeyType: "User" }),
+    });
+    const pre = new PGlite();
+    await pre.exec(
+      generateSchemaDDL(
+        buildPreMigrationTables(
+          snapshot(user, order),
+          diff([
+            {
+              kind: "table_renamed",
+              tableName: "Person",
+              previousTableName: "User",
+              before: user,
+              after: person,
+            },
+            {
+              kind: "field_modified",
+              tableName: "Order",
+              fieldName: "ownerID",
+              before: snapshotField("uuid", {
+                required: true,
+                foreignKey: true,
+                foreignKeyType: "User",
+              }),
+              after: snapshotField("uuid", {
+                required: true,
+                foreignKey: true,
+                foreignKeyType: "Person",
+              }),
+            },
+          ]),
+        ),
+      ),
+    );
+    const { rows } = await pre.query<{ id: string }>(
+      `INSERT INTO "User" (name, status, nickname, score) VALUES ('a', 'active', 'n', 1) RETURNING id`,
+    );
+    await pre.query(`INSERT INTO "Order" ("ownerID") VALUES ($1)`, [rows[0]!.id]);
+    const staged = await pre.query(`SELECT 1 FROM "Order"`);
+    expect(staged.rows).toHaveLength(1);
+    await pre.close();
+  });
+
+  test("stages the rows whose nested relation still points at the old parent when the migration retargets it", async () => {
+    const person = { ...user, name: "Person", pluralForm: "People" };
+    const member = (target: string) =>
+      snapshotField("uuid", { foreignKey: true, foreignKeyType: target });
+    const info = (target: string) =>
+      snapshotField("nested", { required: true, fields: { owner: member(target) } });
+    const pre = new PGlite();
+    await pre.exec(
+      generateSchemaDDL(
+        buildPreMigrationTables(
+          snapshot(user, table("Order", { info: info("User") })),
+          diff([
+            {
+              kind: "table_renamed",
+              tableName: "Person",
+              previousTableName: "User",
+              before: user,
+              after: person,
+            },
+            {
+              kind: "field_modified",
+              tableName: "Order",
+              fieldName: "info",
+              before: info("User"),
+              after: info("Person"),
+            },
+          ]),
+        ),
+      ),
+    );
+    const { rows } = await pre.query<{ id: string }>(
+      `INSERT INTO "User" (name, status, nickname, score) VALUES ('a', 'active', 'n', 1) RETURNING id`,
+    );
+    await pre.query(`INSERT INTO "Order" (info) VALUES ($1::jsonb)`, [
+      JSON.stringify({ owner: rows[0]!.id }),
+    ]);
+    const staged = await pre.query(`SELECT 1 FROM "Order"`);
+    expect(staged.rows).toHaveLength(1);
+    await pre.close();
+  });
+
+  test("the module still renders when a relation cannot be a foreign key", () => {
+    const content = generateMigrationPgliteSchema(
+      snapshot(
+        table("Post", {
+          ownerID: snapshotField("uuid", {
+            required: true,
+            foreignKey: true,
+            foreignKeyType: "Ghost",
+          }),
+        }),
+      ),
+      diff([]),
+    );
+    expect(content).toContain('CREATE TABLE IF NOT EXISTS "Post"');
+    expect(content).not.toContain("REFERENCES");
   });
 });

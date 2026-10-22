@@ -318,28 +318,101 @@ function declaredType(type: string): string {
   return type === "bool" ? "boolean" : type;
 }
 
+type ReferenceCheck = { pgType: string } | { problem: string };
+
+function checkReference(
+  reference: Reference,
+  tables: ReadonlyMap<string, DDLTableConfig>,
+): ReferenceCheck {
+  const target = tables.get(reference.table);
+  if (!target) return { problem: `references unknown table "${reference.table}".` };
+  const targetField =
+    reference.field === "id" ? { type: "uuid", unique: true } : target.fields[reference.field];
+  if (!targetField) {
+    return {
+      problem: `references unknown field "${reference.field}" of table "${reference.table}".`,
+    };
+  }
+  const sameType =
+    reference.field === "id" || declaredType(targetField.type) === declaredType(reference.type);
+  if (!targetField.unique || !sameType) {
+    return {
+      problem: `references "${reference.table}"."${reference.field}", which must be unique and of the same type as the referencing field.`,
+    };
+  }
+  return { pgType: mapFieldTypeToPostgresType(targetField.type) };
+}
+
 function referencedColumnType(
   reference: Reference,
   tables: ReadonlyMap<string, DDLTableConfig>,
   label: string,
 ): string {
-  const target = tables.get(reference.table);
-  if (!target) throw new Error(`Field ${label} references unknown table "${reference.table}".`);
-  const targetField =
-    reference.field === "id" ? { type: "uuid", unique: true } : target.fields[reference.field];
-  if (!targetField) {
-    throw new Error(
-      `Field ${label} references unknown field "${reference.field}" of table "${reference.table}".`,
-    );
+  const check = checkReference(reference, tables);
+  if ("problem" in check) throw new Error(`Field ${label} ${check.problem}`);
+  return check.pgType;
+}
+
+/**
+ * The field without the relation it declares.
+ * @param field - A field config
+ * @returns The field with its foreign key settings removed
+ */
+export function withoutReference(field: DDLFieldConfig): DDLFieldConfig {
+  const {
+    foreignKey: _foreignKey,
+    foreignKeyType: _type,
+    foreignKeyField: _field,
+    ...rest
+  } = field;
+  return rest;
+}
+
+function withoutUnresolvableReference(
+  field: DDLFieldConfig,
+  tables: ReadonlyMap<string, DDLTableConfig>,
+): DDLFieldConfig {
+  if (field.fields) {
+    return {
+      ...field,
+      fields: Object.fromEntries(
+        Object.entries(field.fields).map(([name, child]) => [
+          name,
+          withoutUnresolvableReference(child, tables),
+        ]),
+      ),
+    };
   }
-  const sameType =
-    reference.field === "id" || declaredType(targetField.type) === declaredType(reference.type);
-  if (!targetField.unique || !sameType) {
-    throw new Error(
-      `Field ${label} references "${reference.table}"."${reference.field}", which must be unique and of the same type as the referencing field.`,
-    );
-  }
-  return mapFieldTypeToPostgresType(targetField.type);
+  if (!field.foreignKey || field.foreignKeyType === undefined) return field;
+  const reference = {
+    column: "",
+    path: "$",
+    table: field.foreignKeyType,
+    field: field.foreignKeyField ?? "id",
+    type: field.type,
+  };
+  return "problem" in checkReference(reference, tables) ? withoutReference(field) : field;
+}
+
+/**
+ * Remove the references the given tables cannot satisfy: a target table or
+ * field that is missing, not unique, or of another type than the referencing
+ * field. {@link generateSchemaDDL} rejects such references, so this lets a
+ * schema that is only partly consistent still render, minus those references.
+ * @param tables - Tables of one schema
+ * @returns The tables, with unsatisfiable references removed from their fields
+ */
+export function dropUnresolvableReferences(tables: readonly DDLTableConfig[]): DDLTableConfig[] {
+  const byName = new Map(tables.map((table) => [table.name, table]));
+  return tables.map((table) => ({
+    ...table,
+    fields: Object.fromEntries(
+      Object.entries(table.fields).map(([name, field]) => [
+        name,
+        withoutUnresolvableReference(field, byName),
+      ]),
+    ),
+  }));
 }
 
 function referenceCheck(

@@ -6,6 +6,7 @@ import {
   mapFieldTypeToPostgresType,
   type DDLFieldConfig,
   type DDLTableConfig,
+  dropUnresolvableReferences,
 } from "./tailordb-ddl";
 
 const openDatabases: PGlite[] = [];
@@ -630,6 +631,50 @@ describe("foreign keys to a non-id field and edge columns", { timeout: 30_000 },
     );
     expect(script).toContain('"id" uuid PRIMARY KEY DEFAULT gen_random_uuid()\n');
     expect(script).not.toContain("REFERENCES");
+  });
+});
+
+describe("dropUnresolvableReferences", () => {
+  const parent: DDLTableConfig = { name: "Parent", fields: { id: { type: "uuid" } } };
+  const toParent = (extra: Partial<DDLFieldConfig> = {}): DDLFieldConfig => ({
+    type: "uuid",
+    foreignKey: true,
+    foreignKeyType: "Parent",
+    ...extra,
+  });
+
+  test("keeps references that resolve, including inside nested fields", () => {
+    const child: DDLTableConfig = {
+      name: "Child",
+      fields: {
+        id: { type: "uuid" },
+        owner: toParent(),
+        info: { type: "nested", fields: { owner: toParent() } },
+      },
+    };
+    expect(dropUnresolvableReferences([parent, child])).toEqual([parent, child]);
+  });
+
+  test("drops only the references that do not resolve, inside nested fields too", () => {
+    const [, child] = dropUnresolvableReferences([
+      parent,
+      {
+        name: "Child",
+        fields: {
+          id: { type: "uuid" },
+          owner: toParent(),
+          ghost: toParent({ foreignKeyType: "Ghost" }),
+          info: {
+            type: "nested",
+            fields: { owner: toParent(), ghost: toParent({ foreignKeyType: "Ghost" }) },
+          },
+        },
+      },
+    ]);
+    expect(child!.fields.owner).toMatchObject({ foreignKey: true });
+    expect(child!.fields.ghost).toEqual({ type: "uuid" });
+    expect(child!.fields.info!.fields!.owner).toMatchObject({ foreignKey: true });
+    expect(child!.fields.info!.fields!.ghost).toEqual({ type: "uuid" });
   });
 });
 

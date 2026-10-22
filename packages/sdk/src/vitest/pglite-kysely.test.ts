@@ -1,6 +1,12 @@
+import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "vitest";
 import { Temporal } from "#/runtime/temporal";
-import { createKyselyPGlite, type PGliteClient, type PGliteQueryResult } from "./pglite-kysely";
+import {
+  createKyselyPGlite,
+  prepareFixtures,
+  type PGliteClient,
+  type PGliteQueryResult,
+} from "./pglite-kysely";
 
 interface Database {
   User: {
@@ -222,5 +228,178 @@ describe("createKyselyPGlite Temporal support", () => {
       null,
       "2026-03-15",
     ]);
+  });
+});
+
+describe("prepareFixtures", () => {
+  const ROLE = "session_replication_role";
+  const setRole = (value: string) => ({
+    sql: "SELECT set_config($1, $2, false)",
+    params: [ROLE, value],
+  });
+  const callerRole = (value: string) => [{ [ROLE]: value }];
+
+  test("runs the preparation with relations unchecked, restores the caller's setting, and returns its result", async () => {
+    const { client, queries } = createStubClient(callerRole("origin"));
+
+    const result = await prepareFixtures(client, async () => {
+      await client.query("INSERT INTO prepared");
+      return "done";
+    });
+
+    expect(result).toBe("done");
+    expect(queries).toEqual([
+      { sql: `SHOW ${ROLE}`, params: [] },
+      setRole("replica"),
+      { sql: "INSERT INTO prepared", params: [] },
+      setRole("origin"),
+    ]);
+  });
+
+  test("restores the caller's setting and rethrows when the preparation fails", async () => {
+    const { client, queries } = createStubClient(callerRole("origin"));
+    const failure = new Error("insert failed");
+
+    await expect(prepareFixtures(client, () => Promise.reject(failure))).rejects.toBe(failure);
+
+    expect(queries.map((q) => q.params)).toEqual([[], [ROLE, "replica"], [ROLE, "origin"]]);
+  });
+
+  test("hands back the setting it found, which is not always origin", async () => {
+    const { client, queries } = createStubClient(callerRole("replica"));
+
+    await prepareFixtures(client, () => Promise.resolve());
+
+    expect(queries.at(-1)).toEqual(setRole("replica"));
+  });
+
+  test("changes the setting once for preparations that overlap, and restores it when the last one finishes", async () => {
+    const { client, queries } = createStubClient(callerRole("origin"));
+    let releaseFirst!: () => void;
+    const first = prepareFixtures(
+      client,
+      () => new Promise<void>((resolve) => (releaseFirst = resolve)),
+    );
+    await Promise.resolve();
+    const second = prepareFixtures(client, () => Promise.resolve());
+    await second;
+    expect(queries.map((q) => q.params)).toEqual([[], [ROLE, "replica"]]);
+
+    releaseFirst();
+    await first;
+
+    expect(queries.map((q) => q.params)).toEqual([[], [ROLE, "replica"], [ROLE, "origin"]]);
+  });
+
+  test.each([0, 1, 2, 3, 4, 5, 6, 7, 8])(
+    "leaves relations checked when another preparation starts %i ticks after the last one's callback settles",
+    async (ticks) => {
+      let role = "origin";
+      const client: PGliteClient = {
+        query: (sql, params) => {
+          if (sql.startsWith("SHOW")) return Promise.resolve({ rows: [{ [ROLE]: role }] });
+          if (sql.startsWith("SELECT set_config")) role = String(params?.[1]);
+          return Promise.resolve({ rows: [] });
+        },
+        close: () => Promise.resolve(),
+      };
+      let second: Promise<void> | undefined;
+      const startSecond = (remaining: number) => {
+        if (remaining === 0) second = prepareFixtures(client, () => Promise.resolve());
+        else void Promise.resolve().then(() => startSecond(remaining - 1));
+      };
+
+      await prepareFixtures(client, () => {
+        startSecond(ticks);
+        return Promise.resolve();
+      });
+      await second;
+
+      expect(role).toBe("origin");
+    },
+  );
+
+  describe("on PGlite", { timeout: 30_000 }, () => {
+    async function setup() {
+      const pglite = new PGlite();
+      await pglite.exec(`
+        CREATE TABLE "User" (id uuid PRIMARY KEY DEFAULT gen_random_uuid());
+        CREATE TABLE "Order" (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), "ownerID" uuid REFERENCES "User" (id));
+      `);
+      return pglite;
+    }
+    const orphan = (pglite: PGlite) =>
+      pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`);
+
+    test("prepares a row whose parent is missing, and checks the relation again afterwards", async () => {
+      const pglite = await setup();
+      try {
+        await prepareFixtures(pglite, () => orphan(pglite));
+        const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
+        expect(prepared.rows).toHaveLength(1);
+
+        await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
+      } finally {
+        await pglite.close();
+      }
+    });
+
+    test("checks relations again after a failed preparation", async () => {
+      const pglite = await setup();
+      try {
+        await expect(
+          prepareFixtures(pglite, () => pglite.query(`INSERT INTO "Missing" DEFAULT VALUES`)),
+        ).rejects.toThrow(/Missing/);
+
+        await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
+      } finally {
+        await pglite.close();
+      }
+    });
+
+    test("keeps relations unchecked for the rest of an outer preparation after a nested one returns", async () => {
+      const pglite = await setup();
+      try {
+        await prepareFixtures(pglite, async () => {
+          await prepareFixtures(pglite, () => orphan(pglite));
+          await orphan(pglite);
+        });
+        const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
+        expect(prepared.rows).toHaveLength(2);
+
+        await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
+      } finally {
+        await pglite.close();
+      }
+    });
+
+    test("keeps relations unchecked while preparations overlap, and checks them again after the last one", async () => {
+      const pglite = await setup();
+      try {
+        let releaseFirst!: () => void;
+        let releaseSecond!: () => void;
+        const first = prepareFixtures(
+          pglite,
+          () => new Promise<void>((resolve) => (releaseFirst = resolve)),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const second = prepareFixtures(pglite, async () => {
+          await new Promise<void>((resolve) => (releaseSecond = resolve));
+          await orphan(pglite);
+        });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        releaseFirst();
+        await first;
+        releaseSecond();
+        await second;
+
+        const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
+        expect(prepared.rows).toHaveLength(1);
+        await expect(orphan(pglite)).rejects.toThrow(/foreign key/);
+      } finally {
+        await pglite.close();
+      }
+    });
   });
 });
