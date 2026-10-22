@@ -296,6 +296,28 @@ export async function withScriptWorkflow<T>(
 }
 
 /**
+ * Parameters of {@link discardScriptWorkflow}
+ */
+export interface DiscardScriptWorkflowParams {
+  /** Operator client instance */
+  client: OperatorClient;
+  /** Workspace ID */
+  workspaceId: string;
+  /** Name shared by the function, job function and workflow */
+  name: string;
+  /** Sentence telling how a resource left behind after a failed removal gets removed */
+  leftoverNote: string;
+}
+
+/**
+ * Remove the temporary workflow that an earlier run kept, if there is one.
+ * @param params - The workflow to remove
+ */
+export async function discardScriptWorkflow(params: DiscardScriptWorkflowParams): Promise<void> {
+  await reclaimTemporaryWorkflow({ ...params, subject: SUBJECT });
+}
+
+/**
  * A temporary workflow found by name.
  */
 export interface ScriptWorkflowInspection {

@@ -6,6 +6,7 @@ import { seedApplyCommand } from "./apply";
 const sdk = vi.hoisted(() => ({
   bundleSeedScript: vi.fn(),
   chunkSeedData: vi.fn(),
+  discardScriptWorkflow: vi.fn(),
   initOperatorClient: vi.fn(),
   loadAccessToken: vi.fn(),
   loadSeedContext: vi.fn(),
@@ -92,6 +93,7 @@ beforeEach(() => {
   sdk.loadWorkspaceId.mockResolvedValue("workspace-id");
   sdk.initOperatorClient.mockReturnValue({});
   sdk.truncate.mockResolvedValue(undefined);
+  sdk.discardScriptWorkflow.mockResolvedValue(undefined);
   sdk.withScriptWorkflow.mockImplementation(
     async (
       options: { name: string },
@@ -956,6 +958,48 @@ describe("seedApplyCommand", () => {
       expect.stringContaining("run `tailor seed apply --upsert`"),
       expect.anything(),
     );
+  });
+
+  test("keeps nothing and warns when the script cannot tell whether its transaction committed", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([
+      { data: { User: [{ id: "u1" }] }, order: ["User"], index: 0 },
+    ]);
+    workflow.runScript.mockResolvedValue({
+      error: undefined,
+      logs: "",
+      result: '{"success":false,"processed":{},"errors":["commit failed"],"outcomeUnknown":true}',
+      success: true,
+      executionId: "exec-finished",
+    });
+
+    await runApplyCommand(["--machine-user", "manager", "--skip-idp"]);
+
+    expect(workflow.retain).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("not known whether this chunk was applied"),
+      expect.anything(),
+    );
+  });
+
+  test("removes the workflow an earlier failed run kept when the namespace has no data to seed", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, []])),
+    );
+
+    await runApplyCommand(["--machine-user", "manager", "--skip-idp"]);
+
+    expect(sdk.discardScriptWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "tailor-seed-tailordb--tailordb" }),
+    );
+    expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
   test("keeps nothing when every TailorDB chunk succeeds", async () => {

@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
 import { logger } from "./logger";
 import {
+  discardScriptWorkflow,
   inspectScriptWorkflow,
   withKeptScriptWorkflow,
   withScriptWorkflow,
@@ -290,6 +291,20 @@ describe("keeping a script workflow", () => {
     });
 
     expect(mocks.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
+  test("removes the workflow that an earlier run kept", async () => {
+    const { client, mocks } = createMockClient({ leftoverWorkflowId: "wf-kept" });
+
+    await discardScriptWorkflow({
+      client,
+      workspaceId: "ws",
+      name: baseOptions.name,
+      leftoverNote: baseOptions.leftoverNote,
+    });
+
+    expect(mocks.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-kept" });
+    expect(mocks.deleteFunctionRegistry).toHaveBeenCalledTimes(1);
   });
 
   test("finds no workflow when none was kept", async () => {

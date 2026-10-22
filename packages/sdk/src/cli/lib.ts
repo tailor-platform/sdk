@@ -289,9 +289,11 @@ export {
   type ExecutionWaitResult,
 } from "./shared/script-executor";
 export {
+  discardScriptWorkflow,
   inspectScriptWorkflow,
   withKeptScriptWorkflow,
   withScriptWorkflow,
+  type DiscardScriptWorkflowParams,
   type InspectScriptWorkflowParams,
   type KeptScriptWorkflowOptions,
   type RetainControls,

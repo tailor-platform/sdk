@@ -64,6 +64,7 @@ function generateSeedScriptContent(namespace: string): string {
       success: boolean;
       processed: Record<string, { inserted: number; updated: number; skipped: number }>;
       errors: string[];
+      outcomeUnknown?: boolean;
     };
 
     function getDB(namespace: string) {
@@ -269,14 +270,24 @@ function generateSeedScriptContent(namespace: string): string {
     }
 
     export async function main(input: SeedInput): Promise<SeedResult> {
+      const transaction = { bodyFinished: false };
       try {
         const processed = await getDB("${namespace}")
           .transaction()
-          .execute((db) => seedTables(db, input));
+          .execute(async (db) => {
+            const result = await seedTables(db, input);
+            transaction.bodyFinished = true;
+            return result;
+          });
         return { success: true, processed, errors: [] };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return { success: false, processed: {}, errors: [message] };
+        return {
+          success: false,
+          processed: {},
+          errors: [message],
+          ...(transaction.bodyFinished ? { outcomeUnknown: true } : {}),
+        };
       }
     }
   `;

@@ -127,7 +127,8 @@ export const seedRetryCommand = defineAppCommand({
           code: "SEED_RETRY_NOT_RECORDED",
           message: `The temporary seed workflow of namespace '${unrecorded.nsConfig.namespace}' holds no record of a failed chunk.`,
           suggestion:
-            "Run `tailor seed apply` again, which removes the leftover workflow before it seeds.",
+            "Wait for any seed that is still running, then check the data in the database. " +
+            "Run `tailor seed apply --upsert` to seed again; its rows need the same ids as the rows that exist.",
           context: { namespace: unrecorded.nsConfig.namespace },
         });
       }

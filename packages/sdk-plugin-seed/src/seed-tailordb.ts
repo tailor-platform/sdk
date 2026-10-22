@@ -1,6 +1,7 @@
 import {
   bundleSeedScript,
   chunkSeedData,
+  discardScriptWorkflow,
   initOperatorClient,
   loadAccessToken,
   loadWorkspaceId,
@@ -295,7 +296,8 @@ export async function runSeedChunks(params: RunSeedChunksParams): Promise<boolea
     }
     if (!success) {
       logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, { mode: "plain" });
-      const reportedFailure = !outcomeUnknown && parsed.success === false;
+      const reportedFailure =
+        !outcomeUnknown && parsed.success === false && parsed.outcomeUnknown !== true;
       if (!reportedFailure || !result.executionId) {
         logger.warn(UNKNOWN_OUTCOME_WARNING, { mode: "plain" });
       } else {
@@ -331,6 +333,12 @@ export async function seedNamespace(params: SeedNamespaceParams): Promise<SeedRe
 
   const built = buildNamespaceChunks({ plan, upsert });
   if (!built) {
+    await discardScriptWorkflow({
+      client: execution.operatorClient,
+      workspaceId: execution.workspaceId,
+      name: seedWorkflowName("tailordb", namespace),
+      leftoverNote: APPLY_LEFTOVER_NOTE,
+    });
     logger.log(styles.dim(`  [${namespace}] No data to seed`));
     return { success: true, processed: processedTotals };
   }

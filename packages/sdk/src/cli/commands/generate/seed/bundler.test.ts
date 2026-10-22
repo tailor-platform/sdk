@@ -27,6 +27,7 @@ type SeedResult = {
   success: boolean;
   processed: Record<string, { inserted: number; updated: number; skipped: number }>;
   errors: string[];
+  outcomeUnknown?: boolean;
 };
 
 type RecordedQuery = { sql: string; parameters: readonly unknown[] };
@@ -436,6 +437,26 @@ describe("seed script transaction", () => {
     await main({ data: { User: [{ id: "u1" }] }, order: ["User"], selfRefTypes: [] });
 
     expect(logSpy).toHaveBeenCalledWith("[custom-namespace] User: 1/1");
+  });
+
+  test("reports an unknown outcome when the commit fails after every table was inserted", async () => {
+    stubRecording("commit");
+    const { main } = await loadMain();
+
+    const result = await main(input);
+
+    expect(result).toMatchObject({ success: false, outcomeUnknown: true });
+  });
+
+  test("does not report an unknown outcome when an insert fails and the transaction rolls back", async () => {
+    stubRecording('"Order"');
+    const { main } = await loadMain();
+    using _errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const result = await main(input);
+
+    expect(result.success).toBe(false);
+    expect(result.outcomeUnknown).toBeUndefined();
   });
 
   test("commits once after every table has been inserted", async () => {
