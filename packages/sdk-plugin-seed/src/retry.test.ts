@@ -78,7 +78,7 @@ function failedChunkLabels(overrides: { chunkIndex?: number; failedAt?: number }
     hash: hashChunkArgs(chunkArgsOf(false)),
     upsert: false,
     executionId: FAILED_EXECUTION,
-    failedAt: overrides.failedAt ?? 1_792_000_000,
+    failedAt: overrides.failedAt ?? 1_792_000_000_000,
   });
 }
 
@@ -251,7 +251,7 @@ describe("seedRetryCommand", () => {
         hash: hashChunkArgs(chunkArgsOf(true)),
         upsert: true,
         executionId: FAILED_EXECUTION,
-        failedAt: 1_792_000_000,
+        failedAt: 1_792_000_000_000,
       }),
       activeExecutionId: undefined,
       latestExecutionId: FAILED_EXECUTION,
@@ -350,7 +350,7 @@ describe("seedRetryCommand", () => {
       Promise.resolve({
         workflowId: `wf-${name}`,
         labels: failedChunkLabels({
-          failedAt: name.endsWith("second") ? 1_792_000_100 : 1_792_000_000,
+          failedAt: name.endsWith("second") ? 1_792_000_100_000 : 1_792_000_000_000,
         }),
         activeExecutionId: undefined,
         latestExecutionId: FAILED_EXECUTION,
@@ -443,7 +443,64 @@ describe("seedRetryCommand", () => {
     const result = await runRetry(["--namespace", "missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(String(result.error)).toContain('No entities found in namespace "missing"');
+    expect(String(result.error)).toContain('"missing" is not a TailorDB namespace');
+  });
+
+  test("retries the named namespace when the failed apply was limited to some of its tables", async () => {
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: [
+        {
+          ...namespaceConfig("first"),
+          dependencies: { User: [], Order: [] },
+          requiredFields: { User: [], Order: [] },
+          types: ["User", "Order"],
+        },
+        namespaceConfig("second"),
+      ],
+    });
+
+    await runRetry(["--namespace", "first", "Order"]);
+
+    expect(sdk.inspectScriptWorkflow).toHaveBeenCalledTimes(1);
+    expect(sdk.inspectScriptWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "tailor-seed-tailordb--first" }),
+    );
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(
+      expect.anything(),
+      ["Order"],
+      expect.anything(),
+    );
+  });
+
+  test("retries the failure recorded later when two namespaces failed within the same second", async () => {
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: [namespaceConfig("first"), namespaceConfig("second")],
+    });
+    sdk.inspectScriptWorkflow.mockImplementation(({ name }: { name: string }) =>
+      Promise.resolve({
+        workflowId: `wf-${name}`,
+        labels: failedChunkLabels({
+          failedAt: name.endsWith("first") ? 1_792_000_000_250 : 1_792_000_000_750,
+        }),
+        activeExecutionId: undefined,
+        latestExecutionId: FAILED_EXECUTION,
+      }),
+    );
+
+    await runRetry();
+
+    expect(sdk.withKeptScriptWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ workflowId: "wf-tailor-seed-tailordb--second" }),
+      expect.any(Function),
+    );
   });
 
   test("needs a machine user", async () => {

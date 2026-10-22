@@ -78,10 +78,12 @@ export const seedRetryCommand = defineAppCommand({
       );
     }
 
+    if (args.namespace && !context.namespaces.some((ns) => ns.namespace === args.namespace)) {
+      throw new Error(`"${args.namespace}" is not a TailorDB namespace of this config.`);
+    }
     const selection = selectEntities({
       namespaceTables: Object.fromEntries(context.namespaces.map((ns) => [ns.namespace, ns.types])),
       hasIdpUser: false,
-      namespace: args.namespace,
       entities: args.entities,
       skipIdp: false,
     });
@@ -89,7 +91,9 @@ export const seedRetryCommand = defineAppCommand({
       selection.entitiesToProcess
         ? nsConfig.types.filter((type) => selection.entitiesToProcess?.includes(type))
         : nsConfig.types;
-    const namespaces = context.namespaces.filter((ns) => typesToSeedOf(ns).length > 0);
+    const namespaces = context.namespaces.filter(
+      (ns) => (!args.namespace || ns.namespace === args.namespace) && typesToSeedOf(ns).length > 0,
+    );
 
     const execution = await createSeedExecution({
       configPath: args.config,
@@ -185,7 +189,8 @@ export const seedRetryCommand = defineAppCommand({
         code: "SEED_RETRY_DATA_CHANGED",
         message: `The seed data of namespace '${namespace}' differs from the run that failed, so its chunks are not the same.`,
         suggestion:
-          "Pass the same table names and the same --dataset, --all-datasets and --no-base as the failed `tailor seed apply` and keep the seed data as it was, or run `tailor seed apply` again.",
+          "Pass the same table names and the same --dataset, --all-datasets and --no-base as the failed `tailor seed apply` and keep the seed data as it was. " +
+          "If the data has to change, check which chunks the failed run applied, then run `tailor seed apply --upsert` (its rows need the same ids as the rows that exist) or truncate the tables first.",
         context: { namespace, failedChunk: record.chunkIndex + 1, totalChunks: record.total },
       });
     }

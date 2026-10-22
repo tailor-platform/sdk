@@ -23,7 +23,7 @@ export interface RetryRecord {
   upsert: boolean;
   /** ID of the execution that ran the failed chunk */
   executionId: string;
-  /** When the chunk failed, in seconds since the epoch */
+  /** When the chunk failed, in milliseconds since the epoch */
   failedAt: number;
 }
 

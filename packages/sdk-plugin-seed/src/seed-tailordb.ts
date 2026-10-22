@@ -308,7 +308,7 @@ export async function runSeedChunks(params: RunSeedChunksParams): Promise<boolea
             hash: built.hash,
             upsert,
             executionId: result.executionId,
-            failedAt: Math.floor(Date.now() / 1000),
+            failedAt: Date.now(),
           }),
         );
       }
