@@ -1009,8 +1009,8 @@ async function resolveRenames(
   const fieldRenames = [...specs.fieldRenames];
   const typeRenames = [...specs.typeRenames];
   const nestedMemberRenames = [...specs.nestedMemberRenames];
-  // Keys of different kinds cannot collide: a table key has no dot, a field
-  // key one, and a nested member key two or more.
+  // TailorDB names contain no dots, so keys of different kinds cannot collide:
+  // a table key has none, a field key one, and a nested member key two or more.
   const claimed = new Set([
     ...typeRenames.flatMap((spec) => [spec.previousTableName, spec.tableName]),
     ...fieldRenames.flatMap((spec) => [
