@@ -92,7 +92,7 @@ export async function bundleExecutors(
       sourceFile: executor.sourceFile,
       tsconfig,
       runtimeGlobals: { label: `Executor "${executor.name}"`, allowed: allowedRuntimeGlobals },
-      transform: () => createStartTransformPlugin(startContext),
+      createTransformPlugin: () => createStartTransformPlugin(startContext),
       entry: (absoluteSourcePath) => ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";
 

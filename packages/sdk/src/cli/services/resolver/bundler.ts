@@ -97,13 +97,15 @@ export async function bundleResolvers(
     const code = await buildFunctionBundle({
       ...options,
       kind: "resolver",
+      namespace,
       name: resolver.name,
       sourceFile: resolver.sourceFile,
       tsconfig,
+      dateDefault,
       entryContext: [defaultPermission ?? null],
       dateRepresentations: resolverDateRepresentations(resolver, dateDefault),
       runtimeGlobals: { label: `Resolver "${resolver.name}"`, allowed: allowedRuntimeGlobals },
-      transform: () => createStartTransformPlugin(startContext),
+      createTransformPlugin: () => createStartTransformPlugin(startContext),
       entry: (absoluteSourcePath) => {
         const validatedInputExpr = buildResolverValidatedInputExpr({
           permission: resolver.permission,

@@ -71,7 +71,7 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   /** Generates the entry module source; called only when the bundle is not restored from cache */
   entry: (absoluteSourcePath: string) => string;
   /** Creates the plugin that rewrites the function's sources before path resolution */
-  transform?: () => rolldown.Plugin | undefined;
+  createTransformPlugin?: () => rolldown.Plugin | undefined;
   /** Config values the entry embeds, added to the cache key besides the start context and date default */
   entryContext?: unknown[];
   /** Environment variables the entry embeds, added to the cache key */
@@ -98,7 +98,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     sourceFile,
     tsconfig,
     entry,
-    transform,
+    createTransformPlugin,
     entryContext = [],
     env,
     dateRepresentations,
@@ -152,7 +152,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
         "js",
         absoluteSourcePath,
       );
-      const transformPlugin = transform?.();
+      const transformPlugin = createTransformPlugin?.();
       const plugins: rolldown.Plugin[] = [virtualEntry.plugin];
       if (transformPlugin) {
         plugins.push(transformPlugin);

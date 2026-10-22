@@ -258,6 +258,9 @@ export interface BundleWorkflowJobsResult {
   sourceFileState: string;
 }
 
+/**
+ * Options for bundling workflow jobs
+ */
 export interface BundleWorkflowJobsOptions extends FunctionBundleSettings {
   /** All available job infos */
   allJobs: JobInfo[];
@@ -352,7 +355,7 @@ export async function bundleWorkflowJobs(
       tsconfig,
       env,
       runtimeGlobals: { label: `Workflow job "${job.name}"`, allowed: allowedRuntimeGlobals },
-      transform: () => createWorkflowTransformPlugin(job, usedJobs, startContext),
+      createTransformPlugin: () => createWorkflowTransformPlugin(job, usedJobs, startContext),
       entry: (absoluteSourcePath) => ml /* js */ `
         import { ${job.exportName} } from "${absoluteSourcePath}";
 

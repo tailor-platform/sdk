@@ -57,8 +57,9 @@ export async function bundleAuthHooks(
     sourceFile: path.resolve(configPath),
     tsconfig,
     env,
+    bundleLogLevel,
     define: { "process.env.TAILOR_APP_LOG_LEVEL": JSON.stringify(bundleLogLevel) },
-    transform: () => createStartTransformPlugin(startContext),
+    createTransformPlugin: () => createStartTransformPlugin(startContext),
     entry: (absoluteConfigPath) => ml /* js */ `
       import _config from "${absoluteConfigPath}";
       const __auth_hook_function = _config.${handlerAccessPath};

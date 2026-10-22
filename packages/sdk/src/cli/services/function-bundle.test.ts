@@ -106,6 +106,16 @@ describe("buildFunctionBundle runtime globals", () => {
     );
     expect(debugSpy).toHaveBeenCalledWith(expect.stringMatching(/cached.*fn/));
   });
+
+  test("bundles a function that uses Web Standard globals", async () => {
+    using tmp = tempCwd("sdk-function-bundle-web-standard-");
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `export default async () => (await fetch(new URL("https://example.com"))).status;\n`,
+    );
+
+    await expect(bundle(sourceFile)).resolves.toContain("example.com");
+  });
 });
 
 describe("buildFunctionBundle cache", () => {
