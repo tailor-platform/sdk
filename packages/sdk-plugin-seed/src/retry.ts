@@ -34,6 +34,7 @@ interface KeptNamespace {
   nsConfig: SeedNamespaceConfig;
   workflowId: string;
   activeExecutionId: string | undefined;
+  latestExecutionId: string | undefined;
   /** Undefined when the kept workflow holds no complete record of a failed chunk */
   record: RetryRecord | undefined;
 }
@@ -109,6 +110,7 @@ export const seedRetryCommand = defineAppCommand({
           nsConfig,
           workflowId: found.workflowId,
           activeExecutionId: found.activeExecutionId,
+          latestExecutionId: found.latestExecutionId,
           record: readRetryLabels(found.labels),
         });
       }
@@ -149,6 +151,16 @@ export const seedRetryCommand = defineAppCommand({
         message: `The seed of namespace '${namespace}' has an execution that is still running (${target.activeExecutionId}).`,
         suggestion: "Wait for it to finish, then run `tailor seed retry` again.",
         context: { namespace, executionId: target.activeExecutionId },
+      });
+    }
+
+    if (target.latestExecutionId !== record.executionId) {
+      throw CLIError({
+        code: "SEED_RETRY_INTERRUPTED",
+        message: `The seed of namespace '${namespace}' ran again after the chunk failed, and it is not known whether that run applied the chunk.`,
+        suggestion:
+          "Check the data in the database, then run `tailor seed apply --upsert` to seed again.",
+        context: { namespace, failedChunk: record.chunkIndex + 1, totalChunks: record.total },
       });
     }
 

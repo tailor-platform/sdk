@@ -73,6 +73,7 @@ function createMockClient(options: MockClientOptions = {}) {
     getWorkflowExecution: vi.fn(() =>
       Promise.resolve({
         execution: {
+          id: "exec-1",
           status: options.status ?? WorkflowExecution_Status.SUCCESS,
           jobExecutions: [{ executionId: "fn-1" }],
         },
@@ -97,7 +98,6 @@ const baseOptions = {
   description: "Temporary function for seeding",
   code: "export async function main() {}",
   invoker,
-  appName: "my-app",
   leftoverNote: "It is removed by the next run.",
   pollIntervalMs: 1,
 };
@@ -135,6 +135,7 @@ describe("withScriptWorkflow", () => {
       success: true,
       logs: "[tailordb] User: 1/1",
       result: '{"success":true,"processed":{}}',
+      executionId: "exec-1",
     });
   });
 
@@ -304,7 +305,12 @@ describe("keeping a script workflow", () => {
 
     await expect(
       inspectScriptWorkflow({ client, workspaceId: "ws", name: baseOptions.name }),
-    ).resolves.toEqual({ workflowId: "wf-kept", labels, activeExecutionId: undefined });
+    ).resolves.toEqual({
+      workflowId: "wf-kept",
+      labels,
+      activeExecutionId: undefined,
+      latestExecutionId: undefined,
+    });
   });
 
   test("reports the execution that is still running on a kept workflow", async () => {
@@ -323,6 +329,65 @@ describe("keeping a script workflow", () => {
     });
 
     expect(found?.activeExecutionId).toBe("exec-running");
+  });
+
+  test("reports the newest execution of a kept workflow", async () => {
+    const { client } = createMockClient({
+      leftoverWorkflowId: "wf-kept",
+      executions: [
+        { id: "exec-newest", status: WorkflowExecution_Status.SUCCESS },
+        { id: "exec-old", status: WorkflowExecution_Status.FAILED },
+      ],
+    });
+
+    const found = await inspectScriptWorkflow({
+      client,
+      workspaceId: "ws",
+      name: baseOptions.name,
+    });
+
+    expect(found?.latestExecutionId).toBe("exec-newest");
+  });
+
+  test("tells which execution ran the script", async () => {
+    const { client } = createMockClient({ result: '{"success":true}' });
+
+    const outcome = await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    expect(outcome.executionId).toBe("exec-1");
+  });
+
+  test("writes no ownership labels, so a deploy does not treat the resources as its own", async () => {
+    const { client } = createMockClient();
+    vi.mocked(writeMetadataLabelsDirect).mockClear();
+
+    await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    expect(writeMetadataLabelsDirect).not.toHaveBeenCalled();
+  });
+
+  test("leaves a kept workflow and its labels as they were when use throws", async () => {
+    const { client, mocks } = createMockClient();
+
+    await expect(
+      withKeptScriptWorkflow(
+        {
+          client,
+          workspaceId: "ws",
+          name: baseOptions.name,
+          workflowId: "wf-kept",
+          invoker,
+          leftoverNote: baseOptions.leftoverNote,
+          pollIntervalMs: 1,
+        },
+        async () => {
+          throw new Error("start refused");
+        },
+      ),
+    ).rejects.toThrow("start refused");
+
+    expect(mocks.deleteWorkflow).not.toHaveBeenCalled();
+    expect(mocks.deleteFunctionRegistry).not.toHaveBeenCalled();
   });
 
   test("starts the kept workflow and removes it after use", async () => {

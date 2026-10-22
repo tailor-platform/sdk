@@ -56,8 +56,6 @@ export interface ScriptWorkflowOptions {
   code: string;
   /** Auth invoker for the script */
   invoker: ScriptInvoker;
-  /** Name of the owning application, recorded in the resources' labels */
-  appName: string;
   /** Sentence telling how a resource left behind after a failed removal gets removed */
   leftoverNote: string;
   /** Poll interval in milliseconds (default: 3000ms) */
@@ -125,6 +123,8 @@ interface UseAndFinishParams<T> {
   use: UseScriptWorkflow<T>;
   /** Wait between attempts to record labels, in milliseconds */
   retryWaitMs: number;
+  /** Keep the resources when `use` throws, instead of removing them */
+  keepOnError: boolean;
 }
 
 /** Attempts to record the labels of a kept workflow through transient errors. */
@@ -171,14 +171,25 @@ async function recordLabels(params: RecordLabelsParams): Promise<boolean> {
 
 /**
  * Run `use`, then remove the resources, or keep them with the labels `use` asked
- * to record. A thrown error always removes them: it says nothing about what the
- * script did, so there is nothing to take up again. Resources whose labels could
- * not be recorded are removed too, since nothing could find them.
+ * to record. A thrown error says nothing about what the script did, so resources
+ * made for this run are removed, while resources an earlier run kept stay as they
+ * were. Resources whose labels could not be recorded are removed too, since
+ * nothing could find them.
  * @param params - Resources and the callback
  * @returns What `use` returned
  */
 async function useAndFinish<T>(params: UseAndFinishParams<T>): Promise<T> {
-  const { client, workspaceId, name, workflowId, leftoverNote, run, use, retryWaitMs } = params;
+  const {
+    client,
+    workspaceId,
+    name,
+    workflowId,
+    leftoverNote,
+    run,
+    use,
+    retryWaitMs,
+    keepOnError,
+  } = params;
   const teardown = () =>
     teardownTemporaryWorkflow({
       client,
@@ -198,7 +209,7 @@ async function useAndFinish<T>(params: UseAndFinishParams<T>): Promise<T> {
       },
     });
   } catch (error) {
-    await teardown();
+    if (!keepOnError) await teardown();
     throw error;
   }
   if (
@@ -223,7 +234,7 @@ export async function withScriptWorkflow<T>(
   options: ScriptWorkflowOptions,
   use: UseScriptWorkflow<T>,
 ): Promise<T> {
-  const { client, workspaceId, name, appName, invoker, leftoverNote } = options;
+  const { client, workspaceId, name, invoker, leftoverNote } = options;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
   await reclaimTemporaryWorkflow({
@@ -243,7 +254,7 @@ export async function withScriptWorkflow<T>(
       name,
       code: options.code,
       description: options.description,
-      appName,
+      appName: undefined,
       appId: undefined,
     });
     workflowId = await createTemporaryWorkflow(
@@ -252,7 +263,7 @@ export async function withScriptWorkflow<T>(
         workspaceId,
         name,
         jobFunctionNames: [name],
-        appName,
+        appName: undefined,
         appId: undefined,
         subject: SUBJECT,
       },
@@ -280,6 +291,7 @@ export async function withScriptWorkflow<T>(
     run,
     use,
     retryWaitMs: pollInterval,
+    keepOnError: false,
   });
 }
 
@@ -293,6 +305,8 @@ export interface ScriptWorkflowInspection {
   labels: Record<string, string>;
   /** ID of an execution that is still running, when there is one */
   activeExecutionId: string | undefined;
+  /** ID of the newest execution, when the workflow has run */
+  latestExecutionId: string | undefined;
 }
 
 /**
@@ -327,6 +341,7 @@ export async function inspectScriptWorkflow(
     workflowId,
     labels: metadata?.metadata?.labels ?? {},
     activeExecutionId: executions.find(isExecutionActive)?.id,
+    latestExecutionId: executions[0]?.id,
   };
 }
 
@@ -353,7 +368,8 @@ export interface KeptScriptWorkflowOptions {
 /**
  * Take up a temporary workflow that an earlier run kept: hand `use` a function
  * that runs its script, and remove the resources afterwards unless `use` keeps
- * them again through {@link RetainControls}.
+ * them again through {@link RetainControls}. An error thrown by `use` leaves the
+ * kept workflow and its labels as they were.
  * @param options - The kept workflow
  * @param use - Receives the function that starts the script
  * @returns What `use` returned
@@ -374,6 +390,7 @@ export async function withKeptScriptWorkflow<T>(
     run,
     use,
     retryWaitMs: pollInterval,
+    keepOnError: true,
   });
 }
 
@@ -419,16 +436,17 @@ async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionRe
         success: false,
         logs,
         result,
+        executionId: execution.id,
         error:
           "The workflow finished, but the result of its job could not be read, so it is unknown whether the script's changes were applied",
       };
     }
-    return { success: true, logs, result };
+    return { success: true, logs, result, executionId: execution.id };
   }
   const canceled = execution.status === WorkflowExecution_Status.CANCELED;
   const error =
     job?.error?.message.trim() ||
     result.trim() ||
     (canceled ? "Script execution was canceled" : "Script execution failed with unknown error");
-  return { success: false, logs, result, error };
+  return { success: false, logs, result, executionId: execution.id, error };
 }

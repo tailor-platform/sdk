@@ -69,12 +69,15 @@ function chunkArgsOf(upsert: boolean) {
   }));
 }
 
+const FAILED_EXECUTION = "0b3f3b3e-6f5a-4a38-9c3f-0a1b2c3d4e5f";
+
 function failedChunkLabels(overrides: { chunkIndex?: number; failedAt?: number } = {}) {
   return toRetryLabels({
     chunkIndex: overrides.chunkIndex ?? 1,
     total: 3,
     hash: hashChunkArgs(chunkArgsOf(false)),
     upsert: false,
+    executionId: FAILED_EXECUTION,
     failedAt: overrides.failedAt ?? 1_792_000_000,
   });
 }
@@ -147,6 +150,7 @@ beforeEach(() => {
     workflowId: "wf-kept",
     labels: failedChunkLabels(),
     activeExecutionId: undefined,
+    latestExecutionId: FAILED_EXECUTION,
   });
   sdk.withKeptScriptWorkflow.mockImplementation(
     async (
@@ -208,14 +212,34 @@ describe("seedRetryCommand", () => {
       logs: "",
       result: '{"success":false,"processed":{},"errors":["User: duplicate id"]}',
       success: true,
+      executionId: "exec-this-time",
     });
 
     const result = await runRetry();
 
     expect(result.exitCode).toBe(1);
     expect(workflow.retain).toHaveBeenCalledWith(
-      expect.objectContaining({ "seed-retry-chunk": "c2", "seed-retry-total": "n3" }),
+      expect.objectContaining({
+        "seed-retry-chunk": "c2",
+        "seed-retry-total": "n3",
+        "seed-retry-exec": "eexec-this-time",
+      }),
     );
+  });
+
+  test("keeps nothing when the retried chunk's outcome is not known", async () => {
+    workflow.runScript.mockResolvedValueOnce(succeeded(1)).mockResolvedValueOnce({
+      error: "Script execution failed with unknown error",
+      logs: "",
+      result: "",
+      success: false,
+      executionId: "exec-this-time",
+    });
+
+    const result = await runRetry();
+
+    expect(result.exitCode).toBe(1);
+    expect(workflow.retain).not.toHaveBeenCalled();
   });
 
   test("sends the chunks with the upsert option of the failed run", async () => {
@@ -226,9 +250,11 @@ describe("seedRetryCommand", () => {
         total: 3,
         hash: hashChunkArgs(chunkArgsOf(true)),
         upsert: true,
+        executionId: FAILED_EXECUTION,
         failedAt: 1_792_000_000,
       }),
       activeExecutionId: undefined,
+      latestExecutionId: FAILED_EXECUTION,
     });
 
     await runRetry();
@@ -253,6 +279,7 @@ describe("seedRetryCommand", () => {
       workflowId: "wf-leftover",
       labels: { "sdk-name": "my-app" },
       activeExecutionId: undefined,
+      latestExecutionId: undefined,
     });
 
     const result = await runRetry();
@@ -266,11 +293,26 @@ describe("seedRetryCommand", () => {
       workflowId: "wf-kept",
       labels: failedChunkLabels(),
       activeExecutionId: "exec-running",
+      latestExecutionId: "exec-running",
     });
 
     const result = await runRetry();
 
     expect(errorCode(result)).toBe("SEED_RETRY_EXECUTION_ACTIVE");
+    expect(workflow.runScript).not.toHaveBeenCalled();
+  });
+
+  test("refuses to retry when a later execution ran after the chunk failed", async () => {
+    sdk.inspectScriptWorkflow.mockResolvedValue({
+      workflowId: "wf-kept",
+      labels: failedChunkLabels(),
+      activeExecutionId: undefined,
+      latestExecutionId: "a-later-execution",
+    });
+
+    const result = await runRetry();
+
+    expect(errorCode(result)).toBe("SEED_RETRY_INTERRUPTED");
     expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
@@ -311,6 +353,7 @@ describe("seedRetryCommand", () => {
           failedAt: name.endsWith("second") ? 1_792_000_100 : 1_792_000_000,
         }),
         activeExecutionId: undefined,
+        latestExecutionId: FAILED_EXECUTION,
       }),
     );
 

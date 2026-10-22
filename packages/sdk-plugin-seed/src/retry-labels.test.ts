@@ -7,6 +7,7 @@ const record = {
   total: 3,
   hash: hashChunkArgs([{ data: { User: [{ id: "u1" }] } }]),
   upsert: false,
+  executionId: "0b3f3b3e-6f5a-4a38-9c3f-0a1b2c3d4e5f",
   failedAt: 1_792_000_000,
 };
 

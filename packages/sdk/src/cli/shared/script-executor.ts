@@ -54,6 +54,8 @@ export interface ScriptExecutionResult {
   result: string;
   /** Error message if execution failed */
   error?: string;
+  /** ID of the workflow execution, when the script ran as a workflow */
+  executionId?: string;
 }
 
 /**

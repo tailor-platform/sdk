@@ -856,6 +856,7 @@ describe("seedApplyCommand", () => {
         logs: "",
         result: '{"success":false,"processed":{},"errors":["User: duplicate id"]}',
         success: true,
+        executionId: "exec-failed",
       });
 
     await runApplyCommand(["--machine-user", "manager", "--skip-idp"]);
@@ -866,7 +867,37 @@ describe("seedApplyCommand", () => {
         "seed-retry-chunk": "c1",
         "seed-retry-total": "n3",
         "seed-retry-upsert": "false",
+        "seed-retry-exec": "eexec-failed",
       }),
+    );
+  });
+
+  test("keeps nothing and says so when it is not known whether a chunk was applied", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([
+      { data: { User: [{ id: "u1" }] }, order: ["User"], index: 0 },
+    ]);
+    workflow.runScript.mockResolvedValue({
+      error: "Script execution failed with unknown error",
+      logs: "",
+      result: "",
+      success: false,
+      executionId: "exec-failed",
+    });
+
+    await runApplyCommand(["--machine-user", "manager", "--skip-idp"]);
+
+    expect(workflow.retain).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("not known whether this chunk was applied"),
+      expect.anything(),
     );
   });
 

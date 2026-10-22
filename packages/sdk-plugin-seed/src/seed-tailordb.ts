@@ -30,7 +30,6 @@ export interface SeedExecutionContext {
   workspaceId: string;
   authNamespace: string;
   machineUserName: string;
-  appName: string;
 }
 
 interface CreateSeedExecutionParams {
@@ -55,7 +54,6 @@ export async function createSeedExecution(
     workspaceId: await loadWorkspaceId({ workspaceId, profile }),
     authNamespace: appInfo.auth,
     machineUserName,
-    appName: appInfo.name,
   };
 }
 
@@ -96,7 +94,6 @@ export function withSeedWorkflow<T>(
       description,
       code,
       invoker: invokerOf(execution),
-      appName: execution.appName,
       leftoverNote: APPLY_LEFTOVER_NOTE,
     },
     use,
@@ -273,7 +270,7 @@ export async function runSeedChunks(params: RunSeedChunksParams): Promise<boolea
 
     const result = await run(chunk.arg);
 
-    const { success, parsed, errors } = parseExecutionResult(result, "    ");
+    const { success, parsed, errors, outcomeUnknown } = parseExecutionResult(result, "    ");
     const processed = (parsed.processed ?? {}) as Record<
       string,
       { inserted: number; updated: number; skipped: number }
@@ -288,15 +285,24 @@ export async function runSeedChunks(params: RunSeedChunksParams): Promise<boolea
     }
     if (!success) {
       logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, { mode: "plain" });
-      retain(
-        toRetryLabels({
-          chunkIndex: index,
-          total,
-          hash: built.hash,
-          upsert,
-          failedAt: Math.floor(Date.now() / 1000),
-        }),
-      );
+      if (outcomeUnknown || !result.executionId) {
+        logger.warn(
+          "  It is not known whether this chunk was applied, so it cannot be retried. " +
+            "Check the data in the database, then run `tailor seed apply --upsert`.",
+          { mode: "plain" },
+        );
+      } else {
+        retain(
+          toRetryLabels({
+            chunkIndex: index,
+            total,
+            hash: built.hash,
+            upsert,
+            executionId: result.executionId,
+            failedAt: Math.floor(Date.now() / 1000),
+          }),
+        );
+      }
       return false;
     }
   }

@@ -34,7 +34,8 @@ const CHUNK_SIZE = 64 * 1024;
 
 /** Owning application recorded in the labels of every temporary resource. */
 interface TemporaryResourceOwner {
-  appName: string;
+  /** Owning application, recorded in the resources' labels; no ownership labels are written when undefined */
+  appName: string | undefined;
   appId: string | undefined;
 }
 
@@ -92,6 +93,7 @@ export async function uploadTemporaryFunction(
   } else {
     await client.updateFunctionRegistry(stream());
   }
+  if (appName === undefined) return;
   await writeMetadataLabelsDirect(
     client,
     await buildMetaRequest({
@@ -252,14 +254,16 @@ export async function createTemporaryWorkflow(
       scriptRef: name,
       publishExecutionEvents: false,
     });
-    await writeMetadataLabelsDirect(
-      client,
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
-        appName,
-        appId,
-      }),
-    );
+    if (appName !== undefined) {
+      await writeMetadataLabelsDirect(
+        client,
+        await buildMetaRequest({
+          trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
+          appName,
+          appId,
+        }),
+      );
+    }
     const version = jobFunction?.version;
     if (version === undefined) {
       throw internalError(
@@ -280,15 +284,17 @@ export async function createTemporaryWorkflow(
     throw internalError(`Temporary ${subject} workflow '${name}' was created without an id.`);
   }
   created.workflowId = workflowId;
-  await writeMetadataLabelsDirect(
-    client,
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "workflow", name),
-      appName,
-      appId,
-      ...(params.workflowLabels ? { metadata: params.workflowLabels } : {}),
-    }),
-  );
+  if (appName !== undefined) {
+    await writeMetadataLabelsDirect(
+      client,
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "workflow", name),
+        appName,
+        appId,
+        ...(params.workflowLabels ? { metadata: params.workflowLabels } : {}),
+      }),
+    );
+  }
   return workflowId;
 }
 

@@ -4,6 +4,7 @@ const CHUNK_KEY = "seed-retry-chunk";
 const TOTAL_KEY = "seed-retry-total";
 const HASH_KEY = "seed-retry-hash";
 const UPSERT_KEY = "seed-retry-upsert";
+const EXECUTION_KEY = "seed-retry-exec";
 const FAILED_AT_KEY = "seed-retry-at";
 
 const HASH_LENGTH = 40;
@@ -20,6 +21,8 @@ export interface RetryRecord {
   hash: string;
   /** Whether the failed run was an upsert */
   upsert: boolean;
+  /** ID of the execution that ran the failed chunk */
+  executionId: string;
   /** When the chunk failed, in seconds since the epoch */
   failedAt: number;
 }
@@ -45,6 +48,7 @@ export function toRetryLabels(record: RetryRecord): Record<string, string> {
     [TOTAL_KEY]: `n${record.total}`,
     [HASH_KEY]: `h${record.hash}`,
     [UPSERT_KEY]: String(record.upsert),
+    [EXECUTION_KEY]: `e${record.executionId}`,
     [FAILED_AT_KEY]: `t${record.failedAt}`,
   };
 }
@@ -66,14 +70,18 @@ export function readRetryLabels(labels: Record<string, string>): RetryRecord | u
   const failedAt = readNumber(labels[FAILED_AT_KEY], "t");
   const hash = labels[HASH_KEY]?.startsWith("h") ? labels[HASH_KEY].slice(1) : undefined;
   const upsert = labels[UPSERT_KEY];
+  const executionId = labels[EXECUTION_KEY]?.startsWith("e")
+    ? labels[EXECUTION_KEY].slice(1)
+    : undefined;
   if (
     chunkIndex === undefined ||
     total === undefined ||
     failedAt === undefined ||
     !hash ||
+    !executionId ||
     (upsert !== "true" && upsert !== "false")
   ) {
     return undefined;
   }
-  return { chunkIndex, total, hash, upsert: upsert === "true", failedAt };
+  return { chunkIndex, total, hash, upsert: upsert === "true", executionId, failedAt };
 }
