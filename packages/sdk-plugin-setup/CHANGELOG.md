@@ -1,5 +1,16 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.13.0
+
+### Minor Changes
+
+- [#2560](https://github.com/tailor-platform/sdk/pull/2560) [`51a5b81`](https://github.com/tailor-platform/sdk/commit/51a5b81fe5496a534832f38ab7f62a527125eb13) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `--migration-test` to `tailor setup ci branch`. The generated workflow gains a job that runs `tailordb migration test` against cloned data when a pull request gets the `tailor:migration-test` label (change it with `--migration-test-label`), then removes the label whether the test passed, failed, or was cancelled while running. Use `--migration-test-environment` to read the source workspace from a dedicated GitHub Environment instead of the plan/deploy one. `tailor setup ci env` lists what the dedicated environment needs.
+
+### Patch Changes
+
+- Updated dependencies [[`c85d2d8`](https://github.com/tailor-platform/sdk/commit/c85d2d8f27be5a02117f1d6197390b159b36df15), [`8706209`](https://github.com/tailor-platform/sdk/commit/870620945d19e068add0092c01c2bbbb68c2061b), [`6152316`](https://github.com/tailor-platform/sdk/commit/615231674d129ca888b5c8be599b1f54bdea4fdc), [`cc8a577`](https://github.com/tailor-platform/sdk/commit/cc8a5777314ac9daaf32b9659b182d1585f5a173), [`dc605c2`](https://github.com/tailor-platform/sdk/commit/dc605c207e6af179dc000b747def7f41fefedc66), [`127454d`](https://github.com/tailor-platform/sdk/commit/127454d6cd9d4fe20ccc3504f44430650874df71), [`3b21d1c`](https://github.com/tailor-platform/sdk/commit/3b21d1c36e8eaa282374b9e9601e95537ac00377), [`ab7cb70`](https://github.com/tailor-platform/sdk/commit/ab7cb704ece975c7e3b7a2868ec71077643e26ac), [`698343b`](https://github.com/tailor-platform/sdk/commit/698343bbcc0fedfa790e2a3e085423f19b0e608c), [`bfea8a3`](https://github.com/tailor-platform/sdk/commit/bfea8a3c5653017fc9b798e30e674b0e0a4f9859)]:
+  - @tailor-platform/sdk@2.32.0
+
 ## 0.12.0
 
 ### Minor Changes
