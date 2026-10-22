@@ -2294,7 +2294,7 @@ describe("template-generator", () => {
 
       expect(script).toContain('import { PGlite } from "@electric-sql/pglite"');
       expect(script).toContain(
-        'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+        'import { applyDateRepresentation, createKyselyPGlite, prepareRecords, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('import type { Database } from "./db"');
       expect(script).toContain('import { pgliteSchema } from "./db.pglite"');
@@ -2306,6 +2306,23 @@ describe("template-generator", () => {
       );
       expect(script).toContain('describe("tailordb migration (PGlite)"');
     });
+
+    test.each(["main", "steps"] as const)(
+      "prepares the records with relations unchecked before the %s script runs against checked ones",
+      (scriptKind) => {
+        const script = generateMigrationPgliteTestScript(createMockMigrationDiff(), scriptKind);
+        const prepare = script.indexOf("await prepareRecords(pglite, async () => {");
+        const run = script.indexOf(scriptKind === "main" ? "main(trx)" : "runMigrationSteps(steps");
+
+        expect(script).toContain("prepareRecords");
+        expect(script).toMatch(
+          /import \{[^}]*\bprepareRecords\b[^}]*\} from "@tailor-platform\/sdk\/vitest"/,
+        );
+        expect(prepare).toBeGreaterThan(-1);
+        expect(run).toBeGreaterThan(prepare);
+        expect(script).not.toContain("session_replication_role");
+      },
+    );
 
     test("reads Temporal values from PGlite for a migration recorded as temporal", () => {
       const script = generateMigrationPgliteTestScript(createMockMigrationDiff({ temporal: true }));
@@ -2322,7 +2339,7 @@ describe("template-generator", () => {
       );
 
       expect(script).toContain(
-        'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+        'import { applyDateRepresentation, createKyselyPGlite, prepareRecords, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('applyDateRepresentation("temporal")');
       expect(script).toContain("tailor-runtime");

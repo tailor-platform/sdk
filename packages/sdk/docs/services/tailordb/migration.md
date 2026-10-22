@@ -1023,12 +1023,12 @@ npm install -D @electric-sql/pglite
 
 The generated `db.pglite.ts` exports the `CREATE TABLE` script for the same schema `db.ts` types — the tables as the pre-migration phase leaves them while `migrate.ts` runs, including relaxed constraints, renamed fields under both names, and retained removed fields. Run it once on the PGlite instance, stage rows, then run the script in a transaction. `tailor tailordb migration script <N> --with-test` scaffolds this test too when `@electric-sql/pglite` is installed. Type the instance with `Unmigrated<Database>` rather than `Database`: `db.ts` types a column the migration makes required as `T | null` on read but `T` on write (and an enum it narrows as the old values on read but the new ones on write), so that `migrate.ts` cannot write what the migration is removing — which would also stop the test from staging the rows the script has to convert. `Unmigrated` lets every column be written with whatever it can still be read as; `main` still receives a `Transaction<Database>`.
 
-Relations are enforced as on the platform: a row that points at a parent that does not exist is rejected, so stage parent rows before their children. A relation is left unenforced while the pre-migration schema cannot satisfy it: when a pending type change leaves the field a different type from its target, when the migration retargets the relation to another table, or when the target field's unique constraint is still withheld. How relations on array fields and inside nested objects behave is described under [Real SQL execution with PGlite](../../testing.md#real-sql-execution-with-pglite-mocktailordbwithpglite).
+Relations are enforced as on the platform: a row that points at a parent that does not exist is rejected. Write the records the test starts from inside `prepareRecords`, which leaves relations unchecked while it runs, so you can stage rows that predate a relation, such as rows whose parent does not exist that the script repairs. Relations are checked again when it returns, so the script itself still cannot write a missing parent. NOT NULL, UNIQUE, and CHECK constraints stay enforced. A relation is left unenforced while the pre-migration schema cannot satisfy it: when a pending type change leaves the field a different type from its target, when the migration retargets the relation to another table, or when the target field's unique constraint is still withheld. How relations on array fields and inside nested objects behave is described under [Real SQL execution with PGlite](../../testing.md#real-sql-execution-with-pglite-mocktailordbwithpglite).
 
 ```typescript
 // migrations/0005/migrate.pglite.test.ts
 import { PGlite } from "@electric-sql/pglite";
-import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
+import { createKyselyPGlite, prepareRecords, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { pgliteSchema } from "./db.pglite";
 import { main } from "./migrate";
@@ -1049,13 +1049,15 @@ afterAll(async () => {
 describe("0005 add required email", () => {
   test("backfills null emails and keeps existing ones", async () => {
     const now = new Date();
-    await db
-      .insertInto("User")
-      .values([
-        { name: "a", email: null, createdAt: now, updatedAt: now },
-        { name: "b", email: "b@example.com", createdAt: now, updatedAt: now },
-      ])
-      .execute();
+    await prepareRecords(pglite, async () => {
+      await db
+        .insertInto("User")
+        .values([
+          { name: "a", email: null, createdAt: now, updatedAt: now },
+          { name: "b", email: "b@example.com", createdAt: now, updatedAt: now },
+        ])
+        .execute();
+    });
 
     await db.transaction().execute((trx) => main(trx));
 

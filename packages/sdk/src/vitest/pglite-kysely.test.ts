@@ -1,6 +1,12 @@
+import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "vitest";
 import { Temporal } from "#/runtime/temporal";
-import { createKyselyPGlite, type PGliteClient, type PGliteQueryResult } from "./pglite-kysely";
+import {
+  createKyselyPGlite,
+  prepareRecords,
+  type PGliteClient,
+  type PGliteQueryResult,
+} from "./pglite-kysely";
 
 interface Database {
   User: {
@@ -222,5 +228,74 @@ describe("createKyselyPGlite Temporal support", () => {
       null,
       "2026-03-15",
     ]);
+  });
+});
+
+describe("prepareRecords", () => {
+  const REPLICA = "SET session_replication_role = replica";
+  const ORIGIN = "SET session_replication_role = origin";
+
+  test("runs the preparation between the statements that unchecks and rechecks relations, and returns its result", async () => {
+    const { client, queries } = createStubClient();
+
+    const result = await prepareRecords(client, async () => {
+      await client.query("INSERT INTO prepared");
+      return "done";
+    });
+
+    expect(result).toBe("done");
+    expect(queries.map((q) => q.sql)).toEqual([REPLICA, "INSERT INTO prepared", ORIGIN]);
+  });
+
+  test("rechecks relations and rethrows when the preparation fails", async () => {
+    const { client, queries } = createStubClient();
+    const failure = new Error("insert failed");
+
+    await expect(prepareRecords(client, () => Promise.reject(failure))).rejects.toBe(failure);
+
+    expect(queries.map((q) => q.sql)).toEqual([REPLICA, ORIGIN]);
+  });
+
+  describe("on PGlite", { timeout: 30_000 }, () => {
+    async function setup() {
+      const pglite = new PGlite();
+      await pglite.exec(`
+        CREATE TABLE "User" (id uuid PRIMARY KEY DEFAULT gen_random_uuid());
+        CREATE TABLE "Order" (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), "ownerID" uuid REFERENCES "User" (id));
+      `);
+      return pglite;
+    }
+
+    test("prepares a row whose parent is missing, and checks the relation again afterwards", async () => {
+      const pglite = await setup();
+      try {
+        await prepareRecords(pglite, () =>
+          pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`),
+        );
+        const prepared = await pglite.query(`SELECT 1 FROM "Order"`);
+        expect(prepared.rows).toHaveLength(1);
+
+        await expect(
+          pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`),
+        ).rejects.toThrow(/foreign key/);
+      } finally {
+        await pglite.close();
+      }
+    });
+
+    test("checks relations again after a failed preparation", async () => {
+      const pglite = await setup();
+      try {
+        await expect(
+          prepareRecords(pglite, () => pglite.query(`INSERT INTO "Missing" DEFAULT VALUES`)),
+        ).rejects.toThrow(/Missing/);
+
+        await expect(
+          pglite.query(`INSERT INTO "Order" ("ownerID") VALUES (gen_random_uuid())`),
+        ).rejects.toThrow(/foreign key/);
+      } finally {
+        await pglite.close();
+      }
+    });
   });
 });

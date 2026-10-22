@@ -800,7 +800,7 @@ export function generateMigrationPgliteTestScript(
  */
 
 import { PGlite } from "@electric-sql/pglite";
-import { applyDateRepresentation, createKyselyPGlite${isSteps ? ", runMigrationSteps" : ""}, type Unmigrated } from "@tailor-platform/sdk/vitest";
+import { applyDateRepresentation, createKyselyPGlite, prepareRecords${isSteps ? ", runMigrationSteps" : ""}, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { pgliteSchema } from "./db.pglite";
@@ -819,8 +819,11 @@ afterAll(async () => {
 
 describe(${JSON.stringify(`${diff.namespace} migration (PGlite)`)}, () => {
   test("transforms the staged rows", async () => {
-    // Stage the rows the script converts:
-    // await db.insertInto("Table").values([{ field: "before" }]).execute();
+    // Stage the rows the script converts. Relations are not checked while preparing, so rows that
+    // predate a relation can be staged; they are checked again once the script runs.
+    await prepareRecords(pglite, async () => {
+      // await db.insertInto("Table").values([{ field: "before" }]).execute();
+    });
 
 ${
   isSteps

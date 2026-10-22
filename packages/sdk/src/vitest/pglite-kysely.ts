@@ -197,3 +197,31 @@ export function createKyselyPGlite<DB = Record<string, never>>(
   };
   return new Kysely<DB>({ dialect });
 }
+
+/**
+ * Run `prepare` with relations unchecked, so a test can stage rows that predate a relation (for
+ * example rows whose parent does not exist, which the migration under test repairs). Relations are
+ * checked again when `prepare` returns or throws, so the script under test still runs against
+ * checked relations. NOT NULL, UNIQUE, and CHECK constraints stay enforced.
+ * @param client - The PGlite instance the rows are written to
+ * @param prepare - Writes the rows, for example with the Kysely instance of the same client
+ * @returns Whatever `prepare` returns
+ * @example
+ * ```typescript
+ * await prepareRecords(pglite, async () => {
+ *   await db.insertInto("Order").values([{ ownerID: crypto.randomUUID() }]).execute();
+ * });
+ * await db.transaction().execute((trx) => main(trx));
+ * ```
+ */
+export async function prepareRecords<T>(
+  client: PGliteClient,
+  prepare: () => Promise<T>,
+): Promise<T> {
+  await client.query("SET session_replication_role = replica");
+  try {
+    return await prepare();
+  } finally {
+    await client.query("SET session_replication_role = origin");
+  }
+}
