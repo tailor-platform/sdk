@@ -10,6 +10,7 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
@@ -424,7 +425,7 @@ interface BundleGeneratedEntryParams {
  */
 async function bundleGeneratedEntry(params: BundleGeneratedEntryParams): Promise<string> {
   const { entryFileName, entryContent, baseDir, buildOptions } = params;
-  const inlineSourcemap = buildOptions.inlineSourcemap ?? false;
+  const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
 
   // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "seed");

@@ -101,20 +101,20 @@ describe("seed-bundler", () => {
       expect(typeof result.bundledCode).toBe("string");
     });
 
-    test("minifies the script and embeds no sourcemap by default", async () => {
+    test("embeds an inline sourcemap that keeps function names by default", async () => {
       const result = await bundleSeedScript("tailordb", ["User"]);
-
-      expect(result.bundledCode).not.toContain("sourceMappingURL");
-      expect(result.bundledCode.split("\n").length).toBeLessThan(20);
-    });
-
-    test("embeds an inline sourcemap that keeps function names when inlineSourcemap is enabled", async () => {
-      const result = await bundleSeedScript("tailordb", ["User"], undefined, {
-        inlineSourcemap: true,
-      });
 
       expect(result.bundledCode).toContain("//# sourceMappingURL=data:application/json");
       expect(result.bundledCode).toContain("function sortBySelfReference");
+    });
+
+    test("minifies the script and embeds no sourcemap when inlineSourcemap is disabled", async () => {
+      const result = await bundleSeedScript("tailordb", ["User"], undefined, {
+        inlineSourcemap: false,
+      });
+
+      expect(result.bundledCode).not.toContain("sourceMappingURL");
+      expect(result.bundledCode).not.toContain("function sortBySelfReference");
     });
 
     test("resolves the tsconfig from the provided project directory", async () => {

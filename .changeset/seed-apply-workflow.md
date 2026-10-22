@@ -9,4 +9,4 @@ Do not run `tailor seed apply` for the same namespace twice at once: the later r
 
 A TailorDB chunk that fails now stops the remaining chunks of that namespace, so later chunks do not fail on foreign keys of the rolled-back chunk or leave a gap in a table split across chunks.
 
-The seed and seed dump scripts are now minified. Set `buildOptions.inlineSourcemap` in `defineConfig` to embed a sourcemap and keep function names readable in stack traces.
+The seed and seed dump scripts are now minified and, like other bundled functions, embed an inline sourcemap by default so error stack traces stay readable. Set `buildOptions.inlineSourcemap` to `false` in `defineConfig` to drop the sourcemap.
