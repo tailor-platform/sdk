@@ -2,37 +2,19 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import * as rolldown from "rolldown";
-import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
-import { createBundleLog } from "#/cli/shared/bundle-log";
-import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import {
-  checkForbiddenRuntimeGlobals,
-  assertPackageRuntimeGlobalsAllowed,
-} from "#/cli/shared/forbidden-runtime-globals";
-import {
-  composeFunctionTreeshakeOptions,
-  createUserTreeshakeOptions,
-} from "#/cli/shared/function-treeshake";
+import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/shared/function-bundle";
 import { logger, styles } from "#/cli/shared/logger";
-import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
-import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
-import {
-  createTsconfigPathsPlugin,
-  type TsconfigLookupCache,
-} from "#/cli/shared/tsconfig-paths-plugin";
-import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { getModuleExportName, type ASTNode } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
-import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/types";
+import type { StartContext } from "#/cli/shared/start-context";
+import type { AllowedRuntimeGlobals } from "#/configure/config/types";
+import type * as rolldown from "rolldown";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);
@@ -276,6 +258,32 @@ export interface BundleWorkflowJobsResult {
   sourceFileState: string;
 }
 
+export interface BundleWorkflowJobsOptions extends FunctionBundleSettings {
+  /** All available job infos */
+  allJobs: JobInfo[];
+  /** Names of main jobs */
+  mainJobNames: string[];
+  /** Environment variables to inject */
+  env?: Record<string, string | number | boolean>;
+  /** Start context for transformations */
+  startContext: StartContext;
+  /** Directory the owning config's tsconfig is resolved against */
+  baseDir: string;
+  /**
+   * A prior call's `usedJobNames`/`mainJobDeps`/`sourceFileState` over the same
+   * `allJobs`/`mainJobNames`/`startContext`, reused instead of re-parsing every workflow source
+   * file to redetect reachability, as long as `sourceFileState` still matches (reachability
+   * cannot change unless the sources do, but the sources can change between calls, e.g. during
+   * an interactive confirmation pause before a rebuild)
+   */
+  previousUsedJobs?: Pick<
+    BundleWorkflowJobsResult,
+    "usedJobNames" | "mainJobDeps" | "sourceFileState"
+  >;
+  /** Globals each installed package may reference */
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+}
+
 /**
  * Bundle workflow jobs
  *
@@ -285,45 +293,21 @@ export interface BundleWorkflowJobsResult {
  * 3. Creates an in-memory entry module and bundles with tree-shaking
  *
  * Returns metadata about which jobs each workflow uses.
- * @param allJobs - All available job infos
- * @param mainJobNames - Names of main jobs
- * @param env - Environment variables to inject
- * @param startContext - Start context for transformations
- * @param baseDir - Directory the owning config's tsconfig is resolved against
- * @param cache - Optional bundle cache for skipping unchanged builds
- * @param inlineSourcemap - Whether to enable inline sourcemaps
- * @param bundleLogLevel - Controls which console calls are kept in bundled code
- * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
- * @param previousUsedJobs - A prior call's `usedJobNames`/`mainJobDeps`/`sourceFileState` over
- *   the same `allJobs`/`mainJobNames`/`startContext`, reused instead of re-parsing every
- *   workflow source file to redetect reachability, as long as `sourceFileState` still matches
- *   (reachability cannot change unless the sources do, but the sources can change between calls,
- *   e.g. during an interactive confirmation pause before a rebuild)
- * @param allowedRuntimeGlobals - Globals each installed package may reference
- * @param dateDefault - Representation applied to `t` date fields that omit `as`
- * @param bundleTreeshake - Overrides how unused code is removed from bundled code
- * @param inlineSourcemapDependencySources - Whether inline sourcemaps embed the source text of installed packages
+ * @param options - Bundle options
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
-  allJobs: JobInfo[],
-  mainJobNames: string[],
-  env: Record<string, string | number | boolean> = {},
-  startContext: StartContext,
-  baseDir: string,
-  cache?: BundleCache,
-  inlineSourcemap?: boolean,
-  bundleLogLevel: LogLevel = "DEBUG",
-  tsconfigCache?: TsconfigLookupCache,
-  previousUsedJobs?: Pick<
-    BundleWorkflowJobsResult,
-    "usedJobNames" | "mainJobDeps" | "sourceFileState"
-  >,
-  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
-  dateDefault: EffectiveDateDefault = "legacy",
-  bundleTreeshake?: TreeshakeOptions,
-  inlineSourcemapDependencySources?: boolean | string[],
+  options: BundleWorkflowJobsOptions,
 ): Promise<BundleWorkflowJobsResult> {
+  const {
+    allJobs,
+    mainJobNames,
+    env = {},
+    startContext,
+    baseDir,
+    previousUsedJobs,
+    allowedRuntimeGlobals,
+  } = options;
   const jobSourceFiles = allJobs.map((job) => job.sourceFile);
   const sourceFileState = hashReachabilitySourceFiles([
     ...jobSourceFiles,
@@ -359,23 +343,28 @@ export async function bundleWorkflowJobs(
 
   // Process each job, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
-  const results = await withBundleConcurrency(usedJobs, (job) =>
-    bundleSingleJob(
-      job,
-      usedJobs,
+  const results = await withBundleConcurrency(usedJobs, async (job) => {
+    const code = await buildFunctionBundle({
+      ...options,
+      kind: "workflow-job",
+      name: job.name,
+      sourceFile: job.sourceFile,
       tsconfig,
       env,
-      startContext,
-      cache,
-      inlineSourcemap,
-      bundleLogLevel,
-      tsconfigCache,
-      allowedRuntimeGlobals,
-      dateDefault,
-      bundleTreeshake,
-      inlineSourcemapDependencySources,
-    ),
-  );
+      runtimeGlobals: { label: `Workflow job "${job.name}"`, allowed: allowedRuntimeGlobals },
+      transform: () => createWorkflowTransformPlugin(job, usedJobs, startContext),
+      entry: (absoluteSourcePath) => ml /* js */ `
+        import { ${job.exportName} } from "${absoluteSourcePath}";
+
+        export async function main(input) {
+          const env = ${JSON.stringify(env)};
+          const invoker = ${INVOKER_EXPR};
+          return await ${job.exportName}.body(input, { env, invoker });
+        }
+      `,
+    });
+    return [job.name, code] as const;
+  });
 
   const bundledCode = new Map<string, string>();
   for (const [name, code] of results) {
@@ -615,171 +604,64 @@ async function filterUsedJobs(
   return { usedJobs, mainJobDeps };
 }
 
-async function bundleSingleJob(
+function createWorkflowTransformPlugin(
   job: JobInfo,
   allJobs: JobInfo[],
-  tsconfig: string | undefined,
-  env: Record<string, string | number | boolean>,
   startContext: StartContext,
-  cache?: BundleCache,
-  inlineSourcemap?: boolean,
-  bundleLogLevel: LogLevel = "DEBUG",
-  tsconfigCache?: TsconfigLookupCache,
-  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
-  dateDefault: EffectiveDateDefault = "legacy",
-  bundleTreeshake?: TreeshakeOptions,
-  inlineSourcemapDependencySources?: boolean | string[],
-): Promise<[string, string]> {
-  const serializedStartContext = serializeStartContext(startContext);
+): rolldown.Plugin {
+  // Pre-compute once to avoid redundant realpathSync calls per module
+  const resolvedSourceFile = safeRealpath(job.sourceFile);
 
-  // Include sorted env variables as a prefix so that env changes invalidate the cache
-  const sortedEnvPrefix = JSON.stringify(
-    Object.fromEntries(Object.entries(env).toSorted(([a], [b]) => a.localeCompare(b))),
-  );
-  const contextHash = computeBundlerContextHash({
-    sourceFile: job.sourceFile,
-    extraContext: JSON.stringify([serializedStartContext, dateDefault]),
-    tsconfig,
-    inlineSourcemap,
-    inlineSourcemapDependencySources,
-    bundleLogLevel,
-    bundleTreeshake,
-    prefix: sortedEnvPrefix,
-  });
+  // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
+  const otherJobExportNames = allJobs
+    .filter(
+      (candidate) =>
+        candidate.name !== job.name && safeRealpath(candidate.sourceFile) === resolvedSourceFile,
+    )
+    .map((j) => j.exportName);
 
-  const { code, packageRuntimeGlobals } = await withCache({
-    cache,
-    kind: "workflow-job",
-    name: job.name,
-    sourceFile: job.sourceFile,
-    contextHash,
-    async build(cachePlugins, trackDependency) {
-      const absoluteSourcePath = path.resolve(job.sourceFile);
-
-      const entryContent = ml /* js */ `
-        import { ${job.exportName} } from "${absoluteSourcePath}";
-
-        export async function main(input) {
-          const env = ${JSON.stringify(env)};
-          const invoker = ${INVOKER_EXPR};
-          return await ${job.exportName}.body(input, { env, invoker });
+  // Transform start calls and remove other job declarations
+  return {
+    name: "workflow-transform",
+    transform: {
+      filter: {
+        id: {
+          include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
+        },
+      },
+      handler(code, id) {
+        // Only transform source files that contain workflow jobs or start calls
+        if (
+          !code.includes("createWorkflowJob") &&
+          !code.includes("createWorkflow") &&
+          !hasStartCall(code)
+        ) {
+          return null;
         }
-      `;
-      const entry = createVirtualEntry(
-        `workflow-job:${job.name}`,
-        entryContent,
-        "js",
-        absoluteSourcePath,
-      );
 
-      // Pre-compute once to avoid redundant realpathSync calls per module
-      const resolvedSourceFile = safeRealpath(job.sourceFile);
+        // Only remove other jobs and the default workflow export from the job's
+        // own source file. Dependency files imported by the source file must keep
+        // their exports intact for rolldown to resolve cross-file
+        // imports (e.g. `import workflow from "./other-workflow"`).
+        let transformed = code;
+        const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
+        if (isJobSourceFile) {
+          transformed = transformWorkflowSource(
+            code,
+            job.name,
+            job.exportName,
+            otherJobExportNames,
+          );
+        }
 
-      // Step 2: Bundle with a transform plugin that transforms start calls
-      // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
-      const otherJobExportNames = allJobs
-        .filter(
-          (candidate) =>
-            candidate.name !== job.name &&
-            safeRealpath(candidate.sourceFile) === resolvedSourceFile,
-        )
-        .map((j) => j.exportName);
+        // Apply workflow.start / job.start transformation.
+        if (hasStartCall(transformed)) {
+          transformed = transformStartCalls(transformed, startContext, id);
+        }
 
-      // Create transform plugin to transform start calls and remove other job declarations
-      const transformPlugin: rolldown.Plugin = {
-        name: "workflow-transform",
-        transform: {
-          filter: {
-            id: {
-              include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
-            },
-          },
-          handler(code, id) {
-            // Only transform source files that contain workflow jobs or start calls
-            if (
-              !code.includes("createWorkflowJob") &&
-              !code.includes("createWorkflow") &&
-              !hasStartCall(code)
-            ) {
-              return null;
-            }
-
-            // Only remove other jobs and the default workflow export from the job's
-            // own source file. Dependency files imported by the source file must keep
-            // their exports intact for rolldown to resolve cross-file
-            // imports (e.g. `import workflow from "./other-workflow"`).
-            let transformed = code;
-            const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
-            if (isJobSourceFile) {
-              transformed = transformWorkflowSource(
-                code,
-                job.name,
-                job.exportName,
-                otherJobExportNames,
-              );
-            }
-
-            // Apply workflow.start / job.start transformation.
-            if (hasStartCall(transformed)) {
-              transformed = transformStartCalls(transformed, startContext, id);
-            }
-
-            if (transformed === code) return null;
-            return { code: transformed };
-          },
-        },
-      };
-
-      const plugins: rolldown.Plugin[] = [
-        entry.plugin,
-        transformPlugin,
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(undefined, dateDefault),
-        ...cachePlugins,
-      ];
-
-      const bundleLog = createBundleLog({ tsconfig });
-      const result = await rolldown.build({
-        input: entry.input,
-        write: false,
-        output: {
-          format: "esm",
-          sourcemap: true,
-          minify: inlineSourcemap
-            ? {
-                mangle: {
-                  keepNames: true,
-                },
-              }
-            : true,
-          codeSplitting: false,
-        },
-        tsconfig,
-        plugins,
-        treeshake: composeFunctionTreeshakeOptions([
-          createLogLevelTreeshakeOptions(bundleLogLevel),
-          createUserTreeshakeOptions(bundleTreeshake),
-        ]),
-        ...bundleLog.options,
-      } as rolldown.BuildOptions);
-      bundleLog.assertAllResolved();
-
-      const [chunk] = result.output;
-      return {
-        code: chunkCodeWithSourcemap({
-          chunk,
-          inlineSourcemap: inlineSourcemap ?? false,
-          dependencySources: inlineSourcemapDependencySources ?? false,
-        }),
-        packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Workflow job "${job.name}"`),
-      };
+        if (transformed === code) return null;
+        return { code: transformed };
+      },
     },
-  });
-  assertPackageRuntimeGlobalsAllowed(
-    packageRuntimeGlobals,
-    `Workflow job "${job.name}"`,
-    allowedRuntimeGlobals,
-  );
-
-  return [job.name, code];
+  };
 }

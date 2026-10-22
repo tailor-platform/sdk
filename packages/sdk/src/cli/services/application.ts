@@ -812,22 +812,21 @@ export async function loadApplication(
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs(
-      workflowService.jobs,
+    workflowBuildResult = await bundleWorkflowJobs({
+      allJobs: workflowService.jobs,
       mainJobNames,
       env,
       startContext,
       baseDir,
-      bundleCache,
+      cache: bundleCache,
       inlineSourcemap,
-      bundleLogLevel,
-      tsconfigCache,
-      undefined,
-      buildOptions.allowedRuntimeGlobals,
-      dateDefault,
-      buildOptions.treeshake,
       inlineSourcemapDependencySources,
-    );
+      bundleLogLevel,
+      bundleTreeshake: buildOptions.treeshake,
+      tsconfigCache,
+      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault,
+    });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
@@ -972,22 +971,22 @@ async function reloadEnvDependentBundles(params: {
   let workflowBuildResult = previous.workflowBuildResult;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs(
-      workflowService.jobs,
+    workflowBuildResult = await bundleWorkflowJobs({
+      allJobs: workflowService.jobs,
       mainJobNames,
       env,
       startContext,
       baseDir,
-      bundleCache,
+      cache: bundleCache,
       inlineSourcemap,
-      bundleLogLevel,
-      tsconfigCache,
-      previous.workflowBuildResult,
-      buildOptionsOf(config).allowedRuntimeGlobals,
-      effectiveDateDefault(config),
-      buildOptionsOf(config).treeshake,
       inlineSourcemapDependencySources,
-    );
+      bundleLogLevel,
+      bundleTreeshake: buildOptionsOf(config).treeshake,
+      tsconfigCache,
+      previousUsedJobs: previous.workflowBuildResult,
+      allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
+      dateDefault: effectiveDateDefault(config),
+    });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 

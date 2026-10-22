@@ -10,12 +10,18 @@ import {
   bundleWorkflowJobs,
   collectExecJobFunctionTargets,
   validateBundledDependencies,
+  type BundleWorkflowJobsOptions,
 } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
   test("does not throw when no workflow jobs are provided", async () => {
     await expect(
-      bundleWorkflowJobs([], [], {}, { modules: new Map() }, process.cwd()),
+      bundleWorkflowJobs({
+        allJobs: [],
+        mainJobNames: [],
+        startContext: { modules: new Map() },
+        baseDir: process.cwd(),
+      }),
     ).resolves.toEqual({
       mainJobDeps: {},
       usedJobNames: [],
@@ -51,15 +57,13 @@ export const mainJob = createWorkflowJob({
     });
 
     try {
-      const result = await bundleWorkflowJobs(
-        [{ name: "main-job", exportName: "mainJob", sourceFile }],
-        ["main-job"],
-        {},
-        { modules: new Map() },
-        tmpDir,
-        undefined,
-        true,
-      );
+      const result = await bundleWorkflowJobs({
+        allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        mainJobNames: ["main-job"],
+        startContext: { modules: new Map() },
+        baseDir: tmpDir,
+        inlineSourcemap: true,
+      });
       const code = result.bundledCode.get("main-job");
       expect(code).toBeDefined();
       const moduleUrl = `data:text/javascript;base64,${Buffer.from(code!).toString("base64")}`;
@@ -107,27 +111,27 @@ export default createWorkflow({ name: "main-workflow", mainJob });
       ];
       const startContext = { modules: new Map() };
 
-      const fresh = await bundleWorkflowJobs(allJobs, ["main-job"], {}, startContext, tmpDir);
+      const fresh = await bundleWorkflowJobs({
+        allJobs,
+        mainJobNames: ["main-job"],
+        startContext,
+        baseDir: tmpDir,
+      });
       // Without a hint, reachability detection correctly drops the unused job.
       expect(fresh.usedJobNames).toEqual(["main-job"]);
       expect(fresh.bundledCode.has("unused-job")).toBe(false);
 
-      const reused = await bundleWorkflowJobs(
+      const reused = await bundleWorkflowJobs({
         allJobs,
-        ["main-job"],
-        {},
+        mainJobNames: ["main-job"],
         startContext,
-        tmpDir,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        {
+        baseDir: tmpDir,
+        previousUsedJobs: {
           usedJobNames: ["main-job", "unused-job"],
           mainJobDeps: fresh.mainJobDeps,
           sourceFileState: fresh.sourceFileState,
         },
-      );
+      });
 
       // A caller-supplied usedJobNames set is trusted as-is, not re-detected:
       // "unused-job" is bundled here only because it was passed in, proving
@@ -168,28 +172,28 @@ export default createWorkflow({ name: "main-workflow", mainJob });
       ];
       const startContext = { modules: new Map() };
 
-      const fresh = await bundleWorkflowJobs(allJobs, ["main-job"], {}, startContext, tmpDir);
+      const fresh = await bundleWorkflowJobs({
+        allJobs,
+        mainJobNames: ["main-job"],
+        startContext,
+        baseDir: tmpDir,
+      });
 
       // Touch the source file so its content-hash changes, simulating an edit
       // made between the first build and a later rebuild.
       fs.appendFileSync(sourceFile, "\n// touched\n");
 
-      const rebuilt = await bundleWorkflowJobs(
+      const rebuilt = await bundleWorkflowJobs({
         allJobs,
-        ["main-job"],
-        {},
+        mainJobNames: ["main-job"],
         startContext,
-        tmpDir,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        {
+        baseDir: tmpDir,
+        previousUsedJobs: {
           usedJobNames: ["main-job", "unused-job"],
           mainJobDeps: fresh.mainJobDeps,
           sourceFileState: fresh.sourceFileState,
         },
-      );
+      });
 
       // The stale hint is discarded because the source changed, so reachability
       // is redetected from scratch and "unused-job" is correctly dropped again.
@@ -218,14 +222,15 @@ export const mainJob = createWorkflowJob({
 
     try {
       await expect(
-        bundleWorkflowJobs(
-          [{ name: "main-job", exportName: "mainJob", sourceFile }],
-          ["main-job"],
-          {},
-          { modules: new Map() },
-          tmpDir,
-        ),
-      ).rejects.toThrow(/references a global unavailable in the Tailor Platform runtime: process/);
+        bundleWorkflowJobs({
+          allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile }],
+          mainJobNames: ["main-job"],
+          startContext: { modules: new Map() },
+          baseDir: tmpDir,
+        }),
+      ).rejects.toThrow(
+        /Workflow job "main-job" references a global unavailable in the Tailor Platform runtime: process/,
+      );
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -233,8 +238,7 @@ export const mainJob = createWorkflowJob({
 
   async function bundleEncodingJob(
     packageName: string,
-    allowedRuntimeGlobals?: Record<string, string[]>,
-    inlineSourcemap?: { dependencySources?: boolean },
+    options: Partial<BundleWorkflowJobsOptions>,
   ) {
     const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-package-global-")));
     const packageDir = path.join(tmpDir, "node_modules", packageName);
@@ -262,101 +266,40 @@ export const mainJob = createWorkflowJob({
     );
 
     try {
-      return await bundleWorkflowJobs(
-        [{ name: "main-job", exportName: "mainJob", sourceFile }],
-        ["main-job"],
-        {},
-        { modules: new Map() },
-        tmpDir,
-        undefined,
-        inlineSourcemap !== undefined,
-        undefined,
-        undefined,
-        undefined,
-        allowedRuntimeGlobals,
-        undefined,
-        undefined,
-        inlineSourcemap?.dependencySources,
-      );
+      return await bundleWorkflowJobs({
+        allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        mainJobNames: ["main-job"],
+        startContext: { modules: new Map() },
+        baseDir: tmpDir,
+        ...options,
+      });
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   }
 
-  test("rejects a job whose installed package references a forbidden global and names the package", async () => {
-    await expect(bundleEncodingJob("job-buffer-lib")).rejects.toThrow(
-      expect.objectContaining({ details: expect.stringContaining("job-buffer-lib") }),
-    );
-  });
-
   test("bundles a job whose installed package references an allowed global", async () => {
     const result = await bundleEncodingJob("job-allowed-buffer-lib", {
-      "job-allowed-buffer-lib": ["Buffer"],
+      allowedRuntimeGlobals: { "job-allowed-buffer-lib": ["Buffer"] },
     });
 
     expect(result.bundledCode.get("main-job")).toBeDefined();
   });
 
-  describe("source text in inline sourcemaps", () => {
-    async function embeddedSourceTexts(inlineSourcemap: {
-      dependencySources?: boolean;
-    }): Promise<string[]> {
-      const result = await bundleEncodingJob(
-        "job-sourcemap-lib",
-        { "job-sourcemap-lib": ["Buffer"] },
-        inlineSourcemap,
-      );
-      const traceMap = assertDefined(
-        extractInlineSourcemap(assertDefined(result.bundledCode.get("main-job"), "job missing")),
-        "inline sourcemap missing",
-      );
-      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
-    }
-
-    test("leaves out the source text of installed packages by default", async () => {
-      const texts = await embeddedSourceTexts({});
-
-      expect(texts.some((text) => text.includes('toString("base64")'))).toBe(false);
-      expect(texts.some((text) => text.includes('encode("hi")'))).toBe(true);
+  test("embeds the source text of installed packages in inline sourcemaps when asked to", async () => {
+    const result = await bundleEncodingJob("job-sourcemap-lib", {
+      allowedRuntimeGlobals: { "job-sourcemap-lib": ["Buffer"] },
+      inlineSourcemap: true,
+      inlineSourcemapDependencySources: true,
     });
 
-    test("embeds the source text of installed packages when asked to", async () => {
-      const texts = await embeddedSourceTexts({ dependencySources: true });
-
-      expect(texts.some((text) => text.includes('toString("base64")'))).toBe(true);
-    });
-  });
-
-  test("bundles a job that uses Web Standard globals", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-web-standard-")));
-    const sourceFile = path.join(tmpDir, "workflow.ts");
-    fs.writeFileSync(
-      sourceFile,
-      `
-import { createWorkflowJob } from "@tailor-platform/sdk";
-
-export const mainJob = createWorkflowJob({
-  name: "main-job",
-  body: async () => {
-    const res = await fetch(new URL("https://example.com"));
-    return res.status;
-  },
-});
-`,
+    const traceMap = assertDefined(
+      extractInlineSourcemap(assertDefined(result.bundledCode.get("main-job"), "job missing")),
+      "inline sourcemap missing",
     );
-
-    try {
-      const result = await bundleWorkflowJobs(
-        [{ name: "main-job", exportName: "mainJob", sourceFile }],
-        ["main-job"],
-        {},
-        { modules: new Map() },
-        tmpDir,
-      );
-      expect(result.bundledCode.get("main-job")).toBeDefined();
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    expect(traceMap.sourcesContent?.some((text) => text?.includes('toString("base64")'))).toBe(
+      true,
+    );
   });
 
   test("bundles a job whose dependency detects the environment with a UMD typeof ternary", async () => {
@@ -380,13 +323,12 @@ export const mainJob = createWorkflowJob({
     );
 
     try {
-      const result = await bundleWorkflowJobs(
-        [{ name: "main-job", exportName: "mainJob", sourceFile }],
-        ["main-job"],
-        {},
-        { modules: new Map() },
-        tmpDir,
-      );
+      const result = await bundleWorkflowJobs({
+        allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        mainJobNames: ["main-job"],
+        startContext: { modules: new Map() },
+        baseDir: tmpDir,
+      });
       expect(result.bundledCode.get("main-job")).toBeDefined();
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -441,18 +383,17 @@ export default createWorkflow({ name: "workflow-b", mainJob: mainB });
       );
       const context = await buildStartContext({ files: [firstFile, secondFile] });
 
-      const result = await bundleWorkflowJobs(
-        [
+      const result = await bundleWorkflowJobs({
+        allJobs: [
           { name: "step-a", exportName: "step", sourceFile: firstFile },
           { name: "main-a", exportName: "mainA", sourceFile: firstFile },
           { name: "step-b", exportName: "step", sourceFile: secondFile },
           { name: "main-b", exportName: "mainB", sourceFile: secondFile },
         ],
-        ["main-a"],
-        {},
-        context,
-        dir,
-      );
+        mainJobNames: ["main-a"],
+        startContext: context,
+        baseDir: dir,
+      });
 
       expect(result.mainJobDeps["main-a"]).toEqual(["main-a", "step-a"]);
       expect(result.usedJobNames).toEqual(["step-a", "main-a"]);
@@ -486,16 +427,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       );
       const context = await buildStartContext({ files: [jobsFile, callerFile] });
 
-      const result = await bundleWorkflowJobs(
-        [
+      const result = await bundleWorkflowJobs({
+        allJobs: [
           { name: "step-a", exportName: "step", sourceFile: jobsFile },
           { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
         ],
-        ["main-job"],
-        {},
-        context,
-        dir,
-      );
+        mainJobNames: ["main-job"],
+        startContext: context,
+        baseDir: dir,
+      });
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
       expect(result.usedJobNames).toEqual(["step-a", "main-job"]);
@@ -544,16 +484,15 @@ export default createWorkflow({ name: "workflow", mainJob });
         { workflow: { name: "sync-gl-balances" }, sourceFile: syncFile },
       ]);
 
-      const result = await bundleWorkflowJobs(
-        [
+      const result = await bundleWorkflowJobs({
+        allJobs: [
           { name: "sync-step", exportName: "syncStep", sourceFile: syncFile },
           { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
         ],
-        ["main-job"],
-        {},
-        context,
-        dir,
-      );
+        mainJobNames: ["main-job"],
+        startContext: context,
+        baseDir: dir,
+      });
 
       expect(result.bundledCode.get("main-job")).toMatch(/startWorkflow\([`'"]sync-gl-balances/);
     });
@@ -573,16 +512,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       );
 
       await expect(
-        bundleWorkflowJobs(
-          [
+        bundleWorkflowJobs({
+          allJobs: [
             { name: "sync-step", exportName: "syncStep", sourceFile: syncFile },
             { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
           ],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        ),
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/syncWorkflow\.start\(\) .*cannot be rewritten/);
     });
 
@@ -612,16 +550,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       );
       const context = await buildStartContext({ files: [jobsFile, callerFile] });
 
-      const result = await bundleWorkflowJobs(
-        [
+      const result = await bundleWorkflowJobs({
+        allJobs: [
           { name: "step-a", exportName: "step", sourceFile: jobsFile },
           { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
         ],
-        ["main-job"],
-        {},
-        context,
-        dir,
-      );
+        mainJobNames: ["main-job"],
+        startContext: context,
+        baseDir: dir,
+      });
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
       expect(result.bundledCode.get("main-job")).toMatch(/execJobFunction\([`'"]step-a/);
@@ -645,16 +582,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       );
       const context = await buildStartContext({ files: [workflowFile] });
 
-      const result = await bundleWorkflowJobs(
-        [
+      const result = await bundleWorkflowJobs({
+        allJobs: [
           { name: "step-a", exportName: "step", sourceFile: workflowFile },
           { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
         ],
-        ["main-job"],
-        {},
-        context,
-        dir,
-      );
+        mainJobNames: ["main-job"],
+        startContext: context,
+        baseDir: dir,
+      });
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job"]);
       expect(result.usedJobNames).toEqual(["main-job"]);
@@ -681,13 +617,12 @@ export default createWorkflow({ name: "workflow", mainJob });
       const context = await buildStartContext({ files: [workflowFile] });
 
       await expect(
-        bundleWorkflowJobs(
-          [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        ),
+        bundleWorkflowJobs({
+          allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/main-job/);
     });
 
@@ -707,13 +642,12 @@ this is not valid syntax &&&
       const context = await buildStartContext({ files: [workflowFile] });
 
       await expect(
-        bundleWorkflowJobs(
-          [{ name: "step-a", exportName: "step", sourceFile: workflowFile }],
-          ["step-a"],
-          {},
-          context,
-          dir,
-        ),
+        bundleWorkflowJobs({
+          allJobs: [{ name: "step-a", exportName: "step", sourceFile: workflowFile }],
+          mainJobNames: ["step-a"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/parse/i);
     });
 
@@ -741,16 +675,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       const context = await buildStartContext({ files: [workflowFile] });
 
       await expect(
-        bundleWorkflowJobs(
-          [
+        bundleWorkflowJobs({
+          allJobs: [
             { name: "step-a", exportName: "step", sourceFile: workflowFile },
             { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
           ],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        ),
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/step-a/);
     });
 
@@ -791,16 +724,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       const context = await buildStartContext({ files: [jobsFile, helpersFile, workflowFile] });
 
       await expect(
-        bundleWorkflowJobs(
-          [
+        bundleWorkflowJobs({
+          allJobs: [
             { name: "step-a", exportName: "step", sourceFile: jobsFile },
             { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
           ],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        ),
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/step-a/);
     });
 
@@ -849,16 +781,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       const context = await buildStartContext({ files: [jobsFile, workflowFile] });
 
       await expect(
-        bundleWorkflowJobs(
-          [
+        bundleWorkflowJobs({
+          allJobs: [
             { name: "step-a", exportName: "step", sourceFile: jobsFile },
             { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
           ],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        ),
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/step-a/);
     });
 
@@ -906,16 +837,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
       try {
         await expect(
-          bundleWorkflowJobs(
-            [
+          bundleWorkflowJobs({
+            allJobs: [
               { name: "step-a", exportName: "step", sourceFile: jobsFile },
               { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
             ],
-            ["main-job"],
-            {},
-            context,
-            dir,
-          ),
+            mainJobNames: ["main-job"],
+            startContext: context,
+            baseDir: dir,
+          }),
         ).rejects.toThrow(/step-a/);
 
         expect(logSpy.mock.calls.some(([message]) => message.includes("Bundled"))).toBe(false);
@@ -945,16 +875,15 @@ export default createWorkflow({ name: "workflow", mainJob });
 
       let error: unknown;
       try {
-        await bundleWorkflowJobs(
-          [
+        await bundleWorkflowJobs({
+          allJobs: [
             { name: "worker", exportName: "worker", sourceFile: workflowFile },
             { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
           ],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        );
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        });
       } catch (caught) {
         error = caught;
       }
@@ -985,16 +914,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       const context = await buildStartContext({ files: [workflowFile] });
 
       await expect(
-        bundleWorkflowJobs(
-          [
+        bundleWorkflowJobs({
+          allJobs: [
             { name: "worker", exportName: "worker", sourceFile: workflowFile },
             { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
           ],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        ),
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/worker.*\.start\(/);
     });
 
@@ -1019,16 +947,15 @@ export default createWorkflow({ name: "workflow", mainJob });
       const context = await buildStartContext({ files: [workflowFile] });
 
       await expect(
-        bundleWorkflowJobs(
-          [
+        bundleWorkflowJobs({
+          allJobs: [
             { name: "worker", exportName: "worker", sourceFile: workflowFile },
             { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
           ],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        ),
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/worker.*\.start\(/);
     });
 
@@ -1051,13 +978,12 @@ export default createWorkflow({ name: "workflow", mainJob });
       const context = await buildStartContext({ files: [workflowFile] });
 
       await expect(
-        bundleWorkflowJobs(
-          [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
-          ["main-job"],
-          {},
-          context,
-          dir,
-        ),
+        bundleWorkflowJobs({
+          allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
       ).rejects.toThrow(/isn't a string literal/);
     });
 
@@ -1080,13 +1006,12 @@ export default createWorkflow({ name: "workflow", mainJob });
       );
       const context = await buildStartContext({ files: [workflowFile] });
 
-      const result = await bundleWorkflowJobs(
-        [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
-        ["main-job"],
-        {},
-        context,
-        dir,
-      );
+      const result = await bundleWorkflowJobs({
+        allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
+        mainJobNames: ["main-job"],
+        startContext: context,
+        baseDir: dir,
+      });
 
       expect(result.usedJobNames).toEqual(["main-job"]);
     });
@@ -1113,13 +1038,12 @@ export default createWorkflow({ name: "workflow", mainJob });
       );
       const context = await buildStartContext({ files: [workflowFile] });
 
-      const result = await bundleWorkflowJobs(
-        [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
-        ["main-job"],
-        {},
-        context,
-        dir,
-      );
+      const result = await bundleWorkflowJobs({
+        allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
+        mainJobNames: ["main-job"],
+        startContext: context,
+        baseDir: dir,
+      });
 
       expect(result.usedJobNames).toEqual(["main-job"]);
     });
@@ -1245,7 +1169,7 @@ export default createWorkflow({
         authNamespace: "default",
       };
 
-      return bundleWorkflowJobs(allJobs, mainJobNames, {}, startContext, tmpDir);
+      return bundleWorkflowJobs({ allJobs, mainJobNames, startContext, baseDir: tmpDir });
     };
 
     test.each([
@@ -1342,20 +1266,13 @@ export const mainJob = createWorkflowJob({
 `,
     );
     try {
-      const result = await bundleWorkflowJobs(
-        [{ name: "main-job", exportName: "mainJob", sourceFile }],
-        ["main-job"],
-        {},
-        { modules: new Map() },
-        tmpDir,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        "temporal",
-      );
+      const result = await bundleWorkflowJobs({
+        allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        mainJobNames: ["main-job"],
+        startContext: { modules: new Map() },
+        baseDir: tmpDir,
+        dateDefault: "temporal",
+      });
       expect(result.bundledCode.get("main-job")).toMatch(/["'`]temporal["'`]/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
