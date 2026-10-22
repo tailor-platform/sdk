@@ -626,12 +626,14 @@ export function rolledBackError(migration: PendingMigration, cause: unknown): Er
  * @param migration - Migration that stays in progress
  * @param cause - The failure that triggered the rollback
  * @param maintenanceMode - Whether the namespace's tables stay in maintenance mode
+ * @param recordConfirmed - Whether the remote state confirmed the migration's own record remains
  * @returns The error to raise in place of the original failure
  */
 export function rollbackSkippedError(
   migration: PendingMigration,
   cause: unknown,
   maintenanceMode: boolean,
+  recordConfirmed: boolean,
 ): Error {
   const { namespace } = migration;
   const resolveRollback = `'tailor tailordb migration resolve --rollback --namespace ${namespace}'`;
@@ -645,9 +647,29 @@ export function rollbackSkippedError(
       maintenanceMode,
       "Until then",
     ),
-    context: { namespace, migrationNumber: migration.number },
+    context: {
+      namespace,
+      migrationNumber: migration.number,
+      rollbackSkipped: true,
+      ...(recordConfirmed ? { recordConfirmed: true } : {}),
+    },
     cause,
   });
+}
+
+/**
+ * Whether a rollback was skipped because the migration's own in-progress record was confirmed to
+ * remain, so the migration resumes from the schema its Pre-phase left.
+ * @param error - Failure raised while rolling back
+ * @returns True when the rollback was skipped with the record confirmed
+ */
+export function isRollbackSkippedWithRecord(error: unknown): boolean {
+  return (
+    isCLIError(error) &&
+    error.code === "MIGRATION_PARTIALLY_APPLIED" &&
+    error.context?.rollbackSkipped === true &&
+    error.context.recordConfirmed === true
+  );
 }
 
 function unreleasedRecordError(

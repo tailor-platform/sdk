@@ -28,6 +28,7 @@ import {
   isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
   isMigrationRunEnded,
+  isRollbackSkippedWithRecord,
   rolledBackError,
   rollbackSkippedError,
   updateMigrationLabel,
@@ -349,31 +350,34 @@ async function removeRunResources(
   }
 }
 
+type RecordState = "cleared" | "in-progress" | "unknown";
+
 /**
- * Whether the migration's record is gone and its checkpoint is still the one before it. A clear
- * whose response was lost can have taken effect, and rolling back then is still right. A record
- * of another migration, or a checkpoint that moved on, means a concurrent deploy owns the schema.
+ * Read whether the migration's record is gone with its checkpoint still the one before it, or
+ * remains with that checkpoint. A record of another migration, a checkpoint that moved on, or a
+ * state that cannot be read means a concurrent deploy may own the schema, so nothing is assumed.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param migration - Migration whose record was being cleared
- * @returns True only when the remote state confirms no record and the prior checkpoint
+ * @returns What the remote state confirms about the record
  */
-async function isRecordCleared(
+async function readRecordState(
   client: OperatorClient,
   workspaceId: string,
   migration: PendingMigration,
-): Promise<boolean> {
+): Promise<RecordState> {
   try {
     const state = await fetchRemoteMigrationState(
       client,
       resourceTrn(workspaceId, "tailordb", migration.namespace),
     );
+    if (state.inProgressInvalid) return "unknown";
     const checkpoint = state.number ?? (migration.number === 1 ? 0 : null);
-    return (
-      !state.inProgressInvalid && state.inProgress === null && checkpoint === migration.number - 1
-    );
+    if (checkpoint !== migration.number - 1) return "unknown";
+    if (state.inProgress === null) return "cleared";
+    return state.inProgress.number === migration.number ? "in-progress" : "unknown";
   } catch {
-    return false;
+    return "unknown";
   }
 }
 
@@ -381,20 +385,21 @@ async function clearRolledBackRecord(
   client: OperatorClient,
   workspaceId: string,
   migration: PendingMigration,
-): Promise<boolean> {
+): Promise<RecordState> {
   const { namespace } = migration;
   try {
     await clearMigrationInProgress(client, workspaceId, namespace);
+    return "cleared";
   } catch (error) {
-    if (await isRecordCleared(client, workspaceId, migration)) return true;
+    const state = await readRecordState(client, workspaceId, migration);
+    if (state === "cleared") return state;
     logger.warn(
       `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migration.number)}: ` +
         `${error instanceof Error ? error.message : String(error)}. ` +
         "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; deploy again to resume it.",
     );
-    return false;
+    return state;
   }
-  return true;
 }
 
 /**
@@ -1214,7 +1219,18 @@ async function runPostMigrationPhase(
       );
       throw error;
     }
-    throw await rollbackMigration(flow, attempt, restoration, runLog, error, true);
+    const failure = await rollbackMigration(flow, attempt, restoration, runLog, error, true);
+    if (isRollbackSkippedWithRecord(failure)) {
+      await reapplyPrePhaseAfterPostPhaseFailure(
+        client,
+        changeSet,
+        migration,
+        phaseSettings,
+        attemptedTables,
+        gqlPermissionUndo,
+      );
+    }
+    throw failure;
   }
 }
 
@@ -1242,13 +1258,18 @@ async function rollbackMigration(
   const { client, migrationContext, phaseSettings } = flow;
   const { migration, rollsBackOnFailure, inProgress, gqlPermissionUndo } = attempt;
   const { workspaceId } = migrationContext;
-  if (
-    rollsBackOnFailure &&
-    recordMayExist &&
-    !(await clearRolledBackRecord(client, workspaceId, migration))
-  ) {
+  const record =
+    rollsBackOnFailure && recordMayExist
+      ? await clearRolledBackRecord(client, workspaceId, migration)
+      : "cleared";
+  if (record !== "cleared") {
     runLog.partial.set(migration.namespace, migration);
-    return rollbackSkippedError(migration, error, phaseSettings.restricted);
+    return rollbackSkippedError(
+      migration,
+      error,
+      phaseSettings.restricted,
+      record === "in-progress",
+    );
   }
   const attemptedTables = new Set(attempt.attemptedTables);
   const resumedRollback = rollsBackOnFailure && inProgress;

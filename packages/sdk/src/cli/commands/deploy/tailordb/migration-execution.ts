@@ -526,15 +526,16 @@ export interface RollbackLeftovers {
  * @param migration - The migration to roll back
  * @param finalMigration - The last pending migration of the namespace, whose snapshot the
  * deployment ends at
- * @param recordedTables - Tables an earlier Pre-phase may have changed permission of. They get the
- * checkpoint's permission even when it equals the final one, because what is installed may differ
- * from both.
+ * @param recordedTables - Set only for a resumed migration: the tables whose permission this deploy
+ * recorded. An earlier Pre-phase installed the final settings of the migration's tables, so a
+ * resumed migration also undoes a table whose own snapshot differs from the checkpoint, and a
+ * recorded table gets the checkpoint's permission even when it equals the final one.
  * @returns Per table, the permission of the prior checkpoint, or none when it had none
  */
 export function gqlPermissionUndoFromSnapshots(
   migration: PendingMigration,
   finalMigration: PendingMigration = migration,
-  recordedTables: ReadonlySet<string> = new Set(),
+  recordedTables?: ReadonlySet<string>,
 ): GqlPermissionUndo {
   const undo: GqlPermissionUndo = new Map();
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return undo;
@@ -549,12 +550,14 @@ export function gqlPermissionUndoFromSnapshots(
     const currentTable = currentTables[tableName];
     if (!currentTable) continue;
     const finalTable = finalTables[tableName] ?? currentTable;
-    if (
-      isDeepStrictEqual(priorTable.permissions?.gql, finalTable.permissions?.gql) &&
-      !recordedTables.has(tableName)
-    ) {
-      continue;
-    }
+    const unchangedByFinal = isDeepStrictEqual(
+      priorTable.permissions?.gql,
+      finalTable.permissions?.gql,
+    );
+    const unchangedByMigration =
+      recordedTables === undefined ||
+      isDeepStrictEqual(priorTable.permissions?.gql, currentTable.permissions?.gql);
+    if (unchangedByFinal && unchangedByMigration && !recordedTables?.has(tableName)) continue;
     undo.set(
       tableName,
       priorTable.permissions?.gql

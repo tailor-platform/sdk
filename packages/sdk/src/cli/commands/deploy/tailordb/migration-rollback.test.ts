@@ -2363,7 +2363,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
       });
 
-      function leaveInProgress(migration: PendingMigration): void {
+      function leaveInProgress(
+        migration: PendingMigration,
+        ...following: PendingMigration[]
+      ): void {
         remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
         vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
           async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
@@ -2376,10 +2379,88 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
               inProgressInvalid: false,
               maintenanceModeCheckpoint: null,
             });
-            return [migration];
+            return [migration, ...following];
           },
         );
       }
+
+      test("undoes a permission an earlier Pre-phase installed when a later pending migration removes it again", async () => {
+        const client = createMockClient();
+        const installedGql = [{ conditions: [], actions: ["all"], permit: "allow" }];
+        leaveInProgress(
+          { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: rollbackForm },
+          mkAddFieldMigration(2, "GoodsReceipt", "extra"),
+        );
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValue(runEndedPartiallyApplied());
+
+        await withOverriddenSnapshot(
+          (migrationsDir, maxVersion) => {
+            const snapshot = snapshotFixtures.reconstructSnapshotFromMigrations(
+              migrationsDir,
+              maxVersion,
+            ) as SchemaSnapshot;
+            if (maxVersion !== 1) return snapshot;
+            return {
+              ...snapshot,
+              tables: {
+                ...snapshot.tables,
+                GoodsReceipt: {
+                  ...snapshot.tables.GoodsReceipt,
+                  permissions: { gql: installedGql },
+                },
+              },
+            } as SchemaSnapshot;
+          },
+          async () => {
+            await expect(
+              applyTailorDB(client, withInputs(createUpdatePlanResult()), "create-update"),
+            ).rejects.toMatchObject({ code: "MIGRATION_ROLLED_BACK" });
+          },
+        );
+
+        expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledWith(
+          expect.objectContaining({ typeName: "GoodsReceipt" }),
+        );
+      });
+
+      test.each([
+        ["the same migration's record remains", { "sdk-migration-in-progress": "m0001" }, true],
+        ["the remote state belongs to another run", { "sdk-migration": "m0001" }, false],
+      ])(
+        "after a post-phase failure with the record not cleared, %s",
+        async (_label, extraLabels, reapplies) => {
+          const client = createMockClient();
+          setPendingMigrations([
+            { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: rollbackForm },
+          ]);
+          vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+          vi.mocked(migrationModule.clearMigrationInProgress).mockRejectedValueOnce(
+            new Error("response lost"),
+          );
+          vi.mocked(client.getMetadata).mockResolvedValue({
+            metadata: { labels: { "sdk-migration": "m0000", ...extraLabels } },
+          } as never);
+          const goodsReceiptWrites: unknown[] = [];
+          vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+            goodsReceiptWrites.push(structuredClone(request));
+            if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
+            return {} as never;
+          });
+
+          const error = await applyTailorDB(
+            client,
+            withInputs(createUpdatePlanResult()),
+            "create-update",
+          ).catch((caught: unknown) => caught);
+
+          expect(error).toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
+          expect(goodsReceiptWrites).toHaveLength(reapplies ? 4 : 3);
+          expect(goodsReceiptWrites.at(3) === undefined).toBe(!reapplies);
+          expect(goodsReceiptWrites.at(3) ?? goodsReceiptWrites[1]).toEqual(goodsReceiptWrites[1]);
+        },
+      );
 
       test("rolls back a migration that an earlier deploy left in progress", async () => {
         const client = createMockClient();
