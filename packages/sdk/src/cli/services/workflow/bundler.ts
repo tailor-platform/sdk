@@ -19,7 +19,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
+import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -303,6 +303,7 @@ export interface BundleWorkflowJobsResult {
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
  * @param bundleTreeshake - Overrides how unused code is removed from bundled code
  * @param inlineSourcemapDependencySources - Whether inline sourcemaps embed the source text of installed packages
+ * @param inlineSourcemapProjectSources - Which of the project's own sources keep their text in inline sourcemaps
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -323,6 +324,7 @@ export async function bundleWorkflowJobs(
   dateDefault: EffectiveDateDefault = "legacy",
   bundleTreeshake?: TreeshakeOptions,
   inlineSourcemapDependencySources?: boolean | string[],
+  inlineSourcemapProjectSources?: ProjectSourcesFilter,
 ): Promise<BundleWorkflowJobsResult> {
   const jobSourceFiles = allJobs.map((job) => job.sourceFile);
   const sourceFileState = hashReachabilitySourceFiles([
@@ -374,6 +376,7 @@ export async function bundleWorkflowJobs(
       dateDefault,
       bundleTreeshake,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
     ),
   );
 
@@ -629,6 +632,7 @@ async function bundleSingleJob(
   dateDefault: EffectiveDateDefault = "legacy",
   bundleTreeshake?: TreeshakeOptions,
   inlineSourcemapDependencySources?: boolean | string[],
+  inlineSourcemapProjectSources?: ProjectSourcesFilter,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -642,6 +646,7 @@ async function bundleSingleJob(
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
     bundleTreeshake,
     prefix: sortedEnvPrefix,
@@ -745,6 +750,7 @@ async function bundleSingleJob(
         output: {
           format: "esm",
           sourcemap: true,
+          dir: process.cwd(),
           minify: inlineSourcemap
             ? {
                 mangle: {
@@ -770,6 +776,7 @@ async function bundleSingleJob(
           chunk,
           inlineSourcemap: inlineSourcemap ?? false,
           dependencySources: inlineSourcemapDependencySources ?? false,
+          projectSources: inlineSourcemapProjectSources,
         }),
         packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Workflow job "${job.name}"`),
       };

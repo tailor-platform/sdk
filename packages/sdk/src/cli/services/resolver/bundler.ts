@@ -23,7 +23,7 @@ import {
   INVOKER_EXPR,
   resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
+import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -61,6 +61,7 @@ export interface BundleResolversOptions {
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
   inlineSourcemapDependencySources?: boolean | string[];
+  inlineSourcemapProjectSources?: ProjectSourcesFilter;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */
@@ -95,6 +96,7 @@ export async function bundleResolvers(
     cache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     tsconfigCache,
@@ -146,6 +148,7 @@ export async function bundleResolvers(
       cache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake,
       tsconfigCache,
@@ -180,6 +183,7 @@ async function bundleSingleResolver(
     cache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     tsconfigCache,
@@ -199,6 +203,7 @@ async function bundleSingleResolver(
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
     bundleTreeshake,
   });
@@ -263,6 +268,7 @@ async function bundleSingleResolver(
         output: {
           format: "esm",
           sourcemap: true,
+          dir: process.cwd(),
           minify: inlineSourcemap
             ? {
                 mangle: {
@@ -288,6 +294,7 @@ async function bundleSingleResolver(
           chunk,
           inlineSourcemap: inlineSourcemap ?? false,
           dependencySources: inlineSourcemapDependencySources ?? false,
+          projectSources: inlineSourcemapProjectSources,
         }),
         packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Resolver "${resolver.name}"`),
       };

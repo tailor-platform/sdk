@@ -11,7 +11,7 @@ import {
 import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
+import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -42,6 +42,7 @@ export interface BundleAuthHooksOptions {
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
   inlineSourcemapDependencySources?: boolean | string[];
+  inlineSourcemapProjectSources?: ProjectSourcesFilter;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */
@@ -75,6 +76,7 @@ export async function bundleAuthHooks(
     cache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     baseDir,
@@ -103,6 +105,7 @@ export async function bundleAuthHooks(
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
     bundleTreeshake,
     prefix: sortedEnvPrefix,
@@ -148,6 +151,7 @@ export async function bundleAuthHooks(
         output: {
           format: "esm",
           sourcemap: true,
+          dir: process.cwd(),
           minify: inlineSourcemap
             ? {
                 mangle: {
@@ -178,6 +182,7 @@ export async function bundleAuthHooks(
           chunk,
           inlineSourcemap: inlineSourcemap ?? false,
           dependencySources: inlineSourcemapDependencySources ?? false,
+          projectSources: inlineSourcemapProjectSources,
         }),
         packageRuntimeGlobals: {},
       };

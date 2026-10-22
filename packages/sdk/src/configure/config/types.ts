@@ -82,6 +82,18 @@ export interface BuildOptions {
    */
   inlineSourcemapDependencySources?: boolean | string[];
   /**
+   * Choose which of your own source files embed their text in the inline sourcemap.
+   * `include` and `exclude` are globs relative to the project root (such as
+   * `["src/**"]` or `["src/generated/**"]`). Only files matching `include` (all files
+   * when omitted) and not matching `exclude` keep their text. Files under
+   * `node_modules` are controlled by `inlineSourcemapDependencySources` instead.
+   * Error positions still resolve to the original files and lines; `tailor function
+   * run` shows no code snippet for a frame in a file whose text is left out.
+   * Only applies when `inlineSourcemap` is enabled.
+   * @example inlineSourcemapProjectSources: { exclude: ["src/generated/**"] }
+   */
+  inlineSourcemapProjectSources?: { include?: string[]; exclude?: string[] };
+  /**
    * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
    * calls remain in bundled functions. `logger.setAttributes` has no severity and
    * is never dropped.

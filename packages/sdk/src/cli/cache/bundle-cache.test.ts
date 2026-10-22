@@ -615,6 +615,11 @@ describe("computeBundlerContextHash", () => {
       { inlineSourcemapDependencySources: false },
       { inlineSourcemapDependencySources: true },
     ],
+    [
+      "inlineSourcemapProjectSources",
+      { inlineSourcemapProjectSources: {} },
+      { inlineSourcemapProjectSources: { exclude: ["src/generated/**"] } },
+    ],
   ])("returns different hash when %s differs", (_label, overrideA, overrideB) => {
     const a = computeBundlerContextHash({ ...baseParams, ...overrideA });
     const b = computeBundlerContextHash({ ...baseParams, ...overrideB });

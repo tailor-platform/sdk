@@ -18,7 +18,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
+import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -51,6 +51,7 @@ export interface BundleExecutorsOptions {
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
   inlineSourcemapDependencySources?: boolean | string[];
+  inlineSourcemapProjectSources?: ProjectSourcesFilter;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */
@@ -85,6 +86,7 @@ export async function bundleExecutors(
     cache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     baseDir,
@@ -142,6 +144,7 @@ export async function bundleExecutors(
       cache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       tsconfigCache,
       allowedRuntimeGlobals,
@@ -166,6 +169,7 @@ async function bundleSingleExecutor(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   inlineSourcemapDependencySources?: boolean | string[],
+  inlineSourcemapProjectSources?: ProjectSourcesFilter,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
   allowedRuntimeGlobals?: AllowedRuntimeGlobals,
@@ -182,6 +186,7 @@ async function bundleSingleExecutor(
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
     bundleTreeshake,
   });
@@ -230,6 +235,7 @@ async function bundleSingleExecutor(
         output: {
           format: "esm",
           sourcemap: true,
+          dir: process.cwd(),
           minify: inlineSourcemap
             ? {
                 mangle: {
@@ -255,6 +261,7 @@ async function bundleSingleExecutor(
           chunk,
           inlineSourcemap: inlineSourcemap ?? false,
           dependencySources: inlineSourcemapDependencySources ?? false,
+          projectSources: inlineSourcemapProjectSources,
         }),
         packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Executor "${executor.name}"`),
       };

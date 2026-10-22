@@ -55,6 +55,7 @@ import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-poin
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
+import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
 import type { EffectiveDateDefault } from "#/runtime/types";
@@ -99,6 +100,7 @@ interface ReusableBuildState {
   readonly tsconfigCache: TsconfigLookupCache;
   readonly inlineSourcemap: boolean;
   readonly inlineSourcemapDependencySources: boolean | string[];
+  readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
   readonly bundleLogLevel: LogLevel;
 }
 
@@ -757,6 +759,7 @@ export async function loadApplication(
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
+  const inlineSourcemapProjectSources = buildOptions.inlineSourcemapProjectSources ?? {};
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
 
@@ -779,6 +782,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
@@ -799,6 +803,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
@@ -827,6 +832,7 @@ export async function loadApplication(
       dateDefault,
       buildOptions.treeshake,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -861,6 +867,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
@@ -917,6 +924,7 @@ export async function loadApplication(
       tsconfigCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
     },
   };
@@ -954,6 +962,7 @@ async function reloadEnvDependentBundles(params: {
     tsconfigCache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
   } = reusableBuildState;
 
@@ -987,6 +996,7 @@ async function reloadEnvDependentBundles(params: {
       effectiveDateDefault(config),
       buildOptionsOf(config).treeshake,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -1002,6 +1012,7 @@ async function reloadEnvDependentBundles(params: {
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptionsOf(config).treeshake,
       baseDir,

@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, test, expect } from "vitest";
 import { assertDefined } from "#/utils/assert";
 import {
   chunkCodeWithSourcemap,
+  omitProjectSourcesContent,
   omitSourcesContent,
   sourcePackageName,
   toInlineSourcemapCode,
@@ -106,6 +107,60 @@ describe("omitSourcesContent", () => {
     const { sourcesContent: _omitted, ...map } = createMap();
 
     expect(omitSourcesContent({ map, exclude: ["plain"] })).toBe(map);
+  });
+});
+
+describe("omitProjectSourcesContent", () => {
+  function createProjectMap(): SourcemapData {
+    return {
+      version: 3,
+      sources: ["src/app.ts", "src/generated/types.ts", "node_modules/plain/index.js"],
+      sourcesContent: ["app source", "generated source", "plain source"],
+      names: [],
+      mappings: "AAAA;ACAA;ACCA",
+    };
+  }
+
+  test("drops the content of a project source matching an exclude glob", () => {
+    const result = omitProjectSourcesContent({
+      map: createProjectMap(),
+      projectSources: { exclude: ["src/generated/**"] },
+    });
+
+    expect(result.sourcesContent).toEqual(["app source", null, "plain source"]);
+  });
+
+  test("keeps only the project sources matching an include glob", () => {
+    const result = omitProjectSourcesContent({
+      map: createProjectMap(),
+      projectSources: { include: ["src/generated/**"] },
+    });
+
+    expect(result.sourcesContent).toEqual([null, "generated source", "plain source"]);
+  });
+
+  test("drops a source that matches both include and exclude", () => {
+    const result = omitProjectSourcesContent({
+      map: createProjectMap(),
+      projectSources: { include: ["src/**"], exclude: ["src/generated/**"] },
+    });
+
+    expect(result.sourcesContent).toEqual(["app source", null, "plain source"]);
+  });
+
+  test("never touches the content of a source under node_modules", () => {
+    const result = omitProjectSourcesContent({
+      map: createProjectMap(),
+      projectSources: { include: ["nothing/**"], exclude: ["**"] },
+    });
+
+    expect(result.sourcesContent).toEqual([null, null, "plain source"]);
+  });
+
+  test("returns the input map itself when no rule is given", () => {
+    const map = createProjectMap();
+
+    expect(omitProjectSourcesContent({ map, projectSources: {} })).toBe(map);
   });
 });
 
@@ -223,6 +278,17 @@ describe("chunkCodeWithSourcemap", () => {
 
     expect(contentOf(result, "@scope/lib/index.js")).toBeNull();
     expect(contentOf(result, "plain/dist/index.js")).toBeNull();
+  });
+
+  test("drops the source text of project files matching the project source exclude glob", () => {
+    const result = chunkCodeWithSourcemap({
+      chunk: { code, map: createMap() },
+      inlineSourcemap: true,
+      dependencySources: false,
+      projectSources: { exclude: ["../p/src/**"] },
+    });
+
+    expect(contentOf(result, "src/app.ts")).toBeNull();
   });
 
   test("keeps the source text of the project's own files", () => {
