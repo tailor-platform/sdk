@@ -6,7 +6,7 @@ import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import { nodeRangeKey, sourceArrayElements, sourceStaticStringContent } from "./source-strings";
-import { TAILOR_CLI_VALUE_FLAGS } from "./tailor-cli-tokens";
+import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import type {
   CodemodPackage,
   CodemodPattern,
@@ -70,7 +70,6 @@ const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Se
   "string_fragment",
   "jsx_text",
 ]);
-const SOURCE_VALUE_FLAGS: ReadonlySet<string> = new Set(TAILOR_CLI_VALUE_FLAGS);
 const SOURCE_CLI_BINARY_RE =
   /^(?:(?:.*[\\/])?tailor(?:\.(?:cmd|ps1|exe))?|(?:.*[\\/])?tailor-sdk(?:@[^\s'"`;|&)]+)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
 
@@ -313,7 +312,7 @@ function isSourceValueArgument(fragment: SgNode, source: string): boolean {
   const previous = sourceStaticStringContent(elements[index - 1]!, source);
   return (
     previous != null &&
-    SOURCE_VALUE_FLAGS.has(previous.split("=", 1)[0]!) &&
+    TAILOR_CLI_VALUE_FLAG_SET.has(previous.split("=", 1)[0]!) &&
     !previous.includes("=")
   );
 }

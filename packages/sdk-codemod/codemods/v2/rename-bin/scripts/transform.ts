@@ -7,7 +7,11 @@ import {
   sourceStaticStringContent,
   sourceStringContent,
 } from "../../../../src/source-strings";
-import { TAILOR_CLI_COMMANDS, TAILOR_CLI_VALUE_FLAGS } from "../../../../src/tailor-cli-tokens";
+import {
+  TAILOR_CLI_COMMANDS,
+  TAILOR_CLI_VALUE_FLAG_SET,
+  TAILOR_CLI_VALUE_FLAGS,
+} from "../../../../src/tailor-cli-tokens";
 import type { SgNode } from "@ast-grep/napi";
 
 const SOURCE_ARG_VALUE = `(?:[^\\s'"\`;|&]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
@@ -45,7 +49,6 @@ const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 const TAILOR_CLI_COMMAND_PATTERN = `(?:${TAILOR_CLI_COMMANDS.join("|")})`;
 const TAILOR_CLI_VALUE_FLAG = `(?:${TAILOR_CLI_VALUE_FLAGS.join("|")})`;
-const TAILOR_CLI_VALUE_FLAG_SET: ReadonlySet<string> = new Set(TAILOR_CLI_VALUE_FLAGS);
 const TAILOR_CLI_COMMAND_VALUE_FLAGS = new Set(["--value", "-v"]);
 const SOURCE_ESCAPED_QUOTED_VALUE = String.raw`\\"(?:\\\\.|[^"\\])*\\"|\\'(?:\\\\.|[^'\\])*\\'`;
 const SOURCE_CLI_ARG_VALUE = `(?:${SOURCE_ESCAPED_QUOTED_VALUE}|${SOURCE_ARG_VALUE})`;

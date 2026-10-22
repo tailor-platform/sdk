@@ -53,3 +53,5 @@ export const TAILOR_CLI_VALUE_FLAGS = [
   "-f",
   "-n",
 ] as const;
+
+export const TAILOR_CLI_VALUE_FLAG_SET: ReadonlySet<string> = new Set(TAILOR_CLI_VALUE_FLAGS);
