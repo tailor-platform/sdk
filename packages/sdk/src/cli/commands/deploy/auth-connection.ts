@@ -11,11 +11,10 @@ import {
   buildMetaRequest,
   type MetadataLabelWrite,
   resourceTrn,
-  sdkNameLabelKey,
   type WithLabel,
   writeMetadataLabels,
 } from "./label";
-import { trackDesiredResourceOwnership, trackRemainingResourceOwner } from "./owned-resource";
+import { createOwnershipTracker } from "./owned-resource";
 import {
   hashValue,
   loadSecretsState,
@@ -23,7 +22,6 @@ import {
   withSecretsStateLock,
 } from "./secrets-state";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
 import type {
   CreateAuthConnectionRequestSchema,
@@ -135,9 +133,7 @@ export async function planAuthConnections(
     DeleteConnection,
     MaskedUpdateConnection
   >("Auth connections");
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
 
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
   for (const auth of auths) {
@@ -162,11 +158,7 @@ export async function planAuthConnections(
       const { metadata } = await client.getMetadata({
         trn: resourceTrn(workspaceId, "auth_connection", resource.name),
       });
-      existingConnections[resource.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
+      existingConnections[resource.name] = { resource, allLabels: metadata?.labels };
     }),
   );
 
@@ -181,16 +173,10 @@ export async function planAuthConnections(
     });
 
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "auth.connection",
         resourceLabel: "Auth connection",
         resourceName: name,
-        conflicts,
-        unmanaged,
       });
 
       const currentHash = hashValue(config.clientSecret);
@@ -230,17 +216,10 @@ export async function planAuthConnections(
 
   for (const [name, entry] of Object.entries(existingConnections)) {
     if (!entry) continue;
-    const owned = trackRemainingResourceOwner({
-      labels: entry.allLabels,
-      ownerLabel: entry.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
     // Only delete connections we own. Connections without our label are
     // treated as unowned and left untouched, even if the local secrets-state
     // happens to track them.
-    if (owned) {
+    if (ownership.ownsRemaining(entry.allLabels)) {
       changeSet.deletes.push({
         name,
         request: { workspaceId, connectionName: name },
@@ -248,7 +227,7 @@ export async function planAuthConnections(
     }
   }
 
-  return { changeSet, conflicts, unmanaged, resourceOwners, stateScope };
+  return { changeSet, ...ownership.result, stateScope };
 }
 
 type AuthConnectionApplyResult = Pick<

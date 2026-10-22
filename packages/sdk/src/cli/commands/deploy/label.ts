@@ -10,14 +10,7 @@ import type {
 } from "@tailor-platform/tailor-proto/metadata_pb";
 
 export type WithLabel<T> = Partial<
-  Record<
-    string,
-    {
-      resource: T;
-      label: string | undefined;
-      allLabels?: Record<string, string>;
-    }
-  >
+  Record<string, { resource: T; allLabels?: Record<string, string> }>
 >;
 
 /**

@@ -15,14 +15,9 @@ import {
   resourceTrn,
   writeMetadataLabels,
 } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { AIGateway as ProtoAIGateway } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
 
 /**
@@ -126,9 +121,7 @@ export async function planAIGateway(context: PlanContext) {
   const changeSet = createChangeSet<CreateAIGateway, UpdateAIGateway, DeleteAIGateway>(
     "AIGateways",
   );
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(application.name, application.id);
 
   const existingGateways = await fetchExistingResourcesWithLabels({
     client,
@@ -171,16 +164,10 @@ export async function planAIGateway(context: PlanContext) {
     };
 
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName: application.name,
-        appId: application.id,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "aigateway",
         resourceLabel: "AIGateway",
         resourceName: name,
-        conflicts,
-        unmanaged,
       });
 
       const configUnchanged = owned && areAIGatewaysEqual(existing.resource, desired);
@@ -204,15 +191,7 @@ export async function planAIGateway(context: PlanContext) {
     }
   }
   Object.entries(existingGateways).forEach(([name, entry]) => {
-    const label = entry?.label;
-    const owned = trackRemainingResourceOwner({
-      labels: entry?.allLabels,
-      ownerLabel: label,
-      appName: application.name,
-      appId: application.id,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(entry?.allLabels)) {
       changeSet.deletes.push({
         name,
         request: {
@@ -223,5 +202,5 @@ export async function planAIGateway(context: PlanContext) {
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, ...ownership.result };
 }

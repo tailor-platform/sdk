@@ -46,11 +46,7 @@ import {
   resourceTrn,
   writeMetadataLabels,
 } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
@@ -60,7 +56,6 @@ import type {
   StandardIdPPermissionCondition,
 } from "#/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 
 type IdPServiceMutationRequest = {
   workspaceId?: string;
@@ -469,9 +464,7 @@ async function planServices(
     never,
     UnchangedService
   >("IdP services");
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
@@ -583,16 +576,10 @@ async function planServices(
     };
 
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "idp.service",
         resourceLabel: "IdP service",
         resourceName: idp.name,
-        conflicts,
-        unmanaged,
       });
       const configUnchanged = owned && areIdPServicesEqual(existing.resource, desired);
       if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
@@ -616,14 +603,7 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const owned = trackRemainingResourceOwner({
-      labels: entry?.allLabels,
-      ownerLabel: entry?.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(entry?.allLabels)) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {
@@ -634,7 +614,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, ...ownership.result };
 }
 
 type CreateClient = {

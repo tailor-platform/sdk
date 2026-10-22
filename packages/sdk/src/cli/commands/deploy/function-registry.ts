@@ -12,14 +12,9 @@ import {
   type WithLabel,
   writeMetadataLabels,
 } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { Application } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BundledScripts, FunctionEntry } from "./function-registry-types";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -329,9 +324,7 @@ export async function planFunctionRegistry(
     UpdateFunction,
     DeleteFunction
   >("Function registry");
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
 
   const fetchedMap =
     previousExisting ??
@@ -368,16 +361,10 @@ export async function planFunctionRegistry(
     });
 
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "function_registry",
         resourceLabel: "Function registry",
         resourceName: entry.name,
-        conflicts,
-        unmanaged,
       });
 
       const configUnchanged = owned && existing.resource.contentHash === entry.contentHash;
@@ -406,14 +393,7 @@ export async function planFunctionRegistry(
   // Remaining entries in existingMap are candidates for deletion
   for (const [name, existing] of Object.entries(existingMap)) {
     if (!existing) continue;
-    const owned = trackRemainingResourceOwner({
-      labels: existing.allLabels,
-      ownerLabel: existing.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(existing.allLabels)) {
       changeSet.deletes.push({
         name,
         workspaceId,
@@ -433,9 +413,7 @@ export async function planFunctionRegistry(
     resolverFunctionChanges,
     executorFunctionChanges,
     authHookFunctionChanges,
-    conflicts,
-    unmanaged,
-    resourceOwners,
+    ...ownership.result,
     existingMap: fetchedMap,
   };
 }
