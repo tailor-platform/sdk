@@ -6,7 +6,7 @@ import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { renderCallbackPage } from "#/cli/shared/callback-page";
 import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, isCLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -187,8 +187,13 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
           server.close();
           resolve();
         } catch (err) {
-          res.writeHead(400, { "Content-Type": "text/plain" });
-          res.end(`Authorization failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+          res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+          res.end(
+            renderCallbackPage({
+              title: "Authorization failed",
+              message: isCLIError(err) ? err.message : "Return to the terminal for details.",
+            }),
+          );
           server.close();
           reject(toError(err));
         }
