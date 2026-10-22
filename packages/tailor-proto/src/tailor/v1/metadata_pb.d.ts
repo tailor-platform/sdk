@@ -146,8 +146,9 @@ export declare type BulkSetMetadataResult = Message<"tailor.v1.BulkSetMetadataRe
 export declare const BulkSetMetadataResultSchema: GenMessage<BulkSetMetadataResult>;
 
 /**
- * ListMetadataRequest finds resources in a workspace whose labels match all
- * of the given key-value pairs (AND semantics).
+ * ListMetadataRequest lists labeled resources in a workspace, optionally
+ * narrowed to those whose labels match all of the given key-value pairs (AND
+ * semantics).
  *
  * @generated from message tailor.v1.ListMetadataRequest
  */
@@ -158,6 +159,8 @@ export declare type ListMetadataRequest = Message<"tailor.v1.ListMetadataRequest
   workspaceId: string;
 
   /**
+   * When empty, every labeled resource in the workspace matches.
+   *
    * @generated from field: map<string, string> labels = 2;
    */
   labels: { [key: string]: string };
