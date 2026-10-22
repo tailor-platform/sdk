@@ -33,15 +33,32 @@ const SQL_STYLE_MAP: Record<string, string> = {
 
 type Piece = { text: string; literal: boolean; comment?: boolean };
 
-function splitSqlLine(line: string, startDepth: number) {
-  let depth = startDepth;
+function createPieceBuffer() {
   const pieces: Piece[] = [];
   let code = "";
-  let i = 0;
   const flushCode = () => {
     if (code) pieces.push({ text: code, literal: false });
     code = "";
   };
+  return {
+    addCode(text: string) {
+      code += text;
+    },
+    addLiteral(text: string, comment?: boolean) {
+      flushCode();
+      pieces.push({ text, literal: true, comment });
+    },
+    finish() {
+      flushCode();
+      return pieces;
+    },
+  };
+}
+
+function splitSqlLine(line: string, startDepth: number) {
+  let depth = startDepth;
+  const buffer = createPieceBuffer();
+  let i = 0;
   const takeBlockComment = (from: number) => {
     let j = from;
     while (j < line.length && depth > 0) {
@@ -55,33 +72,30 @@ function splitSqlLine(line: string, startDepth: number) {
         j++;
       }
     }
-    pieces.push({ text: line.slice(i, j), literal: true });
+    buffer.addLiteral(line.slice(i, j));
     i = j;
   };
   while (i < line.length) {
     if (depth > 0) {
       takeBlockComment(i);
     } else if (line.startsWith("/*", i)) {
-      flushCode();
       depth = 1;
       takeBlockComment(i + 2);
     } else if (line.startsWith("--", i)) {
-      flushCode();
-      pieces.push({ text: line.slice(i), literal: true });
+      buffer.addLiteral(line.slice(i));
       i = line.length;
     } else if (line[i] === "'" || line[i] === '"') {
       const quote = line[i];
       let j = i + 1;
       while (j < line.length && line[j] !== quote) j++;
-      code += line.slice(i, j + 1);
+      buffer.addCode(line.slice(i, j + 1));
       i = j + 1;
     } else {
-      code += line[i];
+      buffer.addCode(line.charAt(i));
       i++;
     }
   }
-  flushCode();
-  return { pieces, depth };
+  return { pieces: buffer.finish(), depth };
 }
 
 /**
@@ -137,13 +151,8 @@ const GQL_BUILTINS = new Set(["true", "false", "null"]);
 
 function splitGraphqlLine(line: string, startsInBlockString: boolean) {
   let inBlockString = startsInBlockString;
-  const pieces: Piece[] = [];
-  let code = "";
+  const buffer = createPieceBuffer();
   let i = 0;
-  const flushCode = () => {
-    if (code) pieces.push({ text: code, literal: false });
-    code = "";
-  };
   const takeBlockString = (from: number) => {
     let j = from;
     while (j < line.length) {
@@ -153,7 +162,7 @@ function splitGraphqlLine(line: string, startsInBlockString: boolean) {
     }
     const closed = j < line.length;
     const stop = closed ? j + 3 : line.length;
-    pieces.push({ text: line.slice(i, stop), literal: true });
+    buffer.addLiteral(line.slice(i, stop));
     i = stop;
     inBlockString = !closed;
   };
@@ -161,24 +170,21 @@ function splitGraphqlLine(line: string, startsInBlockString: boolean) {
     if (inBlockString) {
       takeBlockString(i);
     } else if (line.startsWith('"""', i)) {
-      flushCode();
       takeBlockString(i + 3);
     } else if (line[i] === '"') {
       let j = i + 1;
       while (j < line.length && line[j] !== '"') j += line[j] === "\\" ? 2 : 1;
-      code += line.slice(i, j + 1);
+      buffer.addCode(line.slice(i, j + 1));
       i = j + 1;
     } else if (line[i] === "#") {
-      flushCode();
-      pieces.push({ text: line.slice(i), literal: true, comment: true });
+      buffer.addLiteral(line.slice(i), true);
       i = line.length;
     } else {
-      code += line[i];
+      buffer.addCode(line.charAt(i));
       i++;
     }
   }
-  flushCode();
-  return { pieces, inBlockString };
+  return { pieces: buffer.finish(), inBlockString };
 }
 
 /**
