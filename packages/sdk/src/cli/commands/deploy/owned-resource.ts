@@ -83,12 +83,11 @@ export function createOwnershipTracker(
     result,
     ownsDesired(labels, resource) {
       if (isOwnedByApp(labels, appName, appId)) return true;
-      const { resourceType, resourceLabel, resourceName } = resource;
       const currentOwner = labels?.[sdkNameLabelKey];
       if (currentOwner) {
-        result.conflicts.push({ resourceType, resourceLabel, resourceName, currentOwner });
+        result.conflicts.push({ ...resource, currentOwner });
       } else {
-        result.unmanaged.push({ resourceType, resourceLabel, resourceName });
+        result.unmanaged.push(resource);
       }
       return false;
     },
