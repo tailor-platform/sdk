@@ -209,10 +209,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           renderCallbackPage({
             status: "failure",
             title: "Authentication failed",
-            message:
-              isCLIError(error) && error.code === "PROFILE_USER_MISMATCH"
-                ? error.message
-                : "Return to the terminal for details.",
+            message: isCLIError(error) ? error.message : "Return to the terminal for details.",
           }),
         );
         reject(toError(error));

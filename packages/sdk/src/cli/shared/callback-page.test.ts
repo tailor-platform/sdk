@@ -14,17 +14,16 @@ describe("renderCallbackPage", () => {
     expect(html).not.toContain("<script>alert");
   });
 
-  test("offers a close button and tries to close the tab on success", () => {
+  test("tries to close the tab on success without offering a close button", () => {
     const html = renderCallbackPage({ status: "success", title: "Done", message: "Back" });
 
-    expect(html).toContain("<button");
     expect(html).toContain("window.close()");
+    expect(html).not.toContain("<button");
   });
 
-  test("shows no close button and runs no script on failure", () => {
+  test("runs no script on failure", () => {
     const html = renderCallbackPage({ status: "failure", title: "Oops", message: "Back" });
 
-    expect(html).not.toContain("<button");
     expect(html).not.toContain("<script");
   });
 

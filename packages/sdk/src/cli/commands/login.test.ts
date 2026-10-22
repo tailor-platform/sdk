@@ -254,6 +254,26 @@ describe("login --profile", () => {
     expect(response?.body).not.toContain("<b>dev</b>");
   });
 
+  test("shows the message of a CLIError on the failure page", async () => {
+    getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
+    let pending: Promise<CallbackResponse> | undefined;
+    openMock.mockImplementation(async () => {
+      pending = fetch("http://localhost:8085/other").then(async (res) => ({
+        status: res.status,
+        contentType: res.headers.get("content-type"),
+        body: await res.text(),
+      }));
+      await pending;
+    });
+
+    const result = await runCommand(loginCommand, []);
+    const response = await pending;
+
+    expect(result.success).toBe(false);
+    expect(response?.status).toBe(401);
+    expect(response?.body).toContain("Invalid callback URL");
+  });
+
   test("does not expose internal error messages on the failure page", async () => {
     getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
     getTokenFromCodeRedirectMock.mockRejectedValue(new Error("secret-internal-detail"));
