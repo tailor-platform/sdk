@@ -5,7 +5,6 @@ import {
   isTailorConfigPath,
   isIntrinsicJsxName,
   isTopLevelExportedDeclarator,
-  renameBindingAndUsages,
 } from "../../../../src/plugin-export-bindings";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
@@ -58,6 +57,44 @@ function findEnclosingDeclarator(node: SgNode): SgNode | undefined {
   if (parent.field("value")?.range().start.index !== value.range().start.index) return undefined;
   if (!isTopLevelExportedDeclarator(parent)) return undefined;
   return parent;
+}
+
+/**
+ * Rename a declarator's name node and every other bare identifier reference to it in the
+ * file (the caller has already checked, via {@link hasOtherBindingNamed}, that no shadowing
+ * binding makes this ambiguous).
+ * @param root - File root node
+ * @param declNode - The declarator's name node to rename
+ * @param oldName - The binding's current name
+ * @param edits - Edit list to append to
+ */
+function renameBindingAndUsages(
+  root: SgNode,
+  declNode: SgNode,
+  oldName: string,
+  edits: Edit[],
+): void {
+  edits.push(declNode.replace("plugins"));
+  const declStart = declNode.range().start.index;
+  for (const idNode of root.findAll({ rule: { kind: "identifier", regex: `^${oldName}$` } })) {
+    if (isIntrinsicJsxName(idNode)) continue;
+    if (idNode.range().start.index === declStart) continue;
+    if (idNode.parent()?.kind() === "import_specifier") continue;
+    const exportSpec = idNode.parent();
+    if (exportSpec?.kind() === "export_specifier") {
+      if (exportSpec.parent()?.parent()?.field("source")) continue;
+    }
+    edits.push(idNode.replace("plugins"));
+  }
+  // A shorthand `{ oldName }` is both the object key and the value reference; replacing the
+  // whole node would rename the key too (`{ oldName }` -> `{ plugins }`, not `{ oldName:
+  // plugins }`), silently changing the object's shape. Expand it to an explicit pair instead,
+  // so only the referenced value is renamed.
+  for (const idNode of root.findAll({
+    rule: { kind: "shorthand_property_identifier", regex: `^${oldName}$` },
+  })) {
+    edits.push(idNode.replace(`${oldName}: plugins`));
+  }
 }
 
 /**
@@ -289,7 +326,7 @@ export default function transform(source: string, filePath?: string): string | n
     if (nameNode) {
       const oldName = nameNode.text();
       if (!hasOtherBindingNamed(tree, oldName, nameNode.range().start.index)) {
-        renameBindingAndUsages(tree, nameNode, oldName, edits, false);
+        renameBindingAndUsages(tree, nameNode, oldName, edits);
       }
     }
   }
