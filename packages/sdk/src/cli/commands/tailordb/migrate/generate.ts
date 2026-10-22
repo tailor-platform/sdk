@@ -949,7 +949,6 @@ interface RenameQuestion {
   noun: "tables" | "fields" | "members";
   /** What the prompt says the added sibling shares with the removed item. */
   compatibility: "schema" | "type";
-  /** Record the rename to a confirmed sibling. */
   record: (newName: string) => void;
 }
 

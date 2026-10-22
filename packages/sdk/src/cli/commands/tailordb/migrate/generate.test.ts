@@ -903,10 +903,10 @@ describe("tailordb migration generate rename candidates of each kind", () => {
     },
   ];
 
-  function addSchemas({ baseline, local }: Schemas): string {
+  function addSchemas(schemas: Schemas): string {
     const migrationsDir = path.join(tmpDir, "tailordb");
-    writeInitialSchema(migrationsDir, baseline);
-    state.namespaces.push({ namespace: "tailordb", migrationsDir, localTypes: local });
+    writeInitialSchema(migrationsDir, schemas.baseline);
+    state.namespaces.push({ namespace: "tailordb", migrationsDir, localTypes: schemas.local });
     return migrationsDir;
   }
 
@@ -1017,6 +1017,32 @@ describe("tailordb migration generate rename candidates of each kind", () => {
       );
     },
   );
+
+  test("reports conflicting fields first, then nested members, then tables", async () => {
+    addEveryKind();
+    const tableFlags = ["--rename", "Account:Person", "--drop", "Account"];
+    const memberFlags = ["--rename", "User.address.zip:zipCode", "--drop", "User.address.zip"];
+    const fieldFlags = ["--rename", "User.name:displayName", "--drop", "User.name"];
+
+    const everyKind = await runCommand(generateCommand, [
+      "--yes",
+      ...tableFlags,
+      ...memberFlags,
+      ...fieldFlags,
+    ]);
+    const withoutFields = await runCommand(generateCommand, [
+      "--yes",
+      ...tableFlags,
+      ...memberFlags,
+    ]);
+
+    expect(everyKind.error).toMatchObject({
+      message: "--rename and --drop conflict for: User.name",
+    });
+    expect(withoutFields.error).toMatchObject({
+      message: "--rename and --drop conflict for: User.address.zip",
+    });
+  });
 
   test("reports unresolved tables, then fields, then nested members", async () => {
     addEveryKind();
