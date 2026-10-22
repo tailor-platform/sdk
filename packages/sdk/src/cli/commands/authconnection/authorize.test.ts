@@ -206,6 +206,7 @@ describe("authconnection authorize", () => {
     expect(response?.contentType).toContain("text/html");
     expect(response?.body).toContain("Authorization successful");
     expect(response?.body).toContain("close this tab");
+    expect(response?.body).toContain("window.close()");
   });
 
   test("returns an escaped HTML failure page with 400 when the provider reports an error", async () => {
