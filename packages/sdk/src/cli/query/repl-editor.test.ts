@@ -82,6 +82,11 @@ describe("highlightGraphqlLines (multi-line)", () => {
     expect(out[1]).toContain("\x1b[34mquery\x1b[0m");
   });
 
+  test("keeps the argument context after a block string on the same line", () => {
+    const out = highlightGraphqlLines(['{ field(a: """text""", b: 1) }'])[0];
+    expect(out).toContain("\x1b[3;33mb\x1b[0m");
+  });
+
   test("keeps the line count and text", () => {
     const lines = ['a(s: """doc', "mid", 'more""")'];
     expect(highlightGraphqlLines(lines).map(stripAnsi)).toEqual(lines);

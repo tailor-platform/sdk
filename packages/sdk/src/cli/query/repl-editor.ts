@@ -191,33 +191,47 @@ export function highlightGraphqlLines(lines: readonly string[]): string[] {
   return lines.map((line) => {
     const split = splitGraphqlLine(line, inBlockString);
     inBlockString = split.inBlockString;
+    const context: GraphqlContext = {
+      parenDepth: 0,
+      prevKind: "",
+      prevText: "",
+      afterColon: false,
+    };
     return split.pieces
       .map((piece) => {
-        if (!piece.literal) return highlightGraphqlCode(piece.text);
+        if (!piece.literal) return highlightGraphqlCode(piece.text, context);
+        if (!piece.comment) {
+          context.prevKind = TokenKind.BLOCK_STRING;
+          context.prevText = piece.text;
+          context.afterColon = false;
+        }
         return `${piece.comment ? DIM : GREEN}${piece.text}${RESET}`;
       })
       .join("");
   });
 }
 
+type GraphqlContext = {
+  parenDepth: number;
+  prevKind: string;
+  prevText: string;
+  afterColon: boolean;
+};
+
 /**
  * Highlight a single GraphQL code fragment using the official `graphql` Lexer.
  * Tracks paren depth and the previous token to provide semantic-level colouring
  * (field names vs argument names vs types).
  * @param line - GraphQL text without comments or block strings
+ * @param context - Lexer state shared by the fragments of one editor line; updated in place
  * @returns ANSI-decorated line, or the input unchanged when the lexer rejects it
  */
-function highlightGraphqlCode(line: string): string {
+function highlightGraphqlCode(line: string, context: GraphqlContext): string {
   try {
     const source = new Source(line);
     const lexer = new Lexer(source);
     let result = "";
     let pos = 0;
-
-    let parenDepth = 0;
-    let prevKind: string = "";
-    let prevText = "";
-    let afterColon = false;
 
     let token = lexer.advance();
     while (token.kind !== TokenKind.EOF) {
@@ -228,65 +242,65 @@ function highlightGraphqlCode(line: string): string {
       const text = line.slice(token.start, token.end);
       switch (token.kind) {
         case TokenKind.NAME: {
-          if (prevKind === TokenKind.DOLLAR) {
+          if (context.prevKind === TokenKind.DOLLAR) {
             result += `${MAGENTA}${text}${RESET}`;
-          } else if (prevKind === TokenKind.AT) {
+          } else if (context.prevKind === TokenKind.AT) {
             result += `${BOLD_MAGENTA}${text}${RESET}`;
           } else if (GQL_BUILTINS.has(text) || GQL_KEYWORDS.has(text)) {
             result += `${BLUE}${text}${RESET}`;
-          } else if (GQL_DEF_KEYWORDS.has(prevText)) {
+          } else if (GQL_DEF_KEYWORDS.has(context.prevText)) {
             result += `${BOLD_CYAN}${text}${RESET}`;
-          } else if (afterColon) {
+          } else if (context.afterColon) {
             result += `${CYAN}${text}${RESET}`;
-          } else if (parenDepth > 0) {
+          } else if (context.parenDepth > 0) {
             result += `${ITALIC_YELLOW}${text}${RESET}`;
           } else {
             result += `${BRIGHT_BLUE}${text}${RESET}`;
           }
-          afterColon = false;
+          context.afterColon = false;
           break;
         }
         case TokenKind.INT:
         case TokenKind.FLOAT:
           result += `${BLUE}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.STRING:
         case TokenKind.BLOCK_STRING:
           result += `${GREEN}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.DOLLAR:
           result += `${MAGENTA}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.AT:
           result += `${BOLD_MAGENTA}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.BRACE_L:
         case TokenKind.BRACE_R:
           result += `${YELLOW}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.PAREN_L:
-          parenDepth += 1;
+          context.parenDepth += 1;
           result += `${DIM_YELLOW}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.PAREN_R:
-          parenDepth = Math.max(0, parenDepth - 1);
+          context.parenDepth = Math.max(0, context.parenDepth - 1);
           result += `${DIM_YELLOW}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.BRACKET_L:
         case TokenKind.BRACKET_R:
           result += `${DIM_YELLOW}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         case TokenKind.COLON:
           result += `${DIM}${text}${RESET}`;
-          afterColon = true;
+          context.afterColon = true;
           break;
         case TokenKind.BANG:
         case TokenKind.EQUALS:
@@ -294,15 +308,15 @@ function highlightGraphqlCode(line: string): string {
         case TokenKind.AMP:
         case TokenKind.SPREAD:
           result += `${DIM}${text}${RESET}`;
-          afterColon = false;
+          context.afterColon = false;
           break;
         default:
           result += text;
-          afterColon = false;
+          context.afterColon = false;
       }
 
-      prevKind = token.kind;
-      prevText = text;
+      context.prevKind = token.kind;
+      context.prevText = text;
       pos = token.end;
       token = lexer.advance();
     }
