@@ -318,6 +318,20 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
+  test.fails("reports a remote checkpoint ahead of the local migration history as an error", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0009" } },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(stdout.output)).toMatchObject([{ status: "error", namespace: "tailordb" }]);
+  });
+
   test("identifies a migration history mismatch in human-readable output", async () => {
     markHistoryAsRebaselined();
     state.getMetadata.mockResolvedValue({

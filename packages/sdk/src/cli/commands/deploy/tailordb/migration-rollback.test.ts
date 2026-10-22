@@ -934,6 +934,30 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(restoredFields).not.toContain("extra");
   });
 
+  test.fails("records the maintenance mode after the first checkpoint of a multi-migration run that stops at the second migration", async () => {
+    const client = createMockClient();
+    setPendingMigrations([
+      mkAddFieldMigration(1, "GoodsReceipt", "note"),
+      mkAddFieldMigration(2, "GoodsReceipt", "extra"),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockImplementation(
+      (_ctx: unknown, migrations: PendingMigration[]) =>
+        migrations.some((m) => m.number === 2)
+          ? Promise.reject(new Error("migration 2 failed"))
+          : Promise.resolve(undefined),
+    );
+
+    await expect(applyTailorDB(client, createUpdatePlanResult(), "create-update")).rejects.toThrow(
+      "migration 2 failed",
+    );
+
+    const firstCheckpoint = vi
+      .mocked(migrationModule.updateMigrationLabel)
+      .mock.calls.find((call) => call[3] === 1);
+    expect(firstCheckpoint).toBeDefined();
+    expect(firstCheckpoint![5]).toBe(true);
+  });
+
   test("rolls back only types touched by the failed migration", async () => {
     const table = (name: string, fields: SchemaSnapshot["tables"][string]["fields"]) => ({
       name,
