@@ -111,11 +111,8 @@ const { isolated: isolatedUnitTests, shared: sharedUnitTests } = classifyUnitTes
 // CLI subprocesses keep human-readable output when the suite runs inside an AI coding agent.
 const e2eEnv = { POLITTY_NO_AGENT: "1" };
 
-// E2e files spend their time waiting on Platform responses, so the default
-// CPU-derived worker cap only leaves runners idle.
 const e2eMaxWorkers = 8;
 
-// Vitest rejects projects that differ in maxWorkers but share a groupOrder.
 const e2eGroupOrder = 1;
 
 export default defineConfig({
