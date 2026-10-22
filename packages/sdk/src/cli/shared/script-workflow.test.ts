@@ -259,6 +259,38 @@ describe("keeping a script workflow", () => {
     expect(mocks.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-1" });
   });
 
+  test("removes the resources, warns and still returns the result when the labels cannot be recorded", async () => {
+    const { client, mocks } = createMockClient({ result: '{"success":false}' });
+
+    const outcome = await withScriptWorkflow(
+      { ...baseOptions, client },
+      async (run, { retain }) => {
+        const result = await run({});
+        vi.mocked(writeMetadataLabelsDirect).mockRejectedValueOnce(new Error("labels rejected"));
+        retain(labels);
+        return result;
+      },
+    );
+
+    expect(outcome).toMatchObject({ success: true, result: '{"success":false}' });
+    expect(mocks.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-1" });
+    expect(vi.mocked(logger.warn).mock.calls.at(-1)?.[0]).toContain("labels rejected");
+  });
+
+  test("records the labels again after a transient error and keeps the resources", async () => {
+    const { client, mocks } = createMockClient();
+
+    await withScriptWorkflow({ ...baseOptions, client }, async (run, { retain }) => {
+      await run({});
+      vi.mocked(writeMetadataLabelsDirect)
+        .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+        .mockResolvedValueOnce(true);
+      retain(labels);
+    });
+
+    expect(mocks.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
   test("finds no workflow when none was kept", async () => {
     const { client } = createMockClient();
 

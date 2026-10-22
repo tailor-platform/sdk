@@ -323,11 +323,84 @@ describe("seedRetryCommand", () => {
     );
   });
 
+  test("rebuilds the chunks from only the tables the failed apply was limited to", async () => {
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: [
+        {
+          ...namespaceConfig("tailordb"),
+          dependencies: { User: [], Order: [] },
+          requiredFields: { User: [], Order: [] },
+          types: ["User", "Order"],
+        },
+      ],
+    });
+
+    await runRetry(["Order"]);
+
+    expect(jsonl.loadSeedData).toHaveBeenCalledWith(
+      expect.anything(),
+      ["Order"],
+      expect.anything(),
+    );
+  });
+
+  test("rebuilds the chunks from every table when no table names are given", async () => {
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: [
+        {
+          ...namespaceConfig("tailordb"),
+          dependencies: { User: [], Order: [] },
+          requiredFields: { User: [], Order: [] },
+          types: ["User", "Order"],
+        },
+      ],
+    });
+
+    await runRetry();
+
+    expect(jsonl.loadSeedData.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining(["User", "Order"]),
+    );
+  });
+
+  test("looks only at the namespaces that hold the named tables", async () => {
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: [
+        namespaceConfig("first"),
+        {
+          ...namespaceConfig("second"),
+          dependencies: { Order: [] },
+          requiredFields: { Order: [] },
+          types: ["Order"],
+        },
+      ],
+    });
+
+    await runRetry(["Order"]);
+
+    expect(sdk.inspectScriptWorkflow).toHaveBeenCalledTimes(1);
+    expect(sdk.inspectScriptWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "tailor-seed-tailordb--second" }),
+    );
+  });
+
   test("rejects a namespace that is not in the config", async () => {
     const result = await runRetry(["--namespace", "missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(String(result.error)).toContain('"missing" is not a TailorDB namespace');
+    expect(String(result.error)).toContain('No entities found in namespace "missing"');
   });
 
   test("needs a machine user", async () => {

@@ -1,6 +1,5 @@
 import {
   arg,
-  buildOptionsOf,
   CLIError,
   defineAppCommand,
   deploymentArgs,
@@ -17,12 +16,13 @@ import {
   noBaseArg,
   selectDatasets,
 } from "./datasets";
+import { selectEntities } from "./entities";
 import { assertSeedDataDirectory } from "./jsonl";
 import { readRetryLabels } from "./retry-labels";
 import {
+  buildNamespaceChunks,
   buildNamespaceSeedPlan,
   createSeedExecution,
-  prepareNamespaceSeed,
   runSeedChunks,
   withKeptTailorDBSeedWorkflow,
 } from "./seed-tailordb";
@@ -56,6 +56,10 @@ export const seedRetryCommand = defineAppCommand({
     ...datasetArg,
     ...allDatasetsArg,
     ...noBaseArg,
+    entities: arg(z.array(z.string()).default([]), {
+      positional: true,
+      description: "Table names the failed `tailor seed apply` was limited to (default: all)",
+    }),
   }),
   run: async (args) => {
     assertDatasetSelection(args.dataset, args["all-datasets"]);
@@ -73,12 +77,18 @@ export const seedRetryCommand = defineAppCommand({
       );
     }
 
-    const namespaces = args.namespace
-      ? context.namespaces.filter((ns) => ns.namespace === args.namespace)
-      : context.namespaces;
-    if (args.namespace && namespaces.length === 0) {
-      throw new Error(`"${args.namespace}" is not a TailorDB namespace of this config.`);
-    }
+    const selection = selectEntities({
+      namespaceTables: Object.fromEntries(context.namespaces.map((ns) => [ns.namespace, ns.types])),
+      hasIdpUser: false,
+      namespace: args.namespace,
+      entities: args.entities,
+      skipIdp: false,
+    });
+    const typesToSeedOf = (nsConfig: SeedNamespaceConfig) =>
+      selection.entitiesToProcess
+        ? nsConfig.types.filter((type) => selection.entitiesToProcess?.includes(type))
+        : nsConfig.types;
+    const namespaces = context.namespaces.filter((ns) => typesToSeedOf(ns).length > 0);
 
     const execution = await createSeedExecution({
       configPath: args.config,
@@ -147,27 +157,22 @@ export const seedRetryCommand = defineAppCommand({
     const dataDirs = [...(args["no-base"] ? [] : [dataDir]), ...datasets.dirs];
     const plan = buildNamespaceSeedPlan({
       nsConfig,
-      typesToSeed: nsConfig.types,
+      typesToSeed: typesToSeedOf(nsConfig),
       dataDirs,
       upsert: record.upsert,
     });
-    const prepared = await prepareNamespaceSeed({
-      plan,
-      upsert: record.upsert,
-      configDir: path.dirname(context.config.path),
-      buildOptions: buildOptionsOf(context.config),
-    });
+    const built = buildNamespaceChunks({ plan, upsert: record.upsert });
     if (
-      !prepared ||
-      prepared.hash !== record.hash ||
-      prepared.chunkArgs.length !== record.total ||
-      record.chunkIndex >= prepared.chunkArgs.length
+      !built ||
+      built.hash !== record.hash ||
+      built.chunks.length !== record.total ||
+      record.chunkIndex >= built.chunks.length
     ) {
       throw CLIError({
         code: "SEED_RETRY_DATA_CHANGED",
         message: `The seed data of namespace '${namespace}' differs from the run that failed, so its chunks are not the same.`,
         suggestion:
-          "Pass the same --dataset, --all-datasets and --no-base flags as the failed `tailor seed apply` and keep the seed data as it was, or run `tailor seed apply` again.",
+          "Pass the same table names and the same --dataset, --all-datasets and --no-base as the failed `tailor seed apply` and keep the seed data as it was, or run `tailor seed apply` again.",
         context: { namespace, failedChunk: record.chunkIndex + 1, totalChunks: record.total },
       });
     }
@@ -181,7 +186,7 @@ export const seedRetryCommand = defineAppCommand({
       { execution, namespace, workflowId: target.workflowId },
       (run, { retain }) =>
         runSeedChunks({
-          prepared,
+          built,
           upsert: record.upsert,
           startIndex: record.chunkIndex,
           run,

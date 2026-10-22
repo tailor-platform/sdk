@@ -638,8 +638,9 @@ export async function writeMetadataLabels(
 
 /**
  * Write one metadata change immediately, bypassing deploy resource batching.
- * This is reserved for migration checkpoints whose callers continue only
- * after the label is durable.
+ * This is reserved for callers that continue only after the label is
+ * durable, such as migration checkpoints and temporary workflows kept for a
+ * later run.
  * @param client - Operator client instance
  * @param write - TRN, labels to set, and label keys to delete
  * @returns Whether the labels changed

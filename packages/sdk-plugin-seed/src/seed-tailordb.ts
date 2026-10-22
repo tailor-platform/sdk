@@ -199,65 +199,54 @@ export interface SeedResult {
 
 type ChunkArg = Parameters<RunScript>[0];
 
-export interface PreparedNamespaceSeed {
+export interface NamespaceChunks {
   namespace: string;
-  /** Bundled seed script */
-  code: string;
-  /** Number of tables that have data */
-  tableCount: number;
-  /** Argument of every chunk, in the order they run */
-  chunkArgs: ChunkArg[];
-  /** Order of the tables each chunk holds, for progress lines */
-  chunkTables: string[][];
-  /** Fingerprint of {@link chunkArgs} */
+  /** Tables that have data, in dependency order */
+  tables: string[];
+  /** Every chunk, in the order they run */
+  chunks: { arg: ChunkArg; tables: string[] }[];
+  /** Fingerprint of the argument of every chunk */
   hash: string;
 }
 
-interface PrepareNamespaceSeedParams {
+interface BuildNamespaceChunksParams {
   plan: NamespaceSeedPlan;
   upsert: boolean;
-  configDir: string;
-  buildOptions: SeedBundleBuildOptions;
 }
 
 /**
- * Bundle the seed script of a namespace and split its data into the chunks that run.
- * @param params - Plan of the namespace and how to bundle
- * @returns The script and its chunks; undefined when the namespace has no data
+ * Split the data of a namespace into the chunks that run.
+ * @param params - Plan of the namespace
+ * @returns The chunks; undefined when the namespace has no data
  */
-export async function prepareNamespaceSeed(
-  params: PrepareNamespaceSeedParams,
-): Promise<PreparedNamespaceSeed | undefined> {
-  const { plan, upsert, configDir, buildOptions } = params;
+export function buildNamespaceChunks(
+  params: BuildNamespaceChunksParams,
+): NamespaceChunks | undefined {
+  const { plan, upsert } = params;
   const { namespace, sortedTypes, data, selfRefTypes, selfRefFields, selfRefKeys } = plan;
 
-  const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
-  if (typesWithData.length === 0) return undefined;
+  const tables = sortedTypes.filter((type) => data[type] && data[type].length > 0);
+  if (tables.length === 0) return undefined;
 
-  const bundled = await bundleSeedScript(namespace, typesWithData, configDir, buildOptions);
-  const chunks = chunkSeedData({ data, order: sortedTypes });
-  if (chunks.length === 0) return undefined;
+  const split = chunkSeedData({ data, order: sortedTypes });
+  if (split.length === 0) return undefined;
 
-  const chunkArgs = chunks.map((chunk) => ({
-    data: chunk.data,
-    order: chunk.order,
-    selfRefTypes,
-    selfRefFields,
-    selfRefKeys,
-    upsert,
+  const chunks = split.map((chunk) => ({
+    arg: {
+      data: chunk.data,
+      order: chunk.order,
+      selfRefTypes,
+      selfRefFields,
+      selfRefKeys,
+      upsert,
+    },
+    tables: chunk.order,
   }));
-  return {
-    namespace,
-    code: bundled.bundledCode,
-    tableCount: typesWithData.length,
-    chunkArgs,
-    chunkTables: chunks.map((chunk) => chunk.order),
-    hash: hashChunkArgs(chunkArgs),
-  };
+  return { namespace, tables, chunks, hash: hashChunkArgs(chunks.map((chunk) => chunk.arg)) };
 }
 
 interface RunSeedChunksParams {
-  prepared: PreparedNamespaceSeed;
+  built: NamespaceChunks;
   upsert: boolean;
   /** Index of the first chunk to run */
   startIndex: number;
@@ -268,20 +257,21 @@ interface RunSeedChunksParams {
 }
 
 /**
- * Run the chunks of a prepared seed one after another from `startIndex`, and stop at the
- * first one that fails, keeping the workflow with a record of where it stopped.
+ * Run the chunks one after another from `startIndex`, and stop at the first one that
+ * fails, keeping the workflow with a record of where it stopped.
  * @param params - Chunks to run and where to start
  * @returns Whether every chunk from `startIndex` succeeded
  */
 export async function runSeedChunks(params: RunSeedChunksParams): Promise<boolean> {
-  const { prepared, upsert, startIndex, run, retain, processedTotals } = params;
-  const total = prepared.chunkArgs.length;
+  const { built, upsert, startIndex, run, retain, processedTotals } = params;
+  const total = built.chunks.length;
   const logChunkProgress = createChunkProgressLogger(total);
 
-  for (let index = startIndex; index < total; index++) {
-    logChunkProgress(index, (prepared.chunkTables[index] ?? []).join(", "));
+  for (const [index, chunk] of built.chunks.entries()) {
+    if (index < startIndex) continue;
+    logChunkProgress(index, chunk.tables.join(", "));
 
-    const result = await run(prepared.chunkArgs[index] as ChunkArg);
+    const result = await run(chunk.arg);
 
     const { success, parsed, errors } = parseExecutionResult(result, "    ");
     const processed = (parsed.processed ?? {}) as Record<
@@ -302,7 +292,7 @@ export async function runSeedChunks(params: RunSeedChunksParams): Promise<boolea
         toRetryLabels({
           chunkIndex: index,
           total,
-          hash: prepared.hash,
+          hash: built.hash,
           upsert,
           failedAt: Math.floor(Date.now() / 1000),
         }),
@@ -326,27 +316,28 @@ export async function seedNamespace(params: SeedNamespaceParams): Promise<SeedRe
   const { namespace } = plan;
   const processedTotals: Record<string, number> = {};
 
-  const prepared = await prepareNamespaceSeed({ plan, upsert, configDir, buildOptions });
-  if (!prepared) {
+  const built = buildNamespaceChunks({ plan, upsert });
+  if (!built) {
     logger.log(styles.dim(`  [${namespace}] No data to seed`));
     return { success: true, processed: processedTotals };
   }
 
   logger.info(
-    `  [${namespace}] Seeding ${prepared.tableCount} tables via Kysely batch ${upsert ? "upsert" : "insert"}...`,
+    `  [${namespace}] Seeding ${built.tables.length} tables via Kysely batch ${upsert ? "upsert" : "insert"}...`,
     { mode: "plain" },
   );
 
+  const bundled = await bundleSeedScript(namespace, built.tables, configDir, buildOptions);
   const success = await withSeedWorkflow(
     {
       execution,
       kind: "tailordb",
       namespace,
       description: `Temporary function for seeding TailorDB namespace ${namespace}`,
-      code: prepared.code,
+      code: bundled.bundledCode,
     },
     (run, { retain }) =>
-      runSeedChunks({ prepared, upsert, startIndex: 0, run, retain, processedTotals }),
+      runSeedChunks({ built, upsert, startIndex: 0, run, retain, processedTotals }),
   );
   return { success, processed: processedTotals };
 }

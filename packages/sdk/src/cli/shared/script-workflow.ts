@@ -12,6 +12,7 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import { resourceTrn, writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
 import { getOrNull } from "#/cli/shared/client";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
+import { logger } from "#/cli/shared/logger";
 import {
   createTemporaryWorkflow,
   findTemporaryWorkflowId,
@@ -122,51 +123,92 @@ interface UseAndFinishParams<T> {
   leftoverNote: string;
   run: RunScript;
   use: UseScriptWorkflow<T>;
+  /** Wait between attempts to record labels, in milliseconds */
+  retryWaitMs: number;
+}
+
+/** Attempts to record the labels of a kept workflow through transient errors. */
+const RECORD_ATTEMPTS = 3;
+
+interface RecordLabelsParams {
+  client: OperatorClient;
+  workspaceId: string;
+  name: string;
+  labels: Record<string, string>;
+  retryWaitMs: number;
+}
+
+/**
+ * Record labels on the kept workflow. A failure is reported, not thrown: the
+ * result of the run matters more than the record that would let a later run
+ * take it up again.
+ * @param params - Workflow and the labels to record
+ * @returns Whether the labels were recorded
+ */
+async function recordLabels(params: RecordLabelsParams): Promise<boolean> {
+  const { client, workspaceId, name, labels, retryWaitMs } = params;
+  for (let attempt = 1; attempt <= RECORD_ATTEMPTS; attempt++) {
+    try {
+      await writeMetadataLabelsDirect(client, {
+        trn: resourceTrn(workspaceId, "workflow", name),
+        labels,
+      });
+      return true;
+    } catch (error) {
+      if (attempt < RECORD_ATTEMPTS && isRetryableWaitError(error)) {
+        await new Promise((resolve) => setTimeout(resolve, retryWaitMs));
+        continue;
+      }
+      logger.warn(
+        `Could not record the labels that mark the kept ${SUBJECT} workflow '${name}', so a later run cannot take it up again: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+  return false;
 }
 
 /**
  * Run `use`, then remove the resources, or keep them with the labels `use` asked
  * to record. A thrown error always removes them: it says nothing about what the
- * script did, so there is nothing to take up again.
+ * script did, so there is nothing to take up again. Resources whose labels could
+ * not be recorded are removed too, since nothing could find them.
  * @param params - Resources and the callback
  * @returns What `use` returned
  */
 async function useAndFinish<T>(params: UseAndFinishParams<T>): Promise<T> {
-  const { client, workspaceId, name, workflowId, leftoverNote, run, use } = params;
+  const { client, workspaceId, name, workflowId, leftoverNote, run, use, retryWaitMs } = params;
+  const teardown = () =>
+    teardownTemporaryWorkflow({
+      client,
+      workspaceId,
+      name,
+      workflowId,
+      subject: SUBJECT,
+      leftoverNote,
+    });
+
   let retained: Record<string, string> | undefined;
+  let result: T;
   try {
-    const result = await use(run, {
+    result = await use(run, {
       retain: (labels) => {
         retained = labels;
       },
     });
-    if (retained) {
-      await writeMetadataLabelsDirect(client, {
-        trn: resourceTrn(workspaceId, "workflow", name),
-        labels: retained,
-      });
-      return result;
-    }
-    await teardownTemporaryWorkflow({
-      client,
-      workspaceId,
-      name,
-      workflowId,
-      subject: SUBJECT,
-      leftoverNote,
-    });
-    return result;
   } catch (error) {
-    await teardownTemporaryWorkflow({
-      client,
-      workspaceId,
-      name,
-      workflowId,
-      subject: SUBJECT,
-      leftoverNote,
-    });
+    await teardown();
     throw error;
   }
+  if (
+    retained &&
+    (await recordLabels({ client, workspaceId, name, labels: retained, retryWaitMs }))
+  ) {
+    return result;
+  }
+  await teardown();
+  return result;
 }
 
 /**
@@ -229,7 +271,16 @@ export async function withScriptWorkflow<T>(
   }
 
   const run = createRunner({ client, workspaceId, workflowId, invoker, pollInterval });
-  return await useAndFinish({ client, workspaceId, name, workflowId, leftoverNote, run, use });
+  return await useAndFinish({
+    client,
+    workspaceId,
+    name,
+    workflowId,
+    leftoverNote,
+    run,
+    use,
+    retryWaitMs: pollInterval,
+  });
 }
 
 /**
@@ -314,7 +365,16 @@ export async function withKeptScriptWorkflow<T>(
   const { client, workspaceId, name, workflowId, invoker, leftoverNote } = options;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
   const run = createRunner({ client, workspaceId, workflowId, invoker, pollInterval });
-  return await useAndFinish({ client, workspaceId, name, workflowId, leftoverNote, run, use });
+  return await useAndFinish({
+    client,
+    workspaceId,
+    name,
+    workflowId,
+    leftoverNote,
+    run,
+    use,
+    retryWaitMs: pollInterval,
+  });
 }
 
 /** Reads of the job's function execution tried through transient errors. */
