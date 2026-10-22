@@ -220,7 +220,11 @@ function defineResolver(
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  for (const [namespace, serviceConfig] of Object.entries(config ?? {})) {
+  if (!config) {
+    return { resolverServices, subgraphs };
+  }
+
+  for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
       const resolverService = createResolverService(
         namespace,
@@ -234,33 +238,39 @@ function defineResolver(
     subgraphs.push({ Type: "pipeline", Name: namespace });
   }
 
-  const registerGeneratedNamespaces = () => {
-    for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
-      if (config?.[namespace] && "external" in config[namespace]) {
-        throw CLIError({
-          code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
-          message: `Plugin "${pluginId}" cannot generate resolvers in external namespace "${namespace}".`,
-          context: { pluginId, namespace, resourceType: "pipeline.service" },
-        });
-      }
-      if (resolverServices.some((service) => service.namespace === namespace)) continue;
-      resolverServices.push(
-        createResolverService(namespace, { files: [] }, baseDir, pluginManager, configPath),
-      );
-      subgraphs.push({ Type: "pipeline", Name: namespace });
-    }
-  };
+  return { resolverServices, subgraphs };
+}
 
-  return {
-    get resolverServices() {
-      registerGeneratedNamespaces();
-      return resolverServices;
-    },
-    get subgraphs() {
-      registerGeneratedNamespaces();
-      return subgraphs;
-    },
-  };
+/**
+ * Define resolver services for namespaces that plugins generate resolvers into without a `resolver` entry.
+ * Call after table and namespace plugins have run.
+ * @param config - Loaded configuration
+ * @param pluginManager - Plugin manager holding the generated resolvers
+ * @returns Resolver services for those namespaces
+ */
+export function definePluginResolverServices(
+  config: LoadedConfig,
+  pluginManager: PluginManager | undefined,
+): ResolverService[] {
+  const baseDir = path.dirname(config.path);
+  const resolverServices: ResolverService[] = [];
+  for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
+    const serviceConfig = config.resolver?.[namespace];
+    if (serviceConfig && "external" in serviceConfig) {
+      throw CLIError({
+        code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
+        message: `Plugin "${pluginId}" cannot generate resolvers in external namespace "${namespace}".`,
+        context: { pluginId, namespace, resourceType: "pipeline.service" },
+      });
+    }
+    if (serviceConfig || resolverServices.some((service) => service.namespace === namespace)) {
+      continue;
+    }
+    resolverServices.push(
+      createResolverService(namespace, { files: [] }, baseDir, pluginManager, config.path),
+    );
+  }
+  return resolverServices;
 }
 
 type DefineIdpResult = {
@@ -543,19 +553,15 @@ function buildApplication(params: {
     name: params.config.name,
     id: params.config.id,
     config: params.config,
-    get subgraphs() {
-      return [
-        ...params.tailordbResult.subgraphs,
-        ...params.resolverResult.subgraphs,
-        ...params.idpResult.subgraphs,
-        ...params.authResult.subgraphs,
-      ];
-    },
+    subgraphs: [
+      ...params.tailordbResult.subgraphs,
+      ...params.resolverResult.subgraphs,
+      ...params.idpResult.subgraphs,
+      ...params.authResult.subgraphs,
+    ],
     tailorDBServices: params.tailordbResult.tailorDBServices,
     externalTailorDBNamespaces: params.tailordbResult.externalTailorDBNamespaces,
-    get resolverServices() {
-      return params.resolverResult.resolverServices;
-    },
+    resolverServices: params.resolverResult.resolverServices,
     idpServices: params.idpResult.idpServices,
     authService: params.authResult.authService,
     executorService: params.executorService,
@@ -722,7 +728,7 @@ export async function loadApplication(
   // 1. Define services (synchronous)
   const {
     tailordbResult,
-    resolverResult,
+    resolverResult: configuredResolverResult,
     idpResult,
     authResult,
     staticWebsiteServices,
@@ -744,7 +750,7 @@ export async function loadApplication(
         })
       : (config.env ?? {});
 
-  // 3. Load TailorDB tables and process namespace plugins
+  // 3. Load TailorDB tables, process namespace plugins, and define plugin resolver namespaces
   for (const tailordb of tailordbResult.tailorDBServices) {
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();
@@ -752,6 +758,14 @@ export async function loadApplication(
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
   });
+  const pluginResolverServices = definePluginResolverServices(config, pluginManager);
+  const resolverResult: DefineResolverResult = {
+    resolverServices: [...configuredResolverResult.resolverServices, ...pluginResolverServices],
+    subgraphs: [
+      ...configuredResolverResult.subgraphs,
+      ...pluginResolverServices.map(({ namespace }) => ({ Type: "pipeline", Name: namespace })),
+    ],
+  };
 
   // 4. Generate plugin files and determine executor file paths
   const pluginExecutorFiles = generatePluginFilesIfNeeded(

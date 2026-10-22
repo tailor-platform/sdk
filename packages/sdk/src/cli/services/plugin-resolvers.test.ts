@@ -167,6 +167,26 @@ describe("plugin-generated resolvers", () => {
     expect(application.resolverServices[0]!.defaultPermission).toBe("allowAnonymous");
   });
 
+  test("includes resolver namespaces that only plugins generate into in generation", async () => {
+    const pluginManager = new PluginManager([
+      {
+        id: "greeting",
+        description: "Query",
+        onNamespaceLoaded: () => ({
+          resolvers: [{ name: "greet", operation: "query", outputFields: {}, body: "return {};" }],
+        }),
+      },
+    ]);
+    const config = {
+      ...defineConfig({ name: "test-app", db: { main: { files: [] } } }),
+      path: path.join(baseDir, "tailor.config.ts"),
+    };
+    const application = defineApplication({ config, pluginManager });
+    const generation = createGenerationManager({ application, config, pluginManager });
+    await generation.generate();
+    expect(Object.keys(generation.services.resolver.main!)).toEqual(["greet"]);
+  });
+
   test("bundles generated resolvers when the build directory contains glob characters", async () => {
     vi.stubEnv("TAILOR_BUILD_OUTPUT_DIR", path.join(baseDir, "out [v2] {a}"));
     const pluginManager = new PluginManager([
@@ -537,5 +557,9 @@ describe("plugin-generated resolvers", () => {
       code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
       context: { pluginId: "queries", namespace: "main" },
     });
+    const application = defineApplication({ config, pluginManager });
+    await expect(
+      createGenerationManager({ application, config, pluginManager }).generate(),
+    ).rejects.toMatchObject({ code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL" });
   });
 });
