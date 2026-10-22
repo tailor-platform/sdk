@@ -235,6 +235,7 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
         const renamed = getNestedMember(field, rename.path);
         if (renamed?.required) renamed.required = false;
         if (renamed?.unique) renamed.unique = false;
+        if (renamed) relaxNestedUnique(renamed);
       }
     },
   });
@@ -425,6 +426,7 @@ function relaxRenamedNestedMembers(
     const member = getProtoNestedMember(field, rename.path);
     if (member?.required) member.required = false;
     if (member?.unique) member.unique = false;
+    if (member) relaxNestedUnique(member);
   }
 }
 
