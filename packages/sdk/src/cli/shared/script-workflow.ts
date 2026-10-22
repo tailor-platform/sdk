@@ -9,9 +9,14 @@
  */
 
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { resourceTrn, writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
+import { getOrNull } from "#/cli/shared/client";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import {
   createTemporaryWorkflow,
+  findTemporaryWorkflowId,
+  isExecutionActive,
+  listTemporaryWorkflowExecutions,
   pollUntilTerminal,
   reclaimTemporaryWorkflow,
   teardownTemporaryWorkflow,
@@ -64,16 +69,117 @@ export interface ScriptWorkflowOptions {
 export type RunScript = (arg: Jsonifiable) => Promise<ScriptExecutionResult>;
 
 /**
+ * What `use` can ask for besides running the script.
+ */
+export interface RetainControls {
+  /**
+   * Keep the resources instead of removing them once `use` returns, and record
+   * `labels` on the workflow so a later run can take the work up again. Labels
+   * are subject to the platform's metadata label rules: keys and values start
+   * with a lowercase letter and hold lowercase letters, digits, `_` and `-`.
+   */
+  retain: (labels: Record<string, string>) => void;
+}
+
+/**
+ * Callback of {@link withScriptWorkflow}
+ */
+export type UseScriptWorkflow<T> = (run: RunScript, controls: RetainControls) => Promise<T>;
+
+interface RunnerParams {
+  client: OperatorClient;
+  workspaceId: string;
+  workflowId: string;
+  invoker: ScriptInvoker;
+  pollInterval: number;
+}
+
+function createRunner(params: RunnerParams): RunScript {
+  const { client, workspaceId, workflowId, invoker, pollInterval } = params;
+  return async (arg) => {
+    const { executionId } = await client.startWorkflow({
+      workspaceId,
+      workflowId,
+      authInvoker: invoker,
+      arg: JSON.stringify(arg),
+    });
+    const execution = await pollUntilTerminal({
+      client,
+      workspaceId,
+      executionId,
+      pollInterval,
+      subject: "Script",
+    });
+    return await readOutcome({ client, workspaceId, execution, pollInterval });
+  };
+}
+
+interface UseAndFinishParams<T> {
+  client: OperatorClient;
+  workspaceId: string;
+  name: string;
+  workflowId: string;
+  leftoverNote: string;
+  run: RunScript;
+  use: UseScriptWorkflow<T>;
+}
+
+/**
+ * Run `use`, then remove the resources, or keep them with the labels `use` asked
+ * to record. A thrown error always removes them: it says nothing about what the
+ * script did, so there is nothing to take up again.
+ * @param params - Resources and the callback
+ * @returns What `use` returned
+ */
+async function useAndFinish<T>(params: UseAndFinishParams<T>): Promise<T> {
+  const { client, workspaceId, name, workflowId, leftoverNote, run, use } = params;
+  let retained: Record<string, string> | undefined;
+  try {
+    const result = await use(run, {
+      retain: (labels) => {
+        retained = labels;
+      },
+    });
+    if (retained) {
+      await writeMetadataLabelsDirect(client, {
+        trn: resourceTrn(workspaceId, "workflow", name),
+        labels: retained,
+      });
+      return result;
+    }
+    await teardownTemporaryWorkflow({
+      client,
+      workspaceId,
+      name,
+      workflowId,
+      subject: SUBJECT,
+      leftoverNote,
+    });
+    return result;
+  } catch (error) {
+    await teardownTemporaryWorkflow({
+      client,
+      workspaceId,
+      name,
+      workflowId,
+      subject: SUBJECT,
+      leftoverNote,
+    });
+    throw error;
+  }
+}
+
+/**
  * Register the script as a temporary workflow, hand `use` a function that runs
  * it once per argument, and remove the resources afterwards, whether or not
- * `use` threw.
+ * `use` threw. `use` can keep them instead through {@link RetainControls}.
  * @param options - Script and where to register it
  * @param use - Receives the function that starts the script
  * @returns What `use` returned
  */
 export async function withScriptWorkflow<T>(
   options: ScriptWorkflowOptions,
-  use: (run: RunScript) => Promise<T>,
+  use: UseScriptWorkflow<T>,
 ): Promise<T> {
   const { client, workspaceId, name, appName, invoker, leftoverNote } = options;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
@@ -122,35 +228,93 @@ export async function withScriptWorkflow<T>(
     throw error;
   }
 
-  const run: RunScript = async (arg) => {
-    const { executionId } = await client.startWorkflow({
-      workspaceId,
-      workflowId,
-      authInvoker: invoker,
-      arg: JSON.stringify(arg),
-    });
-    const execution = await pollUntilTerminal({
-      client,
-      workspaceId,
-      executionId,
-      pollInterval,
-      subject: "Script",
-    });
-    return await readOutcome({ client, workspaceId, execution, pollInterval });
-  };
+  const run = createRunner({ client, workspaceId, workflowId, invoker, pollInterval });
+  return await useAndFinish({ client, workspaceId, name, workflowId, leftoverNote, run, use });
+}
 
-  try {
-    return await use(run);
-  } finally {
-    await teardownTemporaryWorkflow({
-      client,
-      workspaceId,
-      name,
-      workflowId,
-      subject: SUBJECT,
-      leftoverNote,
-    });
-  }
+/**
+ * A temporary workflow found by name.
+ */
+export interface ScriptWorkflowInspection {
+  /** ID of the workflow */
+  workflowId: string;
+  /** Metadata labels recorded on the workflow */
+  labels: Record<string, string>;
+  /** ID of an execution that is still running, when there is one */
+  activeExecutionId: string | undefined;
+}
+
+/**
+ * Parameters of {@link inspectScriptWorkflow}
+ */
+export interface InspectScriptWorkflowParams {
+  /** Operator client instance */
+  client: OperatorClient;
+  /** Workspace ID */
+  workspaceId: string;
+  /** Name shared by the function, job function and workflow */
+  name: string;
+}
+
+/**
+ * Look up a temporary workflow that an earlier run kept.
+ * @param params - Where to look
+ * @returns The workflow, its labels and any running execution; undefined when no such workflow exists
+ */
+export async function inspectScriptWorkflow(
+  params: InspectScriptWorkflowParams,
+): Promise<ScriptWorkflowInspection | undefined> {
+  const { client, workspaceId, name } = params;
+  const workflowId = await findTemporaryWorkflowId(client, workspaceId, name);
+  if (!workflowId) return undefined;
+
+  const [metadata, executions] = await Promise.all([
+    getOrNull(() => client.getMetadata({ trn: resourceTrn(workspaceId, "workflow", name) })),
+    listTemporaryWorkflowExecutions(client, workspaceId, name),
+  ]);
+  return {
+    workflowId,
+    labels: metadata?.metadata?.labels ?? {},
+    activeExecutionId: executions.find(isExecutionActive)?.id,
+  };
+}
+
+/**
+ * Options for {@link withKeptScriptWorkflow}
+ */
+export interface KeptScriptWorkflowOptions {
+  /** Operator client instance */
+  client: OperatorClient;
+  /** Workspace ID */
+  workspaceId: string;
+  /** Name shared by the function, job function and workflow */
+  name: string;
+  /** ID of the workflow, from {@link inspectScriptWorkflow} */
+  workflowId: string;
+  /** Auth invoker for the script */
+  invoker: ScriptInvoker;
+  /** Sentence telling how a resource left behind after a failed removal gets removed */
+  leftoverNote: string;
+  /** Poll interval in milliseconds (default: 3000ms) */
+  pollIntervalMs?: number;
+}
+
+/**
+ * Take up a temporary workflow that an earlier run kept: hand `use` a function
+ * that runs its script, and remove the resources afterwards unless `use` keeps
+ * them again through {@link RetainControls}.
+ * @param options - The kept workflow
+ * @param use - Receives the function that starts the script
+ * @returns What `use` returned
+ */
+export async function withKeptScriptWorkflow<T>(
+  options: KeptScriptWorkflowOptions,
+  use: UseScriptWorkflow<T>,
+): Promise<T> {
+  const { client, workspaceId, name, workflowId, invoker, leftoverNote } = options;
+  const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
+  const run = createRunner({ client, workspaceId, workflowId, invoker, pollInterval });
+  return await useAndFinish({ client, workspaceId, name, workflowId, leftoverNote, run, use });
 }
 
 /** Reads of the job's function execution tried through transient errors. */

@@ -288,9 +288,16 @@ export {
   type ExecutionWaitResult,
 } from "./shared/script-executor";
 export {
+  inspectScriptWorkflow,
+  withKeptScriptWorkflow,
   withScriptWorkflow,
+  type InspectScriptWorkflowParams,
+  type KeptScriptWorkflowOptions,
+  type RetainControls,
   type RunScript,
+  type ScriptWorkflowInspection,
   type ScriptWorkflowOptions,
+  type UseScriptWorkflow,
 } from "./shared/script-workflow";
 export { initOperatorClient, type OperatorClient } from "./shared/client";
 export type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
