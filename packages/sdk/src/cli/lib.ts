@@ -270,9 +270,11 @@ export {
 export {
   bundleSeedScript,
   bundleSeedDumpScript,
+  type SeedBundleBuildOptions,
   type SeedBundleResult,
   type SeedDumpBundleResult,
 } from "./commands/generate/seed/bundler";
+export { buildOptionsOf } from "./shared/build-options";
 export {
   bundleMigrationScript,
   type MigrationBundleResult,
@@ -285,5 +287,10 @@ export {
   type ScriptInvoker,
   type ExecutionWaitResult,
 } from "./shared/script-executor";
+export {
+  withScriptWorkflow,
+  type RunScript,
+  type ScriptWorkflowOptions,
+} from "./shared/script-workflow";
 export { initOperatorClient, type OperatorClient } from "./shared/client";
 export type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";

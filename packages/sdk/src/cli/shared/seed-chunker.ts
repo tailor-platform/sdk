@@ -1,8 +1,9 @@
 /**
  * Seed data chunker for splitting large seed data into manageable message sizes.
  *
- * When seed data exceeds the gRPC message size limit, this module splits the data
- * into multiple chunks at type boundaries (or record boundaries for large types).
+ * When seed data exceeds the size one script execution can take as its argument,
+ * this module splits the data into multiple chunks at type boundaries (or record
+ * boundaries for large types).
  */
 
 import { assertDefined } from "#/utils/assert";
@@ -31,20 +32,20 @@ export type ChunkSeedDataOptions = {
   data: SeedData;
   /** Ordered list of type names (dependency order) */
   order: string[];
-  /** Byte size of the bundled seed script code */
-  codeByteSize: number;
-  /** Maximum gRPC message size in bytes (default: 3.5MB) */
+  /** Byte size of script code sent in the same message as the data (default: 0) */
+  codeByteSize?: number;
+  /** Maximum message size in bytes (default: 3.5MB) */
   maxMessageSize?: number;
 };
 
-/** Default maximum message size: 3.5MB (conservative limit for gRPC) */
+/** Default maximum message size: 3.5MB (conservative margin under the 4MB limit of a workflow start argument) */
 export const DEFAULT_MAX_MESSAGE_SIZE = 3.5 * 1024 * 1024;
 
 /** Reserved bytes for message metadata overhead */
 const METADATA_OVERHEAD = 1024;
 
 /**
- * Split seed data into chunks that fit within the gRPC message size limit.
+ * Split seed data into chunks that fit within the message size limit.
  *
  * Algorithm:
  * 1. Calculate the available budget for the arg field (maxMessageSize - codeByteSize - overhead)
@@ -58,7 +59,7 @@ const METADATA_OVERHEAD = 1024;
  * @returns Array of seed chunks
  */
 export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
-  const { data, order, codeByteSize, maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE } = options;
+  const { data, order, codeByteSize = 0, maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE } = options;
 
   const argBudget = maxMessageSize - codeByteSize - METADATA_OVERHEAD;
   if (argBudget <= 0) {

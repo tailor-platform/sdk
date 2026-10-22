@@ -44,6 +44,9 @@ function stubTailordb(existingIds: string[] = []): RecordedQuery[] {
       async connect() {}
       async end() {}
       async queryObject(sql: string, parameters: readonly unknown[]) {
+        if (["begin", "commit", "rollback"].includes(sql)) {
+          return { rows: [], command: sql.toUpperCase(), rowCount: 0 };
+        }
         queries.push({ sql, parameters });
         if (sql.startsWith("select")) {
           const rows = parameters
@@ -98,25 +101,20 @@ describe("seed-bundler", () => {
       expect(typeof result.bundledCode).toBe("string");
     });
 
-    test.each([
-      ["exported main function", "tailordb", ["User"], ["export", "main"]],
-      ["Kysely and TailordbDialect", "tailordb", ["User"], ["Kysely", "TailordbDialect"]],
-      ["batch insert logic", "tailordb", ["User"], ["insertInto", "BATCH_SIZE"]],
-      ["error handling", "tailordb", ["User"], ["errors", "success"]],
-      ["self-referencing FK handling", "tailordb", ["Category"], ["selfRefTypes", "one-by-one"]],
-    ] as const)("generates code with %s", async (_label, namespace, types, snippets) => {
-      const result = await bundleSeedScript(namespace, [...types]);
+    test("minifies the script and embeds no sourcemap by default", async () => {
+      const result = await bundleSeedScript("tailordb", ["User"]);
 
-      for (const snippet of snippets) {
-        expect(result.bundledCode).toContain(snippet);
-      }
+      expect(result.bundledCode).not.toContain("sourceMappingURL");
+      expect(result.bundledCode.split("\n").length).toBeLessThan(20);
     });
 
-    test("generates code with getDB using the correct namespace", async () => {
-      const result = await bundleSeedScript("custom-namespace", ["Event"]);
+    test("embeds an inline sourcemap that keeps function names when inlineSourcemap is enabled", async () => {
+      const result = await bundleSeedScript("tailordb", ["User"], undefined, {
+        inlineSourcemap: true,
+      });
 
-      expect(result.bundledCode).toContain("getDB");
-      expect(result.bundledCode).toContain('"custom-namespace"');
+      expect(result.bundledCode).toContain("//# sourceMappingURL=data:application/json");
+      expect(result.bundledCode).toContain("function sortBySelfReference");
     });
 
     test("resolves the tsconfig from the provided project directory", async () => {
@@ -127,22 +125,6 @@ describe("seed-bundler", () => {
       await bundleSeedScript("tailordb", ["User"], projectDir);
 
       expect(resolveTSConfig).toHaveBeenCalledWith(projectDir);
-    });
-
-    test("generates split insert and update logic gated on the runtime upsert input", async () => {
-      const result = await bundleSeedScript("tailordb", ["User"]);
-
-      expect(result.bundledCode).toContain("selectFrom");
-      expect(result.bundledCode).toContain("updateTable");
-      expect(result.bundledCode).toContain("upsert");
-    });
-
-    test("probes and updates by id", async () => {
-      const result = await bundleSeedScript("tailordb", ["User"]);
-
-      expect(result.bundledCode).toContain('select("id")');
-      expect(result.bundledCode).toContain('where("id", "in"');
-      expect(result.bundledCode).toContain('where("id", "="');
     });
   });
 });
@@ -399,6 +381,90 @@ describe("seed script upsert behavior", () => {
   });
 });
 
+describe("seed script transaction", () => {
+  const loadMain = async () => {
+    const { bundledCode } = await bundleSeedScript("tailordb", ["User", "Order"]);
+    const modulePath = path.join(process.env.TAILOR_BUILD_OUTPUT_DIR as string, "main-tx.mjs");
+    fs.writeFileSync(modulePath, bundledCode);
+    return (await import(/* @vite-ignore */ modulePath)) as {
+      main: (input: SeedInput) => Promise<SeedResult>;
+    };
+  };
+
+  const stubRecording = (failOn?: string): string[] => {
+    const statements: string[] = [];
+    vi.stubGlobal("tailordb", {
+      Client: class {
+        async connect() {}
+        async end() {}
+        async queryObject(sql: string) {
+          statements.push(sql.split(" ")[0] ?? "");
+          if (failOn && sql.includes(failOn)) throw new Error(`boom ${failOn}`);
+          return { rows: [], command: "INSERT", rowCount: 1 };
+        }
+      },
+    });
+    return statements;
+  };
+
+  aroundEach(async (runTest) => {
+    const testDir = path.join(
+      TEST_BUNDLER_BASE,
+      `tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
+    await runTest();
+  });
+
+  const input: SeedInput = {
+    data: { User: [{ id: "u1" }], Order: [{ id: "o1" }] },
+    order: ["User", "Order"],
+    selfRefTypes: [],
+  };
+
+  test("prefixes progress logs with the namespace the script was bundled for", async () => {
+    stubRecording();
+    const { bundledCode } = await bundleSeedScript("custom-namespace", ["User"]);
+    const modulePath = path.join(process.env.TAILOR_BUILD_OUTPUT_DIR as string, "main-custom.mjs");
+    fs.writeFileSync(modulePath, bundledCode);
+    const { main } = (await import(/* @vite-ignore */ modulePath)) as {
+      main: (input: SeedInput) => Promise<SeedResult>;
+    };
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main({ data: { User: [{ id: "u1" }] }, order: ["User"], selfRefTypes: [] });
+
+    expect(logSpy).toHaveBeenCalledWith("[custom-namespace] User: 1/1");
+  });
+
+  test("commits once after every table has been inserted", async () => {
+    const statements = stubRecording();
+    const { main } = await loadMain();
+
+    const result = await main(input);
+
+    expect(result.success).toBe(true);
+    expect(statements).toEqual(["begin", "insert", "insert", "commit"]);
+  });
+
+  test("rolls back earlier tables and reports the failing table when a later table fails", async () => {
+    const statements = stubRecording('"Order"');
+    const { main } = await loadMain();
+    using _errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const result = await main(input);
+
+    expect(result).toEqual({
+      success: false,
+      processed: {},
+      errors: ['Order: boom "Order"'],
+    });
+    expect(statements).toContain("rollback");
+    expect(statements).not.toContain("commit");
+  });
+});
+
 type DumpInput = { table: string; limit: number; after?: string | null };
 
 type DumpResult = {
@@ -458,13 +524,20 @@ describe("seed dump script behavior", () => {
     delete process.env.TAILOR_BUILD_OUTPUT_DIR;
   });
 
-  test("bundles a script exporting main for the requested namespace", async () => {
+  test("reports the namespace it was bundled for", async () => {
     const result = await bundleSeedDumpScript("custom-namespace");
 
     expect(result.namespace).toBe("custom-namespace");
-    expect(result.bundledCode).toContain('"custom-namespace"');
-    expect(result.bundledCode).toContain("selectAll");
-    expect(result.bundledCode).toContain("orderBy");
+  });
+
+  test("prefixes its log with the requested namespace", async () => {
+    stubTailordbReads([[{ id: "u1" }]]);
+    const { main } = await loadDumpMain("custom-namespace");
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main({ table: "User", limit: 2 });
+
+    expect(logSpy).toHaveBeenCalledWith("[custom-namespace] User: 1 rows read");
   });
 
   test("reads a page ordered by id and reports no cursor when the page is short", async () => {
