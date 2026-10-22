@@ -15,6 +15,7 @@ import { z } from "zod";
 import { seedApplyCommand } from "./apply";
 import { seedDumpCommand } from "./dump";
 import { seedFillCommand } from "./fill";
+import { seedRetryCommand } from "./retry";
 import { seedValidateCommand } from "./validate";
 
 function hasFormat(error: unknown): error is { format(): string } {
@@ -38,6 +39,7 @@ const mainCommand = defineCommand({
     dump: seedDumpCommand,
     validate: seedValidateCommand,
     fill: seedFillCommand,
+    retry: seedRetryCommand,
   },
 });
 

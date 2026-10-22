@@ -1,15 +1,8 @@
 import { createInterface } from "node:readline";
 import {
   buildOptionsOf,
-  bundleSeedScript,
-  chunkSeedData,
-  initOperatorClient,
-  loadAccessToken,
   loadSeedContext,
-  loadWorkspaceId,
-  show,
   truncate,
-  withScriptWorkflow,
   deploymentArgs,
   defineAppCommand,
   logger,
@@ -29,86 +22,15 @@ import {
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
-import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
-import { seedWorkflowName } from "./workflow-name";
-import type {
-  OperatorClient,
-  RunScript,
-  SeedBundleBuildOptions,
-  SeedData,
-  SeedIdpUserContext,
-  SeedNamespaceConfig,
-} from "@tailor-platform/sdk/cli";
-
-interface SeedExecutionContext {
-  operatorClient: OperatorClient;
-  workspaceId: string;
-  authNamespace: string;
-  machineUserName: string;
-  appName: string;
-}
-
-interface SeedWorkflowParams {
-  execution: SeedExecutionContext;
-  /** What the script seeds, e.g. `tailordb` or `idp-seed`. */
-  kind: string;
-  namespace: string;
-  description: string;
-  code: string;
-}
-
-/**
- * Run a seed script as a temporary workflow named `tailor-seed-<kind>--<namespace>`.
- * @param params - Script and the namespace it seeds
- * @param use - Receives the function that starts the script
- * @returns What `use` returned
- */
-function withSeedWorkflow<T>(
-  params: SeedWorkflowParams,
-  use: (run: RunScript) => Promise<T>,
-): Promise<T> {
-  const { execution, kind, namespace, description, code } = params;
-  return withScriptWorkflow(
-    {
-      client: execution.operatorClient,
-      workspaceId: execution.workspaceId,
-      name: seedWorkflowName(kind, namespace),
-      description,
-      code,
-      invoker: {
-        namespace: execution.authNamespace,
-        machineUserName: execution.machineUserName,
-      },
-      appName: execution.appName,
-      leftoverNote: "It is removed by the next `tailor seed apply` for this namespace.",
-    },
-    use,
-  );
-}
-
-interface NamespaceSeedPlan {
-  namespace: string;
-  sortedTypes: string[];
-  data: SeedData;
-  selfRefTypes: string[];
-  selfRefFields: Record<string, string[]>;
-  selfRefKeys: Record<string, Record<string, string>>;
-}
-
-interface SeedNamespaceParams {
-  execution: SeedExecutionContext;
-  plan: NamespaceSeedPlan;
-  upsert: boolean;
-  configDir: string;
-  buildOptions: SeedBundleBuildOptions;
-}
-
-interface NamespaceSeedPlanParams {
-  nsConfig: SeedNamespaceConfig;
-  typesToSeed: string[];
-  dataDirs: string[];
-  upsert: boolean;
-}
+import {
+  buildNamespaceSeedPlan,
+  createChunkProgressLogger,
+  createSeedExecution,
+  seedNamespace,
+  withSeedWorkflow,
+} from "./seed-tailordb";
+import type { SeedExecutionContext } from "./seed-tailordb";
+import type { RunScript, SeedData, SeedIdpUserContext } from "@tailor-platform/sdk/cli";
 
 function promptConfirmation(question: string): Promise<boolean> {
   if (!process.stdin.isTTY) {
@@ -122,127 +44,6 @@ function promptConfirmation(question: string): Promise<boolean> {
       resolve(answer.toLowerCase().trim() === "y");
     });
   });
-}
-
-interface SeedResult {
-  success: boolean;
-  processed: Record<string, number>;
-}
-
-function createChunkProgressLogger(
-  total: number,
-  indent = "    ",
-): (index: number, details: string) => void {
-  if (total > 1) {
-    logger.log(styles.dim(`${indent}Split into ${total} chunks`));
-  }
-  return (index, details) => {
-    if (total > 1) {
-      logger.log(styles.dim(`${indent}Chunk ${index + 1}/${total}: ${details}`));
-    }
-  };
-}
-
-function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedPlan {
-  const { nsConfig, typesToSeed, dataDirs, upsert } = params;
-  const selfRefFields = nsConfig.selfRefFields ?? {};
-  const selfRefKeys = nsConfig.selfRefKeys ?? {};
-  const sortedTypes = topologicalSort(typesToSeed, nsConfig.dependencies);
-  const data = loadSeedData(dataDirs, sortedTypes, {
-    requireId: upsert,
-    requiredFieldsByType: upsert ? nsConfig.requiredFields : {},
-  });
-  // Sort each self-referencing table's full record set before chunkSeedData
-  // splits it by byte size, so a table split across script executions still
-  // has its parents in the same or an earlier chunk than their children.
-  for (const type of nsConfig.selfRefTypes) {
-    const fields = selfRefFields[type];
-    const records = data[type];
-    if (records && fields && fields.length > 0) {
-      data[type] = sortRecordsBySelfReference(records, fields, selfRefKeys[type]);
-    }
-  }
-  return {
-    namespace: nsConfig.namespace,
-    sortedTypes,
-    data,
-    selfRefTypes: nsConfig.selfRefTypes,
-    selfRefFields,
-    selfRefKeys,
-  };
-}
-
-async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
-  const { execution, plan, upsert, configDir, buildOptions } = params;
-  const { namespace, sortedTypes, data, selfRefTypes, selfRefFields, selfRefKeys } = plan;
-  const processedTotals: Record<string, number> = {};
-
-  const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
-  if (typesWithData.length === 0) {
-    logger.log(styles.dim(`  [${namespace}] No data to seed`));
-    return { success: true, processed: processedTotals };
-  }
-
-  logger.info(
-    `  [${namespace}] Seeding ${typesWithData.length} tables via Kysely batch ${upsert ? "upsert" : "insert"}...`,
-    { mode: "plain" },
-  );
-
-  const bundled = await bundleSeedScript(namespace, typesWithData, configDir, buildOptions);
-  const chunks = chunkSeedData({ data, order: sortedTypes });
-
-  if (chunks.length === 0) {
-    logger.log(styles.dim(`  [${namespace}] No data to seed`));
-    return { success: true, processed: processedTotals };
-  }
-  const logChunkProgress = createChunkProgressLogger(chunks.length);
-
-  let success = true;
-  await withSeedWorkflow(
-    {
-      execution,
-      kind: "tailordb",
-      namespace,
-      description: `Temporary function for seeding TailorDB namespace ${namespace}`,
-      code: bundled.bundledCode,
-    },
-    async (runScript) => {
-      for (const chunk of chunks) {
-        logChunkProgress(chunk.index, chunk.order.join(", "));
-
-        const result = await runScript({
-          data: chunk.data,
-          order: chunk.order,
-          selfRefTypes,
-          selfRefFields,
-          selfRefKeys,
-          upsert,
-        });
-
-        const { success: chunkSuccess, parsed, errors } = parseExecutionResult(result, "    ");
-        const processed = (parsed.processed ?? {}) as Record<
-          string,
-          { inserted: number; updated: number; skipped: number }
-        >;
-        for (const [type, counts] of Object.entries(processed)) {
-          processedTotals[type] = (processedTotals[type] ?? 0) + counts.inserted + counts.updated;
-          const skippedSuffix = counts.skipped > 0 ? `, ${counts.skipped} skipped` : "";
-          const message = upsert
-            ? `${counts.inserted} inserted, ${counts.updated} updated${skippedSuffix}`
-            : `${counts.inserted} rows inserted`;
-          logger.log(styles.success(`    ✓ ${type}: ${message}`));
-        }
-        if (!chunkSuccess) {
-          logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, {
-            mode: "plain",
-          });
-          success = false;
-          break;
-        }
-      }
-    },
-  );
-  return { success, processed: processedTotals };
 }
 
 type IdpUserRef = { id: string; name: string };
@@ -650,21 +451,12 @@ export const seedApplyCommand = defineAppCommand({
         )
       : [];
 
-    const appInfo = await show({
+    const execution = await createSeedExecution({
       configPath: args.config,
       profile: args.profile,
       workspaceId: args["workspace-id"],
-    });
-    const execution: SeedExecutionContext = {
-      operatorClient: await initOperatorClient(await loadAccessToken({ profile: args.profile })),
-      workspaceId: await loadWorkspaceId({
-        workspaceId: args["workspace-id"],
-        profile: args.profile,
-      }),
-      authNamespace: appInfo.auth,
       machineUserName,
-      appName: appInfo.name,
-    };
+    });
 
     if (args.truncate) {
       const confirmed =

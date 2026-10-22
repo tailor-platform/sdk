@@ -17,6 +17,7 @@ const sdk = vi.hoisted(() => ({
 
 const workflow = vi.hoisted(() => ({
   runScript: vi.fn(),
+  retain: vi.fn(),
 }));
 
 const jsonl = vi.hoisted(() => ({
@@ -94,8 +95,11 @@ beforeEach(() => {
   sdk.withScriptWorkflow.mockImplementation(
     async (
       options: { name: string },
-      use: (run: (arg: unknown) => Promise<unknown>) => Promise<unknown>,
-    ) => use((arg) => workflow.runScript({ name: options.name, arg })),
+      use: (
+        run: (arg: unknown) => Promise<unknown>,
+        controls: { retain: typeof workflow.retain },
+      ) => Promise<unknown>,
+    ) => use((arg) => workflow.runScript({ name: options.name, arg }), { retain: workflow.retain }),
   );
   workflow.runScript.mockImplementation(({ name }: { name: string }) =>
     Promise.resolve({
@@ -824,6 +828,70 @@ describe("seedApplyCommand", () => {
 
     expect(result.exitCode).toBe(1);
     expect(workflow.runScript).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps the TailorDB workflow with the index of the chunk that failed", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([
+      { data: { User: [{ id: "u1" }] }, order: ["User"], index: 0 },
+      { data: { User: [{ id: "u2" }] }, order: ["User"], index: 1 },
+      { data: { User: [{ id: "u3" }] }, order: ["User"], index: 2 },
+    ]);
+    workflow.runScript
+      .mockResolvedValueOnce({
+        error: undefined,
+        logs: "",
+        result: '{"success":true,"processed":{"User":{"inserted":1,"updated":0,"skipped":0}}}',
+        success: true,
+      })
+      .mockResolvedValueOnce({
+        error: undefined,
+        logs: "",
+        result: '{"success":false,"processed":{},"errors":["User: duplicate id"]}',
+        success: true,
+      });
+
+    await runApplyCommand(["--machine-user", "manager", "--skip-idp"]);
+
+    expect(workflow.retain).toHaveBeenCalledTimes(1);
+    expect(workflow.retain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "seed-retry-chunk": "c1",
+        "seed-retry-total": "n3",
+        "seed-retry-upsert": "false",
+      }),
+    );
+  });
+
+  test("keeps nothing when every TailorDB chunk succeeds", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([
+      { data: { User: [{ id: "u1" }] }, order: ["User"], index: 0 },
+    ]);
+    workflow.runScript.mockResolvedValue({
+      error: undefined,
+      logs: "",
+      result: '{"success":true,"processed":{"User":{"inserted":1,"updated":0,"skipped":0}}}',
+      success: true,
+    });
+
+    await runApplyCommand(["--machine-user", "manager", "--skip-idp"]);
+
+    expect(workflow.retain).not.toHaveBeenCalled();
   });
 
   test("sorts a self-referencing table's full record set before it reaches chunkSeedData", async () => {

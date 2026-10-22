@@ -57,7 +57,18 @@ tailor seed dump --force User Order
 tailor seed apply --dataset cogs --dataset local
 tailor seed validate --dataset cogs
 tailor seed fill --dataset cogs
+
+# Run the chunk that failed in the last apply again, then the chunks after it
+tailor seed retry
 ```
+
+## Retrying a failed chunk
+
+A TailorDB namespace is seeded in chunks, and each chunk is applied in one transaction. When a chunk fails, `tailor seed apply` stops there: the chunks before it stay applied, the failed chunk and the ones after it are not, and the workspace keeps a record of where it stopped.
+
+After you fix the cause, `tailor seed retry` runs the failed chunk again and then every chunk after it. With namespaces that have failed, it retries the one that failed last; pass `--namespace` to pick another. It builds the chunks again from your seed data and stops without running anything when they are not the ones of the failed run, so pass the same `--dataset`, `--all-datasets` and `--no-base` as the `apply` that failed and leave the seed data as it was. If you change the data, run `tailor seed apply` again instead.
+
+`tailor seed retry` exits with an error when no failed chunk is recorded, or when an earlier run of that namespace is still running. Running `tailor seed apply` for a namespace discards its record. A failure while seeding the IdP `_User` is not recorded and cannot be retried.
 
 ## Datasets
 
