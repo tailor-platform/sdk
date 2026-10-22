@@ -167,6 +167,25 @@ describe("plugin-generated resolvers", () => {
     expect(application.resolverServices[0]!.defaultPermission).toBe("allowAnonymous");
   });
 
+  test("bundles generated resolvers when the build directory contains glob characters", async () => {
+    vi.stubEnv("TAILOR_BUILD_OUTPUT_DIR", path.join(baseDir, "out [v2] {a}"));
+    const pluginManager = new PluginManager([
+      {
+        id: "greeting",
+        description: "Query",
+        onNamespaceLoaded: () => ({
+          resolvers: [{ name: "greet", operation: "query", outputFields: {}, body: "return {};" }],
+        }),
+      },
+    ]);
+    const config = {
+      ...defineConfig({ name: "test-app", db: { main: { files: [] } } }),
+      path: path.join(baseDir, "tailor.config.ts"),
+    };
+    const { bundledScripts } = await loadApplication({ config, pluginManager });
+    expect(bundledScripts.resolvers.has("main:greet")).toBe(true);
+  });
+
   test("preserves explicit ignore overrides when bundling loaded resolver files", async () => {
     fs.writeFileSync(
       path.join(baseDir, "allowed.test.ts"),

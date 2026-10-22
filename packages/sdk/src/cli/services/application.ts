@@ -808,7 +808,7 @@ export async function loadApplication(
     await pipeline.loadResolvers();
     const resolverBundles = await bundleResolvers({
       namespace: pipeline.namespace,
-      config: { files: Object.keys(pipeline.resolvers), ignores: [] },
+      files: Object.keys(pipeline.resolvers),
       baseDir,
       defaultPermission: pipeline.defaultPermission,
       startContext,
