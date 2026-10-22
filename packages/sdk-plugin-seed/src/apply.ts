@@ -30,6 +30,7 @@ import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
+import { seedWorkflowName } from "./workflow-name";
 import type {
   OperatorClient,
   RunScript,
@@ -71,7 +72,7 @@ function withSeedWorkflow<T>(
     {
       client: execution.operatorClient,
       workspaceId: execution.workspaceId,
-      name: `tailor-seed-${kind}--${namespace}`,
+      name: seedWorkflowName(kind, namespace),
       description,
       code,
       invoker: {
