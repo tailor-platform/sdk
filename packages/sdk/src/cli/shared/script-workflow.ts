@@ -190,6 +190,15 @@ async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionRe
   const result = job?.result ?? "";
 
   if (execution.status === WorkflowExecution_Status.SUCCESS) {
+    if (!job) {
+      return {
+        success: false,
+        logs,
+        result,
+        error:
+          "The workflow finished, but the result of its job could not be read, so it is unknown whether the script's changes were applied",
+      };
+    }
     return { success: true, logs, result };
   }
   const canceled = execution.status === WorkflowExecution_Status.CANCELED;

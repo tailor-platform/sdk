@@ -178,6 +178,18 @@ describe("withScriptWorkflow", () => {
     expect(mocks.getFunctionExecution).toHaveBeenCalledTimes(2);
   });
 
+  test("reports an unknown outcome when a finished workflow's job result cannot be found", async () => {
+    const { client, mocks } = createMockClient();
+    mocks.getFunctionExecution.mockResolvedValue({ execution: undefined } as never);
+
+    const outcome = await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    expect(outcome).toMatchObject({
+      success: false,
+      error: expect.stringContaining("unknown whether the script's changes were applied"),
+    });
+  });
+
   test("tells how a resource that could not be removed gets removed", async () => {
     const { client, mocks } = createMockClient();
     mocks.deleteWorkflow.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
