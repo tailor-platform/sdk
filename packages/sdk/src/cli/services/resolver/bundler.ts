@@ -1,7 +1,6 @@
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/cache/bundle-cache";
-import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
@@ -47,9 +46,9 @@ interface ResolverInfo {
 export interface BundleResolversOptions {
   /** Resolver namespace name */
   namespace: string;
-  /** Resolver file loading configuration */
-  config: FileLoadConfig;
-  /** Directory the config's file patterns are resolved against */
+  /** Absolute paths of the resolver files to bundle */
+  files: ReadonlyArray<string>;
+  /** Directory the application's tsconfig is resolved from */
   baseDir: string;
   /** The namespace's `defaultPermission`, applied to resolvers declaring none */
   defaultPermission?: Resolver["permission"];
@@ -88,7 +87,7 @@ export async function bundleResolvers(
 ): Promise<Map<string, string>> {
   const {
     namespace,
-    config,
+    files,
     baseDir,
     defaultPermission,
     startContext,
@@ -102,9 +101,7 @@ export async function bundleResolvers(
     dateDefault,
   } = options;
   const bundledCode = new Map<string, string>();
-  const files = loadFilesWithIgnores(config, baseDir);
   if (files.length === 0) {
-    logger.warn(`No resolver files found for patterns: ${config.files.join(", ")}`);
     return bundledCode;
   }
 
@@ -163,7 +160,7 @@ export async function bundleResolvers(
   return bundledCode;
 }
 
-type BundleSingleResolverOptions = Omit<BundleResolversOptions, "config" | "baseDir"> & {
+type BundleSingleResolverOptions = Omit<BundleResolversOptions, "files" | "baseDir"> & {
   resolver: ResolverInfo;
   tsconfig: string | undefined;
 };

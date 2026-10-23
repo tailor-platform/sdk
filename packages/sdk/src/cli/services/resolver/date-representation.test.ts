@@ -97,7 +97,7 @@ describe("resolver Date representation bundles", () => {
         ? (
             await bundleResolvers({
               namespace: "date",
-              config: { files: ["./resolver.mjs"] },
+              files: fs.globSync(path.resolve(tmp.dir, "./resolver.mjs")),
               baseDir: tmp.dir,
               inlineSourcemap: true,
             })
@@ -170,7 +170,7 @@ describe("resolver Date representation bundles", () => {
           ? (
               await bundleResolvers({
                 namespace: "date",
-                config: { files: ["./resolver.mjs"] },
+                files: fs.globSync(path.resolve(tmp.dir, "./resolver.mjs")),
                 baseDir: tmp.dir,
               })
             ).get("stringDateRoundTrip")!
@@ -234,7 +234,7 @@ describe("resolver Date representation bundles", () => {
           ? (
               await bundleResolvers({
                 namespace: "date",
-                config: { files: ["./resolver.mjs"] },
+                files: fs.globSync(path.resolve(tmp.dir, "./resolver.mjs")),
                 baseDir: tmp.dir,
               })
             ).get("manualDateParse")!
@@ -329,7 +329,7 @@ describe("resolver Date representation bundles", () => {
           ? (
               await bundleResolvers({
                 namespace: "date",
-                config: { files: ["./resolver.mjs"] },
+                files: fs.globSync(path.resolve(tmp.dir, "./resolver.mjs")),
                 baseDir: tmp.dir,
                 inlineSourcemap: true,
               })

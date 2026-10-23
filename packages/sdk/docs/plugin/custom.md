@@ -90,6 +90,40 @@ interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
 | `executors` | `PluginGeneratedExecutor[]`                     | Additional executors to generate                       |
 | `extends`   | `{ fields?: Record<string, TailorAnyDBField> }` | Fields to add to the source table                      |
 
+Resolvers returned by `onTableLoaded` or `onNamespaceLoaded` are loaded, bundled, and deployed to
+the resolver namespace (a `resolver` key in your config) with the same name as the hook's TailorDB
+namespace (a `db` key). These are separate namespaces that only share the name: with
+`db: { main: ... }` and `resolver: { billing: ... }`, generated resolvers go to a `main` resolver
+namespace, not `billing`. If you configure a resolver namespace with that name, generated resolvers
+join its configured files and use its `defaultPermission`. Otherwise, a resolver namespace is created
+automatically. Configure `defaultPermission` to restrict access; without it, generated resolvers are
+accessible to anonymous callers, like regular resolvers with no permission declared. Generating into
+an external resolver namespace or duplicating a resolver name within a namespace fails the build.
+
+For example, a namespace hook can return a query using `t` field builders:
+
+```typescript
+onNamespaceLoaded() {
+  return {
+    resolvers: [{
+      name: "greet",
+      operation: "query",
+      inputFields: { name: t.string() },
+      outputFields: { message: t.string() },
+      body: 'return { message: `Hello, ${context.input.name}!` };',
+    }],
+  };
+}
+```
+
+The `body` string contains JavaScript statements with access to `context.input`, `context.caller`,
+`context.invoker`, and `context.env`. It can use `await` and platform globals, but cannot capture
+plugin-local variables. Embed configuration values as literals with `JSON.stringify` when building
+the string. Field validators must also be self-contained: they can use their arguments and standard
+JavaScript globals, and references to other names are rejected during generation. Input validation and date conversion follow the same rules as regular
+resolvers. Invalid field definitions or JavaScript syntax fail the build with the plugin and namespace
+identified in the error.
+
 Tables in `tables` are validated as complete TailorDB table definitions before registration.
 Fields in `extends.fields` are validated as part of the resulting source table. You can return a
 table builder directly or a structural copy such as `{ ...db.table(...) }`; a copy is accepted as

@@ -14,7 +14,11 @@ import {
   type HttpAdapterService,
 } from "#/cli/services/http-adapter/service";
 import { bundleResolvers } from "#/cli/services/resolver/bundler";
-import { createResolverService, type ResolverService } from "#/cli/services/resolver/service";
+import {
+  createResolverService,
+  type PluginResolverSource,
+  type ResolverService,
+} from "#/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "#/cli/services/tailordb/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
@@ -26,6 +30,7 @@ import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared
 import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { CLIError } from "#/cli/shared/errors";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -210,9 +215,17 @@ type DefineResolverResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
+function pluginResolverSource(
+  config: LoadedConfig,
+  pluginManager: PluginManager | undefined,
+): PluginResolverSource | undefined {
+  return pluginManager && { pluginManager, appName: config.name, configPath: config.path };
+}
+
 function defineResolver(
   config: ResolverServiceInput | undefined,
   baseDir: string,
+  plugins: PluginResolverSource | undefined,
 ): DefineResolverResult {
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
@@ -223,13 +236,50 @@ function defineResolver(
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(namespace, serviceConfig, baseDir);
+      const resolverService = createResolverService(namespace, serviceConfig, baseDir, plugins);
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
   }
 
   return { resolverServices, subgraphs };
+}
+
+/**
+ * Define resolver services for namespaces that plugins generate resolvers into without a `resolver` entry.
+ * Call after table and namespace plugins have run.
+ * @param config - Loaded configuration
+ * @param pluginManager - Plugin manager holding the generated resolvers
+ * @returns Resolver services for those namespaces
+ */
+export function definePluginResolverServices(
+  config: LoadedConfig,
+  pluginManager: PluginManager | undefined,
+): ResolverService[] {
+  const baseDir = path.dirname(config.path);
+  const resolverServices: ResolverService[] = [];
+  for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
+    const serviceConfig = config.resolver?.[namespace];
+    if (serviceConfig && "external" in serviceConfig) {
+      throw CLIError({
+        code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
+        message: `Plugin "${pluginId}" cannot generate resolvers in external namespace "${namespace}".`,
+        context: { pluginId, namespace, resourceType: "pipeline.service" },
+      });
+    }
+    if (serviceConfig || resolverServices.some((service) => service.namespace === namespace)) {
+      continue;
+    }
+    resolverServices.push(
+      createResolverService(
+        namespace,
+        { files: [] },
+        baseDir,
+        pluginResolverSource(config, pluginManager),
+      ),
+    );
+  }
+  return resolverServices;
 }
 
 type DefineIdpResult = {
@@ -466,7 +516,11 @@ function defineServices(
     effectiveDateDefault(config),
     pluginManager,
   );
-  const resolverResult = defineResolver(config.resolver, baseDir);
+  const resolverResult = defineResolver(
+    config.resolver,
+    baseDir,
+    pluginResolverSource(config, pluginManager),
+  );
   const idpResult = defineIdp(config.idp, config.path);
   const authResult = defineAuth(
     config.auth,
@@ -687,7 +741,7 @@ export async function loadApplication(
   // 1. Define services (synchronous)
   const {
     tailordbResult,
-    resolverResult,
+    resolverResult: configuredResolverResult,
     idpResult,
     authResult,
     staticWebsiteServices,
@@ -709,7 +763,7 @@ export async function loadApplication(
         })
       : (config.env ?? {});
 
-  // 3. Load TailorDB tables and process namespace plugins
+  // 3. Load TailorDB tables, process namespace plugins, and define plugin resolver namespaces
   for (const tailordb of tailordbResult.tailorDBServices) {
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();
@@ -717,6 +771,14 @@ export async function loadApplication(
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
   });
+  const pluginResolverServices = definePluginResolverServices(config, pluginManager);
+  const resolverResult: DefineResolverResult = {
+    resolverServices: [...configuredResolverResult.resolverServices, ...pluginResolverServices],
+    subgraphs: [
+      ...configuredResolverResult.subgraphs,
+      ...pluginResolverServices.map(({ namespace }) => ({ Type: "pipeline", Name: namespace })),
+    ],
+  };
 
   // 4. Generate plugin files and determine executor file paths
   const pluginExecutorFiles = generatePluginFilesIfNeeded(
@@ -770,9 +832,10 @@ export async function loadApplication(
 
   // 10. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
+    await pipeline.loadResolvers();
     const resolverBundles = await bundleResolvers({
       namespace: pipeline.namespace,
-      config: pipeline.config,
+      files: Object.keys(pipeline.resolvers),
       baseDir,
       defaultPermission: pipeline.defaultPermission,
       startContext,
