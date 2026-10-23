@@ -19,6 +19,7 @@ import {
 import { errorToJson } from "./error-json";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
+import { writeHeldConfigLock } from "./test-helpers/config-lock";
 import { isKeyringAvailable, resetKeyringState } from "./token-store";
 import type * as ClientModule from "./client";
 
@@ -1457,15 +1458,7 @@ describe("loadAccessToken", () => {
         refresh_token: "refresh-0",
         token_expires_at: pastDate,
       });
-      fs.writeFileSync(
-        lockPath,
-        JSON.stringify({
-          pid: process.pid,
-          hostname: os.hostname(),
-          nonce: "other-process",
-          createdAt: Date.now(),
-        }),
-      );
+      writeHeldConfigLock(lockPath);
       setTimeout(() => {
         writeFileUser({
           access_token: "fresh-access",
@@ -1477,6 +1470,48 @@ describe("loadAccessToken", () => {
 
       await expect(loadAccessToken()).resolves.toBe("fresh-access");
       expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+    });
+
+    test("keeps a token that expires within five minutes while another process holds the lock", async () => {
+      writeFileUser({
+        access_token: "expiring-access",
+        refresh_token: "refresh-0",
+        token_expires_at: inOneMinute(),
+      });
+      writeHeldConfigLock(lockPath);
+
+      await expect(loadAccessToken()).resolves.toBe("expiring-access");
+      expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+    });
+
+    test("warns once about a keyring that rejects the refreshed tokens", async () => {
+      keyringSetPasswordFailure.error = new Error("keyring denied");
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "platform-user-sub": {
+            storage: "file",
+            access_token: "expired-access",
+            refresh_token: "refresh-0",
+            token_expires_at: pastDate,
+            email: "user@example.com",
+          },
+        },
+        profiles: {},
+        current_user: "platform-user-sub",
+      });
+      rotateRefreshTokens("refresh-0");
+      clientMocks.fetchUserInfo.mockResolvedValue({
+        sub: "platform-user-sub",
+        email: "user@example.com",
+      });
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await expect(loadAccessToken()).resolves.toBe("access-1");
+      expect(
+        warnSpy.mock.calls.filter(([message]) => String(message).includes("System keyring failed")),
+      ).toHaveLength(1);
     });
 
     test("stores the refreshed tokens before looking up the user", async () => {
@@ -1496,8 +1531,10 @@ describe("loadAccessToken", () => {
       });
       rotateRefreshTokens("refresh-0");
       let storedDuringLookup: string | undefined;
+      let entryDuringLookup: unknown;
       clientMocks.fetchUserInfo.mockImplementation(async () => {
         storedDuringLookup = keyringPasswords.get("tailor-platform-cli:legacy@example.com");
+        entryDuringLookup = (await readPlatformConfig()).users["legacy@example.com"];
         return { sub: "platform-user-sub", email: "legacy@example.com" };
       });
 
@@ -1505,6 +1542,7 @@ describe("loadAccessToken", () => {
       expect(storedDuringLookup).toBe(
         JSON.stringify({ accessToken: "access-1", refreshToken: "refresh-1" }),
       );
+      expect(entryDuringLookup).toMatchObject({ storage: "keyring" });
       expect((await readPlatformConfig()).current_user).toBe("platform-user-sub");
     });
 

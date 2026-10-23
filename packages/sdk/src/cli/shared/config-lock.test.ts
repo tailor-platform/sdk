@@ -3,24 +3,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
-import { withConfigLock } from "./config-lock";
+import { isConfigLockTimeout, withConfigLock } from "./config-lock";
 import { errorToJson } from "./error-json";
+import { createConcurrencyProbe } from "./test-helpers/concurrency-probe";
+import { writeHeldConfigLock } from "./test-helpers/config-lock";
 import { tempCwd } from "./test-helpers/temp-cwd";
 
-const ELEVEN_MINUTES_MS = 11 * 60 * 1000;
-
-function writeForeignLock(lockPath: string, overrides: Record<string, unknown> = {}) {
-  fs.writeFileSync(
-    lockPath,
-    JSON.stringify({
-      pid: process.pid,
-      hostname: os.hostname(),
-      nonce: "foreign",
-      createdAt: Date.now(),
-      ...overrides,
-    }),
-  );
-}
+const THREE_MINUTES_MS = 3 * 60 * 1000;
 
 function exitedPid(): number {
   return spawnSync(process.execPath, ["-e", ""]).pid;
@@ -31,23 +20,19 @@ function backdate(filePath: string, ageMs: number) {
   fs.utimesSync(filePath, time, time);
 }
 
+function readNonce(lockPath: string): unknown {
+  return (JSON.parse(fs.readFileSync(lockPath, "utf-8")) as { nonce: unknown }).nonce;
+}
+
 describe("withConfigLock", () => {
   test("runs callers in the same process one at a time", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
-    let active = 0;
-    let maxActive = 0;
-    const task = () =>
-      withConfigLock(lockPath, async () => {
-        active++;
-        maxActive = Math.max(maxActive, active);
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        active--;
-      });
+    const probe = createConcurrencyProbe();
 
-    await Promise.all([task(), task(), task()]);
+    await Promise.all([1, 2, 3].map(() => withConfigLock(lockPath, probe.run)));
 
-    expect(maxActive).toBe(1);
+    expect(probe.maxInFlight()).toBe(1);
     expect(fs.existsSync(lockPath)).toBe(false);
   });
 
@@ -65,7 +50,7 @@ describe("withConfigLock", () => {
   test("waits until another live process releases its lock", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
-    writeForeignLock(lockPath);
+    writeHeldConfigLock(lockPath);
     let releasedAt = 0;
     setTimeout(() => {
       releasedAt = Date.now();
@@ -81,23 +66,24 @@ describe("withConfigLock", () => {
   test("times out on a lock another live process keeps", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
-    writeForeignLock(lockPath);
+    writeHeldConfigLock(lockPath);
 
     const error = await withConfigLock(lockPath, async () => "entered", { timeoutMs: 100 }).catch(
       (error: unknown) => error,
     );
 
+    expect(isConfigLockTimeout(error)).toBe(true);
     expect(errorToJson(error).error).toMatchObject({
       code: "CONFIG_LOCK_TIMEOUT",
       context: { lockPath },
     });
-    expect(JSON.parse(fs.readFileSync(lockPath, "utf-8"))).toMatchObject({ nonce: "foreign" });
+    expect(readNonce(lockPath)).toBe("other-process");
   });
 
   test("reclaims a lock whose process has exited", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
-    writeForeignLock(lockPath, { pid: exitedPid() });
+    writeHeldConfigLock(lockPath, { pid: exitedPid() });
 
     await expect(
       withConfigLock(lockPath, async () => "entered", { timeoutMs: 1000 }),
@@ -105,10 +91,30 @@ describe("withConfigLock", () => {
     expect(fs.existsSync(lockPath)).toBe(false);
   });
 
+  test("reclaims a lock an earlier process with this process's pid left behind", async () => {
+    using tempDir = tempCwd("tailor-config-lock-");
+    const lockPath = path.join(tempDir.dir, "config.yaml.lock");
+    writeHeldConfigLock(lockPath, { pid: process.pid });
+
+    await expect(
+      withConfigLock(lockPath, async () => "entered", { timeoutMs: 1000 }),
+    ).resolves.toBe("entered");
+  });
+
+  test("reclaims an old lock even when its pid is alive", async () => {
+    using tempDir = tempCwd("tailor-config-lock-");
+    const lockPath = path.join(tempDir.dir, "config.yaml.lock");
+    writeHeldConfigLock(lockPath, { createdAt: Date.now() - THREE_MINUTES_MS });
+
+    await expect(
+      withConfigLock(lockPath, async () => "entered", { timeoutMs: 1000 }),
+    ).resolves.toBe("entered");
+  });
+
   test("keeps a recent lock from another host", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
-    writeForeignLock(lockPath, { hostname: `${os.hostname()}-other`, pid: exitedPid() });
+    writeHeldConfigLock(lockPath, { hostname: `${os.hostname()}-other`, pid: exitedPid() });
 
     await expect(
       withConfigLock(lockPath, async () => "entered", { timeoutMs: 100 }),
@@ -118,11 +124,10 @@ describe("withConfigLock", () => {
   test("reclaims an old lock from another host", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
-    writeForeignLock(lockPath, {
+    writeHeldConfigLock(lockPath, {
       hostname: `${os.hostname()}-other`,
-      createdAt: Date.now() - ELEVEN_MINUTES_MS,
+      createdAt: Date.now() - THREE_MINUTES_MS,
     });
-    backdate(lockPath, ELEVEN_MINUTES_MS);
 
     await expect(
       withConfigLock(lockPath, async () => "entered", { timeoutMs: 1000 }),
@@ -150,15 +155,40 @@ describe("withConfigLock", () => {
     ).resolves.toBe("entered");
   });
 
+  test("leaves a stale lock to the process that is reclaiming it", async () => {
+    using tempDir = tempCwd("tailor-config-lock-");
+    const lockPath = path.join(tempDir.dir, "config.yaml.lock");
+    writeHeldConfigLock(lockPath, { pid: exitedPid() });
+    fs.writeFileSync(`${lockPath}.reclaim`, "");
+
+    await expect(
+      withConfigLock(lockPath, async () => "entered", { timeoutMs: 100 }),
+    ).rejects.toMatchObject({ code: "CONFIG_LOCK_TIMEOUT" });
+    expect(readNonce(lockPath)).toBe("other-process");
+  });
+
+  test("reclaims a stale lock when the reclaiming process left its guard behind", async () => {
+    using tempDir = tempCwd("tailor-config-lock-");
+    const lockPath = path.join(tempDir.dir, "config.yaml.lock");
+    writeHeldConfigLock(lockPath, { pid: exitedPid() });
+    fs.writeFileSync(`${lockPath}.reclaim`, "");
+    backdate(`${lockPath}.reclaim`, 60 * 1000);
+
+    await expect(
+      withConfigLock(lockPath, async () => "entered", { timeoutMs: 1000 }),
+    ).resolves.toBe("entered");
+    expect(fs.readdirSync(tempDir.dir)).toEqual([]);
+  });
+
   test("leaves a lock that another process took over in place on release", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
 
     await withConfigLock(lockPath, async () => {
-      writeForeignLock(lockPath);
+      writeHeldConfigLock(lockPath);
     });
 
-    expect(JSON.parse(fs.readFileSync(lockPath, "utf-8"))).toMatchObject({ nonce: "foreign" });
+    expect(readNonce(lockPath)).toBe("other-process");
   });
 
   test("releases the lock when the callback throws", async () => {

@@ -4,14 +4,19 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { z } from "zod";
-import { CLIError } from "./errors";
+import { CLIError, isCLIError } from "./errors";
+import { logger } from "./logger";
 import { ensureSecretDir } from "./secret-file";
 
-const DEFAULT_TIMEOUT_MS = 60_000;
-const MAX_LOCK_AGE_MS = 10 * 60 * 1000;
+const MAX_LOCK_AGE_MS = 2 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = MAX_LOCK_AGE_MS + 30_000;
 const UNWRITTEN_LOCK_AGE_MS = 10_000;
+const RECLAIM_GUARD_AGE_MS = 10_000;
+const WAIT_NOTICE_DELAY_MS = 3_000;
 const MAX_RETRY_DELAY_MS = 250;
+const LOCK_TIMEOUT_CODE = "CONFIG_LOCK_TIMEOUT";
 
+// A lock written by a newer SDK may carry more fields.
 const lockOwnerSchema = z.looseObject({
   pid: z.number().int(),
   hostname: z.string(),
@@ -74,26 +79,36 @@ export async function withConfigLock<T>(
   }
 }
 
+/**
+ * Whether an error is the timeout {@link withConfigLock} throws when the lock stays held.
+ * @param error - Error to check
+ * @returns True for a lock timeout
+ */
+export function isConfigLockTimeout(error: unknown): boolean {
+  return isCLIError(error) && error.code === LOCK_TIMEOUT_CODE;
+}
+
 async function acquireFileLock(lockPath: string, timeoutMs: number): Promise<string> {
   ensureSecretDir(path.dirname(lockPath));
-  const owner: LockOwner = {
-    pid: process.pid,
-    hostname: os.hostname(),
-    nonce: crypto.randomUUID(),
-    createdAt: Date.now(),
-  };
-  const deadline = Date.now() + timeoutMs;
+  const nonce = crypto.randomUUID();
+  const startedAt = Date.now();
+  let noticeShown = false;
   let delay = 10;
   for (;;) {
-    if (tryCreateLock(lockPath, owner)) return owner.nonce;
+    if (tryCreateLock(lockPath, nonce)) return nonce;
     if (reclaimIfStale(lockPath)) continue;
-    if (Date.now() >= deadline) throw lockTimeoutError(lockPath);
+    const waitedMs = Date.now() - startedAt;
+    if (waitedMs >= timeoutMs) throw lockTimeoutError(lockPath);
+    if (!noticeShown && waitedMs >= WAIT_NOTICE_DELAY_MS) {
+      noticeShown = true;
+      logger.info(`Waiting for another tailor command to release ${lockPath}...`);
+    }
     await new Promise((resolve) => setTimeout(resolve, delay * (0.5 + Math.random())));
     delay = Math.min(delay * 2, MAX_RETRY_DELAY_MS);
   }
 }
 
-function tryCreateLock(lockPath: string, owner: LockOwner): boolean {
+function tryCreateLock(lockPath: string, nonce: string): boolean {
   let fd: number;
   try {
     fd = fs.openSync(lockPath, "wx", 0o600);
@@ -101,6 +116,12 @@ function tryCreateLock(lockPath: string, owner: LockOwner): boolean {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
     throw error;
   }
+  const owner: LockOwner = {
+    pid: process.pid,
+    hostname: os.hostname(),
+    nonce,
+    createdAt: Date.now(),
+  };
   try {
     fs.writeSync(fd, JSON.stringify(owner));
   } catch (error) {
@@ -138,7 +159,10 @@ function isStale(lock: ObservedLock): boolean {
   const now = Date.now();
   if (!lock.owner) return now - lock.mtimeMs > UNWRITTEN_LOCK_AGE_MS;
   if (now - lock.owner.createdAt > MAX_LOCK_AGE_MS) return true;
-  return lock.owner.hostname === os.hostname() && !isProcessAlive(lock.owner.pid);
+  if (lock.owner.hostname !== os.hostname()) return false;
+  // This process takes the file lock only after its in-process queue, so a lock with its pid is left over.
+  if (lock.owner.pid === process.pid) return true;
+  return !isProcessAlive(lock.owner.pid);
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -151,36 +175,44 @@ function isProcessAlive(pid: number): boolean {
 }
 
 /**
- * Remove a stale lock, putting back a newer lock that replaced it after it was read.
+ * Remove a stale lock. Only the process holding the reclaim guard removes it, and only if
+ * the lock is still the one judged stale.
  * @param lockPath - Lock file path
- * @returns Whether the lock file is gone or was replaced, so creating it can be retried now
+ * @returns Whether creating the lock can be retried right away
  */
 function reclaimIfStale(lockPath: string): boolean {
   const observed = readLock(lockPath);
   if (!observed) return true;
   if (!isStale(observed)) return false;
 
-  const aside = `${lockPath}.${crypto.randomUUID()}.stale`;
+  const guardPath = `${lockPath}.reclaim`;
+  if (!tryCreateGuard(guardPath)) return false;
   try {
-    fs.renameSync(lockPath, aside);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
-    throw error;
+    const current = readLock(lockPath);
+    if (current?.ino === observed.ino && current.content === observed.content) {
+      fs.rmSync(lockPath, { force: true });
+    }
+    return true;
+  } finally {
+    fs.rmSync(guardPath, { force: true });
   }
-  const moved = readLock(aside);
-  if (moved && (moved.ino !== observed.ino || moved.content !== observed.content)) {
-    restoreLock(aside, lockPath);
-  }
-  fs.rmSync(aside, { force: true });
-  return true;
 }
 
-function restoreLock(movedPath: string, lockPath: string): void {
+function tryCreateGuard(guardPath: string): boolean {
   try {
-    fs.linkSync(movedPath, lockPath);
+    fs.closeSync(fs.openSync(guardPath, "wx", 0o600));
+    return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
   }
+  try {
+    if (Date.now() - fs.statSync(guardPath).mtimeMs > RECLAIM_GUARD_AGE_MS) {
+      fs.rmSync(guardPath, { force: true });
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return false;
 }
 
 function releaseFileLock(lockPath: string, nonce: string): void {
@@ -191,7 +223,7 @@ function releaseFileLock(lockPath: string, nonce: string): void {
 
 function lockTimeoutError(lockPath: string): Error {
   return CLIError({
-    code: "CONFIG_LOCK_TIMEOUT",
+    code: LOCK_TIMEOUT_CODE,
     message: `Timed out waiting for another tailor command to release ${lockPath}.`,
     suggestion:
       "Wait for the other tailor commands to finish, then retry. If none is running, delete the lock file.",

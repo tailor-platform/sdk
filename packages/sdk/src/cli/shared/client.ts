@@ -993,6 +993,7 @@ export async function fetchUserInfo(accessToken: string, config?: PlatformClient
       Authorization: `Bearer ${accessToken}`,
       "User-Agent": await userAgent(),
     },
+    signal: AbortSignal.timeout(OAUTH2_REQUEST_TIMEOUT_MS),
   });
   if (!resp.ok) {
     throw new Error(`Failed to fetch user info: ${resp.statusText}`);

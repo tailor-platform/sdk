@@ -55,8 +55,12 @@ function resolveExistingPath(filePath: string): string {
   try {
     return fs.realpathSync(filePath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return filePath;
-    throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  try {
+    return path.resolve(path.dirname(filePath), fs.readlinkSync(filePath));
+  } catch {
+    return filePath;
   }
 }
 

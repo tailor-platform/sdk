@@ -144,6 +144,9 @@ export const updateCommand = defineAppCommand({
         tokenLookupPlatformConfig,
         args.name,
       );
+      if (config.profiles[args.name] !== profile) {
+        throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${args.name}" not found.` });
+      }
       resolvedUser = refreshed.user;
 
       // Check if workspace exists

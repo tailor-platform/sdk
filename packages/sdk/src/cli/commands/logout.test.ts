@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
@@ -11,6 +10,7 @@ import {
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { writeHeldConfigLock } from "#/cli/shared/test-helpers/config-lock";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { logoutCommand } from "./logout";
@@ -136,17 +136,8 @@ describe("logout --profile", () => {
   });
 
   test("reads the config only after another process releases the config lock", async () => {
-    const configDir = path.join(xdgTempDir, "tailor-platform");
-    const lockPath = path.join(configDir, "config.yaml.lock");
-    fs.writeFileSync(
-      lockPath,
-      JSON.stringify({
-        pid: process.pid,
-        hostname: os.hostname(),
-        nonce: "other-process",
-        createdAt: Date.now(),
-      }),
-    );
+    const lockPath = path.join(xdgTempDir, "tailor-platform", "config.yaml.lock");
+    writeHeldConfigLock(lockPath);
     setTimeout(() => {
       void (async () => {
         const config = await readPlatformConfig();
