@@ -13,6 +13,7 @@ import {
   CustomDomainTransferStatus,
 } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -157,11 +158,7 @@ type DesiredCustomDomain = {
 };
 
 /** Why a custom domain produced no change in this plan. */
-export type CustomDomainNoteKind =
-  | "transfer-pending"
-  | "transfer-completed"
-  | "transfer-not-completed"
-  | "transfer-source-removing";
+export type CustomDomainNoteKind = "transfer-pending" | "transfer-completed";
 
 /**
  * A plan-time remark about a custom domain that produced no change. Change-set
@@ -421,8 +418,10 @@ export async function planStaticWebsite(context: PlanContext) {
   // Live offers this workspace made, read once. The RPC also returns offers made
   // *to* this workspace; cancelling one of those from the source lane would
   // withdraw someone else's offer, so filter to our own.
+  // Deleting a site also needs them: the platform refuses to delete one whose
+  // domain is still offered, and nothing else in this plan would read that.
   const fetchLiveOffers =
-    desiredDomainsByWebsite.size > 0
+    desiredDomainsByWebsite.size > 0 || changeSet.deletes.length > 0
       ? fetchAllTolerant<CustomDomainTransfer>(async (pageToken, pageSize) => {
           const { transfers, nextPageToken } = await client.listCustomDomainTransfers({
             workspaceId,
@@ -435,11 +434,30 @@ export async function planStaticWebsite(context: PlanContext) {
       : Promise.resolve<CustomDomainTransfer[]>([]);
 
   const [, liveOffers] = await Promise.all([fetchExistingDomains, fetchLiveOffers]);
-  const liveOffersByDomain = new Map(
-    liveOffers
-      .filter((transfer) => transfer.sourceWorkspaceId === workspaceId)
-      .map((transfer) => [transfer.domain, transfer]),
-  );
+  const ownLiveOffers = liveOffers.filter((transfer) => transfer.sourceWorkspaceId === workspaceId);
+  const liveOffersByDomain = new Map(ownLiveOffers.map((transfer) => [transfer.domain, transfer]));
+
+  // An offer names the site it came from, so a deleted site can be checked
+  // without listing its domains -- which are never fetched for a site that is
+  // not in the config, and not fetched at all under `tailor remove`.
+  for (const del of changeSet.deletes) {
+    const offer = ownLiveOffers.find((transfer) => transfer.sourceStaticWebsiteName === del.name);
+    if (offer) {
+      throw CLIError({
+        code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT",
+        message: `Static website "${del.name}" cannot be deleted: its custom domain "${offer.domain}" is offered to workspace ${offer.targetWorkspaceId}.`,
+        suggestion: "Cancel the pending transfer before deleting the static website.",
+        details:
+          "The platform refuses to delete a static website while one of its custom domains is still offered. Changing the entry back to a plain string and deploying cancels the offer.",
+        context: {
+          resourceType: "staticwebsite",
+          staticWebsiteName: del.name,
+          domain: offer.domain,
+          targetWorkspaceId: offer.targetWorkspaceId,
+        },
+      });
+    }
+  }
 
   // For each transfer intent with no live offer, the domain's latest record.
   // It never suppresses a request; it only explains what happened last time.
@@ -478,15 +496,19 @@ export async function planStaticWebsite(context: PlanContext) {
       const existing = existingByDomain.get(domain);
 
       if (existing?.status === CustomDomainStatus.REMOVING) {
-        customDomainChangeSet.unchanged.push({ name: domain });
-        customDomainNotes.push({
-          kind: "transfer-source-removing",
-          staticWebsiteName: name,
-          domain,
-          message:
-            "the domain is being removed; delete this entry or wait for the removal to finish",
+        throw CLIError({
+          code: "CUSTOM_DOMAIN_REMOVING",
+          message: `Custom domain "${domain}" on static website "${name}" is being removed.`,
+          suggestion:
+            "Delete this entry, or wait for the removal to finish and deploy again to re-add it.",
+          details:
+            "A domain reaches this state when it is removed outside the SDK. The platform refuses to re-add, offer or accept it until the removal completes.",
+          context: {
+            resourceType: "staticwebsite.custom_domain",
+            staticWebsiteName: name,
+            domain,
+          },
         });
-        continue;
       }
 
       if (!existing) {
@@ -550,9 +572,6 @@ export async function planStaticWebsite(context: PlanContext) {
     // Transfers, decided presence-first.
     for (const [domain, entry] of desiredEntries) {
       const existing = existingByDomain.get(domain);
-      if (existing?.status === CustomDomainStatus.REMOVING) {
-        continue;
-      }
       const offer = liveOffersByDomain.get(domain);
       const target = entry.transferToWorkspaceId;
 
@@ -570,19 +589,45 @@ export async function planStaticWebsite(context: PlanContext) {
       }
 
       if (!existing) {
+        // Still offered, so the move is in flight rather than lost. The domain
+        // list and the transfer list are separate reads and a lagging replica
+        // can disagree about which happened first; trust the live offer.
+        if (offer) {
+          customDomainNotes.push({
+            kind: "transfer-pending",
+            staticWebsiteName: name,
+            domain,
+            message: `transfer to workspace ${offer.targetWorkspaceId} is pending`,
+          });
+          continue;
+        }
+
         const latest = latestTransferByDomain.get(domain);
-        const completedHere =
+        if (
           latest?.status === CustomDomainTransferStatus.COMPLETED &&
-          latest.sourceWorkspaceId === workspaceId;
-        customDomainNotes.push({
-          kind: completedHere ? "transfer-completed" : "transfer-not-completed",
-          staticWebsiteName: name,
-          domain,
-          message: completedHere
-            ? `transfer to workspace ${latest.targetWorkspaceId} completed — remove this entry`
-            : "the transfer did not complete — check this entry",
+          latest.sourceWorkspaceId === workspaceId
+        ) {
+          customDomainNotes.push({
+            kind: "transfer-completed",
+            staticWebsiteName: name,
+            domain,
+            message: `transfer to workspace ${latest.targetWorkspaceId} completed — remove this entry`,
+          });
+          continue;
+        }
+
+        throw CLIError({
+          code: "CUSTOM_DOMAIN_TRANSFER_INCOMPLETE",
+          message: `Custom domain "${domain}" is not on static website "${name}", and no transfer from this workspace completed it.`,
+          suggestion: "Remove this entry, or correct the domain it names.",
+          details:
+            "This happens when the domain was removed outside the SDK, or when the entry names a domain this static website never held.",
+          context: {
+            resourceType: "staticwebsite.custom_domain",
+            staticWebsiteName: name,
+            domain,
+          },
         });
-        continue;
       }
 
       if (offer && offer.targetWorkspaceId === target) {

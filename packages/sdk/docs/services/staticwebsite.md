@@ -104,10 +104,10 @@ That deploy completes the move. The next plan on the giving side reports that th
 
 The two deploys must be separate runs, even when both sites live in the same workspace: the receiving side cannot accept an offer that the same run is still opening, and `tailor deploy` says so rather than failing partway.
 
-Three rules apply while an offer is open:
+These rules apply while an offer is open:
 
 - An offer expires after 7 days. Deploying the entry again after that opens a fresh offer.
-- The domain cannot be removed while its offer is open. Change the entry back to a plain string and deploy to withdraw the offer first.
+- Neither the domain nor the static website holding it can be removed. Change the entry back to a plain string and deploy to withdraw the offer first; `tailor deploy` and `tailor remove` both refuse before changing anything.
 - An offer takes a moment to become ready. Until it is, the receiving side cannot accept it and its deploy is refused; the giving side's plan says so.
 
 ## Type-safe URL References
