@@ -1,7 +1,6 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ManagedResourceType } from "./managed-resource-type";
 
 type ResourcePageFetcher<T> = (pageToken: string, maxPageSize: number) => Promise<[T[], string]>;
 
@@ -37,97 +36,66 @@ export async function fetchExistingResourcesWithLabels<T>(
       const { metadata } = await client.getMetadata({
         trn: getTrn(name),
       });
-      existingResources[name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
+      existingResources[name] = { resource, allLabels: metadata?.labels };
     }),
   );
   return existingResources;
 }
 
-export interface TrackDesiredResourceOwnershipParams {
-  labels: Record<string, string> | undefined;
-  ownerLabel: string | undefined;
-  appName: string;
-  appId: string | undefined;
-  resourceType: ManagedResourceType;
-  resourceLabel: string;
-  resourceName: string;
+export interface OwnershipResult {
   conflicts: OwnerConflict[];
   unmanaged: UnmanagedResource[];
-}
-
-/**
- * Determine whether a same-named existing resource is managed by this app.
- * Records the user-facing confirmation data when ownership does not match.
- * @param params - Ownership classification inputs
- * @param params.labels - Existing resource labels
- * @param params.ownerLabel - Existing `sdk-name` label, when present
- * @param params.appName - Current application name
- * @param params.appId - Current application id, when present
- * @param params.resourceType - Stable resource kind identifier for machine-readable output
- * @param params.resourceLabel - Resource kind for human-readable plan and confirmation messages
- * @param params.resourceName - Resource name for confirmation messages
- * @param params.conflicts - Conflict accumulator
- * @param params.unmanaged - Unmanaged-resource accumulator
- * @returns True when the resource is owned by the current app
- */
-export function trackDesiredResourceOwnership(
-  params: TrackDesiredResourceOwnershipParams,
-): boolean {
-  const {
-    labels,
-    ownerLabel,
-    appName,
-    appId,
-    resourceType,
-    resourceLabel,
-    resourceName,
-    conflicts,
-    unmanaged,
-  } = params;
-  const owned = isOwnedByApp(labels, appName, appId);
-  if (!owned) {
-    if (!ownerLabel) {
-      unmanaged.push({ resourceType, resourceLabel, resourceName });
-    } else {
-      conflicts.push({
-        resourceType,
-        resourceLabel,
-        resourceName,
-        currentOwner: ownerLabel,
-      });
-    }
-  }
-  return owned;
-}
-
-export interface TrackRemainingResourceOwnerParams {
-  labels: Record<string, string> | undefined;
-  ownerLabel: string | undefined;
-  appName: string;
-  appId: string | undefined;
   resourceOwners: Set<string>;
 }
 
+export interface OwnershipTracker {
+  /** Confirmation data recorded so far, in the shape plan results carry. */
+  result: OwnershipResult;
+  /**
+   * Determine whether a same-named existing resource is managed by this app.
+   * Records the user-facing confirmation data when ownership does not match.
+   * @param labels - Existing resource labels
+   * @param resource - Resource kind and name for confirmation messages
+   * @returns True when the resource is owned by the current app
+   */
+  ownsDesired(labels: Record<string, string> | undefined, resource: UnmanagedResource): boolean;
+  /**
+   * Determine whether a remote-only resource is still owned by this app.
+   * Also records other SDK owners so renamed-empty applications can be handled.
+   * @param labels - Existing resource labels
+   * @returns True when the resource is owned by the current app
+   */
+  ownsRemaining(labels: Record<string, string> | undefined): boolean;
+}
+
 /**
- * Determine whether a remote-only resource is still owned by this app.
- * Also records other SDK owners so renamed-empty applications can be handled.
- * @param params - Ownership classification inputs
- * @param params.labels - Existing resource labels
- * @param params.ownerLabel - Existing `sdk-name` label, when present
- * @param params.appName - Current application name
- * @param params.appId - Current application id, when present
- * @param params.resourceOwners - Other-owner accumulator
- * @returns True when the resource is owned by the current app
+ * Create the ownership bookkeeping one planner shares across its resources.
+ * @param appName - Current application name
+ * @param appId - Current application id, when present
+ * @returns Tracker classifying resources and accumulating confirmation data
  */
-export function trackRemainingResourceOwner(params: TrackRemainingResourceOwnerParams): boolean {
-  const { labels, ownerLabel, appName, appId, resourceOwners } = params;
-  const owned = isOwnedByApp(labels, appName, appId);
-  if (ownerLabel && !owned) {
-    resourceOwners.add(ownerLabel);
-  }
-  return owned;
+export function createOwnershipTracker(
+  appName: string,
+  appId: string | undefined,
+): OwnershipTracker {
+  const result: OwnershipResult = { conflicts: [], unmanaged: [], resourceOwners: new Set() };
+  return {
+    result,
+    ownsDesired(labels, resource) {
+      if (isOwnedByApp(labels, appName, appId)) return true;
+      const currentOwner = labels?.[sdkNameLabelKey];
+      if (currentOwner) {
+        result.conflicts.push({ ...resource, currentOwner });
+      } else {
+        result.unmanaged.push(resource);
+      }
+      return false;
+    },
+    ownsRemaining(labels) {
+      if (isOwnedByApp(labels, appName, appId)) return true;
+      const owner = labels?.[sdkNameLabelKey];
+      if (owner) result.resourceOwners.add(owner);
+      return false;
+    },
+  };
 }
