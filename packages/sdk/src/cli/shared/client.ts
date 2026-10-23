@@ -166,9 +166,9 @@ export function findAccessTokenSource(accessToken: string): AccessTokenSource | 
 
 /**
  * Initialize an Operator client with the given access token.
- * A client created with a token from `loadAccessToken` for a logged-in user renews the token
- * while it runs, so it keeps working past the token's lifetime; this can refresh and save the
- * stored login. Other tokens are sent as given.
+ * A client created with a token that `loadAccessToken` returned for a browser login
+ * (`tailor login`) renews the token while it runs, so it keeps working past the token's
+ * lifetime; this can refresh and save the stored login. Other tokens are sent as given.
  * @param accessToken - Access token for authentication
  * @param config - Optional platform connection settings
  * @returns Configured Operator client
@@ -506,9 +506,11 @@ async function currentAccessToken(source: AccessTokenSource): Promise<string> {
         undefined,
         error,
       ),
-      isCLIError(error)
-        ? { code: error.code, suggestion: error.suggestion, context: error.context }
-        : {},
+      {
+        ...(isCLIError(error) && error.code ? { code: error.code } : {}),
+        ...(isCLIError(error) && error.suggestion ? { suggestion: error.suggestion } : {}),
+        causes: { authentication: error },
+      },
     );
   }
 }

@@ -1298,10 +1298,9 @@ export async function fetchLatestToken(
   return { accessToken: latest.accessToken, user: latest.user };
 }
 
-async function resolveLatestToken(request: TokenRequest): Promise<ResolvedToken> {
-  const { config, user, platformConfig, profile, rejectedToken } = request;
+function loginFailureFor(profile: string | undefined): LoginFailure {
   const loginArgs = profile ? ["--profile", profile] : [];
-  const loginFailure: LoginFailure = (code, message, suggestion) =>
+  return (code, message, suggestion) =>
     CLIError({
       code,
       message,
@@ -1309,6 +1308,19 @@ async function resolveLatestToken(request: TokenRequest): Promise<ResolvedToken>
       next: { command: "tailor", args: ["login", ...loginArgs, "--help"] },
       context: { profile: profile ?? null },
     });
+}
+
+function tokenExpiredError(loginFailure: LoginFailure): Error {
+  return loginFailure(
+    "AUTH_TOKEN_EXPIRED",
+    "Token expired.",
+    "Use the original login method (browser or --machine-user) to authenticate again on the same platform.",
+  );
+}
+
+async function resolveLatestToken(request: TokenRequest): Promise<ResolvedToken> {
+  const { config, user, platformConfig, profile, rejectedToken } = request;
+  const loginFailure = loginFailureFor(profile);
   const stored = await readStoredToken(config, user, platformConfig, loginFailure);
   if (!isDueForRefresh(stored, rejectedToken)) return useStoredToken(stored, platformConfig);
 
@@ -1342,13 +1354,7 @@ async function refreshStoredToken(
   if (!isDueForRefresh(stored, rejectedToken)) return useStoredToken(stored, platformConfig);
 
   const { userKey: storedUser, configUser: storedConfigUser, entry: userEntry, tokens } = stored;
-  if (!tokens.refreshToken) {
-    throw loginFailure(
-      "AUTH_TOKEN_EXPIRED",
-      "Token expired.",
-      "Use the original login method (browser or --machine-user) to authenticate again on the same platform.",
-    );
-  }
+  if (!tokens.refreshToken) throw tokenExpiredError(loginFailure);
 
   const client = initOAuth2Client(platformConfig);
   let resp;
@@ -1439,9 +1445,8 @@ type StoredTokenSourceInit = {
 };
 
 /**
- * Keep the token of a logged-in user usable for a long-running command. Renewal happens
- * only inside a request, and only the request that starts it waits for it while the
- * current token is still usable.
+ * Keep the token of a browser login usable for a long-running command. It renews only inside
+ * a request, never on a timer, so the process cannot exit before a new token is stored.
  * @param init - Token to start from and the login it belongs to
  * @returns Source for the Operator client
  */
@@ -1451,6 +1456,8 @@ function createStoredTokenSource(init: StoredTokenSourceInit): AccessTokenSource
   let renewalError: Error | undefined;
   let retryAt = 0;
   let renewedAt = -Infinity;
+  let forcedAt = -Infinity;
+  let lastRejected: string | undefined;
 
   const isUsable = () => !expiresWithin(expiresAt, MIN_USABLE_TOKEN_LIFETIME_MS);
   const isDue = () =>
@@ -1487,18 +1494,19 @@ function createStoredTokenSource(init: StoredTokenSourceInit): AccessTokenSource
 
   const source: AccessTokenSource = {
     async current() {
+      if (renewal && accessToken === lastRejected) await renewal;
       if (!isDue() || (renewal && isUsable())) return accessToken;
       await renew();
-      if (!isUsable()) {
-        throw renewalError ?? CLIError({ code: "AUTH_TOKEN_EXPIRED", message: "Token expired." });
-      }
+      if (!isUsable()) throw renewalError ?? tokenExpiredError(loginFailureFor(init.profile));
       return accessToken;
     },
     async replaceRejected(rejected) {
       if (accessToken !== rejected) return accessToken;
-      await renewal;
+      lastRejected = rejected;
+      while (renewal) await renewal;
       if (accessToken !== rejected) return accessToken;
-      if (Date.now() - renewedAt < FORCED_RENEWAL_INTERVAL_MS) return undefined;
+      if (Date.now() - Math.max(renewedAt, forcedAt) < FORCED_RENEWAL_INTERVAL_MS) return undefined;
+      forcedAt = Date.now();
       await renew(rejected);
       return accessToken === rejected ? undefined : accessToken;
     },

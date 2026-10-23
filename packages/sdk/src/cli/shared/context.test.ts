@@ -1632,7 +1632,8 @@ describe("loadAccessToken", () => {
         },
         {
           login: "a stored user without a refresh token",
-          setup: () => writeFileUser({ access_token: "env-token", token_expires_at: futureDate }),
+          setup: () =>
+            writeFileUser({ access_token: "stored-token", token_expires_at: futureDate }),
         },
       ])("gives $login no source", async ({ setup }) => {
         setup();
@@ -1648,6 +1649,22 @@ describe("loadAccessToken", () => {
         await expect(source.current()).resolves.toBe("issued");
         advance(minutes(6));
         await expect(source.current()).resolves.toBe("access-1");
+        expect(findAccessTokenSource("access-1")).toBe(source);
+      });
+
+      test("keeps the issued token when the renewal fails because the login was removed", async () => {
+        const source = await startSource();
+        writePlatformConfig({
+          version: 3,
+          min_sdk_version: "2.0.0",
+          users: {},
+          profiles: {},
+          current_user: null,
+        });
+
+        advance(minutes(56));
+
+        await expect(source.current()).resolves.toBe("issued");
       });
 
       test("keeps the issued token and waits 30 seconds after a failed renewal", async () => {
@@ -1720,6 +1737,26 @@ describe("loadAccessToken", () => {
 
         await expect(source.replaceRejected("issued")).resolves.toBe("access-1");
         await expect(source.replaceRejected("access-1")).resolves.toBeUndefined();
+        expect(clientMocks.refreshToken).toHaveBeenCalledTimes(1);
+      });
+
+      test("does not retry a failed refresh of a rejected token within a minute", async () => {
+        const source = await startSource();
+        clientMocks.refreshToken.mockRejectedValue(new Error("network down"));
+
+        await expect(source.replaceRejected("issued")).resolves.toBeUndefined();
+        await expect(source.replaceRejected("issued")).resolves.toBeUndefined();
+        expect(clientMocks.refreshToken).toHaveBeenCalledTimes(1);
+      });
+
+      test("waits for a renewal in progress instead of refreshing the rejected token again", async () => {
+        const source = await startSource();
+        rotateRefreshTokens("refresh-0");
+
+        advance(minutes(56));
+        const tokens = await Promise.all([source.current(), source.replaceRejected("issued")]);
+
+        expect(tokens).toEqual(["access-1", "access-1"]);
         expect(clientMocks.refreshToken).toHaveBeenCalledTimes(1);
       });
     });

@@ -698,8 +698,9 @@ describe("access token renewal in the operator client", () => {
 
   test("reports a token its source cannot provide as unauthenticated", async () => {
     const source = sourceOf("unused");
+    const next = { command: "tailor", args: ["login", "--help"] };
     vi.mocked(source.current).mockRejectedValue(
-      CLIError({ code: "AUTH_TOKEN_REFRESH_FAILED", message: "Failed to refresh token." }),
+      CLIError({ code: "AUTH_TOKEN_REFRESH_FAILED", message: "Failed to refresh token.", next }),
     );
     registerAccessTokenSource("issued-6", source);
     const server = vi.fn<Next>();
@@ -707,7 +708,11 @@ describe("access token renewal in the operator client", () => {
     const error = await callThroughClient("issued-6", server).catch((error: unknown) => error);
 
     expect(error).toMatchObject({ code: Code.Unauthenticated });
-    expect(errorToJson(error).error).toMatchObject({ code: "AUTH_TOKEN_REFRESH_FAILED" });
+    expect(errorToJson(error).error).toMatchObject({
+      code: "AUTH_TOKEN_REFRESH_FAILED",
+      suggestion: expect.stringContaining("tailor auth status"),
+      context: { authentication: { code: "AUTH_TOKEN_REFRESH_FAILED", next } },
+    });
     expect(server).not.toHaveBeenCalled();
   });
 
