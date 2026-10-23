@@ -864,6 +864,8 @@ export interface MigrationStepsWorkflowResult {
   failedSteps: string[];
   /** Whether any step may have committed: a job succeeded, or the outcome could not be observed. */
   stepsMayHaveCommitted: boolean;
+  /** Whether the execution was observed in a final state, so no job of the run can still be writing. */
+  runEnded?: boolean;
 }
 
 interface StepOutcome {
@@ -1229,6 +1231,7 @@ async function summarizeSteps(
     stepsMayHaveCommitted: execution.jobExecutions.some(
       (job) => job.status === WorkflowJobExecution_Status.SUCCESS,
     ),
+    runEnded: true,
   };
   if (execution.status === WorkflowExecution_Status.SUCCESS) return { success: true, ...base };
   const error =
@@ -1267,6 +1270,7 @@ async function waitForSteps(
       completedSteps: [],
       failedSteps: [],
       stepsMayHaveCommitted: true,
+      runEnded: false,
     };
   }
 }
