@@ -1,9 +1,5 @@
 import { db, type TailorAnyDBType } from "#/configure/services/tailordb/index";
-import {
-  getPluginGenerationDependencies,
-  getRawPluginTableName,
-  hasGenerationHooks,
-} from "#/plugin/guards";
+import { getRawPluginTableName, hasGenerationHooks } from "#/plugin/guards";
 import { assertDefined } from "#/utils/assert";
 import type {
   TailorTypePermission,
@@ -15,7 +11,6 @@ import type {
   TypeValidateFn,
 } from "#/configure/services/tailordb/types";
 import type {
-  DependencyKind,
   Plugin,
   PluginAttachment,
   PluginGeneratedExecutor,
@@ -156,9 +151,6 @@ export class PluginManager {
   private processedResolverNamespaces = new Set<string>();
   private namespaceGeneratedTableKeys: Set<string> = new Set();
   private namespaceGeneratedExecutorKeys: Set<string> = new Set();
-
-  /** Generated plugin executor file paths */
-  private pluginExecutorFiles: string[] = [];
 
   constructor(plugins: Plugin[] = []) {
     for (const plugin of plugins) {
@@ -434,24 +426,6 @@ export class PluginManager {
   }
 
   /**
-   * Get plugins that have onNamespaceLoaded method
-   * @returns Array of plugin IDs that support namespace processing
-   */
-  getNamespacePluginIds(): string[] {
-    return Array.from(this.plugins.entries())
-      .filter(([, plugin]) => plugin.onNamespaceLoaded !== undefined)
-      .map(([id]) => id);
-  }
-
-  /**
-   * Get the count of registered plugins
-   * @returns Number of registered plugins
-   */
-  get pluginCount(): number {
-    return this.plugins.size;
-  }
-
-  /**
    * Get a plugin by its ID
    * @param pluginId - The plugin ID to look up
    * @returns The plugin instance, or undefined if not found
@@ -478,14 +452,6 @@ export class PluginManager {
   }
 
   /**
-   * Get all plugin-generated executors
-   * @returns Array of plugin-generated executor info
-   */
-  getPluginGeneratedExecutors(): ReadonlyArray<PluginExecutorInfo> {
-    return this.generatedExecutors;
-  }
-
-  /**
    * Get all plugin-generated executors with import paths
    * @returns Array of plugin-generated executor info with import paths
    */
@@ -505,15 +471,6 @@ export class PluginManager {
   }
 
   /**
-   * Get plugin-generated executors for a specific namespace
-   * @param namespace - The namespace to filter by
-   * @returns Array of plugin-generated executor info for the namespace
-   */
-  getPluginGeneratedExecutorsForNamespace(namespace: string): ReadonlyArray<PluginExecutorInfo> {
-    return this.generatedExecutors.filter((info) => info.namespace === namespace);
-  }
-
-  /**
    * Get plugins that have any generation-time hooks.
    * @returns Array of plugins with generation hooks
    */
@@ -522,18 +479,7 @@ export class PluginManager {
   }
 
   /**
-   * Get the generation-time dependencies for a specific plugin.
-   * @param pluginId - The plugin ID to look up
-   * @returns Set of dependency kinds, or empty set if plugin not found
-   */
-  getPluginGenerationDependencies(pluginId: string): Set<DependencyKind> {
-    const plugin = this.plugins.get(pluginId);
-    if (!plugin) return new Set();
-    return getPluginGenerationDependencies(plugin);
-  }
-
-  /**
-   * Generate plugin files (tables and executors) and store the executor file paths.
+   * Generate plugin files (tables and executors).
    * @param params - Parameters for file generation
    * @returns Generated executor file paths
    */
@@ -545,15 +491,13 @@ export class PluginManager {
 
     // Generate executor files
     const pluginExecutors = this.getPluginGeneratedExecutorsWithImportPath();
-    this.pluginExecutorFiles = executorGenerator(
+    return executorGenerator(
       pluginExecutors,
       outputDir,
       tableGenerationResult,
       sourceTableInfoMap,
       configPath,
     );
-
-    return this.pluginExecutorFiles;
   }
 
   /**

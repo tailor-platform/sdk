@@ -9,16 +9,13 @@ import {
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
   DB_TYPES_FILE_NAME,
-  INITIAL_SCHEMA_NUMBER,
 } from "./snapshot";
 import {
-  isSchemaError,
   sanitizeMigrationLabel,
   parseMigrationLabelNumber,
   executionIdToLabel,
   parseExecutionLabel,
   MAX_LABEL_LENGTH,
-  SCHEMA_ERROR_PATTERNS,
 } from "./types";
 
 describe("migration constants", () => {
@@ -42,22 +39,11 @@ describe("migration constants", () => {
     expect(MIGRATION_NUMBER_PATTERN.test(value)).toBe(expected);
   });
 
-  test("SCHEMA_ERROR_PATTERNS should contain expected patterns", () => {
-    expect(SCHEMA_ERROR_PATTERNS).toContain("failed to fetch schema");
-    expect(SCHEMA_ERROR_PATTERNS).toContain("sqlaccess error");
-    expect(SCHEMA_ERROR_PATTERNS).toContain("schema not found");
-    expect(SCHEMA_ERROR_PATTERNS).toContain("invalid schema");
-  });
-
   test("file names should be correct for directory structure", () => {
     expect(SCHEMA_FILE_NAME).toBe("schema.json");
     expect(DIFF_FILE_NAME).toBe("diff.json");
     expect(MIGRATE_FILE_NAME).toBe("migrate.ts");
     expect(DB_TYPES_FILE_NAME).toBe("db.ts");
-  });
-
-  test("INITIAL_SCHEMA_NUMBER should be 0", () => {
-    expect(INITIAL_SCHEMA_NUMBER).toBe(0);
   });
 });
 
@@ -153,27 +139,6 @@ describe("getMigrationFilePath", () => {
     [1, "db", "/migrations/tailordb/0001/db.ts"],
   ] as const)("returns correct path for number %i, kind %s", (number, kind, expected) => {
     expect(getMigrationFilePath("/migrations/tailordb", number, kind)).toBe(expected);
-  });
-});
-
-describe("isSchemaError", () => {
-  test.each([
-    ["failed to fetch schema", true],
-    ["sqlaccess error: connection failed", true],
-    ["schema not found in database", true],
-    ["invalid schema structure", true],
-    ["FAILED TO FETCH SCHEMA", true],
-    ["SQLAccess Error", true],
-    ["Schema Not Found", true],
-    ["Invalid SCHEMA", true],
-    ["network timeout", false],
-    ["authentication failed", false],
-    ["permission denied", false],
-    ["", false],
-    ["Error: failed to fetch schema for type User", true],
-    ["Database sqlaccess error occurred during migration", true],
-  ])("isSchemaError(%j) is %s", (message, expected) => {
-    expect(isSchemaError(message)).toBe(expected);
   });
 });
 

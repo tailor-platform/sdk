@@ -2,11 +2,7 @@
 //
 // These live outside plugin/types.ts (a pure type module) because they are
 // runtime functions. The types they operate on are imported type-only.
-import type {
-  DependencyKind,
-  PluginGeneratedExecutor,
-  PluginGeneratedExecutorWithFile,
-} from "./types";
+import type { PluginGeneratedExecutor, PluginGeneratedExecutorWithFile } from "./types";
 
 /**
  * Reads a table name without assuming plugin output is a valid table object.
@@ -17,32 +13,6 @@ export function getRawPluginTableName(table: unknown): string | undefined {
   const name =
     typeof table === "object" && table !== null && "name" in table ? table.name : undefined;
   return typeof name === "string" ? name : undefined;
-}
-
-/**
- * Collects the generation-time dependency kinds a plugin requires.
- * @param plugin - The plugin object to inspect.
- * @param plugin.onTailorDBReady - Hook for TailorDB readiness.
- * @param plugin.onResolverReady - Hook for resolver readiness.
- * @param plugin.onExecutorReady - Hook for executor readiness.
- * @returns Set of dependency kinds required by the plugin.
- */
-export function getPluginGenerationDependencies(plugin: {
-  onTailorDBReady?: unknown;
-  onResolverReady?: unknown;
-  onExecutorReady?: unknown;
-}): Set<DependencyKind> {
-  const deps = new Set<DependencyKind>();
-  if (plugin.onTailorDBReady) {
-    deps.add("tailordb");
-  }
-  if (plugin.onResolverReady) {
-    deps.add("resolver");
-  }
-  if (plugin.onExecutorReady) {
-    deps.add("executor");
-  }
-  return deps;
 }
 
 /**

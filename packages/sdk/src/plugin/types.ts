@@ -4,8 +4,6 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-export type DependencyKind = "tailordb" | "resolver" | "executor";
-
 import type {
   PluginAttachment,
   TailorAnyDBField,
