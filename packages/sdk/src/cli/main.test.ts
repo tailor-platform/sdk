@@ -37,6 +37,12 @@ describe("CLI error verbosity", () => {
     { name: "negated flag", extraEnv: {}, args: ["--verbose", "--no-verbose"], stack: false },
     { name: "runner", extraEnv: { RUNNER_DEBUG: "1" }, args: [], stack: true },
     { name: "debug", extraEnv: { DEBUG: "true" }, args: [], stack: true },
+    {
+      name: "negated flag over runner and debug",
+      extraEnv: { RUNNER_DEBUG: "1", DEBUG: "true" },
+      args: ["--no-verbose"],
+      stack: false,
+    },
   ])(
     "preserves JSON failure context with $name verbosity",
     ({ extraEnv, args, stack }) => {

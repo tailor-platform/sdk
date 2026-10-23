@@ -283,7 +283,8 @@ export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource
  * @param argv - Command-line arguments after the executable and script path
  */
 export function resolveEarlyFailure(error: unknown, argv: readonly string[]): void {
-  if (globalFlagValue(argv, VERBOSE_ARG_NAME) === true) logger.verbose = true;
+  const verbose = globalFlagValue(argv, VERBOSE_ARG_NAME);
+  if (typeof verbose === "boolean") logger.verbose = verbose;
   const source = requestedJsonModeSource(argv);
   if (!source) return;
   logger.setJsonMode(true, source);
@@ -348,8 +349,8 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       ...(options.verboseAlias === undefined ? {} : { alias: options.verboseAlias }),
       description: "Enable verbose logging",
       negation: true,
-      effect: (value) => {
-        logger.verbose = value;
+      effect: (value, { args }) => {
+        logger.verbose = args.$source?.(VERBOSE_ARG_NAME) === "cli" ? value : undefined;
       },
     }),
     [JSON_ARG_NAME]: arg(

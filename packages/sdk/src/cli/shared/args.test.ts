@@ -372,24 +372,29 @@ describe("resolveEarlyFailure", () => {
   });
 
   test.each([
-    { argv: ["--json", "--verbose"], verbose: true },
-    { argv: ["--verbose"], verbose: true },
-    { argv: ["--json", "--verbose=false"], verbose: false },
-    { argv: ["--json", "--verbose", "--no-verbose"], verbose: false },
-    { argv: ["--json"], verbose: false },
-  ])("applies verbose output from $argv", ({ argv, verbose }) => {
-    vi.stubEnv("DEBUG", undefined);
-    vi.stubEnv("RUNNER_DEBUG", undefined);
-    const previous = logger.verbose;
-    logger.verbose = false;
-    try {
-      resolve(new Error("Unknown flags: bogus"), argv);
-      expect(logger.verbose).toBe(verbose);
-    } finally {
-      logger.verbose = previous;
-      vi.unstubAllEnvs();
-    }
-  });
+    { runnerDebug: undefined, argv: ["--json", "--verbose"], verbose: true },
+    { runnerDebug: undefined, argv: ["--verbose"], verbose: true },
+    { runnerDebug: undefined, argv: ["--json", "--verbose=false"], verbose: false },
+    { runnerDebug: undefined, argv: ["--json", "--verbose", "--no-verbose"], verbose: false },
+    { runnerDebug: undefined, argv: ["--json"], verbose: false },
+    { runnerDebug: "1", argv: ["--json"], verbose: true },
+    { runnerDebug: "1", argv: ["--json", "--no-verbose"], verbose: false },
+    { runnerDebug: "1", argv: ["--json", "--verbose=false"], verbose: false },
+  ])(
+    "applies verbose output from $argv with RUNNER_DEBUG=$runnerDebug",
+    ({ runnerDebug, argv, verbose }) => {
+      vi.stubEnv("DEBUG", undefined);
+      vi.stubEnv("RUNNER_DEBUG", runnerDebug);
+      logger.verbose = undefined;
+      try {
+        resolve(new Error("Unknown flags: bogus"), argv);
+        expect(logger.verbose).toBe(verbose);
+      } finally {
+        logger.verbose = undefined;
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 });
 
 describe("createCommonArgs effects", () => {
@@ -418,6 +423,8 @@ describe("createCommonArgs effects", () => {
       argv: ["--verbose", "--no-verbose"],
       enabled: false,
     },
+    { runnerDebug: "1", debug: "true", argv: ["--no-verbose"], enabled: false },
+    { runnerDebug: "1", debug: "true", argv: ["--verbose=false"], enabled: false },
     { runnerDebug: "true", debug: "false", argv: [], enabled: false },
   ])(
     "resolves verbose output from $runnerDebug / $debug / $argv",

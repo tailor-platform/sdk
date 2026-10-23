@@ -98,7 +98,8 @@ excluded from that list.
 Use `--verbose` to include debug diagnostics and error stack traces. `DEBUG=true` or
 `RUNNER_DEBUG=1` also enables verbose output, including stacks in JSON errors. GitHub Actions
 sets `RUNNER_DEBUG=1` when debug logging is enabled, so the same command automatically includes
-these details in a debug run. These settings do not enable JSON output; pass `--json` separately.
+these details in a debug run. `--no-verbose` turns verbose output off even when these are set.
+These settings do not enable JSON output; pass `--json` separately.
 
 Capture the original failure's stderr and exit code before retrying. Failures before the CLI starts,
 a rejected `--json` or `TAILOR_JSON_OUTPUT` value, argument errors in the bundled CLI plugins, and
