@@ -409,6 +409,7 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
   }
 
   // Check that migrations > INITIAL_SCHEMA_NUMBER have diff files
+  const lastDiffNumber = Math.max(INITIAL_SCHEMA_NUMBER, ...diffFiles);
   for (const { number, fileTypes } of artifacts) {
     if (number === INITIAL_SCHEMA_NUMBER || fileTypes.includes("diff")) continue;
     if (fileTypes.includes("schema")) {
@@ -419,11 +420,15 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
       });
       continue;
     }
+    const label = formatMigrationNumber(number);
     const fileNames = fileTypes.map((type) => MIGRATION_FILE_NAMES[type]).join(", ");
     errors.push({
       type: "missing_diff",
-      message: `Migration ${formatMigrationNumber(number)} has ${fileNames} but no ${DIFF_FILE_NAME}`,
-      suggestion: `Delete each migration directory that has no ${DIFF_FILE_NAME}, or restore its ${DIFF_FILE_NAME}.`,
+      message: `Migration ${label} has ${fileNames} but no ${DIFF_FILE_NAME}`,
+      suggestion:
+        number > lastDiffNumber
+          ? `Delete migration directory ${label} if it is a leftover, or restore its ${DIFF_FILE_NAME}.`
+          : `Restore ${DIFF_FILE_NAME} in migration directory ${label}.`,
       migrationNumber: number,
     });
   }

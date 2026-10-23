@@ -18,9 +18,6 @@ import {
 } from "./test-helpers/snapshot-test";
 import type { MigrationDiff } from "./diff-calculator";
 
-const ORPHAN_ARTIFACTS_SUGGESTION =
-  "Delete each migration directory that has no diff.json, or restore its diff.json.";
-
 const TEST_MIGRATIONS_BASE = path.join(
   __dirname,
   "__test_migrations__",
@@ -712,21 +709,50 @@ describe("snapshot", () => {
     });
 
     test.each([
-      { position: "last", diffNumbers: [1, 2] },
-      { position: "middle", diffNumbers: [1, 2, 4] },
-    ])("detects a $position migration that has migrate.ts but no diff.json", ({ diffNumbers }) => {
-      writeInitialSchema(testDir, {});
-      for (const diffNumber of diffNumbers) writeDiff(testDir, diffNumber, []);
-      fs.mkdirSync(path.join(testDir, "0003"));
-      fs.writeFileSync(path.join(testDir, "0003", "migrate.ts"), "export async function main() {}");
+      {
+        position: "last",
+        diffNumbers: [1, 2],
+        suggestion:
+          "Delete migration directory 0003 if it is a leftover, or restore its diff.json.",
+      },
+      {
+        position: "middle",
+        diffNumbers: [1, 2, 4],
+        suggestion: "Restore diff.json in migration directory 0003.",
+      },
+    ])(
+      "detects a $position migration that has migrate.ts but no diff.json",
+      ({ diffNumbers, suggestion }) => {
+        writeInitialSchema(testDir, {});
+        for (const diffNumber of diffNumbers) writeDiff(testDir, diffNumber, []);
+        fs.mkdirSync(path.join(testDir, "0003"));
+        fs.writeFileSync(
+          path.join(testDir, "0003", "migrate.ts"),
+          "export async function main() {}",
+        );
+
+        const errors = validateMigrationFiles(testDir);
+        expect(errors).toEqual([
+          {
+            type: "missing_diff",
+            message: "Migration 0003 has migrate.ts but no diff.json",
+            suggestion,
+            migrationNumber: 3,
+          },
+        ]);
+      },
+    );
+
+    test("detects a missing initial schema when 0000 holds only generated files", () => {
+      fs.mkdirSync(path.join(testDir, "0000"));
+      fs.writeFileSync(path.join(testDir, "0000", "migrate.ts"), "export async function main() {}");
 
       const errors = validateMigrationFiles(testDir);
       expect(errors).toEqual([
         {
-          type: "missing_diff",
-          message: "Migration 0003 has migrate.ts but no diff.json",
-          suggestion: ORPHAN_ARTIFACTS_SUGGESTION,
-          migrationNumber: 3,
+          type: "missing_schema",
+          message: "Initial schema snapshot (0000/schema.json) is missing",
+          migrationNumber: INITIAL_SCHEMA_NUMBER,
         },
       ]);
     });
@@ -788,7 +814,8 @@ describe("snapshot", () => {
       expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(
         expect.objectContaining({
           code: "MIGRATION_FILES_INVALID",
-          suggestion: ORPHAN_ARTIFACTS_SUGGESTION,
+          suggestion:
+            "Delete migration directory 0001 if it is a leftover, or restore its diff.json.",
         }),
       );
     });
