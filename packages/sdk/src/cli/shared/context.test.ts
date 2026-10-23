@@ -1484,6 +1484,26 @@ describe("loadAccessToken", () => {
       expect(clientMocks.refreshToken).not.toHaveBeenCalled();
     });
 
+    test("waits for the lock again when the current token expires while waiting for it", async () => {
+      writeFileUser({
+        access_token: "expiring-access",
+        refresh_token: "refresh-0",
+        token_expires_at: new Date(Date.now() + 1000).toISOString(),
+      });
+      writeHeldConfigLock(lockPath);
+      setTimeout(() => {
+        writeFileUser({
+          access_token: "fresh-access",
+          refresh_token: "refresh-9",
+          token_expires_at: futureDate,
+        });
+        fs.rmSync(lockPath);
+      }, 2500);
+
+      await expect(loadAccessToken()).resolves.toBe("fresh-access");
+      expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+    });
+
     test("warns once about a keyring that rejects the refreshed tokens", async () => {
       keyringSetPasswordFailure.error = new Error("keyring denied");
       writePlatformConfig({

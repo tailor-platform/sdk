@@ -2,14 +2,16 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { isConfigLockTimeout, withConfigLock } from "./config-lock";
 import { errorToJson } from "./error-json";
+import { logger } from "./logger";
 import { createConcurrencyProbe } from "./test-helpers/concurrency-probe";
-import { writeHeldConfigLock } from "./test-helpers/config-lock";
+import { processStartedAt, writeHeldConfigLock } from "./test-helpers/config-lock";
 import { tempCwd } from "./test-helpers/temp-cwd";
 
 const THREE_MINUTES_MS = 3 * 60 * 1000;
+const ELEVEN_MINUTES_MS = 11 * 60 * 1000;
 
 function exitedPid(): number {
   return spawnSync(process.execPath, ["-e", ""]).pid;
@@ -94,17 +96,44 @@ describe("withConfigLock", () => {
   test("reclaims a lock an earlier process with this process's pid left behind", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
-    writeHeldConfigLock(lockPath, { pid: process.pid });
+    writeHeldConfigLock(lockPath, {
+      pid: process.pid,
+      processStartedAt: processStartedAt() - 60 * 60 * 1000,
+    });
 
     await expect(
       withConfigLock(lockPath, async () => "entered", { timeoutMs: 1000 }),
     ).resolves.toBe("entered");
   });
 
-  test("reclaims an old lock even when its pid is alive", async () => {
+  test("waits for a lock another thread of this process holds", async () => {
+    using tempDir = tempCwd("tailor-config-lock-");
+    const lockPath = path.join(tempDir.dir, "config.yaml.lock");
+    writeHeldConfigLock(lockPath, {
+      pid: process.pid,
+      processStartedAt: processStartedAt(),
+      instanceId: "other-thread",
+    });
+
+    await expect(
+      withConfigLock(lockPath, async () => "entered", { timeoutMs: 100 }),
+    ).rejects.toMatchObject({ code: "CONFIG_LOCK_TIMEOUT" });
+  });
+
+  test("keeps a lock a live process on this host has held for minutes", async () => {
     using tempDir = tempCwd("tailor-config-lock-");
     const lockPath = path.join(tempDir.dir, "config.yaml.lock");
     writeHeldConfigLock(lockPath, { createdAt: Date.now() - THREE_MINUTES_MS });
+
+    await expect(
+      withConfigLock(lockPath, async () => "entered", { timeoutMs: 100 }),
+    ).rejects.toMatchObject({ code: "CONFIG_LOCK_TIMEOUT" });
+  });
+
+  test("reclaims a lock a live process on this host has held for over ten minutes", async () => {
+    using tempDir = tempCwd("tailor-config-lock-");
+    const lockPath = path.join(tempDir.dir, "config.yaml.lock");
+    writeHeldConfigLock(lockPath, { createdAt: Date.now() - ELEVEN_MINUTES_MS });
 
     await expect(
       withConfigLock(lockPath, async () => "entered", { timeoutMs: 1000 }),
@@ -178,6 +207,43 @@ describe("withConfigLock", () => {
       withConfigLock(lockPath, async () => "entered", { timeoutMs: 1000 }),
     ).resolves.toBe("entered");
     expect(fs.readdirSync(tempDir.dir)).toEqual([]);
+  });
+
+  test("stamps the lock with the time it was taken", async () => {
+    using tempDir = tempCwd("tailor-config-lock-");
+    const lockPath = path.join(tempDir.dir, "config.yaml.lock");
+    writeHeldConfigLock(lockPath);
+    setTimeout(() => fs.rmSync(lockPath), 200);
+    const startedAt = Date.now();
+
+    const createdAt = await withConfigLock(
+      lockPath,
+      async () =>
+        (JSON.parse(fs.readFileSync(lockPath, "utf-8")) as { createdAt: number }).createdAt,
+    );
+
+    expect(createdAt - startedAt).toBeGreaterThanOrEqual(150);
+  });
+
+  test("says once that it is waiting for another command", async () => {
+    using tempDir = tempCwd("tailor-config-lock-");
+    const lockPath = path.join(tempDir.dir, "config.yaml.lock");
+    writeHeldConfigLock(lockPath);
+    using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    vi.useFakeTimers();
+    try {
+      const entered = withConfigLock(lockPath, async () => "entered");
+      await vi.advanceTimersByTimeAsync(6_000);
+      fs.rmSync(lockPath);
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(entered).resolves.toBe("entered");
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(
+      infoSpy.mock.calls.filter(([message]) => String(message).startsWith("Waiting for another")),
+    ).toHaveLength(1);
   });
 
   test("leaves a lock that another process took over in place on release", async () => {

@@ -39,7 +39,7 @@ function chmodIfDifferent(target: string, mode: number): void {
  */
 export function writeSecretFile(filePath: string, content: string | Buffer): void {
   ensureSecretDir(path.dirname(filePath));
-  const target = resolveExistingPath(filePath);
+  const target = resolveWriteTarget(filePath);
   const tempPath = `${target}.${crypto.randomUUID()}.tmp`;
   try {
     fs.writeFileSync(tempPath, content, { mode: FILE_MODE, flag: "wx" });
@@ -51,17 +51,22 @@ export function writeSecretFile(filePath: string, content: string | Buffer): voi
   }
 }
 
-function resolveExistingPath(filePath: string): string {
-  try {
-    return fs.realpathSync(filePath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+const MAX_SYMLINK_DEPTH = 40;
+
+function resolveWriteTarget(filePath: string): string {
+  let current = filePath;
+  for (let depth = 0; depth < MAX_SYMLINK_DEPTH; depth++) {
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return current;
+      throw error;
+    }
+    if (!stat.isSymbolicLink()) return current;
+    current = path.resolve(fs.realpathSync(path.dirname(current)), fs.readlinkSync(current));
   }
-  try {
-    return path.resolve(path.dirname(filePath), fs.readlinkSync(filePath));
-  } catch {
-    return filePath;
-  }
+  throw new Error(`Too many levels of symbolic links: ${filePath}`);
 }
 
 const WINDOWS_RENAME_RETRY_CODES: ReadonlySet<string> = new Set(["EACCES", "EBUSY", "EPERM"]);

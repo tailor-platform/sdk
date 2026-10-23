@@ -84,6 +84,22 @@ describe("writeSecretFile", () => {
     expect(fs.readFileSync(realTarget, "utf-8")).toBe("new");
   });
 
+  test.skipIf(isWindows)("follows a chain of symlinks whose last target is missing", () => {
+    using tempDir = tempCwd("tailor-secret-file-");
+    const realTarget = path.join(tempDir.dir, "dotfiles", "config.yaml");
+    fs.mkdirSync(path.dirname(realTarget));
+    const middle = path.join(tempDir.dir, "middle.yaml");
+    fs.symlinkSync(realTarget, middle);
+    const link = path.join(tempDir.dir, "config.yaml");
+    fs.symlinkSync("middle.yaml", link);
+
+    writeSecretFile(link, "new");
+
+    expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(fs.lstatSync(middle).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(realTarget, "utf-8")).toBe("new");
+  });
+
   test.skipIf(isWindows)("tightens permissions on existing world-readable directories", () => {
     using tempDir = tempCwd("tailor-secret-file-");
     const dir = path.join(tempDir.dir, "loose");

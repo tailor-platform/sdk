@@ -1284,6 +1284,7 @@ export async function fetchLatestToken(
     );
   } catch (error) {
     if (expired || !isConfigLockTimeout(error)) throw error;
+    if (isExpired(stored)) return await fetchLatestToken(config, user, platformConfig, profile);
     logger.debug("Another tailor command is refreshing the token; using the current token.");
     return useStoredToken(stored, platformConfig);
   }
