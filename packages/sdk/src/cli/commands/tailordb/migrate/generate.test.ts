@@ -1134,7 +1134,7 @@ describe("tailordb migration generate declined confirmations", () => {
             db: Object.fromEntries(
               state.namespaces.map(({ namespace, migrationsDir }) => [
                 namespace,
-                { migration: { directory: migrationsDir } },
+                { files: [], migration: { directory: migrationsDir } },
               ]),
             ),
           },
@@ -1228,7 +1228,7 @@ describe("tailordb migration generate JSON output", () => {
             db: Object.fromEntries(
               state.namespaces.map(({ namespace, migrationsDir }) => [
                 namespace,
-                { migration: { directory: migrationsDir } },
+                { files: [], migration: { directory: migrationsDir } },
               ]),
             ),
           },
