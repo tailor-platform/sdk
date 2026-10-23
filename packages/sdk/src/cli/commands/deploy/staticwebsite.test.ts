@@ -5,7 +5,11 @@ import {
 } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { createChangeSet } from "./change-set";
-import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
+import {
+  applyStaticWebsite,
+  assertStaticWebsiteDeletesNotOffered,
+  planStaticWebsite,
+} from "./staticwebsite";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -41,6 +45,7 @@ type MockTransfer = {
   status: CustomDomainTransferStatus;
   targetWorkspaceId: string;
   sourceWorkspaceId?: string;
+  sourceStaticWebsiteName?: string;
   requestPurgedAt?: boolean;
 };
 
@@ -78,7 +83,7 @@ function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = [
     status: t.status,
     sourceWorkspaceId: t.sourceWorkspaceId ?? workspaceId,
     targetWorkspaceId: t.targetWorkspaceId,
-    sourceStaticWebsiteName: "site-a",
+    sourceStaticWebsiteName: t.sourceStaticWebsiteName ?? "site-a",
     targetStaticWebsiteName: "",
     requestPurgedAt: t.requestPurgedAt === false ? undefined : {},
   });
@@ -697,9 +702,9 @@ describe("planStaticWebsite custom domain transfers", () => {
     ]);
   });
 
-  test("a site whose domain is still offered cannot be deleted", async () => {
-    // The site is dropped from config, so its domains are never listed; the
-    // offer names its source site, which is how this is caught at all.
+  test("a site dropped from config is still checked for open offers", async () => {
+    // Its domains are never listed, so the offer naming its source site is the
+    // only thing that catches this.
     const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
       {
         domain: "example.com",
@@ -712,10 +717,39 @@ describe("planStaticWebsite custom domain transfers", () => {
       id: "test-id",
       staticWebsiteServices: [],
     } as unknown as Application;
+    const result = await planStaticWebsite(createContext(client, app));
 
-    await expect(planStaticWebsite(createContext(client, app))).rejects.toMatchObject({
-      code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT",
-    });
+    expect(result.changeSet.deletes).toHaveLength(1);
+    expect(() => assertStaticWebsiteDeletesNotOffered(result)).toThrow(
+      expect.objectContaining({ code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT" }),
+    );
+  });
+
+  test("an offer from another site does not block this one's deletion", async () => {
+    const client = createMockClient(
+      [
+        { name: "site-a", label: appName, customDomains: [{ domain: "a.example.com" }] },
+        { name: "site-b", label: appName, customDomains: [{ domain: "b.example.com" }] },
+      ],
+      [
+        {
+          domain: "b.example.com",
+          status: CustomDomainTransferStatus.PENDING,
+          targetWorkspaceId: target,
+          sourceStaticWebsiteName: "site-b",
+        },
+      ],
+    );
+    // Only site-b is declared, so site-a is the one being deleted.
+    const app = {
+      name: appName,
+      id: "test-id",
+      staticWebsiteServices: [{ name: "site-b", customDomains: ["b.example.com"] }],
+    } as unknown as Application;
+    const result = await planStaticWebsite(createContext(client, app));
+
+    expect(result.changeSet.deletes.map((d) => d.name)).toEqual(["site-a"]);
+    expect(() => assertStaticWebsiteDeletesNotOffered(result)).not.toThrow();
   });
 
   test("tailor remove refuses a site whose domain is still offered", async () => {
@@ -727,10 +761,11 @@ describe("planStaticWebsite custom domain transfers", () => {
       },
     ]);
     const app = createMockApplication({ customDomains: ["example.com"] });
+    const result = await planStaticWebsite(createContext(client, app, true));
 
-    await expect(planStaticWebsite(createContext(client, app, true))).rejects.toMatchObject({
-      code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT",
-    });
+    expect(() => assertStaticWebsiteDeletesNotOffered(result)).toThrow(
+      expect.objectContaining({ code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT" }),
+    );
   });
 
   test("tailor remove deletes a site with no live offer", async () => {
@@ -739,7 +774,7 @@ describe("planStaticWebsite custom domain transfers", () => {
     const result = await planStaticWebsite(createContext(client, app, true));
 
     expect(result.changeSet.deletes).toHaveLength(1);
-    expect(result.customDomainTransferChangeSet.deletes).toHaveLength(0);
+    expect(() => assertStaticWebsiteDeletesNotOffered(result)).not.toThrow();
   });
 });
 

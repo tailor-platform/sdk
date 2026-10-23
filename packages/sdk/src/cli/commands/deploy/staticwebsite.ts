@@ -197,6 +197,46 @@ function describePreviousTransfer(transfer: CustomDomainTransfer): string {
   return `a previous transfer to workspace ${transfer.targetWorkspaceId} ${word}`;
 }
 
+/** The planned static website deletions and the offers this workspace has open. */
+export interface StaticWebsiteDeleteCheck {
+  changeSet: { deletes: ReadonlyArray<{ name: string }> };
+  customDomainLiveOffers: ReadonlyMap<string, CustomDomainTransfer>;
+}
+
+/**
+ * Reject deleting a static website while one of its custom domains is offered.
+ *
+ * An offer names the site it came from, so this needs no extra read — which is
+ * what makes it work for a site dropped from the config, whose domains are
+ * never listed, and under `tailor remove`, where none are.
+ *
+ * Call this only once the planned deletions are final: `deploy` drops deletes
+ * that another config in the same run still claims, and a site moved between
+ * configs must not be refused over an offer it keeps.
+ * @param plan - Planned static website changes to check
+ */
+export function assertStaticWebsiteDeletesNotOffered(plan: StaticWebsiteDeleteCheck): void {
+  const offers = [...plan.customDomainLiveOffers.values()];
+  for (const del of plan.changeSet.deletes) {
+    const offer = offers.find((transfer) => transfer.sourceStaticWebsiteName === del.name);
+    if (offer) {
+      throw CLIError({
+        code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT",
+        message: `Static website "${del.name}" cannot be deleted: its custom domain "${offer.domain}" is offered to workspace ${offer.targetWorkspaceId}.`,
+        suggestion: "Cancel the pending transfer before deleting the static website.",
+        details:
+          "The platform refuses to delete a static website while one of its custom domains is still offered. Changing the entry back to a plain string and deploying cancels the offer.",
+        context: {
+          resourceType: "staticwebsite",
+          staticWebsiteName: del.name,
+          domain: offer.domain,
+          targetWorkspaceId: offer.targetWorkspaceId,
+        },
+      });
+    }
+  }
+}
+
 function normalizeComparableStaticWebsiteShape(
   input: Pick<ComparableStaticWebsite, "description" | "allowedIpAddresses">,
 ): ComparableStaticWebsite {
@@ -418,8 +458,6 @@ export async function planStaticWebsite(context: PlanContext) {
   // Live offers this workspace made, read once. The RPC also returns offers made
   // *to* this workspace; cancelling one of those from the source lane would
   // withdraw someone else's offer, so filter to our own.
-  // Deleting a site also needs them: the platform refuses to delete one whose
-  // domain is still offered, and nothing else in this plan would read that.
   const fetchLiveOffers =
     desiredDomainsByWebsite.size > 0 || changeSet.deletes.length > 0
       ? fetchAllTolerant<CustomDomainTransfer>(async (pageToken, pageSize) => {
@@ -436,28 +474,6 @@ export async function planStaticWebsite(context: PlanContext) {
   const [, liveOffers] = await Promise.all([fetchExistingDomains, fetchLiveOffers]);
   const ownLiveOffers = liveOffers.filter((transfer) => transfer.sourceWorkspaceId === workspaceId);
   const liveOffersByDomain = new Map(ownLiveOffers.map((transfer) => [transfer.domain, transfer]));
-
-  // An offer names the site it came from, so a deleted site can be checked
-  // without listing its domains -- which are never fetched for a site that is
-  // not in the config, and not fetched at all under `tailor remove`.
-  for (const del of changeSet.deletes) {
-    const offer = ownLiveOffers.find((transfer) => transfer.sourceStaticWebsiteName === del.name);
-    if (offer) {
-      throw CLIError({
-        code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT",
-        message: `Static website "${del.name}" cannot be deleted: its custom domain "${offer.domain}" is offered to workspace ${offer.targetWorkspaceId}.`,
-        suggestion: "Cancel the pending transfer before deleting the static website.",
-        details:
-          "The platform refuses to delete a static website while one of its custom domains is still offered. Changing the entry back to a plain string and deploying cancels the offer.",
-        context: {
-          resourceType: "staticwebsite",
-          staticWebsiteName: del.name,
-          domain: offer.domain,
-          targetWorkspaceId: offer.targetWorkspaceId,
-        },
-      });
-    }
-  }
 
   // For each transfer intent with no live offer, the domain's latest record.
   // It never suppresses a request; it only explains what happened last time.

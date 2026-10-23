@@ -1,4 +1,5 @@
 import { CLIError } from "#/cli/shared/errors";
+import { assertStaticWebsiteDeletesNotOffered } from "./staticwebsite";
 import type { PlannedDeployment } from "./apply-phases";
 
 /**
@@ -17,6 +18,8 @@ export function assertNoSingleRunTransferHandoff(
 
   for (const deployment of deployments) {
     const { staticWebsite } = deployment;
+
+    assertStaticWebsiteDeletesNotOffered(staticWebsite);
 
     // A domain removed from config while it is still offered: removing it would
     // tear down the edge configuration the pending transfer depends on.

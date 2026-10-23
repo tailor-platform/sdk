@@ -12,7 +12,11 @@ import {
 import { applyIdP, planIdP } from "#/cli/commands/deploy/idp";
 import { applyPipeline, planPipeline } from "#/cli/commands/deploy/resolver";
 import { applySecretManager, planSecretManager } from "#/cli/commands/deploy/secret-manager";
-import { applyStaticWebsite, planStaticWebsite } from "#/cli/commands/deploy/staticwebsite";
+import {
+  applyStaticWebsite,
+  assertStaticWebsiteDeletesNotOffered,
+  planStaticWebsite,
+} from "#/cli/commands/deploy/staticwebsite";
 import { applyTailorDB, planTailorDB } from "#/cli/commands/deploy/tailordb/index";
 import { applyWorkflow, planWorkflow } from "#/cli/commands/deploy/workflow";
 import {
@@ -115,6 +119,10 @@ async function execRemove(
     ),
     secretManager: await planSecretManager(ctx),
   } satisfies PlanResults;
+
+  // No cross-deployment pass runs here, and nothing drops these deletes, so the
+  // planned deletions are already final.
+  assertStaticWebsiteDeletesNotOffered(plans.staticWebsite);
 
   // Resources carrying this application's sdk-name whose sdk-app-id the config
   // does not match, because it holds a different id or none. They are skipped,

@@ -13,16 +13,21 @@ type TransferEntry = {
 type DeploymentSpec = {
   adds?: string[];
   removes?: string[];
+  siteDeletes?: string[];
   requests?: Array<{ domain: string; target: string }>;
-  liveOffers?: Array<{ domain: string; target: string }>;
+  liveOffers?: Array<{ domain: string; target: string; sourceSite?: string }>;
 };
 
 function deployment(spec: DeploymentSpec): PlannedDeployment {
+  const changeSet = createChangeSet("StaticWebsites");
   const customDomainChangeSet = createChangeSet("CustomDomains");
   const customDomainTransferChangeSet = createChangeSet<TransferEntry, never, TransferEntry>(
     "CustomDomainTransfers",
   );
 
+  for (const name of spec.siteDeletes ?? []) {
+    changeSet.deletes.push({ name });
+  }
   for (const domain of spec.adds ?? []) {
     customDomainChangeSet.creates.push({ name: domain });
   }
@@ -37,14 +42,19 @@ function deployment(spec: DeploymentSpec): PlannedDeployment {
     });
   }
   const customDomainLiveOffers = new Map(
-    (spec.liveOffers ?? []).map(({ domain, target }) => [
+    (spec.liveOffers ?? []).map(({ domain, target, sourceSite }) => [
       domain,
-      { domain, targetWorkspaceId: target } as CustomDomainTransfer,
+      {
+        domain,
+        targetWorkspaceId: target,
+        sourceStaticWebsiteName: sourceSite ?? "site-a",
+      } as CustomDomainTransfer,
     ]),
   );
 
   return {
     staticWebsite: {
+      changeSet,
       customDomainChangeSet,
       customDomainTransferChangeSet,
       customDomainLiveOffers,
@@ -84,6 +94,28 @@ describe("assertNoSingleRunTransferHandoff", () => {
   test("allows removing a domain with no live offer", () => {
     expect(() =>
       assertNoSingleRunTransferHandoff([deployment({ removes: ["example.com"] })]),
+    ).not.toThrow();
+  });
+
+  test("rejects deleting a site whose domain is still offered", () => {
+    expect(() =>
+      assertNoSingleRunTransferHandoff([
+        deployment({
+          siteDeletes: ["site-a"],
+          liveOffers: [{ domain: "example.com", target: "ws-b", sourceSite: "site-a" }],
+        }),
+      ]),
+    ).toThrow(expect.objectContaining({ code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT" }));
+  });
+
+  test("allows deleting a site when the open offer belongs to another one", () => {
+    expect(() =>
+      assertNoSingleRunTransferHandoff([
+        deployment({
+          siteDeletes: ["site-a"],
+          liveOffers: [{ domain: "example.com", target: "ws-b", sourceSite: "site-b" }],
+        }),
+      ]),
     ).not.toThrow();
   });
 
