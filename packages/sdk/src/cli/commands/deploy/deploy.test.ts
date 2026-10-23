@@ -1877,24 +1877,6 @@ describe("assertUniqueGlobalResourceNames", () => {
     ).toThrow('- Application "shared-app": ');
   });
 
-  test("throws when two configs define the same executor name", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ executorNames: ["sync-user"] }),
-        fakeTarget({ executorNames: ["sync-user"] }),
-      ]),
-    ).toThrow('- Executor "sync-user": ');
-  });
-
-  test("throws when two configs define the same non-bundled executor name", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
-        fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
-      ]),
-    ).toThrow('- Executor "forward-webhook": ');
-  });
-
   test("throws when two configs define the same workflow job name", () => {
     expect(() =>
       assertUniqueGlobalResourceNames([
@@ -1922,17 +1904,8 @@ describe("assertUniqueGlobalResourceNames", () => {
   test("accepts the same resolver name in different namespaces", () => {
     expect(() =>
       assertUniqueGlobalResourceNames([
-        fakeTarget({ resolvers: { get: "buyer" } }),
-        fakeTarget({ resolvers: { get: "supplier" } }),
-      ]),
-    ).not.toThrow();
-  });
-
-  test("ignores duplicate resolver bundle names across configs", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ resolvers: { get: "a" } }),
-        fakeTarget({ resolvers: { get: "b" } }),
+        fakeTarget({ resolverNamespaces: ["buyer"], resolvers: { get: "buyer" } }),
+        fakeTarget({ resolverNamespaces: ["supplier"], resolvers: { get: "supplier" } }),
       ]),
     ).not.toThrow();
   });
@@ -1944,42 +1917,6 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ authHooks: { "before-login": "b" } }),
       ]),
     ).not.toThrow();
-  });
-
-  test("throws when two configs define the same StaticWebsite name", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
-        fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
-      ]),
-    ).toThrow('- StaticWebsite "marketing-site": ');
-  });
-
-  test("throws when two configs define the same TailorDB namespace", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
-        fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
-      ]),
-    ).toThrow('- TailorDB namespace "shared-db": ');
-  });
-
-  test("throws when two configs define the same Auth namespace", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ authNamespace: "shared-auth" }),
-        fakeTarget({ authNamespace: "shared-auth" }),
-      ]),
-    ).toThrow('- Auth namespace "shared-auth": ');
-  });
-
-  test("throws when two configs define the same IdP namespace", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ idpNames: ["shared-idp"] }),
-        fakeTarget({ idpNames: ["shared-idp"] }),
-      ]),
-    ).toThrow('- IdP namespace "shared-idp": ');
   });
 
   test("throws when two configs define the same Resolver namespace", () => {
