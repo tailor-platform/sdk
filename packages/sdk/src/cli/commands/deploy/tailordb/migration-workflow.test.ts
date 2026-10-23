@@ -980,15 +980,19 @@ describe("observing when the migration script runs", () => {
           jobs: [{ executionId: "fn-1", status: running }],
         },
         {
+          status: WorkflowExecution_Status.RUNNING,
+          jobs: [{ executionId: "fn-1", status: running }],
+        },
+        {
           status: WorkflowExecution_Status.SUCCESS,
           jobs: [{ executionId: "fn-1", status: succeeded }],
         },
       ],
       { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG]] },
     );
-    raw.getFunctionExecution.mockRejectedValueOnce(
-      new ConnectError("unavailable", Code.Unavailable),
-    );
+    raw.getFunctionExecution
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable));
 
     const { result, events } = runObserved(client);
 
