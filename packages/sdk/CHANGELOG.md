@@ -1,5 +1,49 @@
 # @tailor-platform/sdk
 
+## 2.33.0
+
+### Minor Changes
+
+- [#2742](https://github.com/tailor-platform/sdk/pull/2742) [`4f3f30c`](https://github.com/tailor-platform/sdk/commit/4f3f30c4b7a305d654a1b8ad9cb709f7effe75ec) Thanks [@mocchira](https://github.com/mocchira)! - `customDomains` entries can now name a destination, moving a domain to another static website — in the same workspace or a different one — without downtime, a new certificate, or a DNS change:
+  
+  ```typescript
+  defineStaticWebSite("my-website", {
+    customDomains: [{ domain: "app.example.com", transferTo: { workspaceId: "..." } }],
+  });
+  ```
+  
+  Deploying opens the offer; the receiving side accepts it by listing the domain normally and deploying. `tailor deploy` reports an open offer and says when the domain has moved and the entry can be deleted.
+  
+  While an offer is open, `tailor deploy` and `tailor remove` refuse to remove the domain or the static website holding it, at plan time and before anything is applied. A plan also fails, rather than quietly doing nothing, when an entry names a domain the site does not hold and no transfer from this workspace accounts for it, or when the domain is still being removed.
+  
+  `tailor deploy` also now takes ownership of a custom domain that already exists but carries no SDK labels, instead of trying to add it again — the recovery path when a previous deploy lost the response, or when the domain was added through the API or console.
+
+- [#2591](https://github.com/tailor-platform/sdk/pull/2591) [`59fcb9a`](https://github.com/tailor-platform/sdk/commit/59fcb9a356455494bdbc0068d59ae4daa4de1582) Thanks [@toiroakr](https://github.com/toiroakr)! - Let a TailorDB migration script that exports `steps` roll back instead of staying in progress when a step fails. Export `onFailure = "rollback"` next to `steps` and `tailor deploy` restores the pre-migration schema, clears the in-progress record, and takes the tables out of maintenance mode. The deploy then fails with the step's error under the code `MIGRATION_ROLLED_BACK`, and the next deploy runs every step again from the beginning. Nothing is rolled back while the run may still be executing, or when the in-progress record cannot be cleared. If some tables cannot be rolled back, the deploy warns which tables need manual repair. Without `onFailure`, or with `"resume"`, a failed run stays in progress as before
+
+- [#2700](https://github.com/tailor-platform/sdk/pull/2700) [`6eb2033`](https://github.com/tailor-platform/sdk/commit/6eb203365aa0aedf6619b63f192aac948e2e0876) Thanks [@toiroakr](https://github.com/toiroakr)! - The `db.pglite.ts` that `tailor tailordb migration generate` writes now enforces relations: a row pointing at a parent that does not exist is rejected, as on the platform. Migration tests that stage a row whose parent is missing must create the parent first or stage the row with `prepareFixtures`. A relation the pre-migration schema cannot satisfy is left unenforced: one whose pending type change leaves the field a different type from its target, or one the migration retargets.
+  
+  `prepareFixtures` from `@tailor-platform/sdk/vitest` writes a test's starting records with relations unchecked, so a migration test can stage rows that predate a relation, and checks them again before the script runs. The migration PGlite test scaffold uses it.
+
+### Patch Changes
+
+- [#2741](https://github.com/tailor-platform/sdk/pull/2741) [`6f6ca9f`](https://github.com/tailor-platform/sdk/commit/6f6ca9fb72255f4124c04933af012ef6d7170380) Thanks [@mocchira](https://github.com/mocchira)! - `tailor staticwebsite domain list` and `domain get` now report a domain being removed as `removing` instead of `unknown`, and `tailor api` can inspect and call the custom domain transfer endpoints (`RequestCustomDomainTransfer`, `CancelCustomDomainTransfer`, `AcceptCustomDomainTransfer`, `GetCustomDomainTransfer`, `ListCustomDomainTransfers`).
+
+- [#2736](https://github.com/tailor-platform/sdk/pull/2736) [`8595d14`](https://github.com/tailor-platform/sdk/commit/8595d14c76d8ce364448f321ad430c01582d910f) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor login` now shows an HTML page in the browser after authentication instead of raw JSON, telling you to close the tab and return to the terminal. The page follows the system light/dark theme. A failed login shows the reason in the page as well, and `tailor authconnection authorize` shows the same pages on success and failure.
+
+- [#2740](https://github.com/tailor-platform/sdk/pull/2740) [`ef844ff`](https://github.com/tailor-platform/sdk/commit/ef844ffc39a84a39e02818eec9f6a08188ce2ccb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​napi-rs/keyring to v2.1.2
+
+- [#2760](https://github.com/tailor-platform/sdk/pull/2760) [`a7d1cb8`](https://github.com/tailor-platform/sdk/commit/a7d1cb8ce6dbc324f57ff2704f5ffe92af5bf963) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @​inquirer
+
+- [#2766](https://github.com/tailor-platform/sdk/pull/2766) [`15b6f4a`](https://github.com/tailor-platform/sdk/commit/15b6f4a7a9b6c0c2dd6514c6a5a7ca73a4870000) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.4.0
+
+- [#2718](https://github.com/tailor-platform/sdk/pull/2718) [`8927563`](https://github.com/tailor-platform/sdk/commit/89275638f7732fd69015e4b70ad8101b55b22649) Thanks [@toiroakr](https://github.com/toiroakr)! - The `tailor query` REPL now highlights SQL block comments (`/* ... */`) and GraphQL block strings (`"""..."""`) that span multiple lines, and also colours SQL `--` comments and trailing GraphQL `#` comments.
+
+- [#2731](https://github.com/tailor-platform/sdk/pull/2731) [`bbfb9b1`](https://github.com/tailor-platform/sdk/commit/bbfb9b1e9918cb59fdbc6865c6eb81bc3136aecd) Thanks [@dqn](https://github.com/dqn)! - Fix plugin-generated resolvers being silently ignored. Resolver output from table and namespace hooks is now loaded, bundled, and deployed to the resolver namespace with the same name as the hook's TailorDB namespace. The two are separate namespaces that only share the name; the resolver namespace is created automatically when it is not configured, and its settings apply when it is. Resolvers that your existing plugins already return are deployed on the next `deploy`; without `defaultPermission` on their resolver namespace, anonymous callers can reach them.
+
+- [#2747](https://github.com/tailor-platform/sdk/pull/2747) [`d52ec40`](https://github.com/tailor-platform/sdk/commit/d52ec402c9cc295eb94e69ee45b6f87e888badfa) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: remove the unused asynchronous variants of the SDK's internal TypeScript loader hooks. Loading `.ts` config and resource files is unchanged.
+
+- [#2744](https://github.com/tailor-platform/sdk/pull/2744) [`559d442`](https://github.com/tailor-platform/sdk/commit/559d442b7ab19d900ccfd5b84694b88490ae62e2) Thanks [@dqn](https://github.com/dqn)! - Reject duplicate generated enum constant names instead of silently overwriting definitions. Duplicates with identical values, which previously generated successfully, now fail too. Rename conflicting tables or fields to give their enum constants unique names.
+
 ## 2.32.0
 
 ### Minor Changes
