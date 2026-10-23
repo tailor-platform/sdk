@@ -74,9 +74,10 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
 
+      # More concurrent packages push eslint-plugin-sdk's oxlint-spawning tests past their 5s timeout.
       - name: Run other package tests
         if: matrix.shard == 4
-        run: pnpm -r --filter '!@tailor-platform/sdk' run test --project 'unit*'
+        run: pnpm -r --workspace-concurrency=2 --filter '!@tailor-platform/sdk' run test --project 'unit*'
 
   plugin-windows:
     needs: changes
