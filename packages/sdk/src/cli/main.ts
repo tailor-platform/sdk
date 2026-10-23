@@ -116,8 +116,7 @@ The \`setup\` commands are provided by the @tailor-platform/sdk-plugin-setup CLI
     package: packageName,
     mode: "copy",
     descriptionAppend: false,
-    // strip unknown keys
-    globalArgs: z.object(commonArgs),
+    globalArgs: z.strictObject(commonArgs),
     commandMap: { add: ["add"], remove: ["remove"] },
     unknownKeys: "strict",
     descriptions: {
@@ -140,8 +139,7 @@ export const mainCommand = withCompletionCommand({
 
 void runMain(mainCommand, {
   version: packageJson.version,
-  // strip unknown keys
-  globalArgs: z.object(commonArgs),
+  globalArgs: z.strictObject(commonArgs),
   displayErrors: false,
   agentHelp,
   setup: ({ agent }) => {

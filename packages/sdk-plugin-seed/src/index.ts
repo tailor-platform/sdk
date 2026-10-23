@@ -43,8 +43,8 @@ const mainCommand = defineCommand({
 
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
-  // -v matches the generated seed runner this plugin replaces; strip unknown keys
-  globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
+  // -v matches the generated seed runner this plugin replaces
+  globalArgs: z.strictObject(createCommonArgs({ verboseAlias: "v" })),
   displayErrors: false,
   cleanup: ({ error }) => {
     if (!error) return;

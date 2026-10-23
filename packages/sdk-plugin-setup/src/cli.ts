@@ -35,8 +35,7 @@ const mainCommand = defineCommand({
 
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
-  // strip unknown keys
-  globalArgs: z.object(createCommonArgs()),
+  globalArgs: z.strictObject(createCommonArgs()),
   displayErrors: false,
   // Render errors the way the host CLI does: `setup` used to run inside it, so
   // dropping either branch would regress `--json` consumers and CLIError detail.

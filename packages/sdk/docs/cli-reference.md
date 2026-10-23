@@ -20,8 +20,8 @@ tailor <command> [options]
 | ------------------------------------------- | ----- | --------------------------------------------------- | -------- | ------- | -------------------- |
 | `--env-file <ENV_FILE>`                     | `-e`  | Path to the environment file (error if not found)   | No       | -       | -                    |
 | `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | -     | Path to the environment file (ignored if not found) | No       | -       | -                    |
-| `--verbose`                                 | -     | Enable verbose logging                              | No       | `false` | -                    |
-| `--json`                                    | `-j`  | Output as JSON                                      | No       | `false` | `TAILOR_JSON_OUTPUT` |
+| `--verbose` / `--no-verbose`                | -     | Enable verbose logging                              | No       | `false` | -                    |
+| `--json` / `--no-json`                      | `-j`  | Output as JSON                                      | No       | `false` | `TAILOR_JSON_OUTPUT` |
 
 ### Progress and Detailed Logs
 
@@ -82,9 +82,7 @@ unexpected argument, or an option value that fails validation (including one set
 environment variable), and `1` for other failures, including checks a command makes after reading
 its arguments. A command that only warns about an unknown option or an extra argument keeps
 running. Cancelling an interactive prompt exits with `130`, and a CLI plugin exits with its own
-code. A command group run without a subcommand, such as `tailor` or `tailor tailordb`, can exit
-with `0` after printing its help or a warning even when an option is unknown or its value is
-invalid, so name the subcommand to rely on `2`.
+code.
 
 Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
@@ -107,7 +105,8 @@ excluded from that list.
 Use `--verbose` to include debug diagnostics and error stack traces. `DEBUG=true` or
 `RUNNER_DEBUG=1` also enables verbose output, including stacks in JSON errors. GitHub Actions
 sets `RUNNER_DEBUG=1` when debug logging is enabled, so the same command automatically includes
-these details in a debug run. These settings do not enable JSON output; pass `--json` separately.
+these details in a debug run. `--no-verbose` turns verbose output off even when these are set.
+These settings do not enable JSON output; pass `--json` separately.
 
 Capture the original failure's stderr and exit code before retrying. Failures before the CLI starts,
 a rejected `--json` or `TAILOR_JSON_OUTPUT` value, argument errors in the bundled CLI plugins, and
