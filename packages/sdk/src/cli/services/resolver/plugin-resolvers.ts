@@ -16,12 +16,14 @@ const PluginResolverSchema = ResolverSchema.extend({ body: z.string() });
 
 /**
  * Generate validated resolver modules for the standard loader and bundler.
+ * @param appName - Name of the application the resolvers belong to
  * @param namespace - Resolver namespace to generate files for
  * @param configPath - Path to the application's config
  * @param resolvers - Plugin resolver definitions in one namespace
  * @returns Absolute paths of generated resolver modules
  */
 export function generatePluginResolverFiles(
+  appName: string,
   namespace: string,
   configPath: string,
   resolvers: ReadonlyArray<PluginResolverInfo>,
@@ -30,9 +32,8 @@ export function generatePluginResolverFiles(
     getDistDir(),
     "plugin",
     "resolvers",
-    createHash("sha256")
-      .update(JSON.stringify([path.resolve(configPath), namespace]))
-      .digest("hex"),
+    encodeURIComponent(appName),
+    encodeURIComponent(namespace),
   );
   fs.rmSync(outputDir, { recursive: true, force: true });
   return resolvers.map((info, index) => {

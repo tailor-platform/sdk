@@ -206,6 +206,36 @@ describe("plugin-generated resolvers", () => {
     expect(bundledScripts.resolvers.has("main:greet")).toBe(true);
   });
 
+  test("generates resolver files at the same project-relative path in every checkout", async () => {
+    const generatedFiles: string[][] = [];
+    for (const checkout of ["checkout-1", "checkout-2"]) {
+      const pluginManager = new PluginManager([
+        {
+          id: "greeting",
+          description: "Query",
+          onNamespaceLoaded: () => ({
+            resolvers: [
+              { name: "greet", operation: "query", outputFields: {}, body: "return {};" },
+            ],
+          }),
+        },
+      ]);
+      const projectDir = path.join(baseDir, checkout);
+      vi.stubEnv("TAILOR_BUILD_OUTPUT_DIR", path.join(projectDir, ".tailor"));
+      const config = {
+        ...defineConfig({ name: "test-app", db: { main: { files: [] } } }),
+        path: path.join(projectDir, "tailor.config.ts"),
+      };
+      const { application } = await loadApplication({ config, pluginManager });
+      generatedFiles.push(
+        Object.keys(application.resolverServices[0]!.resolvers).map((file) =>
+          path.relative(projectDir, file),
+        ),
+      );
+    }
+    expect(generatedFiles[1]).toEqual(generatedFiles[0]);
+  });
+
   test("preserves explicit ignore overrides when bundling loaded resolver files", async () => {
     fs.writeFileSync(
       path.join(baseDir, "allowed.test.ts"),

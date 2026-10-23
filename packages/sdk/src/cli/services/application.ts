@@ -14,7 +14,11 @@ import {
   type HttpAdapterService,
 } from "#/cli/services/http-adapter/service";
 import { bundleResolvers } from "#/cli/services/resolver/bundler";
-import { createResolverService, type ResolverService } from "#/cli/services/resolver/service";
+import {
+  createResolverService,
+  type PluginResolverSource,
+  type ResolverService,
+} from "#/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "#/cli/services/tailordb/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
@@ -211,11 +215,17 @@ type DefineResolverResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
+function pluginResolverSource(
+  config: LoadedConfig,
+  pluginManager: PluginManager | undefined,
+): PluginResolverSource | undefined {
+  return pluginManager && { pluginManager, appName: config.name, configPath: config.path };
+}
+
 function defineResolver(
   config: ResolverServiceInput | undefined,
   baseDir: string,
-  configPath: string,
-  pluginManager?: PluginManager,
+  plugins: PluginResolverSource | undefined,
 ): DefineResolverResult {
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
@@ -226,13 +236,7 @@ function defineResolver(
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(
-        namespace,
-        serviceConfig,
-        baseDir,
-        pluginManager,
-        configPath,
-      );
+      const resolverService = createResolverService(namespace, serviceConfig, baseDir, plugins);
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
@@ -267,7 +271,12 @@ export function definePluginResolverServices(
       continue;
     }
     resolverServices.push(
-      createResolverService(namespace, { files: [] }, baseDir, pluginManager, config.path),
+      createResolverService(
+        namespace,
+        { files: [] },
+        baseDir,
+        pluginResolverSource(config, pluginManager),
+      ),
     );
   }
   return resolverServices;
@@ -507,7 +516,11 @@ function defineServices(
     effectiveDateDefault(config),
     pluginManager,
   );
-  const resolverResult = defineResolver(config.resolver, baseDir, config.path, pluginManager);
+  const resolverResult = defineResolver(
+    config.resolver,
+    baseDir,
+    pluginResolverSource(config, pluginManager),
+  );
   const idpResult = defineIdp(config.idp, config.path);
   const authResult = defineAuth(
     config.auth,
