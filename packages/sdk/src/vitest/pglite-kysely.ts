@@ -197,3 +197,61 @@ export function createKyselyPGlite<DB = Record<string, never>>(
   };
   return new Kysely<DB>({ dialect });
 }
+
+const REPLICATION_ROLE = "session_replication_role";
+
+interface FixtureScope {
+  active: number;
+  previous: Promise<string>;
+}
+
+const fixtureScopes = new WeakMap<PGliteClient, FixtureScope>();
+
+function setReplicationRole(client: PGliteClient, value: string): Promise<PGliteQueryResult> {
+  return client.query("SELECT set_config($1, $2, false)", [REPLICATION_ROLE, value]);
+}
+
+async function uncheckRelations(client: PGliteClient): Promise<string> {
+  const found = await client.query(`SHOW ${REPLICATION_ROLE}`);
+  const previous = (found.rows[0] as Record<string, unknown> | undefined)?.[REPLICATION_ROLE];
+  await setReplicationRole(client, "replica");
+  return typeof previous === "string" ? previous : "origin";
+}
+
+/**
+ * Run `prepare` with relations unchecked, so a test can stage rows that predate a relation (for
+ * example rows whose parent does not exist, which the migration under test repairs). The setting
+ * from before the first call is restored when the last `prepareFixtures` on the client returns or
+ * throws, so the script under test still runs against checked relations, and calls that are nested
+ * or overlap keep relations unchecked until all of them are done. NOT NULL, UNIQUE, and CHECK
+ * constraints stay enforced.
+ * @param client - The PGlite instance the rows are written to
+ * @param prepare - Writes the rows, for example with the Kysely instance of the same client
+ * @returns Whatever `prepare` returns
+ * @example
+ * ```typescript
+ * await prepareFixtures(pglite, async () => {
+ *   await db.insertInto("Order").values([{ ownerID: crypto.randomUUID() }]).execute();
+ * });
+ * await db.transaction().execute((trx) => main(trx));
+ * ```
+ */
+export async function prepareFixtures<T>(
+  client: PGliteClient,
+  prepare: () => Promise<T>,
+): Promise<T> {
+  const scope = fixtureScopes.get(client) ?? { active: 0, previous: uncheckRelations(client) };
+  scope.active += 1;
+  fixtureScopes.set(client, scope);
+  let previous: string | undefined;
+  try {
+    previous = await scope.previous;
+    return await prepare();
+  } finally {
+    scope.active -= 1;
+    if (scope.active === 0) {
+      fixtureScopes.delete(client);
+      if (previous !== undefined) await setReplicationRole(client, previous);
+    }
+  }
+}

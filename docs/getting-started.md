@@ -37,6 +37,10 @@ In `packages/sdk/`:
 | `pnpm docs:check`           | Verify CLI docs match commands |
 | `pnpm docs:update`          | Regenerate CLI docs            |
 
+The native compiler check is `pnpm typecheck:rs`; `pnpm typecheck` uses stable TypeScript.
+On Windows and Intel macOS, `typecheck:rs` uses `tsc` because this tsrs release has no binary for them.
+On supported platforms, compiler errors and startup failures fail the check without falling back.
+
 ## Example App
 
 `example/` is used for development testing and CI validation.
@@ -56,7 +60,7 @@ pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 1. **Format** — Check staged files with oxfmt
 2. **Build & Generate** — Rebuild the SDK and run code generation
 3. **Lint** — Run standard and Vitest-specific oxlint passes, plus create-sdk template lint
-4. **Typecheck** — Run tsgo
+4. **Typecheck** — Run tsrs
 5. **Knip** — Detect unused dependencies and exports
 
 Steps 2–5 run as separate jobs in this order, only when staged files include `.ts`/`.js`, and stop at the first failing job.

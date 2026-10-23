@@ -8,11 +8,6 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { mainCommand } from "./main";
 
-vi.mock("node:module", async (importOriginal) => ({
-  ...(await importOriginal()),
-  register: vi.fn(),
-}));
-
 vi.mock("@politty/zod", async (importOriginal) => ({
   ...(await importOriginal()),
   runMain: vi.fn(),

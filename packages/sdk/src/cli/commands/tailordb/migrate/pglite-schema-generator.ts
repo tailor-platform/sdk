@@ -5,24 +5,71 @@
  */
 
 import * as fs from "node:fs/promises";
-import { generatePgliteSchemaModule, type DDLTableConfig } from "#/utils/tailordb-ddl";
+import {
+  dropUnresolvableReferences,
+  generatePgliteSchemaModule,
+  withoutReference,
+  type DDLFieldConfig,
+  type DDLTableConfig,
+} from "#/utils/tailordb-ddl";
 import { writeDbTypesFile } from "./db-types-generator";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
+import { collectNestedMemberChanges } from "./nested-members";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import { getMigrationFilePath } from "./snapshot";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { MigrationDiff } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
-import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot-types";
+import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
 
 function toDDLTable(table: TailorDBSnapshotType): DDLTableConfig {
   return { name: table.name, fields: table.fields, indexes: table.indexes };
+}
+
+type RetargetedMembers = Map<string, Map<string, string[][]>>;
+
+function retargets(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
+  return (
+    before.foreignKeyType !== undefined &&
+    (before.foreignKeyType !== after.foreignKeyType ||
+      before.foreignKeyField !== after.foreignKeyField)
+  );
+}
+
+function retargetedMembers(diff: MigrationDiff): RetargetedMembers {
+  const retargeted: RetargetedMembers = new Map();
+  for (const change of diff.changes) {
+    if (change.kind !== "field_modified") continue;
+    const paths: string[][] = [];
+    if (retargets(change.before, change.after)) paths.push([]);
+    for (const member of collectNestedMemberChanges(change.before, change.after)) {
+      if (member.kind === "modified" && retargets(member.before, member.after)) {
+        paths.push(member.path);
+      }
+    }
+    if (paths.length === 0) continue;
+    const fields = retargeted.get(change.tableName) ?? new Map<string, string[][]>();
+    fields.set(change.fieldName, paths);
+    retargeted.set(change.tableName, fields);
+  }
+  return retargeted;
+}
+
+function withoutReferenceAt(field: DDLFieldConfig, path: readonly string[]): DDLFieldConfig {
+  const [head, ...rest] = path;
+  if (head === undefined) return withoutReference(field);
+  const member = field.fields?.[head];
+  if (!field.fields || !member) return field;
+  return { ...field, fields: { ...field.fields, [head]: withoutReferenceAt(member, rest) } };
 }
 
 /**
  * The tables `migrate.ts` sees: the migration's target schema with the
  * Pre-phase relaxations applied, plus the tables the Pre-phase retains for
  * the script to read (removed tables, and renamed tables under their old name).
+ * A relation the migration retargets, also one inside a nested field, has no
+ * reference, because its stored values still point at the old target until
+ * the script repairs them.
  * @param previousSnapshot - Schema before the migration
  * @param diff - The migration's diff
  * @returns Tables in creation order
@@ -31,7 +78,23 @@ export function buildPreMigrationTables(
   previousSnapshot: SchemaSnapshot,
   diff: MigrationDiff,
 ): DDLTableConfig[] {
-  return Object.values(buildPreMigrationSnapshot(previousSnapshot, diff).tables).map(toDDLTable);
+  const retargeted = retargetedMembers(diff);
+  const tables = Object.values(buildPreMigrationSnapshot(previousSnapshot, diff).tables).map(
+    (table) => {
+      const fields = retargeted.get(table.name);
+      if (!fields) return toDDLTable(table);
+      return {
+        ...toDDLTable(table),
+        fields: Object.fromEntries(
+          Object.entries(table.fields).map(([name, field]) => [
+            name,
+            (fields.get(name) ?? []).reduce<DDLFieldConfig>(withoutReferenceAt, field),
+          ]),
+        ),
+      };
+    },
+  );
+  return dropUnresolvableReferences(tables);
 }
 
 /**

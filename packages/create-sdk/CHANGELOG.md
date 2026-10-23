@@ -1,5 +1,9 @@
 # @tailor-platform/create-sdk
 
+## 2.32.0
+
+No changes in this release.
+
 ## 2.31.1
 
 No changes in this release.

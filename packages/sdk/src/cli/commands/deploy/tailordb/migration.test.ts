@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
@@ -108,7 +109,7 @@ vi.mock("./migration-workflow", () => ({
     `tailordb-migration--${namespace}--${number}`,
 }));
 
-const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations_service__");
+const TEST_MIGRATIONS_BASE = path.join(os.tmpdir(), `tailor-sdk-migration-test-${process.pid}`);
 
 function createMockMigration(overrides: Partial<PendingMigration> = {}): PendingMigration {
   return {

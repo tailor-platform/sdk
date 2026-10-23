@@ -46,7 +46,7 @@ pre-commit:
           - name: lint-templates
             run: pnpm --filter='./packages/create-sdk/templates/*' run lint
           - name: typecheck
-            run: pnpm --filter=@tailor-platform/sdk --filter=example run typecheck:go
+            run: pnpm --filter=@tailor-platform/sdk --filter=example run typecheck:rs
           - name: knip
             run: pnpm --filter=@tailor-platform/sdk run knip
 

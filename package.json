@@ -29,7 +29,7 @@
     "check:lint": "pnpm -r run lint:fix && pnpm run lint:tooling:fix && pnpm run lint:vitest",
     "check:typecheck": "pnpm run --no-bail \"/^check-type:/\"",
     "check-type:root": "pnpm run typecheck:root",
-    "check-type:native-preview": "pnpm --no-bail -r run typecheck:go",
+    "check-type:rust": "pnpm --no-bail -r run typecheck:rs",
     "check-type:stable": "pnpm --filter=!example --no-bail -r run typecheck",
     "check-type:example": "pnpm --filter example run typecheck:generated",
     "check:knip": "pnpm -r run knip",
@@ -45,12 +45,11 @@
     "lint:vitest:fix": "oxlint --config oxlint.vitest.json . --fix",
     "knip": "pnpm run build && pnpm -r run knip",
     "publint": "pnpm run build && pnpm -r run publint",
-    "typecheck:go": "pnpm run build && pnpm --filter @tailor-platform/sdk --filter example run generate && pnpm -r run typecheck:go",
+    "typecheck:rs": "pnpm run build && pnpm --filter @tailor-platform/sdk --filter example run generate && pnpm -r run typecheck:rs",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "typecheck": "pnpm run generate && pnpm -r run typecheck",
-    "typecheck:root": "tsc --noEmit",
-    "perf:typecheck": "pnpm --filter example perf:typecheck"
+    "typecheck:root": "tsc --noEmit"
   },
   "devDependencies": {
     "@changesets/changelog-github": "1.0.1",
@@ -58,7 +57,7 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.19.2",
     "eslint-plugin-zod": "5.2.0",
-    "knip": "6.41.0",
+    "knip": "6.42.0",
     "lefthook": "2.2.1",
     "madge": "8.0.0",
     "oxfmt": "0.73.0",

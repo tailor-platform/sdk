@@ -31,6 +31,8 @@ export type {
   PreparedMigrationTest,
 } from "./test-types";
 
+const DEFAULT_WORKSPACE_TTL = "24h";
+
 /**
  * Run pending migrations against an isolated target workspace.
  * @param options - Migration test options
@@ -100,10 +102,11 @@ export async function runMigrationTest(
         name: undefined,
         createdAt: undefined,
       };
+  const expiryTtl = options.keepTtl ?? (options.keep ? undefined : DEFAULT_WORKSPACE_TTL);
   let expiryRecorded = false;
-  if (temporary && options.keepTtl !== undefined) {
+  if (temporary && expiryTtl !== undefined) {
     try {
-      await dependencies.recordWorkspaceExpiry(workspace.id, options.keepTtl, workspace.createdAt);
+      await dependencies.recordWorkspaceExpiry(workspace.id, expiryTtl, workspace.createdAt);
       expiryRecorded = true;
     } catch (expiryError) {
       logger.warn(
@@ -115,7 +118,7 @@ export async function runMigrationTest(
               "ttl",
               "set",
               "--ttl",
-              options.keepTtl,
+              expiryTtl,
               `--workspace-id=${workspace.id}`,
               ...(options.profile ? [`--profile=${options.profile}`] : []),
             ],
@@ -160,7 +163,7 @@ export async function runMigrationTest(
 
   if (temporary && options.keep) {
     logger.info(
-      `Keeping temporary workspace ${workspace.name ?? workspace.id}${expiryRecorded ? `; it can be pruned after ${options.keepTtl}` : ""}.`,
+      `Keeping temporary workspace ${workspace.name ?? workspace.id}${expiryRecorded ? `; it can be pruned after ${expiryTtl}` : ""}.`,
     );
   } else if (temporary) {
     try {
@@ -218,7 +221,7 @@ export const testCommand = defineAppCommand({
   description:
     "Test pending migrations with seed fixtures or cloned data in a temporary workspace.",
   notes:
-    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed. Organization and folder IDs loaded by --env-file are used the same way as the options; command-line options take precedence, and empty env-file values are ignored.",
+    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. Right after creating the workspace it records a 24h expiry (unless --keep is given without --keep-ttl), so if the run is interrupted before the command can delete the workspace, workspace prune --expired removes it later. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed. Organization and folder IDs loaded by --env-file are used the same way as the options; command-line options take precedence, and empty env-file values are ignored.",
   args: z.strictObject({
     ...deploymentArgs,
     yes: arg(z.boolean().default(false), {
