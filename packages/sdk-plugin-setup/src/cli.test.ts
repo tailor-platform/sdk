@@ -7,6 +7,9 @@ import { describe, expect, test } from "vitest";
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const cliEntry = path.join(packageRoot, "bin/cli.mjs");
 const CLI_TEST_TIMEOUT_MS = 15_000;
+const conflictingEnvArgs = ["ci", "env", "--check", "--format", "terraform"];
+const conflictingEnvMessage =
+  "--check cannot be combined with --format terraform: it reads GitHub with gh and prints gh commands for what is missing.";
 
 function runCli(args: string[]) {
   if (!existsSync(path.join(packageRoot, "dist/cli.js"))) {
@@ -31,18 +34,7 @@ describe("setup CLI JSON errors", () => {
   test(
     "keeps the error envelope on the last stderr line under --verbose",
     () => {
-      const message =
-        "--check cannot be combined with --format terraform: it reads GitHub with gh and prints gh commands for what is missing.";
-
-      const result = runCli([
-        "ci",
-        "env",
-        "--check",
-        "--format",
-        "terraform",
-        "--json",
-        "--verbose",
-      ]);
+      const result = runCli([...conflictingEnvArgs, "--json", "--verbose"]);
 
       expect(result.error).toBeUndefined();
       expect(result.status).toBe(1);
@@ -51,10 +43,24 @@ describe("setup CLI JSON errors", () => {
       expect(parseErrorEnvelope(result.stderr)).toEqual({
         error: {
           code: "UNEXPECTED_ERROR",
-          message,
-          stack: expect.stringContaining(`Error: ${message}`),
+          message: conflictingEnvMessage,
+          stack: expect.stringContaining(`Error: ${conflictingEnvMessage}`),
         },
       });
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "keeps the human stack trace under --verbose without --json",
+    () => {
+      const result = runCli([...conflictingEnvArgs, "--verbose"]);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain(`✖ ${conflictingEnvMessage}`);
+      expect(result.stderr).toContain(`Stack trace:\nError: ${conflictingEnvMessage}`);
     },
     CLI_TEST_TIMEOUT_MS,
   );
