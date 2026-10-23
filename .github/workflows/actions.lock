@@ -19,7 +19,7 @@ workflows:
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
     '.github/workflows/ci.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'aquaproj/aqua-installer@82d0e83878a8657c4a6f2ff1755d3bfbfc67f329'
+        - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
         - 'suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7'
     '.github/workflows/cleanup-e2e-workspaces.yml':
@@ -31,7 +31,7 @@ workflows:
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
     '.github/workflows/deploy.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'aquaproj/aqua-installer@82d0e83878a8657c4a6f2ff1755d3bfbfc67f329'
+        - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
     '.github/workflows/docs-consistency-check.yml':
@@ -49,7 +49,7 @@ workflows:
         - 'suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7'
     '.github/workflows/github-actions-lint.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'aquaproj/aqua-installer@82d0e83878a8657c4a6f2ff1755d3bfbfc67f329'
+        - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
         - 'tailor-platform/actions@26a3cae341adecfaf0e6c81bd969de09c72dad55'
     '.github/workflows/link-check.yml':
@@ -69,7 +69,7 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/migration.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'aquaproj/aqua-installer@82d0e83878a8657c4a6f2ff1755d3bfbfc67f329'
+        - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
     '.github/workflows/neutralize-mentions.yml':
@@ -165,9 +165,9 @@ dependencies:
         repo_id: 986421638
         uses:
             - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
-    'aquaproj/aqua-installer@82d0e83878a8657c4a6f2ff1755d3bfbfc67f329':
-        ref: 'v4.1.0'
-        commit: 'sha1-82d0e83878a8657c4a6f2ff1755d3bfbfc67f329'
+    'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461':
+        ref: 'v4.1.1'
+        commit: 'sha1-611554c6f0137ba41c8dd15aca8bee82504ea461'
         owner_id: 95116411
         repo_id: 400140776
     'changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51':
