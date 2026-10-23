@@ -211,6 +211,74 @@ describe("query", () => {
     );
   });
 
+  test("runs SQL in the namespace passed with --namespace without inferring it", async () => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { executeScript } = await import("../shared/script-executor");
+    vi.mocked(extractAllNamespaces).mockReturnValue(["tailordb", "billing"]);
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      namespace: "billing",
+      query: 'select * from "User";',
+    });
+
+    expect(resolveTableNamespaces).not.toHaveBeenCalled();
+    expect(executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "query-sql-billing.js" }),
+    );
+    expect(result).toMatchObject({ namespace: "billing" });
+  });
+
+  test("rejects a --namespace that the config does not define", async () => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { executeScript } = await import("../shared/script-executor");
+    vi.mocked(extractAllNamespaces).mockReturnValue(["tailordb", "billing"]);
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        namespace: "missing",
+        query: 'select * from "User";',
+      }),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message:
+        'TailorDB namespace "missing" is not defined in the config. Defined namespaces: tailordb, billing.',
+    });
+    expect(executeScript).not.toHaveBeenCalled();
+  });
+
+  test("suggests --namespace when a table exists in several namespaces", async () => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const actual = await vi.importActual<{ resolveTableNamespaces: typeof resolveTableNamespaces }>(
+      "../shared/tailordb-namespace",
+    );
+    vi.mocked(extractAllNamespaces).mockReturnValue(["tailordb", "billing"]);
+    vi.mocked(resolveTableNamespaces).mockImplementation(actual.resolveTableNamespaces);
+    mockClient.listTailorDBTypes.mockResolvedValue({ tailordbTypes: [{ name: "User" }] });
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: 'select * from "User";',
+      }),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS",
+      suggestion: "Pass --namespace with one of: tailordb, billing.",
+    });
+  });
+
   test.each([
     ["referenced", "owned"],
     ["owned", "referenced"],
@@ -837,6 +905,16 @@ describe("queryCommand args", () => {
       throw new Error("expected args parsing to fail");
     }
     expect(result.error.issues[0]?.message).toBe(expectedMessage);
+  });
+
+  test("rejects --namespace with the gql engine", () => {
+    const result = queryCommand.args.safeParse({
+      engine: "gql",
+      "machine-user": "bot",
+      namespace: "billing",
+    });
+
+    expect(result.error?.issues[0]?.message).toBe("Pass --namespace only with --engine sql.");
   });
 
   test("newline-on-enter is optional and passes boolean through", () => {

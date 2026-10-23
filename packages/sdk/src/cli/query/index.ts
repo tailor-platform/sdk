@@ -21,7 +21,7 @@ import { extractAllNamespaces } from "../shared/config";
 import { loadConfig, type LoadedConfig } from "../shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "../shared/context";
 import { getEditorCommand, openInEditor } from "../shared/editor";
-import { isCLIError } from "../shared/errors";
+import { CLIError, isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { parseBoolean } from "../shared/parse-boolean";
 import { parseOptions } from "../shared/parse-options";
@@ -50,6 +50,7 @@ const queryBaseOptionsSchema = z.object({
   engine: queryEngineSchema,
   machineUser: z.string().optional(),
   machineUserSource: z.enum(["option", "env"]).optional(),
+  namespace: z.string().optional(),
 });
 const queryOptionsSchema = queryBaseOptionsSchema.extend({
   query: z.string(),
@@ -121,6 +122,15 @@ async function getNamespaceFromSqlQuery(
     namespaces,
     tableNames,
     client,
+  }).catch((error: unknown) => {
+    if (!isCLIError(error) || error.code !== "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS") throw error;
+    throw CLIError({
+      code: error.code,
+      message: error.message,
+      suggestion: `Pass --namespace with one of: ${namespaces.join(", ")}.`,
+      context: error.context,
+      cause: error,
+    });
   });
 
   const notFoundTables = tableNames.filter((tableName) => !tableNamespaceMap.has(tableName));
@@ -376,6 +386,13 @@ async function prepareQueryExecutor(
 ): Promise<(query: string) => Promise<QueryDispatchResult>> {
   const { client, workspaceId, config, application, machineUserResource, engine, namespaces } =
     await loadOptions(options);
+  if (options.namespace !== undefined && !namespaces.includes(options.namespace)) {
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: `TailorDB namespace "${options.namespace}" is not defined in the config. Defined namespaces: ${namespaces.join(", ")}.`,
+      context: { namespace: options.namespace, namespaces },
+    });
+  }
   const bundledCode = await bundleQueryScript(engine, path.dirname(config.path));
   const invoker = create(AuthInvokerSchema, {
     namespace: application.authNamespace,
@@ -388,7 +405,9 @@ async function prepareQueryExecutor(
     try {
       switch (engine) {
         case "sql": {
-          namespace = await getNamespaceFromSqlQuery(workspaceId, queryString, client, namespaces);
+          namespace =
+            options.namespace ??
+            (await getNamespaceFromSqlQuery(workspaceId, queryString, client, namespaces));
           const result = await sqlQuery(client, invoker, {
             workspaceId,
             namespace,
@@ -761,12 +780,25 @@ export const queryCommand = defineAppCommand({
           "Machine user name for query execution. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description:
+          "TailorDB namespace to run a SQL query in; required when a queried table exists in several namespaces",
+      }),
       "newline-on-enter": arg(z.boolean().optional(), {
         description:
           "REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap.",
       }),
     })
     .superRefine((args, ctx) => {
+      if (args.namespace != null && args.engine !== "sql") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["namespace"],
+          message: "Pass --namespace only with --engine sql.",
+        });
+      }
+
       if (args.query != null && args.file != null) {
         ctx.addIssue({
           code: "custom",
@@ -806,6 +838,7 @@ export const queryCommand = defineAppCommand({
       engine: args.engine,
       machineUser: args["machine-user"],
       machineUserSource: resolveMachineUserInputSource(args["machine-user"]),
+      namespace: args.namespace,
     };
 
     if (mode.mode === "abort") {
