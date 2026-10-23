@@ -25,7 +25,7 @@ import {
   resourceTrn,
   writeMetadataLabels,
 } from "./label";
-import { createOwnershipTracker, type OwnershipResult } from "./owned-resource";
+import { createOwnershipTracker } from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
@@ -329,7 +329,7 @@ export async function planApplication(
         });
       }
     }
-    return Object.assign(withOwnership(changeSet, ownership.result), {
+    return Object.assign(changeSet, ownership.result, {
       existingApplications,
       existingLabels: undefined,
     });
@@ -338,7 +338,7 @@ export async function planApplication(
   // Skip application create/update when there are no subgraphs
   // (e.g. deploying only static web hosting)
   if (application.subgraphs.length === 0) {
-    return Object.assign(withOwnership(changeSet, ownership.result), {
+    return Object.assign(changeSet, ownership.result, {
       existingApplications,
       existingLabels: undefined,
     });
@@ -481,29 +481,10 @@ export async function planApplication(
     });
   }
 
-  return Object.assign(withOwnership(changeSet, ownership.result), {
+  return Object.assign(changeSet, ownership.result, {
     existingApplications,
     existingLabels,
   });
-}
-
-/**
- * Attach the ownership-tracking fields to the plan's change set.
- *
- * The other resource plans return `{ changeSet, conflicts, ... }`; this one
- * returns the change set itself, so the fields are attached to it. Without
- * them the application is the one managed resource that never reaches
- * `confirmOwnerConflict`, which would let a deploy re-tag — or a `remove`
- * silently skip — an application this config does not own.
- * @param changeSet - The application change set
- * @param ownership - The ownership-tracking fields recorded while planning
- * @returns The change set, with the ownership-tracking fields attached
- */
-function withOwnership<T extends object>(
-  changeSet: T,
-  ownership: OwnershipResult,
-): T & OwnershipResult {
-  return Object.assign(changeSet, ownership);
 }
 
 async function fetchAppLabels(
