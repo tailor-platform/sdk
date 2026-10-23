@@ -42,6 +42,7 @@ export function assertUniqueGlobalResourceNames(
 ): void {
   assertNoDuplicateResourceNames(targets, DEPLOY_MANAGED_RESOURCE_DEFINITIONS);
 }
+
 /**
  * Every `PlanResults` entry carries ownership-tracking fields; deriving the
  * list from `results` itself (instead of naming each key) keeps these
