@@ -129,14 +129,21 @@ describe("planFunctionRegistry", () => {
   });
 
   describe("create scenarios", () => {
-    test("new function is created when no existing entries", async () => {
+    test("new functions are created when no existing entries", async () => {
       const client = createMockClient([]);
-      const entries = [createEntry("resolver/ns/getUser")];
+      const entries = [
+        createEntry("resolver/ns/getUser"),
+        createEntry("executor/user-created"),
+        createEntry("workflow-job/process-order"),
+      ];
 
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
-      expect(result.changeSet.creates).toHaveLength(1);
-      expect(result.changeSet.creates[0]!.name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.creates.map((c) => c.name).toSorted()).toEqual([
+        "executor/user-created",
+        "resolver/ns/getUser",
+        "workflow-job/process-order",
+      ]);
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
