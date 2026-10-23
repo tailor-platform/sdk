@@ -27,6 +27,10 @@ import {
   executeMigrations,
   isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
+  isMigrationRunEnded,
+  isRollbackSkippedWithRecord,
+  rolledBackError,
+  rollbackSkippedError,
   updateMigrationLabel,
   type MigrationContext,
 } from "./migration";
@@ -39,8 +43,11 @@ import {
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
   generateMigrationPhaseManifest,
+  type GqlPermissionUndo,
   restoreMigrationRestrictions,
   getDeletedTableNames,
+  getPreMigrationTargetTableNames,
+  gqlPermissionUndoFromSnapshots,
   migrationSnapshotCache,
   namespacedTableKey,
   processedTables,
@@ -51,6 +58,7 @@ import {
   RESTRICTION_EFFECT,
   resolveMigrationSnapshotSettings,
   rollbackSingleMigrationAfterFailure,
+  type RollbackLeftovers,
   warnTablesLeftRestricted,
   type MigrationRestrictionState,
   type RestrictedTables,
@@ -299,6 +307,7 @@ function includeUndeletedTables(
  * @param migration - Migration whose Post-phase failed
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables the migration's phases touched
+ * @param gqlPermissionUndo - Records how to undo each GraphQL permission the migration wrote
  */
 async function reapplyPrePhaseAfterPostPhaseFailure(
   client: OperatorClient,
@@ -306,6 +315,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
+  gqlPermissionUndo: GqlPermissionUndo,
 ): Promise<void> {
   try {
     await executeSingleMigrationPrePhase(
@@ -314,6 +324,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
       migration,
       phaseSettings,
       attemptedTables,
+      gqlPermissionUndo,
     );
   } catch (error) {
     logger.warn(
@@ -336,6 +347,58 @@ async function removeRunResources(
       `Could not remove the temporary resources of migration ${namespace}/${formatMigrationNumber(migrationNumber)}: ` +
         `${error instanceof Error ? error.message : String(error)}. A later deploy removes them.`,
     );
+  }
+}
+
+type RecordState = "cleared" | "in-progress" | "unknown";
+
+/**
+ * Read whether the migration's record is gone with its checkpoint still the one before it, or
+ * remains with that checkpoint. A record of another migration, a checkpoint that moved on, or a
+ * state that cannot be read means a concurrent deploy may own the schema, so nothing is assumed.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param migration - Migration whose record was being cleared
+ * @returns What the remote state confirms about the record
+ */
+async function readRecordState(
+  client: OperatorClient,
+  workspaceId: string,
+  migration: PendingMigration,
+): Promise<RecordState> {
+  try {
+    const state = await fetchRemoteMigrationState(
+      client,
+      resourceTrn(workspaceId, "tailordb", migration.namespace),
+    );
+    if (state.inProgressInvalid) return "unknown";
+    const checkpoint = state.number ?? (migration.number === 1 ? 0 : null);
+    if (checkpoint !== migration.number - 1) return "unknown";
+    if (state.inProgress === null) return "cleared";
+    return state.inProgress.number === migration.number ? "in-progress" : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+async function clearRolledBackRecord(
+  client: OperatorClient,
+  workspaceId: string,
+  migration: PendingMigration,
+): Promise<RecordState> {
+  const { namespace } = migration;
+  try {
+    await clearMigrationInProgress(client, workspaceId, namespace);
+    return "cleared";
+  } catch (error) {
+    const state = await readRecordState(client, workspaceId, migration);
+    if (state === "cleared") return state;
+    logger.warn(
+      `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migration.number)}: ` +
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; deploy again to resume it.",
+    );
+    return state;
   }
 }
 
@@ -698,7 +761,7 @@ interface RestorationState {
 interface MigrationRunLog {
   reached: Set<PendingMigration>;
   partial: Map<string, PendingMigration>;
-  unrolledBack: { migration: PendingMigration; tables: string[] }[];
+  unrolledBack: ({ migration: PendingMigration } & RollbackLeftovers)[];
   touchedTables: { namespace: string; tables: ReadonlySet<string> }[];
   recordedNamespaces: Set<string>;
 }
@@ -708,6 +771,8 @@ interface MigrationAttempt {
   attemptedTables: Set<string>;
   inProgress: boolean;
   runsSteps: boolean;
+  rollsBackOnFailure: boolean;
+  gqlPermissionUndo: GqlPermissionUndo;
 }
 
 type MigrationFailure = { error: unknown };
@@ -1043,29 +1108,43 @@ async function runMigration(
   runLog.touchedTables.push({ namespace: migration.namespace, tables: attemptedTables });
   const inProgress =
     flow.validation.inProgressMigrations[migration.namespace]?.number === migration.number;
+  const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
   const attempt: MigrationAttempt = {
     migration,
     attemptedTables,
     inProgress,
-    runsSteps: usesStepRunner(migration.scriptForm, inProgress),
+    runsSteps,
+    rollsBackOnFailure:
+      runsSteps &&
+      migration.scriptForm?.kind === "steps" &&
+      migration.scriptForm.rollbackOnFailure === true,
+    gqlPermissionUndo: new Map(),
   };
-  await runPreMigrationPhase(flow, attempt, runLog);
-  await runPostMigrationPhase(flow, attempt, runLog);
+  await runPreMigrationPhase(flow, attempt, restoration, runLog);
+  await runPostMigrationPhase(flow, attempt, restoration, runLog);
   await commitMigration(flow, attempt, restoration, runLog);
 }
 
 async function runPreMigrationPhase(
   flow: MigrationFlow,
   attempt: MigrationAttempt,
+  restoration: RestorationState,
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, phaseSettings, migrationCtx } = flow;
-  const { migration, attemptedTables, inProgress } = attempt;
+  const { migration, attemptedTables, inProgress, rollsBackOnFailure, gqlPermissionUndo } = attempt;
   flow.timeline?.enter("preMigration");
   try {
     // Pre-migration phase: Create/update tables with breaking fields as optional
     await withSpan("apply.tailorDB.migration.prePhase", () =>
-      executeSingleMigrationPrePhase(client, changeSet, migration, phaseSettings, attemptedTables),
+      executeSingleMigrationPrePhase(
+        client,
+        changeSet,
+        migration,
+        phaseSettings,
+        attemptedTables,
+        gqlPermissionUndo,
+      ),
     );
 
     // Script execution (only if migrate.ts exists for this migration)
@@ -1081,30 +1160,54 @@ async function runPreMigrationPhase(
     }
   } catch (error) {
     const shouldKeepPreMigrationSchema =
-      inProgress || isMigrationPartiallyApplied(error) || isMigrationOutcomeUnknown(error);
+      isMigrationOutcomeUnknown(error) ||
+      (rollsBackOnFailure
+        ? !isRollbackSafe(error, inProgress)
+        : inProgress || isMigrationPartiallyApplied(error));
     if (shouldKeepPreMigrationSchema) {
       runLog.partial.set(migration.namespace, migration);
       throw error;
     }
-    await rollbackMigration(flow, attempt, runLog);
-    throw error;
+    const recordMayExist = inProgress || isMigrationPartiallyApplied(error);
+    throw await rollbackMigration(flow, attempt, restoration, runLog, error, recordMayExist);
   }
+}
+
+/**
+ * Whether a failure of a migration that asked to be rolled back leaves no step writing. A resumed
+ * migration's earlier workflow execution is only known to have ended when the runner observed it,
+ * so a failure that happened before the runner (a Pre-phase or bundling error) does not count.
+ * @param error - The failure of the Pre-phase or the script
+ * @param inProgress - Whether an earlier deploy left the migration in progress
+ * @returns True when rolling back cannot race a running step
+ */
+function isRollbackSafe(error: unknown, inProgress: boolean): boolean {
+  if (isMigrationRunEnded(error)) return true;
+  return !inProgress && !isMigrationPartiallyApplied(error);
 }
 
 async function runPostMigrationPhase(
   flow: MigrationFlow,
   attempt: MigrationAttempt,
+  restoration: RestorationState,
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, phaseSettings } = flow;
-  const { migration, attemptedTables, inProgress, runsSteps } = attempt;
+  const {
+    migration,
+    attemptedTables,
+    inProgress,
+    runsSteps,
+    rollsBackOnFailure,
+    gqlPermissionUndo,
+  } = attempt;
   flow.timeline?.enter("postMigration");
   try {
     await withSpan("apply.tailorDB.migration.postPhase", () =>
       executeSingleMigrationPostPhase(client, changeSet, migration, phaseSettings, attemptedTables),
     );
   } catch (error) {
-    if (inProgress || runsSteps) {
+    if (!rollsBackOnFailure && (inProgress || runsSteps)) {
       runLog.partial.set(migration.namespace, migration);
       await reapplyPrePhaseAfterPostPhaseFailure(
         client,
@@ -1112,29 +1215,159 @@ async function runPostMigrationPhase(
         migration,
         phaseSettings,
         attemptedTables,
+        gqlPermissionUndo,
       );
       throw error;
     }
-    await rollbackMigration(flow, attempt, runLog);
-    throw error;
+    const failure = await rollbackMigration(flow, attempt, restoration, runLog, error, true);
+    if (isRollbackSkippedWithRecord(failure)) {
+      await reapplyPrePhaseAfterPostPhaseFailure(
+        client,
+        changeSet,
+        migration,
+        phaseSettings,
+        attemptedTables,
+        gqlPermissionUndo,
+      );
+    }
+    throw failure;
   }
 }
 
+/**
+ * Roll a failed migration's schema back. A migration that asked to be rolled back
+ * clears its in-progress record first, because a record that survives a rollback
+ * makes the next deploy resume against a schema its completed steps no longer match.
+ * @param flow - Migration flow
+ * @param attempt - Attempt that failed
+ * @param restoration - What the tables return to, updated in place
+ * @param runLog - Receives what the rollback could not revert
+ * @param error - The failure that triggered the rollback
+ * @param recordMayExist - Whether the migration may still be recorded as in progress; a failure that
+ * settled the record itself, such as a Pre-phase schema error, leaves nothing to clear
+ * @returns The error to raise in place of the failure
+ */
 async function rollbackMigration(
   flow: MigrationFlow,
   attempt: MigrationAttempt,
+  restoration: RestorationState,
   runLog: MigrationRunLog,
-): Promise<void> {
+  error: unknown,
+  recordMayExist: boolean,
+): Promise<unknown> {
+  const { client, migrationContext, phaseSettings } = flow;
+  const { migration, rollsBackOnFailure, inProgress, gqlPermissionUndo } = attempt;
+  const { workspaceId } = migrationContext;
+  const record =
+    rollsBackOnFailure && recordMayExist
+      ? await clearRolledBackRecord(client, workspaceId, migration)
+      : "cleared";
+  if (record !== "cleared") {
+    runLog.partial.set(migration.namespace, migration);
+    return rollbackSkippedError(
+      migration,
+      error,
+      phaseSettings.restricted,
+      record === "in-progress",
+    );
+  }
+  const attemptedTables = new Set(attempt.attemptedTables);
+  const resumedRollback = rollsBackOnFailure && inProgress;
+  const finalMigration = flow.pending.lastByNamespace.get(migration.namespace) ?? migration;
+  for (const tableName of readRollbackScope(
+    migration,
+    finalMigration,
+    gqlPermissionUndo,
+    resumedRollback,
+  )) {
+    attemptedTables.add(tableName);
+  }
   runLog.unrolledBack.push({
-    migration: attempt.migration,
-    tables: await rollbackSingleMigrationAfterFailure(
-      flow.client,
-      attempt.migration,
-      flow.migrationContext.workspaceId,
-      flow.phaseSettings,
-      attempt.attemptedTables,
-    ),
+    migration,
+    ...(await rollbackSingleMigrationAfterFailure(
+      client,
+      migration,
+      workspaceId,
+      phaseSettings,
+      attemptedTables,
+      gqlPermissionUndo,
+    )),
   });
+  if (!rollsBackOnFailure) return error;
+  await removeRunResources(client, workspaceId, migration.namespace, migration.number);
+  if (inProgress) settleRolledBackRestorationSettings(flow, migration, restoration);
+  return rolledBackError(migration, error);
+}
+
+/**
+ * Read what the rollback has to undo beyond what this attempt recorded: the GraphQL permission each
+ * table had at the prior checkpoint, and for a resumed migration also the tables an earlier deploy's
+ * Pre-phase wrote. A resumed migration's snapshot-derived permissions replace this deploy's undo
+ * records, because a forced update after an SDK upgrade records the permission the earlier Pre-phase
+ * installed as the one to restore. A failure to read the prior checkpoint is logged, so the rollback
+ * of this deploy's own writes and the original error go ahead.
+ * @param migration - The migration being rolled back
+ * @param finalMigration - The last pending migration of the namespace
+ * @param gqlPermissionUndo - Undo records of this attempt, updated in place
+ * @param resumed - Whether an earlier deploy left the migration in progress
+ * @returns The tables to roll back besides those this deploy wrote
+ */
+function readRollbackScope(
+  migration: PendingMigration,
+  finalMigration: PendingMigration,
+  gqlPermissionUndo: GqlPermissionUndo,
+  resumed: boolean,
+): ReadonlySet<string> {
+  try {
+    const tables = resumed ? getPreMigrationTargetTableNames(migration) : new Set<string>();
+    const recordedTables = resumed ? new Set(gqlPermissionUndo.keys()) : undefined;
+    for (const [tableName, undo] of gqlPermissionUndoFromSnapshots(
+      migration,
+      finalMigration,
+      recordedTables,
+    )) {
+      if (resumed || !gqlPermissionUndo.has(tableName)) gqlPermissionUndo.set(tableName, undo);
+    }
+    return tables;
+  } catch (error) {
+    logger.warn(
+      `Could not read migration ${migration.namespace}/${formatMigrationNumber(migration.number)} or its prior checkpoint: ` +
+        `${error instanceof Error ? error.message : String(error)}. Only what this deploy wrote is rolled back.`,
+    );
+    return new Set();
+  }
+}
+
+/**
+ * Point the settings a rolled-back migration's tables are restored to at the schema they
+ * returned to. The settings captured at the start of a deploy that resumes a migration are
+ * the restrictions an earlier deploy applied, which would stay in place after the rollback.
+ * @param flow - Migration flow
+ * @param migration - The migration that was rolled back
+ * @param restoration - What the tables return to, updated in place
+ */
+function settleRolledBackRestorationSettings(
+  flow: MigrationFlow,
+  migration: PendingMigration,
+  restoration: RestorationState,
+): void {
+  const input = flow.migrationContext.tailorDBInputs.find(
+    (entry) => entry.namespace === migration.namespace,
+  );
+  const committedSnapshot = restoration.snapshots.get(migration.namespace);
+  if (!input || !committedSnapshot) return;
+  const settings = resolveMigrationSnapshotSettings(
+    committedSnapshot,
+    input,
+    flow.migrationContext.executorUsedTables,
+  );
+  const migrationTables = migrationSnapshotCache.load(migration).tables;
+  for (const [tableName, captured] of restoration.settings.get(migration.namespace) ?? []) {
+    if (!committedSnapshot.tables[tableName] && !migrationTables[tableName]) {
+      settings.set(tableName, captured);
+    }
+  }
+  restoration.settings.set(migration.namespace, settings);
 }
 
 async function commitMigration(
@@ -1532,7 +1765,7 @@ function warnIncompleteRollbacks(
   runLog: MigrationRunLog,
   unrestored: readonly RestrictedTables[],
 ): void {
-  for (const { migration, tables } of runLog.unrolledBack) {
+  for (const { migration, tables, permissions } of runLog.unrolledBack) {
     const failedRestoration = unrestored.find((entry) => entry.namespace === migration.namespace);
     const lifted = new Set(
       restoration.skipped.has(migration.namespace) || failedRestoration?.tables.length === 0
@@ -1542,6 +1775,16 @@ function warnIncompleteRollbacks(
             ...(restoration.settings.get(migration.namespace)?.keys() ?? []),
           ].filter((tableName) => !failedRestoration?.tables.includes(tableName)),
     );
+    // Restoration writes table definitions but not GraphQL permissions, so a failed
+    // permission undo stays unreverted even for a table restoration lifted.
+    if (permissions.length > 0) {
+      logger.warn(
+        `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely. GraphQL permissions needing manual repair in namespace '${migration.namespace}': ${permissions.join(", ")}.`,
+      );
+      logger.log(
+        "Check the GraphQL permission of these tables in the workspace and set it back by hand.",
+      );
+    }
     const remaining = tables.filter((tableName) => !lifted.has(tableName));
     if (remaining.length === 0) continue;
     if (!flow.phaseSettings.restricted) {

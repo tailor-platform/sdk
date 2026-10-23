@@ -28,7 +28,7 @@ function isDbReference(imports: ImportTracker, node: AstNode | null | undefined)
   return false;
 }
 
-function isDbTypeReceiver(
+function isDbTableReceiver(
   context: Rule.RuleContext,
   imports: ImportTracker,
   node: AstNode | null | undefined,
@@ -39,7 +39,9 @@ function isDbTypeReceiver(
     if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
       return false;
     }
-    if (memberName(callee) === "type" && isDbReference(imports, callee.object)) return true;
+    const method = memberName(callee);
+    if ((method === "type" || method === "table") && isDbReference(imports, callee.object))
+      return true;
     current = resolveValue(context, callee.object);
   }
   return false;
@@ -61,7 +63,7 @@ function permissionArgument(
   }
   const method = memberName(callee);
   if (method !== "permission" && method !== "gqlPermission") return null;
-  if (!isDbTypeReceiver(context, imports, callee.object)) return null;
+  if (!isDbTableReceiver(context, imports, callee.object)) return null;
   return call.arguments[0] ?? null;
 }
 

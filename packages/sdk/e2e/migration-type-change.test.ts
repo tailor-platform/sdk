@@ -322,12 +322,8 @@ export const steps = {
 };
 `;
 
-    /**
-     * Scenario 10: a step that fails after another step committed leaves the
-     * migration in progress, keeping its Pre-phase schema for the next deploy.
-     */
     test(
-      "leaves the migration in progress when its second step fails",
+      "generates the multi-step verification migration",
       async ({ signal }) => {
         ws.writeUserTable([
           "role: db.string({ optional: true })",
@@ -348,7 +344,62 @@ export const steps = {
         const files = getMigrationFiles(ws.migrationsDir);
         expect(files.length).toBe(4);
         expect(files[3]!.number).toBe(3);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
+    /**
+     * Scenario 10a: a script that exports onFailure = "rollback" gives its Pre-phase schema back,
+     * clears the in-progress record and removes its workflow when a later step fails. The next
+     * scenario deploys the same migration again, so nothing is left in progress here.
+     */
+    test(
+      "rolls the migration back when its second step fails and its script asks for it",
+      async ({ signal }) => {
+        ws.overwriteMigrationScript(
+          3,
+          `import type { Transaction } from "./db";
+
+export const onFailure = "rollback";
+
+export const steps = {
+  probe: {
+    run: async (trx: Transaction) => {
+      await trx.updateTable("User").set({ verificationMarker: "rollback-probe" }).execute();
+    },
+  },
+  verify: {
+    dependsOn: ["probe"],
+    run: async () => {
+      throw new Error("simulated step failure for rollback e2e");
+    },
+  },
+};
+`,
+        );
+
+        const result = await ws.tryDeploy(signal);
+
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("MIGRATION_ROLLED_BACK");
+        expect(result.output).toContain("simulated step failure for rollback e2e");
+        expect(await ws.getMigrationCheckpoint()).toBe(2);
+        expect(await ws.getTailorDBTypeFields("User")).not.toContain("verificationMarker");
+        const labels = await ws.namespaceLabels();
+        expect(labels).not.toHaveProperty("sdk-migration-in-progress");
+        expect(labels).not.toHaveProperty("sdk-migration-execution");
+        expect(await ws.migrationWorkflowExists(3)).toBe(false);
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
+
+    /**
+     * Scenario 10b: a step that fails after another step committed leaves the
+     * migration in progress, keeping its Pre-phase schema for the next deploy.
+     */
+    test(
+      "leaves the migration in progress when its second step fails",
+      async ({ signal }) => {
         ws.overwriteMigrationScript(
           3,
           stepsScript(
@@ -372,11 +423,11 @@ export const steps = {
         });
         expect(await ws.migrationWorkflowExists(3)).toBe(true);
       },
-      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
+      DEPLOY_TEST_TIMEOUT_MS,
     );
 
     /**
-     * Scenario 10b: the next deploy resumes the failed run with the fixed script;
+     * Scenario 10c: the next deploy resumes the failed run with the fixed script;
      * the completed step does not run again, and its committed changes are visible.
      */
     test(

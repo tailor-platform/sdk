@@ -1,106 +1,20 @@
-import { parse, Lang } from "@ast-grep/napi";
-import { stringValue } from "../../../../src/ast-grep-helpers";
+import { parse } from "@ast-grep/napi";
+import {
+  callArgument,
+  excerptOf,
+  lineOf,
+  pairValue,
+  sourceLang,
+} from "../../../../src/ast-grep-helpers";
+import {
+  hasDynamicProperties,
+  isRelationCall,
+  literalStringValue,
+  objectPair,
+  relationAliases,
+} from "../../../../src/relation-call";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { SgNode } from "@ast-grep/napi";
-
-function sourceLang(filePath: string, source: string): Lang {
-  const lowerPath = filePath.toLowerCase();
-  if (/\.(?:ts|mts|cts)$/u.test(lowerPath)) return Lang.TypeScript;
-  if (/\.(?:tsx|jsx|js)$/u.test(lowerPath)) return Lang.Tsx;
-  return source.includes("</") ? Lang.Tsx : Lang.TypeScript;
-}
-
-function isRelationCall(call: SgNode, aliases: ReadonlySet<string>): boolean {
-  const callee = call.children()[0];
-  if (!callee) return false;
-  if (callee.kind() === "identifier") return aliases.has(callee.text());
-  if (callee.kind() === "subscript_expression") {
-    const property = literalStringValue(callee.field("index"));
-    return property === null || property === "relation";
-  }
-  if (callee.kind() !== "member_expression") return false;
-
-  const property = callee
-    .children()
-    .findLast((child) => child.kind() === "property_identifier" || child.kind() === "identifier");
-  return property?.text() === "relation";
-}
-
-function relationBindingName(pattern: SgNode): string | null {
-  if (pattern.kind() !== "object_pattern") return null;
-
-  for (const child of pattern.children()) {
-    if (child.kind() === "shorthand_property_identifier_pattern" && child.text() === "relation") {
-      return child.text();
-    }
-    if (child.kind() === "pair_pattern" && stringValue(child.field("key")) === "relation") {
-      const value = child.field("value");
-      return value?.kind() === "identifier" ? value.text() : null;
-    }
-    if (child.kind() === "object_assignment_pattern") {
-      const binding = child
-        .children()
-        .find((node) => node.kind() === "shorthand_property_identifier_pattern");
-      if (binding?.text() === "relation") return binding.text();
-    }
-  }
-
-  return null;
-}
-
-function relationAliases(root: SgNode): Set<string> {
-  const aliases = new Set<string>();
-  for (const pattern of root.findAll({ rule: { kind: "object_pattern" } })) {
-    const name = relationBindingName(pattern);
-    if (name) aliases.add(name);
-  }
-  return aliases;
-}
-
-function callArgument(call: SgNode): SgNode | null {
-  const args = call.children().find((child) => child.kind() === "arguments");
-  if (!args) return null;
-
-  const values = args.children().filter((child) => {
-    const kind = child.kind();
-    return kind !== "(" && kind !== ")" && kind !== "," && kind !== "comment";
-  });
-  return values.length === 1 ? values[0]! : null;
-}
-
-function pairKey(pair: SgNode): string | null {
-  const key = pair.children()[0];
-  return stringValue(key ?? null);
-}
-
-function pairValue(pair: SgNode): SgNode | null {
-  const children = pair.children();
-  const colonIndex = children.findIndex((child) => child.kind() === ":");
-  if (colonIndex === -1) return null;
-  return children.slice(colonIndex + 1).find((child) => child.kind() !== "comment") ?? null;
-}
-
-function objectPair(object: SgNode, key: string): SgNode | null {
-  return (
-    object.children().find((child) => child.kind() === "pair" && pairKey(child) === key) ?? null
-  );
-}
-
-function literalStringValue(node: SgNode | null): string | null {
-  if (node?.kind() !== "string") return null;
-  return stringValue(node);
-}
-
-function hasDynamicProperties(object: SgNode): boolean {
-  return object.children().some((child) => {
-    const kind = child.kind();
-    if (kind === "{" || kind === "}" || kind === "," || kind === "comment") return false;
-    if (kind !== "pair") return true;
-
-    const keyKind = child.children()[0]?.kind();
-    return keyKind !== "property_identifier" && keyKind !== "string";
-  });
-}
 
 function needsReview(call: SgNode): boolean {
   const config = callArgument(call);
@@ -147,8 +61,8 @@ export function reviewFindings(
     .filter((call) => isRelationCall(call, aliases) && needsReview(call))
     .map((call) => ({
       file: relativePath,
-      line: call.range().start.line + 1,
+      line: lineOf(call),
       message: "Review the v2 forward GraphQL field name or add an explicit toward.as.",
-      excerpt: call.text().split("\n", 1)[0]!.trim(),
+      excerpt: excerptOf(call),
     }));
 }

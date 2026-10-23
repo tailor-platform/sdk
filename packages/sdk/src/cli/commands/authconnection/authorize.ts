@@ -3,6 +3,7 @@ import * as http from "node:http";
 import open from "open";
 import { z } from "zod";
 import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
+import { sendCallbackFailure, sendCallbackSuccess } from "#/cli/shared/callback-page";
 import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
@@ -175,15 +176,11 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
             redirectUri,
           });
 
-          res.writeHead(200, { "Content-Type": "text/html" });
-          res.end(
-            "<html><body><h1>Authorization successful</h1><p>You can close this window.</p></body></html>",
-          );
+          sendCallbackSuccess(res, "Authorization successful");
           server.close();
           resolve();
         } catch (err) {
-          res.writeHead(400, { "Content-Type": "text/plain" });
-          res.end(`Authorization failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+          sendCallbackFailure(res, 400, "Authorization failed", err);
           server.close();
           reject(toError(err));
         }

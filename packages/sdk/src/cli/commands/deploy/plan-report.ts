@@ -23,6 +23,7 @@ import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
 import type { ManagedResourceType } from "./managed-resource-type";
+import type { CustomDomainNoteKind } from "./staticwebsite";
 type PrintPlanOptions = {
   dryRun?: boolean;
 };
@@ -51,6 +52,13 @@ type JsonPlanPayload = {
     resourceType: ManagedResourceType;
     name: string;
     currentOwner: string;
+  }>;
+  /** Custom domains that produced no change, with the reason. */
+  notes: Array<{
+    type: CustomDomainNoteKind;
+    resourceType: ManagedResourceType;
+    name: string;
+    message: string;
   }>;
 };
 
@@ -185,6 +193,9 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...formatChangeSetEntries(otherFunctionRegistryChanges),
     ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
     ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
+    ...formatChangeSetEntries(results.staticWebsite.customDomainTransferChangeSet, [
+      "customDomainTransfer",
+    ]),
     ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
     ...formatChangeSetEntries(results.app, ["application"]),
     ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
@@ -222,6 +233,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ),
     ...results.staticWebsite.changeSet.lines(),
     ...results.staticWebsite.customDomainChangeSet.lines(),
+    ...results.staticWebsite.customDomainTransferChangeSet.lines(),
     ...results.aiGateway.changeSet.lines(),
     ...results.app.lines(),
     ...buildGroupedDisplayLines("TailorDB", tailorDBEntries, tailorDBServiceActions),
@@ -248,6 +260,14 @@ function buildPlanReport(results: PlanResults): PlanReport {
     }
   }
 
+  const customDomainNotes = results.staticWebsite.customDomainNotes;
+  if (customDomainNotes.length > 0) {
+    allLines.push(styles.bold("Custom domains (no change):"));
+    for (const note of customDomainNotes) {
+      allLines.push(`  ${styles.dim("\u25cb")} ${note.domain} \u2014 ${note.message}`);
+    }
+  }
+
   if (allConflicts.length > 0) {
     allLines.push(styles.bold("Owner conflicts (will require confirmation on apply):"));
     for (const { resourceLabel, resourceName, currentOwner } of allConflicts) {
@@ -259,9 +279,16 @@ function buildPlanReport(results: PlanResults): PlanReport {
 
   allLines.push(formatPlanSummary(summary));
 
+  const notes = customDomainNotes.map((note) => ({
+    type: note.kind,
+    resourceType: "staticwebsite.custom_domain_transfer" as const,
+    name: note.domain,
+    message: note.message,
+  }));
+
   return {
     summary,
-    json: { summary, changes, warnings, conflicts },
+    json: { summary, changes, warnings, conflicts, notes },
     lines: allLines,
   };
 }
@@ -326,6 +353,7 @@ export function summarizePlanResults(
     otherChanges,
     results.staticWebsite.changeSet,
     results.staticWebsite.customDomainChangeSet,
+    results.staticWebsite.customDomainTransferChangeSet,
     results.aiGateway.changeSet,
     results.app,
     results.secretManager.vaultChangeSet,
@@ -361,6 +389,7 @@ export function printDeploymentPlans(
       changes: reports.flatMap((report) => report.json.changes),
       warnings: reports.flatMap((report) => report.json.warnings),
       conflicts: reports.flatMap((report) => report.json.conflicts),
+      notes: reports.flatMap((report) => report.json.notes),
       ...(opts.pendingDeployedHooks?.length
         ? { pendingDeployedHooks: opts.pendingDeployedHooks }
         : {}),

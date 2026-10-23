@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import {
   defineApplication,
+  definePluginResolverServices,
   generatePluginFilesIfNeeded,
   type Application,
 } from "#/cli/services/application";
@@ -322,6 +323,10 @@ export function createGenerationManager(params: {
           throw error;
         }
       });
+      const resolverServices = [
+        ...app.resolverServices,
+        ...definePluginResolverServices(config, pluginManager),
+      ];
 
       // Generate plugin type and executor files
       // This must happen after TailorDB tables are loaded since plugins process during table loading
@@ -366,7 +371,7 @@ export function createGenerationManager(params: {
 
       // Load Resolvers (can now import generated files)
       await withSpan("generate.loadResolvers", async () => {
-        for (const resolverService of app.resolverServices) {
+        for (const resolverService of resolverServices) {
           const namespace = resolverService.namespace;
           await withSpan(`generate.loadResolvers.${namespace}`, async () => {
             try {

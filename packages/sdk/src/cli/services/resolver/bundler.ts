@@ -1,4 +1,3 @@
-import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { logger, styles } from "#/cli/shared/logger";
@@ -25,9 +24,9 @@ interface ResolverInfo {
 export interface BundleResolversOptions extends FunctionBundleSettings {
   /** Resolver namespace name */
   namespace: string;
-  /** Resolver file loading configuration */
-  config: FileLoadConfig;
-  /** Directory the config's file patterns are resolved against */
+  /** Absolute paths of the resolver files to bundle */
+  files: ReadonlyArray<string>;
+  /** Directory the application's tsconfig is resolved from */
   baseDir: string;
   /** The namespace's `defaultPermission`, applied to resolvers declaring none */
   defaultPermission?: Resolver["permission"];
@@ -50,16 +49,14 @@ export async function bundleResolvers(
 ): Promise<Map<string, string>> {
   const {
     namespace,
-    config,
+    files,
     baseDir,
     defaultPermission,
     allowedRuntimeGlobals,
     dateDefault = "legacy",
   } = options;
   const bundledCode = new Map<string, string>();
-  const files = loadFilesWithIgnores(config, baseDir);
   if (files.length === 0) {
-    logger.warn(`No resolver files found for patterns: ${config.files.join(", ")}`);
     return bundledCode;
   }
 

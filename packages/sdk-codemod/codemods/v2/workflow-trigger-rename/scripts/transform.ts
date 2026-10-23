@@ -1,9 +1,10 @@
 import { parse, Lang } from "@ast-grep/napi";
+import { findImportStatements } from "../../../../src/ast-grep-helpers";
 import {
-  findImportStatements,
-  importBindings,
-  localDeclarationNames,
-} from "../../../../src/ast-grep-helpers";
+  collectWorkflowLocals,
+  isAmbientTailorWorkflow,
+  tailorIsAmbientGlobal,
+} from "../../../../src/workflow-bindings";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RENAMES: Record<string, string> = {
@@ -11,11 +12,6 @@ const RENAMES: Record<string, string> = {
   triggerJobFunction: "execJobFunction",
   resumeWorkflow: "resumeWorkflowExecution",
 };
-
-const WORKFLOW_MODULE_SOURCES = new Set([
-  "@tailor-platform/sdk/runtime",
-  "@tailor-platform/sdk/runtime/workflow",
-]);
 
 function quickFilter(source: string): boolean {
   return Object.keys(RENAMES).some((name) => source.includes(name));
@@ -25,40 +21,6 @@ function sourceLang(filePath: string, source: string): Lang {
   const lower = filePath.toLowerCase();
   if (lower.endsWith(".tsx") || lower.endsWith(".jsx")) return Lang.Tsx;
   return source.includes("</") || source.includes("/>") ? Lang.Tsx : Lang.TypeScript;
-}
-
-function collectWorkflowLocals(root: SgNode, imports: SgNode[]): Set<string> {
-  const locals = new Set<string>();
-  for (const importStmt of imports) {
-    for (const binding of importBindings(importStmt)) {
-      if (binding.importedName === "workflow" && WORKFLOW_MODULE_SOURCES.has(binding.source)) {
-        locals.add(binding.localName);
-      }
-    }
-  }
-
-  // Coarse safety check: a local name also declared elsewhere in the file
-  // (shadowing the import) is dropped rather than range-tracked.
-  const declaredNames = localDeclarationNames(root);
-  for (const name of locals) {
-    if (declaredNames.has(name)) locals.delete(name);
-  }
-  return locals;
-}
-
-function tailorIsAmbientGlobal(root: SgNode, imports: SgNode[]): boolean {
-  const declaredNames = localDeclarationNames(root);
-  if (declaredNames.has("tailor")) return false;
-  return !imports.some((stmt) => importBindings(stmt).some((b) => b.localName === "tailor"));
-}
-
-function isAmbientTailorWorkflow(object: SgNode | null): boolean {
-  if (!object || object.kind() !== "member_expression") return false;
-  const base = object.field("object");
-  const property = object.field("property");
-  return (
-    base?.kind() === "identifier" && base.text() === "tailor" && property?.text() === "workflow"
-  );
 }
 
 function expressionArguments(args: SgNode): SgNode[] {

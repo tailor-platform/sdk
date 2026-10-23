@@ -137,7 +137,7 @@ describe("bundleResolvers", () => {
     await expect(
       bundleResolvers({
         namespace: "provisioning",
-        config: { files: ["./src/backend/provisioning/resolver/*.ts"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./src/backend/provisioning/resolver/*.ts")),
         baseDir: tmp.dir,
       }),
     ).resolves.toEqual(new Map());
@@ -161,7 +161,7 @@ describe("bundleResolvers", () => {
 
     const result = await bundleResolvers({
       namespace: "permissioncheck",
-      config: { files: ["./src/backend/permissioncheck/resolver/*.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./src/backend/permissioncheck/resolver/*.ts")),
       baseDir: tmp.dir,
     });
 
@@ -191,7 +191,7 @@ describe("bundleResolvers", () => {
 
     const result = await bundleResolvers({
       namespace: "nopermission",
-      config: { files: ["./src/backend/nopermission/resolver/*.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./src/backend/nopermission/resolver/*.ts")),
       baseDir: tmp.dir,
     });
 
@@ -228,7 +228,7 @@ describe("bundleResolvers", () => {
 
     const result = await bundleResolvers({
       namespace: "defaulted",
-      config: { files: ["./resolver/*.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./resolver/*.ts")),
       baseDir: tmp.dir,
       defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
     });
@@ -256,7 +256,7 @@ describe("bundleResolvers", () => {
     ) =>
       bundleResolvers({
         namespace: "cache",
-        config: { files: ["./resolver.ts"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
         baseDir: tmp.dir,
         defaultPermission,
         cache,
@@ -290,7 +290,7 @@ describe("bundleResolvers", () => {
 
       await bundleResolvers({
         namespace: "tsconfig-test",
-        config: { files: ["./src/backend/tsconfig-test/resolver/*.ts"] },
+        files: fs.globSync(path.resolve(otherDir, "./src/backend/tsconfig-test/resolver/*.ts")),
         baseDir: otherDir,
       });
 
@@ -334,7 +334,7 @@ describe("bundleResolvers", () => {
     const bundle = () =>
       bundleResolvers({
         namespace: "cache",
-        config: { files: ["./resolver.ts"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
         baseDir: tmp.dir,
         cache,
       });
@@ -383,7 +383,7 @@ describe("bundleResolvers", () => {
 
     const bundles = await bundleResolvers({
       namespace: "sourcemap",
-      config: { files: ["./uses-lib.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./uses-lib.ts")),
       baseDir: tmp.dir,
       inlineSourcemap: true,
       inlineSourcemapDependencySources: true,
@@ -449,13 +449,13 @@ describe("bundleResolvers", () => {
 
       const firstBuild = bundleResolvers({
         namespace: "first",
-        config: { files: ["./first/resolver/*.ts"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./first/resolver/*.ts")),
         baseDir: tmp.dir,
       });
       await firstBuildStarted;
       const secondBuild = bundleResolvers({
         namespace: "second",
-        config: { files: ["./second/resolver/*.ts"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./second/resolver/*.ts")),
         baseDir: tmp.dir,
       });
 
@@ -495,7 +495,7 @@ describe("bundleResolvers", () => {
 
       await bundleResolvers({
         namespace: "concurrency",
-        config: { files: ["./src/backend/concurrency/resolver/*.ts"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./src/backend/concurrency/resolver/*.ts")),
         baseDir: tmp.dir,
       });
 
@@ -523,7 +523,7 @@ describe("bundleResolvers", () => {
     await expect(
       bundleResolvers({
         namespace: "nodeglobal",
-        config: { files: ["./src/backend/nodeglobal/resolver/*.ts"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./src/backend/nodeglobal/resolver/*.ts")),
         baseDir: tmp.dir,
       }),
     ).rejects.toThrow(
@@ -568,7 +568,7 @@ describe("bundleResolvers", () => {
 
     const result = await bundleResolvers({
       namespace: "pkgglobal",
-      config: { files: ["./src/backend/pkgglobal/resolver/*.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./src/backend/pkgglobal/resolver/*.ts")),
       baseDir: tmp.dir,
       allowedRuntimeGlobals: { "allowed-buffer-lib": ["Buffer"] },
     });
@@ -593,7 +593,7 @@ describe("bundleResolvers date default", () => {
 
     const result = await bundleResolvers({
       namespace: "dates",
-      config: { files: ["./resolver.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
       baseDir: tmp.dir,
       dateDefault: "temporal",
     });
@@ -609,7 +609,7 @@ describe("bundleResolvers date default", () => {
 
     const result = await bundleResolvers({
       namespace: "dates",
-      config: { files: ["./resolver.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
       baseDir: tmp.dir,
     });
 
@@ -631,7 +631,7 @@ describe("bundleResolvers date default", () => {
 
     const result = await bundleResolvers({
       namespace: "dates",
-      config: { files: ["./resolver.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
       baseDir: tmp.dir,
       dateDefault: "temporal",
     });
@@ -646,7 +646,7 @@ describe("bundleResolvers date default", () => {
 
     const result = await bundleResolvers({
       namespace: "dates",
-      config: { files: ["./resolver.ts"] },
+      files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
       baseDir: tmp.dir,
     });
 
@@ -661,7 +661,7 @@ describe("bundleResolvers date default", () => {
     const bundle = (dateDefault?: Parameters<typeof bundleResolvers>[0]["dateDefault"]) =>
       bundleResolvers({
         namespace: "dates",
-        config: { files: ["./resolver.ts"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
         baseDir: tmp.dir,
         dateDefault,
         cache,
