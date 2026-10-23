@@ -72,6 +72,29 @@ describe("buildFunctionBundle runtime globals", () => {
     );
   });
 
+  test("bundles a function that references a forbidden global when the check is turned off", async () => {
+    using tmp = tempCwd("sdk-function-bundle-unchecked-global-");
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `export default async () => (process.env.SOME_FLAG === "1" ? 1 : 0);\n`,
+    );
+
+    await expect(bundle(sourceFile, { runtimeGlobals: false })).resolves.toContain("process.env");
+  });
+
+  test("requires every caller to choose whether to check runtime globals", () => {
+    // @ts-expect-error - omitting runtimeGlobals would silently skip the check
+    const options: BuildFunctionBundleOptions = {
+      kind: "executor",
+      name: "fn",
+      sourceFile: "fn.ts",
+      tsconfig: undefined,
+      entry: () => "",
+    };
+
+    expect(options.runtimeGlobals).toBeUndefined();
+  });
+
   test("rejects an installed package that references a forbidden global and names the package", async () => {
     using tmp = tempCwd("sdk-function-bundle-package-global-");
     const sourceFile = writeEncodingFunction(tmp.dir, "buffer-lib");

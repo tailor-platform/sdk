@@ -81,8 +81,8 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   dateRepresentations?: BundledDateRepresentations;
   /** Expressions replaced with constants while bundling */
   define?: Record<string, string>;
-  /** Rejects Node-only globals in the bundle */
-  runtimeGlobals?: RuntimeGlobalsCheck;
+  /** Rejects Node-only globals in the bundle, or `false` to skip the check */
+  runtimeGlobals: RuntimeGlobalsCheck | false;
 }
 
 /**
