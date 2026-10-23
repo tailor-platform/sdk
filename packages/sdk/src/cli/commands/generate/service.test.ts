@@ -200,6 +200,34 @@ describe("GenerationManager", () => {
       expect(Object.keys(manager.services.tailordb)).toEqual(["own"]);
     });
 
+    test("names the namespace and schemaFrom of a referenced config that fails to load", async () => {
+      const cause = new Error("Config file not found: /repo/owner/tailor.config.ts");
+      vi.mocked(createTailorDBNamespaceLoader).mockReturnValueOnce(
+        vi.fn().mockRejectedValue(cause),
+      );
+      const config: LoadedConfig = {
+        name: "app",
+        path: "/repo/consumer/tailor.config.ts",
+        db: { shared: { attach: false, schemaFrom: "../owner/tailor.config.ts" } },
+      };
+      const manager = createGenerationManager({
+        config,
+        application: applicationWithTailorDBServices(config, []),
+      });
+
+      await expect(manager.generate()).rejects.toMatchObject({
+        code: "TAILORDB_SCHEMA_FROM_LOAD_FAILED",
+        message:
+          'Failed to load TailorDB namespace "shared" from schemaFrom "../owner/tailor.config.ts" in /repo/consumer/tailor.config.ts: Config file not found: /repo/owner/tailor.config.ts',
+        context: {
+          namespace: "shared",
+          schemaFrom: "../owner/tailor.config.ts",
+          configPath: "/repo/consumer/tailor.config.ts",
+        },
+        cause,
+      });
+    });
+
     test("executes complete generation process", async () => {
       const application = defineApplication({ config: mockConfig });
       const manager = createGenerationManager({

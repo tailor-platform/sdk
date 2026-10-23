@@ -13,7 +13,7 @@ import { normalizedDbOf } from "#/cli/shared/config";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
-import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
 import { logger, plainRedacted, styles } from "#/cli/shared/logger";
 import { createTailorDBNamespaceLoader } from "#/cli/shared/tailordb-namespaces";
 import { generateUserTypes } from "#/cli/shared/type-generator";
@@ -339,8 +339,21 @@ export function createGenerationManager(params: {
       referencedTailordb = [];
       for (const [namespace, entry] of Object.entries(normalizedDbOf(config))) {
         if (entry.schemaSource?.kind !== "config") continue;
-        const configPath = path.resolve(path.dirname(config.path), entry.schemaSource.path);
-        referencedTailordb.push(await loadNamespace(configPath, namespace));
+        const schemaFrom = entry.schemaSource.path;
+        try {
+          referencedTailordb.push(
+            await loadNamespace(path.resolve(path.dirname(config.path), schemaFrom), namespace),
+          );
+        } catch (error) {
+          throw CLIError({
+            code: "TAILORDB_SCHEMA_FROM_LOAD_FAILED",
+            message: `Failed to load TailorDB namespace "${namespace}" from schemaFrom "${schemaFrom}" in ${config.path}: ${toError(error).message}`,
+            suggestion:
+              "Point schemaFrom at the tailor.config.ts of the application that owns the namespace.",
+            context: { namespace, schemaFrom, configPath: config.path },
+            cause: error,
+          });
+        }
       }
 
       // Generate plugin type and executor files
