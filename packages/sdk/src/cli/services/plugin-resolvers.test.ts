@@ -465,6 +465,38 @@ describe("plugin-generated resolvers", () => {
     ]);
   });
 
+  test("keeps another application's generated resolvers when a name is a dot segment", async () => {
+    const createManager = () =>
+      new PluginManager([
+        {
+          id: "greeting",
+          description: "Query",
+          onNamespaceLoaded: () => ({
+            resolvers: [
+              { name: "greet", operation: "query", outputFields: {}, body: "return {};" },
+            ],
+          }),
+        },
+      ]);
+    const { application } = await loadApplication({
+      config: {
+        ...defineConfig({ name: "main", db: { other: { files: [] } } }),
+        path: path.join(baseDir, "main.config.ts"),
+      },
+      pluginManager: createManager(),
+    });
+    const files = Object.keys(application.resolverServices[0]!.resolvers);
+    expect(files).toHaveLength(1);
+    await loadApplication({
+      config: {
+        ...defineConfig({ name: ".", db: { main: { files: [] } } }),
+        path: path.join(baseDir, "dot.config.ts"),
+      },
+      pluginManager: createManager(),
+    });
+    expect(files.filter((file) => !fs.existsSync(file))).toEqual([]);
+  });
+
   test.each([
     {
       name: "invalid field",

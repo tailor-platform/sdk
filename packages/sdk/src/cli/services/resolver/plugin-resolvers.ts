@@ -32,8 +32,9 @@ export function generatePluginResolverFiles(
     getDistDir(),
     "plugin",
     "resolvers",
-    encodeURIComponent(appName),
-    encodeURIComponent(namespace),
+    createHash("sha256")
+      .update(JSON.stringify([appName, namespace]))
+      .digest("hex"),
   );
   fs.rmSync(outputDir, { recursive: true, force: true });
   return resolvers.map((info, index) => {
