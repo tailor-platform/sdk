@@ -97,15 +97,15 @@ export function createResolverService(
               .filter((info) => info.namespace === namespace),
           )
         : [];
-      const resolverFiles = [
-        ...new Set([...loadFilesWithIgnores(config, baseDir), ...generatedFiles]),
-      ];
+      const configuredFiles = loadFilesWithIgnores(config, baseDir);
+      const resolverFiles = [...new Set([...configuredFiles, ...generatedFiles])];
 
       logger.log(
         `Found ${styles.highlight(resolverFiles.length.toString())} resolver files for service ${styles.highlight(`"${namespace}"`)}`,
       );
-      if (resolverFiles.length === 0) {
-        const patterns = config.files.length > 0 ? ` matching ${config.files.join(", ")}` : "";
+      const unmatched = config.files.length > 0 && configuredFiles.length === 0;
+      if (unmatched || resolverFiles.length === 0) {
+        const patterns = unmatched ? ` matching ${config.files.join(", ")}` : "";
         logger.warn(`No resolver files found for namespace "${namespace}"${patterns}`);
       }
 

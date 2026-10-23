@@ -9,6 +9,7 @@ import {
 } from "#/cli/commands/deploy/function-registry";
 import { planPipeline } from "#/cli/commands/deploy/resolver";
 import { createGenerationManager } from "#/cli/commands/generate/service";
+import { logger } from "#/cli/shared/logger";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { defineConfig } from "#/configure/config/index";
 import { t } from "#/configure/types/type";
@@ -181,10 +182,14 @@ describe("plugin-generated resolvers", () => {
       ...defineConfig({ name: "test-app", db: { main: { files: [] } } }),
       path: path.join(baseDir, "tailor.config.ts"),
     };
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const application = defineApplication({ config, pluginManager });
     const generation = createGenerationManager({ application, config, pluginManager });
     await generation.generate();
+    const warnings = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
     expect(Object.keys(generation.services.resolver.main!)).toEqual(["greet"]);
+    expect(warnings.filter((message) => message.startsWith("No resolver files found"))).toEqual([]);
   });
 
   test("bundles generated resolvers when the build directory contains glob characters", async () => {
@@ -234,6 +239,33 @@ describe("plugin-generated resolvers", () => {
       );
     }
     expect(generatedFiles[1]).toEqual(generatedFiles[0]);
+  });
+
+  test("warns about unmatched resolver patterns when plugins generate resolvers", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const pluginManager = new PluginManager([
+      {
+        id: "greeting",
+        description: "Query",
+        onNamespaceLoaded: () => ({
+          resolvers: [{ name: "greet", operation: "query", outputFields: {}, body: "return {};" }],
+        }),
+      },
+    ]);
+    const config = {
+      ...defineConfig({
+        name: "test-app",
+        db: { main: { files: [] } },
+        resolver: { main: { files: ["./missing/*.ts"] } },
+      }),
+      path: path.join(baseDir, "tailor.config.ts"),
+    };
+    await loadApplication({ config, pluginManager });
+    const warnings = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    expect(warnings).toContainEqual(
+      'No resolver files found for namespace "main" matching ./missing/*.ts',
+    );
   });
 
   test("preserves explicit ignore overrides when bundling loaded resolver files", async () => {

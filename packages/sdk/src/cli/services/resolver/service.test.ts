@@ -116,6 +116,17 @@ export default resolver;
     expect(warnings).toEqual([expect.stringContaining("./missing/*.ts")]);
   });
 
+  test("warns without patterns when the namespace configures none", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    const service = createResolverService("ns", { files: [] }, process.cwd());
+    await service.loadResolvers();
+
+    const warnings = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    expect(warnings).toEqual(['No resolver files found for namespace "ns"']);
+  });
+
   test("rejects an invalid defaultPermission, naming the namespace", () => {
     expect(() =>
       createResolverService(
