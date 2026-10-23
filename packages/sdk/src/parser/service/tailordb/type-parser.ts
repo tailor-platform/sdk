@@ -7,6 +7,7 @@ import {
   processRelationMetadata,
   buildRelationInfo,
   applyRelationMetadataToFieldConfig,
+  applyNestedRelationMetadata,
 } from "./relation";
 import type { TailorDBField } from "#/configure/services/tailordb/types";
 import type {
@@ -104,6 +105,8 @@ function parseTailorDBType(
       const relationMetadata = processRelationMetadata(rawRelation, context, fieldConfig.array);
       fieldConfig = applyRelationMetadataToFieldConfig(fieldConfig, relationMetadata);
     }
+
+    fieldConfig = applyNestedRelationMetadata(fieldConfig, context);
 
     // Validate that index/unique are not set on array fields
     if (fieldConfig.array && fieldConfig.index) {

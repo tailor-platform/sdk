@@ -819,4 +819,83 @@ describe("parseTypes", () => {
       expect(result.User!.backwardRelationships).toEqual({});
     });
   });
+
+  describe("relations inside object fields", () => {
+    const user = db.table("User", { name: db.string() });
+
+    test("sets the foreign key on the inner field", () => {
+      const order = db.table("Order", {
+        info: db.object({
+          ownerID: db.uuid().relation({ type: "n-1", toward: { table: user, key: "id" } }),
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Order: order }), "test-namespace");
+
+      expect(result.Order!.fields.info!.config.fields!.ownerID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "id",
+      });
+    });
+
+    test("sets the foreign key on the inner fields of an object array", () => {
+      const order = db.table("Order", {
+        items: db.object(
+          { ownerID: db.uuid().relation({ type: "keyOnly", toward: { table: user } }) },
+          { array: true },
+        ),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Order: order }), "test-namespace");
+
+      expect(result.Order!.fields.items!.config.fields!.ownerID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "User",
+      });
+    });
+
+    test("resolves a self reference to the table name", () => {
+      const node = db.table("Node", {
+        links: db.object({
+          parentID: db.uuid().relation({ type: "n-1", toward: { table: "self" } }),
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ Node: node }), "test-namespace");
+
+      expect(result.Node!.fields.links!.config.fields!.parentID!.foreignKeyType).toBe("Node");
+    });
+
+    test("does not add an index, a unique constraint, or forward and backward relationships", () => {
+      const profile = db.table("Profile", {
+        info: db.object({ ownerID: db.uuid().relation({ type: "1-1", toward: { table: user } }) }),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
+
+      const inner = result.Profile!.fields.info!.config.fields!.ownerID!;
+      expect(inner.index).toBeFalsy();
+      expect(inner.unique).toBeFalsy();
+      expect(result.Profile!.fields.info!.relation).toBeUndefined();
+      expect(result.Profile!.forwardRelationships).toEqual({});
+      expect(result.User!.backwardRelationships).toEqual({});
+    });
+
+    test("rejects a relation to a table that does not exist, naming the nested field", () => {
+      const missing = db.table("Missing", { name: db.string() });
+      const order = db.table("Order", {
+        info: db.object({
+          ownerID: db.uuid().relation({ type: "n-1", toward: { table: missing } }),
+        }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Order: order }), "test-namespace")).toThrow(
+        /info\.ownerID.*unknown table "Missing"/,
+      );
+    });
+  });
 });
