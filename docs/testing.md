@@ -83,3 +83,5 @@ pnpm test:generator:update-expects # Update test fixtures after intentional chan
 ```
 
 Generator tests compare output against expected fixtures in `example/tests/fixtures/`. After intentional changes to code generation, update the fixtures with `test:generator:update-expects`.
+
+To show that a change leaves bundled resolvers, executors, workflow jobs, and auth hooks unchanged, run `pnpm snapshot:bundles <outDir>` in `example/` of two built checkouts, your branch and its base commit (for example `git worktree add <dir> <base>`, then `pnpm install && pnpm build` there), and `diff -r` the two directories. It bundles `tailor.config.ts` and `tests/tailor.config.plugins-compat.ts` with inline sourcemaps on and off, bypassing the bundle cache. HTTP adapter bundles are not included. Neither is the cache manifest: its input hashes and dependency paths depend on where the checkout is, and the dependency paths also vary between runs of the same build.
