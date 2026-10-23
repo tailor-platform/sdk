@@ -1034,32 +1034,38 @@ async function resolveRenames(
   const droppedMembers = new Set(specs.nestedMemberDrops.map((spec) => nestedMemberKey(spec)));
 
   const questions: RenameQuestion[] = [
-    ...findTypeRenameCandidates(diff).map(({ removed, added }): RenameQuestion => ({
-      label: removed.tableName,
-      oldName: removed.tableName,
-      added: added.map((change) => change.tableName),
-      keyOf: (name) => name,
-      claimed: claimedTypes,
-      dropped: droppedTypes,
-      noun: "tables",
-      compatibility: "schema",
-      record: (tableName) => {
-        typeRenames.push({ previousTableName: removed.tableName, tableName });
-      },
-    })),
-    ...findRenameCandidates(diff).map(({ tableName, removed, added }): RenameQuestion => ({
-      label: fieldKey(tableName, removed.fieldName),
-      oldName: removed.fieldName,
-      added: added.map((change) => change.fieldName),
-      keyOf: (name) => fieldKey(tableName, name),
-      claimed: claimedFields,
-      dropped: droppedFields,
-      noun: "fields",
-      compatibility: "type",
-      record: (fieldName) => {
-        fieldRenames.push({ tableName, previousFieldName: removed.fieldName, fieldName });
-      },
-    })),
+    ...findTypeRenameCandidates(diff).map((candidate): RenameQuestion => {
+      const { removed, added } = candidate;
+      return {
+        label: removed.tableName,
+        oldName: removed.tableName,
+        added: added.map((change) => change.tableName),
+        keyOf: (name) => name,
+        claimed: claimedTypes,
+        dropped: droppedTypes,
+        noun: "tables",
+        compatibility: "schema",
+        record: (tableName) => {
+          typeRenames.push({ previousTableName: removed.tableName, tableName });
+        },
+      };
+    }),
+    ...findRenameCandidates(diff).map((candidate): RenameQuestion => {
+      const { tableName, removed, added } = candidate;
+      return {
+        label: fieldKey(tableName, removed.fieldName),
+        oldName: removed.fieldName,
+        added: added.map((change) => change.fieldName),
+        keyOf: (name) => fieldKey(tableName, name),
+        claimed: claimedFields,
+        dropped: droppedFields,
+        noun: "fields",
+        compatibility: "type",
+        record: (fieldName) => {
+          fieldRenames.push({ tableName, previousFieldName: removed.fieldName, fieldName });
+        },
+      };
+    }),
     ...findNestedMemberRenameCandidates(diff).map((candidate): RenameQuestion => {
       const { tableName, fieldName, previousPath } = candidate;
       const parent = previousPath.slice(0, -1);
