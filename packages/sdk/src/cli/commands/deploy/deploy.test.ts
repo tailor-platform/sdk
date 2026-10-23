@@ -77,6 +77,9 @@ function emptyResults(): PlanResults {
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
       customDomainChangeSet: createChangeSet("CustomDomains"),
+      customDomainTransferChangeSet: createChangeSet("CustomDomainTransfers"),
+      customDomainNotes: [],
+      customDomainLiveOffers: new Map(),
       ...emptyOwnership(),
     },
     aiGateway: {
@@ -2096,5 +2099,64 @@ describe("collectExpectedLocalStaticWebsiteNamesFromConfigs", () => {
     const result = collectExpectedLocalStaticWebsiteNamesFromConfigs([loadedConfig([])]);
 
     expect(result).toEqual(new Set());
+  });
+});
+
+describe("custom domain notes", () => {
+  function resultsWithNote(): PlanResults {
+    const results = emptyResults();
+    results.staticWebsite.customDomainNotes.push({
+      kind: "transfer-pending",
+      staticWebsiteName: "site-a",
+      domain: "app.example.com",
+      message: "transfer to workspace ws-b is pending; the receiving site cannot accept it yet",
+    });
+    return results;
+  }
+
+  test("a notes-only plan changes nothing in the summary", () => {
+    const summary = summarizePlanResults(resultsWithNote(), [], []);
+
+    expect(summary).toMatchObject({ create: 0, update: 0, delete: 0, replace: 0 });
+  });
+
+  test("notes are printed under their own heading", () => {
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    printPlanResults(resultsWithNote(), { dryRun: false });
+
+    const printed = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(printed).toContain("Custom domains (no change):");
+    expect(printed).toContain("app.example.com");
+    expect(printed).toContain("cannot accept it yet");
+  });
+
+  test("the JSON payload carries the same notes", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    printDeploymentPlans([plannedDeployment("buyer", resultsWithNote())], { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      notes: Array<{ type: string; resourceType: string; name: string; message: string }>;
+    };
+    expect(payload.notes).toEqual([
+      {
+        type: "transfer-pending",
+        resourceType: "staticwebsite.custom_domain_transfer",
+        name: "app.example.com",
+        message: "transfer to workspace ws-b is pending; the receiving site cannot accept it yet",
+      },
+    ]);
+  });
+
+  test("a plan with no notes still reports an empty array", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    printDeploymentPlans([plannedDeployment("buyer", emptyResults())], { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as { notes: unknown[] };
+    expect(payload.notes).toEqual([]);
   });
 });

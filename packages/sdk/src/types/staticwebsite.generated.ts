@@ -8,6 +8,19 @@ export type StaticWebsite = {
   /** IP addresses allowed to access the website */
   allowedIpAddresses?: string[] | undefined;
   /** Custom domains for the static website */
-  customDomains?: string[] | undefined;
+  customDomains?:
+    | (
+        | string
+        | {
+            /** Custom domain to move to another workspace */
+            domain: string;
+            /** Where the domain should move */
+            transferTo: {
+              /** Workspace that receives the domain */
+              workspaceId: string;
+            };
+          }
+      )[]
+    | undefined;
 };
 export type StaticWebsiteInput = StaticWebsite;

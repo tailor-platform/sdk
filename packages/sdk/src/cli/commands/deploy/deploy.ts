@@ -41,6 +41,7 @@ import {
   type ImportantResourceDeletion,
   type MissingDependentApp,
 } from "./confirm";
+import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
 import { fetchMissingDependentApps } from "./dependency-records";
 import {
   deployedHookLoadFailure,
@@ -957,6 +958,7 @@ async function deployInternal(
         previousDeployments: reuse?.previousDeployments,
       });
       dropCrossDeploymentManagedDeletes(deployments);
+      assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };
 
