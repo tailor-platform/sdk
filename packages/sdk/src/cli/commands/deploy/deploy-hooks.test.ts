@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { beforeEach, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdoutStream } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
@@ -566,4 +567,15 @@ test("--json dry-run prints one JSON object on stdout", async () => {
   register(vi.fn());
   await deploy({ dryRun: true, noValidate: true });
   expect(expectOneJsonObject(stdout.output)).toMatchObject({ summary: expect.any(Object) });
+});
+test("--json dry-run prints a plan that deletes a table without asking to confirm the deletion", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using _json = jsonMode();
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+  mocks.results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+  await deploy({ dryRun: true, noValidate: true });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({ summary: expect.objectContaining({ delete: 1 }) }),
+  );
 });

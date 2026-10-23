@@ -19,6 +19,9 @@ export interface UnmanagedResource {
   resourceName: string;
 }
 
+/** Whether a confirmation prompts, is accepted by `--yes`, or is only reported by `--dry-run`. */
+export type ConfirmMode = "prompt" | "yes" | "dry-run";
+
 export async function confirmMigrationCheckpointRepairs(
   repairs: ReadonlyArray<MigrationCheckpointRepair>,
   yes: boolean,
@@ -63,14 +66,14 @@ export async function confirmMigrationCheckpointRepairs(
  * resource carries a different sdk-name (name mismatch).
  * @param conflicts - Detected owner conflicts
  * @param appName - Target application name
- * @param yes - Whether to auto-confirm without prompting
+ * @param mode - Whether to prompt, auto-confirm, or only report
  * @param appId - Target application id, when the config resolves to one
  * @returns Promise that resolves when confirmation completes
  */
 export async function confirmOwnerConflict(
   conflicts: OwnerConflict[],
   appName: string,
-  yes: boolean,
+  mode: ConfirmMode,
   appId?: string,
 ): Promise<void> {
   if (conflicts.length === 0) return;
@@ -82,22 +85,23 @@ export async function confirmOwnerConflict(
 
   if (idMismatches.length > 0) {
     await (appId
-      ? confirmIdRegeneration(idMismatches, appName, yes)
-      : confirmMissingConfigId(idMismatches, appName, yes));
+      ? confirmIdRegeneration(idMismatches, appName, mode)
+      : confirmMissingConfigId(idMismatches, appName, mode));
   }
   if (nameMismatches.length > 0) {
-    await confirmNameMismatch(nameMismatches, appName, yes);
+    await confirmNameMismatch(nameMismatches, appName, mode);
   }
 }
 
 async function confirmIdRegeneration(
   conflicts: OwnerConflict[],
   appName: string,
-  yes: boolean,
+  mode: ConfirmMode,
 ): Promise<void> {
   logIdMismatch(`Application id was regenerated for "${appName}":`, conflicts);
 
-  if (yes) {
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
     logger.success("Re-tagging resources with the new id (--yes flag specified)...", {
       mode: "plain",
     });
@@ -132,11 +136,12 @@ function logIdMismatch(heading: string, conflicts: OwnerConflict[]): void {
 async function confirmMissingConfigId(
   conflicts: OwnerConflict[],
   appName: string,
-  yes: boolean,
+  mode: ConfirmMode,
 ): Promise<void> {
   logIdMismatch(`No application id resolved for "${appName}":`, conflicts);
 
-  if (yes) {
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
     logger.success("Managing these resources by name (--yes flag specified)...", { mode: "plain" });
     return;
   }
@@ -159,7 +164,7 @@ async function confirmMissingConfigId(
 async function confirmNameMismatch(
   conflicts: OwnerConflict[],
   appName: string,
-  yes: boolean,
+  mode: ConfirmMode,
 ): Promise<void> {
   const currentOwners = [...new Set(conflicts.map((c) => c.currentOwner))];
 
@@ -175,7 +180,8 @@ async function confirmNameMismatch(
     logger.log(`    • ${styles.bold(c.resourceLabel)} ${styles.info(`"${c.resourceName}"`)}`);
   }
 
-  if (yes) {
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
     logger.success("Updating resources (--yes flag specified)...", {
       mode: "plain",
     });
@@ -205,13 +211,13 @@ async function confirmNameMismatch(
  * Confirm allowing tailor to manage previously unmanaged resources.
  * @param resources - Unmanaged resources
  * @param appName - Target application name
- * @param yes - Whether to auto-confirm without prompting
+ * @param mode - Whether to prompt, auto-confirm, or only report
  * @returns Promise that resolves when confirmation completes
  */
 export async function confirmUnmanagedResources(
   resources: UnmanagedResource[],
   appName: string,
-  yes: boolean,
+  mode: ConfirmMode,
 ): Promise<void> {
   if (resources.length === 0) return;
 
@@ -228,7 +234,8 @@ export async function confirmUnmanagedResources(
     "  If they are managed by another tool (e.g., Terraform), cancel and manage them there instead.",
   );
 
-  if (yes) {
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
     logger.success(`Adding to "${appName}" (--yes flag specified)...`, {
       mode: "plain",
     });
@@ -258,12 +265,12 @@ export interface ImportantResourceDeletion {
 /**
  * Confirm deletion of important resources.
  * @param resources - Resources scheduled for deletion
- * @param yes - Whether to auto-confirm without prompting
+ * @param mode - Whether to prompt, auto-confirm, or only report
  * @returns Promise that resolves when confirmation completes
  */
 export async function confirmImportantResourceDeletion(
   resources: ImportantResourceDeletion[],
-  yes: boolean,
+  mode: ConfirmMode,
 ): Promise<void> {
   if (resources.length === 0) return;
 
@@ -278,7 +285,8 @@ export async function confirmImportantResourceDeletion(
     styles.warning("  Deleting these resources will permanently remove all associated data."),
   );
 
-  if (yes) {
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
     logger.success("Deleting resources (--yes flag specified)...", {
       mode: "plain",
     });
@@ -321,12 +329,12 @@ export interface MissingDependentApp {
  * resources publish events. Applying this config alone resolves those flags from
  * a smaller set of executors, which turns publishing off.
  * @param missing - Recorded dependencies absent from this deploy
- * @param yes - Whether `--yes` was passed
+ * @param mode - Whether to prompt, auto-confirm, or only report
  * @returns Promise that resolves when the deploy may continue
  */
 export async function confirmMissingDependentApps(
   missing: MissingDependentApp[],
-  yes: boolean,
+  mode: ConfirmMode,
 ): Promise<void> {
   if (missing.length === 0) return;
 
@@ -342,7 +350,8 @@ export async function confirmMissingDependentApps(
   logger.log("  To keep it, add their configs to --config, or set publishEvents on");
   logger.log("  the resources above.");
 
-  if (yes) {
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
     logger.warn("Continuing without them (--yes flag specified); applying turns publishing off.");
     return;
   }
