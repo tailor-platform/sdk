@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
-import { fetchAll, initOperatorClient } from "#/cli/shared/client";
+import { fetchAll, initOAuth2Client, initOperatorClient } from "#/cli/shared/client";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -39,6 +39,7 @@ vi.mock("@napi-rs/keyring", () => ({
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
+  initOAuth2Client: vi.fn(),
   initOperatorClient: vi.fn(),
   fetchAll: vi.fn(),
 }));
@@ -188,6 +189,47 @@ describe("profile update --permission", () => {
       },
     });
     expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+  });
+
+  test("keeps the token refreshed while validating the workspace", async () => {
+    using _logger = silenceLogger("out", "success");
+    const context = await vi.importActual<typeof ContextModule>("#/cli/shared/context");
+    vi.mocked(fetchLatestToken).mockImplementationOnce(context.fetchLatestToken);
+    const newUUID = "abcdef12-3456-4abc-8def-abcdef123456";
+    const refreshedExpiresAt = Date.now() + 3600 * 1000;
+    vi.mocked(initOAuth2Client).mockReturnValue({
+      refreshToken: vi.fn().mockResolvedValue({
+        accessToken: "refreshed-access",
+        refreshToken: "refreshed-refresh",
+        expiresAt: refreshedExpiresAt,
+      }),
+    } as unknown as ReturnType<typeof initOAuth2Client>);
+    vi.mocked(fetchAll).mockResolvedValue([{ id: newUUID }]);
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkspaces: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "platform-user-sub": {
+          storage: "file",
+          access_token: "expired-access",
+          refresh_token: "expired-refresh",
+          token_expires_at: new Date(Date.now() - 1000).toISOString(),
+        },
+      },
+      profiles: { rw: { user: "platform-user-sub", workspace_id: validUUID } },
+      current_user: null,
+    });
+
+    await runCommand(updateCommand, ["rw", "--workspace-id", newUUID]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.rw?.workspace_id).toBe(newUUID);
+    expect(config.users["platform-user-sub"]?.token_expires_at).toBe(
+      new Date(refreshedExpiresAt).toISOString(),
+    );
   });
 });
 

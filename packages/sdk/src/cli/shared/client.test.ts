@@ -21,6 +21,7 @@ import {
   getOAuth2ClientId,
   getOrNull,
   getPlatformBaseUrl,
+  initOAuth2Client,
   initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
@@ -56,6 +57,25 @@ describe("client environment configuration", () => {
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.staging.tailor.test");
     const client = await import("./client");
     expect(client.getPlatformBaseUrl()).toBe("https://api.staging.tailor.test");
+  });
+});
+
+describe("initOAuth2Client", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllGlobals();
+  });
+
+  test("gives every OAuth2 request a deadline", async () => {
+    const fetchSpy = vi.fn<typeof fetch>(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const client = initOAuth2Client();
+    await client.settings.fetch?.("https://api.tailor.tech/oauth2/platform/token", {
+      method: "POST",
+    });
+
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });
 

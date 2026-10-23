@@ -18,6 +18,7 @@ import {
   rememberPlatformConfigForToken,
   type PlatformClientConfig,
 } from "./client";
+import { withConfigLock } from "./config-lock";
 import { CLIError, formatCommandHint } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -1149,8 +1150,54 @@ function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean
 }
 
 /**
- * Fetch the latest access token, refreshing if necessary.
- * @param config - Platform config
+ * Run a callback while holding the lock that tailor processes take to refresh stored tokens.
+ * @param fn - Callback to run while holding the lock
+ * @returns The callback's result
+ */
+export async function withPlatformConfigLock<T>(fn: () => Promise<T>): Promise<T> {
+  return await withConfigLock(`${platformConfigPath()}.lock`, fn);
+}
+
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+type LatestToken = { accessToken: string; user: string };
+type LoginFailure = (code: string, message: string, suggestion: string) => Error;
+
+function isDueForRefresh(expiresAt: string, refreshable: boolean): boolean {
+  return !(Date.parse(expiresAt) - Date.now() > (refreshable ? TOKEN_REFRESH_MARGIN_MS : 0));
+}
+
+function userNotFound(loginFailure: LoginFailure, user: string): Error {
+  return loginFailure(
+    "AUTH_USER_NOT_FOUND",
+    `User "${user}" not found.`,
+    "Verify the selected user and use the original login method (browser or --machine-user) on the same platform.",
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function replaceContents(target: Record<string, unknown>, source: Record<string, unknown>) {
+  for (const key of Object.keys(target)) {
+    if (!Object.hasOwn(source, key)) delete target[key];
+  }
+  for (const [key, value] of Object.entries(source)) {
+    const current = target[key];
+    if (isRecord(current) && isRecord(value)) {
+      replaceContents(current, value);
+    } else {
+      target[key] = value;
+    }
+  }
+}
+
+/**
+ * Fetch the latest access token, refreshing it when it expires within five minutes.
+ * A refresh rereads the stored config under {@link withPlatformConfigLock} and uses a token
+ * another process stored in the meantime instead of refreshing again.
+ * @param config - Platform config; replaced in place with the stored config when a refresh was needed
  * @param user - User identifier
  * @param platformConfig - Optional platform connection settings
  * @param profile - Selected profile for login recovery
@@ -1163,9 +1210,9 @@ export async function fetchLatestToken(
   user: string,
   platformConfig?: PlatformClientConfig,
   profile?: string,
-): Promise<{ accessToken: string; user: string }> {
+): Promise<LatestToken> {
   const loginArgs = profile ? ["--profile", profile] : [];
-  const loginFailure = (code: string, message: string, suggestion: string) =>
+  const loginFailure: LoginFailure = (code, message, suggestion) =>
     CLIError({
       code,
       message,
@@ -1174,18 +1221,39 @@ export async function fetchLatestToken(
       context: { profile: profile ?? null },
     });
   const { userKey: storedUser, userEntry } = findUserEntry(config, user, platformConfig);
-  if (!userEntry) {
-    throw loginFailure(
-      "AUTH_USER_NOT_FOUND",
-      `User "${user}" not found.`,
-      "Verify the selected user and use the original login method (browser or --machine-user) on the same platform.",
-    );
+  if (!userEntry) throw userNotFound(loginFailure, user);
+
+  const tokens = await resolveTokens(userEntry, storedUser, user);
+  if (!isDueForRefresh(userEntry.token_expires_at, tokens.refreshToken !== undefined)) {
+    rememberPlatformConfigForToken(tokens.accessToken, platformConfig);
+    return {
+      accessToken: tokens.accessToken,
+      user: userFromPlatformUserKey(storedUser, platformConfig),
+    };
   }
+
+  return await withPlatformConfigLock(async () => {
+    const latest = await readPlatformConfig();
+    try {
+      return await refreshStoredToken(latest, user, platformConfig, loginFailure);
+    } finally {
+      replaceContents(config, latest);
+    }
+  });
+}
+
+async function refreshStoredToken(
+  config: PfConfig,
+  user: string,
+  platformConfig: PlatformClientConfig | undefined,
+  loginFailure: LoginFailure,
+): Promise<LatestToken> {
+  const { userKey: storedUser, userEntry } = findUserEntry(config, user, platformConfig);
+  if (!userEntry) throw userNotFound(loginFailure, user);
 
   const storedConfigUser = userFromPlatformUserKey(storedUser, platformConfig);
   const tokens = await resolveTokens(userEntry, storedUser, user);
-
-  if (new Date(userEntry.token_expires_at) > new Date()) {
+  if (!isDueForRefresh(userEntry.token_expires_at, tokens.refreshToken !== undefined)) {
     rememberPlatformConfigForToken(tokens.accessToken, platformConfig);
     return { accessToken: tokens.accessToken, user: storedConfigUser };
   }
@@ -1206,7 +1274,12 @@ export async function fetchLatestToken(
       refreshToken: tokens.refreshToken,
       expiresAt: Date.parse(userEntry.token_expires_at),
     });
-  } catch {
+  } catch (error) {
+    if (Date.parse(userEntry.token_expires_at) > Date.now()) {
+      logger.debug(`Failed to refresh a token that has not expired yet: ${String(error)}`);
+      rememberPlatformConfigForToken(tokens.accessToken, platformConfig);
+      return { accessToken: tokens.accessToken, user: storedConfigUser };
+    }
     throw loginFailure(
       "AUTH_TOKEN_REFRESH_FAILED",
       "Failed to refresh token. Your session may have expired.",
@@ -1218,13 +1291,24 @@ export async function fetchLatestToken(
     refreshToken: resp.refreshToken ?? undefined,
   });
 
+  const refreshedTokens = {
+    accessToken: resp.accessToken,
+    refreshToken: resp.refreshToken ?? tokens.refreshToken,
+  };
   const newExpiresAt = new Date(
     assertDefined(resp.expiresAt, "token refresh response missing expiresAt"),
   ).toISOString();
-
-  let resolvedUser = storedConfigUser;
   const previousEmail =
     userEntry.email ?? inferEmailFromUserId(user) ?? inferEmailFromUserId(storedConfigUser);
+
+  // The refresh token just used is no longer valid, so the new one is stored before any other request.
+  await saveUserTokens(config, storedConfigUser, refreshedTokens, newExpiresAt, {
+    platformConfig,
+    email: previousEmail,
+  });
+  writePlatformConfig(config);
+
+  let resolvedUser = storedConfigUser;
   let email = previousEmail;
   if (
     shouldResolveSubjectOnRefresh(user, userEntry) ||
@@ -1239,16 +1323,10 @@ export async function fetchLatestToken(
     }
   }
 
-  await saveUserTokens(
-    config,
-    resolvedUser,
-    {
-      accessToken: resp.accessToken,
-      refreshToken: resp.refreshToken ?? tokens.refreshToken,
-    },
-    newExpiresAt,
-    { platformConfig, email },
-  );
+  await saveUserTokens(config, resolvedUser, refreshedTokens, newExpiresAt, {
+    platformConfig,
+    email,
+  });
   await removeLegacyUserAlias(config, user, resolvedUser, platformConfig);
   await removeUserAlias(config, storedUser, platformUserKey(resolvedUser, platformConfig), {
     carryExtraFields: true,

@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
@@ -132,6 +133,35 @@ describe("logout --profile", () => {
     await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
       'User "u@example.com" not found',
     );
+  });
+
+  test("reads the config only after another process releases the config lock", async () => {
+    const configDir = path.join(xdgTempDir, "tailor-platform");
+    const lockPath = path.join(configDir, "config.yaml.lock");
+    fs.writeFileSync(
+      lockPath,
+      JSON.stringify({
+        pid: process.pid,
+        hostname: os.hostname(),
+        nonce: "other-process",
+        createdAt: Date.now(),
+      }),
+    );
+    setTimeout(() => {
+      void (async () => {
+        const config = await readPlatformConfig();
+        config.profiles.staging = { user: "u@example.com", workspace_id: validUUID };
+        writePlatformConfig(config);
+        fs.rmSync(lockPath);
+      })();
+    }, 100);
+
+    const result = await runCommand(logoutCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.profiles.staging).toEqual({ user: "u@example.com", workspace_id: validUUID });
+    expect(fs.existsSync(lockPath)).toBe(false);
   });
 
   test("prints the logged-out user and the revocation under JSON output", async () => {

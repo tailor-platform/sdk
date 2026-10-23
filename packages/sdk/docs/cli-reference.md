@@ -361,23 +361,23 @@ Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.
 
 Commands for authentication and user management.
 
-| Command                                          | Description                                                                           |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| [login](./cli/user.md#login)                     | Login to Tailor Platform.                                                             |
-| [logout](./cli/user.md#logout)                   | Logout from Tailor Platform.                                                          |
-| [auth](./cli/user.md#auth)                       | Authentication helpers for scripts and plugins.                                       |
-| [auth status](./cli/user.md#auth-status)         | Show the active Tailor Platform authentication status without printing tokens.        |
-| [auth token](./cli/user.md#auth-token)           | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
-| [user](./cli/user.md#user)                       | Manage Tailor Platform users.                                                         |
-| [user current](./cli/user.md#user-current)       | Show current user.                                                                    |
-| [user list](./cli/user.md#user-list)             | List all users.                                                                       |
-| [user pat](./cli/user.md#user-pat)               | Manage personal access tokens.                                                        |
-| [user pat create](./cli/user.md#user-pat-create) | Create a new personal access token.                                                   |
-| [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token.                                                       |
-| [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                                                      |
-| [user pat update](./cli/user.md#user-pat-update) | Update a personal access token (delete and recreate).                                 |
-| [user switch](./cli/user.md#user-switch)         | Set current user.                                                                     |
-| [user update](./cli/user.md#user-update)         | Set the current user's default organization and folder for new workspaces.            |
+| Command                                          | Description                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| [login](./cli/user.md#login)                     | Login to Tailor Platform.                                                                                    |
+| [logout](./cli/user.md#logout)                   | Logout from Tailor Platform.                                                                                 |
+| [auth](./cli/user.md#auth)                       | Authentication helpers for scripts and plugins.                                                              |
+| [auth status](./cli/user.md#auth-status)         | Show the active Tailor Platform authentication status without printing tokens.                               |
+| [auth token](./cli/user.md#auth-token)           | Print a valid Tailor Platform access token to stdout, refreshing it first if it expires within five minutes. |
+| [user](./cli/user.md#user)                       | Manage Tailor Platform users.                                                                                |
+| [user current](./cli/user.md#user-current)       | Show current user.                                                                                           |
+| [user list](./cli/user.md#user-list)             | List all users.                                                                                              |
+| [user pat](./cli/user.md#user-pat)               | Manage personal access tokens.                                                                               |
+| [user pat create](./cli/user.md#user-pat-create) | Create a new personal access token.                                                                          |
+| [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token.                                                                              |
+| [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                                                                             |
+| [user pat update](./cli/user.md#user-pat-update) | Update a personal access token (delete and recreate).                                                        |
+| [user switch](./cli/user.md#user-switch)         | Set current user.                                                                                            |
+| [user update](./cli/user.md#user-update)         | Set the current user's default organization and folder for new workspaces.                                   |
 
 ### [Organization Commands](./cli/organization.md)
 

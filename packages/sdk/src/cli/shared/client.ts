@@ -25,6 +25,7 @@ export const defaultConsoleBaseUrl = "https://console.tailor.tech";
 
 const defaultOAuth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
 const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
+const OAUTH2_REQUEST_TIMEOUT_MS = 30_000;
 
 export type PlatformClientConfig = {
   platformUrl?: string;
@@ -116,6 +117,14 @@ export function initOAuth2Client(config?: PlatformClientConfig) {
     clientId: getOAuth2ClientId(config),
     server: getPlatformBaseUrl(config),
     discoveryEndpoint: oauth2DiscoveryEndpoint,
+    fetch: (input, init) =>
+      fetch(input, {
+        ...init,
+        signal: AbortSignal.any([
+          ...(init?.signal ? [init.signal] : []),
+          AbortSignal.timeout(OAUTH2_REQUEST_TIMEOUT_MS),
+        ]),
+      }),
   });
 }
 

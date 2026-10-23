@@ -43,6 +43,34 @@ describe("writeSecretFile", () => {
     expect(fs.readFileSync(target, "utf-8")).toBe("new");
   });
 
+  test.skipIf(isWindows)("replaces an existing file instead of rewriting it in place", () => {
+    using tempDir = tempCwd("tailor-secret-file-");
+    const target = path.join(tempDir.dir, "config.yaml");
+    writeSecretFile(target, "old");
+    const before = fs.statSync(target).ino;
+
+    writeSecretFile(target, "new");
+
+    expect(fs.statSync(target).ino).not.toBe(before);
+    expect(fs.readFileSync(target, "utf-8")).toBe("new");
+    expect(fs.readdirSync(tempDir.dir)).toEqual(["config.yaml"]);
+  });
+
+  test.skipIf(isWindows)("writes through a symlinked file and keeps the link", () => {
+    using tempDir = tempCwd("tailor-secret-file-");
+    const realTarget = path.join(tempDir.dir, "dotfiles", "config.yaml");
+    fs.mkdirSync(path.dirname(realTarget));
+    fs.writeFileSync(realTarget, "old");
+    const link = path.join(tempDir.dir, "config.yaml");
+    fs.symlinkSync(realTarget, link);
+
+    writeSecretFile(link, "new");
+
+    expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(realTarget, "utf-8")).toBe("new");
+    expect(fs.statSync(realTarget).mode & 0o777).toBe(0o600);
+  });
+
   test.skipIf(isWindows)("tightens permissions on existing world-readable directories", () => {
     using tempDir = tempCwd("tailor-secret-file-");
     const dir = path.join(tempDir.dir, "loose");

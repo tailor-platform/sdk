@@ -1347,6 +1347,190 @@ describe("loadAccessToken", () => {
     });
   });
 
+  describe("token refresh shared with other processes", () => {
+    const lockPath = path.join(xdgTempDir, "tailor-platform", "config.yaml.lock");
+    const inOneMinute = () => new Date(Date.now() + 60 * 1000).toISOString();
+
+    function writeFileUser(entry: {
+      access_token: string;
+      refresh_token?: string;
+      token_expires_at: string;
+    }) {
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: { "platform-user-sub": { storage: "file", ...entry } },
+        profiles: {},
+        current_user: "platform-user-sub",
+      });
+    }
+
+    function rotateRefreshTokens(initialRefreshToken: string) {
+      let current = initialRefreshToken;
+      let issued = 0;
+      clientMocks.refreshToken.mockImplementation(
+        async ({ refreshToken }: { refreshToken: string }) => {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          if (refreshToken !== current) throw new Error("invalid_grant");
+          issued++;
+          current = `refresh-${issued}`;
+          return {
+            accessToken: `access-${issued}`,
+            refreshToken: current,
+            expiresAt: Date.now() + 3600 * 1000,
+          };
+        },
+      );
+    }
+
+    afterEach(() => {
+      fs.rmSync(lockPath, { force: true });
+    });
+
+    test("refreshes a token that expires within five minutes", async () => {
+      writeFileUser({
+        access_token: "expiring-access",
+        refresh_token: "refresh-0",
+        token_expires_at: inOneMinute(),
+      });
+      rotateRefreshTokens("refresh-0");
+
+      await expect(loadAccessToken()).resolves.toBe("access-1");
+    });
+
+    test("keeps a token that expires within five minutes when the refresh fails", async () => {
+      writeFileUser({
+        access_token: "expiring-access",
+        refresh_token: "refresh-0",
+        token_expires_at: inOneMinute(),
+      });
+      clientMocks.refreshToken.mockRejectedValue(new Error("network down"));
+
+      await expect(loadAccessToken()).resolves.toBe("expiring-access");
+    });
+
+    test("does not refresh early without a refresh token", async () => {
+      writeFileUser({ access_token: "expiring-access", token_expires_at: inOneMinute() });
+
+      await expect(loadAccessToken()).resolves.toBe("expiring-access");
+      expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+    });
+
+    test("uses a token another process stored after this one read the config", async () => {
+      writeFileUser({
+        access_token: "expired-access",
+        refresh_token: "refresh-0",
+        token_expires_at: pastDate,
+      });
+      const config = await readPlatformConfig();
+      writeFileUser({
+        access_token: "fresh-access",
+        refresh_token: "refresh-9",
+        token_expires_at: futureDate,
+      });
+
+      await expect(fetchLatestToken(config, "platform-user-sub")).resolves.toEqual({
+        accessToken: "fresh-access",
+        user: "platform-user-sub",
+      });
+      expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+      expect(config.users["platform-user-sub"]).toMatchObject({ access_token: "fresh-access" });
+    });
+
+    test("refreshes once when several callers find the token expired", async () => {
+      writeFileUser({
+        access_token: "expired-access",
+        refresh_token: "refresh-0",
+        token_expires_at: pastDate,
+      });
+      rotateRefreshTokens("refresh-0");
+
+      const tokens = await Promise.all([loadAccessToken(), loadAccessToken(), loadAccessToken()]);
+
+      expect(tokens).toEqual(["access-1", "access-1", "access-1"]);
+      expect(clientMocks.refreshToken).toHaveBeenCalledTimes(1);
+    });
+
+    test("waits for a process holding the config lock and uses the token it stored", async () => {
+      writeFileUser({
+        access_token: "expired-access",
+        refresh_token: "refresh-0",
+        token_expires_at: pastDate,
+      });
+      fs.writeFileSync(
+        lockPath,
+        JSON.stringify({
+          pid: process.pid,
+          hostname: os.hostname(),
+          nonce: "other-process",
+          createdAt: Date.now(),
+        }),
+      );
+      setTimeout(() => {
+        writeFileUser({
+          access_token: "fresh-access",
+          refresh_token: "refresh-9",
+          token_expires_at: futureDate,
+        });
+        fs.rmSync(lockPath);
+      }, 100);
+
+      await expect(loadAccessToken()).resolves.toBe("fresh-access");
+      expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+    });
+
+    test("stores the refreshed tokens before looking up the user", async () => {
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "legacy@example.com": {
+            storage: "file",
+            access_token: "expired-access",
+            refresh_token: "refresh-0",
+            token_expires_at: pastDate,
+          },
+        },
+        profiles: {},
+        current_user: "legacy@example.com",
+      });
+      rotateRefreshTokens("refresh-0");
+      let storedDuringLookup: string | undefined;
+      clientMocks.fetchUserInfo.mockImplementation(async () => {
+        storedDuringLookup = keyringPasswords.get("tailor-platform-cli:legacy@example.com");
+        return { sub: "platform-user-sub", email: "legacy@example.com" };
+      });
+
+      await expect(loadAccessToken()).resolves.toBe("access-1");
+      expect(storedDuringLookup).toBe(
+        JSON.stringify({ accessToken: "access-1", refreshToken: "refresh-1" }),
+      );
+      expect((await readPlatformConfig()).current_user).toBe("platform-user-sub");
+    });
+
+    test("does not restore a user another process removed", async () => {
+      writeFileUser({
+        access_token: "expired-access",
+        refresh_token: "refresh-0",
+        token_expires_at: pastDate,
+      });
+      const config = await readPlatformConfig();
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {},
+        profiles: {},
+        current_user: null,
+      });
+
+      await expect(fetchLatestToken(config, "platform-user-sub")).rejects.toMatchObject({
+        code: "AUTH_USER_NOT_FOUND",
+      });
+      expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+      expect((await readPlatformConfig()).users["platform-user-sub"]).toBeUndefined();
+    });
+  });
+
   describe("error case: no token source", () => {
     test.each([
       { reason: "expired", refreshToken: undefined, expectedCode: "AUTH_TOKEN_EXPIRED" },
