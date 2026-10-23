@@ -1,6 +1,7 @@
 ---
 paths:
   - "packages/sdk/src/cli/**/*.ts"
+  - "packages/sdk-plugin-*/src/**/*.ts"
 ---
 
 # CLI Logging Guidelines
@@ -12,6 +13,8 @@ The CLI module uses a unified logging system. Always use `logger` and `styles` f
 ```typescript
 import { logger, styles } from "../shared/logger";
 ```
+
+In plugin packages (`packages/sdk-plugin-*`), import these helpers from `@tailor-platform/sdk/cli`; anything named below applies there only once that entry point exports it.
 
 **Logger Methods:**
 

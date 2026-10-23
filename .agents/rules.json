@@ -7,7 +7,7 @@
     },
     {
       "name": "cli-logging",
-      "paths": ["packages/sdk/src/cli/**/*.ts"],
+      "paths": ["packages/sdk/src/cli/**/*.ts", "packages/sdk-plugin-*/src/**/*.ts"],
       "file": ".agents/rules/cli-logging.md"
     },
     {
