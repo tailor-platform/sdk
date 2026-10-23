@@ -37,14 +37,25 @@ export type AppConfigParsedInput = {
   buildOptions?:
     | {
         inlineSourcemap?: boolean | undefined;
+        inlineSourcemapDependencySources?: boolean | string[] | undefined;
         logLevel?: string | undefined;
         allowedRuntimeGlobals?:
           | {
               [x: string]: true | string[];
             }
           | undefined;
+        treeshake?:
+          | {
+              moduleSideEffects?: boolean | undefined;
+              annotations?: boolean | undefined;
+              unknownGlobalSideEffects?: boolean | undefined;
+              propertyReadSideEffects?: boolean | undefined;
+            }
+          | undefined;
       }
     | undefined;
+  defaultDateRepresentation?: "date" | "temporal" | undefined;
+  maintenanceMode?: false | "migration" | "deploy" | undefined;
   metadata?:
     | {
         [x: string]: string;
