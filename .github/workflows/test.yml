@@ -48,8 +48,9 @@ jobs:
       fail-fast: false
       matrix:
         node: [22, 24]
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
-    name: Test (Node ${{ matrix.node }})
+    name: Test (Node ${{ matrix.node }}, shard ${{ matrix.shard }}/4)
     timeout-minutes: 15
     permissions:
       contents: read
@@ -68,8 +69,14 @@ jobs:
       - name: Build packages
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
-      - name: Run tests
-        run: pnpm -r run test --project 'unit*'
+      - name: Run SDK tests
+        run: pnpm --filter @tailor-platform/sdk run test --project 'unit*' --shard="${SHARD}/4"
+        env:
+          SHARD: ${{ matrix.shard }}
+
+      - name: Run other package tests
+        if: matrix.shard == 4
+        run: pnpm -r --filter '!@tailor-platform/sdk' run test --project 'unit*'
 
   plugin-windows:
     needs: changes
