@@ -104,6 +104,10 @@ export function createResolverService(
       logger.log(
         `Found ${styles.highlight(resolverFiles.length.toString())} resolver files for service ${styles.highlight(`"${namespace}"`)}`,
       );
+      if (resolverFiles.length === 0) {
+        const patterns = config.files.length > 0 ? ` matching ${config.files.join(", ")}` : "";
+        logger.warn(`No resolver files found for namespace "${namespace}"${patterns}`);
+      }
 
       await Promise.all(resolverFiles.map((resolverFile) => loadResolverForFile(resolverFile)));
       assertUniqueResolverNames(resolvers, namespace);

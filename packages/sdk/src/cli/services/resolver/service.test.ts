@@ -105,6 +105,17 @@ export default resolver;
     expect(foundLogs).toHaveLength(1);
   });
 
+  test("warns with the configured patterns when no resolver files match", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    const service = createResolverService("ns", { files: ["./missing/*.ts"] }, process.cwd());
+    await service.loadResolvers();
+
+    const warnings = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    expect(warnings).toEqual([expect.stringContaining("./missing/*.ts")]);
+  });
+
   test("rejects an invalid defaultPermission, naming the namespace", () => {
     expect(() =>
       createResolverService(

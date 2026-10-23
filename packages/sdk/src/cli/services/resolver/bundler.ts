@@ -102,7 +102,6 @@ export async function bundleResolvers(
   } = options;
   const bundledCode = new Map<string, string>();
   if (files.length === 0) {
-    logger.warn(`No resolver files found for namespace "${namespace}"`);
     return bundledCode;
   }
 
