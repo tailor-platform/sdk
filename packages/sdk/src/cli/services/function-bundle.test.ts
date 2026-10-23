@@ -171,21 +171,20 @@ describe("buildFunctionBundle start transform", () => {
 });
 
 describe("buildFunctionBundle cache", () => {
-  test("rebuilds a cached bundle when the env its entry embeds changes", async () => {
-    using tmp = tempCwd("sdk-function-bundle-cached-env-");
-    const sourceFile = writeFunction(tmp.dir, `export default async (env) => env;\n`);
+  test("rebuilds a cached bundle when a value its entry embeds changes", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cached-entry-");
+    const sourceFile = writeFunction(tmp.dir, `export default async (value) => value;\n`);
     const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
-    const bundleWithEnv = (env: Record<string, string>) =>
+    const bundleEmbedding = (value: string) =>
       bundle(sourceFile, {
         cache,
-        env,
         entry: (absoluteSourcePath) =>
           `import fn from "${absoluteSourcePath}";\n` +
-          `export const main = () => fn(${JSON.stringify(env)});\n`,
+          `export const main = () => fn(${JSON.stringify(value)});\n`,
       });
 
-    expect(await bundleWithEnv({ STAGE: "FIRST_ENV" })).toContain("FIRST_ENV");
-    expect(await bundleWithEnv({ STAGE: "SECOND_ENV" })).toContain("SECOND_ENV");
+    expect(await bundleEmbedding("FIRST_VALUE")).toContain("FIRST_VALUE");
+    expect(await bundleEmbedding("SECOND_VALUE")).toContain("SECOND_VALUE");
   });
 });
 

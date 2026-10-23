@@ -353,7 +353,6 @@ export async function bundleWorkflowJobs(
       name: job.name,
       sourceFile: job.sourceFile,
       tsconfig,
-      env,
       runtimeGlobals: { label: `Workflow job "${job.name}"`, allowed: allowedRuntimeGlobals },
       createTransformPlugin: () => createWorkflowTransformPlugin(job, usedJobs, startContext),
       entry: (absoluteSourcePath) => ml /* js */ `

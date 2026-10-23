@@ -54,7 +54,6 @@ export async function bundleAuthHooks(
     name: functionName,
     sourceFile: path.resolve(configPath),
     tsconfig,
-    env,
     bundleLogLevel,
     define: { "process.env.TAILOR_APP_LOG_LEVEL": JSON.stringify(bundleLogLevel) },
     runtimeGlobals: false,

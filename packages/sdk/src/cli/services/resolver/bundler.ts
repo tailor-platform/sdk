@@ -100,7 +100,6 @@ export async function bundleResolvers(
       sourceFile: resolver.sourceFile,
       tsconfig,
       dateDefault,
-      entryContext: [defaultPermission ?? null],
       dateRepresentations: resolverDateRepresentations(resolver, dateDefault),
       runtimeGlobals: { label: `Resolver "${resolver.name}"`, allowed: allowedRuntimeGlobals },
       entry: (absoluteSourcePath) => {

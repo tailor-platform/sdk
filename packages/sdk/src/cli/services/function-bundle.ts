@@ -69,14 +69,10 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   sourceFile: string;
   /** tsconfig resolved for the owning config */
   tsconfig: string | undefined;
-  /** Generates the entry module source; called only when the bundle is not restored from cache */
+  /** Generates the entry module source, which is added to the cache key */
   entry: (absoluteSourcePath: string) => string;
   /** Creates the plugin that rewrites the function's sources before path resolution; defaults to the start transform */
   createTransformPlugin?: () => rolldown.Plugin | undefined;
-  /** Config values the entry embeds, added to the cache key besides the start context and date default */
-  entryContext?: unknown[];
-  /** Environment variables the entry embeds, added to the cache key */
-  env?: Record<string, string | number | boolean>;
   /** Date representations whose conversion code the bundle keeps */
   dateRepresentations?: BundledDateRepresentations;
   /** Expressions replaced with constants while bundling */
@@ -100,8 +96,6 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     tsconfig,
     entry,
     createTransformPlugin,
-    entryContext = [],
-    env,
     dateRepresentations,
     define,
     runtimeGlobals,
@@ -115,27 +109,20 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     dateDefault = "legacy",
   } = options;
 
+  const absoluteSourcePath = path.resolve(sourceFile);
+  const entrySource = entry(absoluteSourcePath);
   const contextHash = computeBundlerContextHash({
     sourceFile,
-    // Config values folded into the bundle live outside every source file, so
-    // a cached bundle would otherwise survive a change to them. Encoded as a
-    // tuple rather than joined, so no separator has to be a character no value
-    // can contain.
-    extraContext: JSON.stringify([
-      serializeStartContext(startContext),
-      ...entryContext,
-      dateDefault,
-    ]),
+    // The entry and the plugins fold in config values that live outside every
+    // source file, so a cached bundle would otherwise survive a change to them.
+    // Encoded as a tuple rather than joined, so no separator has to be a
+    // character no value can contain.
+    extraContext: JSON.stringify([serializeStartContext(startContext), entrySource, dateDefault]),
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
     bundleLogLevel,
     bundleTreeshake,
-    prefix:
-      env &&
-      JSON.stringify(
-        Object.fromEntries(Object.entries(env).toSorted(([a], [b]) => a.localeCompare(b))),
-      ),
   });
 
   const { code, packageRuntimeGlobals } = await withCache({
@@ -146,10 +133,9 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     sourceFile,
     contextHash,
     async build(cachePlugins, trackDependency) {
-      const absoluteSourcePath = path.resolve(sourceFile);
       const virtualEntry = createVirtualEntry(
         `${kind}:${name}`,
-        entry(absoluteSourcePath),
+        entrySource,
         "js",
         absoluteSourcePath,
       );
