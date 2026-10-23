@@ -1,36 +1,83 @@
-import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
-import { tempCwd } from "./shared/test-helpers/temp-cwd";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 const cliEntry = fileURLToPath(new URL("../../bin/tailor.mjs", import.meta.url));
 const builtEntry = fileURLToPath(new URL("../../dist/cli/main.mjs", import.meta.url));
 
-function runCli(args: string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}) {
-  return spawnSync(process.execPath, [cliEntry, ...args], {
-    cwd,
-    encoding: "utf8",
-    timeout: 15_000,
-    env: {
-      PATH: process.env.PATH,
-      HOME: cwd,
-      XDG_CONFIG_HOME: cwd,
-      XDG_CACHE_HOME: cwd,
-      XDG_STATE_HOME: cwd,
-      XDG_DATA_HOME: cwd,
-      NODE_COMPILE_CACHE: cwd,
-      TAILOR_CRASH_REPORTS_LOCAL: "off",
-      TAILOR_CRASH_REPORTS_REMOTE: "off",
-      NO_COLOR: "1",
-      POLITTY_NO_AGENT: "1",
-      ...extraEnv,
+let compileCacheDir: string;
+
+beforeAll(() => {
+  compileCacheDir = mkdtempSync(path.join(tmpdir(), "cli-compile-cache-"));
+});
+
+afterAll(() => {
+  rmSync(compileCacheDir, { recursive: true, force: true });
+});
+
+function tempDir(prefix: string): Disposable & { readonly dir: string } {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix));
+  return {
+    dir,
+    [Symbol.dispose]() {
+      rmSync(dir, { recursive: true, force: true });
     },
+  };
+}
+
+const CLI_TIMEOUT_MS = 15_000;
+
+interface CliResult {
+  status: number;
+  stdout: string;
+  stderr: string;
+}
+
+function runCli(args: string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<CliResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cliEntry, ...args], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: CLI_TIMEOUT_MS,
+      env: {
+        PATH: process.env.PATH,
+        HOME: cwd,
+        XDG_CONFIG_HOME: cwd,
+        XDG_CACHE_HOME: cwd,
+        XDG_STATE_HOME: cwd,
+        XDG_DATA_HOME: cwd,
+        NODE_COMPILE_CACHE: compileCacheDir,
+        TAILOR_CRASH_REPORTS_LOCAL: "off",
+        TAILOR_CRASH_REPORTS_REMOTE: "off",
+        NO_COLOR: "1",
+        POLITTY_NO_AGENT: "1",
+        ...extraEnv,
+      },
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => (stdout += chunk));
+    child.stderr.on("data", (chunk: string) => (stderr += chunk));
+    child.on("error", reject);
+    child.on("close", (status, signal) => {
+      if (status === null) {
+        const reason = child.killed
+          ? `exceeded the ${CLI_TIMEOUT_MS}ms timeout`
+          : `was killed by ${signal}`;
+        reject(new Error(`tailor ${args.join(" ")} ${reason}\n${stderr}`));
+        return;
+      }
+      resolve({ status, stdout, stderr });
+    });
   });
 }
 
-describe("CLI error verbosity", () => {
+describe.concurrent("CLI error verbosity", () => {
   test.each([
     { name: "default", extraEnv: {}, args: [], stack: false },
     { name: "flag", extraEnv: {}, args: ["--verbose"], stack: true },
@@ -45,18 +92,20 @@ describe("CLI error verbosity", () => {
     },
   ])(
     "preserves JSON failure context with $name verbosity",
-    ({ extraEnv, args, stack }) => {
+    async ({ extraEnv, args, stack }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-error-verbosity-");
+      using tmp = tempDir("cli-error-verbosity-");
       const config = path.join(tmp.dir, "missing.config.ts");
       expect(existsSync(config)).toBe(false);
 
-      const result = runCli(["generate", "--json", "--config", config, ...args], tmp.dir, extraEnv);
+      const result = await runCli(
+        ["generate", "--json", "--config", config, ...args],
+        tmp.dir,
+        extraEnv,
+      );
 
-      expect(result.error).toBeUndefined();
-      expect(result.signal).toBeNull();
       expect(result.status).toBe(1);
       expect(result.stdout).toBe("");
       const envelope = JSON.parse(result.stderr);
@@ -73,22 +122,21 @@ describe("CLI error verbosity", () => {
   );
 });
 
-describe("argument errors under JSON output", () => {
+describe.concurrent("argument errors under JSON output", () => {
   test.each([
     { name: "--json", args: ["--json"], extraEnv: {} },
     { name: "-j", args: ["-j"], extraEnv: {} },
     { name: "TAILOR_JSON_OUTPUT", args: [], extraEnv: { TAILOR_JSON_OUTPUT: "1" } },
   ])(
     "reports an unknown flag as INVALID_ARGUMENTS with $name",
-    ({ args, extraEnv }) => {
+    async ({ args, extraEnv }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-argument-error-json-");
+      using tmp = tempDir("cli-argument-error-json-");
 
-      const result = runCli(["workspace", "list", "--bogus", ...args], tmp.dir, extraEnv);
+      const result = await runCli(["workspace", "list", "--bogus", ...args], tmp.dir, extraEnv);
 
-      expect(result.error).toBeUndefined();
       expect(result.status).toBe(2);
       expect(result.stdout).toBe("");
       expect(JSON.parse(result.stderr)).toEqual({
@@ -98,24 +146,23 @@ describe("argument errors under JSON output", () => {
     20_000,
   );
 
-  test("reports a schema validation failure as INVALID_ARGUMENTS", () => {
+  test("reports a schema validation failure as INVALID_ARGUMENTS", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-argument-error-json-");
+    using tmp = tempDir("cli-argument-error-json-");
 
-    const result = runCli(["workspace", "list", "--limit", "abc", "--json"], tmp.dir);
+    const result = await runCli(["workspace", "list", "--limit", "abc", "--json"], tmp.dir);
 
-    expect(result.error).toBeUndefined();
     expect(result.status).toBe(2);
     const envelope = JSON.parse(result.stderr);
     expect(envelope.error.code).toBe("INVALID_ARGUMENTS");
     expect(envelope.error.message).toContain("limit");
   }, 20_000);
 
-  test("keeps a plain-text argument error when JSON output is explicitly disabled", () => {
+  test("keeps a plain-text argument error when JSON output is explicitly disabled", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-argument-error-json-");
+    using tmp = tempDir("cli-argument-error-json-");
 
-    const result = runCli(["workspace", "list", "--bogus", "--json=false"], tmp.dir, {
+    const result = await runCli(["workspace", "list", "--bogus", "--json=false"], tmp.dir, {
       TAILOR_JSON_OUTPUT: "1",
     });
 
@@ -123,21 +170,21 @@ describe("argument errors under JSON output", () => {
     expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
   }, 20_000);
 
-  test("keeps the plain-text argument error without JSON output", () => {
+  test("keeps the plain-text argument error without JSON output", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-argument-error-json-");
+    using tmp = tempDir("cli-argument-error-json-");
 
-    const result = runCli(["workspace", "list", "--bogus"], tmp.dir);
+    const result = await runCli(["workspace", "list", "--bogus"], tmp.dir);
 
     expect(result.status).toBe(2);
     expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
   }, 20_000);
 
-  test("includes the stack trace for an argument error with --verbose", () => {
+  test("includes the stack trace for an argument error with --verbose", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-argument-error-json-");
+    using tmp = tempDir("cli-argument-error-json-");
 
-    const result = runCli(["workspace", "list", "--bogus", "--json", "--verbose"], tmp.dir);
+    const result = await runCli(["workspace", "list", "--bogus", "--json", "--verbose"], tmp.dir);
 
     expect(result.status).toBe(2);
     const envelope = JSON.parse(result.stderr);
@@ -145,11 +192,13 @@ describe("argument errors under JSON output", () => {
     expect(envelope.error.stack).toContain("Error: Unknown flags: bogus");
   }, 20_000);
 
-  test("keeps the argument error annotation title without JSON output", () => {
+  test("keeps the argument error annotation title without JSON output", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-argument-error-json-");
+    using tmp = tempDir("cli-argument-error-json-");
 
-    const result = runCli(["workspace", "list", "--bogus"], tmp.dir, { GITHUB_ACTIONS: "true" });
+    const result = await runCli(["workspace", "list", "--bogus"], tmp.dir, {
+      GITHUB_ACTIONS: "true",
+    });
 
     expect(result.status).toBe(2);
     expect(result.stderr).toBe(
@@ -158,22 +207,21 @@ describe("argument errors under JSON output", () => {
   }, 20_000);
 });
 
-describe("options given to a command group without a subcommand", () => {
+describe.concurrent("options given to a command group without a subcommand", () => {
   test.each([
     { name: "`--json=yes`", args: ["--json=yes"], extraEnv: {} },
     { name: "`TAILOR_JSON_OUTPUT=maybe`", args: [], extraEnv: { TAILOR_JSON_OUTPUT: "maybe" } },
     { name: "`tailordb --json=yes`", args: ["tailordb", "--json=yes"], extraEnv: {} },
   ])(
     "rejects an invalid option value with exit 2 for $name",
-    ({ args, extraEnv }) => {
+    async ({ args, extraEnv }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-group-options-");
+      using tmp = tempDir("cli-group-options-");
 
-      const result = runCli(args, tmp.dir, extraEnv);
+      const result = await runCli(args, tmp.dir, extraEnv);
 
-      expect(result.error).toBeUndefined();
       expect(result.status).toBe(2);
       expect(result.stdout).toBe("");
       expect(result.stderr.trim()).toBe("✖ json: Invalid input: expected boolean, received string");
@@ -189,15 +237,14 @@ describe("options given to a command group without a subcommand", () => {
     { name: "`plugin --bogus`", args: ["plugin", "--bogus"] },
   ])(
     "rejects an unknown option with exit 2 for $name",
-    ({ args }) => {
+    async ({ args }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-group-options-");
+      using tmp = tempDir("cli-group-options-");
 
-      const result = runCli(args, tmp.dir);
+      const result = await runCli(args, tmp.dir);
 
-      expect(result.error).toBeUndefined();
       expect(result.status).toBe(2);
       expect(result.stdout).toBe("");
       expect(result.stderr.trim()).toBe("✖ Unknown flags: bogus");
@@ -205,19 +252,18 @@ describe("options given to a command group without a subcommand", () => {
     20_000,
   );
 
-  test("suggests a mistyped subcommand followed by an option", () => {
+  test("suggests a mistyped subcommand followed by an option", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-group-options-");
+    using tmp = tempDir("cli-group-options-");
 
-    const result = runCli(["deplyo", "--dry-run"], tmp.dir);
+    const result = await runCli(["deplyo", "--dry-run"], tmp.dir);
 
-    expect(result.error).toBeUndefined();
     expect(result.status).toBe(2);
     expect(result.stderr.trim()).toBe("✖ Unknown subcommand: deplyo. Did you mean: deploy?");
   }, 20_000);
 });
 
-describe("output under an AI coding agent", () => {
+describe.concurrent("output under an AI coding agent", () => {
   const agentEnv = { AI_AGENT: "claude_code", POLITTY_NO_AGENT: undefined };
 
   test.each([
@@ -249,26 +295,25 @@ describe("output under an AI coding agent", () => {
     { name: "no agent", extraEnv: {}, args: [], json: false },
   ])(
     "prints JSON only by default with $name",
-    ({ extraEnv, args, json }) => {
+    async ({ extraEnv, args, json }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-agent-output-");
+      using tmp = tempDir("cli-agent-output-");
 
-      const result = runCli(["profile", "list", ...args], tmp.dir, extraEnv);
+      const result = await runCli(["profile", "list", ...args], tmp.dir, extraEnv);
 
-      expect(result.error).toBeUndefined();
       expect(result.status).toBe(0);
       expect(result.stdout).toBe(json ? "[]\n" : "");
     },
     20_000,
   );
 
-  test("reports an argument error as a JSON envelope", () => {
+  test("reports an argument error as a JSON envelope", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-agent-output-");
+    using tmp = tempDir("cli-agent-output-");
 
-    const result = runCli(["workspace", "list", "--bogus"], tmp.dir, agentEnv);
+    const result = await runCli(["workspace", "list", "--bogus"], tmp.dir, agentEnv);
 
     expect(result.status).toBe(2);
     expect(JSON.parse(result.stderr)).toEqual({
@@ -281,13 +326,13 @@ describe("output under an AI coding agent", () => {
     { name: "no agent", extraEnv: {}, shown: false },
   ])(
     "shows agent guidance in --help only for $name",
-    ({ extraEnv, shown }) => {
+    async ({ extraEnv, shown }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-agent-help-");
+      using tmp = tempDir("cli-agent-help-");
 
-      const result = runCli(["workspace", "--help"], tmp.dir, extraEnv);
+      const result = await runCli(["workspace", "--help"], tmp.dir, extraEnv);
 
       expect(result.status).toBe(0);
       expect(result.stdout.includes("--help-json")).toBe(true);
@@ -297,7 +342,7 @@ describe("output under an AI coding agent", () => {
   );
 });
 
-describe("parent command shortcuts", () => {
+describe.concurrent("parent command shortcuts", () => {
   test.each([
     { parent: ["workspace"], explicit: ["workspace", "list"] },
     { parent: ["workflow"], explicit: ["workflow", "list"] },
@@ -305,21 +350,19 @@ describe("parent command shortcuts", () => {
     { parent: ["workspace", "app"], explicit: ["workspace", "app", "list"] },
   ])(
     "propagates default subcommand failures for `$parent`",
-    ({ parent, explicit }) => {
+    async ({ parent, explicit }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-parent-shortcut-");
+      using tmp = tempDir("cli-parent-shortcut-");
 
-      const explicitResult = runCli([...explicit, "--json"], tmp.dir);
-      expect(explicitResult.error).toBeUndefined();
+      const explicitResult = await runCli([...explicit, "--json"], tmp.dir);
       expect(explicitResult.status).toBe(1);
       expect(JSON.parse(explicitResult.stderr).error).toMatchObject({
         code: "AUTH_TOKEN_NOT_FOUND",
       });
 
-      const parentResult = runCli([...parent, "--json"], tmp.dir);
-      expect(parentResult.error).toBeUndefined();
+      const parentResult = await runCli([...parent, "--json"], tmp.dir);
       expect(parentResult.status).toBe(explicitResult.status);
       expect(JSON.parse(parentResult.stderr)).toEqual(JSON.parse(explicitResult.stderr));
     },
@@ -327,43 +370,40 @@ describe("parent command shortcuts", () => {
   );
 });
 
-describe("parent command shortcuts on success", () => {
+describe.concurrent("parent command shortcuts on success", () => {
   test.each([
     { parent: ["profile"], explicit: ["profile", "list"] },
     { parent: ["plugin"], explicit: ["plugin", "list"] },
     { parent: ["crashreport"], explicit: ["crashreport", "list"] },
   ])(
     "matches the default subcommand output for `$parent`",
-    ({ parent, explicit }) => {
+    async ({ parent, explicit }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-parent-success-");
+      using tmp = tempDir("cli-parent-success-");
 
-      const explicitResult = runCli([...explicit, "--json"], tmp.dir);
-      expect(explicitResult.error).toBeUndefined();
+      const explicitResult = await runCli([...explicit, "--json"], tmp.dir);
       expect(explicitResult.status).toBe(0);
 
-      const parentResult = runCli([...parent, "--json"], tmp.dir);
-      expect(parentResult.error).toBeUndefined();
+      const parentResult = await runCli([...parent, "--json"], tmp.dir);
       expect(parentResult.status).toBe(0);
       expect(parentResult.stdout).toBe(explicitResult.stdout);
     },
     40_000,
   );
 
-  test("renders help for `workspace ttl` without recursing", () => {
+  test("renders help for `workspace ttl` without recursing", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-parent-ttl-");
+    using tmp = tempDir("cli-parent-ttl-");
 
-    const result = runCli(["workspace", "ttl"], tmp.dir);
-    expect(result.error).toBeUndefined();
+    const result = await runCli(["workspace", "ttl"], tmp.dir);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Manage when a workspace becomes prunable.");
   }, 20_000);
 });
 
-describe("plugin dispatch argument forwarding", () => {
+describe.concurrent("plugin dispatch argument forwarding", () => {
   /**
    * Writes a `tailor-erd` probe into `dir` that records the argv it receives.
    * The caller prepends `dir` to PATH so plugin resolution finds it.
@@ -400,32 +440,30 @@ describe("plugin dispatch argument forwarding", () => {
     },
   ])(
     "forwards $name",
-    ({ argv, expected }) => {
+    async ({ argv, expected }) => {
       expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
         true,
       );
-      using tmp = tempCwd("cli-plugin-forward-");
+      using tmp = tempDir("cli-plugin-forward-");
       const capture = writeProbePlugin(tmp.dir);
 
-      const result = runCli(argv, tmp.dir, { PATH: `${tmp.dir}:${process.env.PATH ?? ""}` });
+      const result = await runCli(argv, tmp.dir, { PATH: `${tmp.dir}:${process.env.PATH ?? ""}` });
 
-      expect(result.error).toBeUndefined();
       expect(result.status).toBe(0);
       expect(JSON.parse(readFileSync(capture, "utf8"))).toEqual(expected);
     },
     20_000,
   );
 
-  test("answers --help itself instead of dispatching a plugin", () => {
+  test("answers --help itself instead of dispatching a plugin", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-plugin-help-");
+    using tmp = tempDir("cli-plugin-help-");
     const capture = writeProbePlugin(tmp.dir);
 
-    const result = runCli(["--help", "erd", "export"], tmp.dir, {
+    const result = await runCli(["--help", "erd", "export"], tmp.dir, {
       PATH: `${tmp.dir}:${process.env.PATH ?? ""}`,
     });
 
-    expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
     expect(existsSync(capture)).toBe(false);
   }, 20_000);
