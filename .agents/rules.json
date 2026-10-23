@@ -16,6 +16,14 @@
       "file": ".agents/rules/code-comments.md"
     },
     {
+      "name": "deploy-managed-resources",
+      "paths": [
+        "packages/sdk/src/cli/commands/deploy/apply-phases.ts",
+        "packages/sdk/src/cli/commands/deploy/managed-resource-type.ts"
+      ],
+      "file": ".agents/rules/deploy-managed-resources.md"
+    },
+    {
       "name": "deprecation",
       "paths": ["packages/sdk/src/**/*.ts", "packages/sdk-codemod/src/registry.ts"],
       "file": ".agents/rules/deprecation.md"

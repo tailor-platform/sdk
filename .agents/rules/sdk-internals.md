@@ -146,45 +146,7 @@ surface at build time with a clear message, never as silently wrong output.
 - If a stored artifact records an integrity hash, verify the hash when reading
   the artifact back; otherwise do not record it.
 
-## CLI Command Design: Flags Over Positionals
+## CLI Command Design
 
-politty has an opt-in plugin-dispatch hook (`onUnknownSubcommand`, not wired
-up in this SDK yet) that execs an external `<cli>-<name>` binary for an
-unrecognized subcommand. Its dispatch check skips any command that defines
-`run`, regardless of whether that `run` parses a positional — so a command
-that both parses one and has `subCommands` (a "hybrid") leaves no way to
-tell an unrecognized first argument apart from a subcommand name.
-
-- Prefer flags and subcommands over positional arguments. They're
-  order-independent, unambiguous, and subcommand groups remain a plugin
-  extension point.
-- If a leaf command needs a positional, limit it to a single natural subject
-  (e.g. `api inspect <endpoint>`) and give that command **no** `subCommands`
-  of its own.
-- Don't add a new hybrid command. `api`
-  (`packages/sdk/src/cli/commands/api/index.ts`) is the one existing
-  exception; this doesn't apply retroactively to commands whose `run` just
-  forwards to a default subcommand with no arguments.
-
-## Adding a Deploy-Managed Resource Type
-
-`PlannedDeployment` (`cli/commands/deploy/apply-phases.ts`) is the source of
-truth for which resource types `deploy` manages. Adding a key there does not
-automatically wire the resource into every consumer — check each of these:
-
-- `cli/commands/remove.ts` — its `plans` object is `satisfies Omit<PlannedDeployment, "application">`,
-  so a missing key fails to compile, but the `create-update`/`delete` apply calls
-  and the dry-run `removeLines`/`deletes.length === 0` checks still need a manual update.
-- `cli/commands/deploy/validate-plan.ts` — `ValidatePlanInput` is a `PlannedDeployment`
-  alias, but `validatePlan` still needs `creates`/`updates` calls added for the
-  new resource's proto schema.
-- `cli/commands/deploy/managed-resources.ts`'s `DEPLOY_MANAGED_RESOURCE_DEFINITIONS` —
-  drives dry-run display and owner-conflict detection; add an entry per resource label.
-- `cli/commands/deploy/managed-resource-type.ts`'s `ManagedResourceType` — add the new
-  resource's id before using it as a `resourceType`. `deploy --dry-run --json` reports these
-  ids, so never rename an existing one. Keep the module import-free: planners and
-  `confirm.ts` cannot import `managed-resources.ts` without an import cycle.
-- `collectOwnerConflicts` / `collectUnmanagedResources` / `collectResourceOwners`
-  (`managed-resources.ts`) derive from `PlanResults` via `Object.values`, so no change
-  is needed there as long as the new plan result carries `conflicts`/`unmanaged`/
-  `resourceOwners`.
+Before adding a command or a positional argument, read
+[CLI Command Design: Flags Over Positionals](../../docs/architecture.md#cli-command-design-flags-over-positionals).

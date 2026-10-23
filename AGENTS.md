@@ -21,6 +21,7 @@ When editing files matching these globs, read and follow the linked rule documen
 - `.changeset/**`: [Changeset Rules](.agents/rules/changeset.md)
 - `packages/sdk/src/cli/**/*.ts`: [CLI Logging Guidelines](.agents/rules/cli-logging.md)
 - `**`: [Code Comments](.agents/rules/code-comments.md)
+- `packages/sdk/src/cli/commands/deploy/apply-phases.ts`, `packages/sdk/src/cli/commands/deploy/managed-resource-type.ts`: [Adding a Deploy-Managed Resource Type](.agents/rules/deploy-managed-resources.md)
 - `packages/sdk/src/**/*.ts`, `packages/sdk-codemod/src/registry.ts`: [Deprecating a Public API](.agents/rules/deprecation.md)
 - `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
 - `packages/sdk/e2e/**`: [SDK E2E Tests](.agents/rules/e2e-tests.md)
@@ -54,7 +55,7 @@ When editing files matching these globs, read and follow the linked rule documen
 - `pnpm agent:rules:check` - Verify generated agent rule files are up to date
 - `pnpm codemod:docs:update` - Regenerate `packages/sdk/docs/migration/v<major>.md` from the codemod registry
 - `pnpm codemod:docs:check` - Verify migration docs are up to date
-- `pnpm check:deprecations` - Verify every `@deprecated` in `packages/sdk/src` states its `since` version and codemod (see [Deprecating a Public API](.agents/rules/deprecation.md))
+- `pnpm check:deprecations` - Verify every `@deprecated` in `packages/sdk/src` states its `since` version and codemod (see [Deprecating a Public API](docs/deprecation.md))
 
 ### CLI
 
@@ -96,6 +97,7 @@ Before writing code that uses the SDK, read its rules in the matching user doc u
 - [Architecture](docs/architecture.md) - Design decisions and non-obvious patterns
 - [Testing](docs/testing.md) - Test strategy and conventions
 - [Changeset Conventions](docs/changeset.md) - Whether a PR needs a changeset or the `skip-changeset` label, and the bump level
+- [Deprecating a Public API](docs/deprecation.md) - Removing, renaming, or deprecating a public API
 - [Telemetry / Performance Profiling](docs/telemetry.md) - OTLP tracing for CLI performance analysis
 
 ## Platform Documentation
