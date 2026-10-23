@@ -417,6 +417,26 @@ describe("template-generator", () => {
         expect(script).toContain('copyOrderToPurchase: { dependsOn: ["copyCustomerToClient"]');
       });
 
+      test("copies the parent first when the child points at it from inside a nested field", () => {
+        const nestedChild = {
+          ...child,
+          after: {
+            ...child.after,
+            fields: {
+              info: {
+                type: "nested",
+                required: false,
+                fields: { customerId: { type: "uuid", required: false, foreignKeyType: "Client" } },
+              },
+            },
+          },
+        } as const;
+
+        const script = generateMigrationScript(stepsDiff(nestedChild, parent));
+
+        expect(order(script)).toEqual(["copyCustomerToClient", "copyOrderToPurchase"]);
+      });
+
       test("keeps the listed order when the parent is already first", () => {
         const script = generateMigrationScript(stepsDiff(parent, child));
 

@@ -11,6 +11,7 @@
 
 import * as fs from "node:fs/promises";
 import { CLIError } from "#/cli/shared/errors";
+import { collectForeignKeyTargets, type ForeignKeyTargetField } from "#/utils/foreign-key-targets";
 import { isMigrationStepName } from "#/utils/migration-steps";
 import { formatFieldShape, isSingleValueToArrayChange } from "./field-type-change";
 import { writeMigrationTypeFiles } from "./pglite-schema-generator";
@@ -335,11 +336,6 @@ const OVERWRITE_NOTE = `// Overwrites existing values. Once this step commits it
 
 const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 
-/** The part of a table field that says which table it points to. */
-interface ForeignKeyField {
-  foreignKeyType?: string;
-}
-
 /**
  * The tables other than itself that the fields of a table point to.
  * @param fields - Fields of the table
@@ -347,16 +343,10 @@ interface ForeignKeyField {
  * @returns Names of the referenced tables
  */
 function foreignKeyTargets(
-  fields: Readonly<Record<string, ForeignKeyField>>,
+  fields: Readonly<Record<string, ForeignKeyTargetField>>,
   tableName: string,
 ): string[] {
-  return [
-    ...new Set(
-      Object.values(fields)
-        .map((field) => field.foreignKeyType)
-        .filter((target): target is string => target !== undefined && target !== tableName),
-    ),
-  ];
+  return collectForeignKeyTargets(fields).filter((target) => target !== tableName);
 }
 
 /**
