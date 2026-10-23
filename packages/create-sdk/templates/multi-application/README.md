@@ -9,7 +9,7 @@ This project was bootstrapped with [Create Tailor Platform SDK](https://www.npmj
 This project contains two applications: `user` and `admin`.
 
 - `user` application owns `shared-db` and deploys its resources
-- `admin` application references `shared-db` as `external`, which exposes it in GraphQL without deploying duplicate resources
+- `admin` application references `shared-db` with `attach: true`, which exposes it in GraphQL without deploying duplicate resources
 
 ## Usage
 

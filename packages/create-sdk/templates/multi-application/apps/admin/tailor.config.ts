@@ -4,7 +4,7 @@ import { sharedDb } from "../user/tailor.config";
 export default defineConfig({
   name: "admin",
   db: {
-    [sharedDb]: { external: true },
+    [sharedDb]: { attach: true },
     "admin-db": { files: [`./db/**/*.ts`] },
   },
 });
