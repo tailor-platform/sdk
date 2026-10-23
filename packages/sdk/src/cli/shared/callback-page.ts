@@ -1,3 +1,6 @@
+import { isCLIError } from "./errors";
+import type * as http from "node:http";
+
 type CallbackPageOptions = {
   status: "success" | "failure";
   title: string;
@@ -48,4 +51,46 @@ export function renderCallbackPage(options: CallbackPageOptions) {
   const message = escapeHtml(options.message);
   const script = options.status === "success" ? closeScript : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${styles}</style></head><body class="${options.status}"><main><div class="icon">${icons[options.status]}</div><h1>${title}</h1><p>${message}</p></main>${script}</body></html>`;
+}
+
+const htmlHeaders = { "Content-Type": "text/html; charset=utf-8" };
+
+/**
+ * Respond to a local OAuth2 callback request with the success page.
+ * @param res - Callback server response
+ * @param title - Page title and heading
+ */
+export function sendCallbackSuccess(res: http.ServerResponse, title: string) {
+  res.writeHead(200, htmlHeaders);
+  res.end(
+    renderCallbackPage({
+      status: "success",
+      title,
+      message: "You can close this tab and return to the terminal.",
+    }),
+  );
+}
+
+/**
+ * Respond to a local OAuth2 callback request with the failure page. Only the
+ * message of a `CLIError` is shown; other errors fall back to a generic hint.
+ * @param res - Callback server response
+ * @param statusCode - HTTP status to respond with
+ * @param title - Page title and heading
+ * @param error - Error that caused the failure
+ */
+export function sendCallbackFailure(
+  res: http.ServerResponse,
+  statusCode: number,
+  title: string,
+  error: unknown,
+) {
+  res.writeHead(statusCode, htmlHeaders);
+  res.end(
+    renderCallbackPage({
+      status: "failure",
+      title,
+      message: isCLIError(error) ? error.message : "Return to the terminal for details.",
+    }),
+  );
 }

@@ -3,10 +3,10 @@ import * as http from "node:http";
 import open from "open";
 import { z } from "zod";
 import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
-import { renderCallbackPage } from "#/cli/shared/callback-page";
+import { sendCallbackFailure, sendCallbackSuccess } from "#/cli/shared/callback-page";
 import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { CLIError, formatCommandHint, isCLIError, toError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -176,25 +176,11 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
             redirectUri,
           });
 
-          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-          res.end(
-            renderCallbackPage({
-              status: "success",
-              title: "Authorization successful",
-              message: "You can close this tab and return to the terminal.",
-            }),
-          );
+          sendCallbackSuccess(res, "Authorization successful");
           server.close();
           resolve();
         } catch (err) {
-          res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
-          res.end(
-            renderCallbackPage({
-              status: "failure",
-              title: "Authorization failed",
-              message: isCLIError(err) ? err.message : "Return to the terminal for details.",
-            }),
-          );
+          sendCallbackFailure(res, 400, "Authorization failed", err);
           server.close();
           reject(toError(err));
         }

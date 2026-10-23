@@ -4,7 +4,7 @@ import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import { arg } from "@politty/zod";
 import open from "open";
 import { z } from "zod";
-import { renderCallbackPage } from "#/cli/shared/callback-page";
+import { sendCallbackFailure, sendCallbackSuccess } from "#/cli/shared/callback-page";
 import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
@@ -22,7 +22,7 @@ import {
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
+import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { prompt } from "#/cli/shared/prompt";
@@ -194,24 +194,10 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         await removeLegacyUserAlias(pfConfig, userInfo.email, userInfo.sub, args.platformConfig);
         writePlatformConfig(pfConfig);
 
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(
-          renderCallbackPage({
-            status: "success",
-            title: "Authentication successful",
-            message: "You can close this tab and return to the terminal.",
-          }),
-        );
+        sendCallbackSuccess(res, "Authentication successful");
         resolve({ user: userInfo.sub, email: userInfo.email });
       } catch (error) {
-        res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(
-          renderCallbackPage({
-            status: "failure",
-            title: "Authentication failed",
-            message: isCLIError(error) ? error.message : "Return to the terminal for details.",
-          }),
-        );
+        sendCallbackFailure(res, 401, "Authentication failed", error);
         reject(toError(error));
       } finally {
         // Close the server after handling one request.
