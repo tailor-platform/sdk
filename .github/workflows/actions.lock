@@ -10,6 +10,8 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+    '.github/workflows/changeset-publish.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/check-license.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'

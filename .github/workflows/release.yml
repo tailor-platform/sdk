@@ -15,7 +15,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: write # push release commits/tags and create GitHub releases
       id-token: write # OIDC for npm trusted publishing
@@ -54,32 +54,10 @@ jobs:
         id: changesets
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          publish-script: "pnpm changeset publish"
+          publish-script: "node .github/scripts/changeset-publish.mjs"
           create-github-releases: true
           pr-title: "Release - ${{ github.ref_name }}"
           github-token: ${{ steps.get_access_token.outputs.token }}
-
-      # The next run's `changeset publish` fails on versions npm has accepted
-      # but not yet listed.
-      - name: Wait for published versions on npm
-        if: ${{ !cancelled() && steps.changesets.outputs.published == 'true' }}
-        env:
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs['published-packages'] }}
-        shell: bash
-        run: |
-          specs=$(jq -r '.[] | "\(.name)@\(.version)"' <<< "$PUBLISHED_PACKAGES")
-          wait_seconds=300
-          deadline=$((SECONDS + wait_seconds))
-          for spec in $specs; do
-            until error=$(timeout 30 pnpm info "$spec" version 2>&1 > /dev/null); do
-              if [ "$SECONDS" -ge "$deadline" ]; then
-                echo "$error" >&2
-                echo "::error::$spec is not visible on npm after ${wait_seconds}s"
-                exit 1
-              fi
-              sleep 10
-            done
-          done
 
       # Only fires when changesets/action created/updated a release PR (as
       # opposed to publishing). See resolve-pending-release-versions.sh.
