@@ -16,6 +16,8 @@ import { extractInlineSourcemap } from "./stack-trace";
 
 const PNPM_SCOPED = "../p/node_modules/.pnpm/@scope+lib@1.0.0_abc/node_modules/@scope/lib/index.js";
 const PNPM_PLAIN = "../p/node_modules/.pnpm/plain@2.0.0/node_modules/plain/dist/index.js";
+const PNPM_GENERATED =
+  "../p/node_modules/.pnpm/@prisma+client@6.0.0/node_modules/.prisma/client/index.js";
 const APP = "../p/src/app.ts";
 
 function createMap(): SourcemapData {
@@ -26,6 +28,17 @@ function createMap(): SourcemapData {
     sourcesContent: ["scoped source", "plain source", "app source"],
     names: ["run"],
     mappings: "AAAA;ACAA;ACCA",
+  };
+}
+
+function createGeneratedClientMap(): SourcemapData {
+  return {
+    version: 3,
+    file: "app.js",
+    sources: [PNPM_GENERATED, APP],
+    sourcesContent: ["generated source", "app source"],
+    names: [],
+    mappings: "AAAA;ACAA",
   };
 }
 
@@ -56,28 +69,31 @@ describe("sourcePackageName", () => {
 });
 
 describe("omitSourcesContent", () => {
-  test("drops the content of a package given by name and keeps the others", () => {
-    const result = omitSourcesContent({ map: createMap(), exclude: ["@scope/lib"] });
+  test("keeps the content of a package given by name and drops the other packages", () => {
+    const result = omitSourcesContent({ map: createMap(), keep: ["plain"] });
 
     expect(result.sourcesContent).toEqual([null, "plain source", "app source"]);
   });
 
-  test("drops the content of every package matching a regular expression", () => {
-    const result = omitSourcesContent({ map: createMap(), exclude: [/^@scope\//, /^plain$/] });
+  test("never drops the content of a source outside node_modules", () => {
+    const result = omitSourcesContent({ map: createMap(), keep: [] });
 
     expect(result.sourcesContent).toEqual([null, null, "app source"]);
   });
 
-  test("never drops the content of a source outside node_modules", () => {
-    const result = omitSourcesContent({ map: createMap(), exclude: [/.*/] });
+  test("drops the content of a node_modules file that belongs to no package even when packages are kept", () => {
+    const result = omitSourcesContent({
+      map: createGeneratedClientMap(),
+      keep: ["@prisma/client"],
+    });
 
-    expect(result.sourcesContent).toEqual([null, null, "app source"]);
+    expect(result.sourcesContent).toEqual([null, "app source"]);
   });
 
   test("keeps mappings, sources and names so stack traces still resolve", () => {
     const map = createMap();
 
-    const result = omitSourcesContent({ map, exclude: ["@scope/lib", "plain"] });
+    const result = omitSourcesContent({ map, keep: [] });
 
     expect(result).toMatchObject({
       version: map.version,
@@ -91,21 +107,15 @@ describe("omitSourcesContent", () => {
   test("does not mutate the input map", () => {
     const map = createMap();
 
-    omitSourcesContent({ map, exclude: ["@scope/lib"] });
+    omitSourcesContent({ map, keep: ["plain"] });
 
     expect(map.sourcesContent).toEqual(["scoped source", "plain source", "app source"]);
-  });
-
-  test("returns the input map itself when nothing is excluded", () => {
-    const map = createMap();
-
-    expect(omitSourcesContent({ map, exclude: [] })).toBe(map);
   });
 
   test("returns the input map itself when it carries no content", () => {
     const { sourcesContent: _omitted, ...map } = createMap();
 
-    expect(omitSourcesContent({ map, exclude: ["plain"] })).toBe(map);
+    expect(omitSourcesContent({ map, keep: [] })).toBe(map);
   });
 });
 
@@ -225,6 +235,27 @@ describe("chunkCodeWithSourcemap", () => {
     expect(contentOf(result, "plain/dist/index.js")).toBeNull();
   });
 
+  test("drops the source text of a file in a node_modules dot-directory by default", () => {
+    const result = chunkCodeWithSourcemap({
+      chunk: { code, map: createGeneratedClientMap() },
+      inlineSourcemap: true,
+      dependencySources: false,
+    });
+
+    expect(contentOf(result, ".prisma/client/index.js")).toBeNull();
+    expect(contentOf(result, "src/app.ts")).toBe("app source");
+  });
+
+  test("keeps the source text of a file in a node_modules dot-directory when dependency sources are included", () => {
+    const result = chunkCodeWithSourcemap({
+      chunk: { code, map: createGeneratedClientMap() },
+      inlineSourcemap: true,
+      dependencySources: true,
+    });
+
+    expect(contentOf(result, ".prisma/client/index.js")).toBe("generated source");
+  });
+
   test("keeps the source text of the project's own files", () => {
     const result = chunkCodeWithSourcemap({
       chunk: { code, map: createMap() },
@@ -306,8 +337,8 @@ describe("with a rolldown bundle of pnpm-installed packages", () => {
     fs.rmSync(projectDir, { recursive: true, force: true });
   });
 
-  test("drops only the excluded package from the inlined map", () => {
-    const filtered = omitSourcesContent({ map, exclude: ["@scope/lib"] });
+  test("keeps only the listed package in the inlined map", () => {
+    const filtered = omitSourcesContent({ map, keep: ["plain"] });
 
     const traceMap = assertDefined(
       extractInlineSourcemap(toInlineSourcemapCode({ code, map: filtered })),
@@ -320,8 +351,8 @@ describe("with a rolldown bundle of pnpm-installed packages", () => {
     expect(contentOf("src/app.ts")).toContain("export const run");
   });
 
-  test("still resolves a position inside the excluded package", () => {
-    const filtered = omitSourcesContent({ map, exclude: ["@scope/lib", "plain"] });
+  test("still resolves a position inside a dropped package", () => {
+    const filtered = omitSourcesContent({ map, keep: [] });
     const line = code.split("\n").findIndex((text) => text.includes("scoped:")) + 1;
 
     const traceMap = assertDefined(

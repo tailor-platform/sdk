@@ -9,15 +9,12 @@ export interface SourcemapData {
   mappings: string;
 }
 
-/** An exact package name, a pattern tested against the package name, or a predicate on the package name. */
-type SourcemapPackageSelector = string | RegExp | ((packageName: string) => boolean);
-
 /** Parameters for {@link omitSourcesContent}. */
 export interface OmitSourcesContentParams {
   /** Sourcemap to read. It is never mutated. */
   map: SourcemapData;
-  /** Packages whose embedded source text is dropped. */
-  exclude: readonly SourcemapPackageSelector[];
+  /** Installed packages whose embedded source text is kept. */
+  keep: readonly string[];
 }
 
 /** Parameters for {@link toInlineSourcemapCode}. */
@@ -34,13 +31,27 @@ const SOURCEMAP_REFERENCE_REGEX = /\n*\/\/[#@]\s*sourceMappingURL=[^\n]*\s*$/;
 const INLINE_SOURCEMAP_PREFIX =
   "//# source" + "MappingURL=data:application/json;charset=utf-8;base64,";
 
+function pathSegments(source: string): string[] {
+  return source.replaceAll("\\", "/").split("/");
+}
+
+/**
+ * Whether a sourcemap source path is inside `node_modules`, including files that belong to no
+ * package such as `node_modules/.prisma/client/index.js`.
+ * @param source - A path from a sourcemap's `sources`
+ * @returns True when the path has a `node_modules` segment
+ */
+export function isDependencySource(source: string): boolean {
+  return pathSegments(source).includes("node_modules");
+}
+
 /**
  * Resolve the npm package a sourcemap source path belongs to.
  * @param source - A path from a sourcemap's `sources`
- * @returns The package name, or undefined when the path is outside `node_modules`
+ * @returns The package name, or undefined when the path is outside `node_modules` or belongs to no package
  */
 export function sourcePackageName(source: string): string | undefined {
-  const segments = source.replaceAll("\\", "/").split("/");
+  const segments = pathSegments(source);
   const index = segments.lastIndexOf("node_modules");
   if (index === -1) return undefined;
 
@@ -52,29 +63,26 @@ export function sourcePackageName(source: string): string | undefined {
   return second ? `${first}/${second}` : undefined;
 }
 
-function isExcludedSource(source: string, exclude: readonly SourcemapPackageSelector[]): boolean {
+function isOmittedSource(source: string, keep: readonly string[]): boolean {
+  if (!isDependencySource(source)) return false;
   const name = sourcePackageName(source);
-  if (name === undefined) return false;
-  return exclude.some((selector) => {
-    if (typeof selector === "string") return selector === name;
-    if (typeof selector === "function") return selector(name);
-    return name.search(selector) !== -1;
-  });
+  return name === undefined || !keep.includes(name);
 }
 
 /**
- * Drop the embedded source text of the given packages from a sourcemap.
+ * Drop the embedded source text of every installed package except the given ones from a sourcemap.
+ * A file under `node_modules` that belongs to no package is always dropped.
  * `sources`, `names` and `mappings` are kept, so positions in stack traces still resolve.
- * @param params - The map and the packages to drop
- * @returns A new map, or the input map itself when there is nothing to drop
+ * @param params - The map and the packages to keep
+ * @returns A new map, or the input map itself when it carries no source text
  */
 export function omitSourcesContent(params: OmitSourcesContentParams): SourcemapData {
-  const { map, exclude } = params;
-  if (exclude.length === 0 || !map.sourcesContent) return map;
+  const { map, keep } = params;
+  if (!map.sourcesContent) return map;
 
   const sourcesContent = map.sourcesContent.map((content, index) => {
     const source = map.sources[index];
-    return source !== undefined && isExcludedSource(source, exclude) ? null : content;
+    return source !== undefined && isOmittedSource(source, keep) ? null : content;
   });
   return { ...map, sourcesContent };
 }
@@ -122,7 +130,6 @@ export function chunkCodeWithSourcemap(params: ChunkCodeWithSourcemapParams): st
   if (dependencySources === true)
     return toInlineSourcemapCode({ code: chunk.code, map: chunk.map });
 
-  const kept = new Set(dependencySources || []);
-  const map = omitSourcesContent({ map: chunk.map, exclude: [(name) => !kept.has(name)] });
+  const map = omitSourcesContent({ map: chunk.map, keep: dependencySources || [] });
   return toInlineSourcemapCode({ code: chunk.code, map });
 }

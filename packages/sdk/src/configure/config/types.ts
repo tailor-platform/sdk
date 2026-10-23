@@ -74,7 +74,9 @@ export interface BuildOptions {
    * the inline sourcemap. By default only your own source text is embedded, which
    * makes bundled functions much smaller. Set `true` to embed all installed packages,
    * or list package names (such as `["kysely", "@scope/lib"]`) to embed only those.
-   * A listed package's own dependencies are not embedded unless they are listed too. Error positions still resolve to the
+   * A listed package's own dependencies are not embedded unless they are listed too.
+   * Files under `node_modules` that belong to no package, such as `node_modules/.prisma`,
+   * are embedded only with `true`. Error positions still resolve to the
    * original files and lines; `tailor function run` shows a code snippet for a frame
    * inside an installed package only when that package's file exists locally.
    * Only applies when `inlineSourcemap` is enabled.
