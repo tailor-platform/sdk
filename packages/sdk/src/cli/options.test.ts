@@ -6,14 +6,6 @@ import type { AnyCommand, ExtractedFields, SubCommandValue } from "@politty/zod"
 
 const allowedHybridCommandPaths = new Set(["api"]);
 
-vi.mock("node:module", async () => {
-  const actual = await vi.importActual("node:module");
-  return {
-    ...actual,
-    register: vi.fn(),
-  };
-});
-
 vi.mock("@politty/zod", async () => {
   const actual = await vi.importActual("@politty/zod");
   return {
