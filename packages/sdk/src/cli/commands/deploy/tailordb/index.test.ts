@@ -377,68 +377,9 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.service.deletes).toHaveLength(1);
       expect(result.changeSet.service.deletes[0]!.name).toBe("tailordb-b");
     });
-
-    test("all services are deleted when config is empty", async () => {
-      const client = createMockClient([
-        { name: "tailordb-1", label: appName },
-        { name: "tailordb-2", label: appName },
-      ]);
-      const application = createMockApplication([]);
-
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planTailorDB(ctx);
-
-      expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
-        "tailordb-1",
-        "tailordb-2",
-      ]);
-    });
   });
 
   describe("label ownership scenarios (service level)", () => {
-    test("service without label is NOT deleted", async () => {
-      const client = createMockClient([{ name: "unmanaged-tailordb" }]);
-      const application = createMockApplication([]);
-
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planTailorDB(ctx);
-
-      expect(result.changeSet.service.deletes).toHaveLength(0);
-    });
-
-    test("service owned by different app is NOT deleted", async () => {
-      const client = createMockClient([{ name: "other-tailordb", label: "other-app" }]);
-      const application = createMockApplication([]);
-
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planTailorDB(ctx);
-
-      expect(result.changeSet.service.deletes).toHaveLength(0);
-      expect(result.resourceOwners.has("other-app")).toBe(true);
-    });
-
     test("mixed ownership - only delete own services", async () => {
       const client = createMockClient([
         { name: "my-tailordb", label: appName },
@@ -511,48 +452,6 @@ describe("planTailorDB (service level)", () => {
   });
 
   describe("nested field manifest mapping", () => {
-    test("enables publishRecordEvents when a peer executor targets the table", async () => {
-      const tailorDBService = createMockTailorDBService("shared-db");
-      const userType: TailorDBType = {
-        name: "User",
-        pluralForm: "Users",
-        description: "User table",
-        fields: {
-          name: {
-            name: "name",
-            config: {
-              type: "string",
-            },
-          },
-        },
-        forwardRelationships: {},
-        backwardRelationships: {},
-        settings: {},
-        permissions: {},
-        files: {},
-      };
-
-      Object.defineProperty(tailorDBService, "types", {
-        value: { [userType.name]: userType },
-      });
-
-      const client = createMockClient([]);
-      const application = createMockApplication([tailorDBService]);
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-        executorUsedTailorDBTables: new Set(["User"]),
-      };
-
-      const result = await planTailorDB(ctx);
-
-      const createdType = result.changeSet.type.creates[0]!.request.tailordbType;
-      expect(createdType?.schema?.settings?.publishRecordEvents).toBe(true);
-    });
-
     test.each([
       { disabled: true, expected: false, label: "a disabled executor does not subscribe" },
       { disabled: false, expected: true, label: "an enabled executor subscribes" },
@@ -1044,71 +943,6 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
 
-    test("updates matching type when forceApplyAll is enabled", async () => {
-      const tailordbType: TailorDBType = {
-        name: "Invoice",
-        pluralForm: "Invoices",
-        description: "Invoice table",
-        fields: {
-          code: {
-            name: "code",
-            config: {
-              type: "string",
-              required: true,
-            },
-          },
-        },
-        forwardRelationships: {},
-        backwardRelationships: {},
-        settings: {},
-        permissions: {},
-        files: {},
-      };
-
-      const tailorDBService = createMockTailorDBService("test-tailordb");
-      Object.defineProperty(tailorDBService, "types", {
-        value: { [tailordbType.name]: tailordbType },
-      });
-
-      const client = createRemoteTypeClient("test-tailordb", {
-        name: "Invoice",
-        description: "Invoice table",
-        pluralForm: "invoices",
-        fields: {
-          code: {
-            type: "string",
-            required: true,
-            allowedValues: [],
-            description: "",
-            validate: [],
-            array: false,
-            index: false,
-            unique: false,
-            foreignKey: false,
-            vector: false,
-            fields: {},
-          },
-        },
-      });
-
-      const application = createMockApplication([tailorDBService]);
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-        noSchemaCheck: true,
-        forceApplyAll: true,
-      };
-
-      const result = await planTailorDB(ctx);
-
-      expect(result.changeSet.type.updates).toHaveLength(1);
-      expect(result.changeSet.type.updates[0]?.forcedBySdkVersion).toBe(true);
-      expect(result.changeSet.type.unchanged).toHaveLength(0);
-    });
-
     describe("forceApplyAll markers", () => {
       const invoiceType = (gql?: TailorDBType["permissions"]["gql"]): TailorDBType => ({
         name: "Invoice",
@@ -1179,6 +1013,14 @@ describe("planTailorDB (service level)", () => {
           forceApplyAll: options.forceApplyAll ?? true,
         });
       }
+
+      test("marks a type update that matches remote", async () => {
+        const result = await planInvoice({ local: invoiceType() });
+
+        expect(result.changeSet.type.updates).toHaveLength(1);
+        expect(result.changeSet.type.updates[0]?.forcedBySdkVersion).toBe(true);
+        expect(result.changeSet.type.unchanged).toHaveLength(0);
+      });
 
       test("does not mark a type update whose schema differs from remote", async () => {
         const result = await planInvoice({

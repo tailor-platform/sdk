@@ -65,7 +65,11 @@ const mocks = vi.hoisted(() => {
       ...ownership(),
     })),
     applySecretManager: vi.fn(),
-    planStaticWebsite: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
+    planStaticWebsite: vi.fn(async () => ({
+      changeSet: changeSet(),
+      customDomainLiveOffers: new Map(),
+      ...ownership(),
+    })),
     applyStaticWebsite: vi.fn(),
     planTailorDB: vi.fn(async () => ({
       changeSet: {
@@ -113,7 +117,8 @@ vi.mock("#/cli/commands/deploy/secret-manager", () => ({
   planSecretManager: mocks.planSecretManager,
   applySecretManager: mocks.applySecretManager,
 }));
-vi.mock("#/cli/commands/deploy/staticwebsite", () => ({
+vi.mock("#/cli/commands/deploy/staticwebsite", async (importOriginal) => ({
+  ...(await importOriginal()),
   planStaticWebsite: mocks.planStaticWebsite,
   applyStaticWebsite: mocks.applyStaticWebsite,
 }));

@@ -25,7 +25,12 @@ export type MigrationScriptForm =
       /** The script also exports `steps`, which `main` takes precedence over. */
       ignoredSteps?: true;
     }
-  | { kind: "steps"; order: string[] };
+  | {
+      kind: "steps";
+      order: string[];
+      /** The script asks to roll back the pre-migration schema when a step fails. */
+      rollbackOnFailure?: true;
+    };
 
 const STEP_KEYS = new Set(["run", "dependsOn"]);
 
@@ -87,6 +92,8 @@ interface ExportedNames {
   hasMain: boolean;
   stepsInit: Expression | null | undefined;
   stepsExportedIndirectly: boolean;
+  onFailureInit: Expression | null | undefined;
+  onFailureExportedIndirectly: boolean;
   hasUnreadableExports: boolean;
 }
 
@@ -95,6 +102,8 @@ function collectExports(program: Program): ExportedNames {
     hasMain: false,
     stepsInit: undefined,
     stepsExportedIndirectly: false,
+    onFailureInit: undefined,
+    onFailureExportedIndirectly: false,
     hasUnreadableExports: false,
   };
   for (const statement of program.body) {
@@ -102,6 +111,9 @@ function collectExports(program: Program): ExportedNames {
       if (statement.exportKind === "type") continue;
       if (!statement.exported) result.hasUnreadableExports = true;
       else if (propertyName(statement.exported) === "main") result.hasMain = true;
+      else if (propertyName(statement.exported) === "onFailure") {
+        result.onFailureExportedIndirectly = true;
+      }
       continue;
     }
     if (statement.type !== "ExportNamedDeclaration" || statement.exportKind === "type") continue;
@@ -109,17 +121,36 @@ function collectExports(program: Program): ExportedNames {
     if (declaration?.type === "FunctionDeclaration" && declaration.id?.name === "main") {
       result.hasMain = true;
     }
+    if (
+      declaration?.type === "TSModuleDeclaration" &&
+      declaration.id.type === "Identifier" &&
+      declaration.id.name === "onFailure"
+    ) {
+      result.onFailureExportedIndirectly = true;
+    }
+    if (
+      (declaration?.type === "FunctionDeclaration" ||
+        declaration?.type === "ClassDeclaration" ||
+        declaration?.type === "TSEnumDeclaration") &&
+      declaration.id?.name === "onFailure"
+    ) {
+      result.onFailureExportedIndirectly = true;
+    }
     if (declaration?.type === "VariableDeclaration") {
       for (const declarator of declaration.declarations) {
         if (declarator.id.type !== "Identifier") {
           const names = boundNames(declarator.id);
           if (names.includes("main")) result.hasMain = true;
           if (names.includes("steps")) result.stepsExportedIndirectly = true;
+          if (names.includes("onFailure")) result.onFailureExportedIndirectly = true;
           continue;
         }
         if (declarator.id.name === "main") result.hasMain = true;
         if (declarator.id.name === "steps") {
           result.stepsInit = declaration.kind === "const" ? declarator.init : null;
+        }
+        if (declarator.id.name === "onFailure") {
+          result.onFailureInit = declaration.kind === "const" ? declarator.init : null;
         }
       }
     }
@@ -128,6 +159,7 @@ function collectExports(program: Program): ExportedNames {
       const exported = propertyName(specifier.exported);
       if (exported === "main") result.hasMain = true;
       if (exported === "steps") result.stepsExportedIndirectly = true;
+      if (exported === "onFailure") result.onFailureExportedIndirectly = true;
     }
   }
   return result;
@@ -185,6 +217,20 @@ function readSteps(filePath: string, object: ObjectExpression): MigrationStepNod
   return steps;
 }
 
+function readRollbackOnFailure(filePath: string, exports: ExportedNames): boolean {
+  const problem = invalidScript(
+    filePath,
+    'declare `onFailure` as `export const onFailure = "resume"` or `"rollback"`.',
+  );
+  if (exports.onFailureExportedIndirectly) throw problem;
+  if (exports.onFailureInit === undefined) return false;
+  const init = exports.onFailureInit ? unwrapExpression(exports.onFailureInit) : undefined;
+  if (init?.type !== "Literal" || (init.value !== "resume" && init.value !== "rollback")) {
+    throw problem;
+  }
+  return init.value === "rollback";
+}
+
 /**
  * Determine how a migration script runs from its source.
  * @param source - Script source
@@ -220,8 +266,12 @@ export function analyzeMigrationScriptSource(
   }
 
   const steps = readSteps(filePath, init);
+  const rollbackOnFailure = readRollbackOnFailure(filePath, exports);
   try {
-    return { kind: "steps", order: orderMigrationSteps(steps) };
+    const order = orderMigrationSteps(steps);
+    return rollbackOnFailure
+      ? { kind: "steps", order, rollbackOnFailure }
+      : { kind: "steps", order };
   } catch (error) {
     throw invalidScript(filePath, error instanceof Error ? error.message : String(error));
   }

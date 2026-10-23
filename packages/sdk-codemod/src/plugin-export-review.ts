@@ -1,4 +1,5 @@
 import { parse, Lang } from "@ast-grep/napi";
+import { excerptOf, lineOf } from "./ast-grep-helpers";
 import { isTailorConfigPath } from "./plugin-export-bindings";
 import type { LlmReviewFinding } from "./types";
 import type { SgNode } from "@ast-grep/napi";
@@ -58,9 +59,9 @@ export function reviewFindings(
   const report = (node: SgNode, message: string): void => {
     findings.push({
       file: relativePath,
-      line: node.range().start.line + 1,
+      line: lineOf(node),
       message,
-      excerpt: node.text().split("\n", 1)[0]!.trim(),
+      excerpt: excerptOf(node),
     });
   };
   const exports = root.children().filter((stmt) => stmt.kind() === "export_statement");

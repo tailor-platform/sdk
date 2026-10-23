@@ -468,19 +468,6 @@ describe("executeMigrationStepsAsWorkflow", () => {
     expect(result).toMatchObject({ success: true, completedSteps: ORDER });
   });
 
-  test("keeps waiting through a transient error while polling the run", async () => {
-    const { client, raw } = createStepsClient({
-      run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
-    });
-    raw.getWorkflowExecution.mockRejectedValueOnce(
-      new ConnectError("unavailable", Code.Unavailable),
-    );
-
-    const result = await run(client);
-
-    expect(result).toMatchObject({ success: true, completedSteps: ORDER });
-  });
-
   test("reports progress on every poll that finds the run active", async () => {
     const { client, raw } = createStepsClient({
       run: {

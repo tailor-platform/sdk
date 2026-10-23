@@ -13,6 +13,7 @@ function collectEnums(type: TailorDBType): EnumConstantMetadata["enums"] {
       const enumTypeName = `${type.name}${capitalizeFirst(fieldName)}`;
       enums.push({
         name: enumTypeName,
+        source: `${type.name}.${fieldName}`,
         values: parsedField.config.allowedValues,
         fieldDescription: parsedField.config.description,
       });
@@ -28,6 +29,7 @@ function collectEnums(type: TailorDBType): EnumConstantMetadata["enums"] {
           const enumTypeName = `${type.name}${capitalizeFirst(fullFieldName)}`;
           enums.push({
             name: enumTypeName,
+            source: `${type.name}.${fieldName}.${nestedFieldName}`,
             values: nestedFieldConfig.allowedValues,
             fieldDescription: nestedFieldConfig.description,
           });

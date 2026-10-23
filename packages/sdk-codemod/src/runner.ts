@@ -5,6 +5,8 @@ import { color, renderFor, type StyleFn } from "@tailor-platform/shared/color";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
+import { nodeRangeKey, sourceArrayElements, sourceStaticStringContent } from "./source-strings";
+import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import type {
   CodemodPackage,
   CodemodPattern,
@@ -67,27 +69,6 @@ const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Se
   "regex",
   "string_fragment",
   "jsx_text",
-]);
-const SOURCE_VALUE_FLAGS = new Set([
-  "--env-file-if-exists",
-  "--env-file",
-  "--profile",
-  "--config",
-  "--workspace-id",
-  "--arg",
-  "--query",
-  "--file",
-  "--name",
-  "--namespace",
-  "--dir",
-  "-e",
-  "-p",
-  "-c",
-  "-w",
-  "-a",
-  "-q",
-  "-f",
-  "-n",
 ]);
 const SOURCE_CLI_BINARY_RE =
   /^(?:(?:.*[\\/])?tailor(?:\.(?:cmd|ps1|exe))?|(?:.*[\\/])?tailor-sdk(?:@[^\s'"`;|&)]+)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
@@ -259,15 +240,6 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
-function isConstVariableDeclarator(node: SgNode): boolean {
-  return (
-    node
-      .parent()
-      ?.children()
-      .some((child) => child.kind() === "const") ?? false
-  );
-}
-
 function sourceTextContentForResidualMatching(relative: string, content: string): string | null {
   const ext = path.extname(relative).toLowerCase();
   if (!SOURCE_EXTENSIONS.has(ext)) return null;
@@ -295,7 +267,7 @@ function sourceTextContentForResidualMatching(relative: string, content: string)
 
 function sourceArgumentsCommandContent(node: SgNode, source: string): string | null {
   const args = sourceArrayElements(node);
-  const executable = args[0] == null ? null : sourceStringLikeNodeContent(args[0]!, source);
+  const executable = args[0] == null ? null : sourceStaticStringContent(args[0]!, source);
   const argv = args[1];
   if (executable == null || argv?.kind() !== "array") return null;
 
@@ -312,7 +284,7 @@ function sourceArrayCommandValues(node: SgNode, source: string): string[] {
   const values: string[] = [];
   for (const element of sourceArrayElements(node)) {
     if (isSourceValueArgument(element, source)) continue;
-    const value = sourceStringLikeNodeContent(element, source);
+    const value = sourceStaticStringContent(element, source);
     if (value != null) values.push(value);
   }
   return values;
@@ -322,127 +294,8 @@ function isSourceTailorSdkValueArgument(fragment: SgNode, source: string): boole
   const text =
     fragment.kind() === "string_fragment"
       ? fragment.text()
-      : sourceStringLikeNodeContent(fragment, source);
+      : sourceStaticStringContent(fragment, source);
   return text != null && text.includes("tailor-sdk") && isSourceValueArgument(fragment, source);
-}
-
-function isSyntaxOnlyNode(node: SgNode): boolean {
-  const kind = node.kind();
-  return (
-    kind === "[" ||
-    kind === "]" ||
-    kind === "(" ||
-    kind === ")" ||
-    kind === "," ||
-    kind === "comment"
-  );
-}
-
-function sourceArrayElements(node: SgNode): SgNode[] {
-  return node.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
-}
-
-function nodeRangeKey(node: SgNode): string {
-  const range = node.range();
-  return `${range.start.index}:${range.end.index}`;
-}
-
-function sourceStringLikeNodeContent(node: SgNode, source: string): string | null {
-  const directValue = sourceStringNodeContent(node, source);
-  if (directValue != null) return directValue;
-  return node.kind() === "identifier" ? sourceScopedStringVariableContent(node, source) : null;
-}
-
-function sourceScopedStringVariableContent(identifier: SgNode, source: string): string | null {
-  const name = identifier.text();
-  const before = identifier.range().start.index;
-  let current = identifier.parent();
-  while (current != null) {
-    if (isSourceScopeNode(current)) {
-      const value = findSourceStringVariableInScope(current, name, before, source);
-      if (value != null) return value;
-    }
-    current = current.parent();
-  }
-  return null;
-}
-
-function findSourceStringVariableInScope(
-  scope: SgNode,
-  name: string,
-  before: number,
-  source: string,
-): string | null {
-  let value: string | null = null;
-  const visit = (node: SgNode): void => {
-    if (node !== scope && isSourceScopeNode(node)) return;
-    if (node.kind() === "variable_declarator" && node.range().end.index < before) {
-      const declarationValue = sourceStringVariableDeclarationValue(node, name, source);
-      if (declarationValue != null) value = declarationValue;
-      return;
-    }
-    for (const child of node.children()) {
-      visit(child);
-    }
-  };
-  visit(scope);
-  return value;
-}
-
-function sourceStringVariableDeclarationValue(
-  node: SgNode,
-  name: string,
-  source: string,
-): string | null {
-  if (!isConstVariableDeclarator(node)) return null;
-  const children = node.children();
-  const identifier = children.find((child) => child.kind() === "identifier");
-  if (identifier?.text() !== name) return null;
-  const initializer = children.findLast(
-    (child) => sourceConstInitializerContent(child, source) != null,
-  );
-  return initializer == null ? null : sourceConstInitializerContent(initializer, source);
-}
-
-function sourceConstInitializerContent(node: SgNode, source: string): string | null {
-  const directValue = sourceStringNodeContent(node, source);
-  if (directValue != null) return directValue;
-  if (
-    node.kind() !== "as_expression" &&
-    node.kind() !== "satisfies_expression" &&
-    node.kind() !== "parenthesized_expression"
-  ) {
-    return null;
-  }
-  for (const child of node.children()) {
-    const childValue = sourceConstInitializerContent(child, source);
-    if (childValue != null) return childValue;
-  }
-  return null;
-}
-
-function isSourceScopeNode(node: SgNode): boolean {
-  const kind = node.kind();
-  return (
-    kind === "program" ||
-    kind === "statement_block" ||
-    kind === "function_declaration" ||
-    kind === "arrow_function" ||
-    kind === "method_definition"
-  );
-}
-
-function sourceStringNodeContent(node: SgNode, source: string): string | null {
-  const kind = node.kind();
-  if (kind !== "string" && kind !== "template_string") return null;
-  if (
-    kind === "template_string" &&
-    node.children().some((child: SgNode) => child.kind() === "template_substitution")
-  ) {
-    return null;
-  }
-  const range = node.range();
-  return source.slice(range.start.index + 1, range.end.index - 1);
 }
 
 function isSourceValueArgument(fragment: SgNode, source: string): boolean {
@@ -456,10 +309,10 @@ function isSourceValueArgument(fragment: SgNode, source: string): boolean {
   if (index <= 0) return false;
   if (!isTailorCliArgumentArray(parent, index, source)) return false;
 
-  const previous = sourceStringLikeNodeContent(elements[index - 1]!, source);
+  const previous = sourceStaticStringContent(elements[index - 1]!, source);
   return (
     previous != null &&
-    SOURCE_VALUE_FLAGS.has(previous.split("=", 1)[0]!) &&
+    TAILOR_CLI_VALUE_FLAG_SET.has(previous.split("=", 1)[0]!) &&
     !previous.includes("=")
   );
 }
@@ -468,14 +321,13 @@ function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: stri
   const argumentsNode = arrayNode.parent();
   if (argumentsNode?.kind() === "arguments") {
     const callArgs = sourceArrayElements(argumentsNode);
-    const executable =
-      callArgs[0] == null ? null : sourceStringLikeNodeContent(callArgs[0]!, source);
+    const executable = callArgs[0] == null ? null : sourceStaticStringContent(callArgs[0]!, source);
     if (executable != null && SOURCE_CLI_BINARY_RE.test(executable)) return true;
   }
 
   const elements = sourceArrayElements(arrayNode);
   return elements.slice(0, index).some((element) => {
-    const value = sourceStringLikeNodeContent(element, source);
+    const value = sourceStaticStringContent(element, source);
     return value != null && SOURCE_CLI_BINARY_RE.test(value);
   });
 }

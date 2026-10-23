@@ -14,6 +14,7 @@ import type {
   Plugin,
   PluginAttachment,
   PluginGeneratedExecutor,
+  PluginGeneratedResolver,
   PluginGeneratedTable,
   PluginNamespaceProcessContext,
   PluginOutput,
@@ -132,6 +133,13 @@ export interface PluginExecutorInfo {
   sourceTableName?: string;
 }
 
+export interface PluginResolverInfo {
+  resolver: PluginGeneratedResolver;
+  pluginId: string;
+  namespace: string;
+  sourceTableName?: string;
+}
+
 /**
  * Manages plugin registration and processing
  */
@@ -139,6 +147,8 @@ export class PluginManager {
   private plugins: Map<string, Plugin> = new Map();
   private generatedExecutors: PluginExecutorInfo[] = [];
   private generatedTables: PluginGeneratedTableInfo[] = [];
+  private generatedResolvers: PluginResolverInfo[] = [];
+  private processedResolverNamespaces = new Set<string>();
   private namespaceGeneratedTableKeys: Set<string> = new Set();
   private namespaceGeneratedExecutorKeys: Set<string> = new Set();
 
@@ -203,6 +213,15 @@ export class PluginManager {
         success: false,
         error: `Plugin "${plugin.id}" threw an error while processing table "${context.table.name}": ${message}`,
       };
+    }
+
+    for (const resolver of output.resolvers ?? []) {
+      this.generatedResolvers.push({
+        resolver,
+        pluginId: plugin.id,
+        namespace: context.namespace,
+        sourceTableName: context.table.name,
+      });
     }
 
     // Collect generated tables
@@ -281,6 +300,14 @@ export class PluginManager {
           },
         });
         continue;
+      }
+
+      const resolverNamespaceKey = JSON.stringify([pluginId, namespace]);
+      if (!this.processedResolverNamespaces.has(resolverNamespaceKey)) {
+        for (const resolver of output.resolvers ?? []) {
+          this.generatedResolvers.push({ resolver, pluginId, namespace });
+        }
+        this.processedResolverNamespaces.add(resolverNamespaceKey);
       }
 
       // Collect generated executors (namespace - no source table)
@@ -414,6 +441,14 @@ export class PluginManager {
    */
   getPluginImportPath(pluginId: string): string | undefined {
     return this.plugins.get(pluginId)?.importPath;
+  }
+
+  /**
+   * Get all plugin-generated resolvers.
+   * @returns Resolver definitions with their source plugin and namespace
+   */
+  getPluginGeneratedResolvers(): ReadonlyArray<PluginResolverInfo> {
+    return this.generatedResolvers;
   }
 
   /**

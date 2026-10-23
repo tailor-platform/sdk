@@ -4,6 +4,7 @@ import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import { arg } from "@politty/zod";
 import open from "open";
 import { z } from "zod";
+import { sendCallbackFailure, sendCallbackSuccess } from "#/cli/shared/callback-page";
 import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
@@ -193,17 +194,10 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         await removeLegacyUserAlias(pfConfig, userInfo.email, userInfo.sub, args.platformConfig);
         writePlatformConfig(pfConfig);
 
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            status: "ok",
-            message: "Successfully authenticated. Please close this window.",
-          }),
-        );
+        sendCallbackSuccess(res, "Authentication successful");
         resolve({ user: userInfo.sub, email: userInfo.email });
       } catch (error) {
-        res.writeHead(401);
-        res.end("Authentication failed");
+        sendCallbackFailure(res, 401, "Authentication failed", error);
         reject(toError(error));
       } finally {
         // Close the server after handling one request.

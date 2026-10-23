@@ -1,3 +1,4 @@
+import { parse, Lang } from "@ast-grep/napi";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const DECLARATION_KINDS = [
@@ -49,6 +50,56 @@ function isBindingPatternKind(kind: ReturnType<SgNode["kind"]>): boolean {
     kind === "array_pattern" ||
     kind === "rest_pattern"
   );
+}
+
+export function sourceLang(filePath: string, source: string): Lang {
+  const lowerPath = filePath.toLowerCase();
+  if (/\.(?:ts|mts|cts)$/u.test(lowerPath)) return Lang.TypeScript;
+  if (/\.(?:tsx|jsx|js)$/u.test(lowerPath)) return Lang.Tsx;
+  return source.includes("</") ? Lang.Tsx : Lang.TypeScript;
+}
+
+export function parseRoot(source: string, filePath: string): SgNode | null {
+  try {
+    return parse(sourceLang(filePath, source), source).root();
+  } catch {
+    return null;
+  }
+}
+
+export function lineOf(node: SgNode): number {
+  return node.range().start.line + 1;
+}
+
+export function excerptOf(node: SgNode): string {
+  return node.text().split("\n", 1)[0]!.trim();
+}
+
+export function isInsideImportStatement(node: SgNode): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === "import_statement") return true;
+    current = current.parent();
+  }
+  return false;
+}
+
+export function callArgument(call: SgNode): SgNode | null {
+  const args = call.children().find((child) => child.kind() === "arguments");
+  if (!args) return null;
+
+  const values = args.children().filter((child) => {
+    const kind = child.kind();
+    return kind !== "(" && kind !== ")" && kind !== "," && kind !== "comment";
+  });
+  return values.length === 1 ? values[0]! : null;
+}
+
+export function pairValue(pair: SgNode): SgNode | null {
+  const children = pair.children();
+  const colonIndex = children.findIndex((child) => child.kind() === ":");
+  if (colonIndex === -1) return null;
+  return children.slice(colonIndex + 1).find((child) => child.kind() !== "comment") ?? null;
 }
 
 export function stringValue(node: SgNode | null): string | null {
@@ -166,7 +217,7 @@ export function collectBindingNames(node: SgNode, names: Set<string>): void {
   }
 }
 
-function firstDeclaratorChild(node: SgNode): SgNode | null {
+export function firstDeclaratorChild(node: SgNode): SgNode | null {
   return node.children().find((child) => child.kind() !== "=") ?? null;
 }
 

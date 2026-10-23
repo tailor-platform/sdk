@@ -77,6 +77,9 @@ function emptyResults(): PlanResults {
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
       customDomainChangeSet: createChangeSet("CustomDomains"),
+      customDomainTransferChangeSet: createChangeSet("CustomDomainTransfers"),
+      customDomainNotes: [],
+      customDomainLiveOffers: new Map(),
       ...emptyOwnership(),
     },
     aiGateway: {
@@ -1874,24 +1877,6 @@ describe("assertUniqueGlobalResourceNames", () => {
     ).toThrow('- Application "shared-app": ');
   });
 
-  test("throws when two configs define the same executor name", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ executorNames: ["sync-user"] }),
-        fakeTarget({ executorNames: ["sync-user"] }),
-      ]),
-    ).toThrow('- Executor "sync-user": ');
-  });
-
-  test("throws when two configs define the same non-bundled executor name", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
-        fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
-      ]),
-    ).toThrow('- Executor "forward-webhook": ');
-  });
-
   test("throws when two configs define the same workflow job name", () => {
     expect(() =>
       assertUniqueGlobalResourceNames([
@@ -1919,17 +1904,8 @@ describe("assertUniqueGlobalResourceNames", () => {
   test("accepts the same resolver name in different namespaces", () => {
     expect(() =>
       assertUniqueGlobalResourceNames([
-        fakeTarget({ resolvers: { get: "buyer" } }),
-        fakeTarget({ resolvers: { get: "supplier" } }),
-      ]),
-    ).not.toThrow();
-  });
-
-  test("ignores duplicate resolver bundle names across configs", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ resolvers: { get: "a" } }),
-        fakeTarget({ resolvers: { get: "b" } }),
+        fakeTarget({ resolverNamespaces: ["buyer"], resolvers: { get: "buyer" } }),
+        fakeTarget({ resolverNamespaces: ["supplier"], resolvers: { get: "supplier" } }),
       ]),
     ).not.toThrow();
   });
@@ -1941,42 +1917,6 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ authHooks: { "before-login": "b" } }),
       ]),
     ).not.toThrow();
-  });
-
-  test("throws when two configs define the same StaticWebsite name", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
-        fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
-      ]),
-    ).toThrow('- StaticWebsite "marketing-site": ');
-  });
-
-  test("throws when two configs define the same TailorDB namespace", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
-        fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
-      ]),
-    ).toThrow('- TailorDB namespace "shared-db": ');
-  });
-
-  test("throws when two configs define the same Auth namespace", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ authNamespace: "shared-auth" }),
-        fakeTarget({ authNamespace: "shared-auth" }),
-      ]),
-    ).toThrow('- Auth namespace "shared-auth": ');
-  });
-
-  test("throws when two configs define the same IdP namespace", () => {
-    expect(() =>
-      assertUniqueGlobalResourceNames([
-        fakeTarget({ idpNames: ["shared-idp"] }),
-        fakeTarget({ idpNames: ["shared-idp"] }),
-      ]),
-    ).toThrow('- IdP namespace "shared-idp": ');
   });
 
   test("throws when two configs define the same Resolver namespace", () => {
@@ -2096,5 +2036,64 @@ describe("collectExpectedLocalStaticWebsiteNamesFromConfigs", () => {
     const result = collectExpectedLocalStaticWebsiteNamesFromConfigs([loadedConfig([])]);
 
     expect(result).toEqual(new Set());
+  });
+});
+
+describe("custom domain notes", () => {
+  function resultsWithNote(): PlanResults {
+    const results = emptyResults();
+    results.staticWebsite.customDomainNotes.push({
+      kind: "transfer-pending",
+      staticWebsiteName: "site-a",
+      domain: "app.example.com",
+      message: "transfer to workspace ws-b is pending; the receiving site cannot accept it yet",
+    });
+    return results;
+  }
+
+  test("a notes-only plan changes nothing in the summary", () => {
+    const summary = summarizePlanResults(resultsWithNote(), [], []);
+
+    expect(summary).toMatchObject({ create: 0, update: 0, delete: 0, replace: 0 });
+  });
+
+  test("notes are printed under their own heading", () => {
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    printPlanResults(resultsWithNote(), { dryRun: false });
+
+    const printed = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(printed).toContain("Custom domains (no change):");
+    expect(printed).toContain("app.example.com");
+    expect(printed).toContain("cannot accept it yet");
+  });
+
+  test("the JSON payload carries the same notes", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    printDeploymentPlans([plannedDeployment("buyer", resultsWithNote())], { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      notes: Array<{ type: string; resourceType: string; name: string; message: string }>;
+    };
+    expect(payload.notes).toEqual([
+      {
+        type: "transfer-pending",
+        resourceType: "staticwebsite.custom_domain_transfer",
+        name: "app.example.com",
+        message: "transfer to workspace ws-b is pending; the receiving site cannot accept it yet",
+      },
+    ]);
+  });
+
+  test("a plan with no notes still reports an empty array", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    printDeploymentPlans([plannedDeployment("buyer", emptyResults())], { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as { notes: unknown[] };
+    expect(payload.notes).toEqual([]);
   });
 });

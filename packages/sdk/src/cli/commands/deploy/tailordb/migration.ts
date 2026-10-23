@@ -53,6 +53,7 @@ import {
   sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
 import { type OperatorClient } from "#/cli/shared/client";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { protoEnumName } from "#/cli/shared/proto-enum";
@@ -529,6 +530,20 @@ export function isMigrationOutcomeUnknown(error: unknown): boolean {
   return isCLIError(error) && error.code === "MIGRATION_OUTCOME_UNKNOWN";
 }
 
+/**
+ * Whether a partially applied migration's run was observed in a final state, so
+ * rolling back its schema cannot race a step that is still writing.
+ * @param error - Failure raised while executing migrations
+ * @returns True when the run ended
+ */
+export function isMigrationRunEnded(error: unknown): boolean {
+  return (
+    isCLIError(error) &&
+    error.code === "MIGRATION_PARTIALLY_APPLIED" &&
+    error.context?.runEnded === true
+  );
+}
+
 function withMaintenanceModeNote(
   suggestion: string | undefined,
   namespace: string,
@@ -542,7 +557,10 @@ function withMaintenanceModeNote(
 
 function partiallyAppliedError(
   migration: PendingMigration,
-  result: Pick<MigrationStepsWorkflowResult, "completedSteps" | "failedSteps" | "executionId">,
+  result: Pick<
+    MigrationStepsWorkflowResult,
+    "completedSteps" | "failedSteps" | "executionId" | "runEnded"
+  >,
   cause: unknown,
   maintenanceMode: boolean,
 ): Error {
@@ -570,9 +588,88 @@ function partiallyAppliedError(
       completedSteps: result.completedSteps,
       failedSteps: result.failedSteps,
       ...(result.executionId ? { executionId: result.executionId } : {}),
+      ...(result.runEnded ? { runEnded: true } : {}),
     },
     cause,
   });
+}
+
+/**
+ * The failure of a migration that asked to be rolled back and was.
+ * @param migration - Migration whose schema changes were rolled back
+ * @param cause - The failure that triggered the rollback
+ * @returns The error to raise in place of the original failure
+ */
+export function rolledBackError(migration: PendingMigration, cause: unknown): Error {
+  const { namespace } = migration;
+  const checkpoint = formatMigrationNumber(migration.number - 1);
+  const causeHint =
+    cause instanceof Error && !isCLIError(cause)
+      ? getErrorDiagnostics(cause).suggestion
+      : undefined;
+  return CLIError({
+    code: "MIGRATION_ROLLED_BACK",
+    message: cause instanceof Error ? cause.message : String(cause),
+    suggestion:
+      `Migration ${namespace}/${formatMigrationNumber(migration.number)} was rolled back to migration ${checkpoint} and is no longer in progress; ` +
+      "any table the rollback could not revert is listed in a warning above. " +
+      "Fix the failure in migrate.ts and deploy again: the next deploy runs every step again from the beginning." +
+      (causeHint ? ` ${causeHint}` : ""),
+    context: { namespace, migrationNumber: migration.number },
+    cause,
+  });
+}
+
+/**
+ * The failure of a migration that asked to be rolled back but whose in-progress
+ * record could not be cleared, so its schema was left as it is.
+ * @param migration - Migration that stays in progress
+ * @param cause - The failure that triggered the rollback
+ * @param maintenanceMode - Whether the namespace's tables stay in maintenance mode
+ * @param recordConfirmed - Whether the remote state confirmed the migration's own record remains
+ * @returns The error to raise in place of the original failure
+ */
+export function rollbackSkippedError(
+  migration: PendingMigration,
+  cause: unknown,
+  maintenanceMode: boolean,
+  recordConfirmed: boolean,
+): Error {
+  const { namespace } = migration;
+  const resolveRollback = `'tailor tailordb migration resolve --rollback --namespace ${namespace}'`;
+  return CLIError({
+    code: "MIGRATION_PARTIALLY_APPLIED",
+    message: cause instanceof Error ? cause.message : String(cause),
+    suggestion: withMaintenanceModeNote(
+      "Its in-progress record could not be cleared, so its schema was not rolled back and the migration stays in progress. " +
+        `Deploy again to resume it, or run ${resolveRollback} to roll it back without deploying.`,
+      namespace,
+      maintenanceMode,
+      "Until then",
+    ),
+    context: {
+      namespace,
+      migrationNumber: migration.number,
+      rollbackSkipped: true,
+      ...(recordConfirmed ? { recordConfirmed: true } : {}),
+    },
+    cause,
+  });
+}
+
+/**
+ * Whether a rollback was skipped because the migration's own in-progress record was confirmed to
+ * remain, so the migration resumes from the schema its Pre-phase left.
+ * @param error - Failure raised while rolling back
+ * @returns True when the rollback was skipped with the record confirmed
+ */
+export function isRollbackSkippedWithRecord(error: unknown): boolean {
+  return (
+    isCLIError(error) &&
+    error.code === "MIGRATION_PARTIALLY_APPLIED" &&
+    error.context?.rollbackSkipped === true &&
+    error.context.recordConfirmed === true
+  );
 }
 
 function unreleasedRecordError(
@@ -584,10 +681,12 @@ function unreleasedRecordError(
   const { namespace } = migration;
   const number = formatMigrationNumber(migration.number);
   const checkpoint = formatMigrationNumber(migration.number - 1);
+  const resolveRollback = `'tailor tailordb migration resolve --rollback --namespace ${namespace}'`;
   const next = recordConfirmed
-    ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place and the next deploy runs every step again. Fix the failure and deploy again."
+    ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place and the next deploy runs every step again. " +
+      `Fix the failure and deploy again, or run ${resolveRollback} to clear the record without deploying.`
     : `Whether it is still recorded as in progress could not be confirmed, so its pre-migration schema stays in place. ` +
-      `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, fix the failure and deploy again; ` +
+      `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, fix the failure and deploy again, or run ${resolveRollback} to clear the record without deploying; ` +
       `otherwise run 'tailor tailordb migration sync ${checkpoint} --namespace ${namespace}' to return the schema to migration ${checkpoint}, then deploy again.`;
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",

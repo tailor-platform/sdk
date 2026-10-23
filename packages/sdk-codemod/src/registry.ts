@@ -1,72 +1,20 @@
 import * as url from "node:url";
 import * as path from "pathe";
 import { gte, lt, parse, valid } from "semver";
+import { TAILOR_CLI_COMMANDS, TAILOR_CLI_VALUE_FLAGS } from "./tailor-cli-tokens";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
-const RENAME_BIN_SOURCE_VALUE_FLAGS = [
-  "--env-file-if-exists",
-  "--env-file",
-  "--profile",
-  "--config",
-  "--workspace-id",
-  "--arg",
-  "--query",
-  "--file",
-  "--name",
-  "--namespace",
-  "--dir",
-  "-e",
-  "-p",
-  "-c",
-  "-w",
-  "-a",
-  "-q",
-  "-f",
-  "-n",
-];
-const RENAME_BIN_SOURCE_COMMANDS = [
-  "api",
-  "apply",
-  "authconnection",
-  "completion",
-  "crash-report",
-  "crashreport",
-  "deploy",
-  "executor",
-  "function",
-  "generate",
-  "init",
-  "login",
-  "logout",
-  "machineuser",
-  "oauth2client",
-  "open",
-  "organization",
-  "profile",
-  "query",
-  "remove",
-  "secret",
-  "setup",
-  "show",
-  "skills",
-  "staticwebsite",
-  "tailordb",
-  "upgrade",
-  "user",
-  "workflow",
-  "workspace",
-];
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-const RENAME_BIN_SOURCE_VALUE_GUARDS = RENAME_BIN_SOURCE_VALUE_FLAGS.flatMap((flag) => {
+const RENAME_BIN_SOURCE_VALUE_GUARDS = TAILOR_CLI_VALUE_FLAGS.flatMap((flag) => {
   const escaped = escapeRegExp(flag);
   return [`(?<!${escaped}\\s+)`, `(?<!${escaped}=)`];
 }).join("");
-const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})`;
+const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${TAILOR_CLI_COMMANDS.join("|")})`;
 const RENAME_BIN_SOURCE_COMMAND_TOKEN =
   "tailor-sdk(?:(?:\\.(?:cmd|ps1|exe))|(?:@[^\\s'\"`;|&)]+))?(?![\\w-])";
 const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(

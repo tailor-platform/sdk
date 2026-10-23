@@ -6,6 +6,7 @@ import type { EnumValue } from "#/configure/types/field.types";
 
 export interface EnumDefinition {
   name: string;
+  source: string;
   values: EnumValue[];
   fieldDescription?: string;
 }
