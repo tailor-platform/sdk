@@ -1,6 +1,7 @@
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
+import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import {
@@ -70,7 +71,7 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   tsconfig: string | undefined;
   /** Generates the entry module source; called only when the bundle is not restored from cache */
   entry: (absoluteSourcePath: string) => string;
-  /** Creates the plugin that rewrites the function's sources before path resolution */
+  /** Creates the plugin that rewrites the function's sources before path resolution; defaults to the start transform */
   createTransformPlugin?: () => rolldown.Plugin | undefined;
   /** Config values the entry embeds, added to the cache key besides the start context and date default */
   entryContext?: unknown[];
@@ -152,7 +153,9 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
         "js",
         absoluteSourcePath,
       );
-      const transformPlugin = createTransformPlugin?.();
+      const transformPlugin = (
+        createTransformPlugin ?? (() => createStartTransformPlugin(startContext))
+      )();
       const plugins: rolldown.Plugin[] = [virtualEntry.plugin];
       if (transformPlugin) {
         plugins.push(transformPlugin);

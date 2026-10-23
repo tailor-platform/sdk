@@ -1,6 +1,5 @@
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
-import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -54,7 +53,6 @@ export async function bundleResolvers(
     config,
     baseDir,
     defaultPermission,
-    startContext,
     allowedRuntimeGlobals,
     dateDefault = "legacy",
   } = options;
@@ -105,7 +103,6 @@ export async function bundleResolvers(
       entryContext: [defaultPermission ?? null],
       dateRepresentations: resolverDateRepresentations(resolver, dateDefault),
       runtimeGlobals: { label: `Resolver "${resolver.name}"`, allowed: allowedRuntimeGlobals },
-      createTransformPlugin: () => createStartTransformPlugin(startContext),
       entry: (absoluteSourcePath) => {
         const validatedInputExpr = buildResolverValidatedInputExpr({
           permission: resolver.permission,

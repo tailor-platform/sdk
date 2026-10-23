@@ -1,6 +1,5 @@
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
 import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
-import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -41,7 +40,7 @@ export async function bundleExecutors(
   options: BundleExecutorsOptions,
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
-  const { config, startContext, additionalFiles = [], baseDir, allowedRuntimeGlobals } = options;
+  const { config, additionalFiles = [], baseDir, allowedRuntimeGlobals } = options;
   const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
@@ -92,7 +91,6 @@ export async function bundleExecutors(
       sourceFile: executor.sourceFile,
       tsconfig,
       runtimeGlobals: { label: `Executor "${executor.name}"`, allowed: allowedRuntimeGlobals },
-      createTransformPlugin: () => createStartTransformPlugin(startContext),
       entry: (absoluteSourcePath) => ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";
 

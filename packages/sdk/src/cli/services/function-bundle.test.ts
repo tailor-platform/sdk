@@ -5,6 +5,7 @@ import { createBundleCache } from "#/cli/cache/bundle-cache";
 import { createCacheStore } from "#/cli/cache/store";
 import { logger } from "#/cli/shared/logger";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
+import { normalizeFilePath, type StartContext } from "#/cli/shared/start-context";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { assertDefined } from "#/utils/assert";
 import { buildFunctionBundle, type BuildFunctionBundleOptions } from "./function-bundle";
@@ -115,6 +116,34 @@ describe("buildFunctionBundle runtime globals", () => {
     );
 
     await expect(bundle(sourceFile)).resolves.toContain("example.com");
+  });
+});
+
+describe("buildFunctionBundle start transform", () => {
+  test("rewrites .start() calls through the start context by default", async () => {
+    using tmp = tempCwd("sdk-function-bundle-start-transform-");
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `const flow = { start: () => "UNTRANSFORMED" };\n` +
+        `export default async () => flow.start({});\n`,
+    );
+    const realSourceFile = fs.realpathSync(sourceFile);
+    const startContext: StartContext = {
+      modules: new Map([
+        [
+          normalizeFilePath(realSourceFile),
+          {
+            sourceFile: realSourceFile,
+            localBindings: new Map([["flow", { kind: "workflow", name: "order-flow" }]]),
+            exports: new Map(),
+          },
+        ],
+      ]),
+    };
+
+    await expect(bundle(sourceFile, { startContext })).resolves.toMatch(
+      /startWorkflow\(.order-flow./,
+    );
   });
 });
 

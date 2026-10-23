@@ -1,6 +1,5 @@
 import * as path from "pathe";
 import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
-import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import ml from "#/utils/multiline";
@@ -38,7 +37,6 @@ export async function bundleAuthHooks(
     authName,
     handlerAccessPath,
     env = {},
-    startContext,
     bundleLogLevel = "DEBUG",
     baseDir,
   } = options;
@@ -59,7 +57,6 @@ export async function bundleAuthHooks(
     env,
     bundleLogLevel,
     define: { "process.env.TAILOR_APP_LOG_LEVEL": JSON.stringify(bundleLogLevel) },
-    createTransformPlugin: () => createStartTransformPlugin(startContext),
     entry: (absoluteConfigPath) => ml /* js */ `
       import _config from "${absoluteConfigPath}";
       const __auth_hook_function = _config.${handlerAccessPath};
