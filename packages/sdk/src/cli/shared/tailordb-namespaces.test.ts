@@ -132,7 +132,7 @@ export const plugins = [{
   test.each([
     ["missing", 'TailorDB namespace "missing" not found in config.db of'],
     ["toString", 'TailorDB namespace "toString" not found in config.db of'],
-    ["shared", 'TailorDB namespace "shared" is external in'],
+    ["shared", 'TailorDB namespace "shared" is owned by another application, not'],
   ])("rejects namespace %s that the other config does not own", async (namespace, message) => {
     const configPath = writeProject({
       "tailor.config.ts": `export default { name: "billing-app", db: { billing: { files: [] }, shared: { external: true } } };`,
@@ -152,7 +152,7 @@ export const plugins = [{
       "tailor.config.ts": `export default { name: "other-app", db: { shared: ${JSON.stringify(entry)} } };`,
     });
     await expect(createTailorDBNamespaceLoader()(configPath, "shared")).rejects.toThrow(
-      `TailorDB namespace "shared" is external in ${configPath}. Point schemaFrom at the config that defines its tables.`,
+      `TailorDB namespace "shared" is owned by another application, not ${configPath}. Point schemaFrom at the config that defines its tables.`,
     );
   });
 });

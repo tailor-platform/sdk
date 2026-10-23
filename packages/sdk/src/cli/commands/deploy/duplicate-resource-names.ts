@@ -73,7 +73,7 @@ export function assertNoDuplicateResourceNames(
       "Rename the duplicates so each name is defined once across all configs in a single deploy.",
       ...(hasServiceNamespaceAcrossConfigs
         ? [
-            "To share a service namespace across configs, define it in one config and declare it with `external: true` in the others.",
+            "To share a service namespace across configs, define it in one config and declare it with `attach: true` in the others.",
           ]
         : []),
     ].join(" "),

@@ -43,14 +43,14 @@ tailor tailordb truncate [options] [tables]
 
 **Options**
 
-| Option                          | Alias | Description                                                                | Required | Default              | Env                            |
-| ------------------------------- | ----- | -------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                                  | No       | `false`              | -                              |
-| `--all`                         | `-a`  | Truncate all tables in all owned namespaces (excludes external namespaces) | No       | `false`              | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                 | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                                    | Required | Default              | Env                            |
+| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                   | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                                     | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                                      | No       | `false`              | -                              |
+| `--all`                         | `-a`  | Truncate all tables in all owned namespaces (excludes namespaces owned by another application) | No       | `false`              | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                                     | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

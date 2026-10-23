@@ -178,7 +178,7 @@ describe("truncate command", () => {
       });
     });
 
-    test("excludes external namespaces", async () => {
+    test("excludes namespaces owned by another application", async () => {
       const { loadConfig } = await import("#/cli/shared/config-loader");
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
@@ -239,7 +239,7 @@ describe("truncate command", () => {
 
     test("throws error when namespace not found in config", async () => {
       await expect(truncate({ namespace: "nonexistent" })).rejects.toThrow(
-        'Namespace "nonexistent" not found in config. Available owned namespaces (external namespaces are excluded): tailordb, anotherdb',
+        'Namespace "nonexistent" not found in config. Available owned namespaces (namespaces owned by another application are excluded): tailordb, anotherdb',
       );
     });
 
@@ -260,7 +260,7 @@ describe("truncate command", () => {
       await expect(truncate({ namespace: "shared-db" })).rejects.toMatchObject({
         code: "TAILORDB_NAMESPACE_EXTERNAL",
         message:
-          'Namespace "shared-db" is declared as external in this app\'s config and cannot be truncated from here.',
+          'Namespace "shared-db" is owned by another application and cannot be truncated from here.',
         suggestion: "Run truncate from the app that owns the namespace.",
       });
     });

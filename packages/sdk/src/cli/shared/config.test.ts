@@ -65,7 +65,7 @@ describe("extractOwnedNamespaces", () => {
     expect(extractOwnedNamespaces(config)).toEqual(["tailordb", "analytics"]);
   });
 
-  test("excludes external namespaces", () => {
+  test("excludes namespaces owned by another application", () => {
     const config = createConfig({
       db: {
         owned: { files: ["./owned/*.ts"] },

@@ -805,7 +805,7 @@ tailor setup ci branch --name erp --dir apps/erp/backend --dir apps/users/backen
 `setup ci branch`, `setup ci tag`, and `setup ci preview` accept repeated
 `--dir`. The workflow plans and deploys every app's `tailor.config.ts` in one
 [multi-config deploy](./cli/application.md#deploy) from the repository root, so
-an app can reference resources of another app with `external: true`. Add
+an app can reference resources of another app with `attach: true`. Add
 `@tailor-platform/sdk` to the root `package.json` so the `tailor` CLI resolves
 there; setup stops until it is declared. The generate check runs for each app
 directory, as do seed validation and the migration drift check on branch and tag
@@ -813,7 +813,7 @@ workflows, and a change under any app directory runs the workflow's jobs.
 
 With `--erd-preview`, each TailorDB namespace is previewed from the app that
 owns it. A namespace may be owned by only one app; the others reference it with
-`external: true`.
+`attach: true`.
 
 With more than one app, the preview comment does not link an application URL.
 

@@ -645,7 +645,7 @@ describe("plugin-generated resolvers", () => {
       path: path.join(baseDir, "tailor.config.ts"),
     };
     await expect(loadApplication({ config, pluginManager })).rejects.toThrow(
-      /Plugin "queries" cannot generate resolvers in external namespace "main"/,
+      /Plugin "queries" cannot generate resolvers in namespace "main", which is owned by another application/,
     );
     await expect(loadApplication({ config, pluginManager })).rejects.toMatchObject({
       code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",

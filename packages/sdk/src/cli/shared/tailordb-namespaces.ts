@@ -154,7 +154,7 @@ async function loadNamespace(
   if (!entry.owned) {
     throw CLIError({
       code: "TAILORDB_NAMESPACE_EXTERNAL",
-      message: `TailorDB namespace "${namespace}" is external in ${config.path}. Point schemaFrom at the config that defines its tables.`,
+      message: `TailorDB namespace "${namespace}" is owned by another application, not ${config.path}. Point schemaFrom at the config that defines its tables.`,
     });
   }
   const baseDir = path.dirname(config.path);

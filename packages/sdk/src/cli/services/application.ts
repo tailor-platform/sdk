@@ -286,7 +286,7 @@ export function definePluginResolverServices(
     if (serviceConfig?.attach === true) {
       throw CLIError({
         code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
-        message: `Plugin "${pluginId}" cannot generate resolvers in external namespace "${namespace}".`,
+        message: `Plugin "${pluginId}" cannot generate resolvers in namespace "${namespace}", which is owned by another application.`,
         context: { pluginId, namespace, resourceType: "pipeline.service" },
       });
     }
