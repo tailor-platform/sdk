@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { assertDefined } from "#/utils/assert";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
@@ -197,9 +197,7 @@ export function main() {
 
   describe("resolver", () => {
     test("resolves generated imports from the configured project directory", async () => {
-      const root = fs.realpathSync(
-        fs.mkdtempSync(path.join(os.tmpdir(), "function-bundler-cross-project-")),
-      );
+      const root = makeTempDir("function-bundler-cross-project-");
       try {
         const projectDir = path.join(root, "project");
         const dependencyDir = path.join(projectDir, "node_modules", "@tailor-platform", "sdk");

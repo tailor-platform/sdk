@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { build } from "rolldown";
 import { describe, expect, test } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { createVirtualEntry } from "./virtual-entry";
 
 describe("createVirtualEntry", () => {
@@ -40,7 +40,7 @@ describe("createVirtualEntry", () => {
   });
 
   test("resolves generated imports relative to the source file", async () => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "virtual-entry-resolve-")));
+    const dir = makeTempDir("virtual-entry-resolve-");
     try {
       const dependencyDir = path.join(dir, "node_modules", "fixture-dependency");
       fs.mkdirSync(dependencyDir, { recursive: true });

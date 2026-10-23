@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { loadFilesWithIgnores } from "./file-loader";
 
 // Delegates to the real implementation by default, so only the one test
@@ -23,7 +24,7 @@ describe("loadFilesWithIgnores", () => {
   });
 
   function makeDirWithFile(prefix: string, relativeFile: string): string {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+    const dir = makeTempDir(prefix);
     tmpDirs.push(dir);
     fs.mkdirSync(path.dirname(path.join(dir, relativeFile)), { recursive: true });
     fs.writeFileSync(path.join(dir, relativeFile), "export const marker = true;\n");
@@ -182,9 +183,7 @@ describe("loadFilesWithIgnores", () => {
 
   test("does not fall back when a files pattern throws while globbing, even if baseDir has no other matches", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const baseDir = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-throwing-pattern-")),
-    );
+    const baseDir = makeTempDir("file-loader-throwing-pattern-");
     tmpDirs.push(baseDir);
     // cwd has an unrelated file that must NOT leak in via a wrongful fallback.
     const cwdDir = makeDirWithFile("file-loader-unrelated-cwd-throw-", "src/bar.ts");

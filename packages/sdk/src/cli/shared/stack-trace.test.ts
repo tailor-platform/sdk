@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { TraceMap } from "@jridgewell/trace-mapping";
 import * as path from "pathe";
 import { afterEach, describe, test, expect } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import {
   parseStackTrace,
   extractInlineSourcemap,
@@ -582,7 +582,7 @@ describe("formatMappedError without embedded source text", () => {
   });
 
   function projectWith(files: Record<string, string>): string {
-    bundleDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "stack-trace-snippet-")));
+    bundleDir = makeTempDir("stack-trace-snippet-");
     for (const [relativePath, content] of Object.entries(files)) {
       const file = path.join(bundleDir, relativePath);
       fs.mkdirSync(path.dirname(file), { recursive: true });

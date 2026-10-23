@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -10,6 +9,7 @@ import {
   type StartModuleBindings,
   type StartTarget,
 } from "#/cli/shared/start-context";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import {
@@ -1105,7 +1105,7 @@ const result = await myWorkflow.start({ id: 1 });
     });
 
     function createProject(paths: Record<string, string[]>) {
-      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "start-import-test-")));
+      tmpDir = makeTempDir("start-import-test-");
       fs.writeFileSync(
         path.join(tmpDir, "tsconfig.json"),
         JSON.stringify({ compilerOptions: { paths } }),

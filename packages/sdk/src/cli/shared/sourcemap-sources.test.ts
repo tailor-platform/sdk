@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { originalPositionFor } from "@jridgewell/trace-mapping";
 import * as rolldown from "rolldown";
 import { afterAll, beforeAll, describe, test, expect } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { assertDefined } from "#/utils/assert";
 import {
   chunkCodeWithSourcemap,
@@ -267,7 +267,7 @@ describe("with a rolldown bundle of pnpm-installed packages", () => {
   }
 
   beforeAll(async () => {
-    projectDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sourcemap-sources-")));
+    projectDir = makeTempDir("sourcemap-sources-");
     write(
       "src/app.ts",
       'import { scoped } from "@scope/lib";\nimport { plain } from "plain";\nexport const run = () => scoped("a") + plain("b");\n',

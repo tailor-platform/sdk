@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { assertDefined } from "#/utils/assert";
 import {
   bundleWorkflowJobs,
@@ -31,7 +31,7 @@ describe("bundleWorkflowJobs", () => {
   });
 
   test("passes the mapped invoker to the job body", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-invoker-test-")));
+    const tmpDir = makeTempDir("job-invoker-test-");
     const sourceFile = path.join(tmpDir, "workflow.ts");
     fs.writeFileSync(
       sourceFile,
@@ -83,7 +83,7 @@ export const mainJob = createWorkflowJob({
   });
 
   test("reuses a prior call's usedJobNames/mainJobDeps instead of re-detecting reachability", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "reuse-used-jobs-test-")));
+    const tmpDir = makeTempDir("reuse-used-jobs-test-");
     const sourceFile = path.join(tmpDir, "workflow.ts");
     fs.writeFileSync(
       sourceFile,
@@ -144,7 +144,7 @@ export default createWorkflow({ name: "main-workflow", mainJob });
   });
 
   test("falls back to full reachability detection when a source file changed since the prior call", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "stale-used-jobs-test-")));
+    const tmpDir = makeTempDir("stale-used-jobs-test-");
     const sourceFile = path.join(tmpDir, "workflow.ts");
     fs.writeFileSync(
       sourceFile,
@@ -206,7 +206,7 @@ export default createWorkflow({ name: "main-workflow", mainJob });
   });
 
   test("rejects a job that references process.env", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-forbidden-global-")));
+    const tmpDir = makeTempDir("job-forbidden-global-");
     const sourceFile = path.join(tmpDir, "workflow.ts");
     fs.writeFileSync(
       sourceFile,
@@ -240,7 +240,7 @@ export const mainJob = createWorkflowJob({
     packageName: string,
     options: Partial<BundleWorkflowJobsOptions>,
   ) {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-package-global-")));
+    const tmpDir = makeTempDir("job-package-global-");
     const packageDir = path.join(tmpDir, "node_modules", packageName);
     fs.mkdirSync(packageDir, { recursive: true });
     fs.writeFileSync(
@@ -303,7 +303,7 @@ export const mainJob = createWorkflowJob({
   });
 
   test("bundles a job whose dependency detects the environment with a UMD typeof ternary", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-umd-typeof-")));
+    const tmpDir = makeTempDir("job-umd-typeof-");
     fs.writeFileSync(
       path.join(tmpDir, "umd-lib.js"),
       `export const root = typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};\n`,
@@ -347,7 +347,7 @@ export const mainJob = createWorkflowJob({
     });
 
     function createTempDir() {
-      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-binding-test-")));
+      tmpDir = makeTempDir("job-binding-test-");
       return tmpDir;
     }
 
@@ -1075,8 +1075,7 @@ export default createWorkflow({ name: "workflow", mainJob });
         tsconfigPaths,
       } = options;
 
-      // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
-      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
+      tmpDir = makeTempDir("bundler-test-");
       if (tsconfigPaths) {
         fs.writeFileSync(
           path.join(tmpDir, "tsconfig.json"),
@@ -1252,7 +1251,7 @@ export default createWorkflow({
 
 describe("bundleWorkflowJobs date default", () => {
   test("folds the configured date default into job bundles", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-date-default-")));
+    const tmpDir = makeTempDir("job-date-default-");
     const sourceFile = path.join(tmpDir, "workflow.ts");
     fs.writeFileSync(
       sourceFile,
