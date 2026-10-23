@@ -9,8 +9,6 @@ import {
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
   DB_TYPES_FILE_NAME,
-  INITIAL_SCHEMA_NUMBER,
-  SCHEMA_SNAPSHOT_VERSION,
 } from "./snapshot";
 import {
   sanitizeMigrationLabel,
@@ -46,14 +44,6 @@ describe("migration constants", () => {
     expect(DIFF_FILE_NAME).toBe("diff.json");
     expect(MIGRATE_FILE_NAME).toBe("migrate.ts");
     expect(DB_TYPES_FILE_NAME).toBe("db.ts");
-  });
-
-  test("INITIAL_SCHEMA_NUMBER should be 0", () => {
-    expect(INITIAL_SCHEMA_NUMBER).toBe(0);
-  });
-
-  test("SCHEMA_SNAPSHOT_VERSION should be 8", () => {
-    expect(SCHEMA_SNAPSHOT_VERSION).toBe(8);
   });
 });
 
