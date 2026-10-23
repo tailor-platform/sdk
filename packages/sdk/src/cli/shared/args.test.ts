@@ -400,15 +400,14 @@ describe("resolveEarlyFailure", () => {
 describe("createCommonArgs effects", () => {
   aroundEach(async (runTest) => {
     const previousJsonMode = logger.jsonMode;
-    const previousVerbose = logger.verbose;
     logger.jsonMode = false;
-    logger.verbose = false;
+    logger.verbose = undefined;
     try {
       await runTest();
     } finally {
       vi.unstubAllEnvs();
       logger.jsonMode = previousJsonMode;
-      logger.verbose = previousVerbose;
+      logger.verbose = undefined;
     }
   });
 
