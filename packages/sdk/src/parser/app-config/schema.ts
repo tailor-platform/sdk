@@ -91,7 +91,7 @@ const buildOptionsSchema = z.strictObject({
 
 const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;
 
-export const TailorDBReferenceConfigSchema = z.union([
+export const TailorDBReferenceConfigSchema = z.discriminatedUnion("attach", [
   z.strictObject({ attach: z.literal(true), schemaFrom: z.string().min(1).optional() }),
   z.strictObject({ attach: z.literal(false), schemaFrom: z.string().min(1) }),
 ]);
@@ -109,16 +109,32 @@ const namedServiceReferenceSchema = z.union([
     .transform(({ name }) => ({ name, attach: true as const })),
 ]);
 
-const dbEntrySchema = z.union([
-  z.custom<TailorDBServiceConfigInput>().superRefine((value, ctx) => {
-    const result = TailorDBServiceConfigSchema.safeParse(value);
-    if (!result.success) {
-      for (const issue of result.error.issues) ctx.addIssue({ ...issue });
-    }
-  }),
-  TailorDBReferenceConfigSchema,
-  legacyServiceReferenceSchema,
-]);
+function dbEntrySchemaFor(value: unknown) {
+  if (!value || typeof value !== "object" || "files" in value) return TailorDBServiceConfigSchema;
+  if ("external" in value) return legacyServiceReferenceSchema;
+  if ("attach" in value || "schemaFrom" in value) return TailorDBReferenceConfigSchema;
+  return TailorDBServiceConfigSchema;
+}
+
+type DbEntryReference =
+  | z.input<typeof TailorDBReferenceConfigSchema>
+  | z.input<typeof legacyServiceReferenceSchema>;
+
+const dbEntrySchema = z
+  .custom<TailorDBServiceConfigInput | DbEntryReference>()
+  .transform(
+    (value, ctx): TailorDBServiceConfigInput | z.output<typeof TailorDBReferenceConfigSchema> => {
+      const schema = dbEntrySchemaFor(value);
+      const result = schema.safeParse(value);
+      if (!result.success) {
+        for (const issue of result.error.issues) ctx.addIssue({ ...issue });
+        return z.NEVER;
+      }
+      return schema === TailorDBServiceConfigSchema
+        ? (value as TailorDBServiceConfigInput)
+        : result.data;
+    },
+  );
 
 function serviceEntrySchema(named: boolean) {
   return z.unknown().transform((value, ctx) => {

@@ -84,15 +84,15 @@ export type AppConfigParsedInput = {
                 | undefined;
             }
           | {
-              external: true;
-            }
-          | {
               attach: true;
               schemaFrom?: string | undefined;
             }
           | {
               attach: false;
               schemaFrom: string;
+            }
+          | {
+              external: true;
             };
       }
     | undefined;
@@ -179,9 +179,6 @@ export type AppConfigParsed = {
                     read?: boolean | undefined | undefined;
                   }
                 | undefined;
-            }
-          | {
-              attach: true;
             }
           | {
               attach: true;

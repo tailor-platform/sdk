@@ -31,6 +31,15 @@ describe("TailorDB configuration", () => {
     expect(AppConfigSchema.safeParse({ name: "app", db: { shared: entry } }).success).toBe(false);
   });
 
+  test.each([
+    [{ attach: false }, ["db", "shared", "schemaFrom"]],
+    [{ attach: true, ignores: [] }, ["db", "shared"]],
+  ])("points a malformed reference %j at its own keys, not at files", (entry, path) => {
+    const result = AppConfigSchema.safeParse({ name: "app", db: { shared: entry } });
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([path]);
+    expect(result.error?.message).not.toMatch(/files/);
+  });
+
   test("normalizes referenced definitions independently of subgraph membership", () => {
     expect(
       normalizeDb({
