@@ -10,12 +10,16 @@ import {
   formatMigrationNumber,
   type SchemaSnapshot,
 } from "./snapshot";
+import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
 import {
   cleanupTestMigrationsBase,
   writeDiffToDir,
   writeSchemaToDir,
 } from "./test-helpers/snapshot-test";
 import type { MigrationDiff } from "./diff-calculator";
+
+const ORPHAN_ARTIFACTS_SUGGESTION =
+  "Delete each migration directory that has no diff.json, or restore its diff.json.";
 
 const TEST_MIGRATIONS_BASE = path.join(
   __dirname,
@@ -700,26 +704,45 @@ describe("snapshot", () => {
         )}`,
         migrationNumber: 1,
       });
+      expect(errors).toContainEqual({
+        type: "missing_diff",
+        message: "Migration 0001 is missing diff file",
+        migrationNumber: 1,
+      });
     });
 
-    test("detects missing diff file for migration > 0 (directory structure)", () => {
-      const snapshot: SchemaSnapshot = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace,
-        createdAt: new Date().toISOString(),
-        tables: {},
-      };
-
-      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, snapshot);
-      // Only migrate file at 0001, no diff file - create directory but no diff.json
-      const migDir = path.join(testDir, "0001");
-      fs.mkdirSync(migDir, { recursive: true });
-      fs.writeFileSync(path.join(migDir, "migrate.ts"), "export async function main() {}");
+    test.each([
+      { position: "last", diffNumbers: [1, 2] },
+      { position: "middle", diffNumbers: [1, 2, 4] },
+    ])("detects a $position migration that has migrate.ts but no diff.json", ({ diffNumbers }) => {
+      writeInitialSchema(testDir, {});
+      for (const diffNumber of diffNumbers) writeDiff(testDir, diffNumber, []);
+      fs.mkdirSync(path.join(testDir, "0003"));
+      fs.writeFileSync(path.join(testDir, "0003", "migrate.ts"), "export async function main() {}");
 
       const errors = validateMigrationFiles(testDir);
-      // migrate files are optional, but diff files are not checked for migrate-only files
-      // Actually, with current logic, if only a migrate file exists but no schema/diff, it should not add it to validation
-      expect(errors).toEqual([]);
+      expect(errors).toEqual([
+        {
+          type: "missing_diff",
+          message: "Migration 0003 has migrate.ts but no diff.json",
+          suggestion: ORPHAN_ARTIFACTS_SUGGESTION,
+          migrationNumber: 3,
+        },
+      ]);
+    });
+
+    test("detects a diff file in the initial schema migration", () => {
+      writeInitialSchema(testDir, {});
+      writeDiff(testDir, INITIAL_SCHEMA_NUMBER, []);
+
+      const errors = validateMigrationFiles(testDir);
+      expect(errors).toEqual([
+        {
+          type: "invalid_diff_number",
+          message: "Migration 0000 must not have diff.json",
+          migrationNumber: INITIAL_SCHEMA_NUMBER,
+        },
+      ]);
     });
   });
 
@@ -755,6 +778,19 @@ describe("snapshot", () => {
         /Migration file validation failed for namespace "test"/,
       );
       expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(/Initial schema snapshot/);
+    });
+
+    test("throws MIGRATION_FILES_INVALID with remediation for a migration without diff.json", () => {
+      writeInitialSchema(testDir, {});
+      fs.mkdirSync(path.join(testDir, "0001"));
+      fs.writeFileSync(path.join(testDir, "0001", "migrate.ts"), "export async function main() {}");
+
+      expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(
+        expect.objectContaining({
+          code: "MIGRATION_FILES_INVALID",
+          suggestion: ORPHAN_ARTIFACTS_SUGGESTION,
+        }),
+      );
     });
   });
 });

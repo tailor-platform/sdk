@@ -484,6 +484,20 @@ describe("tailordb migration validate", () => {
     expect(report.migrationFiles.error).toMatch(/require a migration script/);
   });
 
+  test("reports a diff file in 0000 as misplaced rather than missing its script", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 0, [], { requiresMigrationScript: true });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles.valid).toBe(false);
+    expect(report.migrationFiles.error).toContain("Migration 0000 must not have diff.json");
+    expect(report.migrationFiles.error).not.toMatch(/require a migration script/);
+  });
+
   test("accepts a required script skipped with an explicit acknowledgment", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();

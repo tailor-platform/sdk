@@ -915,7 +915,7 @@ When your branch and main each generated the same number, merging or rebasing st
 
 - For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
 - Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
-- `tailor tailordb migration status` validates file-format compatibility across the full local history, compares its history ID with the deployed namespace, and shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero on incompatible files, migration history mismatches, and remote read errors, so check the output.
+- `tailor tailordb migration status` validates the layout and file-format compatibility of the full local history, compares its history ID with the deployed namespace, and shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero on invalid or incompatible files, migration history mismatches, and remote read errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 
 ### Resetting a deployed project
