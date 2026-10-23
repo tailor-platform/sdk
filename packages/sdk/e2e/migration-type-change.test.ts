@@ -14,31 +14,9 @@ import {
   DEPLOY_TEST_TIMEOUT_MS,
   GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
   GENERATE_TEST_TIMEOUT_MS,
+  mergeStepsIntoOne,
   MigrationWorkspace,
 } from "./migration-workspace";
-
-/**
- * Regroup the steps of a generated migrate.ts into two steps, the second depending on the first.
- * Every step is its own platform job, so a migration with many changes takes minutes to deploy;
- * two steps still exercise the step runner.
- * @param script - Generated migrate.ts source that exports `steps`
- * @returns Source whose `steps` holds a `first` and a `second` step running the same functions in order
- */
-function groupStepsIntoTwo(script: string): string {
-  const stepsBlock = /export const steps = \{\n([\s\S]*?)\n\} satisfies MigrationSteps;/.exec(
-    script,
-  );
-  if (!stepsBlock) throw new Error("Generated migrate.ts does not export steps");
-  const names = [...stepsBlock[1]!.matchAll(/^ {2}(\w+): \{/gm)].map((match) => match[1]!);
-  if (names.length < 2) throw new Error(`Expected at least two steps, found ${names.length}`);
-  const half = Math.ceil(names.length / 2);
-  const run = (group: string[]) =>
-    `async (trx: Transaction) => {\n${group.map((name) => `    await ${name}(trx);`).join("\n")}\n  }`;
-  return script.replace(
-    stepsBlock[0],
-    `export const steps = {\n  first: { run: ${run(names.slice(0, half))} },\n  second: { dependsOn: ["first"], run: ${run(names.slice(half))} },\n} satisfies MigrationSteps;`,
-  );
-}
 
 const firstRowId = "10000000-0000-4000-8000-000000000001";
 const secondRowId = "10000000-0000-4000-8000-000000000002";
@@ -243,7 +221,7 @@ export async function main(trx: Transaction): Promise<void> {
         const editedScript = reviewedScript.replace(defaultNormalization, exercisedNormalization);
         expect(editedScript).not.toBe(reviewedScript);
         expect(editedScript).not.toMatch(/\bTODO\(/);
-        fs.writeFileSync(migratePath, groupStepsIntoTwo(editedScript));
+        fs.writeFileSync(migratePath, mergeStepsIntoOne(editedScript));
 
         await ws.runDeploy(signal);
         expect(await ws.getMigrationCheckpoint()).toBe(2);
