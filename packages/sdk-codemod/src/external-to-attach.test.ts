@@ -70,6 +70,43 @@ export default defineConfig({
   });
 
   test.each([
+    ["shorthand", "auth", "idp: [idp]"],
+    ["renamed", "auth: ownAuth", "idp: [ownIdp]"],
+  ])(
+    "does not request manual migration for variables built by owned SDK builders: %s",
+    (_name, auth, idp) => {
+      const source = `${IMPORT}import { defineAuth, defineIdp } from "@tailor-platform/sdk";
+const ${auth.includes(":") ? "ownAuth" : "auth"} = defineAuth("auth", { machineUserAttributes: {} });
+export const ${idp.includes("own") ? "ownIdp" : "idp"} = defineIdp("idp", { clients: ["default"] });
+export default defineConfig({ ${auth}, ${idp} });`;
+
+      expect(transform(source)).toBeNull();
+      expect(reviewFindings(source, "tailor.config.ts", "tailor.config.ts")).toEqual([]);
+    },
+  );
+
+  test.each([
+    ["reassigned", 'let auth = defineAuth("auth", {}); auth = other; defineConfig({ auth });'],
+    [
+      "declared twice",
+      'const auth = defineAuth("auth", {}); { const auth = other; defineConfig({ auth }); }',
+    ],
+    [
+      "inside a function",
+      'const auth = defineAuth("auth", {}); function build(auth) { return defineConfig({ auth }); }',
+    ],
+  ])(
+    "keeps manual migration findings for variables that may not hold a builder: %s",
+    (_name, body) => {
+      const source = `${IMPORT}import { defineAuth } from "@tailor-platform/sdk";\n${body}`;
+
+      expect(reviewFindings(source, "config.ts", "config.ts")).toEqual([
+        expect.objectContaining({ message: expect.stringContaining("not an object literal") }),
+      ]);
+    },
+  );
+
+  test.each([
     ['import { defineAuth } from "other";', 'defineConfig({ auth: defineAuth("auth", {}) });'],
     ['import * as sdk from "other";', 'defineConfig({ auth: sdk.defineAuth("auth", {}) });'],
     [

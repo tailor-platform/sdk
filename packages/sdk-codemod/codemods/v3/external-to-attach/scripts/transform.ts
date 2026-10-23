@@ -14,8 +14,18 @@ type Analysis = {
   edits: Edit[];
   findings: Finding[];
   ownedBuilders: Set<string>;
+  ownedVariables: Set<string>;
   sdkNamespaces: Set<string>;
 };
+
+const FUNCTION_KINDS = [
+  "function_declaration",
+  "function_expression",
+  "arrow_function",
+  "method_definition",
+  "generator_function_declaration",
+  "generator_function",
+];
 
 function entries(node: SgNode): SgNode[] {
   return node
@@ -48,22 +58,59 @@ function objectEntries(node: SgNode, analysis: Analysis): SgNode[] | null {
   return properties;
 }
 
-function migrateService(node: SgNode, named: boolean, analysis: Analysis): void {
-  if (named && node.kind() === "call_expression") {
-    const callee = node.field("function");
-    if (callee?.kind() === "identifier" && analysis.ownedBuilders.has(callee.text())) return;
-    if (callee?.kind() === "member_expression") {
-      const object = callee.field("object");
-      const property = callee.field("property");
-      if (
-        object?.kind() === "identifier" &&
-        analysis.sdkNamespaces.has(object.text()) &&
-        property &&
-        ["defineAuth", "defineIdp"].includes(property.text())
-      )
-        return;
+function isOwnedBuilderCall(node: SgNode, analysis: Analysis): boolean {
+  if (node.kind() !== "call_expression") return false;
+  const callee = node.field("function");
+  if (callee?.kind() === "identifier") return analysis.ownedBuilders.has(callee.text());
+  if (callee?.kind() !== "member_expression") return false;
+  const object = callee.field("object");
+  const property = callee.field("property");
+  return (
+    object?.kind() === "identifier" &&
+    analysis.sdkNamespaces.has(object.text()) &&
+    property !== null &&
+    ["defineAuth", "defineIdp"].includes(property.text())
+  );
+}
+
+function isOwnedVariable(node: SgNode, analysis: Analysis): boolean {
+  return (
+    ["identifier", "shorthand_property_identifier"].includes(String(node.kind())) &&
+    analysis.ownedVariables.has(node.text()) &&
+    !node.ancestors().some((ancestor) => FUNCTION_KINDS.includes(String(ancestor.kind())))
+  );
+}
+
+function collectOwnedVariables(root: SgNode, analysis: Analysis): void {
+  const declarations = new Map<string, number>();
+  const candidates = new Set<string>();
+  for (const declarator of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const name = declarator.field("name");
+    if (name?.kind() !== "identifier") continue;
+    declarations.set(name.text(), (declarations.get(name.text()) ?? 0) + 1);
+    const declaration = declarator.parent();
+    const scope = declaration?.parent();
+    const topLevel =
+      scope?.kind() === "program" ||
+      (scope?.kind() === "export_statement" && scope.parent()?.kind() === "program");
+    const value = declarator.field("value");
+    if (
+      declaration?.kind() === "lexical_declaration" &&
+      declaration.child(0)?.text() === "const" &&
+      topLevel &&
+      value &&
+      isOwnedBuilderCall(value, analysis)
+    ) {
+      candidates.add(name.text());
     }
   }
+  for (const name of candidates) {
+    if (declarations.get(name) === 1) analysis.ownedVariables.add(name);
+  }
+}
+
+function migrateService(node: SgNode, named: boolean, analysis: Analysis): void {
+  if (named && (isOwnedBuilderCall(node, analysis) || isOwnedVariable(node, analysis))) return;
   const properties = objectEntries(node, analysis);
   if (!properties) return;
   const legacy = properties.filter((entry) => entryKey(entry) === "external");
@@ -116,6 +163,7 @@ function analyze(source: string, filePath: string): Analysis {
     edits: [],
     findings: [],
     ownedBuilders: new Set(),
+    ownedVariables: new Set(),
     sdkNamespaces: new Set(),
   };
   const declared = localDeclarationNames(root);
@@ -139,6 +187,7 @@ function analyze(source: string, filePath: string): Analysis {
       }
     }
   }
+  collectOwnedVariables(root, analysis);
   for (const call of root.findAll({ rule: { kind: "call_expression" } })) {
     const callee = call.field("function");
     let name: string | undefined;
