@@ -543,6 +543,104 @@ describe("foreign keys", { timeout: 30_000 }, () => {
     ).rejects.toThrow(/not found/);
   });
 
+  describe("unique fields inside nested fields", () => {
+    const nestedUnique = (): DDLTableConfig => ({
+      name: "Order",
+      fields: {
+        id: { type: "uuid" },
+        info: {
+          type: "nested",
+          required: false,
+          fields: {
+            code: { type: "string", unique: true },
+            seq: { type: "integer", unique: true },
+            group: {
+              type: "nested",
+              fields: { token: { type: "uuid", unique: true } },
+            },
+            note: { type: "string" },
+          },
+        },
+      },
+    });
+    const insertInfo = (db: PGlite, info: unknown) =>
+      db.query(`INSERT INTO "Order" (info) VALUES ($1::jsonb)`, [JSON.stringify(info)]);
+
+    const token = crypto.randomUUID();
+    test.each([
+      ["a string member", { code: "dup" }],
+      ["an integer member", { seq: 7 }],
+      ["a member of a nested object", { group: { token } }],
+    ])("rejects a second row with the same value of %s", async (_label, info) => {
+      const db = await pglite(generateSchemaDDL([nestedUnique()]));
+
+      await insertInfo(db, info);
+      await expect(insertInfo(db, info)).rejects.toThrow(/duplicate key value violates unique/);
+    });
+
+    test("compares a decimal member as a number without rounding it to its scale, as the platform does", async () => {
+      const db = await pglite(
+        generateSchemaDDL([
+          {
+            name: "Order",
+            fields: {
+              id: { type: "uuid" },
+              info: {
+                type: "nested",
+                fields: { amount: { type: "decimal", scale: 2, unique: true } },
+              },
+            },
+          },
+        ]),
+      );
+
+      await insertInfo(db, { amount: "1.231" });
+      await expect(insertInfo(db, { amount: "1.234" })).resolves.toBeDefined();
+      await expect(insertInfo(db, { amount: "1.231" })).rejects.toThrow(
+        /duplicate key value violates unique/,
+      );
+    });
+
+    test("is not skipped by a table index that has the same name as the member path", async () => {
+      const db = await pglite(
+        generateSchemaDDL([
+          {
+            name: "Order",
+            fields: {
+              id: { type: "uuid" },
+              other: { type: "string", required: false },
+              info: { type: "nested", fields: { code: { type: "string", unique: true } } },
+            },
+            indexes: { "info.code": { fields: ["other"], unique: true } },
+          },
+        ]),
+      );
+
+      await insertInfo(db, { code: "dup" });
+      await expect(insertInfo(db, { code: "dup" })).rejects.toThrow(
+        /duplicate key value violates unique/,
+      );
+    });
+
+    test("accepts distinct values, and rows that leave the member out", async () => {
+      const db = await pglite(generateSchemaDDL([nestedUnique()]));
+
+      await insertInfo(db, { code: "a", seq: 1 });
+      await insertInfo(db, { code: "b", seq: 2 });
+      await insertInfo(db, { note: "x" });
+      await insertInfo(db, { note: "y" });
+      await insertInfo(db, { code: null });
+      await expect(insertInfo(db, { code: null })).resolves.toBeDefined();
+    });
+
+    test("applying the script twice leaves the database unchanged", async () => {
+      const script = generateSchemaDDL([nestedUnique()]);
+      const db = await pglite(script);
+
+      await expect(db.exec(script)).resolves.toBeDefined();
+    });
+  });
+
   test("applying the script twice leaves the database unchanged", async () => {
     const script = generateSchemaDDL([
       {

@@ -388,3 +388,22 @@ describe("relations written in the table definition", { timeout: 30_000 }, () =>
     await expect(insert(id, [id], {}, [{ assigneeID: missing }])).rejects.toThrow(/not found/);
   });
 });
+
+describe("unique written inside db.object() in the table definition", { timeout: 30_000 }, () => {
+  const order = db.table("Order", {
+    info: db.object({ code: db.string().unique(), tag: db.string({ optional: true }) }),
+  });
+
+  test("rejects a second row with the same value of the unique member", async () => {
+    const pglite = new PGlite();
+    await pglite.exec(generateSchemaDDL(toDDLTables(parsed({ Order: order }))));
+    const insert = (info: unknown) =>
+      pglite.query(`INSERT INTO "Order" (info) VALUES ($1::jsonb)`, [JSON.stringify(info)]);
+
+    await insert({ code: "a", tag: "x" });
+    await insert({ code: "b", tag: "x" });
+    await expect(insert({ code: "a", tag: "y" })).rejects.toThrow(
+      /duplicate key value violates unique/,
+    );
+  });
+});

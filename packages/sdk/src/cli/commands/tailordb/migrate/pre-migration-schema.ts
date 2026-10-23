@@ -235,6 +235,7 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
         const renamed = getNestedMember(field, rename.path);
         if (renamed?.required) renamed.required = false;
         if (renamed?.unique) renamed.unique = false;
+        if (renamed) relaxNestedUnique(renamed);
       }
     },
   });
@@ -253,6 +254,13 @@ interface PreMigrationFieldStrategy<F extends PreMigrationField> {
   toField: (config: SnapshotFieldConfig) => F;
   /** Apply nested-member relaxations to a modified field. */
   adjustNestedMembers?: (field: F, change: FieldModifiedChange) => void;
+}
+
+function relaxNestedUnique(field: PreMigrationField): void {
+  for (const member of Object.values(field.fields ?? {})) {
+    if (member.unique) member.unique = false;
+    relaxNestedUnique(member);
+  }
 }
 
 function relaxFieldsForPreMigration<F extends PreMigrationField>(
@@ -278,6 +286,7 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
       if (newField) {
         if (change.after.required) newField.required = false;
         if (change.after.unique ?? false) newField.unique = false;
+        relaxNestedUnique(newField);
       }
       continue;
     }
@@ -405,8 +414,7 @@ function restoreRemovedNestedMembers(
 /**
  * Relax the new member of each confirmed nested rename to optional and
  * non-unique; the Post-phase enforces both after the copy script has filled
- * it. The manifest currently sends every nested member as non-unique, so the
- * unique relaxation only guards a manifest that starts sending it.
+ * it.
  * @param {ProtoFieldConfig} field - Pre-phase proto field to adjust (mutated in place)
  * @param {readonly NestedMemberRename[]} memberRenames - Confirmed renames inside the field
  */
@@ -418,6 +426,7 @@ function relaxRenamedNestedMembers(
     const member = getProtoNestedMember(field, rename.path);
     if (member?.required) member.required = false;
     if (member?.unique) member.unique = false;
+    if (member) relaxNestedUnique(member);
   }
 }
 

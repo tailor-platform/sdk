@@ -82,18 +82,16 @@ function fnv1aHex(value: string): string {
   return hash.toString(16).padStart(8, "0");
 }
 
-function derivedName(tableName: string, memberName: string, kind: "seq" | "idx" | "fk"): string {
+type DerivedNameKind = "seq" | "idx" | "nested_idx" | "fk";
+
+function derivedName(tableName: string, memberName: string, kind: DerivedNameKind): string {
   const suffix = `_${fnv1aHex(JSON.stringify([tableName, memberName, kind]))}_${kind}`;
   let head = `${tableName}_${memberName}`;
   while (utf8.encode(head + suffix).length > MAX_IDENTIFIER_BYTES) head = head.slice(0, -1);
   return head + suffix;
 }
 
-function derivedIdentifier(
-  tableName: string,
-  memberName: string,
-  kind: "seq" | "idx" | "fk",
-): string {
+function derivedIdentifier(tableName: string, memberName: string, kind: DerivedNameKind): string {
   return identifier(derivedName(tableName, memberName, kind));
 }
 
@@ -286,6 +284,45 @@ function referencesWithin(column: string, field: DDLFieldConfig, path: string): 
       type: field.type,
     },
   ];
+}
+
+// The platform indexes a unique member of a nested object by the value at its
+// path, cast to the member's type. Members inside an array have no single value
+// to index, so they are left out.
+const CASTABLE_UNIQUE_TYPES = new Set(["integer", "float", "decimal", "boolean", "bool", "uuid"]);
+
+interface NestedUniqueMember {
+  column: string;
+  path: string[];
+  field: DDLFieldConfig;
+}
+
+function nestedUniqueMembers(
+  column: string,
+  field: DDLFieldConfig,
+  path: string[],
+): NestedUniqueMember[] {
+  if (field.array) return [];
+  if (field.type === "nested") {
+    return Object.entries(field.fields ?? {}).flatMap(([key, child]) =>
+      nestedUniqueMembers(column, child, [...path, key]),
+    );
+  }
+  return field.unique && path.length > 0 ? [{ column, path, field }] : [];
+}
+
+function nestedUniqueIndex(tableName: string, member: NestedUniqueMember): string {
+  const keys = member.path.map(stringLiteral).join(", ");
+  const value = `${identifier(member.column)} #>> ARRAY[${keys}]`;
+  const indexed = CASTABLE_UNIQUE_TYPES.has(member.field.type)
+    ? `CAST(${value} AS ${mapFieldTypeToPostgresType(member.field.type)})`
+    : value;
+  const name = derivedIdentifier(
+    tableName,
+    `${member.column}.${member.path.join(".")}`,
+    "nested_idx",
+  );
+  return `CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${identifier(tableName)} ((${indexed}))`;
 }
 
 function tableReferences(table: DDLTableConfig): Reference[] {
@@ -512,12 +549,18 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
     columns.push(`  ${columnDefinition(table.name, fieldName, field)}${inline}`);
   }
 
-  const indexes = Object.entries(table.indexes ?? {})
-    .filter(([, index]) => index.unique)
-    .map(
-      ([name, index]) =>
-        `CREATE UNIQUE INDEX IF NOT EXISTS ${derivedIdentifier(table.name, name, "idx")} ON ${tableIdentifier} (${index.fields.map(identifier).join(", ")})`,
-    );
+  const indexes = [
+    ...Object.entries(table.indexes ?? {})
+      .filter(([, index]) => index.unique)
+      .map(
+        ([name, index]) =>
+          `CREATE UNIQUE INDEX IF NOT EXISTS ${derivedIdentifier(table.name, name, "idx")} ON ${tableIdentifier} (${index.fields.map(identifier).join(", ")})`,
+      ),
+    ...Object.entries(table.fields)
+      .filter(([fieldName]) => fieldName !== "id")
+      .flatMap(([fieldName, field]) => nestedUniqueMembers(fieldName, field, []))
+      .map((member) => nestedUniqueIndex(table.name, member)),
+  ];
 
   for (const reference of constraintReferences.values()) {
     referencedColumnType(reference, tables, `${table.name}.${reference.column}`);

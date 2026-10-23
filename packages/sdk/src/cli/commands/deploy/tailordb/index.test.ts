@@ -1518,7 +1518,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
       type: "string",
       required: true,
       description: "Postal code",
-      index: false,
+      index: true,
     });
     expect(Object.keys(address.fields!.geo!.fields ?? {})).toEqual(["lat", "lng"]);
     expect(address.fields!.geo!.fields!.lng).toMatchObject({ type: "float", required: true });
@@ -1907,6 +1907,78 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.sku).toBeDefined();
     expect(fields.code!.required).toBe(false);
     expect(fields.code!.unique).toBe(false);
+  });
+
+  test("defers the unique members inside a renamed object member while the old member stays unique", () => {
+    const member = (): SnapshotFieldConfig => ({
+      type: "nested",
+      required: false,
+      fields: { code: { type: "string", required: false, unique: true, index: true } },
+    });
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: { location: structuredClone(member()) as unknown as ProtoField },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: { type: "nested", required: false, fields: { geo: member() } },
+          after: { type: "nested", required: false, fields: { location: member() } },
+          memberRenames: [{ previousPath: ["geo"], path: ["location"] }],
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(address.fields!.location!.fields!.code).toMatchObject({ unique: false, index: true });
+    expect(address.fields!.geo!.fields!.code).toMatchObject({ unique: true });
+  });
+
+  test("defers the unique members of a renamed object field until the copy script has filled them", () => {
+    const members = {
+      type: "nested",
+      required: false,
+      fields: {
+        code: { type: "string", required: true, unique: true, index: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { token: { type: "uuid", required: false, unique: true, index: true } },
+        },
+      },
+    } as const;
+    const fields: Record<string, ProtoField> = {
+      details: structuredClone(members),
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "details",
+        {
+          kind: "field_renamed",
+          tableName: "Item",
+          fieldName: "details",
+          previousFieldName: "info",
+          before: structuredClone(members) as unknown as SnapshotFieldConfig,
+          after: structuredClone(members) as unknown as SnapshotFieldConfig,
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.info).toBeDefined();
+    const details = fields.details!;
+    expect(details.fields!.code).toMatchObject({ unique: false, index: true });
+    expect(details.fields!.geo!.fields!.token).toMatchObject({ unique: false, index: true });
   });
 });
 

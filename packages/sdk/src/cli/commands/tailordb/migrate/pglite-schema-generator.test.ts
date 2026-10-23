@@ -252,6 +252,55 @@ describe("buildPreMigrationTables", () => {
     expect(fields.handle).toMatchObject({ required: false, unique: false });
   });
 
+  test("a renamed object field defers the unique members of its new name", () => {
+    const details = snapshotField("nested", {
+      fields: {
+        code: snapshotField("string", { required: true, unique: true, index: true }),
+      },
+    });
+    const tables = buildPreMigrationTables(
+      snapshot(user, table("Post", { details })),
+      diff([
+        {
+          kind: "field_renamed",
+          tableName: "Post",
+          fieldName: "details",
+          previousFieldName: "info",
+          before: details,
+          after: details,
+        },
+      ]),
+    );
+    const fields = tableNamed(tables, "Post").fields;
+    expect(fields.info!.fields!.code).toMatchObject({ unique: true });
+    expect(fields.details!.fields!.code).toMatchObject({ unique: false });
+  });
+
+  test("a renamed object member defers the unique members inside its new name", () => {
+    const member = () =>
+      snapshotField("nested", {
+        fields: { code: snapshotField("string", { unique: true, index: true }) },
+      });
+    const before = snapshotField("nested", { fields: { geo: member() } });
+    const after = snapshotField("nested", { fields: { location: member() } });
+    const tables = buildPreMigrationTables(
+      snapshot(user, table("Post", { address: after })),
+      diff([
+        {
+          kind: "field_modified",
+          tableName: "Post",
+          fieldName: "address",
+          before,
+          after,
+          memberRenames: [{ previousPath: ["geo"], path: ["location"] }],
+        },
+      ]),
+    );
+    const address = tableNamed(tables, "Post").fields.address!.fields!;
+    expect(address.location!.fields!.code).toMatchObject({ unique: false });
+    expect(address.geo!.fields!.code).toMatchObject({ unique: true });
+  });
+
   test("a removed field stays readable with the config the diff recorded", () => {
     const tables = buildPreMigrationTables(
       snapshot(user),
@@ -564,6 +613,15 @@ describe("buildPreMigrationTables relations", () => {
     expect(tableNamed(tables, "Post").fields.info!.fields!.owner).toMatchObject({
       foreignKey: true,
     });
+  });
+
+  test("a unique member inside a nested field stays unique in the Pre-phase tables", () => {
+    const info = snapshotField("nested", {
+      fields: { code: snapshotField("string", { unique: true, index: true }) },
+    });
+    const tables = buildPreMigrationTables(snapshot(user, post({ info })), diff([]));
+
+    expect(tableNamed(tables, "Post").fields.info!.fields!.code).toMatchObject({ unique: true });
   });
 
   test("a relation keeps its reference when the migration modifies the field without retargeting it", () => {
