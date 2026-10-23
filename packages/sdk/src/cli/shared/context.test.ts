@@ -1410,6 +1410,19 @@ describe("loadAccessToken", () => {
       await expect(loadAccessToken()).resolves.toBe("expiring-access");
     });
 
+    test("does not fall back to a token with seconds left when the refresh fails", async () => {
+      writeFileUser({
+        access_token: "expiring-access",
+        refresh_token: "refresh-0",
+        token_expires_at: new Date(Date.now() + 5_000).toISOString(),
+      });
+      clientMocks.refreshToken.mockRejectedValue(new Error("network down"));
+
+      await expect(loadAccessToken()).rejects.toMatchObject({
+        code: "AUTH_TOKEN_REFRESH_FAILED",
+      });
+    });
+
     test("does not refresh early without a refresh token", async () => {
       writeFileUser({ access_token: "expiring-access", token_expires_at: inOneMinute() });
 
@@ -1488,7 +1501,7 @@ describe("loadAccessToken", () => {
       writeFileUser({
         access_token: "expiring-access",
         refresh_token: "refresh-0",
-        token_expires_at: new Date(Date.now() + 1000).toISOString(),
+        token_expires_at: new Date(Date.now() + 11_000).toISOString(),
       });
       writeHeldConfigLock(lockPath);
       setTimeout(() => {

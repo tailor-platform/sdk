@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { CLIError } from "./errors";
 
 const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
@@ -66,7 +67,12 @@ function resolveWriteTarget(filePath: string): string {
     if (!stat.isSymbolicLink()) return current;
     current = path.resolve(fs.realpathSync(path.dirname(current)), fs.readlinkSync(current));
   }
-  throw new Error(`Too many levels of symbolic links: ${filePath}`);
+  throw CLIError({
+    code: "SYMLINK_LOOP",
+    message: `Too many levels of symbolic links: ${filePath}`,
+    suggestion: "Point the symbolic link at a regular file.",
+    context: { path: filePath },
+  });
 }
 
 const WINDOWS_RENAME_RETRY_CODES: ReadonlySet<string> = new Set(["EACCES", "EBUSY", "EPERM"]);

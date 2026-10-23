@@ -122,6 +122,20 @@ describe("profile create with a migrating legacy email user", () => {
     );
     expect(config.users["legacy@example.com"]).toBeUndefined();
   });
+});
+
+describe("profile create while another process updates the config", () => {
+  beforeEach(() => {
+    resetKeyringState();
+    keyringPasswords.clear();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
 
   test("does not overwrite a profile another process created while the token was refreshed", async () => {
     clientMocks.initOperatorClient.mockClear();

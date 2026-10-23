@@ -8,24 +8,20 @@ import { CLIError, isCLIError } from "./errors";
 import { logger } from "./logger";
 import { ensureSecretDir } from "./secret-file";
 
-const REMOTE_LOCK_MAX_AGE_MS = 2 * 60 * 1000;
-const LOCAL_LOCK_MAX_AGE_MS = 10 * 60 * 1000;
-const DEFAULT_TIMEOUT_MS = REMOTE_LOCK_MAX_AGE_MS + 30_000;
+const MAX_LOCK_AGE_MS = 2 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = MAX_LOCK_AGE_MS + 30_000;
 const UNWRITTEN_LOCK_AGE_MS = 10_000;
 const RECLAIM_GUARD_AGE_MS = 10_000;
 const WAIT_NOTICE_DELAY_MS = 3_000;
 const MAX_RETRY_DELAY_MS = 250;
-const PROCESS_START_TOLERANCE_MS = 1_000;
 const LOCK_TIMEOUT_CODE = "CONFIG_LOCK_TIMEOUT";
 
-const PROCESS_STARTED_AT = Math.round(Date.now() - process.uptime() * 1000);
 const INSTANCE_ID = crypto.randomUUID();
 
 // A lock written by a newer SDK may carry more fields.
 const lockOwnerSchema = z.looseObject({
   pid: z.number().int(),
   hostname: z.string(),
-  processStartedAt: z.number(),
   instanceId: z.string(),
   nonce: z.string(),
   createdAt: z.number(),
@@ -126,7 +122,6 @@ function tryCreateLock(lockPath: string, nonce: string): boolean {
   const owner: LockOwner = {
     pid: process.pid,
     hostname: os.hostname(),
-    processStartedAt: PROCESS_STARTED_AT,
     instanceId: INSTANCE_ID,
     nonce,
     createdAt: Date.now(),
@@ -168,16 +163,11 @@ function isStale(lock: ObservedLock): boolean {
   const { owner } = lock;
   const now = Date.now();
   if (!owner) return now - lock.mtimeMs > UNWRITTEN_LOCK_AGE_MS;
-  const ageMs = now - owner.createdAt;
-  if (owner.hostname !== os.hostname()) return ageMs > REMOTE_LOCK_MAX_AGE_MS;
-  if (ageMs > LOCAL_LOCK_MAX_AGE_MS) return true;
-  if (owner.pid !== process.pid) return !isProcessAlive(owner.pid);
-  // Another thread may hold a lock with this pid; it is left over only if an earlier process or
-  // this module, which never acquires while holding, wrote it.
-  return (
-    Math.abs(owner.processStartedAt - PROCESS_STARTED_AT) > PROCESS_START_TOLERANCE_MS ||
-    owner.instanceId === INSTANCE_ID
-  );
+  if (now - owner.createdAt > MAX_LOCK_AGE_MS) return true;
+  if (owner.hostname !== os.hostname()) return false;
+  // Another thread may hold a lock with this pid; this module never acquires while holding one.
+  if (owner.pid === process.pid) return owner.instanceId === INSTANCE_ID;
+  return !isProcessAlive(owner.pid);
 }
 
 function isProcessAlive(pid: number): boolean {

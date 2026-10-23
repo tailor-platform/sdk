@@ -1165,6 +1165,7 @@ export async function withPlatformConfigLock<T>(
 
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
 const EARLY_REFRESH_LOCK_TIMEOUT_MS = 2_000;
+const MIN_USABLE_TOKEN_LIFETIME_MS = 10_000;
 
 type LatestToken = { accessToken: string; user: string };
 type LoginFailure = (code: string, message: string, suggestion: string) => Error;
@@ -1181,7 +1182,7 @@ function expiresWithin(expiresAt: string, marginMs: number): boolean {
 }
 
 function isExpired(stored: StoredToken): boolean {
-  return expiresWithin(stored.entry.token_expires_at, 0);
+  return expiresWithin(stored.entry.token_expires_at, MIN_USABLE_TOKEN_LIFETIME_MS);
 }
 
 function isDueForRefresh(stored: StoredToken): boolean {

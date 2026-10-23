@@ -100,6 +100,18 @@ describe("writeSecretFile", () => {
     expect(fs.readFileSync(realTarget, "utf-8")).toBe("new");
   });
 
+  test.skipIf(isWindows)("rejects a symlink loop", () => {
+    using tempDir = tempCwd("tailor-secret-file-");
+    const first = path.join(tempDir.dir, "config.yaml");
+    const second = path.join(tempDir.dir, "other.yaml");
+    fs.symlinkSync(second, first);
+    fs.symlinkSync(first, second);
+
+    expect(() => writeSecretFile(first, "new")).toThrow(
+      expect.objectContaining({ code: "SYMLINK_LOOP" }),
+    );
+  });
+
   test.skipIf(isWindows)("tightens permissions on existing world-readable directories", () => {
     using tempDir = tempCwd("tailor-secret-file-");
     const dir = path.join(tempDir.dir, "loose");
