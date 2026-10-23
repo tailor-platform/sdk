@@ -12,7 +12,7 @@ import { setupEnv } from "./env";
 import { checkEnv } from "./env-check";
 import { PREVIEW_NAME_MAX_LENGTH, printTargetNextSteps, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
-import { PACKAGE_MANAGERS } from "./templates";
+import { PACKAGE_MANAGERS, PREVIEW_REQUIREMENTS } from "./templates";
 import { setupUpdate } from "./update";
 
 const seedArgs = {
@@ -219,8 +219,9 @@ const previewCommand = defineAppCommand({
     region: arg(z.string().min(1), {
       description: "Workspace region for preview workspace creation (e.g. us-west). Required.",
     }),
-    "require-preview-label": arg(z.boolean().default(false), {
-      description: "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.",
+    require: arg(z.enum(PREVIEW_REQUIREMENTS).optional(), {
+      description:
+        "What a PR must satisfy before its preview deploys: `ready` skips draft PRs and deploys when the PR is marked ready for review, `label` deploys only PRs labeled `tailor:preview`. By default every PR, drafts included, gets a preview.",
     }),
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the preview jobs (defaults to the workspace name)",
@@ -248,7 +249,7 @@ const previewCommand = defineAppCommand({
       workspaceName: args.name,
       branch: args.branch,
       region: args.region,
-      requirePreviewLabel: args["require-preview-label"],
+      require: args.require,
       environment: args.environment,
       packageManager: args["package-manager"],
       dir: args.dir,

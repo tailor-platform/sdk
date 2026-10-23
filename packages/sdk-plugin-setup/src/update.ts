@@ -1,7 +1,7 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { setupTarget, type SetupTargetOptions } from "./generate";
 import { readLock, type LockInputs, type LockTarget } from "./lock";
-import { isPackageManager, type PackageManager } from "./templates";
+import { isPackageManager, type PackageManager, type PreviewRequirement } from "./templates";
 
 type UpdateCommon = { force: boolean; outputDir: string };
 
@@ -29,6 +29,16 @@ function recordedPackageManagerUnlessDetected(inputs: LockInputs): PackageManage
  * @param common - Options shared by every target in this update run
  * @returns The setup options to regenerate this entry with
  */
+/**
+ * Read the requirement of a preview target recorded before `require` existed: those workflows
+ * always skipped drafts, and deployed only labeled PRs when `requirePreviewLabel` was set.
+ * @param inputs - Inputs recorded in the lock
+ * @returns The requirement that reproduces the recorded workflow, as nearly as one can
+ */
+function legacyPreviewRequirement(inputs: LockInputs): PreviewRequirement {
+  return inputs.requirePreviewLabel ? "label" : "ready";
+}
+
 export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTargetOptions {
   const { kind, workspaceName, inputs } = target;
   const dir = inputs.apps ? inputs.apps.map((app) => app.dir) : inputs.dir;
@@ -70,7 +80,10 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         branch: recordedBranchUnlessDetected(inputs),
         extraPaths: inputs.paths,
         region: inputs.region ?? "",
-        requirePreviewLabel: inputs.requirePreviewLabel ?? false,
+        require:
+          inputs.require === undefined
+            ? legacyPreviewRequirement(inputs)
+            : (inputs.require ?? undefined),
       };
   }
 }

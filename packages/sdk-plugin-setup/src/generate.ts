@@ -51,6 +51,7 @@ import {
   TEMPLATE_VERSION,
   workflowFilePath,
   type PackageManager,
+  type PreviewRequirement,
   type RenderApp,
   type RenderMigrationTestParams,
   type RenderResult,
@@ -116,10 +117,11 @@ type PreviewSetupOptions = CommonSetupOptions & {
   /** Workspace region for preview workspace creation (e.g. `us-west`). */
   region: string;
   /**
-   * When true, the preview workflow deploys only for PRs labeled `tailor:preview`.
-   * Default false: preview deploys on every PR.
+   * What a PR must satisfy before its preview deploys: `ready` skips draft PRs and deploys once
+   * the draft is ready for review, `label` deploys only PRs labeled `tailor:preview`.
+   * Default none: every PR, drafts included.
    */
-  requirePreviewLabel?: boolean;
+  require?: PreviewRequirement;
 };
 
 export type SetupTargetOptions = BranchSetupOptions | TagSetupOptions | PreviewSetupOptions;
@@ -750,7 +752,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       environment,
       packageManager,
       region: options.region,
-      requirePreviewLabel: options.requirePreviewLabel ?? false,
+      require: options.require,
       seed: options.seed,
     });
   }
@@ -766,7 +768,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     packageManager,
     packageManagerAutoDetected: options.packageManager === undefined,
     region: kind === "preview" ? options.region : undefined,
-    requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
+    require: kind === "preview" ? (options.require ?? null) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
     erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
     ghes: kind === "branch" && options.ghes ? true : undefined,
