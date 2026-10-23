@@ -92,6 +92,14 @@ export default defineConfig({ ${auth}, ${idp} });`;
       'const auth = defineAuth("auth", {}); { const auth = other; defineConfig({ auth }); }',
     ],
     [
+      "shadowed by a destructured binding",
+      'const auth = defineAuth("auth", {}); { const { auth } = references; defineConfig({ auth }); }',
+    ],
+    [
+      "shadowed by a loop binding",
+      'const auth = defineAuth("auth", {}); for (const auth of references) defineConfig({ auth });',
+    ],
+    [
       "inside a function",
       'const auth = defineAuth("auth", {}); function build(auth) { return defineConfig({ auth }); }',
     ],

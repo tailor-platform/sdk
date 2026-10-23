@@ -18,13 +18,19 @@ type Analysis = {
   sdkNamespaces: Set<string>;
 };
 
-const FUNCTION_KINDS = [
+const SCOPE_KINDS = [
   "function_declaration",
   "function_expression",
   "arrow_function",
   "method_definition",
   "generator_function_declaration",
   "generator_function",
+  "class_body",
+  "statement_block",
+  "for_statement",
+  "for_in_statement",
+  "catch_clause",
+  "switch_body",
 ];
 
 function entries(node: SgNode): SgNode[] {
@@ -77,17 +83,14 @@ function isOwnedVariable(node: SgNode, analysis: Analysis): boolean {
   return (
     ["identifier", "shorthand_property_identifier"].includes(String(node.kind())) &&
     analysis.ownedVariables.has(node.text()) &&
-    !node.ancestors().some((ancestor) => FUNCTION_KINDS.includes(String(ancestor.kind())))
+    !node.ancestors().some((ancestor) => SCOPE_KINDS.includes(String(ancestor.kind())))
   );
 }
 
 function collectOwnedVariables(root: SgNode, analysis: Analysis): void {
-  const declarations = new Map<string, number>();
-  const candidates = new Set<string>();
   for (const declarator of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const name = declarator.field("name");
     if (name?.kind() !== "identifier") continue;
-    declarations.set(name.text(), (declarations.get(name.text()) ?? 0) + 1);
     const declaration = declarator.parent();
     const scope = declaration?.parent();
     const topLevel =
@@ -101,11 +104,8 @@ function collectOwnedVariables(root: SgNode, analysis: Analysis): void {
       value &&
       isOwnedBuilderCall(value, analysis)
     ) {
-      candidates.add(name.text());
+      analysis.ownedVariables.add(name.text());
     }
-  }
-  for (const name of candidates) {
-    if (declarations.get(name) === 1) analysis.ownedVariables.add(name);
   }
 }
 
