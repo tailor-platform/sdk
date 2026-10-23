@@ -15,7 +15,9 @@ import {
   getPlatformBaseUrl,
   initOAuth2Client,
   normalizeBaseUrl,
+  registerAccessTokenSource,
   rememberPlatformConfigForToken,
+  type AccessTokenSource,
   type PlatformClientConfig,
 } from "./client";
 import { type ConfigLockOptions, isConfigLockTimeout, withConfigLock } from "./config-lock";
@@ -410,14 +412,17 @@ async function trySaveTokensInKeyring(user: string, tokens: UserTokens): Promise
   }
 }
 
+let warnedAboutNewerConfig = false;
+
 async function warnIfNewerConfigAvailable(config: {
   latest_version?: number;
   latest_min_sdk_version?: string;
 }) {
-  if (!config.latest_min_sdk_version) return;
+  if (!config.latest_min_sdk_version || warnedAboutNewerConfig) return;
   const packageJson = await readPackageJson();
   const sdkVersion = packageJson.version ?? "0.0.0";
   if (semverLt(sdkVersion, config.latest_min_sdk_version)) {
+    warnedAboutNewerConfig = true;
     logger.warn(ml`
       A newer config version (${String(config.latest_version)}) is available.
       Please update your SDK to >= ${config.latest_min_sdk_version}: pnpm update @tailor-platform/sdk
@@ -775,7 +780,19 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
     });
   }
   const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-  return (await fetchLatestToken(pfConfig, user, fromProfile, profile)).accessToken;
+  const token = await resolveLatestToken({
+    config: pfConfig,
+    user,
+    platformConfig: fromProfile,
+    profile,
+  });
+  if (token.refreshable) {
+    registerAccessTokenSource(
+      token.accessToken,
+      createStoredTokenSource({ token, platformConfig: fromProfile, profile }),
+    );
+  }
+  return token.accessToken;
 }
 
 /**
@@ -1168,6 +1185,7 @@ const EARLY_REFRESH_LOCK_TIMEOUT_MS = 2_000;
 const MIN_USABLE_TOKEN_LIFETIME_MS = 10_000;
 
 type LatestToken = { accessToken: string; user: string };
+type ResolvedToken = LatestToken & { expiresAt: number; refreshable: boolean };
 type LoginFailure = (code: string, message: string, suggestion: string) => Error;
 type StoredToken = {
   userKey: string;
@@ -1175,20 +1193,33 @@ type StoredToken = {
   entry: PfUser;
   tokens: UserTokens;
 };
+type TokenRequest = {
+  config: PfConfig;
+  user: string;
+  platformConfig?: PlatformClientConfig;
+  profile?: string;
+  /** A token the Platform rejected; a stored token equal to it counts as expired. */
+  rejectedToken?: string;
+};
 
-function expiresWithin(expiresAt: string, marginMs: number): boolean {
-  const remainingMs = Date.parse(expiresAt) - Date.now();
+function expiresWithin(expiresAt: number, marginMs: number): boolean {
+  const remainingMs = expiresAt - Date.now();
   return Number.isNaN(remainingMs) || remainingMs <= marginMs;
 }
 
-function isExpired(stored: StoredToken): boolean {
-  return expiresWithin(stored.entry.token_expires_at, MIN_USABLE_TOKEN_LIFETIME_MS);
+function isExpired(stored: StoredToken, rejectedToken?: string): boolean {
+  return (
+    stored.tokens.accessToken === rejectedToken ||
+    expiresWithin(Date.parse(stored.entry.token_expires_at), MIN_USABLE_TOKEN_LIFETIME_MS)
+  );
 }
 
-function isDueForRefresh(stored: StoredToken): boolean {
-  return stored.tokens.refreshToken
-    ? expiresWithin(stored.entry.token_expires_at, TOKEN_REFRESH_MARGIN_MS)
-    : isExpired(stored);
+function isDueForRefresh(stored: StoredToken, rejectedToken?: string): boolean {
+  return (
+    isExpired(stored, rejectedToken) ||
+    (Boolean(stored.tokens.refreshToken) &&
+      expiresWithin(Date.parse(stored.entry.token_expires_at), TOKEN_REFRESH_MARGIN_MS))
+  );
 }
 
 async function readStoredToken(
@@ -1216,9 +1247,14 @@ async function readStoredToken(
 function useStoredToken(
   stored: StoredToken,
   platformConfig: PlatformClientConfig | undefined,
-): LatestToken {
+): ResolvedToken {
   rememberPlatformConfigForToken(stored.tokens.accessToken, platformConfig);
-  return { accessToken: stored.tokens.accessToken, user: stored.configUser };
+  return {
+    accessToken: stored.tokens.accessToken,
+    user: stored.configUser,
+    expiresAt: Date.parse(stored.entry.token_expires_at),
+    refreshable: Boolean(stored.tokens.refreshToken),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1258,6 +1294,12 @@ export async function fetchLatestToken(
   platformConfig?: PlatformClientConfig,
   profile?: string,
 ): Promise<LatestToken> {
+  const latest = await resolveLatestToken({ config, user, platformConfig, profile });
+  return { accessToken: latest.accessToken, user: latest.user };
+}
+
+async function resolveLatestToken(request: TokenRequest): Promise<ResolvedToken> {
+  const { config, user, platformConfig, profile, rejectedToken } = request;
   const loginArgs = profile ? ["--profile", profile] : [];
   const loginFailure: LoginFailure = (code, message, suggestion) =>
     CLIError({
@@ -1268,15 +1310,15 @@ export async function fetchLatestToken(
       context: { profile: profile ?? null },
     });
   const stored = await readStoredToken(config, user, platformConfig, loginFailure);
-  if (!isDueForRefresh(stored)) return useStoredToken(stored, platformConfig);
+  if (!isDueForRefresh(stored, rejectedToken)) return useStoredToken(stored, platformConfig);
 
-  const expired = isExpired(stored);
+  const expired = isExpired(stored, rejectedToken);
   try {
     return await withPlatformConfigLock(
       async () => {
         const latest = await readPlatformConfig();
         try {
-          return await refreshStoredToken(latest, user, platformConfig, loginFailure);
+          return await refreshStoredToken({ ...request, config: latest }, loginFailure);
         } finally {
           replaceContents(config, latest);
         }
@@ -1285,20 +1327,19 @@ export async function fetchLatestToken(
     );
   } catch (error) {
     if (expired || !isConfigLockTimeout(error)) throw error;
-    if (isExpired(stored)) return await fetchLatestToken(config, user, platformConfig, profile);
+    if (isExpired(stored, rejectedToken)) return await resolveLatestToken(request);
     logger.debug("Another tailor command is refreshing the token; using the current token.");
     return useStoredToken(stored, platformConfig);
   }
 }
 
 async function refreshStoredToken(
-  config: PfConfig,
-  user: string,
-  platformConfig: PlatformClientConfig | undefined,
+  request: TokenRequest,
   loginFailure: LoginFailure,
-): Promise<LatestToken> {
+): Promise<ResolvedToken> {
+  const { config, user, platformConfig, rejectedToken } = request;
   const stored = await readStoredToken(config, user, platformConfig, loginFailure);
-  if (!isDueForRefresh(stored)) return useStoredToken(stored, platformConfig);
+  if (!isDueForRefresh(stored, rejectedToken)) return useStoredToken(stored, platformConfig);
 
   const { userKey: storedUser, configUser: storedConfigUser, entry: userEntry, tokens } = stored;
   if (!tokens.refreshToken) {
@@ -1318,7 +1359,7 @@ async function refreshStoredToken(
       expiresAt: Date.parse(userEntry.token_expires_at),
     });
   } catch (error) {
-    if (!isExpired(stored)) {
+    if (!isExpired(stored, rejectedToken)) {
       logger.debug(`Failed to refresh a token that has not expired yet: ${String(error)}`);
       return useStoredToken(stored, platformConfig);
     }
@@ -1380,7 +1421,89 @@ async function refreshStoredToken(
   }
   writePlatformConfig(config);
   rememberPlatformConfigForToken(resp.accessToken, platformConfig);
-  return { accessToken: resp.accessToken, user: resolvedUser };
+  return {
+    accessToken: resp.accessToken,
+    user: resolvedUser,
+    expiresAt: Date.parse(newExpiresAt),
+    refreshable: true,
+  };
+}
+
+const RENEWAL_RETRY_INTERVAL_MS = 30_000;
+const FORCED_RENEWAL_INTERVAL_MS = 60_000;
+
+type StoredTokenSourceInit = {
+  token: ResolvedToken;
+  platformConfig?: PlatformClientConfig;
+  profile?: string;
+};
+
+/**
+ * Keep the token of a logged-in user usable for a long-running command. Renewal happens
+ * only inside a request, and only the request that starts it waits for it while the
+ * current token is still usable.
+ * @param init - Token to start from and the login it belongs to
+ * @returns Source for the Operator client
+ */
+function createStoredTokenSource(init: StoredTokenSourceInit): AccessTokenSource {
+  let { accessToken, expiresAt, user } = init.token;
+  let renewal: Promise<void> | undefined;
+  let renewalError: Error | undefined;
+  let retryAt = 0;
+  let renewedAt = -Infinity;
+
+  const isUsable = () => !expiresWithin(expiresAt, MIN_USABLE_TOKEN_LIFETIME_MS);
+  const isDue = () =>
+    expiresWithin(expiresAt, TOKEN_REFRESH_MARGIN_MS) && (!isUsable() || Date.now() >= retryAt);
+
+  const renew = (rejectedToken?: string) =>
+    (renewal ??= (async () => {
+      try {
+        const latest = await resolveLatestToken({
+          config: await readPlatformConfig(),
+          user,
+          platformConfig: init.platformConfig,
+          profile: init.profile,
+          rejectedToken,
+        });
+        renewalError = undefined;
+        const replacesRejected =
+          rejectedToken !== undefined && latest.accessToken !== rejectedToken;
+        if (latest.expiresAt > expiresAt || replacesRejected) {
+          ({ accessToken, expiresAt, user } = latest);
+          renewedAt = Date.now();
+          registerAccessTokenSource(accessToken, source);
+        } else {
+          retryAt = Date.now() + RENEWAL_RETRY_INTERVAL_MS;
+        }
+      } catch (error) {
+        renewalError = error instanceof Error ? error : new Error(String(error));
+        retryAt = Date.now() + RENEWAL_RETRY_INTERVAL_MS;
+        logger.debug(`Failed to renew the access token: ${String(error)}`);
+      } finally {
+        renewal = undefined;
+      }
+    })());
+
+  const source: AccessTokenSource = {
+    async current() {
+      if (!isDue() || (renewal && isUsable())) return accessToken;
+      await renew();
+      if (!isUsable()) {
+        throw renewalError ?? CLIError({ code: "AUTH_TOKEN_EXPIRED", message: "Token expired." });
+      }
+      return accessToken;
+    },
+    async replaceRejected(rejected) {
+      if (accessToken !== rejected) return accessToken;
+      await renewal;
+      if (accessToken !== rejected) return accessToken;
+      if (Date.now() - renewedAt < FORCED_RENEWAL_INTERVAL_MS) return undefined;
+      await renew(rejected);
+      return accessToken === rejected ? undefined : accessToken;
+    },
+  };
+  return source;
 }
 
 const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
