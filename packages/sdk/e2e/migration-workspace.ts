@@ -38,6 +38,81 @@ export const GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS = cliTestTimeout(
 
 const BASE_USER_FIELDS = ["name: db.string()", "email: db.string().unique()"];
 
+const MACHINE_USER = "migration-executor";
+
+let scriptCount = 0;
+
+/**
+ * Merge the steps of a generated migrate.ts into one step running the same functions in order.
+ * Each step of a migration runs as its own Platform job.
+ * @param script - Generated migrate.ts source that exports `steps`
+ * @returns Source whose `steps` holds one step
+ */
+export function mergeStepsIntoOne(script: string): string {
+  const stepsBlock = /export const steps = \{\n([\s\S]*?)\n\} satisfies MigrationSteps;/.exec(
+    script,
+  );
+  if (!stepsBlock) throw new Error("Generated migrate.ts does not export steps");
+  const names = [...stepsBlock[1]!.matchAll(/^ {2}(\w+): \{/gm)].map((match) => match[1]!);
+  if (names.length < 2) throw new Error(`Expected at least two steps, found ${names.length}`);
+  const calls = names.map((name) => `    await ${name}(trx);`).join("\n");
+  return script.replace(
+    stepsBlock[0],
+    `export const steps = {\n  all: {\n    run: async (trx: Transaction) => {\n${calls}\n    },\n  },\n} satisfies MigrationSteps;`,
+  );
+}
+
+/** Where and how {@link runTailorDBScript} runs its script. */
+export interface TailorDBScriptOptions {
+  /** Fixture directory holding the config and the `@tailor-platform/sdk` link */
+  cwd: string;
+  configPath: string;
+  workspaceId: string;
+  namespace: string;
+  /** Statements run with `db`, a Kysely instance on the namespace; a returned value must be JSON */
+  body: string;
+  signal: AbortSignal | undefined;
+}
+
+/**
+ * Run statements against a TailorDB namespace with `tailor function run`.
+ * @param options - Fixture directory, target namespace, statements, and the calling test's signal
+ * @returns The value the statements return
+ */
+export async function runTailorDBScript(options: TailorDBScriptOptions): Promise<unknown> {
+  const scriptPath = path.join(options.cwd, "scripts", `script-${++scriptCount}.ts`);
+  fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+  fs.writeFileSync(
+    scriptPath,
+    `import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
+
+export default async function main() {
+  const db = new Kysely<any>({
+    dialect: new TailordbDialect(new tailordb.Client({ namespace: ${JSON.stringify(options.namespace)} })),
+  });
+${options.body}
+}
+`,
+  );
+  const result = await runCli(
+    [
+      "function",
+      "run",
+      scriptPath,
+      "--config",
+      options.configPath,
+      "--workspace-id",
+      options.workspaceId,
+      "--machine-user",
+      MACHINE_USER,
+      "--json",
+    ],
+    { cwd: options.cwd, timeoutMs: CLI_BUDGET_MS.script, signal: options.signal },
+  );
+  const { result: returned } = JSON.parse(result.stdout) as { result?: string };
+  return returned ? JSON.parse(returned) : undefined;
+}
+
 /**
  * A workspace, fixture directory and TailorDB namespace owned by one migration test file.
  * Each file creates its own so files can run in parallel.
@@ -243,6 +318,23 @@ export type user = typeof user;
     return tryCli(this.deployArgs(), {
       cwd: this.tempDir,
       timeoutMs: CLI_BUDGET_MS.deploy,
+      signal,
+    });
+  }
+
+  /**
+   * Run statements against this file's namespace; see {@link runTailorDBScript}.
+   * @param body - Statements run with `db`; a returned value must be JSON
+   * @param signal - The calling test's signal
+   * @returns The value the statements return
+   */
+  runTailorDBScript(body: string, signal: AbortSignal | undefined): Promise<unknown> {
+    return runTailorDBScript({
+      cwd: this.tempDir,
+      configPath: this.createConfig(),
+      workspaceId: this.workspaceId,
+      namespace: this.tailordbName,
+      body,
       signal,
     });
   }
