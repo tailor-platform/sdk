@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.6.1
+
+### Patch Changes
+
+- [#2760](https://github.com/tailor-platform/sdk/pull/2760) [`a7d1cb8`](https://github.com/tailor-platform/sdk/commit/a7d1cb8ce6dbc324f57ff2704f5ffe92af5bf963) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @​inquirer
+
+- [#2766](https://github.com/tailor-platform/sdk/pull/2766) [`15b6f4a`](https://github.com/tailor-platform/sdk/commit/15b6f4a7a9b6c0c2dd6514c6a5a7ca73a4870000) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.4.0
+- Updated dependencies [[`6f6ca9f`](https://github.com/tailor-platform/sdk/commit/6f6ca9fb72255f4124c04933af012ef6d7170380), [`4f3f30c`](https://github.com/tailor-platform/sdk/commit/4f3f30c4b7a305d654a1b8ad9cb709f7effe75ec), [`8595d14`](https://github.com/tailor-platform/sdk/commit/8595d14c76d8ce364448f321ad430c01582d910f), [`59fcb9a`](https://github.com/tailor-platform/sdk/commit/59fcb9a356455494bdbc0068d59ae4daa4de1582), [`6eb2033`](https://github.com/tailor-platform/sdk/commit/6eb203365aa0aedf6619b63f192aac948e2e0876), [`ef844ff`](https://github.com/tailor-platform/sdk/commit/ef844ffc39a84a39e02818eec9f6a08188ce2ccb), [`a7d1cb8`](https://github.com/tailor-platform/sdk/commit/a7d1cb8ce6dbc324f57ff2704f5ffe92af5bf963), [`15b6f4a`](https://github.com/tailor-platform/sdk/commit/15b6f4a7a9b6c0c2dd6514c6a5a7ca73a4870000), [`8927563`](https://github.com/tailor-platform/sdk/commit/89275638f7732fd69015e4b70ad8101b55b22649), [`bbfb9b1`](https://github.com/tailor-platform/sdk/commit/bbfb9b1e9918cb59fdbc6865c6eb81bc3136aecd), [`d52ec40`](https://github.com/tailor-platform/sdk/commit/d52ec402c9cc295eb94e69ee45b6f87e888badfa), [`559d442`](https://github.com/tailor-platform/sdk/commit/559d442b7ab19d900ccfd5b84694b88490ae62e2)]:
+  - @tailor-platform/sdk@2.33.0
+
 ## 0.6.0
 
 ### Minor Changes
