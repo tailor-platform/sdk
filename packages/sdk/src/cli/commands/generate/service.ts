@@ -340,7 +340,7 @@ export function createGenerationManager(params: {
       for (const [namespace, entry] of Object.entries(normalizedDbOf(config))) {
         if (entry.schemaSource?.kind !== "config") continue;
         const configPath = path.resolve(path.dirname(config.path), entry.schemaSource.path);
-        referencedTailordb.push(...(await loadNamespace(configPath, [namespace])));
+        referencedTailordb.push(await loadNamespace(configPath, namespace));
       }
 
       // Generate plugin type and executor files

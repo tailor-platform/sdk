@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
+import { normalizedDbOf } from "./config";
 import { atConfigSource, loadConfig } from "./config-loader";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 
@@ -50,7 +51,7 @@ describe("loadConfig", () => {
     expect(config.resolver).toEqual({ shared: { attach: true } });
     expect(config.auth).toEqual({ name: "shared-auth", attach: true });
     expect(config.idp).toEqual([{ name: "shared-idp", attach: true }]);
-    expect(config.normalizedDb?.shared).toEqual({
+    expect(normalizedDbOf(config).shared).toEqual({
       owned: false,
       inSubgraph: true,
       schemaSource: undefined,
@@ -64,7 +65,7 @@ describe("loadConfig", () => {
     } };`);
     const { config } = await loadConfig(configPath);
     expect(config.db?.own?.gqlOperations).toBe("query");
-    expect(config.normalizedDb?.shared).toEqual({
+    expect(normalizedDbOf(config).shared).toEqual({
       owned: false,
       inSubgraph: false,
       schemaSource: { kind: "config", path: "../owner/tailor.config.ts" },

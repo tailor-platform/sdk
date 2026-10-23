@@ -5,7 +5,7 @@ import {
   type Application,
 } from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
-import { extractOwnedNamespaces, normalizedDbOf } from "./config";
+import { normalizedDbOf } from "./config";
 import { loadConfig, type LoadedConfig } from "./config-loader";
 import { effectiveDateDefault } from "./date-default";
 import { CLIError } from "./errors";
@@ -120,28 +120,12 @@ export async function loadTailorDBNamespaces(
 }
 
 /**
- * Load TailorDB namespaces owned by a given tailor.config.ts.
+ * Load one TailorDB namespace owned by a given tailor.config.ts.
  */
 export type TailorDBNamespaceLoader = (
   configPath: string,
-  namespaces?: string[],
-) => Promise<TailorDBNamespaceData[]>;
-
-/**
- * List the namespaces owned by a config.
- * @param config - Loaded config
- * @returns Namespace names in config order
- */
-function ownedNamespacesOf(config: LoadedConfig): string[] {
-  const owned = extractOwnedNamespaces(config);
-  if (owned.length === 0) {
-    throw CLIError({
-      code: "TAILORDB_NAMESPACE_NOT_CONFIGURED",
-      message: `${config.path} defines no owned TailorDB namespace.`,
-    });
-  }
-  return owned;
-}
+  namespace: string,
+) => Promise<TailorDBNamespaceData>;
 
 interface LoadedNamespaceSource {
   config: LoadedConfig;
@@ -203,8 +187,6 @@ async function loadNamespace(
  */
 export function createTailorDBNamespaceLoader(): TailorDBNamespaceLoader {
   const configs = new Map<string, Promise<LoadedNamespaceSource>>();
-  const namespaces = new Map<string, Promise<TailorDBNamespaceData>>();
-  let previousLoad: Promise<unknown> = Promise.resolve();
 
   const loadConfigOnce = (configPath: string) => {
     let loaded = configs.get(configPath);
@@ -218,23 +200,6 @@ export function createTailorDBNamespaceLoader(): TailorDBNamespaceLoader {
     return loaded;
   };
 
-  const loadNamespaceOnce = (source: LoadedNamespaceSource, namespace: string) => {
-    const key = `${source.config.path}\0${namespace}`;
-    let loaded = namespaces.get(key);
-    if (!loaded) {
-      loaded = previousLoad.then(() => loadNamespace(source, namespace));
-      previousLoad = loaded.catch(() => undefined);
-      namespaces.set(key, loaded);
-    }
-    return loaded;
-  };
-
-  return async (configPath, selected) => {
-    const source = await loadConfigOnce(path.resolve(configPath));
-    const loaded: TailorDBNamespaceData[] = [];
-    for (const namespace of selected ?? ownedNamespacesOf(source.config)) {
-      loaded.push(await loadNamespaceOnce(source, namespace));
-    }
-    return loaded;
-  };
+  return async (configPath, namespace) =>
+    loadNamespace(await loadConfigOnce(path.resolve(configPath)), namespace);
 }

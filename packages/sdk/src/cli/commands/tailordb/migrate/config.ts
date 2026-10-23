@@ -1,7 +1,8 @@
-import * as path from "pathe";
 /**
  * Migration configuration utilities
  */
+
+import * as path from "pathe";
 import { normalizedDbOf } from "#/cli/shared/config";
 import { CLIError } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";

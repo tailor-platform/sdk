@@ -156,8 +156,8 @@ describe("GenerationManager", () => {
       }));
       const loader = vi
         .fn()
-        .mockResolvedValueOnce([referenced[0]])
-        .mockResolvedValueOnce([referenced[1]]);
+        .mockResolvedValueOnce(referenced[0])
+        .mockResolvedValueOnce(referenced[1]);
       vi.mocked(createTailorDBNamespaceLoader).mockReturnValueOnce(loader);
       const hooks = {
         onTailorDBReady: vi.fn().mockResolvedValue({ files: [] }),
@@ -186,8 +186,8 @@ describe("GenerationManager", () => {
       });
       await manager.generate();
       expect(loader.mock.calls).toEqual([
-        ["/repo/owner/tailor.config.ts", ["shared"]],
-        ["/repo/owner/tailor.config.ts", ["sql"]],
+        ["/repo/owner/tailor.config.ts", "shared"],
+        ["/repo/owner/tailor.config.ts", "sql"],
       ]);
       for (const hook of Object.values(hooks)) {
         expect(hook).toHaveBeenCalledWith(

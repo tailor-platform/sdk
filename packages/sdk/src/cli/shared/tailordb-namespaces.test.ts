@@ -46,10 +46,10 @@ describe("createTailorDBNamespaceLoader", () => {
     });
 
     using _logger = silenceLogger("error", "log");
-    const [namespace] = await createTailorDBNamespaceLoader()(configPath, ["billing"]);
+    const namespace = await createTailorDBNamespaceLoader()(configPath, "billing");
 
-    expect(namespace!.namespace).toBe("billing");
-    expect(Object.keys(namespace!.tables)).toEqual(["Invoice"]);
+    expect(namespace.namespace).toBe("billing");
+    expect(Object.keys(namespace.tables)).toEqual(["Invoice"]);
   });
 
   test("does not load consumer tables when the owner's file patterns match nothing", async () => {
@@ -62,9 +62,9 @@ describe("createTailorDBNamespaceLoader", () => {
       .mockReturnValue(path.join(path.dirname(configPath), "consumer"));
     using _logger = silenceLogger("error", "log", "warn");
 
-    const [namespace] = await createTailorDBNamespaceLoader()(configPath, ["billing"]);
+    const namespace = await createTailorDBNamespaceLoader()(configPath, "billing");
 
-    expect(Object.keys(namespace!.tables)).toEqual([]);
+    expect(Object.keys(namespace.tables)).toEqual([]);
   });
 
   test("loads each config once for several of its namespaces", async () => {
@@ -76,8 +76,8 @@ describe("createTailorDBNamespaceLoader", () => {
 
     using _logger = silenceLogger("error", "log");
     const loadTailorDB = createTailorDBNamespaceLoader();
-    await loadTailorDB(configPath, ["billing"]);
-    await loadTailorDB(configPath, ["audit"]);
+    await loadTailorDB(configPath, "billing");
+    await loadTailorDB(configPath, "audit");
 
     expect(loadConfig).toHaveBeenCalledTimes(1);
   });
@@ -103,9 +103,9 @@ export const plugins = [{
     });
 
     using _logger = silenceLogger("error", "log");
-    const [namespace] = await createTailorDBNamespaceLoader()(configPath, ["billing"]);
+    const namespace = await createTailorDBNamespaceLoader()(configPath, "billing");
 
-    expect(Object.keys(namespace!.tables)).toEqual(["AuditLog"]);
+    expect(Object.keys(namespace.tables)).toEqual(["AuditLog"]);
   });
 
   test("does not run the other config's generation hooks", async () => {
@@ -124,67 +124,9 @@ export const plugins = [{
     });
 
     using _logger = silenceLogger("error", "log");
-    const [namespace] = await createTailorDBNamespaceLoader()(configPath, ["billing"]);
+    const namespace = await createTailorDBNamespaceLoader()(configPath, "billing");
 
-    expect(Object.keys(namespace!.tables)).toEqual(["Invoice"]);
-  });
-
-  test("loads each namespace once when it is requested again, even concurrently", async () => {
-    const configPath = writeProject({
-      "tailor.config.ts": `
-export default { name: "billing-app", db: { billing: { files: [] } } };
-export const plugins = [{
-  id: "load-counter",
-  description: "Counts namespace loads",
-  importPath: "@example/load-counter",
-  onNamespaceLoaded: () => {
-    globalThis.__namespaceLoads = (globalThis.__namespaceLoads ?? 0) + 1;
-    return {};
-  },
-}];
-`,
-    });
-    const counter = globalThis as { __namespaceLoads?: number };
-    counter.__namespaceLoads = 0;
-
-    using _logger = silenceLogger("error", "log");
-    const loadTailorDB = createTailorDBNamespaceLoader();
-    await Promise.all([loadTailorDB(configPath, ["billing"]), loadTailorDB(configPath)]);
-    await loadTailorDB(configPath, ["billing"]);
-
-    expect(counter.__namespaceLoads).toBe(1);
-    delete counter.__namespaceLoads;
-  });
-
-  test("loads one namespace at a time even when namespaces are requested concurrently", async () => {
-    const configPath = writeProject({
-      "tailor.config.ts": `
-export default { name: "billing-app", db: { billing: { files: [] }, audit: { files: [] } } };
-export const plugins = [{
-  id: "overlap-recorder",
-  description: "Records overlapping namespace loads",
-  importPath: "@example/overlap-recorder",
-  onNamespaceLoaded: async () => {
-    const state = globalThis.__namespaceLoadOverlap;
-    state.active += 1;
-    state.max = Math.max(state.max, state.active);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    state.active -= 1;
-    return {};
-  },
-}];
-`,
-    });
-    const overlap = { active: 0, max: 0 };
-    const state = globalThis as { __namespaceLoadOverlap?: typeof overlap };
-    state.__namespaceLoadOverlap = overlap;
-
-    using _logger = silenceLogger("error", "log");
-    const loadTailorDB = createTailorDBNamespaceLoader();
-    await Promise.all([loadTailorDB(configPath, ["billing"]), loadTailorDB(configPath, ["audit"])]);
-
-    expect(overlap.max).toBe(1);
-    delete state.__namespaceLoadOverlap;
+    expect(Object.keys(namespace.tables)).toEqual(["Invoice"]);
   });
 
   test.each([
@@ -196,7 +138,7 @@ export const plugins = [{
       "tailor.config.ts": `export default { name: "billing-app", db: { billing: { files: [] }, shared: { external: true } } };`,
     });
 
-    await expect(createTailorDBNamespaceLoader()(configPath, [namespace])).rejects.toThrow(
+    await expect(createTailorDBNamespaceLoader()(configPath, namespace)).rejects.toThrow(
       `${message} ${configPath}.`,
     );
   });
@@ -209,30 +151,8 @@ export const plugins = [{
     const configPath = writeProject({
       "tailor.config.ts": `export default { name: "other-app", db: { shared: ${JSON.stringify(entry)} } };`,
     });
-    await expect(createTailorDBNamespaceLoader()(configPath, ["shared"])).rejects.toThrow(
+    await expect(createTailorDBNamespaceLoader()(configPath, "shared")).rejects.toThrow(
       `TailorDB namespace "shared" is external in ${configPath}. Point schemaFrom at the config that defines its tables.`,
-    );
-  });
-
-  test("loads every owned namespace, in config order, when namespaces is omitted", async () => {
-    const configPath = writeProject({
-      "tailor.config.ts": `export default { name: "billing-app", db: { billing: { files: ["./tailordb/*.ts"] }, shared: { external: true }, audit: { files: [] } } };`,
-      "tailordb/invoice.ts": invoiceTable,
-    });
-
-    using _logger = silenceLogger("error", "log");
-    const namespaces = await createTailorDBNamespaceLoader()(configPath);
-
-    expect(namespaces.map((ns) => ns.namespace)).toEqual(["billing", "audit"]);
-  });
-
-  test("rejects a config without a namespace to load when namespaces is omitted", async () => {
-    const configPath = writeProject({
-      "tailor.config.ts": `export default { name: "billing-app", db: { shared: { external: true } } };`,
-    });
-
-    await expect(createTailorDBNamespaceLoader()(configPath)).rejects.toThrow(
-      `${configPath} defines no owned TailorDB namespace.`,
     );
   });
 });

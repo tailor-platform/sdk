@@ -3,12 +3,12 @@ import type { NormalizedDb } from "#/types/app-config.generated";
 import type { LoadedConfig } from "./config-loader";
 
 /**
- * Read normalized namespaces, including configurations constructed by CLI consumers.
+ * Read the configured TailorDB namespaces as ownership, attachment, and definition source.
  * @param config - Application configuration
  * @returns Normalized namespace entries
  */
-export function normalizedDbOf(config: Pick<LoadedConfig, "db" | "normalizedDb">): NormalizedDb {
-  return config.normalizedDb ?? normalizeDb(config.db);
+export function normalizedDbOf(config: Pick<LoadedConfig, "db">): NormalizedDb {
+  return normalizeDb(config.db);
 }
 
 /**
