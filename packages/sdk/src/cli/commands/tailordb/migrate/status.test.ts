@@ -264,6 +264,25 @@ describe("tailordb migration status --json", () => {
     expect(initOperatorClient).not.toHaveBeenCalled();
   });
 
+  test("reports a migration directory that has migrate.ts but no diff.json", async () => {
+    fs.mkdirSync(path.join(state.migrationsDir, "0003"));
+    fs.writeFileSync(path.join(state.migrationsDir, "0003", "migrate.ts"), "export {};");
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "error",
+        namespace: "tailordb",
+        error: expect.stringContaining("Migration 0003 has migrate.ts but no diff.json"),
+      },
+    ]);
+  });
+
   test.each([
     ["baseline", "0000/schema.json"],
     ["applied diff", "0001/diff.json"],
