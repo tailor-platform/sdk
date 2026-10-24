@@ -151,8 +151,10 @@ export const plugins = [{
     const configPath = writeProject({
       "tailor.config.ts": `export default { name: "other-app", db: { shared: ${JSON.stringify(entry)} } };`,
     });
-    await expect(createTailorDBNamespaceLoader()(configPath, "shared")).rejects.toThrow(
-      `TailorDB namespace "shared" is owned by another application, not ${configPath}. Point schemaFrom at the config that defines its tables.`,
-    );
+    await expect(createTailorDBNamespaceLoader()(configPath, "shared")).rejects.toMatchObject({
+      code: "TAILORDB_NAMESPACE_EXTERNAL",
+      message: `TailorDB namespace "shared" is owned by another application, not ${configPath}.`,
+      suggestion: "Point schemaFrom at the config that defines its tables.",
+    });
   });
 });
