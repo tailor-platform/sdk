@@ -1632,6 +1632,45 @@ describe("template-generator", () => {
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
 
+    test("should clear and restore a self-referential column named __proto__ as an own property", async () => {
+      const selfRefColumn = (foreignKeyType: string) => ({
+        type: "uuid",
+        required: false,
+        foreignKey: true,
+        foreignKeyType,
+        foreignKeyField: "id",
+      });
+      const fieldsFor = (foreignKeyType: string) =>
+        Object.fromEntries([["__proto__", selfRefColumn(foreignKeyType)]]) as Record<
+          string,
+          ReturnType<typeof selfRefColumn>
+        >;
+      const renamePreviousSnapshot = createTestSnapshot({
+        Node: { name: "Node", pluralForm: "Nodes", fields: fieldsFor("Node") },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Vertex",
+            previousTableName: "Node",
+            before: { name: "Node", pluralForm: "Nodes", fields: fieldsFor("Node") },
+            after: { name: "Vertex", pluralForm: "Vertices", fields: fieldsFor("Vertex") },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Vertex", reason: "Table renamed from Node to Vertex" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('({ ...row, ["__proto__"]: null })');
+      expect(scriptContent).toContain('const restored = { ["__proto__"]: row["__proto__"] };');
+      expect(scriptContent).not.toContain("__proto__: null");
+    }, 15_000);
+
     test("should not emit the nested reference helper for a rename without nested self-references", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
         User: { name: "User", pluralForm: "Users", fields: {} },

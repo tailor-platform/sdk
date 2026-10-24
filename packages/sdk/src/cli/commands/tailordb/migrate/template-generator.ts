@@ -1261,6 +1261,16 @@ function nestedSelfReferencePaths(change: TableRenamedChange): Map<string, strin
   return paths;
 }
 
+// A bare `__proto__: value` in an object literal sets the prototype instead of
+// creating a property, so that column name needs a computed key.
+function objectKey(name: string): string {
+  return name === "__proto__" ? '["__proto__"]' : name;
+}
+
+function rowValue(name: string): string {
+  return name === "__proto__" ? 'row["__proto__"]' : `row.${name}`;
+}
+
 function generateTypeRenameCopyScript(change: TableRenamedChange): string {
   const { tableName, previousTableName } = change;
   const columns = ["id", ...Object.keys(change.before.fields).filter((name) => name !== "id")];
@@ -1277,9 +1287,10 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
   const clearedValues = [
     ...selfRefColumns
       .filter((name) => !nestedSelfRefPaths.has(name))
-      .map((name) => `${name}: null`),
+      .map((name) => `${objectKey(name)}: null`),
     ...[...nestedSelfRefPaths].map(
-      ([name, paths]) => `${name}: clearNestedReferences(row.${name}, ${JSON.stringify(paths)})`,
+      ([name, paths]) =>
+        `${objectKey(name)}: clearNestedReferences(${rowValue(name)}, ${JSON.stringify(paths)})`,
     ),
   ];
   const insertValues =
@@ -1306,7 +1317,7 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        const restored = { ${selfRefColumns.map((name) => `${name}: row.${name}`).join(", ")} };
+        const restored = { ${selfRefColumns.map((name) => `${objectKey(name)}: ${rowValue(name)}`).join(", ")} };
         if (Object.values(restored).every((value) => value === null || value === undefined)) {
           continue;
         }
