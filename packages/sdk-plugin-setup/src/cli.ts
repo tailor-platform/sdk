@@ -50,7 +50,7 @@ void runMain(mainCommand, {
     } else {
       logger.error(`Unknown error: ${String(error)}`);
     }
-    if (error instanceof Error && error.stack) {
+    if (!logger.jsonMode && error instanceof Error && error.stack) {
       logger.debug(`\nStack trace:\n${error.stack}`);
     }
     annotateTerminalError(error, { jsonMode: logger.jsonMode });
