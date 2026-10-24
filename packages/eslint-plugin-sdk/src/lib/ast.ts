@@ -67,6 +67,7 @@ export function isValueReference(node: AstIdentifier): boolean {
     case "ImportSpecifier":
     case "ImportDefaultSpecifier":
     case "ImportNamespaceSpecifier":
+    case "ExportAllDeclaration":
     case "LabeledStatement":
     case "BreakStatement":
     case "ContinueStatement":
@@ -84,6 +85,13 @@ export function isValueReference(node: AstIdentifier): boolean {
     case "FunctionDeclaration":
     case "ClassDeclaration":
       return parent.id !== node;
+    case "ExportSpecifier": {
+      const declaration = parentOf(parent);
+      return (
+        parent.local === node &&
+        !(declaration?.type === "ExportNamedDeclaration" && declaration.source)
+      );
+    }
 
     default:
       return true;
