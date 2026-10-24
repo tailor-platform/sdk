@@ -4,6 +4,7 @@ import { styles, logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import ml from "#/utils/multiline";
 import type { MigrationCheckpointRepair } from "#/cli/commands/tailordb/migrate/types";
+import type { DependencyScope } from "./label";
 import type { ManagedResourceType } from "./managed-resource-type";
 
 export interface OwnerConflict {
@@ -316,6 +317,14 @@ export interface MissingDependentApp {
    * resource, so this identifies one of those rather than an application.
    */
   resource: string;
+  /** Kind of the resource carrying the records. */
+  resourceType: ManagedResourceType;
+  /** Namespace of the resource, for kinds whose names are only unique within one. */
+  namespace?: string;
+  /** Name of the resource carrying the records. */
+  name: string;
+  /** Which of the resource's values the records concern. */
+  scope: DependencyScope;
   /** Stable id of the absent application. */
   appId: string;
   /** Why it has to take part in the same deploy. */

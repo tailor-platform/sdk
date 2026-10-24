@@ -1037,7 +1037,11 @@ async function deployInternal(
         );
     let planSummary: PlanSummary | undefined =
       dryRun || !needsUrlResolution
-        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun, pendingDeployedHooks })
+        ? printDeploymentPlans(deployments, {
+            dryRun: options?.dryRun,
+            pendingDeployedHooks,
+            missingDependentApps,
+          })
         : undefined;
 
     if (dryRun) {

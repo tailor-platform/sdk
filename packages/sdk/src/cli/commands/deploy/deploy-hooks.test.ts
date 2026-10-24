@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   getStaticWebsite: vi.fn(),
   getAIGateway: vi.fn(),
   listAuthOAuth2Clients: vi.fn(),
+  fetchMissingDependentApps: vi.fn(),
 }));
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
@@ -45,7 +46,7 @@ vi.mock("./metadata-lookup", () => ({
 }));
 vi.mock(import("./dependency-records"), async (original) => ({
   ...(await original()),
-  fetchMissingDependentApps: async () => [],
+  fetchMissingDependentApps: mocks.fetchMissingDependentApps,
 }));
 vi.mock(import("./apply-phases"), async (original) => ({
   ...(await original()),
@@ -255,6 +256,7 @@ beforeEach(() => {
   } as unknown as BuiltDeploymentTarget;
   mocks.results = emptyResults();
   mocks.apply.mockResolvedValue([]);
+  mocks.fetchMissingDependentApps.mockResolvedValue([]);
   mocks.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
   mocks.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
   mocks.getAIGateway.mockResolvedValue({ aigateway: { name: "ai", url: "https://ai" } });
@@ -577,5 +579,37 @@ test("--json dry-run prints a plan that deletes a table without asking to confir
   expect(confirm).not.toHaveBeenCalled();
   expect(logger.out).toHaveBeenCalledWith(
     expect.objectContaining({ summary: expect.objectContaining({ delete: 1 }) }),
+  );
+});
+test("--json dry-run lists a missing dependent application in warnings without asking", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using _json = jsonMode();
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+  mocks.fetchMissingDependentApps.mockResolvedValue([
+    {
+      resource: 'TailorDB table "Order"',
+      resourceType: "tailordb.type",
+      namespace: "db",
+      name: "Order",
+      scope: "resource",
+      appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
+      reason: "publish-events",
+    },
+  ]);
+  await deploy({ dryRun: true, noValidate: true });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({
+      warnings: [
+        {
+          type: "missingDependentApp",
+          resourceType: "tailordb.type",
+          namespace: "db",
+          name: "Order",
+          appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
+          reason: "publish-events",
+        },
+      ],
+    }),
   );
 });

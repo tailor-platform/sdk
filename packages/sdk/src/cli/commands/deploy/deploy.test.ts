@@ -842,7 +842,15 @@ describe("confirmDeploymentPlans", () => {
       plan: () => ({
         deployments: [plannedDeployment("my-app", emptyResults())],
         missingDependentApps: [
-          { resource: 'TailorDB table "Order"', appId: "subscriber-id", reason: "subscribes" },
+          {
+            resource: 'TailorDB table "Order"',
+            resourceType: "tailordb.type",
+            namespace: "tailordb",
+            name: "Order",
+            scope: "resource",
+            appId: "subscriber-id",
+            reason: "subscribes",
+          },
         ],
       }),
     },
@@ -1359,6 +1367,57 @@ describe("printDeploymentPlans", () => {
     };
     expect(summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
     expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
+
+    outSpy.mockRestore();
+  });
+
+  test("lists missing dependent applications in warnings, with scope only for a workflow's jobs", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const appId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+
+    printDeploymentPlans([plannedDeployment("supplier", emptyResults())], {
+      dryRun: true,
+      missingDependentApps: [
+        {
+          resource: 'TailorDB table "Order"',
+          resourceType: "tailordb.type",
+          namespace: "db",
+          name: "Order",
+          scope: "resource",
+          appId,
+          reason: "publish-events",
+        },
+        {
+          resource: 'Jobs of workflow "nightly"',
+          resourceType: "workflow",
+          name: "nightly",
+          scope: "jobs",
+          appId,
+          reason: "publish-events",
+        },
+      ],
+    });
+
+    const payload = outSpy.mock.calls[0]?.[0] as { warnings: unknown[] };
+    expect(payload.warnings).toEqual([
+      {
+        type: "missingDependentApp",
+        resourceType: "tailordb.type",
+        namespace: "db",
+        name: "Order",
+        appId,
+        reason: "publish-events",
+      },
+      {
+        type: "missingDependentApp",
+        resourceType: "workflow",
+        name: "nightly",
+        scope: "jobs",
+        appId,
+        reason: "publish-events",
+      },
+    ]);
 
     outSpy.mockRestore();
   });
