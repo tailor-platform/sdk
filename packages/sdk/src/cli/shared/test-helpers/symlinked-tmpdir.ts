@@ -17,7 +17,9 @@ import { vi } from "vitest";
  * @returns A `Disposable` exposing `realDir`; restores the environment and removes both directories on dispose
  */
 export function symlinkedTmpdir(): Disposable & { readonly realDir: string } {
-  const realDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sdk-real-tmp-")));
+  const realDir = path.normalize(
+    fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sdk-real-tmp-"))),
+  );
   const linkDir = `${realDir}-link`;
   fs.symlinkSync(realDir, linkDir);
   for (const name of ["TMPDIR", "TMP", "TEMP"]) vi.stubEnv(name, linkDir);
