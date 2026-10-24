@@ -491,13 +491,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
     const planResult = createMockPlanResult({ creates: [] });
     planResult.changeSet.gqlPermission.updates.push({
-      name: "Drift",
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        typeName: "Drift",
-        permission: {},
-      },
+      ...gqlPermissionEntry("Drift"),
+      previousPermission: undefined,
     });
     const order = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
@@ -530,13 +525,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
     const planResult = createMockPlanResult({ creates: [] });
     planResult.changeSet.gqlPermission.updates.push({
-      name: "Drift",
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        typeName: "Drift",
-        permission: {},
-      },
+      ...gqlPermissionEntry("Drift"),
+      previousPermission: undefined,
     });
     const order = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
