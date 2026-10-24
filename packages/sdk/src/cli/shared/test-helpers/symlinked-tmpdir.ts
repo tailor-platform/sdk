@@ -20,7 +20,7 @@ export function symlinkedTmpdir(): Disposable & { readonly realDir: string } {
   const realDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sdk-real-tmp-")));
   const linkDir = `${realDir}-link`;
   fs.symlinkSync(realDir, linkDir);
-  vi.stubEnv("TMPDIR", linkDir);
+  for (const name of ["TMPDIR", "TMP", "TEMP"]) vi.stubEnv(name, linkDir);
   return {
     realDir,
     [Symbol.dispose]() {
