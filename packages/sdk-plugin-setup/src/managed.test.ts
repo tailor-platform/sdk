@@ -72,7 +72,7 @@ const variants: Array<[string, RenderResult]> = [
       environment: "my-app",
       packageManager: "pnpm",
       region: "us-west",
-      requirePreviewLabel: true,
+      require: "label",
     }),
   ],
 ];

@@ -109,6 +109,37 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
+  test.each([
+    [[], undefined],
+    [["--require", "ready"], "ready"],
+    [["--require=label"], "label"],
+  ] as const)("ci preview %j requires %s", async (flags, expected) => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      "preview",
+      "--region",
+      "us-west",
+      ...flags,
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(expect.objectContaining({ require: expected }));
+  });
+
+  test("ci preview rejects a requirement it does not know", async () => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      "preview",
+      "--region",
+      "us-west",
+      "--require",
+      "approved",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(setupTarget).not.toHaveBeenCalled();
+  });
+
   test.each(["action", "coordinate"])("ci %s is no longer a subcommand", async (subcommand) => {
     const result = await runCommand(setupCommand, ["ci", subcommand]);
 
