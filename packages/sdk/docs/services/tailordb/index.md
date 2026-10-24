@@ -218,6 +218,25 @@ const user = db.table("User", {
 });
 ```
 
+A relation can also be set on a field inside `db.object()`. The inner field gets the foreign key constraint only: no index, no unique constraint, and no forward or backward relationship, as with `type: "keyOnly"`.
+
+```typescript
+const order = db.table("Order", {
+  items: db.object(
+    {
+      productId: db.uuid().relation({
+        type: "keyOnly",
+        toward: { table: product },
+      }),
+      quantity: db.int(),
+    },
+    { array: true },
+  ),
+});
+```
+
+A relation inside `db.object()` that points at its own table is not yet handled by `tailor seed apply` or by the data copy a table rename generates. Both write rows in batches, and the platform rejects a row whose parent is in the same or a later batch.
+
 Create relations against different fields using `toward.key`:
 
 ```typescript

@@ -160,3 +160,32 @@ export function applyRelationMetadataToFieldConfig(
     foreignKeyField: metadata.foreignKeyField,
   };
 }
+
+/**
+ * Resolve the relations declared on the inner fields of an object field into foreign keys.
+ * An inner field gets only the foreign key: no index, no unique constraint, and no forward or
+ * backward relationship.
+ * @param fieldConfig - Object field configuration
+ * @param context - Context information of the object field
+ * @returns Field config whose inner fields carry the foreign keys
+ */
+export function applyNestedRelationMetadata(
+  fieldConfig: OperatorFieldConfig,
+  context: RelationProcessingContext,
+): OperatorFieldConfig {
+  if (!fieldConfig.fields) return fieldConfig;
+  const fields = Object.fromEntries(
+    Object.entries(fieldConfig.fields).map(([name, inner]) => {
+      if (!inner.rawRelation) return [name, inner];
+      const innerContext = { ...context, fieldName: `${context.fieldName}.${name}` };
+      validateRelationConfig(inner.rawRelation, innerContext);
+      const { foreignKey, foreignKeyType, foreignKeyField } = processRelationMetadata(
+        inner.rawRelation,
+        innerContext,
+        inner.array,
+      );
+      return [name, { ...inner, foreignKey, foreignKeyType, foreignKeyField }];
+    }),
+  );
+  return { ...fieldConfig, fields };
+}
