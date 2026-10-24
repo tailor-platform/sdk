@@ -269,6 +269,24 @@ function parseFreshErdExportResults(stdout: string): ErdBuildResult[] {
   throw new Error("Failed to parse ERD export JSON output.");
 }
 
+export function freshErdExportFailureMessage(stderr: string): string | undefined {
+  const output = stderr.trim();
+  if (!output) return undefined;
+  let envelope: unknown;
+  try {
+    envelope = JSON.parse(output.split(/\r?\n/).at(-1) ?? "");
+  } catch {
+    return output;
+  }
+  const error = (
+    envelope as { error?: { message?: unknown; details?: unknown; suggestion?: unknown } } | null
+  )?.error;
+  if (typeof error?.message !== "string") return output;
+  return [error.message, error.details, error.suggestion]
+    .filter((part): part is string => typeof part === "string")
+    .join("\n");
+}
+
 function freshErdExportArgs(options: FreshErdExportOptions): string[] {
   const cliEntry = process.argv[1];
   if (!cliEntry) {
@@ -305,7 +323,7 @@ async function runFreshErdExport(options: FreshErdExportOptions): Promise<ErdBui
     child.on("error", reject);
     child.on("close", (code, signal) => {
       if (code !== 0) {
-        const detail = stderr.trim() || signal || `exit code ${code}`;
+        const detail = freshErdExportFailureMessage(stderr) ?? signal ?? `exit code ${code}`;
         reject(new Error(`Fresh ERD export failed: ${detail}`));
         return;
       }

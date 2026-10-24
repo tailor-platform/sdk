@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
-import { resolveWatchPaths } from "./serve";
+import { freshErdExportFailureMessage, resolveWatchPaths } from "./serve";
 import type { ErdBuildResult } from "./export";
 import type { LocalErdSchemaContext } from "./local-schema";
 
@@ -42,5 +42,42 @@ describe("resolveWatchPaths", () => {
     expect(paths).toContain(typeFile);
     expect(paths).toContain(typeDir);
     expect(paths).not.toContain(path.join(typeDir, "*.ts"));
+  });
+});
+
+describe("freshErdExportFailureMessage", () => {
+  test("reads the message of the JSON error envelope on the last line", () => {
+    const stderr = [
+      "⚠ tailordb erd is a beta feature.",
+      "",
+      JSON.stringify({
+        error: { code: "UNEXPECTED_ERROR", message: "Configuration file not found" },
+      }),
+    ].join("\n");
+
+    expect(freshErdExportFailureMessage(stderr)).toBe("Configuration file not found");
+  });
+
+  test("keeps the details and suggestion of the error envelope", () => {
+    const stderr = JSON.stringify({
+      error: {
+        code: "CONFIG_INVALID",
+        message: "Invalid config",
+        details: "db.main is missing",
+        suggestion: "Fix tailor.config.ts",
+      },
+    });
+
+    expect(freshErdExportFailureMessage(stderr)).toBe(
+      "Invalid config\ndb.main is missing\nFix tailor.config.ts",
+    );
+  });
+
+  test("falls back to the whole output when the last line is not an error envelope", () => {
+    expect(freshErdExportFailureMessage("node: bad option\n")).toBe("node: bad option");
+  });
+
+  test("returns undefined for empty output", () => {
+    expect(freshErdExportFailureMessage("\n")).toBeUndefined();
   });
 });
