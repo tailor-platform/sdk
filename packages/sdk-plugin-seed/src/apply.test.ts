@@ -423,6 +423,60 @@ describe("seedApplyCommand", () => {
     );
   });
 
+  describe("discarding the retry records before a truncate", () => {
+    const discardedBeforeTruncate = () => {
+      const truncatedAt = sdk.truncate.mock.invocationCallOrder[0];
+      return sdk.discardScriptWorkflow.mock.calls
+        .filter(
+          (_call, index) => sdk.discardScriptWorkflow.mock.invocationCallOrder[index] < truncatedAt,
+        )
+        .map(([call]) => (call as { name: string }).name);
+    };
+
+    beforeEach(() => {
+      sdk.loadSeedContext.mockResolvedValue({
+        config: { path: "/workspace/tailor.config.ts" },
+        distPath: "/seed",
+        idpUser: null,
+        machineUserName: undefined,
+        namespaces: ["first", "second"].map((namespace) => ({
+          dependencies: { [`${namespace}Table`]: [] },
+          namespace,
+          requiredFields: { [`${namespace}Table`]: [] },
+          selfRefTypes: [],
+          types: [`${namespace}Table`],
+        })),
+      });
+    });
+
+    test("discards the record of every namespace before truncating all tables", async () => {
+      await runApply(["--truncate", "--yes"]);
+
+      expect(discardedBeforeTruncate()).toEqual([
+        "tailor-seed-tailordb--first",
+        "tailor-seed-tailordb--second",
+      ]);
+    });
+
+    test("discards only the record of the namespace being truncated", async () => {
+      await runApply(["--truncate", "--yes", "--namespace", "second"]);
+
+      expect(discardedBeforeTruncate()).toEqual(["tailor-seed-tailordb--second"]);
+    });
+
+    test("discards only the records of the namespaces holding the truncated tables", async () => {
+      await runApply(["--truncate", "--yes", "firstTable"]);
+
+      expect(discardedBeforeTruncate()).toEqual(["tailor-seed-tailordb--first"]);
+    });
+
+    test("keeps the records when the truncate is cancelled", async () => {
+      await runApply(["--truncate"]).catch(() => undefined);
+
+      expect(sdk.truncate).not.toHaveBeenCalled();
+    });
+  });
+
   test("limits truncation to a namespace and excludes the IdP user", async () => {
     await runApply(["--truncate", "--yes", "--namespace", "tailordb"]);
 

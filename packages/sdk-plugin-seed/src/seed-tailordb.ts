@@ -326,6 +326,19 @@ interface SeedNamespaceParams {
   buildOptions: SeedBundleBuildOptions;
 }
 
+export function discardKeptTailorDBSeedWorkflow(params: {
+  execution: SeedExecutionContext;
+  namespace: string;
+}): Promise<void> {
+  const { execution, namespace } = params;
+  return discardScriptWorkflow({
+    client: execution.operatorClient,
+    workspaceId: execution.workspaceId,
+    name: seedWorkflowName("tailordb", namespace),
+    leftoverNote: APPLY_LEFTOVER_NOTE,
+  });
+}
+
 export async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   const { execution, plan, upsert, configDir, buildOptions } = params;
   const { namespace } = plan;
@@ -333,12 +346,7 @@ export async function seedNamespace(params: SeedNamespaceParams): Promise<SeedRe
 
   const built = buildNamespaceChunks({ plan, upsert });
   if (!built) {
-    await discardScriptWorkflow({
-      client: execution.operatorClient,
-      workspaceId: execution.workspaceId,
-      name: seedWorkflowName("tailordb", namespace),
-      leftoverNote: APPLY_LEFTOVER_NOTE,
-    });
+    await discardKeptTailorDBSeedWorkflow({ execution, namespace });
     logger.log(styles.dim(`  [${namespace}] No data to seed`));
     return { success: true, processed: processedTotals };
   }
