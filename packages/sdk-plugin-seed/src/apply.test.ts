@@ -6,13 +6,17 @@ import { seedApplyCommand } from "./apply";
 const sdk = vi.hoisted(() => ({
   bundleSeedScript: vi.fn(),
   chunkSeedData: vi.fn(),
-  executeScript: vi.fn(),
   initOperatorClient: vi.fn(),
   loadAccessToken: vi.fn(),
   loadSeedContext: vi.fn(),
   loadWorkspaceId: vi.fn(),
   show: vi.fn(),
   truncate: vi.fn(),
+  withScriptWorkflow: vi.fn(),
+}));
+
+const workflow = vi.hoisted(() => ({
+  runScript: vi.fn(),
 }));
 
 const jsonl = vi.hoisted(() => ({
@@ -66,6 +70,7 @@ beforeEach(() => {
     config: { path: "/workspace/tailor.config.ts" },
     distPath: "/seed",
     idpUser: {
+      idpNamespace: "idp",
       seedScriptCode: "seed-user-code",
       listScriptCode: "list-user-code",
       truncateScriptCode: "truncate-user-code",
@@ -86,7 +91,13 @@ beforeEach(() => {
   sdk.loadWorkspaceId.mockResolvedValue("workspace-id");
   sdk.initOperatorClient.mockReturnValue({});
   sdk.truncate.mockResolvedValue(undefined);
-  sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+  sdk.withScriptWorkflow.mockImplementation(
+    async (
+      options: { name: string },
+      use: (run: (arg: unknown) => Promise<unknown>) => Promise<unknown>,
+    ) => use((arg) => workflow.runScript({ name: options.name, arg })),
+  );
+  workflow.runScript.mockImplementation(({ name }: { name: string }) =>
     Promise.resolve({
       error: undefined,
       logs: "",
@@ -116,10 +127,10 @@ type IdpUserRef = { id: string; name: string };
  * @returns Serialized script result
  */
 function idpScriptResult(name: string, users: IdpUserRef[], chunk?: unknown[]): string {
-  if (name === "list-idp-user.ts") {
+  if (name === "tailor-seed-idp-list--idp") {
     return JSON.stringify({ success: true, users });
   }
-  if (name === "truncate-idp-user.ts") {
+  if (name === "tailor-seed-idp-truncate--idp") {
     const total = chunk?.length ?? users.length;
     return JSON.stringify({ success: true, deleted: total, notFound: 0, total, errors: [] });
   }
@@ -193,9 +204,9 @@ describe("seedApplyCommand", () => {
         ),
       );
       await runApply(["--upsert", "_User"]);
-      expect(sdk.executeScript).toHaveBeenCalledWith(
+      expect(workflow.runScript).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: "seed-idp-user.ts",
+          name: "tailor-seed-idp-seed--idp",
           arg: expect.objectContaining({
             users: [
               { name: "Ada", initialPassword: "pw" },
@@ -210,9 +221,9 @@ describe("seedApplyCommand", () => {
       rowsWithoutPassword();
       seedModule.hookSeedRows.mockImplementation(async ({ rows }: { rows: unknown[] }) => rows);
       await runApply(["_User"]);
-      expect(sdk.executeScript).toHaveBeenCalledWith(
+      expect(workflow.runScript).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: "seed-idp-user.ts",
+          name: "tailor-seed-idp-seed--idp",
           arg: expect.objectContaining({ users: [{ name: "Ada" }] }),
         }),
       );
@@ -240,7 +251,7 @@ describe("seedApplyCommand", () => {
     expect(sdk.loadAccessToken).not.toHaveBeenCalled();
     expect(sdk.loadWorkspaceId).not.toHaveBeenCalled();
     expect(sdk.truncate).not.toHaveBeenCalled();
-    expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
   test("reads the base data alone when no dataset is selected", async () => {
@@ -315,7 +326,7 @@ describe("seedApplyCommand", () => {
     expect(result.exitCode).toBe(1);
     expect(sdk.show).not.toHaveBeenCalled();
     expect(sdk.truncate).not.toHaveBeenCalled();
-    expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
   test("rejects an unknown dataset even when nothing is left to seed", async () => {
@@ -348,7 +359,7 @@ describe("seedApplyCommand", () => {
     expect(sdk.loadWorkspaceId).not.toHaveBeenCalled();
     expect(sdk.initOperatorClient).not.toHaveBeenCalled();
     expect(sdk.truncate).not.toHaveBeenCalled();
-    expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
     expect(jsonl.assertSeedDataDirectory).not.toHaveBeenCalled();
     expect(jsonl.loadSeedData).not.toHaveBeenCalled();
   });
@@ -380,7 +391,7 @@ describe("seedApplyCommand", () => {
     expect(sdk.loadWorkspaceId).not.toHaveBeenCalled();
     expect(sdk.initOperatorClient).not.toHaveBeenCalled();
     expect(sdk.truncate).not.toHaveBeenCalled();
-    expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
   test("truncates all TailorDB data and the IdP user before seeding by default", async () => {
@@ -392,17 +403,17 @@ describe("seedApplyCommand", () => {
       profile: undefined,
       workspaceId: undefined,
     });
-    expect(sdk.executeScript).toHaveBeenNthCalledWith(
+    expect(workflow.runScript).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ name: "list-idp-user.ts" }),
+      expect.objectContaining({ name: "tailor-seed-idp-list--idp" }),
     );
-    expect(sdk.executeScript).toHaveBeenNthCalledWith(
+    expect(workflow.runScript).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ name: "truncate-idp-user.ts" }),
+      expect.objectContaining({ name: "tailor-seed-idp-truncate--idp" }),
     );
-    expect(sdk.executeScript).toHaveBeenNthCalledWith(
+    expect(workflow.runScript).toHaveBeenNthCalledWith(
       3,
-      expect.objectContaining({ name: "seed-idp-user.ts" }),
+      expect.objectContaining({ name: "tailor-seed-idp-seed--idp" }),
     );
   });
 
@@ -415,7 +426,7 @@ describe("seedApplyCommand", () => {
       profile: undefined,
       workspaceId: undefined,
     });
-    expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
   test("limits truncation to selected TailorDB tables and excludes the IdP user", async () => {
@@ -427,24 +438,24 @@ describe("seedApplyCommand", () => {
       tables: ["User"],
       workspaceId: undefined,
     });
-    expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
   test("truncates and seeds only the IdP user when it is the selected entity", async () => {
     await runApply(["--truncate", "--yes", "_User"]);
 
     expect(sdk.truncate).not.toHaveBeenCalled();
-    expect(sdk.executeScript).toHaveBeenNthCalledWith(
+    expect(workflow.runScript).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ name: "list-idp-user.ts" }),
+      expect.objectContaining({ name: "tailor-seed-idp-list--idp" }),
     );
-    expect(sdk.executeScript).toHaveBeenNthCalledWith(
+    expect(workflow.runScript).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ name: "truncate-idp-user.ts" }),
+      expect.objectContaining({ name: "tailor-seed-idp-truncate--idp" }),
     );
-    expect(sdk.executeScript).toHaveBeenNthCalledWith(
+    expect(workflow.runScript).toHaveBeenNthCalledWith(
       3,
-      expect.objectContaining({ name: "seed-idp-user.ts" }),
+      expect.objectContaining({ name: "tailor-seed-idp-seed--idp" }),
     );
   });
 
@@ -452,16 +463,16 @@ describe("seedApplyCommand", () => {
     await runApply(["--truncate", "--yes", "--skip-idp"]);
 
     expect(sdk.truncate).toHaveBeenCalledWith(expect.objectContaining({ all: true }));
-    expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
   test("does not print a success line when every _User row fails", async () => {
-    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+    workflow.runScript.mockImplementation(({ name }: { name: string }) =>
       Promise.resolve({
         error: undefined,
         logs: "",
         result:
-          name === "seed-idp-user.ts"
+          name === "tailor-seed-idp-seed--idp"
             ? JSON.stringify({
                 success: false,
                 processed: 0,
@@ -487,13 +498,13 @@ describe("seedApplyCommand", () => {
     jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
       Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
     );
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) =>
         Promise.resolve({
           error: undefined,
           logs: "",
           result:
-            name === "seed-idp-user.ts"
+            name === "tailor-seed-idp-seed--idp"
               ? JSON.stringify({
                   success: true,
                   processed: arg?.users?.length ?? 0,
@@ -510,12 +521,12 @@ describe("seedApplyCommand", () => {
     const result = await runApplyCommand(["--machine-user", "manager", "--json"]);
 
     expect(result.exitCode).toBe(0);
-    const idpCalls = sdk.executeScript.mock.calls
+    const idpCalls = workflow.runScript.mock.calls
       .map(
         ([options]) =>
           options as { name: string; arg?: { users?: unknown[]; offset?: number; total?: number } },
       )
-      .filter((options) => options.name === "seed-idp-user.ts");
+      .filter((options) => options.name === "tailor-seed-idp-seed--idp");
     expect(idpCalls.map((options) => options.arg?.users?.length)).toEqual([25, 25, 1]);
     expect(idpCalls.map((options) => options.arg?.offset)).toEqual([0, 25, 50]);
     expect(idpCalls.map((options) => options.arg?.total)).toEqual([51, 51, 51]);
@@ -527,6 +538,21 @@ describe("seedApplyCommand", () => {
     expect(logger.out).toHaveBeenCalledWith({ success: true, processed: { _User: 51 } });
   });
 
+  test("reports the processed counts before rethrowing when the _User workflow cannot be registered", async () => {
+    const rows = Array.from({ length: 3 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    const setupError = new Error("permission denied: create workflow");
+    sdk.withScriptWorkflow.mockRejectedValue(setupError);
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--json"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toBe(setupError);
+    expect(logger.out).toHaveBeenCalledWith({ success: false, processed: {} });
+  });
+
   test("reports confirmed progress before rethrowing a _User chunk transport error", async () => {
     const rows = Array.from({ length: 30 }, (_, i) => ({ name: `user-${i}` }));
     jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
@@ -534,9 +560,9 @@ describe("seedApplyCommand", () => {
     );
     const transportError = new Error("[deadline_exceeded] context deadline exceeded");
     let idpCallCount = 0;
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
-        if (name !== "seed-idp-user.ts") {
+        if (name !== "tailor-seed-idp-seed--idp") {
           return Promise.resolve({
             error: undefined,
             logs: "",
@@ -585,9 +611,9 @@ describe("seedApplyCommand", () => {
       Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
     );
     let idpCallCount = 0;
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
-        if (name !== "seed-idp-user.ts") {
+        if (name !== "tailor-seed-idp-seed--idp") {
           return Promise.resolve({
             error: undefined,
             logs: "",
@@ -628,9 +654,9 @@ describe("seedApplyCommand", () => {
       Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
     );
     let idpCallCount = 0;
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
-        if (name !== "seed-idp-user.ts") {
+        if (name !== "tailor-seed-idp-seed--idp") {
           return Promise.resolve({
             error: undefined,
             logs: "",
@@ -683,9 +709,9 @@ describe("seedApplyCommand", () => {
       Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
     );
     let idpCallCount = 0;
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
-        if (name !== "seed-idp-user.ts") {
+        if (name !== "tailor-seed-idp-seed--idp") {
           return Promise.resolve({
             error: undefined,
             logs: "",
@@ -741,32 +767,63 @@ describe("seedApplyCommand", () => {
       typesIncluded: ["User"],
     });
     sdk.chunkSeedData.mockReturnValue([{ data: { User: [{ id: "u1" }] }, order: ["User"] }]);
-    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+    workflow.runScript.mockImplementation(({ name }: { name: string }) =>
       Promise.resolve({
         error: undefined,
         logs: "",
         result:
-          name === "seed-idp-user.ts"
+          name === "tailor-seed-idp-seed--idp"
             ? '{"success":true,"processed":1,"created":0,"updated":1,"skipped":0,"errors":[]}'
             : '{"success":true,"processed":{"User":{"inserted":0,"updated":1,"skipped":0}},"errors":[]}',
         success: true,
       }),
     );
 
-    await runApply(["--upsert"]);
+    await runApply(["--upsert", "--json"]);
 
-    expect(sdk.executeScript).toHaveBeenCalledWith(
+    expect(logger.out).toHaveBeenCalledWith({ success: true, processed: { User: 1, _User: 1 } });
+    expect(sdk.withScriptWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "tailor-seed-tailordb--tailordb", code: "code" }),
+      expect.any(Function),
+    );
+    expect(workflow.runScript).toHaveBeenCalledWith(
       expect.objectContaining({
-        name: "seed-tailordb.ts",
+        name: "tailor-seed-tailordb--tailordb",
         arg: expect.objectContaining({ upsert: true }),
       }),
     );
-    expect(sdk.executeScript).toHaveBeenCalledWith(
+    expect(workflow.runScript).toHaveBeenCalledWith(
       expect.objectContaining({
-        name: "seed-idp-user.ts",
+        name: "tailor-seed-idp-seed--idp",
         arg: expect.objectContaining({ upsert: true }),
       }),
     );
+  });
+
+  test("stops running the remaining TailorDB chunks after one fails", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([
+      { data: { User: [{ id: "u1" }] }, order: ["User"], index: 0 },
+      { data: { User: [{ id: "u2" }] }, order: ["User"], index: 1 },
+    ]);
+    workflow.runScript.mockResolvedValue({
+      error: undefined,
+      logs: "",
+      result: '{"success":false,"processed":{},"errors":["User: duplicate id"]}',
+      success: true,
+    });
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--skip-idp"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(workflow.runScript).toHaveBeenCalledTimes(1);
   });
 
   test("sorts a self-referencing table's full record set before it reaches chunkSeedData", async () => {
@@ -805,7 +862,7 @@ describe("seedApplyCommand", () => {
     sdk.chunkSeedData.mockReturnValue([
       { data: { Category: [{ id: "parent" }, { id: "child" }] }, order: ["Category"] },
     ]);
-    sdk.executeScript.mockResolvedValue({
+    workflow.runScript.mockResolvedValue({
       error: undefined,
       logs: "",
       result:
@@ -829,7 +886,7 @@ describe("seedApplyCommand", () => {
 
   test("deletes listed IdP users in row-count chunks and reports the total", async () => {
     const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) =>
         Promise.resolve({
           error: undefined,
@@ -841,7 +898,7 @@ describe("seedApplyCommand", () => {
 
     await runApply(["--truncate", "--yes", "_User"]);
 
-    const truncateCalls = sdk.executeScript.mock.calls
+    const truncateCalls = workflow.runScript.mock.calls
       .map(
         ([options]) =>
           options as {
@@ -849,7 +906,7 @@ describe("seedApplyCommand", () => {
             arg?: { users?: IdpUserRef[]; offset?: number; total?: number };
           },
       )
-      .filter((options) => options.name === "truncate-idp-user.ts");
+      .filter((options) => options.name === "tailor-seed-idp-truncate--idp");
     expect(truncateCalls.map((options) => options.arg?.users)).toEqual([
       users.slice(0, 25),
       users.slice(25),
@@ -866,9 +923,9 @@ describe("seedApplyCommand", () => {
     const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
     const transportError = new Error("[deadline_exceeded] context deadline exceeded");
     let truncateCallCount = 0;
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
-        if (name === "truncate-idp-user.ts") {
+        if (name === "tailor-seed-idp-truncate--idp") {
           truncateCallCount += 1;
           if (truncateCallCount > 1) {
             return Promise.reject(transportError);
@@ -906,9 +963,9 @@ describe("seedApplyCommand", () => {
   test("reports confirmed progress when an IdP truncate chunk has an unknown outcome", async () => {
     const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
     let truncateCallCount = 0;
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
-        if (name === "truncate-idp-user.ts") {
+        if (name === "tailor-seed-idp-truncate--idp") {
           truncateCallCount += 1;
           if (truncateCallCount > 1) {
             return Promise.resolve({
@@ -953,12 +1010,12 @@ describe("seedApplyCommand", () => {
       { id: "1", name: "Ada" },
       { id: "ghost", name: "ghost@example.com" },
     ];
-    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+    workflow.runScript.mockImplementation(({ name }: { name: string }) =>
       Promise.resolve({
         error: undefined,
         logs: "",
         result:
-          name === "truncate-idp-user.ts"
+          name === "tailor-seed-idp-truncate--idp"
             ? JSON.stringify({ success: true, deleted: 1, notFound: 1, total: 2, errors: [] })
             : idpScriptResult(name, users),
         success: true,
@@ -974,7 +1031,7 @@ describe("seedApplyCommand", () => {
   });
 
   test("skips the delete script when the IdP has no users", async () => {
-    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+    workflow.runScript.mockImplementation(({ name }: { name: string }) =>
       Promise.resolve({
         error: undefined,
         logs: "",
@@ -985,18 +1042,19 @@ describe("seedApplyCommand", () => {
 
     await runApply(["--truncate", "--yes", "_User"]);
 
-    const scriptNames = sdk.executeScript.mock.calls.map(
+    const scriptNames = workflow.runScript.mock.calls.map(
       ([options]) => (options as { name: string }).name,
     );
-    expect(scriptNames).toEqual(["list-idp-user.ts", "seed-idp-user.ts"]);
+    expect(scriptNames).toEqual(["tailor-seed-idp-list--idp", "tailor-seed-idp-seed--idp"]);
   });
 
   test("fails truncation when the listing script returns no user list", async () => {
-    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+    workflow.runScript.mockImplementation(({ name }: { name: string }) =>
       Promise.resolve({
         error: undefined,
         logs: "",
-        result: name === "list-idp-user.ts" ? '{"success":true}' : idpScriptResult(name, []),
+        result:
+          name === "tailor-seed-idp-list--idp" ? '{"success":true}' : idpScriptResult(name, []),
         success: true,
       }),
     );
@@ -1011,10 +1069,10 @@ describe("seedApplyCommand", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.error).toEqual(new Error("IdP user truncation failed."));
-    const scriptNames = sdk.executeScript.mock.calls.map(
+    const scriptNames = workflow.runScript.mock.calls.map(
       ([options]) => (options as { name: string }).name,
     );
-    expect(scriptNames).toEqual(["list-idp-user.ts"]);
+    expect(scriptNames).toEqual(["tailor-seed-idp-list--idp"]);
   });
 
   test("rejects an @tailor-platform/sdk that lacks the IdP user listing script", async () => {
@@ -1039,18 +1097,18 @@ describe("seedApplyCommand", () => {
 
     expect(result.exitCode).toBe(1);
     expect(String(result.error)).toContain("does not provide the IdP user listing script");
-    expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
   test("fails truncation and skips seeding when a delete chunk reports errors", async () => {
     const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
     let truncateCallCount = 0;
-    sdk.executeScript.mockImplementation(
+    workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
-        if (name === "truncate-idp-user.ts") {
+        if (name === "tailor-seed-idp-truncate--idp") {
           truncateCallCount += 1;
         }
-        const failing = name === "truncate-idp-user.ts" && truncateCallCount === 1;
+        const failing = name === "tailor-seed-idp-truncate--idp" && truncateCallCount === 1;
         return Promise.resolve({
           error: undefined,
           logs: "",
@@ -1079,10 +1137,10 @@ describe("seedApplyCommand", () => {
     expect(result.exitCode).toBe(1);
     expect(result.error).toEqual(new Error("IdP user truncation failed."));
     expect(truncateCallCount).toBe(2);
-    const scriptNames = sdk.executeScript.mock.calls.map(
+    const scriptNames = workflow.runScript.mock.calls.map(
       ([options]) => (options as { name: string }).name,
     );
-    expect(scriptNames).not.toContain("seed-idp-user.ts");
+    expect(scriptNames).not.toContain("tailor-seed-idp-seed--idp");
     const erroredLines = logger.error.mock.calls.map(([line]) => String(line));
     expect(
       erroredLines.some((line) => line.includes("User id-3 (user-3): permission denied")),
