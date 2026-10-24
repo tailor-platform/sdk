@@ -1,4 +1,5 @@
 import type { AppConfig, BuildOptions } from "#/configure/config/types";
+import type { ProjectSourcesFilter } from "./sourcemap-sources";
 
 type BuildOptionsSource = Pick<AppConfig, "buildOptions" | "inlineSourcemap" | "logLevel">;
 
@@ -22,4 +23,22 @@ export function buildOptionsOf(config: BuildOptionsSource): BuildOptions {
     allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
     treeshake: buildOptions.treeshake,
   };
+}
+
+/** Parameters for {@link projectSourcesOf}. */
+export interface ProjectSourcesOfParams {
+  /** The config's bundling options. */
+  buildOptions: BuildOptions;
+  /** The directory containing the config file, which `inlineSourcemapProjectSources` globs are relative to. */
+  baseDir: string;
+}
+
+/**
+ * Resolve the project-source filter of inline sourcemaps against the config directory.
+ * @param params - The bundling options and the config directory
+ * @returns The filter, rooted at the config directory
+ */
+export function projectSourcesOf(params: ProjectSourcesOfParams): ProjectSourcesFilter {
+  const { buildOptions, baseDir } = params;
+  return { ...buildOptions.inlineSourcemapProjectSources, root: baseDir };
 }

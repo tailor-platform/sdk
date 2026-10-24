@@ -18,7 +18,7 @@ import {
   type MachineUserInputSource,
   workspaceArgs,
 } from "#/cli/shared/args";
-import { buildOptionsOf } from "#/cli/shared/build-options";
+import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -209,10 +209,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
         env: config.env ?? {},
         inlineSourcemap: buildOptions.inlineSourcemap,
         inlineSourcemapDependencySources: buildOptions.inlineSourcemapDependencySources,
-        inlineSourcemapProjectSources: {
-          ...buildOptions.inlineSourcemapProjectSources,
-          root: baseDir,
-        },
+        inlineSourcemapProjectSources: projectSourcesOf({ buildOptions, baseDir }),
         logLevel: buildOptions.logLevel,
         treeshake: buildOptions.treeshake,
         dateDefault: effectiveDateDefault(config),

@@ -6,6 +6,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { createBundleCache } from "#/cli/cache/bundle-cache";
 import { createCacheStore } from "#/cli/cache/store";
 import { logger } from "#/cli/shared/logger";
+import { type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { assertDefined } from "#/utils/assert";
@@ -420,7 +421,7 @@ describe("bundleResolvers", () => {
       projectDir: string,
       options: {
         inlineSourcemapDependencySources?: boolean;
-        inlineSourcemapProjectSources?: { root?: string; include?: string[]; exclude?: string[] };
+        inlineSourcemapProjectSources?: ProjectSourcesFilter;
       },
     ): Promise<string[]> {
       const bundles = await bundleResolvers({

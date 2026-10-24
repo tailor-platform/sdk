@@ -1,12 +1,10 @@
 import * as fs from "node:fs";
 import { matchesGlob } from "node:path/posix";
 import * as path from "pathe";
-import type { BuildOptions } from "#/configure/config/types";
+import type { InlineSourcemapProjectSources } from "#/configure/config/types";
 
 /** The `buildOptions.inlineSourcemapProjectSources` setting, with the absolute directory its globs are relative to. */
-export type ProjectSourcesFilter = Readonly<
-  NonNullable<BuildOptions["inlineSourcemapProjectSources"]>
-> & {
+export type ProjectSourcesFilter = Readonly<InlineSourcemapProjectSources> & {
   /** The directory containing the config file. The working directory when omitted. */
   root?: string;
 };
@@ -75,6 +73,10 @@ export function sourcePackageName(source: string): string | undefined {
   return second ? `${first}/${second}` : undefined;
 }
 
+function isUnderNodeModules(source: string): boolean {
+  return source.replaceAll("\\", "/").split("/").includes("node_modules");
+}
+
 function isExcludedSource(source: string, exclude: readonly SourcemapPackageSelector[]): boolean {
   const name = sourcePackageName(source);
   if (name === undefined) return false;
@@ -132,7 +134,7 @@ export function omitProjectSourcesContent(params: OmitProjectSourcesContentParam
   const root = realpathOrSelf(projectSources.root ?? process.cwd());
   const sourcesContent = map.sourcesContent.map((content, index) => {
     const source = map.sources[index];
-    if (source === undefined || sourcePackageName(source) !== undefined) return content;
+    if (source === undefined || isUnderNodeModules(source)) return content;
     const projectPath = path.relative(root, path.resolve(sourcesDir, source));
     return keepsProjectSource(projectPath, projectSources) ? content : null;
   });

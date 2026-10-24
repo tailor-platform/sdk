@@ -20,7 +20,7 @@ import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { buildOptionsOf } from "#/cli/shared/build-options";
+import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
@@ -759,10 +759,7 @@ export async function loadApplication(
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
-  const inlineSourcemapProjectSources = {
-    ...buildOptions.inlineSourcemapProjectSources,
-    root: baseDir,
-  };
+  const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
 

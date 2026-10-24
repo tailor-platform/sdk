@@ -168,6 +168,20 @@ describe("omitProjectSourcesContent", () => {
     expect(omitProjectSourcesContent({ map, projectSources: {}, sourcesDir })).toBe(map);
   });
 
+  test("never touches the content of a source under a dot-directory of node_modules", () => {
+    const map = createProjectMap();
+    map.sources = ["src/app.ts", "node_modules/.prisma/client/index.js"];
+    map.sourcesContent = ["app source", "generated client source"];
+
+    const result = omitProjectSourcesContent({
+      map,
+      projectSources: { root: sourcesDir, include: ["src/**"] },
+      sourcesDir,
+    });
+
+    expect(result.sourcesContent).toEqual(["app source", "generated client source"]);
+  });
+
   test("matches globs against the path from the project root, not from the sourcemap directory", () => {
     const map = createProjectMap();
     map.sources = [
