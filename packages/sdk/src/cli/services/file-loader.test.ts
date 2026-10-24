@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
@@ -47,7 +46,7 @@ describe("loadFilesWithIgnores", () => {
 
   test("falls back to process.cwd() when baseDir matches nothing", () => {
     const cwdDir = makeDirWithFile("file-loader-cwd-fallback-", "src/legacy.ts");
-    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-"));
+    const emptyBaseDir = makeTempDir("file-loader-empty-");
     tmpDirs.push(emptyBaseDir);
 
     const originalCwd = process.cwd();
@@ -63,7 +62,7 @@ describe("loadFilesWithIgnores", () => {
   test("warns when falling back to process.cwd()", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const cwdDir = makeDirWithFile("file-loader-cwd-warn-", "src/legacy.ts");
-    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-warn-"));
+    const emptyBaseDir = makeTempDir("file-loader-empty-warn-");
     tmpDirs.push(emptyBaseDir);
 
     const originalCwd = process.cwd();
@@ -79,7 +78,7 @@ describe("loadFilesWithIgnores", () => {
   test("warns only once when called repeatedly for the same baseDir", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const cwdDir = makeDirWithFile("file-loader-dedupe-cwd-", "src/legacy.ts");
-    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-dedupe-empty-"));
+    const emptyBaseDir = makeTempDir("file-loader-dedupe-empty-");
     tmpDirs.push(emptyBaseDir);
 
     const originalCwd = process.cwd();
@@ -99,7 +98,7 @@ describe("loadFilesWithIgnores", () => {
     const cwdDir = makeDirWithFile("file-loader-dedupe-patterns-cwd-", "src/legacy.ts");
     fs.mkdirSync(path.join(cwdDir, "other"), { recursive: true });
     fs.writeFileSync(path.join(cwdDir, "other", "legacy.ts"), "export const legacy = true;\n");
-    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-dedupe-patterns-"));
+    const emptyBaseDir = makeTempDir("file-loader-dedupe-patterns-");
     tmpDirs.push(emptyBaseDir);
 
     const originalCwd = process.cwd();
@@ -123,7 +122,7 @@ describe("loadFilesWithIgnores", () => {
 
   test("returns immediately without warning when files is empty, even if baseDir differs from cwd", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-patterns-"));
+    const emptyBaseDir = makeTempDir("file-loader-empty-patterns-");
     tmpDirs.push(emptyBaseDir);
 
     const files = loadFilesWithIgnores({ files: [] }, emptyBaseDir);
@@ -134,7 +133,7 @@ describe("loadFilesWithIgnores", () => {
   test("does not warn or fall back when every pattern is already absolute", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const cwdDir = makeDirWithFile("file-loader-absolute-cwd-", "src/legacy.ts");
-    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-absolute-base-"));
+    const emptyBaseDir = makeTempDir("file-loader-absolute-base-");
     tmpDirs.push(emptyBaseDir);
     const absolutePattern = path.join(emptyBaseDir, "src", "**", "*.ts");
 
@@ -155,7 +154,7 @@ describe("loadFilesWithIgnores", () => {
       path.join(targetDir, "src", "correct.test.ts"),
       "export const marker = true;\n",
     );
-    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-escaping-base-"));
+    const baseDir = makeTempDir("file-loader-escaping-base-");
     tmpDirs.push(baseDir);
     const escapingPattern = path.join(targetDir, "src", "**", "*.ts");
 
