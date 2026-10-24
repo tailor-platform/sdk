@@ -47,16 +47,11 @@ import {
   type WithLabel,
   writeMetadataLabels,
 } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
 import type { Resolver } from "#/types/resolver.generated";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 
 type ExistingPipelineServices = WithLabel<
   Awaited<ReturnType<OperatorClient["listPipelineServices"]>>["pipelineServices"][number]
@@ -251,9 +246,7 @@ async function planServices(
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
     "Pipeline services",
   );
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
 
   const fetchedServices =
     previousExisting ??
@@ -282,16 +275,10 @@ async function planServices(
       appId,
     });
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "pipeline.service",
         resourceLabel: "Pipeline service",
         resourceName: pipeline.namespace,
-        conflicts,
-        unmanaged,
       });
 
       if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
@@ -321,15 +308,8 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const owned = trackRemainingResourceOwner({
-      labels: entry?.allLabels,
-      ownerLabel: entry?.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
     // Only delete services managed by this application (by name or stable id)
-    if (owned) {
+    if (ownership.ownsRemaining(entry?.allLabels)) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {
@@ -340,7 +320,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners, existingServices: fetchedServices };
+  return { changeSet, ...ownership.result, existingServices: fetchedServices };
 }
 
 type CreateResolver = {

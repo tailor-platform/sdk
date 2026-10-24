@@ -53,6 +53,7 @@ import {
 import {
   AddCustomDomainRequestSchema,
   CreateStaticWebsiteRequestSchema,
+  RequestCustomDomainTransferRequestSchema,
   UpdateStaticWebsiteRequestSchema,
 } from "@tailor-platform/tailor-proto/staticwebsite_pb";
 import {
@@ -273,6 +274,11 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     AddCustomDomainRequestSchema,
     "StaticWebsite custom domain",
     staticWebsite.customDomainChangeSet.creates as HasRequest[],
+  );
+  creates(
+    RequestCustomDomainTransferRequestSchema,
+    "StaticWebsite custom domain transfer",
+    staticWebsite.customDomainTransferChangeSet.creates as HasRequest[],
   );
 
   // cors is excluded: static-website URL placeholders are resolved at apply time.

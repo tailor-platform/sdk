@@ -27,7 +27,7 @@ describe("resolver bundle tree-shaking", () => {
     const code = (
       await bundleResolvers({
         namespace: "treeshake",
-        config: { files: ["./resolver.mjs"] },
+        files: fs.globSync(path.resolve(tmp.dir, "./resolver.mjs")),
         baseDir: tmp.dir,
       })
     ).get("add")!;
@@ -64,7 +64,7 @@ describe("resolver bundle tree-shaking", () => {
       return (
         await bundleResolvers({
           namespace: "treeshake-options",
-          config: { files: ["./resolver.mjs"] },
+          files: fs.globSync(path.resolve(tmp.dir, "./resolver.mjs")),
           baseDir: tmp.dir,
           bundleTreeshake,
         })

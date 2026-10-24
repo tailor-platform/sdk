@@ -52,20 +52,6 @@ export const MAINTENANCE_MODE_LABEL_KEY = "sdk-maintenance-mode";
 export const MIGRATION_HISTORY_ID_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
 
 // ============================================================================
-// Error Constants
-// ============================================================================
-
-/**
- * Error patterns that indicate schema corruption
- */
-export const SCHEMA_ERROR_PATTERNS = [
-  "failed to fetch schema",
-  "sqlaccess error",
-  "schema not found",
-  "invalid schema",
-] as const;
-
-// ============================================================================
 // Types
 // ============================================================================
 
@@ -163,16 +149,6 @@ export function createMigrationHistoryId(): string {
 // ============================================================================
 // Error Helper Functions
 // ============================================================================
-
-/**
- * Check if an error message indicates schema corruption
- * @param {string} errorMessage - Error message to check
- * @returns {boolean} True if error indicates schema corruption
- */
-export function isSchemaError(errorMessage: string): boolean {
-  const lowerMessage = errorMessage.toLowerCase();
-  return SCHEMA_ERROR_PATTERNS.some((pattern) => lowerMessage.includes(pattern));
-}
 
 /**
  * Handle optional-to-required field change error with helpful message

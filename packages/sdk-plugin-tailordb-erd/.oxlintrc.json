@@ -16,6 +16,7 @@
     "no-unreachable": "error",
     "no-array-constructor": "error",
     "no-case-declarations": "error",
+    "no-console": "error",
     "no-fallthrough": "error",
     "no-prototype-builtins": "error",
     "no-redeclare": "error",
@@ -58,6 +59,12 @@
         "prefer-const": "error",
         "prefer-rest-params": "error",
         "prefer-spread": "error"
+      }
+    },
+    {
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "no-console": "off"
       }
     }
   ],

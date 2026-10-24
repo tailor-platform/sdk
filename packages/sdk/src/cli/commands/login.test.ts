@@ -56,6 +56,19 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   })),
 }));
 
+type CallbackResponse = { status: number; contentType: string | null; body: string };
+
+async function fetchCallbackResponse(
+  path = "/callback?code=browser-code&state=s",
+): Promise<CallbackResponse> {
+  const res = await fetch(`http://localhost:8085${path}`, { headers: { connection: "close" } });
+  return {
+    status: res.status,
+    contentType: res.headers.get("content-type"),
+    body: await res.text(),
+  };
+}
+
 const validUUID = "12345678-1234-4abc-8def-123456789012";
 
 aroundAll(async (runSuite) => {
@@ -172,6 +185,108 @@ describe("login --profile", () => {
       token_expires_at: "2099-01-01T00:00:00.000Z",
     });
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns an HTML page telling the user to close the tab after a successful browser login", async () => {
+    getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
+    getTokenFromCodeRedirectMock.mockResolvedValue({
+      accessToken: "browser-token",
+      refreshToken: "browser-refresh-token",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    vi.mocked(fetchUserInfo).mockResolvedValue({
+      sub: "browser-sub",
+      email: "browser@example.com",
+    });
+    let pending: Promise<CallbackResponse> | undefined;
+    openMock.mockImplementation(async () => {
+      pending = fetchCallbackResponse();
+      await pending;
+    });
+
+    const result = await runCommand(loginCommand, []);
+    const response = await pending;
+
+    expect(result.success).toBe(true);
+    expect(response?.status).toBe(200);
+    expect(response?.contentType).toContain("text/html");
+    expect(response?.body).toContain("Authentication successful");
+    expect(response?.body).toContain("close this tab");
+    expect(response?.body).toContain("window.close()");
+  });
+
+  test("returns an escaped HTML failure page with 401 when the browser user mismatches the profile", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        "<b>dev</b>": {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
+    getTokenFromCodeRedirectMock.mockResolvedValue({
+      accessToken: "browser-token",
+      refreshToken: "browser-refresh-token",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    vi.mocked(fetchUserInfo).mockResolvedValue({
+      sub: "browser@example.com",
+      email: "browser@example.com",
+    });
+    let pending: Promise<CallbackResponse> | undefined;
+    openMock.mockImplementation(async () => {
+      pending = fetchCallbackResponse();
+      await pending;
+    });
+
+    const result = await runCommand(loginCommand, ["--profile", "<b>dev</b>"]);
+    const response = await pending;
+
+    expect(result.success).toBe(false);
+    expect(response?.status).toBe(401);
+    expect(response?.contentType).toContain("text/html");
+    expect(response?.body).toContain("Authentication failed");
+    expect(response?.body).toContain("&lt;b&gt;dev&lt;/b&gt;");
+    expect(response?.body).not.toContain("<b>dev</b>");
+  });
+
+  test("shows the message of a CLIError on the failure page", async () => {
+    getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
+    let pending: Promise<CallbackResponse> | undefined;
+    openMock.mockImplementation(async () => {
+      pending = fetchCallbackResponse("/other");
+      await pending;
+    });
+
+    const result = await runCommand(loginCommand, []);
+    const response = await pending;
+
+    expect(result.success).toBe(false);
+    expect(response?.status).toBe(401);
+    expect(response?.body).toContain("Invalid callback URL");
+  });
+
+  test("does not expose internal error messages on the failure page", async () => {
+    getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
+    getTokenFromCodeRedirectMock.mockRejectedValue(new Error("secret-internal-detail"));
+    let pending: Promise<CallbackResponse> | undefined;
+    openMock.mockImplementation(async () => {
+      pending = fetchCallbackResponse();
+      await pending;
+    });
+
+    const result = await runCommand(loginCommand, []);
+    const body = (await pending)?.body ?? "";
+
+    expect(result.success).toBe(false);
+    expect(body).toContain("Authentication failed");
+    expect(body).not.toContain("secret-internal-detail");
   });
 
   test("fails login when the authorization URL cannot be prepared", async () => {

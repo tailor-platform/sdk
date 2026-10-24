@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { aroundEach, describe, expect, test } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import {
   createLogLevelTreeshakeOptions,
   manualPureFunctionsForLogLevel,
@@ -103,7 +103,7 @@ describe("bundle-log-level applied to the real runtime/logger.ts via rolldown", 
   });
 
   async function bundleHandler(logLevel: Parameters<typeof createLogLevelTreeshakeOptions>[0]) {
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "log-level-treeshake-")));
+    tmpDir = makeTempDir("log-level-treeshake-");
     const entry = path.join(tmpDir, "entry.ts");
     fs.writeFileSync(
       entry,

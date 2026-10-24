@@ -1,5 +1,15 @@
+import { Code, ConnectError } from "@connectrpc/connect";
+import {
+  CustomDomainStatus,
+  CustomDomainTransferStatus,
+} from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { planStaticWebsite } from "./staticwebsite";
+import { createChangeSet } from "./change-set";
+import {
+  applyStaticWebsite,
+  assertStaticWebsiteDeletesNotOffered,
+  planStaticWebsite,
+} from "./staticwebsite";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -27,7 +37,19 @@ const sdkVersion = "v1-0-0";
 type MockCustomDomain = {
   domain: string;
   sdkManaged?: boolean;
+  status?: CustomDomainStatus;
 };
+
+type MockTransfer = {
+  domain: string;
+  status: CustomDomainTransferStatus;
+  targetWorkspaceId: string;
+  sourceWorkspaceId?: string;
+  sourceStaticWebsiteName?: string;
+  requestPurgedAt?: boolean;
+};
+
+type CustomDomainEntry = string | { domain: string; transferTo: { workspaceId: string } };
 
 type MockWebsite = {
   name: string;
@@ -38,7 +60,9 @@ type MockWebsite = {
   customDomains?: MockCustomDomain[];
 };
 
-function createMockApplication(overrides?: Partial<{ customDomains: string[] }>): Application {
+function createMockApplication(
+  overrides?: Partial<{ customDomains: CustomDomainEntry[] }>,
+): Application {
   return {
     name: appName,
     id: "test-id",
@@ -53,7 +77,16 @@ function createMockApplication(overrides?: Partial<{ customDomains: string[] }>)
   } as unknown as Application;
 }
 
-function createMockClient(websites: MockWebsite[]): OperatorClient {
+function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = []): OperatorClient {
+  const asTransfer = (t: MockTransfer) => ({
+    domain: t.domain,
+    status: t.status,
+    sourceWorkspaceId: t.sourceWorkspaceId ?? workspaceId,
+    targetWorkspaceId: t.targetWorkspaceId,
+    sourceStaticWebsiteName: t.sourceStaticWebsiteName ?? "site-a",
+    targetStaticWebsiteName: "",
+    requestPurgedAt: t.requestPurgedAt === false ? undefined : {},
+  });
   return {
     listStaticWebsites: vi.fn().mockResolvedValue({
       staticwebsites: websites.map((website) => ({
@@ -99,10 +132,33 @@ function createMockClient(websites: MockWebsite[]): OperatorClient {
       .mockImplementation(({ staticWebsiteName }: { staticWebsiteName: string }) => {
         const website = websites.find((w) => w.name === staticWebsiteName);
         return {
-          customDomains: (website?.customDomains ?? []).map((d) => ({ domain: d.domain })),
+          customDomains: (website?.customDomains ?? []).map((d) => ({
+            domain: d.domain,
+            status: d.status ?? CustomDomainStatus.ACTIVE,
+          })),
         };
       }),
     setMetadata: vi.fn().mockResolvedValue({}),
+    listCustomDomainTransfers: vi
+      .fn()
+      .mockImplementation(({ status }: { status: CustomDomainTransferStatus }) => {
+        return {
+          transfers: transfers.filter((t) => t.status === status).map(asTransfer),
+          nextPageToken: "",
+          totalCount: 0n,
+        };
+      }),
+    getCustomDomainTransfer: vi.fn().mockImplementation(({ domain }: { domain: string }) => {
+      const found = transfers.find((t) => t.domain === domain);
+      if (!found) {
+        throw new ConnectError("not found", Code.NotFound);
+      }
+      return { transfer: asTransfer(found) };
+    }),
+    requestCustomDomainTransfer: vi.fn().mockResolvedValue({}),
+    cancelCustomDomainTransfer: vi.fn().mockResolvedValue({}),
+    addCustomDomain: vi.fn().mockResolvedValue({}),
+    removeCustomDomain: vi.fn().mockResolvedValue({}),
   } as unknown as OperatorClient;
 }
 
@@ -414,5 +470,404 @@ describe("planStaticWebsite", () => {
     expect(result.customDomainChangeSet.creates).toHaveLength(0);
     expect(result.customDomainChangeSet.deletes).toHaveLength(0);
     expect(result.customDomainChangeSet.unchanged).toHaveLength(0);
+  });
+});
+
+describe("planStaticWebsite custom domain transfers", () => {
+  const target = "ws-target";
+  const site = (customDomains: MockCustomDomain[]): MockWebsite[] => [
+    { name: "site-a", label: appName, customDomains },
+  ];
+  const transferTo = (domain: string, workspaceIdOverride = target) => ({
+    domain,
+    transferTo: { workspaceId: workspaceIdOverride },
+  });
+  const plan = (client: OperatorClient, customDomains: CustomDomainEntry[]) =>
+    planStaticWebsite(createContext(client, createMockApplication({ customDomains })));
+
+  test("present, no live offer: requests the transfer", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]));
+    const result = await plan(client, [transferTo("example.com")]);
+
+    expect(result.customDomainTransferChangeSet.creates).toHaveLength(1);
+    const request = result.customDomainTransferChangeSet.creates[0]!;
+    expect(request.name).toBe("example.com");
+    expect(request.request.targetWorkspaceId).toBe(target);
+    expect(result.customDomainTransferChangeSet.deletes).toHaveLength(0);
+    expect(result.customDomainChangeSet.creates).toHaveLength(0);
+    expect(result.customDomainNotes).toHaveLength(0);
+  });
+
+  test("present, historical record: still requests, and says what happened before", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.EXPIRED,
+        targetWorkspaceId: "ws-old",
+      },
+    ]);
+    const result = await plan(client, [transferTo("example.com")]);
+
+    expect(result.customDomainTransferChangeSet.creates).toHaveLength(1);
+    expect(result.customDomainTransferChangeSet.creates[0]!.details).toContain(
+      "a previous transfer to workspace ws-old expired",
+    );
+  });
+
+  test("live offer to the same target: no change, reports it as pending", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: target,
+      },
+    ]);
+    const result = await plan(client, [transferTo("example.com")]);
+
+    expect(result.customDomainTransferChangeSet.creates).toHaveLength(0);
+    expect(result.customDomainTransferChangeSet.deletes).toHaveLength(0);
+    expect(result.customDomainNotes).toEqual([
+      {
+        kind: "transfer-pending",
+        staticWebsiteName: "site-a",
+        domain: "example.com",
+        message: `transfer to workspace ${target} is pending`,
+      },
+    ]);
+  });
+
+  test("a live offer not yet ready says the receiving site cannot accept it", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: target,
+        requestPurgedAt: false,
+      },
+    ]);
+    const result = await plan(client, [transferTo("example.com")]);
+
+    expect(result.customDomainNotes[0]!.kind).toBe("transfer-pending");
+    expect(result.customDomainNotes[0]!.message).toContain("cannot accept it yet");
+    // The platform's internal readiness mechanism is not a user-facing concept.
+    expect(result.customDomainNotes[0]!.message).not.toContain("purge");
+  });
+
+  test("live offer to a different target: cancels, then requests", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: "ws-other",
+      },
+    ]);
+    const result = await plan(client, [transferTo("example.com")]);
+
+    expect(result.customDomainTransferChangeSet.deletes).toHaveLength(1);
+    expect(result.customDomainTransferChangeSet.deletes[0]!.name).toBe("example.com");
+    expect(result.customDomainTransferChangeSet.creates).toHaveLength(1);
+    expect(result.customDomainTransferChangeSet.creates[0]!.request.targetWorkspaceId).toBe(target);
+    expect(result.customDomainChangeSet.deletes).toHaveLength(0);
+  });
+
+  test("entry reverted to a plain string cancels the offer and keeps the domain", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: target,
+      },
+    ]);
+    const result = await plan(client, ["example.com"]);
+
+    expect(result.customDomainTransferChangeSet.deletes).toHaveLength(1);
+    expect(result.customDomainTransferChangeSet.creates).toHaveLength(0);
+    expect(result.customDomainChangeSet.deletes).toHaveLength(0);
+    expect(result.customDomainChangeSet.unchanged).toHaveLength(1);
+  });
+
+  test("entry deleted while an offer is live plans the delete and surfaces the offer", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: target,
+      },
+    ]);
+    const result = await plan(client, []);
+
+    // The planner never cancels a domain it is also removing; the cross-deployment
+    // guard turns this pair into a plan-time error.
+    expect(result.customDomainChangeSet.deletes).toHaveLength(1);
+    expect(result.customDomainTransferChangeSet.deletes).toHaveLength(0);
+    expect(result.customDomainLiveOffers.get("example.com")).toBeDefined();
+  });
+
+  test("domain absent from the site: never created, reports the outcome", async () => {
+    const client = createMockClient(site([]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.COMPLETED,
+        targetWorkspaceId: target,
+      },
+    ]);
+    const result = await plan(client, [transferTo("example.com")]);
+
+    expect(result.customDomainChangeSet.creates).toHaveLength(0);
+    expect(result.customDomainTransferChangeSet.creates).toHaveLength(0);
+    expect(result.customDomainNotes[0]!.kind).toBe("transfer-completed");
+    expect(result.customDomainNotes[0]!.message).toContain("remove this entry");
+  });
+
+  test("domain absent with no completed record fails the plan", async () => {
+    const client = createMockClient(site([]));
+
+    await expect(plan(client, [transferTo("example.com")])).rejects.toMatchObject({
+      code: "CUSTOM_DOMAIN_TRANSFER_INCOMPLETE",
+    });
+  });
+
+  test("domain absent but still offered reports the move as in flight", async () => {
+    const client = createMockClient(site([]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: target,
+      },
+    ]);
+    const result = await plan(client, [transferTo("example.com")]);
+
+    expect(result.customDomainNotes[0]!.kind).toBe("transfer-pending");
+    expect(result.customDomainChangeSet.creates).toHaveLength(0);
+  });
+
+  test("a removing domain fails the plan", async () => {
+    const client = createMockClient(
+      site([{ domain: "example.com", sdkManaged: true, status: CustomDomainStatus.REMOVING }]),
+    );
+
+    await expect(plan(client, [transferTo("example.com")])).rejects.toMatchObject({
+      code: "CUSTOM_DOMAIN_REMOVING",
+    });
+  });
+
+  test("a removing domain fails a plain entry too", async () => {
+    const client = createMockClient(
+      site([{ domain: "example.com", sdkManaged: true, status: CustomDomainStatus.REMOVING }]),
+    );
+
+    await expect(plan(client, ["example.com"])).rejects.toMatchObject({
+      code: "CUSTOM_DOMAIN_REMOVING",
+    });
+  });
+
+  test("a self-targeted transfer is planned like any other", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]));
+    const result = await plan(client, [transferTo("example.com", workspaceId)]);
+
+    expect(result.customDomainTransferChangeSet.creates).toHaveLength(1);
+    expect(result.customDomainTransferChangeSet.creates[0]!.request.targetWorkspaceId).toBe(
+      workspaceId,
+    );
+  });
+
+  test("an inbound offer is never cancelled by the source lane", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: workspaceId,
+        sourceWorkspaceId: "ws-elsewhere",
+      },
+    ]);
+    const result = await plan(client, ["example.com"]);
+
+    expect(result.customDomainTransferChangeSet.deletes).toHaveLength(0);
+    expect(result.customDomainLiveOffers.size).toBe(0);
+  });
+
+  test("an unlabelled existing domain is adopted rather than re-added", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: false }]));
+    const result = await plan(client, ["example.com"]);
+
+    expect(result.customDomainChangeSet.creates).toHaveLength(0);
+    expect(result.customDomainChangeSet.updates).toHaveLength(1);
+    expect(result.customDomainChangeSet.updates[0]!.metaRequest).toBeDefined();
+    expect(result.unmanaged).toEqual([
+      {
+        resourceType: "staticwebsite.custom_domain",
+        resourceLabel: "StaticWebsite custom domain",
+        resourceName: "example.com",
+      },
+    ]);
+  });
+
+  test("a site dropped from config is still checked for open offers", async () => {
+    // Its domains are never listed, so the offer naming its source site is the
+    // only thing that catches this.
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: target,
+      },
+    ]);
+    const app = {
+      name: appName,
+      id: "test-id",
+      staticWebsiteServices: [],
+    } as unknown as Application;
+    const result = await planStaticWebsite(createContext(client, app));
+
+    expect(result.changeSet.deletes).toHaveLength(1);
+    expect(() => assertStaticWebsiteDeletesNotOffered(result)).toThrow(
+      expect.objectContaining({ code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT" }),
+    );
+  });
+
+  test("an offer from another site does not block this one's deletion", async () => {
+    const client = createMockClient(
+      [
+        { name: "site-a", label: appName, customDomains: [{ domain: "a.example.com" }] },
+        { name: "site-b", label: appName, customDomains: [{ domain: "b.example.com" }] },
+      ],
+      [
+        {
+          domain: "b.example.com",
+          status: CustomDomainTransferStatus.PENDING,
+          targetWorkspaceId: target,
+          sourceStaticWebsiteName: "site-b",
+        },
+      ],
+    );
+    // Only site-b is declared, so site-a is the one being deleted.
+    const app = {
+      name: appName,
+      id: "test-id",
+      staticWebsiteServices: [{ name: "site-b", customDomains: ["b.example.com"] }],
+    } as unknown as Application;
+    const result = await planStaticWebsite(createContext(client, app));
+
+    expect(result.changeSet.deletes.map((d) => d.name)).toEqual(["site-a"]);
+    expect(() => assertStaticWebsiteDeletesNotOffered(result)).not.toThrow();
+  });
+
+  test("tailor remove refuses a site whose domain is still offered", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]), [
+      {
+        domain: "example.com",
+        status: CustomDomainTransferStatus.PENDING,
+        targetWorkspaceId: target,
+      },
+    ]);
+    const app = createMockApplication({ customDomains: ["example.com"] });
+    const result = await planStaticWebsite(createContext(client, app, true));
+
+    expect(() => assertStaticWebsiteDeletesNotOffered(result)).toThrow(
+      expect.objectContaining({ code: "STATIC_WEBSITE_TRANSFER_IN_FLIGHT" }),
+    );
+  });
+
+  test("tailor remove deletes a site with no live offer", async () => {
+    const client = createMockClient(site([{ domain: "example.com", sdkManaged: true }]));
+    const app = createMockApplication({ customDomains: ["example.com"] });
+    const result = await planStaticWebsite(createContext(client, app, true));
+
+    expect(result.changeSet.deletes).toHaveLength(1);
+    expect(() => assertStaticWebsiteDeletesNotOffered(result)).not.toThrow();
+  });
+});
+
+describe("applyStaticWebsite custom domains", () => {
+  function createRecordingClient(calls: string[]): OperatorClient {
+    const record = (name: string) =>
+      vi.fn().mockImplementation(async () => {
+        calls.push(name);
+        return {};
+      });
+    return {
+      createStaticWebsite: record("createStaticWebsite"),
+      updateStaticWebsite: record("updateStaticWebsite"),
+      deleteStaticWebsite: record("deleteStaticWebsite"),
+      addCustomDomain: record("addCustomDomain"),
+      removeCustomDomain: record("removeCustomDomain"),
+      requestCustomDomainTransfer: record("requestCustomDomainTransfer"),
+      cancelCustomDomainTransfer: record("cancelCustomDomainTransfer"),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+  }
+
+  function planWith(overrides: Record<string, unknown>) {
+    const changeSet = createChangeSet("StaticWebsites");
+    const customDomainChangeSet = createChangeSet("CustomDomains");
+    const customDomainTransferChangeSet = createChangeSet("CustomDomainTransfers");
+    return {
+      changeSet,
+      customDomainChangeSet,
+      customDomainTransferChangeSet,
+      customDomainNotes: [],
+      customDomainLiveOffers: new Map(),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+      ...overrides,
+    } as unknown as Awaited<ReturnType<typeof planStaticWebsite>>;
+  }
+
+  const meta = (trn: string) => ({ trn, labels: { "sdk-name": appName } });
+
+  test("adds, then removes, then cancels, then requests", async () => {
+    const calls: string[] = [];
+    const client = createRecordingClient(calls);
+
+    const result = planWith({});
+    result.customDomainChangeSet.creates.push({
+      name: "new.example.com",
+      request: { workspaceId, staticWebsiteName: "site-a", domain: "new.example.com" },
+      metaRequest: meta("trn-new"),
+    });
+    result.customDomainChangeSet.deletes.push({
+      name: "old.example.com",
+      request: { workspaceId, domain: "old.example.com" },
+    });
+    result.customDomainTransferChangeSet.deletes.push({
+      name: "moving.example.com",
+      staticWebsiteName: "site-a",
+      request: { workspaceId, domain: "moving.example.com" },
+    });
+    result.customDomainTransferChangeSet.creates.push({
+      name: "moving.example.com",
+      staticWebsiteName: "site-a",
+      request: { workspaceId, domain: "moving.example.com", targetWorkspaceId: "ws-b" },
+    });
+
+    await applyStaticWebsite(client, result, "create-update");
+
+    expect(calls).toEqual([
+      "addCustomDomain",
+      "removeCustomDomain",
+      "cancelCustomDomainTransfer",
+      "requestCustomDomainTransfer",
+    ]);
+  });
+
+  test("an adoption writes labels and never re-adds the domain", async () => {
+    const calls: string[] = [];
+    const client = createRecordingClient(calls);
+
+    const result = planWith({});
+    result.customDomainChangeSet.updates.push({
+      name: "adopted.example.com",
+      metaRequest: meta("trn-adopted"),
+    });
+
+    await applyStaticWebsite(client, result, "create-update");
+
+    expect(calls).toEqual([]);
+    expect(client.addCustomDomain).not.toHaveBeenCalled();
+    expect(client.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ trn: "trn-adopted" }),
+    );
   });
 });

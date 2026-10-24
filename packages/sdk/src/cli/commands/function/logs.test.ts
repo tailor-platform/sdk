@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -23,6 +22,7 @@ import {
 } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import {
   composeExecutionErrorString,
   downloadScriptForMapping,
@@ -255,7 +255,7 @@ describe("formatExecutionError with a deployed bundle", () => {
   });
 
   function inProject(files: Record<string, string>): void {
-    projectDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "logs-deployed-bundle-")));
+    projectDir = makeTempDir("logs-deployed-bundle-");
     for (const [relativePath, content] of Object.entries(files)) {
       const file = path.join(projectDir, relativePath);
       fs.mkdirSync(path.dirname(file), { recursive: true });

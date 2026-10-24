@@ -30,7 +30,7 @@ import {
   type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
-import { mergeBundledScripts } from "./bundled-scripts";
+import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import { type PlanSummary } from "./change-set";
 import {
   confirmImportantResourceDeletion,
@@ -38,9 +38,11 @@ import {
   confirmMissingDependentApps,
   confirmOwnerConflict,
   confirmUnmanagedResources,
+  type ConfirmMode,
   type ImportantResourceDeletion,
   type MissingDependentApp,
 } from "./confirm";
+import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
 import { fetchMissingDependentApps } from "./dependency-records";
 import {
   deployedHookLoadFailure,
@@ -635,13 +637,12 @@ export async function planDeploymentTargets(
 
 export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
   const { deployments, yes, dryRun = false, missingDependentApps = [] } = params;
-  if (!dryRun) {
-    await confirmMigrationCheckpointRepairs(
-      deployments.flatMap((deployment) => deployment.tailorDB.context.checkpointRepairs),
-      yes,
-    );
-  }
-  await confirmMissingDependentApps(missingDependentApps, yes);
+  const mode: ConfirmMode = dryRun ? "dry-run" : yes ? "yes" : "prompt";
+  await confirmMigrationCheckpointRepairs(
+    deployments.flatMap((deployment) => deployment.tailorDB.context.checkpointRepairs),
+    mode,
+  );
+  await confirmMissingDependentApps(missingDependentApps, mode);
   const targetAppNames = new Set(deployments.map((deployment) => deployment.application.name));
   const resourceOwners = collectDeploymentResourceOwners(deployments);
   const scheduledRenamedAppDeletes = new Set<string>();
@@ -653,12 +654,12 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     await confirmOwnerConflict(
       conflicts,
       deployment.application.name,
-      yes,
+      mode,
       deployment.application.id,
     );
 
     const unmanaged = collectUnmanagedResources(results);
-    await confirmUnmanagedResources(unmanaged, deployment.application.name, yes);
+    await confirmUnmanagedResources(unmanaged, deployment.application.name, mode);
 
     importantDeletions.push(...collectImportantResourceDeletions(results));
 
@@ -682,7 +683,7 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     }
   }
 
-  await confirmImportantResourceDeletion(importantDeletions, yes);
+  await confirmImportantResourceDeletion(importantDeletions, mode);
 }
 
 async function validateDeploymentPlans(
@@ -817,7 +818,7 @@ export function adjustApplicationForMigrationTest(
  * @param options - Deploy execution options
  * @param cliContext - Global CLI arguments to preserve in recovery actions
  * @param internalContext - Internal deployment behavior used by composed CLI workflows
- * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
+ * @returns Promise that resolves to `{ bundledScripts, httpAdapterScripts }` when `buildOnly` is true, otherwise void
  */
 async function deployInternal(
   options?: DeployOptions,
@@ -898,7 +899,10 @@ async function deployInternal(
 
     const targets = await build();
     if (buildOnly) {
-      return { bundledScripts: mergeBundledScripts(targets) };
+      return {
+        bundledScripts: mergeBundledScripts(targets),
+        httpAdapterScripts: collectHttpAdapterScripts(targets),
+      };
     }
 
     assertUniqueGlobalResourceNames(targets);
@@ -957,6 +961,7 @@ async function deployInternal(
         previousDeployments: reuse?.previousDeployments,
       });
       dropCrossDeploymentManagedDeletes(deployments);
+      assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };
 
@@ -1035,7 +1040,11 @@ async function deployInternal(
         );
     let planSummary: PlanSummary | undefined =
       dryRun || !needsUrlResolution
-        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun, pendingDeployedHooks })
+        ? printDeploymentPlans(deployments, {
+            dryRun: options?.dryRun,
+            pendingDeployedHooks,
+            missingDependentApps,
+          })
         : undefined;
 
     if (dryRun) {

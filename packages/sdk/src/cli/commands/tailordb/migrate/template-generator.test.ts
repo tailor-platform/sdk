@@ -29,8 +29,6 @@ import {
   generateMigrationPgliteTestScript,
   generateMigrationScript,
   generateMigrationTestScript,
-  migrationScriptExists,
-  getMigrationScriptPath,
 } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import type { DiffChange } from "./diff-calculator";
@@ -2589,32 +2587,6 @@ describe("template-generator", () => {
       const script = generateMigrationTestScript(createMockMigrationDiff({ namespace: 'we"ird' }));
 
       expect(script).toContain('describe("we\\"ird migration"');
-    });
-  });
-
-  describe("migrationScriptExists", () => {
-    test("should return true if migration script exists in directory", async () => {
-      await writeExistingMigrateFile(2);
-
-      const exists = await migrationScriptExists(tempDir, 2);
-      expect(exists).toBe(true);
-    });
-
-    test("should return false if migration script does not exist", async () => {
-      const exists = await migrationScriptExists(tempDir, 999);
-      expect(exists).toBe(false);
-    });
-  });
-
-  describe("getMigrationScriptPath", () => {
-    test.each([
-      [1, "0001"],
-      [2, "0002"],
-      [10, "0010"],
-      [100, "0100"],
-    ])("should return correct path for migration number %i", (migrationNumber, dir) => {
-      const result = getMigrationScriptPath(tempDir, migrationNumber);
-      expect(result).toBe(path.join(tempDir, dir, MIGRATE_FILE_NAME));
     });
   });
 });

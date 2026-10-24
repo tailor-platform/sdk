@@ -41,11 +41,7 @@ import {
   resourceTrn,
   tailorDBTypeTrn,
 } from "../label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "../owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "../owned-resource";
 import {
   areTailorDBServicesEqual,
   normalizeComparableGqlPermission,
@@ -53,7 +49,6 @@ import {
 } from "./compare";
 import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import { validateAndDetectMigrations } from "./migration-validation";
-import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { PlanContext } from "../types";
 
 export type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
@@ -249,9 +244,7 @@ async function planServices(
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
     "TailorDB services",
   );
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
@@ -275,16 +268,10 @@ async function planServices(
       appId,
     });
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "tailordb.service",
         resourceLabel: "TailorDB service",
         resourceName: tailordb.namespace,
-        conflicts,
-        unmanaged,
       });
 
       const configUnchanged = owned && areTailorDBServicesEqual(existing.resource, tailordb);
@@ -313,14 +300,7 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const owned = trackRemainingResourceOwner({
-      labels: entry?.allLabels,
-      ownerLabel: entry?.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(entry?.allLabels)) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {
@@ -331,7 +311,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, ...ownership.result };
 }
 
 type CreateType = {
@@ -512,6 +492,9 @@ type CreateGqlPermission = {
 type UpdateGqlPermission = {
   name: string;
   request: MessageInitShape<typeof UpdateTailorDBGQLPermissionRequestSchema>;
+  previousPermission: MessageInitShape<
+    typeof UpdateTailorDBGQLPermissionRequestSchema
+  >["permission"];
 };
 
 type DeleteGqlPermission = {
@@ -577,6 +560,7 @@ async function planGqlPermissions(
               typeName: tableName,
               permission: desiredPermission,
             },
+            previousPermission: existingPermission?.permission,
             ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }

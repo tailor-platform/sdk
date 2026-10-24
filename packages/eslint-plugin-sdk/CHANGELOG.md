@@ -1,5 +1,11 @@
 # @tailor-platform/eslint-plugin-sdk
 
+## 0.3.1
+
+### Patch Changes
+
+- [#2730](https://github.com/tailor-platform/sdk/pull/2730) [`a0ad6c2`](https://github.com/tailor-platform/sdk/commit/a0ad6c29f6ab30707a4c85d434071c09ffda27ab) Thanks [@dqn](https://github.com/dqn)! - Fix no-unconditional-permit missing unrestricted permissions on db.table chains
+
 ## 0.3.0
 
 ### Minor Changes

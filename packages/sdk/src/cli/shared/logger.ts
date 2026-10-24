@@ -151,7 +151,7 @@ export interface OutOptions {
 let _jsonMode = false;
 let _jsonModeSource: JsonModeSource | undefined;
 let _jsonDefaultAgent: string | undefined;
-let _verbose = false;
+let _verbose: boolean | undefined;
 
 // Values registered via `logger.registerSecret()`, redacted from diagnostic log output
 const _secrets = new Set<string>();
@@ -485,9 +485,15 @@ export const logger = {
   },
 
   get verbose(): boolean {
-    return _verbose || parseBoolean(process.env.DEBUG) === true || process.env.RUNNER_DEBUG === "1";
+    return (
+      _verbose ?? (parseBoolean(process.env.DEBUG) === true || process.env.RUNNER_DEBUG === "1")
+    );
   },
-  set verbose(value: boolean) {
+  /**
+   * Turn verbose output on or off, overriding `DEBUG` and `RUNNER_DEBUG`.
+   * @param value - Whether verbose output is on, or undefined to defer to `DEBUG` and `RUNNER_DEBUG`
+   */
+  set verbose(value: boolean | undefined) {
     _verbose = value;
   },
 

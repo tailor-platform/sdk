@@ -697,22 +697,6 @@ describe("planWorkflow", () => {
   });
 
   describe("label ownership scenarios", () => {
-    test.each([
-      ["workflow without label is NOT deleted", { name: "unmanaged-workflow" }, false],
-      [
-        "workflow owned by different app is NOT deleted",
-        { name: "other-workflow", label: "other-app" },
-        true,
-      ],
-    ])("%s", async (_name, workflow, expectOtherAppOwner) => {
-      const client = createMockClient([{ id: "1", ...workflow }]);
-
-      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
-
-      expect(result.changeSet.deletes).toHaveLength(0);
-      expect(result.resourceOwners.has("other-app")).toBe(expectOtherAppOwner);
-    });
-
     test("mixed ownership - only delete own workflows", async () => {
       const client = createMockClient([
         { id: "1", name: "my-workflow", label: appName },
@@ -724,7 +708,7 @@ describe("planWorkflow", () => {
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("my-workflow");
-      expect(result.resourceOwners.has("other-app")).toBe(true);
+      expect([...result.resourceOwners]).toEqual(["other-app"]);
     });
 
     test("reports an unmanaged workflow with its resource type and label", async () => {

@@ -195,6 +195,7 @@ const VERBOSE_ARG_NAME = "verbose";
 const GLOBAL_FLAG_PARSER_OPTIONS = {
   aliasMap: new Map([[JSON_ARG_ALIAS, JSON_ARG_NAME]]),
   booleanFlags: new Set([JSON_ARG_NAME, VERBOSE_ARG_NAME]),
+  defaultNegationDisabledFields: new Set<string>(),
 };
 
 let globalArgsWereApplied = false;
@@ -233,7 +234,11 @@ function globalFlagValue(argv: readonly string[], name: string, alias?: string):
   return parseGlobalFlag(
     options.filter((value) => {
       const [token] = value.split("=", 1);
-      return token === `--${name}` || (alias !== undefined && token === `-${alias}`);
+      return (
+        token === `--${name}` ||
+        value === `--no-${name}` ||
+        (alias !== undefined && token === `-${alias}`)
+      );
     }),
     name,
   );
@@ -278,7 +283,8 @@ export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource
  * @param argv - Command-line arguments after the executable and script path
  */
 export function resolveEarlyFailure(error: unknown, argv: readonly string[]): void {
-  if (globalFlagValue(argv, VERBOSE_ARG_NAME) === true) logger.verbose = true;
+  const verbose = globalFlagValue(argv, VERBOSE_ARG_NAME);
+  if (typeof verbose === "boolean") logger.verbose = verbose;
   const source = requestedJsonModeSource(argv);
   if (!source) return;
   logger.setJsonMode(true, source);
@@ -342,8 +348,9 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
     [VERBOSE_ARG_NAME]: arg(z.boolean().default(false), {
       ...(options.verboseAlias === undefined ? {} : { alias: options.verboseAlias }),
       description: "Enable verbose logging",
-      effect: (value) => {
-        logger.verbose = value;
+      negation: true,
+      effect: (value, { args }) => {
+        logger.verbose = args.$source?.(VERBOSE_ARG_NAME) === "cli" ? value : undefined;
       },
     }),
     [JSON_ARG_NAME]: arg(
@@ -351,6 +358,7 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       {
         alias: JSON_ARG_ALIAS,
         description: "Output as JSON",
+        negation: true,
         env: JSON_OUTPUT_ENV_VAR,
         effect: (value, { args }) => {
           globalArgsWereApplied = true;

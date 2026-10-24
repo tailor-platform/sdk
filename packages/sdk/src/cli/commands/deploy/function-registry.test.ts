@@ -129,19 +129,7 @@ describe("planFunctionRegistry", () => {
   });
 
   describe("create scenarios", () => {
-    test("new function is created when no existing entries", async () => {
-      const client = createMockClient([]);
-      const entries = [createEntry("resolver/ns/getUser")];
-
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
-
-      expect(result.changeSet.creates).toHaveLength(1);
-      expect(result.changeSet.creates[0]!.name).toBe("resolver/ns/getUser");
-      expect(result.changeSet.updates).toHaveLength(0);
-      expect(result.changeSet.deletes).toHaveLength(0);
-    });
-
-    test("multiple new functions are created", async () => {
+    test("new functions are created when no existing entries", async () => {
       const client = createMockClient([]);
       const entries = [
         createEntry("resolver/ns/getUser"),
@@ -151,12 +139,13 @@ describe("planFunctionRegistry", () => {
 
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
-      expect(result.changeSet.creates).toHaveLength(3);
       expect(result.changeSet.creates.map((c) => c.name).toSorted()).toEqual([
         "executor/user-created",
         "resolver/ns/getUser",
         "workflow-job/process-order",
       ]);
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.deletes).toHaveLength(0);
     });
   });
 
@@ -243,44 +232,9 @@ describe("planFunctionRegistry", () => {
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("resolver/ns/listUsers");
     });
-
-    test("all functions are deleted when entries is empty", async () => {
-      const client = createMockClient([
-        { name: "resolver/ns/getUser", contentHash: "hash", label: appName },
-        { name: "executor/my-executor", contentHash: "hash", label: appName },
-      ]);
-
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
-
-      expect(result.changeSet.deletes).toHaveLength(2);
-      expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
-        "executor/my-executor",
-        "resolver/ns/getUser",
-      ]);
-    });
   });
 
   describe("label ownership scenarios", () => {
-    test.each([
-      {
-        name: "function without label",
-        existingFunctions: [{ name: "resolver/ns/unmanaged", contentHash: "hash" }],
-        resourceOwners: [],
-      },
-      {
-        name: "function owned by different app",
-        existingFunctions: [{ name: "resolver/ns/other", contentHash: "hash", label: "other-app" }],
-        resourceOwners: ["other-app"],
-      },
-    ] as const)("$name is NOT deleted", async ({ existingFunctions, resourceOwners }) => {
-      const client = createMockClient([...existingFunctions]);
-
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
-
-      expect(result.changeSet.deletes).toHaveLength(0);
-      expect([...result.resourceOwners]).toEqual(resourceOwners);
-    });
-
     test("mixed ownership - only delete own functions", async () => {
       const client = createMockClient([
         { name: "resolver/ns/mine", contentHash: "hash", label: appName },
@@ -292,7 +246,7 @@ describe("planFunctionRegistry", () => {
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("resolver/ns/mine");
-      expect(result.resourceOwners.has("other-app")).toBe(true);
+      expect([...result.resourceOwners]).toEqual(["other-app"]);
     });
   });
 

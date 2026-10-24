@@ -336,7 +336,12 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewWorkflow", () =>
     {
       name: "preview / pnpm / label-triggered",
       fileName: "preview-pnpm-label",
-      params: { requirePreviewLabel: true },
+      params: { require: "label" as const },
+    },
+    {
+      name: "preview / pnpm / ready PRs only",
+      fileName: "preview-pnpm-ready",
+      params: { require: "ready" as const },
     },
     {
       name: "preview / pnpm / with workingDirectory",
@@ -351,7 +356,6 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewWorkflow", () =>
   ])("$name has no zizmor findings", ({ fileName, params }) => {
     const { content } = renderPreviewWorkflow({
       ...PREVIEW_COMMON,
-      requirePreviewLabel: false,
       ...params,
     });
     const { ok, output } = writeAndAudit(fileName, content);

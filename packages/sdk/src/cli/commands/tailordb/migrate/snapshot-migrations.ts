@@ -2,7 +2,16 @@ import * as fs from "node:fs";
 import { CLIError } from "#/cli/shared/errors";
 import { type MigrationDiff } from "./diff-calculator";
 import { formatMigrationNumber } from "./migration-number";
-import { INITIAL_SCHEMA_NUMBER, getMigrationFiles, loadDiff, loadSnapshot } from "./snapshot-files";
+import {
+  DIFF_FILE_NAME,
+  INITIAL_SCHEMA_NUMBER,
+  MIGRATION_FILE_NAMES,
+  SCHEMA_FILE_NAME,
+  getMigrationArtifacts,
+  getMigrationFiles,
+  loadDiff,
+  loadSnapshot,
+} from "./snapshot-files";
 import { copySnapshotRecord, normalizeSchemaSnapshot } from "./snapshot-normalization";
 import { type NormalizedSchemaSnapshot, type SchemaSnapshot } from "./snapshot-types";
 
@@ -296,8 +305,15 @@ export function reconstructSnapshotFromMigrations(
  * Validation error for migration files
  */
 export interface MigrationValidationError {
-  type: "missing_schema" | "missing_diff" | "duplicate" | "gap" | "invalid_schema_number";
+  type:
+    | "missing_schema"
+    | "missing_diff"
+    | "duplicate"
+    | "gap"
+    | "invalid_schema_number"
+    | "invalid_diff_number";
   message: string;
+  suggestion?: string;
   migrationNumber?: number;
 }
 
@@ -308,7 +324,8 @@ export interface MigrationValidationError {
  * - Schema file exists at 0000 (initial schema)
  * - No gaps in migration numbers
  * - No duplicate migration numbers (schema at 0000, diffs at 1+)
- * - Diff files exist for migrations 1+
+ * - No diff file at 0000
+ * - Diff files exist for every migration directory 1+, including ones holding only migrate.ts or other generated files
  * @param {string} migrationsDir - Migrations directory path
  * @returns {MigrationValidationError[]} Array of validation errors (empty if valid)
  */
@@ -320,9 +337,8 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
     return errors;
   }
 
-  // Use getMigrationFiles to get directory-based migration files
-  const migrationFiles = getMigrationFiles(migrationsDir);
-  if (migrationFiles.length === 0) {
+  const artifacts = getMigrationArtifacts(migrationsDir);
+  if (artifacts.length === 0) {
     // No migration files at all - valid
     return errors;
   }
@@ -331,21 +347,25 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
   const schemaFiles: number[] = [];
   const diffFiles: number[] = [];
 
-  for (const file of migrationFiles) {
-    if (file.type === "schema") {
-      schemaFiles.push(file.number);
-    } else {
-      diffFiles.push(file.number);
-    }
+  for (const { number, fileTypes } of artifacts) {
+    if (fileTypes.includes("schema")) schemaFiles.push(number);
+    if (fileTypes.includes("diff")) diffFiles.push(number);
   }
+
+  const allNumbers = artifacts.map(({ number }) => number);
+  const lastDiffNumber = Math.max(INITIAL_SCHEMA_NUMBER, ...diffFiles);
+  const hasLaterDiff = lastDiffNumber > INITIAL_SCHEMA_NUMBER;
 
   // Check for schema file at INITIAL_SCHEMA_NUMBER (0000)
   if (!schemaFiles.includes(INITIAL_SCHEMA_NUMBER)) {
+    const label = formatMigrationNumber(INITIAL_SCHEMA_NUMBER);
     errors.push({
       type: "missing_schema",
-      message: `Initial schema snapshot (${formatMigrationNumber(
-        INITIAL_SCHEMA_NUMBER,
-      )}/schema.json) is missing`,
+      message: `Initial schema snapshot (${label}/${SCHEMA_FILE_NAME}) is missing`,
+      suggestion:
+        hasLaterDiff || allNumbers.includes(INITIAL_SCHEMA_NUMBER)
+          ? missingFileSuggestion(label, SCHEMA_FILE_NAME, !hasLaterDiff)
+          : undefined,
       migrationNumber: INITIAL_SCHEMA_NUMBER,
     });
   }
@@ -363,11 +383,12 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
     }
   }
 
-  // Get all migration numbers
-  const allNumbers = [...new Set([...schemaFiles, ...diffFiles])].toSorted((a, b) => a - b);
-
-  if (allNumbers.length === 0) {
-    return errors;
+  if (diffFiles.includes(INITIAL_SCHEMA_NUMBER)) {
+    errors.push({
+      type: "invalid_diff_number",
+      message: `Migration ${formatMigrationNumber(INITIAL_SCHEMA_NUMBER)} must not have ${DIFF_FILE_NAME}`,
+      migrationNumber: INITIAL_SCHEMA_NUMBER,
+    });
   }
 
   // Check for duplicate files (same number with both schema and diff, except for INITIAL_SCHEMA_NUMBER)
@@ -394,17 +415,40 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
   }
 
   // Check that migrations > INITIAL_SCHEMA_NUMBER have diff files
-  for (const num of allNumbers) {
-    if (num > INITIAL_SCHEMA_NUMBER && !diffFiles.includes(num)) {
+  for (const { number, fileTypes } of artifacts) {
+    if (number === INITIAL_SCHEMA_NUMBER || fileTypes.includes("diff")) continue;
+    if (fileTypes.includes("schema")) {
       errors.push({
         type: "missing_diff",
-        message: `Migration ${formatMigrationNumber(num)} is missing diff file`,
-        migrationNumber: num,
+        message: `Migration ${formatMigrationNumber(number)} is missing diff file`,
+        migrationNumber: number,
       });
+      continue;
     }
+    const label = formatMigrationNumber(number);
+    const fileNames = fileTypes.map((type) => MIGRATION_FILE_NAMES[type]).join(", ");
+    errors.push({
+      type: "missing_diff",
+      message: `Migration ${label} has ${fileNames} but no ${DIFF_FILE_NAME}`,
+      suggestion: missingFileSuggestion(label, DIFF_FILE_NAME, number > lastDiffNumber),
+      migrationNumber: number,
+    });
   }
 
   return errors;
+}
+
+/**
+ * Build the remediation for a migration directory that lacks a required file
+ * @param {string} label - Formatted migration number
+ * @param {string} fileName - Name of the missing file
+ * @param {boolean} deletable - Whether deleting the directory leaves a valid history
+ * @returns {string} Suggestion text
+ */
+function missingFileSuggestion(label: string, fileName: string, deletable: boolean): string {
+  return deletable
+    ? `Delete migration directory ${label} if it is a leftover, or restore its ${fileName}.`
+    : `Restore ${fileName} in migration directory ${label}.`;
 }
 
 /**
@@ -417,9 +461,11 @@ export function assertValidMigrationFiles(migrationsDir: string, namespace: stri
   const errors = validateMigrationFiles(migrationsDir);
   if (errors.length > 0) {
     const errorMessages = errors.map((e) => `  - ${e.message}`).join("\n");
+    const suggestions = new Set(errors.flatMap((e) => (e.suggestion ? [e.suggestion] : [])));
     throw CLIError({
       code: "MIGRATION_FILES_INVALID",
       message: `Migration file validation failed for namespace "${namespace}":\n${errorMessages}`,
+      suggestion: suggestions.size > 0 ? [...suggestions].join("\n") : undefined,
     });
   }
 }

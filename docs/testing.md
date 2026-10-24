@@ -51,6 +51,8 @@ Located in `packages/sdk/e2e/`. CI runs these in the `sdk-e2e.yml` workflow (pul
 
 ### Type Assertions
 
+In `packages/sdk`, Vitest type-checks only `*.test-d.ts`, yet reports `Type Errors  no errors` on every run. A type assertion (`assertType`, `expectTypeOf`, `@ts-expect-error`) in a `*.test.ts` fails only under `pnpm typecheck`.
+
 `toMatchTypeOf` is **deprecated**. Use one of:
 
 - `toEqualTypeOf` — Exact type match
@@ -83,3 +85,5 @@ pnpm test:generator:update-expects # Update test fixtures after intentional chan
 ```
 
 Generator tests compare output against expected fixtures in `example/tests/fixtures/`. After intentional changes to code generation, update the fixtures with `test:generator:update-expects`.
+
+To show that a change leaves bundled resolvers, executors, workflow jobs, auth hooks, and HTTP adapters unchanged, run `pnpm snapshot:bundles <outDir>` in `example/` of two built checkouts, your branch and its base commit (for example `git worktree add <dir> <base>`, then `pnpm install && pnpm build` there), and `diff -r` the two directories. Check out the base at the same depth as your branch (for example a sibling directory of the same parent): inline sourcemaps record relative source paths, so a checkout at a different depth makes some inline-true outputs differ. The script bundles `tailor.config.ts` and `tests/tailor.config.plugins-compat.ts` with inline sourcemaps on and off, bypassing the bundle cache. The cache manifest is not included: its input hashes and dependency paths depend on where the checkout is, and the dependency paths also vary between runs of the same build.

@@ -13,7 +13,7 @@ import * as fs from "node:fs";
 import { TraceMap, generatedPositionFor, originalPositionFor } from "@jridgewell/trace-mapping";
 import * as path from "pathe";
 import { styles } from "#/cli/shared/logger";
-import { sourcePackageName } from "#/cli/shared/sourcemap-sources";
+import { isDependencySource } from "#/cli/shared/sourcemap-sources";
 import { assertDefined } from "#/utils/assert";
 
 /** A single frame parsed from a V8 stack trace */
@@ -273,18 +273,18 @@ function buildCodeSnippet(content: string, targetLine: number): string {
 }
 
 /**
- * Read the source file of an installed package, for a frame whose sourcemap does not embed
- * its text.
+ * Read a source file under `node_modules`, for a frame whose sourcemap does not embed its
+ * text.
  *
  * Only a path inside `node_modules` is read: the map can come from a downloaded script, so an
  * arbitrary path in it must not be opened.
  * @param absolutePath - Absolute path the frame's source resolves to
- * @returns The file content, or undefined when the path is not an installed package file or cannot be read
+ * @returns The file content, or undefined when the path is outside `node_modules` or cannot be read
  */
 function readInstalledSource(absolutePath: string): string | undefined {
   try {
     const realPath = fs.realpathSync(absolutePath);
-    if (sourcePackageName(realPath) === undefined) return undefined;
+    if (!isDependencySource(realPath)) return undefined;
     return fs.readFileSync(realPath, "utf-8");
   } catch {
     return undefined;

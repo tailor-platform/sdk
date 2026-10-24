@@ -10,6 +10,7 @@ import {
   formatMigrationNumber,
   type SchemaSnapshot,
 } from "./snapshot";
+import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
 import {
   cleanupTestMigrationsBase,
   writeDiffToDir,
@@ -645,6 +646,7 @@ describe("snapshot", () => {
         message: `Initial schema snapshot (${formatMigrationNumber(
           INITIAL_SCHEMA_NUMBER,
         )}/schema.json) is missing`,
+        suggestion: "Restore schema.json in migration directory 0000.",
         migrationNumber: INITIAL_SCHEMA_NUMBER,
       });
     });
@@ -700,26 +702,120 @@ describe("snapshot", () => {
         )}`,
         migrationNumber: 1,
       });
+      expect(errors).toContainEqual({
+        type: "missing_diff",
+        message: "Migration 0001 is missing diff file",
+        migrationNumber: 1,
+      });
     });
 
-    test("detects missing diff file for migration > 0 (directory structure)", () => {
-      const snapshot: SchemaSnapshot = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace,
-        createdAt: new Date().toISOString(),
-        tables: {},
-      };
+    test.each([
+      {
+        position: "last",
+        diffNumbers: [1, 2],
+        suggestion:
+          "Delete migration directory 0003 if it is a leftover, or restore its diff.json.",
+      },
+      {
+        position: "middle",
+        diffNumbers: [1, 2, 4],
+        suggestion: "Restore diff.json in migration directory 0003.",
+      },
+    ])(
+      "detects a $position migration that has migrate.ts but no diff.json",
+      ({ diffNumbers, suggestion }) => {
+        writeInitialSchema(testDir, {});
+        for (const diffNumber of diffNumbers) writeDiff(testDir, diffNumber, []);
+        fs.mkdirSync(path.join(testDir, "0003"));
+        fs.writeFileSync(
+          path.join(testDir, "0003", "migrate.ts"),
+          "export async function main() {}",
+        );
 
-      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, snapshot);
-      // Only migrate file at 0001, no diff file - create directory but no diff.json
-      const migDir = path.join(testDir, "0001");
-      fs.mkdirSync(migDir, { recursive: true });
-      fs.writeFileSync(path.join(migDir, "migrate.ts"), "export async function main() {}");
+        const errors = validateMigrationFiles(testDir);
+        expect(errors).toEqual([
+          {
+            type: "missing_diff",
+            message: "Migration 0003 has migrate.ts but no diff.json",
+            suggestion,
+            migrationNumber: 3,
+          },
+        ]);
+      },
+    );
+
+    test.each([
+      {
+        history: "no later migrations",
+        diffNumbers: [],
+        suggestion:
+          "Delete migration directory 0000 if it is a leftover, or restore its schema.json.",
+      },
+      {
+        history: "later migrations",
+        diffNumbers: [1],
+        suggestion: "Restore schema.json in migration directory 0000.",
+      },
+    ])(
+      "detects a missing initial schema when 0000 holds only generated files and $history",
+      ({ diffNumbers, suggestion }) => {
+        fs.mkdirSync(path.join(testDir, "0000"));
+        fs.writeFileSync(
+          path.join(testDir, "0000", "migrate.ts"),
+          "export async function main() {}",
+        );
+        for (const diffNumber of diffNumbers) writeDiff(testDir, diffNumber, []);
+
+        const errors = validateMigrationFiles(testDir);
+        expect(errors).toEqual([
+          {
+            type: "missing_schema",
+            message: "Initial schema snapshot (0000/schema.json) is missing",
+            suggestion,
+            migrationNumber: INITIAL_SCHEMA_NUMBER,
+          },
+        ]);
+      },
+    );
+
+    test("leaves the remediation to the leftover migration when 0000 and every diff.json are missing", () => {
+      fs.mkdirSync(path.join(testDir, "0001"));
+      fs.writeFileSync(path.join(testDir, "0001", "migrate.ts"), "export async function main() {}");
 
       const errors = validateMigrationFiles(testDir);
-      // migrate files are optional, but diff files are not checked for migrate-only files
-      // Actually, with current logic, if only a migrate file exists but no schema/diff, it should not add it to validation
-      expect(errors).toEqual([]);
+      expect(errors).toEqual([
+        {
+          type: "missing_schema",
+          message: "Initial schema snapshot (0000/schema.json) is missing",
+          migrationNumber: INITIAL_SCHEMA_NUMBER,
+        },
+        {
+          type: "gap",
+          message: "Migration 0000 is missing (gap in sequence)",
+          migrationNumber: INITIAL_SCHEMA_NUMBER,
+        },
+        {
+          type: "missing_diff",
+          message: "Migration 0001 has migrate.ts but no diff.json",
+          suggestion:
+            "Delete migration directory 0001 if it is a leftover, or restore its diff.json.",
+          migrationNumber: 1,
+        },
+      ]);
+    });
+
+    test("detects a diff file in the initial schema migration", () => {
+      writeInitialSchema(testDir, {});
+      writeDiff(testDir, INITIAL_SCHEMA_NUMBER, []);
+
+      const errors = validateMigrationFiles(testDir);
+      expect(errors).toEqual([
+        {
+          type: "invalid_diff_number",
+          message: "Migration 0000 must not have diff.json",
+          migrationNumber: INITIAL_SCHEMA_NUMBER,
+        },
+      ]);
     });
   });
 
@@ -755,6 +851,20 @@ describe("snapshot", () => {
         /Migration file validation failed for namespace "test"/,
       );
       expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(/Initial schema snapshot/);
+    });
+
+    test("throws MIGRATION_FILES_INVALID with remediation for a migration without diff.json", () => {
+      writeInitialSchema(testDir, {});
+      fs.mkdirSync(path.join(testDir, "0001"));
+      fs.writeFileSync(path.join(testDir, "0001", "migrate.ts"), "export async function main() {}");
+
+      expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(
+        expect.objectContaining({
+          code: "MIGRATION_FILES_INVALID",
+          suggestion:
+            "Delete migration directory 0001 if it is a leftover, or restore its diff.json.",
+        }),
+      );
     });
   });
 });

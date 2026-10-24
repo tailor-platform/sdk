@@ -9,18 +9,13 @@ import { logger } from "./shared/logger";
 import { tempCwd } from "./shared/test-helpers/temp-cwd";
 import type { AnyCommand, RunResult, SubCommandValue } from "@politty/zod";
 
-vi.mock("node:module", async () => {
-  const actual = await vi.importActual("node:module");
-  return { ...actual, register: vi.fn() };
-});
-
 vi.mock("@politty/zod", async () => {
   const actual = await vi.importActual("@politty/zod");
   return { ...actual, runMain: vi.fn() };
 });
 
-// strip unknown global args to match the CLI runner.
-const testGlobalArgs = z.object(commonArgs);
+// Parse global args the same way the CLI runner does.
+const testGlobalArgs = z.strictObject(commonArgs);
 
 async function resolveCommand(cmd: SubCommandValue): Promise<AnyCommand> {
   if (isLazyCommand(cmd)) {

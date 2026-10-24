@@ -1,5 +1,0 @@
-name: "@tailor-platform/relation-toward-table"
-version: "1.0.0"
-description: "Rename the .relation() toward.type option to toward.table"
-engine: jssg
-language: typescript

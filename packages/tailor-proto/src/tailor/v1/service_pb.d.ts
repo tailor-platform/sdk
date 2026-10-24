@@ -5,6 +5,7 @@
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { AddOrganizationTeamMemberRequestSchema, AddOrganizationTeamMemberResponseSchema, CreateOrganizationFolderRequestSchema, CreateOrganizationFolderResponseSchema, CreateOrganizationTeamRequestSchema, CreateOrganizationTeamResponseSchema, CreateWorkspaceRequestSchema, CreateWorkspaceResponseSchema, DeleteOrganizationFolderIPRestrictionRequestSchema, DeleteOrganizationFolderIPRestrictionResponseSchema, DeleteOrganizationFolderRequestSchema, DeleteOrganizationFolderResponseSchema, DeleteOrganizationIPRestrictionRequestSchema, DeleteOrganizationIPRestrictionResponseSchema, DeleteOrganizationTeamRequestSchema, DeleteOrganizationTeamResponseSchema, DeleteWorkspaceRequestSchema, DeleteWorkspaceResponseSchema, GetOrganizationAccessRequestSchema, GetOrganizationAccessResponseSchema, GetOrganizationFolderAccessRequestSchema, GetOrganizationFolderAccessResponseSchema, GetOrganizationFolderIPRestrictionRequestSchema, GetOrganizationFolderIPRestrictionResponseSchema, GetOrganizationFolderRequestSchema, GetOrganizationFolderResponseSchema, GetOrganizationIPRestrictionRequestSchema, GetOrganizationIPRestrictionResponseSchema, GetOrganizationRequestSchema, GetOrganizationResponseSchema, GetOrganizationTeamMemberRequestSchema, GetOrganizationTeamMemberResponseSchema, GetOrganizationTeamRequestSchema, GetOrganizationTeamResponseSchema, GetPlatformAccountPlanRequestSchema, GetPlatformAccountPlanResponseSchema, GetWorkspacePlatformUserRequestSchema, GetWorkspacePlatformUserResponseSchema, GetWorkspaceRequestSchema, GetWorkspaceResponseSchema, GetWorkspaceRoleRequestSchema, GetWorkspaceRoleResponseSchema, GrantOrganizationAccessRequestSchema, GrantOrganizationAccessResponseSchema, GrantOrganizationFolderAccessRequestSchema, GrantOrganizationFolderAccessResponseSchema, InviteWorkspacePlatformUserRequestSchema, InviteWorkspacePlatformUserResponseSchema, ListAvailableWorkspacePlatformUserRolesRequestSchema, ListAvailableWorkspacePlatformUserRolesResponseSchema, ListAvailableWorkspaceRegionsRequestSchema, ListAvailableWorkspaceRegionsResponseSchema, ListOrganizationAccessesRequestSchema, ListOrganizationAccessesResponseSchema, ListOrganizationFolderAccessesRequestSchema, ListOrganizationFolderAccessesResponseSchema, ListOrganizationFoldersRequestSchema, ListOrganizationFoldersResponseSchema, ListOrganizationsRequestSchema, ListOrganizationsResponseSchema, ListOrganizationTeamMembersRequestSchema, ListOrganizationTeamMembersResponseSchema, ListOrganizationTeamsRequestSchema, ListOrganizationTeamsResponseSchema, ListOrganizationWorkspacesRequestSchema, ListOrganizationWorkspacesResponseSchema, ListUserOrganizationsRequestSchema, ListUserOrganizationsResponseSchema, ListWorkspacePlatformUsersRequestSchema, ListWorkspacePlatformUsersResponseSchema, ListWorkspacesRequestSchema, ListWorkspacesResponseSchema, RemoveOrganizationTeamMemberRequestSchema, RemoveOrganizationTeamMemberResponseSchema, RemoveWorkspacePlatformUserRequestSchema, RemoveWorkspacePlatformUserResponseSchema, RestoreWorkspaceRequestSchema, RestoreWorkspaceResponseSchema, RevokeOrganizationAccessRequestSchema, RevokeOrganizationAccessResponseSchema, RevokeOrganizationFolderAccessRequestSchema, RevokeOrganizationFolderAccessResponseSchema, UpdateOrganizationAccessRequestSchema, UpdateOrganizationAccessResponseSchema, UpdateOrganizationFolderAccessRequestSchema, UpdateOrganizationFolderAccessResponseSchema, UpdateOrganizationFolderRequestSchema, UpdateOrganizationFolderResponseSchema, UpdateOrganizationRequestSchema, UpdateOrganizationResponseSchema, UpdateOrganizationTeamMemberRequestSchema, UpdateOrganizationTeamMemberResponseSchema, UpdateOrganizationTeamRequestSchema, UpdateOrganizationTeamResponseSchema, UpdateWorkspacePlatformUserRequestSchema, UpdateWorkspacePlatformUserResponseSchema, UpdateWorkspaceRequestSchema, UpdateWorkspaceResponseSchema, UpsertOrganizationFolderIPRestrictionRequestSchema, UpsertOrganizationFolderIPRestrictionResponseSchema, UpsertOrganizationIPRestrictionRequestSchema, UpsertOrganizationIPRestrictionResponseSchema } from "./workspace_pb";
+import type { CreateOrganizationSecurityFindingMuteRequestSchema, CreateOrganizationSecurityFindingMuteResponseSchema, DeleteOrganizationSecurityFindingMuteRequestSchema, DeleteOrganizationSecurityFindingMuteResponseSchema, ListOrganizationSecurityChecksRequestSchema, ListOrganizationSecurityChecksResponseSchema, ListOrganizationSecurityFindingMutesRequestSchema, ListOrganizationSecurityFindingMutesResponseSchema, ListOrganizationSecurityFindingsRequestSchema, ListOrganizationSecurityFindingsResponseSchema } from "./security_pb";
 import type { CloneApplicationDataRequestSchema, CloneApplicationDataResponseSchema, CreateApplicationRequestSchema, CreateApplicationResponseSchema, DeleteApplicationRequestSchema, DeleteApplicationResponseSchema, GetApplicationRequestSchema, GetApplicationResponseSchema, GetApplicationSchemaHealthRequestSchema, GetApplicationSchemaHealthResponseSchema, GetCloneApplicationDataOperationRequestSchema, GetCloneApplicationDataOperationResponseSchema, ListApplicationsRequestSchema, ListApplicationsResponseSchema, UpdateApplicationRequestSchema, UpdateApplicationResponseSchema } from "./application_pb";
 import type { CreateAIGatewayRequestSchema, CreateAIGatewayResponseSchema, DeleteAIGatewayRequestSchema, DeleteAIGatewayResponseSchema, GetAIGatewayRequestSchema, GetAIGatewayResponseSchema, ListAIGatewaysRequestSchema, ListAIGatewaysResponseSchema, UpdateAIGatewayRequestSchema, UpdateAIGatewayResponseSchema } from "./aigateway_pb";
 import type { ComposeTailorDBSDLRequestSchema, ComposeTailorDBSDLResponseSchema, CreateTailorDBGQLPermissionRequestSchema, CreateTailorDBGQLPermissionResponseSchema, CreateTailorDBServiceRequestSchema, CreateTailorDBServiceResponseSchema, CreateTailorDBTypeRequestSchema, CreateTailorDBTypeResponseSchema, DeleteTailorDBGQLPermissionRequestSchema, DeleteTailorDBGQLPermissionResponseSchema, DeleteTailorDBServiceRequestSchema, DeleteTailorDBServiceResponseSchema, DeleteTailorDBTypeRequestSchema, DeleteTailorDBTypeResponseSchema, GetTailorDBGQLPermissionRequestSchema, GetTailorDBGQLPermissionResponseSchema, GetTailorDBServiceRequestSchema, GetTailorDBServiceResponseSchema, GetTailorDBTypeRequestSchema, GetTailorDBTypeResponseSchema, ListTailorDBGQLPermissionsRequestSchema, ListTailorDBGQLPermissionsResponseSchema, ListTailorDBServicesRequestSchema, ListTailorDBServicesResponseSchema, ListTailorDBTypesRequestSchema, ListTailorDBTypesResponseSchema, TruncateTailorDBTypeRequestSchema, TruncateTailorDBTypeResponseSchema, TruncateTailorDBTypesRequestSchema, TruncateTailorDBTypesResponseSchema, UpdateTailorDBGQLPermissionRequestSchema, UpdateTailorDBGQLPermissionResponseSchema, UpdateTailorDBServiceRequestSchema, UpdateTailorDBServiceResponseSchema, UpdateTailorDBTypeRequestSchema, UpdateTailorDBTypeResponseSchema } from "./tailordb_pb";
@@ -18,7 +19,7 @@ import type { CancelJobFunctionExecutionRequestSchema, CancelJobFunctionExecutio
 import type { CreateFunctionRegistryRequestSchema, CreateFunctionRegistryResponseSchema, DeleteFunctionRegistryRequestSchema, DeleteFunctionRegistryResponseSchema, DownloadFunctionRegistryScriptRequestSchema, DownloadFunctionRegistryScriptResponseSchema, GetFunctionRegistryRequestSchema, GetFunctionRegistryResponseSchema, ListFunctionRegistriesRequestSchema, ListFunctionRegistriesResponseSchema, UpdateFunctionRegistryRequestSchema, UpdateFunctionRegistryResponseSchema } from "./function_registry_pb";
 import type { ListMeterAITokenUsagesRequestSchema, ListMeterAITokenUsagesResponseSchema, ListMeterEventCountsRequestSchema, ListMeterEventCountsResponseSchema, ListMeterExecutionCountsRequestSchema, ListMeterExecutionCountsResponseSchema, ListMeterRequestCountsRequestSchema, ListMeterRequestCountsResponseSchema } from "./meter_pb";
 import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, CreateIdPServiceRequestSchema, CreateIdPServiceResponseSchema, DeleteIdPClientRequestSchema, DeleteIdPClientResponseSchema, DeleteIdPServiceRequestSchema, DeleteIdPServiceResponseSchema, GetIdPClientRequestSchema, GetIdPClientResponseSchema, GetIdPServiceRequestSchema, GetIdPServiceResponseSchema, ListIdPClientsRequestSchema, ListIdPClientsResponseSchema, ListIdPServicesRequestSchema, ListIdPServicesResponseSchema, UpdateIdPServiceRequestSchema, UpdateIdPServiceResponseSchema } from "./idp_pb";
-import type { AddCustomDomainRequestSchema, AddCustomDomainResponseSchema, CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetCustomDomainRequestSchema, GetCustomDomainResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListCustomDomainsRequestSchema, ListCustomDomainsResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, RemoveCustomDomainRequestSchema, RemoveCustomDomainResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
+import type { AcceptCustomDomainTransferRequestSchema, AcceptCustomDomainTransferResponseSchema, AddCustomDomainRequestSchema, AddCustomDomainResponseSchema, CancelCustomDomainTransferRequestSchema, CancelCustomDomainTransferResponseSchema, CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetCustomDomainRequestSchema, GetCustomDomainResponseSchema, GetCustomDomainTransferRequestSchema, GetCustomDomainTransferResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListCustomDomainsRequestSchema, ListCustomDomainsResponseSchema, ListCustomDomainTransfersRequestSchema, ListCustomDomainTransfersResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, RemoveCustomDomainRequestSchema, RemoveCustomDomainResponseSchema, RequestCustomDomainTransferRequestSchema, RequestCustomDomainTransferResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
 import type { CancelWorkflowExecutionRequestSchema, CancelWorkflowExecutionResponseSchema, CreateWorkflowJobFunctionExecutionPolicyRequestSchema, CreateWorkflowJobFunctionExecutionPolicyResponseSchema, CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowJobFunctionExecutionPolicyRequestSchema, DeleteWorkflowJobFunctionExecutionPolicyResponseSchema, DeleteWorkflowJobFunctionRequestSchema, DeleteWorkflowJobFunctionResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionExecutionPolicyByKeyRequestSchema, GetWorkflowJobFunctionExecutionPolicyByKeyResponseSchema, GetWorkflowJobFunctionExecutionPolicyRequestSchema, GetWorkflowJobFunctionExecutionPolicyResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionExecutionPoliciesRequestSchema, ListWorkflowJobFunctionExecutionPoliciesResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, ResumeWorkflowExecutionRequestSchema, ResumeWorkflowExecutionResponseSchema, StartWorkflowRequestSchema, StartWorkflowResponseSchema, TestResumeWorkflowRequestSchema, TestResumeWorkflowResponseSchema, TestStartWorkflowRequestSchema, TestStartWorkflowResponseSchema, UpdateWorkflowJobFunctionExecutionPolicyRequestSchema, UpdateWorkflowJobFunctionExecutionPolicyResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
 import type { BulkSetMetadataRequestSchema, BulkSetMetadataResponseSchema, GetMetadataRequestSchema, GetMetadataResponseSchema, ListMetadataRequestSchema, ListMetadataResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
 import type { CreateOTLPExporterRequestSchema, CreateOTLPExporterResponseSchema, CreateResourceAttributesConfigRequestSchema, CreateResourceAttributesConfigResponseSchema, DeleteOTLPExporterRequestSchema, DeleteOTLPExporterResponseSchema, DeleteResourceAttributesConfigRequestSchema, DeleteResourceAttributesConfigResponseSchema, GetOTLPExporterRequestSchema, GetOTLPExporterResponseSchema, GetResourceAttributesConfigRequestSchema, GetResourceAttributesConfigResponseSchema, ListOTLPExportersRequestSchema, ListOTLPExportersResponseSchema, TestOTLPExporterRequestSchema, TestOTLPExporterResponseSchema, UpdateOTLPExporterRequestSchema, UpdateOTLPExporterResponseSchema, UpdateResourceAttributesConfigRequestSchema, UpdateResourceAttributesConfigResponseSchema } from "./telemetryrouter_pb";
@@ -683,6 +684,98 @@ export declare const OperatorService: GenService<{
     output: typeof DeleteOrganizationFolderIPRestrictionResponseSchema;
   },
   /**
+   * ListOrganizationSecurityChecks evaluates every security check for the
+   * workspaces in an organization and returns one result per check. A check
+   * whose evaluating service fails is returned with status UNAVAILABLE.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: caller does not have permission on the organization
+   * - NotFound: organization does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListOrganizationSecurityChecks
+   */
+  listOrganizationSecurityChecks: {
+    methodKind: "unary";
+    input: typeof ListOrganizationSecurityChecksRequestSchema;
+    output: typeof ListOrganizationSecurityChecksResponseSchema;
+  },
+  /**
+   * ListOrganizationSecurityFindings returns the findings of one security
+   * check across the workspaces in an organization.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: caller does not have permission on the organization
+   * - NotFound: organization does not exist or can not be accessed
+   * - Unavailable: the service that evaluates the check did not respond
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListOrganizationSecurityFindings
+   */
+  listOrganizationSecurityFindings: {
+    methodKind: "unary";
+    input: typeof ListOrganizationSecurityFindingsRequestSchema;
+    output: typeof ListOrganizationSecurityFindingsResponseSchema;
+  },
+  /**
+   * CreateOrganizationSecurityFindingMute mutes a security finding so it no
+   * longer counts toward its check's status.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: caller does not have permission on the organization,
+   *   or the caller is a machine user
+   * - NotFound: organization does not exist or can not be accessed, or the
+   *   resource has no current finding for the check
+   * - AlreadyExists: the finding is already muted
+   * - Unavailable: the service that evaluates the check did not respond
+   *
+   * @generated from rpc tailor.v1.OperatorService.CreateOrganizationSecurityFindingMute
+   */
+  createOrganizationSecurityFindingMute: {
+    methodKind: "unary";
+    input: typeof CreateOrganizationSecurityFindingMuteRequestSchema;
+    output: typeof CreateOrganizationSecurityFindingMuteResponseSchema;
+  },
+  /**
+   * DeleteOrganizationSecurityFindingMute unmutes a security finding.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: caller does not have permission on the organization,
+   *   or the caller is a machine user
+   * - NotFound: organization does not exist or can not be accessed, or the
+   *   finding is not muted
+   *
+   * @generated from rpc tailor.v1.OperatorService.DeleteOrganizationSecurityFindingMute
+   */
+  deleteOrganizationSecurityFindingMute: {
+    methodKind: "unary";
+    input: typeof DeleteOrganizationSecurityFindingMuteRequestSchema;
+    output: typeof DeleteOrganizationSecurityFindingMuteResponseSchema;
+  },
+  /**
+   * ListOrganizationSecurityFindingMutes returns the muted security findings
+   * in an organization.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: caller does not have permission on the organization
+   * - NotFound: organization does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListOrganizationSecurityFindingMutes
+   */
+  listOrganizationSecurityFindingMutes: {
+    methodKind: "unary";
+    input: typeof ListOrganizationSecurityFindingMutesRequestSchema;
+    output: typeof ListOrganizationSecurityFindingMutesResponseSchema;
+  },
+  /**
    * CreateOrganizationTeam creates a team in an organization.
    *
    * [Errors]
@@ -949,7 +1042,6 @@ export declare const OperatorService: GenService<{
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
-   * - Unimplemented: feature flag is disabled
    * - InvalidArgument: request is invalid
    * - NotFound: workspace or application does not exist or cannot be accessed
    * - FailedPrecondition: cross-region clone, namespace mismatch, or target is not empty
@@ -2933,6 +3025,8 @@ export declare const OperatorService: GenService<{
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid
    * - NotFound: staticwebsite does not exist or can not be accessed
+   * - FailedPrecondition: one of the staticwebsite's custom domains has a pending transfer,
+   *   which must be cancelled first
    *
    * @generated from rpc tailor.v1.OperatorService.DeleteStaticWebsite
    */
@@ -2978,9 +3072,16 @@ export declare const OperatorService: GenService<{
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid or domain format is rejected
    * - NotFound: static website does not exist
-   * - AlreadyExists: domain is already registered
-   * - ResourceExhausted: maximum number of custom domains reached
-   * - FailedPrecondition: domain already has an active TLS subscription
+   * - AlreadyExists: domain belongs to another workspace, or to another static website of
+   *   this workspace. A domain this static website already holds, and a domain offered to
+   *   this workspace by a transfer, are completed instead and returned with OK — the
+   *   response carries the transfer when one was completed or matched.
+   * - ResourceExhausted: maximum number of custom domains reached (a new registration only;
+   *   a domain already attached here is not measured against the limit again)
+   * - FailedPrecondition: domain already has an active TLS subscription; or, when the call
+   *   completes a transfer addressed to this workspace: the source cache purge is not yet
+   *   confirmed, this static website has no active deployment or is disabled, the source is
+   *   in another region, or the offer is stale
    *
    * @generated from rpc tailor.v1.OperatorService.AddCustomDomain
    */
@@ -3026,7 +3127,8 @@ export declare const OperatorService: GenService<{
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid
    * - NotFound: custom domain does not exist
-   * - FailedPrecondition: domain DNS is still active, remove DNS record before deleting
+   * - FailedPrecondition: domain DNS is still active, remove DNS record before deleting; or
+   *   the domain has a pending transfer, which must be cancelled first
    *
    * @generated from rpc tailor.v1.OperatorService.RemoveCustomDomain
    */
@@ -3034,6 +3136,96 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof RemoveCustomDomainRequestSchema;
     output: typeof RemoveCustomDomainResponseSchema;
+  },
+  /**
+   * RequestCustomDomainTransfer offers a custom domain owned by this workspace to another workspace.
+   * The transfer completes when the target workspace adds the domain to one of its static websites;
+   * the Fastly registration and TLS subscription move with the domain, so DNS does not change.
+   * Idempotent for an identical (domain, target) pair while the offer is pending.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: custom domain does not exist in this workspace, or target workspace does not exist
+   * - PermissionDenied: can view workspace but no permission to delete resources
+   * - FailedPrecondition: domain is not certificate-issued, a transfer to another workspace is pending,
+   *   or the target is in another region
+   *
+   * @generated from rpc tailor.v1.OperatorService.RequestCustomDomainTransfer
+   */
+  requestCustomDomainTransfer: {
+    methodKind: "unary";
+    input: typeof RequestCustomDomainTransferRequestSchema;
+    output: typeof RequestCustomDomainTransferResponseSchema;
+  },
+  /**
+   * CancelCustomDomainTransfer withdraws a pending offer. Only the source workspace may cancel.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: no live offer for this domain in this workspace
+   * - PermissionDenied: can view workspace but no permission to delete resources
+   *
+   * @generated from rpc tailor.v1.OperatorService.CancelCustomDomainTransfer
+   */
+  cancelCustomDomainTransfer: {
+    methodKind: "unary";
+    input: typeof CancelCustomDomainTransferRequestSchema;
+    output: typeof CancelCustomDomainTransferResponseSchema;
+  },
+  /**
+   * AcceptCustomDomainTransfer completes a pending offer addressed to this workspace by attaching the
+   * domain to one of its static websites. AddCustomDomain performs the same completion implicitly.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid, or the domain already belongs to that static website
+   * - NotFound: no live offer addressed to this workspace, or static website does not exist
+   * - PermissionDenied: can view workspace but no permission to create resources
+   * - ResourceExhausted: static website reached the maximum number of custom domains
+   * - FailedPrecondition: source and target are in different regions, the target has no active
+   *   deployment or is disabled, the domain is no longer certificate-issued, the offer is stale, or the
+   *   source cache purge is not yet confirmed
+   *
+   * @generated from rpc tailor.v1.OperatorService.AcceptCustomDomainTransfer
+   */
+  acceptCustomDomainTransfer: {
+    methodKind: "unary";
+    input: typeof AcceptCustomDomainTransferRequestSchema;
+    output: typeof AcceptCustomDomainTransferResponseSchema;
+  },
+  /**
+   * GetCustomDomainTransfer returns the latest transfer record for a domain in which this workspace is
+   * the source or the target.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: no transfer for this domain involves this workspace
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetCustomDomainTransfer
+   */
+  getCustomDomainTransfer: {
+    methodKind: "unary";
+    input: typeof GetCustomDomainTransferRequestSchema;
+    output: typeof GetCustomDomainTransferResponseSchema;
+  },
+  /**
+   * ListCustomDomainTransfers lists transfers in which this workspace is the source or the target,
+   * newest first, optionally filtered by status.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListCustomDomainTransfers
+   */
+  listCustomDomainTransfers: {
+    methodKind: "unary";
+    input: typeof ListCustomDomainTransfersRequestSchema;
+    output: typeof ListCustomDomainTransfersResponseSchema;
   },
   /**
    * CreateDeployment creates a new deployment.
@@ -3522,8 +3714,8 @@ export declare const OperatorService: GenService<{
     output: typeof BulkSetMetadataResponseSchema;
   },
   /**
-   * ListMetadata finds resources in a workspace whose labels match all of
-   * the given key-value pairs.
+   * ListMetadata lists labeled resources in a workspace, optionally narrowed
+   * to those whose labels match all of the given key-value pairs.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid

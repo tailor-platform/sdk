@@ -6,7 +6,9 @@ on:
     branches: ["__BRANCH__"]
     # __PR_TYPES__
     # To deploy only for PRs that carry the `tailor:preview` label instead of all PRs,
-    # re-run: tailor setup ci preview --require-preview-label
+    # re-run: tailor setup ci preview --require label
+    # To skip draft PRs until they are marked ready for review,
+    # re-run: tailor setup ci preview --require ready
 
 permissions:
   contents: read

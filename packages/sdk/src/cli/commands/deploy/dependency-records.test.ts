@@ -94,7 +94,15 @@ describe("fetchMissingDependentApps", () => {
     });
 
     expect(missing).toEqual([
-      { resource: 'TailorDB table "Order"', appId: buyer, reason: "publish-events" },
+      {
+        resource: 'TailorDB table "Order"',
+        resourceType: "tailordb.type",
+        namespace: "db",
+        name: "Order",
+        scope: "resource",
+        appId: buyer,
+        reason: "publish-events",
+      },
     ]);
     expect(client.getMetadata.mock.calls.map((call) => call[0].trn)).not.toContain(
       "trn:v1:workspace:ws:application:supplier",
@@ -152,7 +160,14 @@ describe("fetchMissingDependentApps", () => {
     });
 
     expect(missing).toEqual([
-      { resource: 'Jobs of workflow "nightly"', appId: buyer, reason: "publish-events" },
+      {
+        resource: 'Jobs of workflow "nightly"',
+        resourceType: "workflow",
+        name: "nightly",
+        scope: "jobs",
+        appId: buyer,
+        reason: "publish-events",
+      },
     ]);
   });
 
@@ -161,15 +176,26 @@ describe("fetchMissingDependentApps", () => {
       "resolver",
       { resolvers: { processOrder: undefined } },
       "trn:v1:workspace:ws:pipeline:pipeline:resolver:processOrder",
-      'Resolver "processOrder"',
+      {
+        resource: 'Resolver "processOrder"',
+        resourceType: "pipeline.resolver",
+        namespace: "pipeline",
+        name: "processOrder",
+      },
     ],
     [
       "IdP",
       { idps: { "shared-idp": undefined } },
       "trn:v1:workspace:ws:idp:shared-idp",
-      'IdP service "shared-idp"',
+      { resource: 'IdP service "shared-idp"', resourceType: "idp.service", name: "shared-idp" },
     ],
-  ])("reads a %s through its own TRN", async (_kind, spec, trn, label) => {
+    [
+      "workflow",
+      { workflows: { nightly: undefined } },
+      "trn:v1:workspace:ws:workflow:nightly",
+      { resource: 'Workflow "nightly"', resourceType: "workflow", name: "nightly" },
+    ],
+  ])("reads a %s through its own TRN", async (_kind, spec, trn, identity) => {
     const missing = await fetchMissingDependentApps({
       client: clientRecording([trn]),
       workspaceId,
@@ -179,7 +205,9 @@ describe("fetchMissingDependentApps", () => {
       jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
-    expect(missing).toEqual([{ resource: label, appId: buyer, reason: "publish-events" }]);
+    expect(missing).toEqual([
+      { ...identity, scope: "resource", appId: buyer, reason: "publish-events" },
+    ]);
   });
 });
 
@@ -239,7 +267,14 @@ describe("fetchMissingDependentApps and the two values a workflow carries", () =
     });
 
     expect(missing).toEqual([
-      { resource: 'Jobs of workflow "nightly"', appId: buyer, reason: "publish-events" },
+      {
+        resource: 'Jobs of workflow "nightly"',
+        resourceType: "workflow",
+        name: "nightly",
+        scope: "jobs",
+        appId: buyer,
+        reason: "publish-events",
+      },
     ]);
   });
 
@@ -343,7 +378,14 @@ describe("fetchMissingDependentApps and a job two workflows share", () => {
         jobsByWorkflow: { "quiet-main": ["quiet-only"], "watched-main": ["watched-only"] },
       }),
     ).resolves.toEqual([
-      { resource: 'Jobs of workflow "quiet"', appId: buyer, reason: "publish-events" },
+      {
+        resource: 'Jobs of workflow "quiet"',
+        resourceType: "workflow",
+        name: "quiet",
+        scope: "jobs",
+        appId: buyer,
+        reason: "publish-events",
+      },
     ]);
   });
 });

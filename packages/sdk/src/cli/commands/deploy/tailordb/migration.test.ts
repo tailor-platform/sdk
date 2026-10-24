@@ -32,6 +32,7 @@ import {
   groupMigrationsByNamespace,
   executeMigrations,
   isMigrationPartiallyApplied,
+  rolledBackError,
   type MigrationContext,
 } from "./migration";
 import { MaintenanceTimeline } from "./migration-timing";
@@ -1059,6 +1060,21 @@ describe("migration", () => {
       });
     });
 
+    test("points to migration resolve when the record is still in progress after it could not be cleared", async () => {
+      const store = createMetadataStore({ failSets: [1] });
+      const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(failBeforeStart);
+
+      await expect(
+        executeMigrations({ ...createMockContext(), client: store.client }, [migration]),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        suggestion: expect.stringContaining(
+          "tailor tailordb migration resolve --rollback --namespace tailordb",
+        ),
+      });
+    });
+
     test("asks to check the record when it can be neither cleared nor read", async () => {
       const store = createMetadataStore({ loseSetResponses: [0], failSets: [1], failGets: [2] });
       const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
@@ -1071,7 +1087,7 @@ describe("migration", () => {
         message:
           "Migration tailordb/0003 failed before any step completed: [unavailable] unavailable",
         suggestion: expect.stringMatching(
-          /tailor tailordb migration sync 0002 --namespace tailordb.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/,
+          /tailor tailordb migration status --namespace tailordb.*tailor tailordb migration resolve --rollback --namespace tailordb.*tailor tailordb migration sync 0002 --namespace tailordb.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/s,
         ),
       });
     });
@@ -1606,7 +1622,7 @@ describe("migration", () => {
         try {
           await executeMigrations(createMockContext(), [createMockMigration()]);
         } finally {
-          logger.verbose = false;
+          logger.verbose = undefined;
         }
 
         const statusLines = vi
@@ -1637,7 +1653,7 @@ describe("migration", () => {
             createMockMigration({ number: 2 }),
           ]);
         } finally {
-          logger.verbose = false;
+          logger.verbose = undefined;
         }
 
         const unsplit = vi
@@ -1680,5 +1696,36 @@ describe("migration", () => {
         expect(text).toBe("Running migration tailordb/0001 (0/1 steps completed, 5.0s)...");
       });
     });
+  });
+});
+
+describe("rolledBackError", () => {
+  test("keeps the recovery advice of a Platform failure next to what the rollback did", () => {
+    const error = rolledBackError(
+      createMockMigration({ number: 3 }),
+      new ConnectError("connection lost", Code.Unavailable),
+    );
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_ROLLED_BACK",
+      message: expect.stringContaining("connection lost"),
+      suggestion: expect.stringMatching(
+        /rolled back to migration 0002.*runs every step again.*Check network connectivity/s,
+      ),
+    });
+  });
+
+  test("replaces the resume advice of a partially applied failure", () => {
+    const error = rolledBackError(
+      createMockMigration({ number: 3 }),
+      CLIError({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        message: "Migration tailordb/0003 failed at recompute: boom",
+        suggestion:
+          "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again.",
+      }),
+    );
+
+    expect((error as { suggestion?: string }).suggestion).not.toContain("do not run again");
   });
 });

@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-codemod
 
+## 0.10.3
+
+### Patch Changes
+
+- [#2751](https://github.com/tailor-platform/sdk/pull/2751) [`4db61d5`](https://github.com/tailor-platform/sdk/commit/4db61d56790f55ffb0a4f3e39fc725c15375b65e) Thanks [@dqn](https://github.com/dqn)! - Internal refactor: codemods that carried copies of the same helpers now share one implementation. The codemods rewrite and report the same code as before.
+
+- [#2745](https://github.com/tailor-platform/sdk/pull/2745) [`f0abb8b`](https://github.com/tailor-platform/sdk/commit/f0abb8ba3990d960566a142f032f92fb23219636) Thanks [@dqn](https://github.com/dqn)! - Internal cleanup: remove unused per-codemod `codemod.yaml` manifests and the unused `language` codemod metadata field. No change to codemod behavior.
+
+- [#2760](https://github.com/tailor-platform/sdk/pull/2760) [`a7d1cb8`](https://github.com/tailor-platform/sdk/commit/a7d1cb8ce6dbc324f57ff2704f5ffe92af5bf963) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @​inquirer
+
+- [#2766](https://github.com/tailor-platform/sdk/pull/2766) [`15b6f4a`](https://github.com/tailor-platform/sdk/commit/15b6f4a7a9b6c0c2dd6514c6a5a7ca73a4870000) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.4.0
+
 ## 0.10.2
 
 ### Patch Changes

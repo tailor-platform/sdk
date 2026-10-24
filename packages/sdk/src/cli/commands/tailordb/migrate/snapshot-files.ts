@@ -12,7 +12,7 @@ import {
   normalizeSchemaSnapshot,
 } from "./snapshot-normalization";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
-import { type NormalizedSchemaSnapshot, type SchemaSnapshot } from "./snapshot-types";
+import { type NormalizedSchemaSnapshot } from "./snapshot-types";
 import { deriveWarningsFromChanges } from "./snapshot-warnings";
 
 // ============================================================================
@@ -254,6 +254,32 @@ export function getMigrationFiles(
   return migrations.toSorted((a, b) => a.number - b.number);
 }
 
+const MIGRATION_FILE_TYPES = Object.keys(MIGRATION_FILE_NAMES) as MigrationFileType[];
+
+/**
+ * Get the known migration files present in each migration directory, sorted by number
+ * @param {string} migrationsDir - Migrations directory path
+ * @returns {Array<{number: number, fileTypes: MigrationFileType[]}>} Directories holding at least one known migration file
+ */
+export function getMigrationArtifacts(
+  migrationsDir: string,
+): { number: number; fileTypes: MigrationFileType[] }[] {
+  if (!fs.existsSync(migrationsDir)) return [];
+
+  return fs
+    .readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && isValidMigrationNumber(entry.name))
+    .map((entry) => {
+      const number = Number.parseInt(entry.name, 10);
+      const fileTypes = MIGRATION_FILE_TYPES.filter((type) =>
+        fs.existsSync(getMigrationFilePath(migrationsDir, number, type)),
+      );
+      return { number, fileTypes };
+    })
+    .filter(({ fileTypes }) => fileTypes.length > 0)
+    .toSorted((a, b) => a.number - b.number);
+}
+
 /**
  * Get the next migration number for a directory
  * Returns INITIAL_SCHEMA_NUMBER (0) if no migrations exist
@@ -304,42 +330,4 @@ export function assertMigrationNumberExists(
     });
   }
   return latestMigrationNumber(files);
-}
-
-// ============================================================================
-// Snapshot Writing
-// ============================================================================
-
-/**
- * Write a schema snapshot to a file (creates directory structure)
- * @param {SchemaSnapshot} snapshot - Snapshot to write
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} num - Migration number
- * @returns {string} Path to the written file
- */
-export function writeSnapshot(
-  snapshot: SchemaSnapshot,
-  migrationsDir: string,
-  num: number,
-): string {
-  const migrationDir = getMigrationDirPath(migrationsDir, num);
-  fs.mkdirSync(migrationDir, { recursive: true });
-  const filePath = getMigrationFilePath(migrationsDir, num, "schema");
-  fs.writeFileSync(filePath, JSON.stringify(snapshot, null, 2));
-  return filePath;
-}
-
-/**
- * Write a migration diff to a file (creates directory structure)
- * @param {MigrationDiff} diff - Diff to write
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} num - Migration number
- * @returns {string} Path to the written file
- */
-export function writeDiff(diff: MigrationDiff, migrationsDir: string, num: number): string {
-  const migrationDir = getMigrationDirPath(migrationsDir, num);
-  fs.mkdirSync(migrationDir, { recursive: true });
-  const filePath = getMigrationFilePath(migrationsDir, num, "diff");
-  fs.writeFileSync(filePath, JSON.stringify(diff, null, 2));
-  return filePath;
 }

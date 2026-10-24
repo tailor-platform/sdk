@@ -37,6 +37,7 @@ function nonTTYStderr(): Disposable {
 // secrets would otherwise leak into unrelated test files run in the same worker.
 afterEach(() => {
   resetSecretRegistry();
+  logger.verbose = undefined;
   vi.unstubAllEnvs();
 });
 
