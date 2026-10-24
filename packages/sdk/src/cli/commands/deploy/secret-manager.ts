@@ -112,7 +112,9 @@ function collectIdPClientVaultNames(idpServices: Application["idpServices"]) {
   );
 }
 
-function validateIdPClientVaultNames(
+const RESERVED_VAULT_NAME_PREFIX = "tailor--";
+
+function validateDeclaredVaultNames(
   secretVaults: ReadonlyArray<{ vaultName: string }>,
   idpClientVaultNames: ReadonlySet<string>,
 ) {
@@ -124,6 +126,11 @@ function validateIdPClientVaultNames(
         suggestion:
           "Rename the vault in defineSecretManager(). If this application already manages a vault with that name, renaming it and removing the declaration both delete the old vault and its secrets on the next deploy, including the secret of an IdP client that already exists.",
       });
+    }
+    if (vaultName.startsWith(RESERVED_VAULT_NAME_PREFIX)) {
+      logger.warn(
+        `Vault "${vaultName}" starts with "${RESERVED_VAULT_NAME_PREFIX}", a prefix reserved for vaults the platform manages. In v3 this will be an error; rename the vault in defineSecretManager().`,
+      );
     }
   }
 }
@@ -137,7 +144,7 @@ export async function planSecretManager(context: PlanContext) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
   const idpClientVaultNames = collectIdPClientVaultNames(application.idpServices);
-  validateIdPClientVaultNames(secretVaults, idpClientVaultNames);
+  validateDeclaredVaultNames(secretVaults, idpClientVaultNames);
 
   const vaultChangeSet = createChangeSet<CreateVault, ExistingVault, DeleteVault>(
     "Secret Manager vaults",
