@@ -821,6 +821,23 @@ describe("confirmDeploymentPlans", () => {
     >;
   }> = [
     {
+      warning:
+        "TailorDB migration checkpoints and history IDs need to be updated before this deployment:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.context.checkpointRepairs = [
+          {
+            namespace: "tailordb",
+            from: 5,
+            to: 0,
+            fromHistoryId: null,
+            toHistoryId: "htailordb",
+          },
+        ];
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+    {
       warning: "Applications recorded as depending on this deploy are missing:",
       plan: () => ({
         deployments: [plannedDeployment("my-app", emptyResults())],

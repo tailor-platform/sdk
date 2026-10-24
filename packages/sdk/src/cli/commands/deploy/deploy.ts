@@ -638,12 +638,10 @@ export async function planDeploymentTargets(
 export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
   const { deployments, yes, dryRun = false, missingDependentApps = [] } = params;
   const mode: ConfirmMode = dryRun ? "dry-run" : yes ? "yes" : "prompt";
-  if (!dryRun) {
-    await confirmMigrationCheckpointRepairs(
-      deployments.flatMap((deployment) => deployment.tailorDB.context.checkpointRepairs),
-      yes,
-    );
-  }
+  await confirmMigrationCheckpointRepairs(
+    deployments.flatMap((deployment) => deployment.tailorDB.context.checkpointRepairs),
+    mode,
+  );
   await confirmMissingDependentApps(missingDependentApps, mode);
   const targetAppNames = new Set(deployments.map((deployment) => deployment.application.name));
   const resourceOwners = collectDeploymentResourceOwners(deployments);

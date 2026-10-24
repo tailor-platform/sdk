@@ -245,7 +245,7 @@ describe("confirmMigrationCheckpointRepairs", () => {
   });
 
   test("does not prompt when there are no checkpoint repairs", async () => {
-    await confirmMigrationCheckpointRepairs([], false);
+    await confirmMigrationCheckpointRepairs([], "prompt");
     expect(prompt.confirm).not.toHaveBeenCalled();
   });
 
@@ -270,7 +270,7 @@ describe("confirmMigrationCheckpointRepairs", () => {
           toHistoryId: "htailordb",
         },
       ],
-      false,
+      "prompt",
     );
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
@@ -305,7 +305,7 @@ describe("confirmMigrationCheckpointRepairs", () => {
             toHistoryId: "htailordb",
           },
         ],
-        false,
+        "prompt",
       ),
     ).rejects.toThrow(/Apply cancelled/);
   });

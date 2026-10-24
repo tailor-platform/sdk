@@ -24,7 +24,7 @@ export type ConfirmMode = "prompt" | "yes" | "dry-run";
 
 export async function confirmMigrationCheckpointRepairs(
   repairs: ReadonlyArray<MigrationCheckpointRepair>,
-  yes: boolean,
+  mode: ConfirmMode,
 ): Promise<void> {
   if (repairs.length === 0) return;
 
@@ -43,7 +43,7 @@ export async function confirmMigrationCheckpointRepairs(
   logger.log("  The checkpoint reset itself changes only metadata.");
   logger.log("  This deployment may still apply pending schema or data migrations afterward.");
 
-  if (yes) return;
+  if (mode !== "prompt") return;
   const confirmed = await prompt.confirm({
     message:
       "Reset these migration checkpoints, align their history IDs, and continue with the deployment?",
