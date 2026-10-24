@@ -1511,9 +1511,90 @@ describe("template-generator", () => {
       const backfillPosition = scriptContent.indexOf("Backfill the self-referential column(s)");
       expect(insertPosition).toBeGreaterThan(-1);
       expect(backfillPosition).toBeGreaterThan(insertPosition);
-      expect(scriptContent).toContain('.whereRef("Category.id", "=", "Section.id")');
+      expect(scriptContent).toContain('.updateTable("Section")');
+      expect(scriptContent).toContain(".set({ parentId: row.parentId })");
+      expect(scriptContent).toContain('.where("id", "=", row.id)');
+      expect(scriptContent).not.toContain("whereRef");
 
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+    }, 15_000);
+
+    test("should insert self-referential foreign keys inside a nested field as null and backfill the nested column", async () => {
+      const nestedFields = (foreignKeyType: string, array: boolean) =>
+        ({
+          links: {
+            type: "nested",
+            required: false,
+            array,
+            fields: {
+              parentID: {
+                type: "uuid",
+                required: false,
+                foreignKey: true,
+                foreignKeyType,
+                foreignKeyField: "id",
+              },
+              label: { type: "string", required: false },
+            },
+          },
+        }) as const;
+      const renamePreviousSnapshot = createTestSnapshot({
+        Node: { name: "Node", pluralForm: "Nodes", fields: nestedFields("Node", true) },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Vertex",
+            previousTableName: "Node",
+            before: { name: "Node", pluralForm: "Nodes", fields: nestedFields("Node", true) },
+            after: { name: "Vertex", pluralForm: "Vertices", fields: nestedFields("Vertex", true) },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Vertex", reason: "Table renamed from Node to Vertex" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain(
+        '.values(pending.map((row) => ({ ...row, links: clearNestedReferences(row.links, ["parentID"]) })))',
+      );
+      const insertPosition = scriptContent.indexOf('insertInto("Vertex")');
+      const backfillPosition = scriptContent.indexOf("Backfill the self-referential column(s)");
+      expect(backfillPosition).toBeGreaterThan(insertPosition);
+      expect(scriptContent).toContain('.select(["id", "links"])');
+      expect(scriptContent).toContain(".set({ links: row.links })");
+      expect(scriptContent).not.toContain("whereRef");
+
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+    }, 15_000);
+
+    test("should not emit the nested reference helper for a rename without nested self-references", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: { name: "User", pluralForm: "Users", fields: {} },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Person",
+            previousTableName: "User",
+            before: { name: "User", pluralForm: "Users", fields: {} },
+            after: { name: "Person", pluralForm: "People", fields: {} },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Person", reason: "Table renamed from User to Person" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).not.toContain("clearNestedReferences");
     }, 15_000);
 
     test("should not scaffold a reference fixup for a retarget that follows a table rename", async () => {

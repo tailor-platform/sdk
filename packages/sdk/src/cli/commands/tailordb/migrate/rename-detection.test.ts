@@ -508,6 +508,34 @@ describe("isTypeRenameCompatible", () => {
     );
   });
 
+  test("rejects a required self-referential foreign key inside a nested field", () => {
+    const withNestedSelfFk = (name: string, required: boolean) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          links: {
+            type: "nested",
+            required: false,
+            array: true,
+            fields: {
+              parentID: stringField({
+                type: "uuid",
+                foreignKey: true,
+                foreignKeyType: name,
+                required,
+              }),
+            },
+          },
+        },
+      });
+    expect(
+      isTypeRenameCompatible(withNestedSelfFk("User", true), withNestedSelfFk("Person", true)),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(withNestedSelfFk("User", false), withNestedSelfFk("Person", false)),
+    ).toBe(true);
+  });
+
   test("rejects tables with serial or file fields", () => {
     expect(
       isTypeRenameCompatible(
