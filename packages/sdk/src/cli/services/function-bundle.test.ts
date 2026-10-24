@@ -137,13 +137,12 @@ describe("buildFunctionBundle start transform", () => {
       `const flow = { start: () => "UNTRANSFORMED" };\n` +
         `export default async () => flow.start({});\n`,
     );
-    const realSourceFile = fs.realpathSync(sourceFile);
     const startContext: StartContext = {
       modules: new Map([
         [
-          normalizeFilePath(realSourceFile),
+          normalizeFilePath(sourceFile),
           {
-            sourceFile: realSourceFile,
+            sourceFile,
             localBindings: new Map([["flow", { kind: "workflow", name: "order-flow" }]]),
             exports: new Map(),
           },

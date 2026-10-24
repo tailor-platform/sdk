@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { assertDefined } from "#/utils/assert";
 import { bundleAuthHooks } from "./bundler";
 import type * as pkgTypes from "pkg-types";
@@ -37,8 +37,7 @@ export default {
 };
 `,
   ): string {
-    // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-test-")));
+    tmpDir = makeTempDir("auth-bundler-test-");
     const configFile = path.join(tmpDir, "tailor.config.ts");
     fs.writeFileSync(configFile, source);
     return configFile;
@@ -168,9 +167,7 @@ export default {
 
   test("uses the passed baseDir rather than deriving one from the config file's own directory", async () => {
     const configFile = writeConfig();
-    const baseDir = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-basedir-")),
-    );
+    const baseDir = makeTempDir("auth-bundler-basedir-");
     try {
       await bundleAuthHooks({
         configPath: configFile,
@@ -188,7 +185,7 @@ export default {
 
 describe("bundleAuthHooks date default", () => {
   test("folds the configured date default into the hook bundle", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-date-default-")));
+    const tmpDir = makeTempDir("auth-date-default-");
     const configFile = path.join(tmpDir, "tailor.config.ts");
     fs.writeFileSync(
       configFile,

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { resolveResolverDefaultPermissionForFile } from "./default-permission";
 import type { ResolverServiceConfig, ResolverServiceInput } from "#/configure/config/types";
 
@@ -9,7 +9,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
   let baseDir: string;
 
   aroundEach(async (runTest) => {
-    baseDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sdk-default-permission-")));
+    baseDir = makeTempDir("sdk-default-permission-");
     fs.mkdirSync(path.join(baseDir, "main"), { recursive: true });
     fs.mkdirSync(path.join(baseDir, "public"), { recursive: true });
     fs.writeFileSync(path.join(baseDir, "main", "guarded.ts"), "export default {};\n");

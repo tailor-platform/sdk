@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
 import { logger } from "./logger";
 import {
@@ -46,7 +46,7 @@ describe("resolvePlugin / listPlugins", () => {
   let originalPath: string | undefined;
 
   beforeEach(() => {
-    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-plugin-")));
+    tempDir = makeTempDir("tailor-plugin-");
     originalCwd = process.cwd();
     originalPath = process.env.PATH;
   });
@@ -188,7 +188,7 @@ describe("dispatchPlugin", () => {
   let outFile: string;
 
   beforeEach(() => {
-    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-dispatch-")));
+    tempDir = makeTempDir("tailor-dispatch-");
     originalCwd = process.cwd();
     originalPath = process.env.PATH;
     originalContextEnv = Object.fromEntries(CONTEXT_ENV_KEYS.map((k) => [k, process.env[k]]));
@@ -446,7 +446,7 @@ describe("dispatchPluginWithInstallHint", () => {
   let originalPath: string | undefined;
 
   beforeEach(() => {
-    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-hint-")));
+    tempDir = makeTempDir("tailor-hint-");
     originalCwd = process.cwd();
     originalPath = process.env.PATH;
     const project = path.join(tempDir, "project");

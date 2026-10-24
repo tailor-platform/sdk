@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
-import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { bundleHttpAdapters } from "./bundler";
 
 const nodeRequire = createRequire(import.meta.url);
@@ -20,7 +20,7 @@ describe("bundleHttpAdapters", () => {
   });
 
   function writeAdapterFiles(files: Record<string, string>): string {
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
+    tmpDir = makeTempDir("http-adapter-bundle-");
     for (const [name, content] of Object.entries(files)) {
       fs.writeFileSync(path.join(tmpDir, name), content);
     }
@@ -125,7 +125,7 @@ export default createHttpAdapter({
   });
 
   test("passes through nullish input handler results", async () => {
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
+    tmpDir = makeTempDir("http-adapter-bundle-");
     const sourceFile = path.join(tmpDir, "adapter.ts");
     fs.writeFileSync(
       sourceFile,
