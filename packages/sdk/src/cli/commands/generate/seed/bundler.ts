@@ -63,6 +63,20 @@ function generateSeedScriptContent(namespace: string): string {
     }
 
     /**
+     * The values a self-reference field holds in a record. A dotted \`path\`
+     * (\`links.parentID\`) descends into nested objects, and into every
+     * element where a nested field is an array, so one row can reference
+     * several rows.
+     */
+    function referencedValues(value: unknown, path: string[]): unknown[] {
+      if (Array.isArray(value)) return value.flatMap((item) => referencedValues(item, path));
+      const [head, ...rest] = path;
+      if (head === undefined) return value === null || value === undefined ? [] : [value];
+      if (value === null || typeof value !== "object") return [];
+      return referencedValues((value as Record<string, unknown>)[head], rest);
+    }
+
+    /**
      * Order records of a self-referencing table so a row referenced by
      * another row in the same batch is always inserted first.
      *
@@ -121,13 +135,13 @@ function generateSeedScriptContent(namespace: string): string {
       for (const record of records) {
         const id = record.id;
         for (const field of fields) {
-          const refValue = record[field];
-          if (refValue === null || refValue === undefined) continue;
           const targetKey = fieldKeys[field] ?? "id";
-          const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
-          if (parentId === undefined || parentId === id) continue;
-          inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
-          dependents.get(parentId)?.push(id);
+          for (const refValue of referencedValues(record, field.split("."))) {
+            const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
+            if (parentId === undefined || parentId === id) continue;
+            inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
+            dependents.get(parentId)?.push(id);
+          }
         }
       }
 

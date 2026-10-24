@@ -1,5 +1,5 @@
 import { assertDefined } from "#/utils/assert";
-import { collectForeignKeyReferences, collectForeignKeyTargets } from "#/utils/foreign-key-targets";
+import { collectForeignKeyReferences } from "#/utils/foreign-key-targets";
 import { processLinesDb } from "./lines-db-processor";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { TailorDBNamespaceData } from "#/plugin/types";
@@ -35,10 +35,16 @@ function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInf
       dependencies.add(targetType);
     }
   }
-  for (const field of Object.values(type.fields)) {
+  for (const [fieldName, field] of Object.entries(type.fields)) {
     if (!field.config.fields) continue;
-    for (const target of collectForeignKeyTargets(field.config.fields)) {
-      if (target !== type.name) dependencies.add(target);
+    for (const reference of collectForeignKeyReferences(field.config.fields)) {
+      if (reference.table !== type.name) {
+        dependencies.add(reference.table);
+        continue;
+      }
+      const path = `${fieldName}.${reference.path}`;
+      selfRefFields.push(path);
+      selfRefKeys[path] = reference.field ?? "id";
     }
   }
 
@@ -70,8 +76,9 @@ export interface SeedNamespaceConfig {
   omitFields?: Record<string, string[]>;
   /**
    * Self-referencing field names per table (a subset of the table's own
-   * fields, e.g. `parentId`). Lets the seed script order same-table inserts
-   * so a row is never inserted before the row it points to.
+   * fields, e.g. `parentId`). A field inside a nested field is named by its
+   * dotted path, e.g. `links.parentID`. Lets the seed script order same-table
+   * inserts so a row is never inserted before the row it points to.
    */
   selfRefFields?: Record<string, string[]>;
   /**
@@ -80,7 +87,7 @@ export interface SeedNamespaceConfig {
    * always target the row's `id` — `toward.key` (or a `keyOnly` relation's
    * `foreignKeyField`) can point at another unique field — so the seed
    * script needs this to resolve parent/child edges by the right value
-   * instead of assuming `id`.
+   * instead of assuming `id`. Keyed by the same names as `selfRefFields`.
    */
   selfRefKeys?: Record<string, Record<string, string>>;
 }

@@ -273,6 +273,55 @@ describe("buildSeedNamespaceConfigs", () => {
 
       expect(config?.selfRefKeys?.Category).toEqual({ parentId: "id" });
     });
+
+    test("names a self-reference inside a nested field by its dotted path", () => {
+      const node = makeType("Node", {
+        id: { name: "id", config: { type: "string" } },
+        links: {
+          name: "links",
+          config: {
+            type: "nested",
+            array: true,
+            fields: {
+              parentID: { type: "uuid", foreignKeyType: "Node" },
+            },
+          },
+        },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [node])]);
+
+      expect(config?.selfRefTypes).toEqual(["Node"]);
+      expect(config?.selfRefFields?.Node).toEqual(["links.parentID"]);
+      expect(config?.selfRefKeys?.Node).toEqual({ "links.parentID": "id" });
+      expect(config?.dependencies.Node).toEqual([]);
+    });
+
+    test("records the field a self-reference inside a nested field is keyed to", () => {
+      const node = makeType("Node", {
+        id: { name: "id", config: { type: "string" } },
+        code: { name: "code", config: { type: "string" } },
+        meta: {
+          name: "meta",
+          config: {
+            type: "nested",
+            fields: {
+              inner: {
+                type: "nested",
+                fields: {
+                  parentCode: { type: "string", foreignKeyType: "Node", foreignKeyField: "code" },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [node])]);
+
+      expect(config?.selfRefFields?.Node).toEqual(["meta.inner.parentCode"]);
+      expect(config?.selfRefKeys?.Node).toEqual({ "meta.inner.parentCode": "code" });
+    });
   });
 });
 

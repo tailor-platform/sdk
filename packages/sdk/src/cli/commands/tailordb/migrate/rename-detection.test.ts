@@ -508,6 +508,105 @@ describe("isTypeRenameCompatible", () => {
     );
   });
 
+  test("rejects a required self-referential foreign key inside a nested field", () => {
+    const withNestedSelfFk = (name: string, required: boolean) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          links: {
+            type: "nested",
+            required: false,
+            array: true,
+            fields: {
+              parentID: stringField({
+                type: "uuid",
+                foreignKey: true,
+                foreignKeyType: name,
+                required,
+              }),
+            },
+          },
+        },
+      });
+    expect(
+      isTypeRenameCompatible(withNestedSelfFk("User", true), withNestedSelfFk("Person", true)),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(withNestedSelfFk("User", false), withNestedSelfFk("Person", false)),
+    ).toBe(true);
+  });
+
+  test("rejects a self-reference keyed to a column that is itself a self-referential foreign key", () => {
+    const withKeyedSelfRef = (name: string, aliasIsSelfReference: boolean) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          aliasID: stringField({
+            type: "uuid",
+            unique: true,
+            ...(aliasIsSelfReference && { foreignKey: true, foreignKeyType: name }),
+          }),
+          links: {
+            type: "nested",
+            required: false,
+            array: true,
+            fields: {
+              parentAliasID: stringField({
+                type: "uuid",
+                foreignKey: true,
+                foreignKeyType: name,
+                foreignKeyField: "aliasID",
+              }),
+            },
+          },
+        },
+      });
+    expect(
+      isTypeRenameCompatible(withKeyedSelfRef("User", true), withKeyedSelfRef("Person", true)),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(withKeyedSelfRef("User", false), withKeyedSelfRef("Person", false)),
+    ).toBe(true);
+  });
+
+  test("rejects a nested self-reference inside a field covered by a unique constraint", () => {
+    const withNestedSelfRef = (
+      name: string,
+      options: {
+        unique?: boolean;
+        indexes?: Record<string, { fields: string[]; unique?: boolean }>;
+      },
+    ) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          label: stringField(),
+          links: {
+            type: "nested",
+            required: false,
+            ...(options.unique && { unique: true }),
+            fields: {
+              parentID: stringField({ type: "uuid", foreignKey: true, foreignKeyType: name }),
+            },
+          },
+        },
+        ...(options.indexes && { indexes: options.indexes }),
+      });
+    const compatible = (options: Parameters<typeof withNestedSelfRef>[1]) =>
+      isTypeRenameCompatible(
+        withNestedSelfRef("User", options),
+        withNestedSelfRef("Person", options),
+      );
+
+    expect(compatible({ unique: true })).toBe(false);
+    expect(compatible({ indexes: { byLinks: { fields: ["links", "label"], unique: true } } })).toBe(
+      false,
+    );
+    expect(compatible({ indexes: { byLinks: { fields: ["links", "label"] } } })).toBe(true);
+    expect(compatible({ indexes: { byLabel: { fields: ["label"], unique: true } } })).toBe(true);
+    expect(compatible({})).toBe(true);
+  });
+
   test("rejects tables with serial or file fields", () => {
     expect(
       isTypeRenameCompatible(
