@@ -218,6 +218,15 @@ describe("tailordb migration resolve", () => {
     expectNothingWritten();
   });
 
+  test.fails("refuses --rollback when the in-progress record is more than one ahead of the checkpoint", async () => {
+    remoteLabels({ "sdk-migration": "m0000", "sdk-migration-in-progress": "m0002" });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expectNothingWritten();
+  });
+
   test("--rollback sends the schema of the migration before the in-progress one", async () => {
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
