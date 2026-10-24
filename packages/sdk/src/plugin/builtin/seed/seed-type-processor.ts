@@ -1,5 +1,5 @@
 import { assertDefined } from "#/utils/assert";
-import { collectForeignKeyReferences, collectForeignKeyTargets } from "#/utils/foreign-key-targets";
+import { collectForeignKeyReferences } from "#/utils/foreign-key-targets";
 import { processLinesDb } from "./lines-db-processor";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { TailorDBNamespaceData } from "#/plugin/types";
@@ -35,10 +35,16 @@ function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInf
       dependencies.add(targetType);
     }
   }
-  for (const field of Object.values(type.fields)) {
+  for (const [fieldName, field] of Object.entries(type.fields)) {
     if (!field.config.fields) continue;
-    for (const target of collectForeignKeyTargets(field.config.fields)) {
-      if (target !== type.name) dependencies.add(target);
+    for (const reference of collectForeignKeyReferences(field.config.fields)) {
+      if (reference.table !== type.name) {
+        dependencies.add(reference.table);
+        continue;
+      }
+      const path = `${fieldName}.${reference.path}`;
+      selfRefFields.push(path);
+      selfRefKeys[path] = reference.field ?? "id";
     }
   }
 
