@@ -646,6 +646,7 @@ describe("snapshot", () => {
         message: `Initial schema snapshot (${formatMigrationNumber(
           INITIAL_SCHEMA_NUMBER,
         )}/schema.json) is missing`,
+        suggestion: "Restore schema.json in migration directory 0000.",
         migrationNumber: INITIAL_SCHEMA_NUMBER,
       });
     });
@@ -743,9 +744,43 @@ describe("snapshot", () => {
       },
     );
 
-    test("detects a missing initial schema when 0000 holds only generated files", () => {
-      fs.mkdirSync(path.join(testDir, "0000"));
-      fs.writeFileSync(path.join(testDir, "0000", "migrate.ts"), "export async function main() {}");
+    test.each([
+      {
+        history: "no later migrations",
+        diffNumbers: [],
+        suggestion:
+          "Delete migration directory 0000 if it is a leftover, or restore its schema.json.",
+      },
+      {
+        history: "later migrations",
+        diffNumbers: [1],
+        suggestion: "Restore schema.json in migration directory 0000.",
+      },
+    ])(
+      "detects a missing initial schema when 0000 holds only generated files and $history",
+      ({ diffNumbers, suggestion }) => {
+        fs.mkdirSync(path.join(testDir, "0000"));
+        fs.writeFileSync(
+          path.join(testDir, "0000", "migrate.ts"),
+          "export async function main() {}",
+        );
+        for (const diffNumber of diffNumbers) writeDiff(testDir, diffNumber, []);
+
+        const errors = validateMigrationFiles(testDir);
+        expect(errors).toEqual([
+          {
+            type: "missing_schema",
+            message: "Initial schema snapshot (0000/schema.json) is missing",
+            suggestion,
+            migrationNumber: INITIAL_SCHEMA_NUMBER,
+          },
+        ]);
+      },
+    );
+
+    test("leaves the remediation to the leftover migration when 0000 and every diff.json are missing", () => {
+      fs.mkdirSync(path.join(testDir, "0001"));
+      fs.writeFileSync(path.join(testDir, "0001", "migrate.ts"), "export async function main() {}");
 
       const errors = validateMigrationFiles(testDir);
       expect(errors).toEqual([
@@ -753,6 +788,18 @@ describe("snapshot", () => {
           type: "missing_schema",
           message: "Initial schema snapshot (0000/schema.json) is missing",
           migrationNumber: INITIAL_SCHEMA_NUMBER,
+        },
+        {
+          type: "gap",
+          message: "Migration 0000 is missing (gap in sequence)",
+          migrationNumber: INITIAL_SCHEMA_NUMBER,
+        },
+        {
+          type: "missing_diff",
+          message: "Migration 0001 has migrate.ts but no diff.json",
+          suggestion:
+            "Delete migration directory 0001 if it is a leftover, or restore its diff.json.",
+          migrationNumber: 1,
         },
       ]);
     });
