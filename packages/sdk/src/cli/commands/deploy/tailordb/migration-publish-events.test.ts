@@ -10,11 +10,12 @@ import { errorToJson } from "#/cli/shared/error-json";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import * as migrationModule from "./migration";
 import {
-  createMockClient as createBaseMockClient,
   createPlanResult,
+  createRemoteCheckpoint,
   gqlPermissionEntry,
   mkPendingMigration,
   mockConfig,
+  type RemoteCheckpoint,
   snapshotAt,
   snapshotTable,
   typeEntry,
@@ -42,13 +43,6 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
   reconstructSnapshotFromMigrations: vi.fn(),
 }));
 
-const remoteCheckpoint = {
-  number: 0 as number | null,
-  historyId: null as string | null,
-  maintenanceMode: null as string | null,
-  maintenanceModeChanges: [] as Array<string | null>,
-};
-
 // Per-test schema states keyed by migration number, so reconstruction returns
 // the state as of the requested checkpoint like the real replay does.
 const snapshotState = {
@@ -68,39 +62,15 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     };
   };
 
+  let checkpoint: RemoteCheckpoint;
+
   function createMockClient(
     options: {
       existingSettings?: Record<string, WrittenSettings>;
       existingTableNames?: string[];
     } = {},
   ) {
-    return createBaseMockClient({
-      setMetadata: vi.fn(async (request: { trn: string; labels: Record<string, string> }) => {
-        const maintenanceMode = request.labels["sdk-maintenance-mode"] ?? null;
-        if (
-          request.trn.endsWith(":tailordb:test-ns") &&
-          maintenanceMode !== remoteCheckpoint.maintenanceMode
-        ) {
-          remoteCheckpoint.maintenanceMode = maintenanceMode;
-          remoteCheckpoint.maintenanceModeChanges.push(maintenanceMode);
-        }
-        return {};
-      }),
-      getMetadata: vi.fn().mockImplementation(async () => ({
-        metadata: {
-          labels: {
-            ...(remoteCheckpoint.number !== null && {
-              "sdk-migration": `m${String(remoteCheckpoint.number).padStart(4, "0")}`,
-            }),
-            ...(remoteCheckpoint.historyId && {
-              "sdk-migration-history": remoteCheckpoint.historyId,
-            }),
-            ...(remoteCheckpoint.maintenanceMode && {
-              "sdk-maintenance-mode": remoteCheckpoint.maintenanceMode,
-            }),
-          },
-        },
-      })),
+    return checkpoint.createMockClient({
       listTailorDBTypes: vi.fn().mockImplementation(async () => {
         const tables = snapshotState.tablesByVersion[0] as
           | Record<
@@ -230,10 +200,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   beforeEach(() => {
     snapshotState.tablesByVersion = {};
     snapshotState.historyId = null;
-    remoteCheckpoint.number = 0;
-    remoteCheckpoint.historyId = null;
-    remoteCheckpoint.maintenanceMode = null;
-    remoteCheckpoint.maintenanceModeChanges = [];
+    checkpoint = createRemoteCheckpoint(0);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
     vi.mocked(reconstructSnapshotFromMigrations).mockImplementation(
       (_migrationsDir, maxVersion) => ({
         ...snapshotAt(snapshotState.tablesByVersion, maxVersion),
@@ -245,17 +213,6 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           },
         }),
       }),
-    );
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
-      async (_client, _workspaceId, _namespace, number, historyId, recordMaintenanceMode) => {
-        remoteCheckpoint.number = number;
-        remoteCheckpoint.historyId = historyId ?? null;
-        if (recordMaintenanceMode) {
-          remoteCheckpoint.maintenanceMode = `m${String(number).padStart(4, "0")}`;
-          remoteCheckpoint.maintenanceModeChanges.push(remoteCheckpoint.maintenanceMode);
-        }
-        return true;
-      },
     );
   });
 
@@ -731,7 +688,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const retired = snapshotTable("Retired", { value: { type: "string", required: true } });
     snapshotState.historyId = "hlocal";
-    remoteCheckpoint.historyId = "hlocal";
+    checkpoint.state.historyId = "hlocal";
     snapshotState.tablesByVersion = { 0: { Retired: retired }, 1: {} };
     planResult.changeSet.type.deletes.push({
       name: "Retired",
@@ -772,7 +729,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const order = snapshotTable("Order", { value: { type: "string", required: true } });
     snapshotState.historyId = "hlocal";
-    remoteCheckpoint.historyId = "hlocal";
+    checkpoint.state.historyId = "hlocal";
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
     vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
@@ -802,7 +759,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const order = snapshotTable("Order", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    remoteCheckpoint.number = 0;
+    checkpoint.state.number = 0;
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
     vi.mocked(client.getMetadata).mockRejectedValueOnce(new Error("ownership read failed"));
 
@@ -821,12 +778,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const order = snapshotTable("Order", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    remoteCheckpoint.number = 0;
+    checkpoint.state.number = 0;
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkPendingMigration([], { hasScript: true }),
     ]);
     vi.mocked(migrationModule.executeMigrations).mockImplementationOnce(async () => {
-      remoteCheckpoint.number = 2;
+      checkpoint.state.number = 2;
       throw new Error("migration failed");
     });
 
@@ -1420,7 +1377,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         }
         if (failure === "checkpoint") {
           vi.mocked(migrationModule.updateMigrationLabel).mockImplementationOnce(async () => {
-            remoteCheckpoint.number = 2;
+            checkpoint.state.number = 2;
             return true;
           });
         } else {
@@ -1465,7 +1422,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect.objectContaining(restricted),
       );
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
       expect(holdMaintenanceMode).not.toHaveBeenCalled();
     });
 
@@ -1524,7 +1481,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         clock.mockReturnValue(10_000);
         vi.mocked(client.setMetadata).mockImplementationOnce(async (request) => {
           clock.mockReturnValue(30_000);
-          remoteCheckpoint.maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
+          checkpoint.state.maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
           return {} as never;
         });
         const releasedReport = await releases[0]?.(client);
@@ -1542,7 +1499,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       [
         "advanced",
         (_client: OperatorClient) => {
-          remoteCheckpoint.number = 2;
+          checkpoint.state.number = 2;
         },
         /advanced concurrently to 0002/i,
       ],
@@ -1586,7 +1543,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
       await applyTailorDB(client, planResult, "create-update");
 
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
     });
 
     test('"deploy" keeps its checkpoint recorded until the held release runs', async () => {
@@ -1603,11 +1560,11 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         holdMaintenanceMode: (release) => releases.push(release),
       });
 
-      expect(remoteCheckpoint.maintenanceMode).toBe("m0001");
+      expect(checkpoint.state.maintenanceMode).toBe("m0001");
 
       await releases[0]?.(client);
 
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
     });
 
     test("records only the last checkpoint of a namespace, together with it", async () => {
@@ -1640,7 +1597,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         [1, false],
         [2, true],
       ]);
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0002", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0002", null]);
     });
 
     test("releases tables an earlier deploy left in maintenance mode when the next migration fails", async () => {
@@ -1674,7 +1631,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           return [mkPendingMigration([])];
         },
       );
-      remoteCheckpoint.maintenanceMode = "m0000";
+      checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
         new Error("script failed"),
       );
@@ -1702,7 +1659,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         /script failed/,
       );
 
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual([]);
     });
 
     test("keeps an earlier maintenance record when listing tables fails", async () => {
@@ -1730,7 +1687,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           return [mkPendingMigration([])];
         },
       );
-      remoteCheckpoint.maintenanceMode = "m0000";
+      checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(client.listTailorDBTypes).mockRejectedValueOnce(new Error("table lookup failed"));
 
       await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
@@ -1741,14 +1698,14 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect.objectContaining({ workspaceId: "test-workspace", namespaceName: "test-ns" }),
       );
       expect(client.updateTailorDBType).not.toHaveBeenCalled();
-      expect(remoteCheckpoint.number).toBe(0);
-      expect(remoteCheckpoint.maintenanceMode).toBe("m0000");
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([]);
+      expect(checkpoint.state.number).toBe(0);
+      expect(checkpoint.state.maintenanceMode).toBe("m0000");
+      expect(checkpoint.state.maintenanceModeChanges).toEqual([]);
 
       await applyTailorDB(client, planResult, "create-update");
 
-      expect(remoteCheckpoint.number).toBe(1);
-      expect(remoteCheckpoint.maintenanceMode).toBeNull();
+      expect(checkpoint.state.number).toBe(1);
+      expect(checkpoint.state.maintenanceMode).toBeNull();
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
     });
 
@@ -1780,7 +1737,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           return pending;
         },
       );
-      remoteCheckpoint.maintenanceMode = "m0000";
+      checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
         new Error("script failed"),
       );
@@ -1789,7 +1746,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         /script failed/,
       );
 
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual([null]);
     });
 
     test.each([

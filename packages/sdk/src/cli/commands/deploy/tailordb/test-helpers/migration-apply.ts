@@ -24,6 +24,7 @@ const WORKSPACE_ID = "test-workspace";
 const NAMESPACE = "test-ns";
 const MIGRATIONS_DIR = "/test/migrations";
 const APP_NAME = "test-app";
+const NAMESPACE_TRN = `trn:v1:workspace:${WORKSPACE_ID}:tailordb:${NAMESPACE}`;
 
 type MockClientOverrides = Partial<Record<keyof OperatorClient, unknown>>;
 
@@ -47,16 +48,26 @@ export function createMockClient(overrides: MockClientOverrides = {}): OperatorC
 export type RemoteCheckpoint = ReturnType<typeof createRemoteCheckpoint>;
 
 export function createRemoteCheckpoint(number: number | null) {
-  const state = { number, historyId: null as string | null };
+  const state = {
+    number,
+    historyId: null as string | null,
+    maintenanceMode: null as string | null,
+    maintenanceModeChanges: [] as Array<string | null>,
+  };
   const record: typeof updateMigrationLabel = async (
     _client,
     _workspaceId,
     _namespace,
     number,
     historyId,
+    recordMaintenanceMode,
   ) => {
     state.number = number;
     state.historyId = historyId ?? null;
+    if (recordMaintenanceMode) {
+      state.maintenanceMode = sanitizeMigrationLabel(number);
+      state.maintenanceModeChanges.push(state.maintenanceMode);
+    }
     return true;
   };
   return {
@@ -71,9 +82,18 @@ export function createRemoteCheckpoint(number: number | null) {
                 "sdk-migration": sanitizeMigrationLabel(state.number),
               }),
               ...(state.historyId && { "sdk-migration-history": state.historyId }),
+              ...(state.maintenanceMode && { "sdk-maintenance-mode": state.maintenanceMode }),
             },
           },
         })),
+        setMetadata: vi.fn(async (request: { trn: string; labels: Record<string, string> }) => {
+          const maintenanceMode = request.labels["sdk-maintenance-mode"] ?? null;
+          if (request.trn === NAMESPACE_TRN && maintenanceMode !== state.maintenanceMode) {
+            state.maintenanceMode = maintenanceMode;
+            state.maintenanceModeChanges.push(maintenanceMode);
+          }
+          return {};
+        }),
         ...overrides,
       }),
   };
