@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.4.0
+
+### Minor Changes
+
+- [#2669](https://github.com/tailor-platform/sdk/pull/2669) [`f59f06e`](https://github.com/tailor-platform/sdk/commit/f59f06e14ecc3c22553d5da7b13b87dd7376c059) Thanks [@dqn](https://github.com/dqn)! - The `tailor` CLI and its command groups, such as `tailor tailordb` and `tailor workspace`, and the setup, seed, and TailorDB ERD plugins now exit with code 2 when run without a subcommand and given an unknown option or an invalid option value, including one set through its environment variable. They previously printed their help or a warning, or ran their default subcommand, and exited with 0. A script or CI job that passes a mistyped option after a group name, such as `tailor workspace --bogus`, now fails with 2 instead of printing a warning and exiting with 0. `--no-json` and `--no-verbose` now turn JSON output and verbose logging off, where they were previously ignored with a warning, so `--no-json` also turns off the JSON output an AI coding agent gets by default. `--no-verbose` and `--verbose=false` also override `DEBUG=true` and `RUNNER_DEBUG=1`, which previously kept verbose logging on. Likewise, setting `logger.verbose` from `@tailor-platform/sdk/cli` overrides them, and setting it to `undefined` defers to them.
+
+### Patch Changes
+
+- [#2773](https://github.com/tailor-platform/sdk/pull/2773) [`45392dd`](https://github.com/tailor-platform/sdk/commit/45392ddae6ec9f962541dcd90aac14365d6a60a1) Thanks [@dqn](https://github.com/dqn)! - `tailor tailordb erd` commands now report a failure under `--json` as a JSON `{ "error": { "code", "message" } }` line on stderr, like the other Tailor CLI commands, instead of human-readable text.
+- Updated dependencies [[`c9bc40b`](https://github.com/tailor-platform/sdk/commit/c9bc40b22d710ae03070c13112559d0db5d260b3), [`f59f06e`](https://github.com/tailor-platform/sdk/commit/f59f06e14ecc3c22553d5da7b13b87dd7376c059), [`4c42666`](https://github.com/tailor-platform/sdk/commit/4c4266603730b39a21b92f698105f1d720c8892f), [`468bd4b`](https://github.com/tailor-platform/sdk/commit/468bd4b1f5d87ce11c3eda99c16752910e8df333), [`b09d3c9`](https://github.com/tailor-platform/sdk/commit/b09d3c9b21e68d290b19bc8bf3672726cb5baf48), [`039f6f5`](https://github.com/tailor-platform/sdk/commit/039f6f51422b865c3cd041394aaeea9b49a0360b), [`8000beb`](https://github.com/tailor-platform/sdk/commit/8000beb99b6fe5f3602467c79b69668c46392545), [`0628ad3`](https://github.com/tailor-platform/sdk/commit/0628ad30fa1ad21010f4f16d59ab2af9d66eb79e), [`35ce933`](https://github.com/tailor-platform/sdk/commit/35ce9330b64ebea35469797c592cb0a368bf0d4c), [`deeb82f`](https://github.com/tailor-platform/sdk/commit/deeb82ff6a2fc4418f761a34cfdec01f9a26def2), [`b09cb46`](https://github.com/tailor-platform/sdk/commit/b09cb4687d255d6373e88d2dcd278f97540322b1), [`07611f5`](https://github.com/tailor-platform/sdk/commit/07611f5a28210bcb50b2234b34fee6faaaa1d304), [`5461ed7`](https://github.com/tailor-platform/sdk/commit/5461ed7e2d96e0559360910afa735de3e4e0736c)]:
+  - @tailor-platform/sdk@2.34.0
+
 ## 0.3.2
 
 ### Patch Changes
