@@ -26,7 +26,7 @@ import {
   buildNamespaceSeedPlan,
   createChunkProgressLogger,
   createSeedExecution,
-  discardKeptTailorDBSeedWorkflow,
+  discardKeptTailorDBSeedWorkflowOrThrow,
   seedNamespace,
   withSeedWorkflow,
 } from "./seed-tailordb";
@@ -474,7 +474,7 @@ export const seedApplyCommand = defineAppCommand({
           ? plans.map((plan) => plan.namespace)
           : context.namespaces.map((ns) => ns.namespace);
       for (const namespace of truncatedNamespaces) {
-        await discardKeptTailorDBSeedWorkflow({ execution, namespace });
+        await discardKeptTailorDBSeedWorkflowOrThrow({ execution, namespace });
       }
 
       logger.info("Truncating tables...");

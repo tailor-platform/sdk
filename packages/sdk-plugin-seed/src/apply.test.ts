@@ -8,6 +8,7 @@ const sdk = vi.hoisted(() => ({
   chunkSeedData: vi.fn(),
   discardScriptWorkflow: vi.fn(),
   initOperatorClient: vi.fn(),
+  inspectScriptWorkflow: vi.fn(),
   loadAccessToken: vi.fn(),
   loadSeedContext: vi.fn(),
   loadWorkspaceId: vi.fn(),
@@ -468,6 +469,22 @@ describe("seedApplyCommand", () => {
       await runApply(["--truncate", "--yes", "firstTable"]);
 
       expect(discardedBeforeTruncate()).toEqual(["tailor-seed-tailordb--first"]);
+    });
+
+    test("stops before truncating when a record is still there after the removal", async () => {
+      sdk.inspectScriptWorkflow.mockImplementation(({ name }: { name: string }) =>
+        Promise.resolve(
+          name.endsWith("second")
+            ? { workflowId: "wf", labels: {}, activeExecutionId: undefined, latestExecutionId: "e" }
+            : undefined,
+        ),
+      );
+
+      const result = await runApplyCommand(["--machine-user", "manager", "--truncate", "--yes"]);
+
+      expect(result.exitCode).toBe(1);
+      expect((result.error as { code?: string }).code).toBe("SEED_TRUNCATE_RECORD_KEPT");
+      expect(sdk.truncate).not.toHaveBeenCalled();
     });
 
     test("keeps the records when the truncate is cancelled", async () => {

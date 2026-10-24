@@ -1,8 +1,10 @@
 import {
   bundleSeedScript,
   chunkSeedData,
+  CLIError,
   discardScriptWorkflow,
   initOperatorClient,
+  inspectScriptWorkflow,
   loadAccessToken,
   loadWorkspaceId,
   logger,
@@ -326,7 +328,7 @@ interface SeedNamespaceParams {
   buildOptions: SeedBundleBuildOptions;
 }
 
-export function discardKeptTailorDBSeedWorkflow(params: {
+function discardKeptTailorDBSeedWorkflow(params: {
   execution: SeedExecutionContext;
   namespace: string;
 }): Promise<void> {
@@ -337,6 +339,28 @@ export function discardKeptTailorDBSeedWorkflow(params: {
     name: seedWorkflowName("tailordb", namespace),
     leftoverNote: APPLY_LEFTOVER_NOTE,
   });
+}
+
+export async function discardKeptTailorDBSeedWorkflowOrThrow(params: {
+  execution: SeedExecutionContext;
+  namespace: string;
+}): Promise<void> {
+  await discardKeptTailorDBSeedWorkflow(params);
+  const { execution, namespace } = params;
+  const remaining = await inspectScriptWorkflow({
+    client: execution.operatorClient,
+    workspaceId: execution.workspaceId,
+    name: seedWorkflowName("tailordb", namespace),
+  });
+  if (remaining) {
+    throw CLIError({
+      code: "SEED_TRUNCATE_RECORD_KEPT",
+      message: `The record of a failed seed of namespace '${namespace}' could not be removed, so the tables were not truncated.`,
+      suggestion:
+        "Run `tailor seed apply --truncate` again once the temporary workflow can be removed; a retry would otherwise skip chunks whose rows the truncate deleted.",
+      context: { namespace },
+    });
+  }
 }
 
 export async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
