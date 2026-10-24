@@ -32,6 +32,12 @@ workspace/
     └── analytics-connection-string
 ```
 
+### Reserved Vault Names
+
+Vault names that start with `tailor--` (two hyphens) are reserved in advance for the platform and have no use today. Declaring such a vault in `defineSecretManager()` prints a warning on `tailor deploy` and will become an error in v3. A name that starts with a single `tailor-`, such as `tailor-reports`, is not reserved.
+
+`tailor deploy` also creates a vault named `idp-<namespace>-<client>` for each IdP client of your application. A declared vault with exactly that name is an error, because both would write to the same vault.
+
 ### Secrets
 
 Secrets are key-value pairs stored within a vault. Secret values are encrypted at rest and only accessible at runtime by authorized services.
