@@ -756,6 +756,21 @@ function hasSelfReferenceKeyedToSelfReference(table: TailorDBSnapshotType): bool
   );
 }
 
+// Clearing the references inside a nested value makes distinct values equal
+// (`{ parentID: A }` and `{ parentID: B }` both become `{ parentID: null }`),
+// so a unique constraint over that value fails the copy before the restore.
+function hasUniqueNestedSelfReference(table: TailorDBSnapshotType): boolean {
+  const uniqueFields = new Set(
+    Object.values(table.indexes ?? {}).flatMap((index) => (index.unique ? index.fields : [])),
+  );
+  return Object.entries(table.fields).some(
+    ([name, field]) =>
+      field.fields !== undefined &&
+      (field.unique || uniqueFields.has(name)) &&
+      collectForeignKeyReferences(field.fields).some((reference) => reference.table === table.name),
+  );
+}
+
 function isTypeRenameFieldCompatible(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
@@ -797,7 +812,9 @@ export function isTypeRenameCompatible(
     return false;
   }
 
-  if (hasSelfReferenceKeyedToSelfReference(before)) return false;
+  if (hasSelfReferenceKeyedToSelfReference(before) || hasUniqueNestedSelfReference(before)) {
+    return false;
+  }
 
   const beforeFieldNames = Object.keys(before.fields);
   const afterFieldNames = Object.keys(after.fields);
