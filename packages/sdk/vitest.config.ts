@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import { configDefaults, defineConfig } from "vitest/config";
 
@@ -65,6 +65,13 @@ const windowsTestIncludes = [
   "src/cli/shared/test-helpers/temp-cwd.test.ts",
   "src/cli/shared/test-helpers/temp-dir.test.ts",
 ];
+
+const missingWindowsTests = windowsTestIncludes.filter(
+  (file) => !existsSync(path.resolve(import.meta.dirname, file)),
+);
+if (missingWindowsTests.length > 0) {
+  throw new Error(`windowsTestIncludes lists missing files: ${missingWindowsTests.join(", ")}`);
+}
 
 // Split unit tests by whether they mutate worker-global state. With
 // `isolate: false` a worker shares one module registry and one global object
