@@ -3,6 +3,7 @@ import * as os from "node:os";
 import { parseYAML, stringifyYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
+import { findAccessTokenSource } from "./client";
 import {
   fetchLatestToken,
   loadConsoleBaseUrl,
@@ -1600,6 +1601,165 @@ describe("loadAccessToken", () => {
       expect(clientMocks.refreshToken).not.toHaveBeenCalled();
       expect((await readPlatformConfig()).users["platform-user-sub"]).toBeUndefined();
     });
+
+    describe("renewing the token of a long-running command", () => {
+      const minutes = (count: number) => count * 60 * 1000;
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      async function startSource() {
+        writeFileUser({
+          access_token: "issued",
+          refresh_token: "refresh-0",
+          token_expires_at: new Date(Date.now() + minutes(60)).toISOString(),
+        });
+        const source = findAccessTokenSource(await loadAccessToken());
+        if (!source) throw new Error("no token source registered");
+        return source;
+      }
+
+      function advance(ms: number) {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(Date.now() + ms);
+      }
+
+      test.each([
+        {
+          login: "an environment token",
+          setup: () => vi.stubEnv("TAILOR_PLATFORM_TOKEN", "env-token"),
+        },
+        {
+          login: "a stored user without a refresh token",
+          setup: () =>
+            writeFileUser({ access_token: "stored-token", token_expires_at: futureDate }),
+        },
+      ])("gives $login no source", async ({ setup }) => {
+        setup();
+
+        expect(findAccessTokenSource(await loadAccessToken())).toBeUndefined();
+      });
+
+      test("keeps the issued token until it expires within five minutes, then renews it", async () => {
+        const source = await startSource();
+        rotateRefreshTokens("refresh-0");
+
+        advance(minutes(50));
+        await expect(source.current()).resolves.toBe("issued");
+        advance(minutes(6));
+        await expect(source.current()).resolves.toBe("access-1");
+        expect(findAccessTokenSource("access-1")).toBe(source);
+      });
+
+      test("keeps the issued token when the renewal fails because the login was removed", async () => {
+        const source = await startSource();
+        writePlatformConfig({
+          version: 3,
+          min_sdk_version: "2.0.0",
+          users: {},
+          profiles: {},
+          current_user: null,
+        });
+
+        advance(minutes(56));
+
+        await expect(source.current()).resolves.toBe("issued");
+      });
+
+      test("keeps the issued token and waits 30 seconds after a failed renewal", async () => {
+        const source = await startSource();
+        clientMocks.refreshToken.mockRejectedValue(new Error("network down"));
+
+        advance(minutes(56));
+        await expect(source.current()).resolves.toBe("issued");
+        await expect(source.current()).resolves.toBe("issued");
+        expect(clientMocks.refreshToken).toHaveBeenCalledTimes(1);
+        advance(31 * 1000);
+        await source.current();
+        expect(clientMocks.refreshToken).toHaveBeenCalledTimes(2);
+      });
+
+      test("lets other requests use the issued token while one renews it", async () => {
+        const source = await startSource();
+        rotateRefreshTokens("refresh-0");
+
+        advance(minutes(56));
+        const tokens = await Promise.all([source.current(), source.current()]);
+
+        expect(tokens).toEqual(["access-1", "issued"]);
+      });
+
+      test("fails once the issued token expired and cannot be renewed", async () => {
+        const source = await startSource();
+        clientMocks.refreshToken.mockRejectedValue(new Error("network down"));
+
+        advance(minutes(61));
+
+        await expect(source.current()).rejects.toMatchObject({
+          code: "AUTH_TOKEN_REFRESH_FAILED",
+        });
+      });
+
+      test("keeps renewing the user it started with after the current user changes", async () => {
+        const source = await startSource();
+        const config = await readPlatformConfig();
+        config.users["other-user-sub"] = {
+          storage: "file",
+          access_token: "other-access",
+          refresh_token: "other-refresh",
+          token_expires_at: pastDate,
+        };
+        config.current_user = "other-user-sub";
+        writePlatformConfig(config);
+        rotateRefreshTokens("refresh-0");
+
+        advance(minutes(56));
+
+        await expect(source.current()).resolves.toBe("access-1");
+      });
+
+      test("replaces a rejected token with one another process stored", async () => {
+        const source = await startSource();
+        writeFileUser({
+          access_token: "fresh-access",
+          refresh_token: "refresh-9",
+          token_expires_at: futureDate,
+        });
+
+        await expect(source.replaceRejected("issued")).resolves.toBe("fresh-access");
+        expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+      });
+
+      test("refreshes a rejected token, but not again within a minute", async () => {
+        const source = await startSource();
+        rotateRefreshTokens("refresh-0");
+
+        await expect(source.replaceRejected("issued")).resolves.toBe("access-1");
+        await expect(source.replaceRejected("access-1")).resolves.toBeUndefined();
+        expect(clientMocks.refreshToken).toHaveBeenCalledTimes(1);
+      });
+
+      test("does not retry a failed refresh of a rejected token within a minute", async () => {
+        const source = await startSource();
+        clientMocks.refreshToken.mockRejectedValue(new Error("network down"));
+
+        await expect(source.replaceRejected("issued")).resolves.toBeUndefined();
+        await expect(source.replaceRejected("issued")).resolves.toBeUndefined();
+        expect(clientMocks.refreshToken).toHaveBeenCalledTimes(1);
+      });
+
+      test("waits for a renewal in progress instead of refreshing the rejected token again", async () => {
+        const source = await startSource();
+        rotateRefreshTokens("refresh-0");
+
+        advance(minutes(56));
+        const tokens = await Promise.all([source.current(), source.replaceRejected("issued")]);
+
+        expect(tokens).toEqual(["access-1", "access-1"]);
+        expect(clientMocks.refreshToken).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 
   describe("error case: no token source", () => {
@@ -1750,6 +1910,26 @@ describe("profile readonly field", () => {
     const config = await readPlatformConfig();
     expect(config.profiles.ro?.readonly).toBe(true);
     expect(config.profiles.rw?.readonly).toBeUndefined();
+  });
+});
+
+describe("newer config version notice", () => {
+  test("warns once per process however often the config is read", async () => {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      latest_version: 4,
+      latest_min_sdk_version: "999.0.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await readPlatformConfig();
+    await readPlatformConfig();
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 });
 

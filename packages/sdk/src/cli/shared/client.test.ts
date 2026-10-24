@@ -27,15 +27,18 @@ import {
   MAX_PAGE_SIZE,
   parseMethodName,
   POOLED_UPLOAD_METHODS,
+  registerAccessTokenSource,
   rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   resolveStaticWebsiteUrlsInEnv,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
   staticWebsiteNameFromPlaceholder,
+  type AccessTokenSource,
   type OperatorClient,
 } from "./client";
 import { errorToJson } from "./error-json";
+import { CLIError } from "./errors";
 import { logger } from "./logger";
 
 vi.mock("@connectrpc/connect-node", () => ({
@@ -593,6 +596,131 @@ describe("initOperatorClient", () => {
         baseUrl: "https://api.dev.tailor.tech",
       }),
     );
+  });
+});
+
+describe("access token renewal in the operator client", () => {
+  type Next = (req: UnaryRequest) => Promise<unknown>;
+
+  aroundEach(async (runTest) => {
+    sent = [];
+    await runTest();
+    vi.clearAllMocks();
+  });
+
+  async function callThroughClient(token: string, server: Next, stream = false) {
+    await initOperatorClient(token);
+    const connectNode = await import("@connectrpc/connect-node");
+    const interceptors = vi.mocked(connectNode.createConnectTransport).mock.calls.at(-1)?.[0]
+      .interceptors as Array<(next: Next) => Next>;
+    const call = interceptors.reduceRight<Next>(
+      (next, interceptor) => interceptor(next),
+      (req) => {
+        sent.push(req.header.get("Authorization"));
+        return server(req);
+      },
+    );
+    return await call({
+      stream,
+      service: OperatorService,
+      method: OperatorService.method.getWorkflowExecution,
+      header: new Headers(),
+      message: {},
+    } as unknown as UnaryRequest);
+  }
+
+  function sourceOf(current: string, replacement?: string): AccessTokenSource {
+    return {
+      current: vi.fn(async () => current),
+      replaceRejected: vi.fn(async () => replacement),
+    };
+  }
+
+  const unauthenticated = () => new ConnectError("invalid token", Code.Unauthenticated);
+  let sent: Array<string | null> = [];
+
+  test("sends the token its source currently holds", async () => {
+    registerAccessTokenSource("issued-1", sourceOf("renewed-1"));
+    const server = vi.fn<Next>().mockResolvedValue({ message: {} });
+
+    await callThroughClient("issued-1", server);
+
+    expect(sent).toEqual(["Bearer renewed-1"]);
+  });
+
+  test("retries a rejected request once with the replacement token", async () => {
+    const source = sourceOf("renewed-2", "replacement-2");
+    registerAccessTokenSource("issued-2", source);
+    const server = vi
+      .fn<Next>()
+      .mockRejectedValueOnce(unauthenticated())
+      .mockResolvedValueOnce({ message: {} });
+
+    await callThroughClient("issued-2", server);
+
+    expect(source.replaceRejected).toHaveBeenCalledWith("renewed-2");
+    expect(sent).toEqual(["Bearer renewed-2", "Bearer replacement-2"]);
+  });
+
+  test.each([
+    { case: "no replacement is available", replacement: undefined, rejections: 1 },
+    { case: "the replacement is rejected too", replacement: "replacement-3", rejections: 2 },
+  ])("surfaces the rejection when $case", async ({ replacement, rejections }) => {
+    registerAccessTokenSource(`issued-3-${rejections}`, sourceOf("renewed-3", replacement));
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(callThroughClient(`issued-3-${rejections}`, server)).rejects.toMatchObject({
+      code: Code.Unauthenticated,
+    });
+    expect(server).toHaveBeenCalledTimes(rejections);
+  });
+
+  test("keeps the rejection when looking for a replacement fails", async () => {
+    const source = sourceOf("renewed-4");
+    vi.mocked(source.replaceRejected).mockRejectedValue(new Error("keyring locked"));
+    registerAccessTokenSource("issued-4", source);
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(callThroughClient("issued-4", server)).rejects.toMatchObject({
+      code: Code.Unauthenticated,
+      rawMessage: expect.stringContaining("invalid token"),
+    });
+  });
+
+  test("does not replay a streaming request", async () => {
+    const source = sourceOf("renewed-5", "replacement-5");
+    registerAccessTokenSource("issued-5", source);
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(callThroughClient("issued-5", server, true)).rejects.toThrow("invalid token");
+    expect(source.replaceRejected).not.toHaveBeenCalled();
+  });
+
+  test("reports a token its source cannot provide as unauthenticated", async () => {
+    const source = sourceOf("unused");
+    const next = { command: "tailor", args: ["login", "--help"] };
+    vi.mocked(source.current).mockRejectedValue(
+      CLIError({ code: "AUTH_TOKEN_REFRESH_FAILED", message: "Failed to refresh token.", next }),
+    );
+    registerAccessTokenSource("issued-6", source);
+    const server = vi.fn<Next>();
+
+    const error = await callThroughClient("issued-6", server).catch((error: unknown) => error);
+
+    expect(error).toMatchObject({ code: Code.Unauthenticated });
+    expect(errorToJson(error).error).toMatchObject({
+      code: "AUTH_TOKEN_REFRESH_FAILED",
+      suggestion: expect.stringContaining("tailor auth status"),
+      context: { authentication: { code: "AUTH_TOKEN_REFRESH_FAILED", next } },
+    });
+    expect(server).not.toHaveBeenCalled();
+  });
+
+  test("sends a token without a source as is and does not retry it", async () => {
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(callThroughClient("plain-token", server)).rejects.toThrow("invalid token");
+    expect(sent).toEqual(["Bearer plain-token"]);
   });
 });
 
