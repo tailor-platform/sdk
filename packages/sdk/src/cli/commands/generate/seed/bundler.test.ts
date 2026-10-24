@@ -351,6 +351,77 @@ describe("seed script upsert behavior", () => {
     expect(insertQueries[1]?.parameters).toContain("c2");
   });
 
+  test("orders self-referencing inserts by a reference inside a nested object", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Node"]);
+
+    const result = await main({
+      data: {
+        Node: [
+          { id: "n2", link: { parentID: "n1" } },
+          { id: "n1", link: { parentID: null } },
+        ],
+      },
+      order: ["Node"],
+      selfRefTypes: ["Node"],
+      selfRefFields: { Node: ["link.parentID"] },
+      upsert: true,
+    });
+
+    expect(result.processed.Node).toEqual({ inserted: 2, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries[0]?.parameters).toContain("n1");
+    expect(insertQueries[1]?.parameters).toContain("n2");
+  });
+
+  test("orders self-referencing inserts by every reference inside a nested array", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Node"]);
+
+    const result = await main({
+      data: {
+        Node: [
+          { id: "n3", links: [{ parentID: "n1" }, { parentID: "n2" }] },
+          { id: "n2", links: [{ parentID: "n1" }] },
+          { id: "n1", links: [] },
+        ],
+      },
+      order: ["Node"],
+      selfRefTypes: ["Node"],
+      selfRefFields: { Node: ["links.parentID"] },
+      upsert: true,
+    });
+
+    expect(result.processed.Node).toEqual({ inserted: 3, updated: 0, skipped: 0 });
+    const inserted = queries
+      .filter(({ sql }) => sql.startsWith("insert"))
+      .map(({ parameters }) => ["n1", "n2", "n3"].find((id) => parameters.includes(id)));
+    expect(inserted).toEqual(["n1", "n2", "n3"]);
+  });
+
+  test("orders self-referencing inserts keyed to a non-id field inside a nested object", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Node"]);
+
+    await main({
+      data: {
+        Node: [
+          { id: "row-2", code: "c2", link: { parentCode: "c1" } },
+          { id: "row-1", code: "c1", link: { parentCode: null } },
+        ],
+      },
+      order: ["Node"],
+      selfRefTypes: ["Node"],
+      selfRefFields: { Node: ["link.parentCode"] },
+      selfRefKeys: { Node: { "link.parentCode": "code" } },
+      upsert: true,
+    });
+
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries[0]?.parameters).toContain("c1");
+    expect(insertQueries[1]?.parameters).toContain("c2");
+  });
+
   test("falls back to file order when selfRefFields is not provided", async () => {
     const queries = stubTailordb();
     const { main } = await loadMain("tailordb", ["Category"]);
