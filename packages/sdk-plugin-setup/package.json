@@ -42,7 +42,6 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.19.2",
     "confbox": "0.3.1",
-    "eslint-plugin-zod": "5.2.0",
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
     "tsdown": "0.23.1",
