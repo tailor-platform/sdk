@@ -1,4 +1,4 @@
-import { fetchAllTolerant, isNotFoundError, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
@@ -111,14 +111,6 @@ export function secretUpdateRequest(
   };
 }
 
-async function ignoreNotFound(deletion: Promise<unknown>) {
-  try {
-    await deletion;
-  } catch (error) {
-    if (!isNotFoundError(error)) throw error;
-  }
-}
-
 function collectIdPClientVaultNames(idpServices: Application["idpServices"]) {
   return new Set(
     idpServices.flatMap((idp) => idp.clients.map((name) => idpClientVaultName(idp.name, name))),
@@ -134,7 +126,8 @@ function validateIdPClientVaultNames(
       throw CLIError({
         code: "RESERVED_VAULT_NAME",
         message: `Vault "${vaultName}" has the name of the vault the SDK creates for an IdP client.`,
-        suggestion: "Rename the vault in defineSecretManager().",
+        suggestion:
+          "Rename the vault in defineSecretManager(). Removing the declaration instead deletes the vault and its secrets on the next deploy, including the secret of an IdP client that already exists.",
       });
     }
   }
@@ -298,7 +291,7 @@ export async function planSecretManager(context: PlanContext) {
 
   // Remaining existing vaults not in config - mark managed ones for deletion
   for (const [name, entry] of Object.entries(existingVaults)) {
-    if (!entry || idpClientVaultNames.has(name)) continue;
+    if (!entry) continue;
     const owned = trackRemainingResourceOwner({
       labels: entry.allLabels,
       ownerLabel: entry.label,
@@ -436,25 +429,21 @@ export async function applySecretManager(
       // Delete orphan secrets
       await Promise.all(
         secretChangeSet.deletes.map((del) =>
-          ignoreNotFound(
-            client.deleteSecretManagerSecret({
-              workspaceId: del.workspaceId,
-              secretmanagerVaultName: del.vaultName,
-              secretmanagerSecretName: del.secretName,
-            }),
-          ),
+          client.deleteSecretManagerSecret({
+            workspaceId: del.workspaceId,
+            secretmanagerVaultName: del.vaultName,
+            secretmanagerSecretName: del.secretName,
+          }),
         ),
       );
 
       // Delete orphan vaults
       await Promise.all(
         vaultChangeSet.deletes.map((del) =>
-          ignoreNotFound(
-            client.deleteSecretManagerVault({
-              workspaceId: del.workspaceId,
-              secretmanagerVaultName: del.name,
-            }),
-          ),
+          client.deleteSecretManagerVault({
+            workspaceId: del.workspaceId,
+            secretmanagerVaultName: del.name,
+          }),
         ),
       );
 

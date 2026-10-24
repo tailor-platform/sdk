@@ -1,4 +1,3 @@
-import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { applySecretManager, planSecretManager } from "./secret-manager";
@@ -829,37 +828,6 @@ describe("applySecretManager metadata update", () => {
       secretmanagerVaultName: "removed-vault",
     });
   });
-
-  test("delete phase ignores a vault and secrets that are already gone", async () => {
-    const client = createMockApplyClient();
-    const notFound = new ConnectError("not found", Code.NotFound);
-    vi.mocked(client.deleteSecretManagerSecret).mockRejectedValue(notFound);
-    vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(notFound);
-
-    const planResult = {
-      vaultChangeSet: {
-        creates: [],
-        updates: [],
-        deletes: [{ name: "removed-vault", workspaceId: "ws-1" }],
-        replaces: [],
-      },
-      secretChangeSet: {
-        creates: [],
-        updates: [],
-        deletes: [
-          {
-            name: "removed-vault/secret-a",
-            secretName: "secret-a",
-            workspaceId: "ws-1",
-            vaultName: "removed-vault",
-          },
-        ],
-        replaces: [],
-      },
-    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
-
-    await expect(applySecretManager(client, planResult, "delete")).resolves.toBeUndefined();
-  });
 });
 
 describe("applySecretManager state persistence", () => {
@@ -1172,13 +1140,27 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
     await expect(planSecretManager(context)).rejects.toThrow(/idp-my-idp-web/);
   });
 
-  test("keeps a managed vault used by an IdP client when it is no longer declared", async () => {
+  test("plans deletion of a managed vault named like an IdP client's vault once it is no longer declared", async () => {
     const client = createMockPlanClient(["client-secret-my-idp-web"], "idp-my-idp-web");
     const context = createPlanContext(client, [], { appName: "test-app", idpServices });
 
     const result = await planSecretManager(context);
 
-    expect(result.vaultChangeSet.deletes).toHaveLength(0);
-    expect(result.secretChangeSet.deletes).toHaveLength(0);
+    expect(result.vaultChangeSet.deletes.map((del) => del.name)).toEqual(["idp-my-idp-web"]);
+    expect(result.secretChangeSet.deletes.map((del) => del.secretName)).toEqual([
+      "client-secret-my-idp-web",
+    ]);
+  });
+
+  test("tells the user that removing the declaration deletes the vault and its secrets", async () => {
+    const context = createPlanContext(
+      createMockPlanClient([], "idp-my-idp-web"),
+      [{ vaultName: "idp-my-idp-web", secrets: [] }],
+      { idpServices },
+    );
+
+    await expect(planSecretManager(context)).rejects.toMatchObject({
+      suggestion: expect.stringContaining("deletes the vault and its secrets"),
+    });
   });
 });
