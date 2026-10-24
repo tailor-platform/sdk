@@ -18,6 +18,7 @@
     "seed:truncate": "tailor tailordb truncate -a",
     "seed": "tailor seed apply",
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
+    "snapshot:bundles": "tsx tests/scripts/snapshot_bundles.ts",
     "lint": "oxlint --type-aware .",
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "pnpm generate && pnpm run typecheck:generated",

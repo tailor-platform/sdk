@@ -5,7 +5,7 @@ import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
-import { mergeBundledScripts } from "./bundled-scripts";
+import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import { createChangeSet } from "./change-set";
 import {
   adjustApplicationForMigrationTest,
@@ -1282,6 +1282,7 @@ type FakeBundledScripts = {
   executors?: Record<string, string>;
   workflowJobs?: Record<string, string>;
   authHooks?: Record<string, string>;
+  httpAdapters?: { inputs: Record<string, string>; outputs?: Record<string, string> };
   executorNames?: string[];
   staticWebsiteNames?: string[];
   tailorDBNamespaces?: string[];
@@ -1349,6 +1350,10 @@ function fakeTarget(
       executors: new Map(Object.entries(bundles.executors ?? {})),
       workflowJobs: new Map(Object.entries(bundles.workflowJobs ?? {})),
       authHooks: new Map(Object.entries(bundles.authHooks ?? {})),
+    },
+    httpAdapterBuildResult: bundles.httpAdapters && {
+      bundledInputs: new Map(Object.entries(bundles.httpAdapters.inputs)),
+      bundledOutputs: new Map(Object.entries(bundles.httpAdapters.outputs ?? {})),
     },
   } as unknown as Parameters<typeof assertUniqueGlobalResourceNames>[0][number];
 }
@@ -1732,6 +1737,68 @@ describe("mergeBundledScripts", () => {
             },
           ],
         },
+      }),
+    );
+  });
+});
+
+describe("collectHttpAdapterScripts", () => {
+  test("groups HTTP adapter bundles by application so same-named adapters stay apart", () => {
+    const httpAdapterScripts = collectHttpAdapterScripts([
+      fakeTarget({
+        appName: "buyer",
+        httpAdapters: { inputs: { echo: "buyer-in" }, outputs: { echo: "buyer-out" } },
+      }),
+      fakeTarget({ appName: "supplier", httpAdapters: { inputs: { echo: "supplier-in" } } }),
+      fakeTarget({ appName: "no-adapters" }),
+    ]);
+
+    expect(httpAdapterScripts).toEqual(
+      new Map([
+        [
+          "buyer",
+          {
+            bundledInputs: new Map([["echo", "buyer-in"]]),
+            bundledOutputs: new Map([["echo", "buyer-out"]]),
+          },
+        ],
+        [
+          "supplier",
+          { bundledInputs: new Map([["echo", "supplier-in"]]), bundledOutputs: new Map() },
+        ],
+      ]),
+    );
+  });
+
+  test("ignores configs without HTTP adapters when checking application names", () => {
+    const httpAdapterScripts = collectHttpAdapterScripts([
+      fakeTarget({ appName: "shared", httpAdapters: { inputs: { echo: "in" } } }),
+      fakeTarget({ appName: "shared" }),
+    ]);
+
+    expect([...httpAdapterScripts.keys()]).toEqual(["shared"]);
+  });
+
+  test("rejects HTTP adapter bundles of the same application name across configs", () => {
+    const configPaths = [fakeConfigPath("apps/buyer"), fakeConfigPath("apps/supplier")];
+
+    expect(() =>
+      collectHttpAdapterScripts([
+        fakeTarget({
+          configDir: "apps/buyer",
+          appName: "shared",
+          httpAdapters: { inputs: { echo: "buyer" } },
+        }),
+        fakeTarget({
+          configDir: "apps/supplier",
+          appName: "shared",
+          httpAdapters: { inputs: { echo: "supplier" } },
+        }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
+        context: { duplicates: [{ resourceType: "application", name: "shared", configPaths }] },
       }),
     );
   });
