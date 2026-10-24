@@ -736,6 +736,13 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function hasRequiredReferenceTo(field: SnapshotFieldConfig, tableName: string): boolean {
+  if (field.foreignKeyType === tableName && field.required) return true;
+  return Object.values(field.fields ?? {}).some((member) =>
+    hasRequiredReferenceTo(member, tableName),
+  );
+}
+
 function isTypeRenameFieldCompatible(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
@@ -787,7 +794,7 @@ export function isTypeRenameCompatible(
     // A required self-referential foreign key cannot survive the copy: the
     // batched insert cannot order rows parent-first and the two-phase
     // backfill needs the column to accept null first.
-    if (beforeField.foreignKeyType === before.name && beforeField.required) return false;
+    if (hasRequiredReferenceTo(beforeField, before.name)) return false;
     const retargeted = retargetSelfReferences(beforeField, before.name, after.name);
     if (!isTypeRenameFieldCompatible(retargeted, afterField)) return false;
   }

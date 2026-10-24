@@ -11,7 +11,11 @@
 
 import * as fs from "node:fs/promises";
 import { CLIError } from "#/cli/shared/errors";
-import { collectForeignKeyTargets, type ForeignKeyTargetField } from "#/utils/foreign-key-targets";
+import {
+  collectForeignKeyReferences,
+  collectForeignKeyTargets,
+  type ForeignKeyTargetField,
+} from "#/utils/foreign-key-targets";
 import { isMigrationStepName } from "#/utils/migration-steps";
 import { formatFieldShape, isSingleValueToArrayChange } from "./field-type-change";
 import { writeMigrationTypeFiles } from "./pglite-schema-generator";
@@ -658,11 +662,17 @@ export function generateMigrationScript(
 
   const steps = buildScriptSteps(diff, expandPlans, typeRenameTargets, finishedExpansions);
 
-  const helpers = diff.changes.some(
-    (change) => change.kind === "field_modified" && change.memberRenames?.length,
-  )
-    ? `\n${NESTED_MEMBER_RENAME_HELPER}`
-    : "";
+  const helperSources = [
+    diff.changes.some((change) => change.kind === "field_modified" && change.memberRenames?.length)
+      ? NESTED_MEMBER_RENAME_HELPER
+      : "",
+    diff.changes.some(
+      (change) => change.kind === "table_renamed" && nestedSelfReferencePaths(change).size > 0,
+    )
+      ? CLEAR_NESTED_REFERENCES_HELPER
+      : "",
+  ].filter((source) => source !== "");
+  const helpers = helperSources.map((source) => `\n${source}`).join("");
 
   return `/**
  * Migration script for ${diff.namespace}
@@ -1206,37 +1216,105 @@ function renameNestedMember(value: unknown, path: readonly string[], newName: st
 }
 `;
 
+// Emitted once per script that copies a renamed table holding a self-referential
+// foreign key inside a nested field. Nested values reach the script as objects
+// (or arrays of objects for array members).
+const CLEAR_NESTED_REFERENCES_HELPER = `/**
+ * Return a copy of a nested value with the members at the dotted \`paths\` set to
+ * null, descending into arrays at every level.
+ */
+function clearNestedReferences<T>(value: T, paths: readonly string[]): T {
+  const clear = (current: unknown, path: readonly string[]): unknown => {
+    if (current === null || current === undefined) return current;
+    if (Array.isArray(current)) return current.map((item) => clear(item, path));
+    if (typeof current !== "object") return current;
+    const record = current as Record<string, unknown>;
+    const [head, ...rest] = path;
+    if (head === undefined || !Object.hasOwn(record, head)) return current;
+    const copy = { ...record };
+    Object.defineProperty(copy, head, {
+      value: rest.length === 0 ? null : clear(record[head], rest),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+    return copy;
+  };
+  return paths.reduce((current, path) => clear(current, path.split(".")), value as unknown) as T;
+}
+`;
+
+/**
+ * Dotted paths of the self-referential foreign keys inside each nested field of a renamed table.
+ * @param change - Table rename
+ * @returns Paths to null while copying, keyed by the nested column that holds them
+ */
+function nestedSelfReferencePaths(change: TableRenamedChange): Map<string, string[]> {
+  const paths = new Map<string, string[]>();
+  for (const [name, field] of Object.entries(change.after.fields)) {
+    if (!field.fields) continue;
+    const own = collectForeignKeyReferences(field.fields)
+      .filter((reference) => reference.table === change.tableName)
+      .map((reference) => reference.path);
+    if (own.length > 0) paths.set(name, own);
+  }
+  return paths;
+}
+
 function generateTypeRenameCopyScript(change: TableRenamedChange): string {
   const { tableName, previousTableName } = change;
   const columns = ["id", ...Object.keys(change.before.fields).filter((name) => name !== "id")];
   const columnList = columns.map((name) => JSON.stringify(name)).join(", ");
   // Self-referential foreign keys may point at rows in later batches, so they
   // are inserted as null and backfilled once every row exists.
-  const selfRefColumns = Object.entries(change.after.fields)
-    .filter(([, field]) => field.foreignKeyType === tableName)
-    .map(([name]) => name);
+  const nestedSelfRefPaths = nestedSelfReferencePaths(change);
+  const selfRefColumns = [
+    ...Object.entries(change.after.fields)
+      .filter(([, field]) => field.foreignKeyType === tableName)
+      .map(([name]) => name),
+    ...nestedSelfRefPaths.keys(),
+  ];
+  const clearedValues = [
+    ...selfRefColumns
+      .filter((name) => !nestedSelfRefPaths.has(name))
+      .map((name) => `${name}: null`),
+    ...[...nestedSelfRefPaths].map(
+      ([name, paths]) => `${name}: clearNestedReferences(row.${name}, ${JSON.stringify(paths)})`,
+    ),
+  ];
   const insertValues =
     selfRefColumns.length > 0
-      ? `pending.map((row) => ({ ...row, ${selfRefColumns.map((name) => `${name}: null`).join(", ")} }))`
+      ? `pending.map((row) => ({ ...row, ${clearedValues.join(", ")} }))`
       : "pending";
   const selfRefBackfill =
     selfRefColumns.length > 0
       ? `
 
   // Backfill the self-referential column(s) now that every row exists.
-  await trx
-    .updateTable("${tableName}")
-    .set((eb) => ({
-${selfRefColumns
-  .map(
-    (name) => `      ${name}: eb
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
         .selectFrom("${previousTableName}")
-        .select("${previousTableName}.${name}")
-        .whereRef("${previousTableName}.id", "=", "${tableName}.id"),`,
-  )
-  .join("\n")}
-    }))
-    .execute();`
+        .select(["id", ${selfRefColumns.map((name) => JSON.stringify(name)).join(", ")}])
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        await trx
+          .updateTable("${tableName}")
+          .set({ ${selfRefColumns.map((name) => `${name}: row.${name}`).join(", ")} })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }`
       : "";
 
   return `  // Copy every ${previousTableName} row into ${tableName}, preserving ids so that
