@@ -1152,7 +1152,7 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
     ]);
   });
 
-  test("tells the user that removing the declaration deletes the vault and its secrets", async () => {
+  test("tells the user that renaming or removing the declaration deletes the old vault and its secrets", async () => {
     const context = createPlanContext(
       createMockPlanClient([], "idp-my-idp-web"),
       [{ vaultName: "idp-my-idp-web", secrets: [] }],
@@ -1160,7 +1160,7 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
     );
 
     await expect(planSecretManager(context)).rejects.toMatchObject({
-      suggestion: expect.stringContaining("deletes the vault and its secrets"),
+      suggestion: expect.stringContaining("renaming it and removing the declaration both delete"),
     });
   });
 });

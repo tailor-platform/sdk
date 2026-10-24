@@ -127,7 +127,7 @@ function validateIdPClientVaultNames(
         code: "RESERVED_VAULT_NAME",
         message: `Vault "${vaultName}" has the name of the vault the SDK creates for an IdP client.`,
         suggestion:
-          "Rename the vault in defineSecretManager(). Removing the declaration instead deletes the vault and its secrets on the next deploy, including the secret of an IdP client that already exists.",
+          "Rename the vault in defineSecretManager(). If this application already manages a vault with that name, renaming it and removing the declaration both delete the old vault and its secrets on the next deploy, including the secret of an IdP client that already exists.",
       });
     }
   }
