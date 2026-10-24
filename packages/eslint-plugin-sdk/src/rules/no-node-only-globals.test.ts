@@ -98,6 +98,14 @@ describe("no-node-only-globals", () => {
     );
   });
 
+  test("ignores export aliases and re-exports from other modules", () => {
+    expectClean(`${RESOLVER}const proc = 1;\nexport { proc as process };`, RULE);
+    expectClean(`${RESOLVER}export { process } from "./pipeline";`, RULE);
+    expectClean(`${RESOLVER}export { Buffer as bytes } from "./bytes";`, RULE);
+    expectClean(`${RESOLVER}const proc = 1;\nexport { proc as "process" };`, RULE);
+    expectClean(`${RESOLVER}export * as process from "./pipeline";`, RULE);
+  });
+
   test("still reports references shadowed only by an ambient declaration", () => {
     expectViolation(
       `${RESOLVER}declare const process: { env: Record<string, string> };\nexport const region = process.env.REGION;`,
@@ -106,6 +114,11 @@ describe("no-node-only-globals", () => {
     );
     expectReportCount(
       `${RESOLVER}declare const process: { env: Record<string, string> };\nexport const region = process.env.REGION;`,
+      RULE,
+      1,
+    );
+    expectReportCount(
+      `${RESOLVER}declare const process: { env: Record<string, string> };\nexport { process };`,
       RULE,
       1,
     );

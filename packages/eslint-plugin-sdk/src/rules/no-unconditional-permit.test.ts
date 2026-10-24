@@ -1,6 +1,8 @@
 /* oxlint-disable vitest/expect-expect -- Assertions are centralized in shared lint helpers. */
-import { describe, test } from "vitest";
-import { expectClean, expectViolation } from "./test-helpers.js";
+import { Linter } from "eslint";
+import { describe, expect, test } from "vitest";
+import plugin from "../index.js";
+import { expectClean, expectReportCount, expectViolation } from "./test-helpers.js";
 
 describe("no-unconditional-permit", () => {
   test.each([
@@ -15,12 +17,34 @@ describe("no-unconditional-permit", () => {
     );
   });
 
-  test("rejects an unsafe constant re-exported from the module", () => {
+  test("rejects an unsafe constant re-exported from the module once", () => {
     expectViolation(
       'import { unsafeAllowAllTypePermission as permission } from "@tailor-platform/sdk";\nexport { permission };',
       "no-unconditional-permit",
       "unsafeAllowAllTypePermission grants access unconditionally",
     );
+    expectReportCount(
+      'import { unsafeAllowAllTypePermission as permission } from "@tailor-platform/sdk";\nexport { permission };',
+      "no-unconditional-permit",
+      1,
+    );
+  });
+
+  test("rejects an unsafe constant re-exported from the module once under ESLint", () => {
+    const messages = new Linter().verify(
+      'import { unsafeAllowAllTypePermission as permission } from "@tailor-platform/sdk";\nexport { permission };',
+      [
+        {
+          plugins: { "tailor-sdk": plugin },
+          rules: { "tailor-sdk/no-unconditional-permit": "error" },
+        },
+      ],
+      { filename: "fixture.js" },
+    );
+
+    expect(messages.map(({ message }) => message)).toEqual([
+      "unsafeAllowAllTypePermission grants access unconditionally; define restrictive permission conditions instead.",
+    ]);
   });
 
   test("rejects unconditional entries in defineIdp permissions", () => {
