@@ -569,6 +569,44 @@ describe("isTypeRenameCompatible", () => {
     ).toBe(true);
   });
 
+  test("rejects a nested self-reference inside a field covered by a unique constraint", () => {
+    const withNestedSelfRef = (
+      name: string,
+      options: {
+        unique?: boolean;
+        indexes?: Record<string, { fields: string[]; unique?: boolean }>;
+      },
+    ) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          label: stringField(),
+          links: {
+            type: "nested",
+            required: false,
+            ...(options.unique && { unique: true }),
+            fields: {
+              parentID: stringField({ type: "uuid", foreignKey: true, foreignKeyType: name }),
+            },
+          },
+        },
+        ...(options.indexes && { indexes: options.indexes }),
+      });
+    const compatible = (options: Parameters<typeof withNestedSelfRef>[1]) =>
+      isTypeRenameCompatible(
+        withNestedSelfRef("User", options),
+        withNestedSelfRef("Person", options),
+      );
+
+    expect(compatible({ unique: true })).toBe(false);
+    expect(compatible({ indexes: { byLinks: { fields: ["links", "label"], unique: true } } })).toBe(
+      false,
+    );
+    expect(compatible({ indexes: { byLinks: { fields: ["links", "label"] } } })).toBe(true);
+    expect(compatible({ indexes: { byLabel: { fields: ["label"], unique: true } } })).toBe(true);
+    expect(compatible({})).toBe(true);
+  });
+
   test("rejects tables with serial or file fields", () => {
     expect(
       isTypeRenameCompatible(
