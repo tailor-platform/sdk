@@ -536,6 +536,39 @@ describe("isTypeRenameCompatible", () => {
     ).toBe(true);
   });
 
+  test("rejects a self-reference keyed to a column that is itself a self-referential foreign key", () => {
+    const withKeyedSelfRef = (name: string, aliasIsSelfReference: boolean) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          aliasID: stringField({
+            type: "uuid",
+            unique: true,
+            ...(aliasIsSelfReference && { foreignKey: true, foreignKeyType: name }),
+          }),
+          links: {
+            type: "nested",
+            required: false,
+            array: true,
+            fields: {
+              parentAliasID: stringField({
+                type: "uuid",
+                foreignKey: true,
+                foreignKeyType: name,
+                foreignKeyField: "aliasID",
+              }),
+            },
+          },
+        },
+      });
+    expect(
+      isTypeRenameCompatible(withKeyedSelfRef("User", true), withKeyedSelfRef("Person", true)),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(withKeyedSelfRef("User", false), withKeyedSelfRef("Person", false)),
+    ).toBe(true);
+  });
+
   test("rejects tables with serial or file fields", () => {
     expect(
       isTypeRenameCompatible(

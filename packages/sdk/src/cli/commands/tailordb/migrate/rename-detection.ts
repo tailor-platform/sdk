@@ -10,6 +10,7 @@
  */
 
 import { CLIError } from "#/cli/shared/errors";
+import { collectForeignKeyReferences } from "#/utils/foreign-key-targets";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import {
   SNAPSHOT_FIELD_BOOLEAN_PROPS,
@@ -743,6 +744,18 @@ function hasRequiredReferenceTo(field: SnapshotFieldConfig, tableName: string): 
   );
 }
 
+// The copy restores references one row at a time in id order, so a reference
+// keyed to a column that is itself cleared during the copy can be restored
+// before the row it points at has its key back.
+function hasSelfReferenceKeyedToSelfReference(table: TailorDBSnapshotType): boolean {
+  return collectForeignKeyReferences(table.fields).some(
+    (reference) =>
+      reference.table === table.name &&
+      reference.field !== undefined &&
+      table.fields[reference.field]?.foreignKeyType === table.name,
+  );
+}
+
 function isTypeRenameFieldCompatible(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
@@ -783,6 +796,8 @@ export function isTypeRenameCompatible(
   if (Object.keys(before.files ?? {}).length > 0 || Object.keys(after.files ?? {}).length > 0) {
     return false;
   }
+
+  if (hasSelfReferenceKeyedToSelfReference(before)) return false;
 
   const beforeFieldNames = Object.keys(before.fields);
   const afterFieldNames = Object.keys(after.fields);
