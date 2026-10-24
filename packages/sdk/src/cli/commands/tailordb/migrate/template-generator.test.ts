@@ -1569,7 +1569,9 @@ describe("template-generator", () => {
       expect(insertPosition).toBeGreaterThan(-1);
       expect(backfillPosition).toBeGreaterThan(insertPosition);
       expect(scriptContent).toContain('.updateTable("Section")');
-      expect(scriptContent).toContain(".set({ parentId: row.parentId })");
+      expect(scriptContent).toContain("const restored = { parentId: row.parentId };");
+      expect(scriptContent).toContain(".set(restored)");
+      expect(scriptContent).toContain("continue;");
       expect(scriptContent).toContain('.where("id", "=", row.id)');
       expect(scriptContent).not.toContain("whereRef");
 
@@ -1623,7 +1625,8 @@ describe("template-generator", () => {
       const backfillPosition = scriptContent.indexOf("Backfill the self-referential column(s)");
       expect(backfillPosition).toBeGreaterThan(insertPosition);
       expect(scriptContent).toContain('.select(["id", "links"])');
-      expect(scriptContent).toContain(".set({ links: row.links })");
+      expect(scriptContent).toContain("const restored = { links: row.links };");
+      expect(scriptContent).toContain(".set(restored)");
       expect(scriptContent).not.toContain("whereRef");
 
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);

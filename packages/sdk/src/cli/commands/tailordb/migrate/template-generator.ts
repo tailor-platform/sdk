@@ -1306,9 +1306,13 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
       if (rows.length === 0) break;
 
       for (const row of rows) {
+        const restored = { ${selfRefColumns.map((name) => `${name}: row.${name}`).join(", ")} };
+        if (Object.values(restored).every((value) => value === null || value === undefined)) {
+          continue;
+        }
         await trx
           .updateTable("${tableName}")
-          .set({ ${selfRefColumns.map((name) => `${name}: row.${name}`).join(", ")} })
+          .set(restored)
           .where("id", "=", row.id)
           .execute();
       }
