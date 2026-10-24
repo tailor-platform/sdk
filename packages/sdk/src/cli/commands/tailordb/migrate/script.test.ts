@@ -652,7 +652,7 @@ describe("script command with an existing migrate.ts", () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         path: path.join(path.dirname(testDir), "tailor.config.ts"),
-        db: { tailordb: { migration: { directory: testDir } } },
+        db: { tailordb: { files: [], migration: { directory: testDir } } },
       },
       plugins: [],
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -739,7 +739,7 @@ describe("script command results", () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         path: path.join(path.dirname(testDir), "tailor.config.ts"),
-        db: { tailordb: { migration: { directory: testDir } } },
+        db: { tailordb: { files: [], migration: { directory: testDir } } },
       },
       plugins: [],
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);

@@ -127,7 +127,7 @@ describe("tailordb migration resolve", () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         path: path.join(tmpDir, "tailor.config.ts"),
-        db: { tailordb: { migration: { directory: state.migrationsDir } } },
+        db: { tailordb: { files: [], migration: { directory: state.migrationsDir } } },
       },
       plugins: [],
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);

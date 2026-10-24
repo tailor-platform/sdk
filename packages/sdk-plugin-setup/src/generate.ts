@@ -668,7 +668,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
               throw new Error(
                 `TailorDB namespace "${namespace}" is owned by both "${owner}" and "${appDir}". ` +
                   "A namespace is unique within a workspace: keep it in one app and reference it " +
-                  "from the other with external: true.",
+                  "from the other with attach: true.",
               );
             }
             owners.set(namespace, appDir);

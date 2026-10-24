@@ -1,6 +1,14 @@
-import { defineApplication, type Application } from "#/cli/services/application";
+import * as path from "pathe";
+import {
+  createOwnedTailorDBService,
+  defineApplication,
+  type Application,
+} from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
+import { normalizedDbOf } from "./config";
 import { loadConfig, type LoadedConfig } from "./config-loader";
+import { effectiveDateDefault } from "./date-default";
+import { CLIError } from "./errors";
 import { generateUserTypes } from "./type-generator";
 import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 
@@ -109,4 +117,90 @@ export async function loadTailorDBNamespaces(
 ): Promise<LoadedTailorDBNamespaces> {
   const { config, plugins, namespaces } = await loadApplicationNamespaces(options);
   return { config, plugins, namespaces };
+}
+
+/**
+ * Load one TailorDB namespace owned by a given tailor.config.ts.
+ */
+export type TailorDBNamespaceLoader = (
+  configPath: string,
+  namespace: string,
+) => Promise<TailorDBNamespaceData>;
+
+interface LoadedNamespaceSource {
+  config: LoadedConfig;
+  pluginManager: PluginManager | undefined;
+}
+
+/**
+ * Load one namespace a config owns, with that config's namespace plugins applied.
+ * @param source - The owning config and its plugins
+ * @param namespace - Namespace name in that config's `db`
+ * @returns The namespace data
+ */
+async function loadNamespace(
+  source: LoadedNamespaceSource,
+  namespace: string,
+): Promise<TailorDBNamespaceData> {
+  const { config, pluginManager } = source;
+  const dbEntries = normalizedDbOf(config);
+  const entry = Object.hasOwn(dbEntries, namespace) ? dbEntries[namespace] : undefined;
+  if (!entry) {
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: `TailorDB namespace "${namespace}" not found in config.db of ${config.path}.`,
+    });
+  }
+  if (!entry.owned) {
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_EXTERNAL",
+      message: `TailorDB namespace "${namespace}" is owned by another application, not ${config.path}.`,
+      suggestion: "Point schemaFrom at the config that defines its tables.",
+    });
+  }
+  const baseDir = path.dirname(config.path);
+  const db = createOwnedTailorDBService({
+    namespace,
+    serviceConfig: {
+      ...entry.schemaSource.config,
+      files: entry.schemaSource.config.files.map((pattern) => path.resolve(baseDir, pattern)),
+    },
+    configPath: config.path,
+    baseDir,
+    dateDefault: effectiveDateDefault(config),
+    pluginManager,
+  });
+  await db.loadTypes();
+  await db.processNamespacePlugins();
+  return {
+    namespace,
+    tables: { ...db.types },
+    sourceInfo: new Map(Object.entries(db.typeSourceInfo)),
+    pluginAttachments: db.pluginAttachments,
+  };
+}
+
+/**
+ * Create a loader that reads TailorDB namespaces owned by other configs: the
+ * namespace's tables are loaded from that config's `db` entry with that
+ * config's namespace plugins applied. None of its generation hooks run.
+ * @returns The namespace loader
+ */
+export function createTailorDBNamespaceLoader(): TailorDBNamespaceLoader {
+  const configs = new Map<string, Promise<LoadedNamespaceSource>>();
+
+  const loadConfigOnce = (configPath: string) => {
+    let loaded = configs.get(configPath);
+    if (!loaded) {
+      loaded = loadConfig(configPath).then(({ config, plugins }) => ({
+        config,
+        pluginManager: plugins.length > 0 ? new PluginManager(plugins) : undefined,
+      }));
+      configs.set(configPath, loaded);
+    }
+    return loaded;
+  };
+
+  return async (configPath, namespace) =>
+    loadNamespace(await loadConfigOnce(path.resolve(configPath)), namespace);
 }

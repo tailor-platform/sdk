@@ -401,7 +401,7 @@ describe("verifyScriptSchemaSnapshot", () => {
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(remoteDerived));
 
     await expect(
-      verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: {} } }, remoteDerived)),
+      verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: { files: [] } } }, remoteDerived)),
     ).resolves.toBeUndefined();
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
       configPath: "tailor.config.ts",
@@ -417,9 +417,9 @@ describe("verifyScriptSchemaSnapshot", () => {
       namespaces: [{ namespace: "tailordb", tables: {}, sourceInfo: new Map() }],
     } as never);
 
-    await expect(verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: {} } }))).rejects.toThrow(
-      /no longer matches the local table definitions/,
-    );
+    await expect(
+      verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: { files: [] } } })),
+    ).rejects.toThrow(/no longer matches the local table definitions/);
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
       configPath: "tailor.config.ts",
       namespaces: ["tailordb"],

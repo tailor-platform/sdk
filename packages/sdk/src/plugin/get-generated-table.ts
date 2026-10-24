@@ -118,7 +118,6 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
 
 interface DbNamespaceConfig {
   files?: string[];
-  external?: boolean;
 }
 
 /**
@@ -141,8 +140,7 @@ async function resolveNamespaceForTable(
 
   for (const [namespace, nsConfig] of Object.entries(config.db)) {
     const dbConfig = nsConfig as DbNamespaceConfig;
-    // Skip external namespaces (no files to resolve)
-    if (dbConfig.external || !dbConfig.files) continue;
+    if (!dbConfig.files) continue;
 
     for (const pattern of dbConfig.files) {
       const absolutePattern = path.resolve(configDir, pattern);
@@ -196,7 +194,7 @@ async function resolveNamespaceForNamespacePlugin(
 
   for (const namespace of Object.keys(config.db)) {
     const dbConfig = config.db[namespace] as DbNamespaceConfig;
-    if (dbConfig.external) continue;
+    if (!dbConfig.files) continue;
 
     const output = await plugin.onNamespaceLoaded({
       pluginConfig,
@@ -380,7 +378,7 @@ async function getGeneratedTableForNamespacePlugin(
   if (config.db) {
     for (const namespace of Object.keys(config.db)) {
       const dbConfig = config.db[namespace] as DbNamespaceConfig;
-      if (dbConfig.external) continue;
+      if (!dbConfig.files) continue;
 
       const cacheKey = getCacheKey(`namespace:ns=${namespace}`, pluginConfig);
       const cached = pluginCache.get(cacheKey);

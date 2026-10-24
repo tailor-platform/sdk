@@ -391,7 +391,7 @@ describe("planApplication", () => {
       authService: undefined,
       config: {
         ...baseApplication.config,
-        auth: { name: "peer-auth", external: true },
+        auth: { name: "peer-auth", attach: true },
       },
       subgraphs: [{ Type: "auth", Name: "peer-auth" }],
     } as unknown as Application;
@@ -413,7 +413,7 @@ describe("planApplication", () => {
       authService: undefined,
       config: {
         ...baseApplication.config,
-        auth: { name: "peer-auth", external: true },
+        auth: { name: "peer-auth", attach: true },
       },
       subgraphs: [{ Type: "auth", Name: "peer-auth" }],
     } as unknown as Application;

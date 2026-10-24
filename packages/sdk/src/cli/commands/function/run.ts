@@ -346,9 +346,7 @@ function invokedViaTestRunAlias(argv: readonly string[]): boolean {
  * @param authConfig - Auth configuration from tailor.config.ts
  * @returns Resolved auth namespace
  */
-function resolveAuthNamespace(
-  authConfig: { name: string; external?: boolean } | undefined,
-): string {
+function resolveAuthNamespace(authConfig: { name: string } | undefined): string {
   if (authConfig?.name) {
     return authConfig.name;
   }
@@ -364,7 +362,7 @@ type ResolveMachineUserNameOptions = {
   cliMachineUserSource: MachineUserInputSource | undefined;
   profile: string | undefined;
   authConfig:
-    | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
+    | { name: string; attach?: boolean; machineUsers?: Record<string, unknown> }
     | undefined;
 };
 
@@ -386,7 +384,7 @@ async function resolveMachineUserName(options: ResolveMachineUserNameOptions): P
     return resolved;
   }
 
-  if (authConfig && !("external" in authConfig && authConfig.external)) {
+  if (authConfig && authConfig.attach !== true) {
     const machineUsers = authConfig.machineUsers;
     if (machineUsers) {
       const keys = Object.keys(machineUsers);
@@ -409,7 +407,7 @@ interface ResolveMachineUserOptions {
   authNamespace: string;
   machineUserName: string;
   authConfig:
-    | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
+    | { name: string; attach?: boolean; machineUsers?: Record<string, unknown> }
     | undefined;
 }
 

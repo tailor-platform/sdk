@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { loadConfig } from "#/cli/shared/config-loader";
 import { getMethodDescriptor } from "./proto-reflect";
 import { apiCommand, normalizeBodyFieldKeys } from "./index";
 
 const apiCallMock = vi.hoisted(() => vi.fn());
 vi.mock("./api-call", () => ({ apiCall: apiCallMock }));
+
+vi.mock("#/cli/shared/config-loader", () => ({ loadConfig: vi.fn() }));
 
 describe("normalizeBodyFieldKeys", () => {
   test("collapses snake_case body keys to localName so injection cannot duplicate them", () => {
@@ -84,6 +87,37 @@ describe("api command workspaceId injection (end-to-end body contract)", () => {
     const opts = apiCallMock.mock.calls[0]![0] as { body: string };
     return JSON.parse(opts.body) as Record<string, unknown>;
   }
+
+  test("infers the sole subgraph namespace while ignoring definitions-only entries", async () => {
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      config: {
+        name: "app",
+        path: "tailor.config.ts",
+        db: {
+          visible: { attach: true },
+          sql: { attach: false, schemaFrom: "owner.ts" },
+        },
+      },
+      plugins: [],
+    });
+    const body = await sentBody(["ListTailorDBTypes", "-b", JSON.stringify({ workspaceId: WS })]);
+    expect(body.namespaceName).toBe("visible");
+  });
+
+  test("does not infer a definitions-only namespace", async () => {
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      config: {
+        name: "app",
+        path: "tailor.config.ts",
+        db: {
+          sql: { attach: false, schemaFrom: "owner.ts" },
+        },
+      },
+      plugins: [],
+    });
+    const body = await sentBody(["ListTailorDBTypes", "-b", JSON.stringify({ workspaceId: WS })]);
+    expect(body).not.toHaveProperty("namespaceName");
+  });
 
   test("sends a single workspaceId when --body provides it in snake_case", async () => {
     // The regression: the injection guard missed the snake_case key, appended a

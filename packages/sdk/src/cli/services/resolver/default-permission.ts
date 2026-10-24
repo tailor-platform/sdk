@@ -1,7 +1,8 @@
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { ResolverPermissionSchema } from "#/parser/service/resolver/index";
-import type { ResolverServiceConfig, ResolverServiceInput } from "#/configure/config/types";
+import type { ResolverServiceConfig } from "#/configure/config/types";
+import type { NormalizedAppConfig } from "#/parser/app-config/types";
 import type { Resolver } from "#/types/resolver.generated";
 
 type ParseParams = {
@@ -34,7 +35,7 @@ export function parseResolverDefaultPermission(
 }
 
 type ResolveForFileParams = {
-  config: ResolverServiceInput | undefined;
+  config: NormalizedAppConfig["resolver"];
   filePath: string;
   baseDir: string;
 };
@@ -66,7 +67,7 @@ export function resolveResolverDefaultPermissionForFile(
   const targetFile = path.resolve(filePath);
   const owners: Array<{ namespace: string; config: ResolverServiceConfig }> = [];
   for (const [namespace, serviceConfig] of Object.entries(config)) {
-    if ("external" in serviceConfig) {
+    if (serviceConfig.attach === true) {
       continue;
     }
     const files = loadFilesWithIgnores(serviceConfig, baseDir);

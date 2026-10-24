@@ -619,7 +619,7 @@ describe("plugin-generated resolvers", () => {
     },
   );
 
-  test("rejects generated resolvers targeting an external namespace", async () => {
+  test("rejects generated resolvers targeting an attached namespace", async () => {
     const pluginManager = new PluginManager([
       {
         id: "queries",
@@ -640,12 +640,12 @@ describe("plugin-generated resolvers", () => {
       ...defineConfig({
         name: "test-app",
         db: { main: { files: [] } },
-        resolver: { main: { external: true } },
+        resolver: { main: { attach: true } },
       }),
       path: path.join(baseDir, "tailor.config.ts"),
     };
     await expect(loadApplication({ config, pluginManager })).rejects.toThrow(
-      /Plugin "queries" cannot generate resolvers in external namespace "main"/,
+      /Plugin "queries" cannot generate resolvers in namespace "main", which is owned by another application/,
     );
     await expect(loadApplication({ config, pluginManager })).rejects.toMatchObject({
       code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",

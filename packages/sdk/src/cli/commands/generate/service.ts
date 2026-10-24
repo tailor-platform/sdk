@@ -9,11 +9,13 @@ import {
 import { createExecutorService } from "#/cli/services/executor/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { getAuthInput } from "#/cli/shared/auth-input";
+import { normalizedDbOf } from "#/cli/shared/config";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
-import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
 import { logger, plainRedacted, styles } from "#/cli/shared/logger";
+import { createTailorDBNamespaceLoader } from "#/cli/shared/tailordb-namespaces";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
@@ -73,6 +75,8 @@ export function createGenerationManager(params: {
     executor: Record<string, Executor>;
   } = { tailordb: {}, resolver: {}, executor: {} };
 
+  let referencedTailordb: TailorDBNamespaceData[] = [];
+
   // Get plugins that have generation hooks
   const generationPlugins = pluginManager?.getPluginsWithGenerationHooks() ?? [];
 
@@ -130,6 +134,7 @@ export function createGenerationManager(params: {
           "plugin.onTailorDBReady hook missing",
         )({
           tailordb,
+          referencedTailordb,
           auth,
           baseDir: pluginBaseDir,
           configPath: config.path,
@@ -142,6 +147,7 @@ export function createGenerationManager(params: {
           "plugin.onResolverReady hook missing",
         )({
           tailordb,
+          referencedTailordb,
           resolvers: buildResolverData(),
           auth,
           baseDir: pluginBaseDir,
@@ -155,6 +161,7 @@ export function createGenerationManager(params: {
           "plugin.onExecutorReady hook missing",
         )({
           tailordb,
+          referencedTailordb,
           resolvers: buildResolverData(),
           executors: { ...services.executor },
           auth,
@@ -327,6 +334,27 @@ export function createGenerationManager(params: {
         ...app.resolverServices,
         ...definePluginResolverServices(config, pluginManager),
       ];
+
+      const loadNamespace = createTailorDBNamespaceLoader();
+      referencedTailordb = [];
+      for (const [namespace, entry] of Object.entries(normalizedDbOf(config))) {
+        if (entry.schemaSource?.kind !== "config") continue;
+        const schemaFrom = entry.schemaSource.path;
+        try {
+          referencedTailordb.push(
+            await loadNamespace(path.resolve(path.dirname(config.path), schemaFrom), namespace),
+          );
+        } catch (error) {
+          throw CLIError({
+            code: "TAILORDB_SCHEMA_FROM_LOAD_FAILED",
+            message: `Failed to load TailorDB namespace "${namespace}" from schemaFrom "${schemaFrom}" in ${config.path}: ${toError(error).message}`,
+            suggestion:
+              "Point schemaFrom at the tailor.config.ts of the application that owns the namespace.",
+            context: { namespace, schemaFrom, configPath: config.path },
+            cause: error,
+          });
+        }
+      }
 
       // Generate plugin type and executor files
       // This must happen after TailorDB tables are loaded since plugins process during table loading

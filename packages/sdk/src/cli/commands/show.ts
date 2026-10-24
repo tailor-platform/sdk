@@ -106,7 +106,7 @@ async function fetchStaticWebsites(
 }
 
 function oauth2ClientNames(auth: LoadedConfig["auth"]): string[] {
-  if (!auth || "external" in auth) {
+  if (!auth || auth.attach === true) {
     return [];
   }
   return Object.keys(auth.oauth2Clients ?? {});

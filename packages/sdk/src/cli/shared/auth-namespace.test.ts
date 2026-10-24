@@ -6,7 +6,7 @@ describe("getApplicationAuthNamespace", () => {
     expect(
       getApplicationAuthNamespace({
         authService: { config: { name: "local-auth" } },
-        config: { auth: { name: "external-auth", external: true } },
+        config: { auth: { name: "external-auth", attach: true } },
       }),
     ).toBe("local-auth");
   });
@@ -14,7 +14,7 @@ describe("getApplicationAuthNamespace", () => {
   test("uses external auth config name when no local auth service exists", () => {
     expect(
       getApplicationAuthNamespace({
-        config: { auth: { name: "external-auth", external: true } },
+        config: { auth: { name: "external-auth", attach: true } },
       }),
     ).toBe("external-auth");
   });

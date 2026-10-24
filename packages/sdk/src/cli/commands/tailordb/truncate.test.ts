@@ -18,10 +18,10 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   initOperatorClient: vi.fn().mockResolvedValue({
     truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
     truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
-    listTailorDBTypes: vi.fn().mockResolvedValue({
-      tailordbTypes: [{ name: "User" }, { name: "Order" }],
+    listTailorDBTypes: vi.fn().mockImplementation(async ({ namespaceName }) => ({
+      tailordbTypes: namespaceName === "tailordb" ? [{ name: "User" }, { name: "Order" }] : [],
       nextPageToken: "",
-    }),
+    })),
   }),
 }));
 
@@ -178,13 +178,16 @@ describe("truncate command", () => {
       });
     });
 
-    test("excludes external namespaces", async () => {
+    test("excludes namespaces owned by another application", async () => {
       const { loadConfig } = await import("#/cli/shared/config-loader");
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
             owned: { files: ["./owned/*.ts"] },
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
+            visible: { attach: true },
+            shared: { attach: true, schemaFrom: "owner.ts" },
+            sql: { attach: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -205,7 +208,10 @@ describe("truncate command", () => {
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
+            visible: { attach: true },
+            shared: { attach: true, schemaFrom: "owner.ts" },
+            sql: { attach: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -233,7 +239,7 @@ describe("truncate command", () => {
 
     test("throws error when namespace not found in config", async () => {
       await expect(truncate({ namespace: "nonexistent" })).rejects.toThrow(
-        'Namespace "nonexistent" not found in config. Available owned namespaces (external namespaces are excluded): tailordb, anotherdb',
+        'Namespace "nonexistent" not found in config. Available owned namespaces (namespaces owned by another application are excluded): tailordb, anotherdb',
       );
     });
 
@@ -243,7 +249,10 @@ describe("truncate command", () => {
         config: {
           db: {
             owned: { files: ["./owned/*.ts"] },
-            "shared-db": { external: true },
+            "shared-db": { attach: true },
+            visible: { attach: true },
+            shared: { attach: true, schemaFrom: "owner.ts" },
+            sql: { attach: false, schemaFrom: "owner.ts" },
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -251,7 +260,7 @@ describe("truncate command", () => {
       await expect(truncate({ namespace: "shared-db" })).rejects.toMatchObject({
         code: "TAILORDB_NAMESPACE_EXTERNAL",
         message:
-          'Namespace "shared-db" is declared as external in this app\'s config and cannot be truncated from here.',
+          'Namespace "shared-db" is owned by another application and cannot be truncated from here.',
         suggestion: "Run truncate from the app that owns the namespace.",
       });
     });
@@ -345,10 +354,10 @@ describe("truncate command", () => {
       vi.mocked(initOperatorClient).mockResolvedValue({
         truncateTailorDBType: vi.fn(),
         truncateTailorDBTypes: vi.fn(),
-        listTailorDBTypes: vi.fn().mockResolvedValue({
-          tailordbTypes: [{ name: "User" }, { name: "Order" }],
+        listTailorDBTypes: vi.fn().mockImplementation(async ({ namespaceName }) => ({
+          tailordbTypes: namespaceName === "tailordb" ? [{ name: "User" }, { name: "Order" }] : [],
           nextPageToken: "",
-        }),
+        })),
       } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
       using _json = jsonMode();
 

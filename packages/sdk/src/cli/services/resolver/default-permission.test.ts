@@ -3,7 +3,8 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
 import { resolveResolverDefaultPermissionForFile } from "./default-permission";
-import type { ResolverServiceConfig, ResolverServiceInput } from "#/configure/config/types";
+import type { ResolverServiceConfig } from "#/configure/config/types";
+import type { NormalizedAppConfig } from "#/parser/app-config/types";
 
 describe("resolveResolverDefaultPermissionForFile", () => {
   let baseDir: string;
@@ -22,11 +23,11 @@ describe("resolveResolverDefaultPermissionForFile", () => {
     { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
   ] as const satisfies ResolverServiceConfig["defaultPermission"];
 
-  function config(): ResolverServiceInput {
+  function config(): NonNullable<NormalizedAppConfig["resolver"]> {
     return {
       main: { files: ["./main/*.ts"], defaultPermission: loggedIn },
       public: { files: ["./public/*.ts"], defaultPermission: "allowAnonymous" },
-      remote: { external: true },
+      attached: { attach: true },
     };
   }
 
@@ -49,7 +50,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
   });
 
   test("rejects a file claimed by more than one namespace", () => {
-    const overlapping: ResolverServiceInput = {
+    const overlapping: NonNullable<NormalizedAppConfig["resolver"]> = {
       main: { files: ["./main/*.ts"], defaultPermission: loggedIn },
       everything: { files: ["./**/*.ts"], defaultPermission: "allowAnonymous" },
     };

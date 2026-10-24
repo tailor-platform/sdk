@@ -3,7 +3,7 @@ import { z } from "zod";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { type initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { extractOwnedNamespaces } from "#/cli/shared/config";
+import { normalizedDbOf, extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -126,7 +126,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
     if (!options.yes) {
       const namespaceList = namespaces.join(", ");
       const confirmation = await prompt.confirm({
-        message: `This will truncate ALL tables in the following owned namespaces (external namespaces are excluded): ${namespaceList}. Continue?`,
+        message: `This will truncate ALL tables in the following owned namespaces (namespaces owned by another application are excluded): ${namespaceList}. Continue?`,
         default: false,
       });
       if (!confirmation) {
@@ -145,19 +145,19 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
   if (hasNamespace) {
     const namespace = assertDefined(options.namespace, "namespace option missing");
 
-    // Validate namespace exists in config and is not external
+    // Validate namespace exists in config and is owned by this application
     if (!namespaces.includes(namespace)) {
-      const dbConfig = config.db?.[namespace];
-      if (dbConfig && "external" in dbConfig) {
+      const dbConfig = normalizedDbOf(config)[namespace];
+      if (dbConfig && !dbConfig.owned) {
         throw CLIError({
           code: "TAILORDB_NAMESPACE_EXTERNAL",
-          message: `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here.`,
+          message: `Namespace "${namespace}" is owned by another application and cannot be truncated from here.`,
           suggestion: "Run truncate from the app that owns the namespace.",
         });
       }
       throw CLIError({
         code: "TAILORDB_NAMESPACE_NOT_FOUND",
-        message: `Namespace "${namespace}" not found in config. Available owned namespaces (external namespaces are excluded): ${namespaces.join(", ")}`,
+        message: `Namespace "${namespace}" not found in config. Available owned namespaces (namespaces owned by another application are excluded): ${namespaces.join(", ")}`,
       });
     }
 
@@ -244,7 +244,8 @@ export const truncateCommand = defineAppCommand({
     }),
     all: arg(z.boolean().default(false), {
       alias: "a",
-      description: "Truncate all tables in all owned namespaces (excludes external namespaces)",
+      description:
+        "Truncate all tables in all owned namespaces (excludes namespaces owned by another application)",
     }),
     namespace: arg(z.string().optional(), {
       alias: "n",

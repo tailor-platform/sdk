@@ -14,10 +14,28 @@ type DefinedIdp<Name extends string, Config, ClientNames extends string> = Confi
   provider(providerName: string, clientName: ClientNames): BuiltinIdP;
 } & IdpDefinitionBrand;
 
-export type IdPExternalConfig = { name: string; external: true };
+type IdPNonOwnedOptions = {
+  [Key in Exclude<keyof IdPOwnConfig, "name" | "external" | "attach">]?: never;
+};
+
+export type IdPExternalConfig = IdPNonOwnedOptions & {
+  name: string;
+  /** @deprecated since NEXT_RELEASE — use `attach: true` instead. codemod: v3/external-to-attach */
+  external: true;
+  attach?: never;
+};
+
+export type IdPAttachedConfig = IdPNonOwnedOptions & {
+  name: string;
+  attach: true;
+  external?: never;
+};
 
 type IdPOwnConfigInput = Omit<IdPInput, "permission"> & { permission?: IdPPermission };
 
-export type IdPOwnConfig = Omit<DefinedIdp<string, IdPOwnConfigInput, string>, "provider">;
+export type IdPOwnConfig = Omit<DefinedIdp<string, IdPOwnConfigInput, string>, "provider"> & {
+  external?: never;
+  attach?: never;
+};
 
-export type IdPConfig = IdPOwnConfig | IdPExternalConfig;
+export type IdPConfig = IdPOwnConfig | IdPExternalConfig | IdPAttachedConfig;

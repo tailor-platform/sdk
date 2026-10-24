@@ -3,6 +3,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { configArg, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { normalizedDbOf } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
@@ -33,7 +34,9 @@ function resolveNamespaceName(methodName: string, config: LoadedConfig): string 
     return undefined;
   }
   if (/TailorDB/.test(methodName)) {
-    const keys = Object.keys(config.db ?? {});
+    const keys = Object.entries(normalizedDbOf(config))
+      .filter(([, entry]) => entry.inSubgraph)
+      .map(([name]) => name);
     if (keys.length === 1) return keys[0];
     return undefined;
   }

@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/schema";
 import { isForbiddenGlobal } from "#/utils/node-builtins";
 import { LOG_LEVELS } from "./log-level";
+import type { TailorDBServiceConfigInput } from "#/types/tailordb.generated";
 
 const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -89,10 +91,70 @@ const buildOptionsSchema = z.strictObject({
 
 const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;
 
+export const TailorDBReferenceConfigSchema = z.discriminatedUnion("attach", [
+  z.strictObject({ attach: z.literal(true), schemaFrom: z.string().min(1).optional() }),
+  z.strictObject({ attach: z.literal(false), schemaFrom: z.string().min(1) }),
+]);
+
+const attachedServiceSchema = z.strictObject({ attach: z.literal(true) });
+const externalServiceSchema = z.strictObject({ external: z.literal(true) });
+const legacyServiceReferenceSchema = externalServiceSchema.transform(() => ({
+  attach: true as const,
+}));
+const serviceReferenceSchema = z.union([attachedServiceSchema, legacyServiceReferenceSchema]);
+const namedServiceReferenceSchema = z.union([
+  attachedServiceSchema.extend({ name: z.string().min(1) }),
+  externalServiceSchema
+    .extend({ name: z.string().min(1) })
+    .transform(({ name }) => ({ name, attach: true as const })),
+]);
+
+function dbEntrySchemaFor(value: unknown) {
+  if (!value || typeof value !== "object" || "files" in value) return TailorDBServiceConfigSchema;
+  if ("external" in value) return legacyServiceReferenceSchema;
+  if ("attach" in value || "schemaFrom" in value) return TailorDBReferenceConfigSchema;
+  return TailorDBServiceConfigSchema;
+}
+
+type DbEntryReference =
+  | z.input<typeof TailorDBReferenceConfigSchema>
+  | z.input<typeof legacyServiceReferenceSchema>;
+
+const dbEntrySchema = z
+  .custom<TailorDBServiceConfigInput | DbEntryReference>()
+  .transform(
+    (value, ctx): TailorDBServiceConfigInput | z.output<typeof TailorDBReferenceConfigSchema> => {
+      const schema = dbEntrySchemaFor(value);
+      const result = schema.safeParse(value);
+      if (!result.success) {
+        for (const issue of result.error.issues) ctx.addIssue({ ...issue });
+        return z.NEVER;
+      }
+      return schema === TailorDBServiceConfigSchema
+        ? (value as TailorDBServiceConfigInput)
+        : result.data;
+    },
+  );
+
+function serviceEntrySchema(named: boolean) {
+  return z.unknown().transform((value, ctx) => {
+    if (!value || typeof value !== "object" || !("attach" in value || "external" in value)) {
+      return value;
+    }
+    const schema = named ? namedServiceReferenceSchema : serviceReferenceSchema;
+    const result = schema.safeParse(value);
+    if (!result.success) {
+      for (const issue of result.error.issues) ctx.addIssue({ ...issue });
+      return z.NEVER;
+    }
+    return result.data;
+  });
+}
+
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
  * top-level fields with platform-side constraints (notably `id`); fields
- * that carry SDK builder objects (`auth`, `idp`, `db`, ...) are accepted
+ * that carry SDK builder objects (`auth`, `idp`, ...) are accepted
  * as opaque values, since their internal shapes are validated by their
  * own factory functions and parser-level schemas.
  *
@@ -122,10 +184,10 @@ export const AppConfigSchema = z
       })
       .optional(),
     metadata: metadataSchema.optional(),
-    db: z.unknown().optional(),
-    resolver: z.unknown().optional(),
-    idp: z.unknown().optional(),
-    auth: z.unknown().optional(),
+    db: z.record(z.string(), dbEntrySchema).optional(),
+    resolver: z.record(z.string(), serviceEntrySchema(false)).optional(),
+    idp: z.array(serviceEntrySchema(true)).optional(),
+    auth: serviceEntrySchema(true).optional(),
     executor: z.unknown().optional(),
     workflow: z.unknown().optional(),
     httpAdapter: z.unknown().optional(),
@@ -144,3 +206,21 @@ export const AppConfigSchema = z
       }
     }
   });
+
+export const NormalizedDbEntrySchema = z.union([
+  z.strictObject({
+    owned: z.literal(true),
+    inSubgraph: z.literal(true),
+    schemaSource: z.strictObject({
+      kind: z.literal("files"),
+      config: z.custom<TailorDBServiceConfigInput>(),
+    }),
+  }),
+  z.strictObject({
+    owned: z.literal(false),
+    inSubgraph: z.boolean(),
+    schemaSource: z.strictObject({ kind: z.literal("config"), path: z.string() }).optional(),
+  }),
+]);
+
+export const NormalizedDbSchema = z.record(z.string(), NormalizedDbEntrySchema);
