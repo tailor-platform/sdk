@@ -1134,6 +1134,26 @@ describe("tailordb migration generate rename candidates of each kind", () => {
 });
 
 describe("tailordb migration generate --data-only", () => {
+  const stderrOutput = () =>
+    vi
+      .mocked(process.stderr.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join("");
+
+  test.each([
+    { terminal: "without an interactive terminal", interactive: false, opens: false },
+    { terminal: "in an interactive terminal", interactive: true, opens: true },
+  ])("opens the configured editor only $terminal", async ({ interactive, opens }) => {
+    vi.stubEnv("EDITOR", "true");
+    vi.mocked(canPrompt).mockReturnValue(interactive);
+    addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(stderrOutput().includes("Opening migrate.ts")).toBe(opens);
+  });
+
   test("creates a script-only migration when the schema is unchanged", async () => {
     const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 

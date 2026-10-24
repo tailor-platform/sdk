@@ -690,14 +690,14 @@ function logPgliteSchemaResult(result: {
 
 /**
  * Open a generated migrate.ts in the configured editor, silently skipping
- * when no editor is configured, the file is missing, or the editor fails.
+ * when no editor is configured, the run is not interactive, the file is
+ * missing, or the editor fails.
  * @param {string} migrateFilePath - Path of the generated migration script
  * @returns {Promise<void>} Promise that resolves when the editor is closed or skipped
  */
 async function openMigrationScriptInEditor(migrateFilePath: string): Promise<void> {
   const editor = getConfiguredEditorCommand();
-  // The editor shares stdout, which carries the JSON result under --json.
-  if (!editor || logger.jsonMode) {
+  if (!editor || !canPrompt()) {
     return;
   }
 

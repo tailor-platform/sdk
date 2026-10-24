@@ -777,6 +777,28 @@ describe("script command results", () => {
     });
   });
 
+  test("does not open the configured editor without an interactive terminal", async () => {
+    vi.stubEnv("EDITOR", "true");
+    const stdinIsTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+
+    try {
+      const result = await runCommand(scriptCommand, ["0001"]);
+
+      expect(result.success).toBe(true);
+    } finally {
+      if (stdinIsTTY) Object.defineProperty(process.stdin, "isTTY", stdinIsTTY);
+      else delete (process.stdin as { isTTY?: boolean }).isTTY;
+    }
+    const stderr = vi
+      .mocked(process.stderr.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join("");
+    expect(stderr).not.toContain("Opening migrate.ts");
+  });
+
   test("creates migrate.ts as steps by default", async () => {
     writeInitialSchema(testDir, { User: snapshotType("User") });
     writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
