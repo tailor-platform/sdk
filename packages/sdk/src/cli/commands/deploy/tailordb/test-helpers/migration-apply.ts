@@ -24,7 +24,10 @@ const WORKSPACE_ID = "test-workspace";
 const NAMESPACE = "test-ns";
 const MIGRATIONS_DIR = "/test/migrations";
 const APP_NAME = "test-app";
-const NAMESPACE_TRN = `trn:v1:workspace:${WORKSPACE_ID}:tailordb:${NAMESPACE}`;
+
+function namespaceTrn(namespace: string) {
+  return `trn:v1:workspace:${WORKSPACE_ID}:tailordb:${namespace}`;
+}
 
 type MockClientOverrides = Partial<Record<keyof OperatorClient, unknown>>;
 
@@ -47,9 +50,9 @@ export function createMockClient(overrides: MockClientOverrides = {}): OperatorC
 
 export type RemoteCheckpoint = ReturnType<typeof createRemoteCheckpoint>;
 
-export function createRemoteCheckpoint(number: number | null) {
+export function createRemoteCheckpoint(initialNumber: number | null) {
   const state = {
-    number,
+    number: initialNumber,
     historyId: null as string | null,
     maintenanceMode: null as string | null,
     maintenanceModeChanges: [] as Array<string | null>,
@@ -88,7 +91,10 @@ export function createRemoteCheckpoint(number: number | null) {
         })),
         setMetadata: vi.fn(async (request: { trn: string; labels: Record<string, string> }) => {
           const maintenanceMode = request.labels["sdk-maintenance-mode"] ?? null;
-          if (request.trn === NAMESPACE_TRN && maintenanceMode !== state.maintenanceMode) {
+          if (
+            request.trn === namespaceTrn(NAMESPACE) &&
+            maintenanceMode !== state.maintenanceMode
+          ) {
             state.maintenanceMode = maintenanceMode;
             state.maintenanceModeChanges.push(maintenanceMode);
           }
@@ -154,7 +160,7 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
 
 export function typeMetaRequest(tableName: string, namespace = NAMESPACE) {
   return {
-    trn: `trn:v1:workspace:${WORKSPACE_ID}:tailordb:${namespace}:type:${tableName}`,
+    trn: `${namespaceTrn(namespace)}:type:${tableName}`,
     labels: { "sdk-name": APP_NAME },
   };
 }
