@@ -460,6 +460,67 @@ function referenceTrigger(
   ];
 }
 
+interface IncomingReference extends Reference {
+  /** Table whose array or nested column holds the reference */
+  child: string;
+  pgType: string;
+}
+
+function incomingReferences(
+  table: DDLTableConfig,
+  tables: ReadonlyMap<string, DDLTableConfig>,
+): IncomingReference[] {
+  return [...tables.values()].flatMap((child) =>
+    tableReferences(child)
+      .filter(
+        (reference) => !isConstraintReference(reference, tables) && reference.table === table.name,
+      )
+      .flatMap((reference) => {
+        const check = checkReference(reference, tables);
+        return "pgType" in check ? [{ ...reference, child: child.name, pgType: check.pgType }] : [];
+      }),
+  );
+}
+
+function holdsParent(reference: IncomingReference): string {
+  const column = `child.${identifier(reference.column)}`;
+  const parentValue = `OLD.${identifier(reference.field)}`;
+  const sameType = reference.pgType === mapFieldTypeToPostgresType(reference.type);
+  if (sameType && reference.path === "$[*]") return `${parentValue} = ANY(${column})`;
+  const comparison = sameType
+    ? `(held.v #>> '{}')::${reference.pgType} = ${parentValue}`
+    : `(held.v #>> '{}') = ${parentValue}::text`;
+  return `EXISTS (SELECT 1 FROM jsonb_path_query(to_jsonb(${column}), ${stringLiteral(reference.path)}) AS held(v) WHERE CASE WHEN jsonb_typeof(held.v) = 'null' THEN false ELSE ${comparison} END)`;
+}
+
+function referencedCheck(table: DDLTableConfig, reference: IncomingReference): string {
+  const message = `update or delete on table \`${table.name}\` violates foreign key constraint: some record is still referenced from table \`${reference.child}\``;
+  return [
+    `  IF (TG_OP = 'DELETE' OR NEW.${identifier(reference.field)} IS DISTINCT FROM OLD.${identifier(reference.field)}) AND EXISTS (SELECT 1 FROM ${identifier(reference.child)} AS child WHERE ${holdsParent(reference)}) THEN`,
+    `    RAISE EXCEPTION ${stringLiteral(message.replaceAll("%", "%%"))} USING ERRCODE = 'foreign_key_violation';`,
+    "  END IF;",
+  ].join("\n");
+}
+
+function referencedTrigger(
+  table: DDLTableConfig,
+  tables: ReadonlyMap<string, DDLTableConfig>,
+): string[] {
+  const references = incomingReferences(table, tables);
+  if (references.length === 0) return [];
+  const name = derivedIdentifier(table.name, "referenced", "fk");
+  const body = [
+    "BEGIN",
+    ...references.map((reference) => referencedCheck(table, reference)),
+    "  RETURN NULL;",
+    "END",
+  ].join("\n");
+  return [
+    `CREATE OR REPLACE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(body)}`,
+    `CREATE OR REPLACE TRIGGER ${name} AFTER DELETE OR UPDATE ON ${identifier(table.name)} FOR EACH ROW EXECUTE FUNCTION ${name}()`,
+  ];
+}
+
 /** What {@link generateTableDDL} needs to know about the other tables of the schema. */
 export interface TableDDLOptions {
   /** Every table of the schema, to resolve the types referenced columns point at */
@@ -471,8 +532,11 @@ export interface TableDDLOptions {
 /**
  * DDL statements that create one table: any sequences its string serial
  * fields draw from, the table, the sequences' ownership of their columns,
- * its unique indexes, then a trigger checking the references Postgres cannot
- * express as a FOREIGN KEY (inside array and nested columns). Every statement
+ * its unique indexes, then the triggers that enforce the references Postgres
+ * cannot express as a FOREIGN KEY (inside array and nested columns): one
+ * checking the references the table holds, one refusing to delete a row, or to
+ * change the key of a row, that another table's array or nested value still
+ * points at. Every statement
  * is `IF NOT EXISTS` or otherwise idempotent, so re-applying the script on a
  * database that already has the table is a no-op. Owning a sequence makes
  * `DROP TABLE` drop it and `TRUNCATE ... RESTART IDENTITY` reset it to the
@@ -533,6 +597,7 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
       references.filter((r) => !isConstraintReference(r, tables)),
       tables,
     ),
+    ...referencedTrigger(table, tables),
   ];
 }
 
