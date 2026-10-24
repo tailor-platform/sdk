@@ -949,10 +949,7 @@ interface RenameQuestion {
   claimed: Set<string>;
   /** Keys of this kind whose removal `--drop` confirmed. */
   dropped: ReadonlySet<string>;
-  /** What the prompt calls the added siblings. */
-  noun: "tables" | "fields" | "members";
-  /** What the prompt says the added sibling shares with the removed item. */
-  compatibility: "schema" | "type";
+  kind: "table" | "field" | "member";
   record: (newName: string) => void;
 }
 
@@ -967,7 +964,8 @@ async function promptRename(
   question: RenameQuestion,
   addedNames: string[],
 ): Promise<string | undefined> {
-  const { label, oldName, noun, compatibility } = question;
+  const { label, oldName, kind } = question;
+  const compatibility = kind === "table" ? "schema" : "type";
   const [firstName] = addedNames;
   if (addedNames.length === 1 && firstName) {
     const isRename = await prompt.confirm({
@@ -977,7 +975,7 @@ async function promptRename(
     return isRename ? firstName : undefined;
   }
   const selected = await prompt.select({
-    message: `${label} was removed. Was it renamed to one of these added ${noun}?`,
+    message: `${label} was removed. Was it renamed to one of these added ${kind}s?`,
     choices: [
       ...addedNames.map((name) => ({
         name: `Yes, renamed to ${name}`,
@@ -1043,8 +1041,7 @@ async function resolveRenames(
         keyOf: (name) => name,
         claimed: claimedTypes,
         dropped: droppedTypes,
-        noun: "tables",
-        compatibility: "schema",
+        kind: "table",
         record: (tableName) => {
           typeRenames.push({ previousTableName: removed.tableName, tableName });
         },
@@ -1059,8 +1056,7 @@ async function resolveRenames(
         keyOf: (name) => fieldKey(tableName, name),
         claimed: claimedFields,
         dropped: droppedFields,
-        noun: "fields",
-        compatibility: "type",
+        kind: "field",
         record: (fieldName) => {
           fieldRenames.push({ tableName, previousFieldName: removed.fieldName, fieldName });
         },
@@ -1076,8 +1072,7 @@ async function resolveRenames(
         keyOf: (name) => nestedMemberKey({ tableName, fieldName, path: [...parent, name] }),
         claimed: claimedMembers,
         dropped: droppedMembers,
-        noun: "members",
-        compatibility: "type",
+        kind: "member",
         record: (name) => {
           nestedMemberRenames.push({ tableName, fieldName, previousPath, path: [...parent, name] });
         },
