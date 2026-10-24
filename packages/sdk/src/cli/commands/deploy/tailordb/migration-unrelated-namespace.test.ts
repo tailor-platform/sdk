@@ -9,12 +9,11 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import * as migrationModule from "./migration";
 import {
-  createMockClient,
   createPlanResult,
+  createRemoteCheckpoint,
   gqlPermissionEntry,
   mkPendingMigration as createPendingMigration,
-  recordRemoteCheckpoint,
-  resetRemoteCheckpoint,
+  type RemoteCheckpoint,
   typeDeletion,
   typeEntry,
 } from "./test-helpers/migration-apply";
@@ -72,13 +71,15 @@ describe("migration flow: namespaces without pending migrations", () => {
     );
   }
 
+  let checkpoint: RemoteCheckpoint;
+
   beforeEach(() => {
-    resetRemoteCheckpoint(null);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(recordRemoteCheckpoint);
+    checkpoint = createRemoteCheckpoint(null);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
   });
 
   test("applies type and gqlPermission changes of a namespace without pending migrations", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration()]);
@@ -120,7 +121,7 @@ describe("migration flow: namespaces without pending migrations", () => {
     // their metadata itself. Leaving it to the non-migration branch would skip a
     // cross-config dependency record on any deploy that carries a migration, and
     // the owner's next solo deploy would turn publishing off without asking.
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration()]);

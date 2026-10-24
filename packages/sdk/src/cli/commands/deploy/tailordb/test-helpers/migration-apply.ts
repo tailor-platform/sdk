@@ -2,6 +2,10 @@ import { assert, vi } from "vitest";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/migration-number";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
+import {
+  sanitizeMigrationLabel,
+  type PendingMigration,
+} from "#/cli/commands/tailordb/migrate/types";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { DiffChange, MigrationDiff } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type {
@@ -10,10 +14,10 @@ import type {
   SnapshotSettings,
   TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { updateMigrationLabel } from "../migration";
 import type { TailorDBPlanResult } from "../plan";
 
 const WORKSPACE_ID = "test-workspace";
@@ -21,43 +25,12 @@ const NAMESPACE = "test-ns";
 const MIGRATIONS_DIR = "/test/migrations";
 const APP_NAME = "test-app";
 
-// One copy per test file: vitest.config.ts isolates the files that call vi.mock.
-export const remoteCheckpoint = { number: null as number | null, historyId: null as string | null };
+type MockClientOverrides = Partial<Record<keyof OperatorClient, unknown>>;
 
-export function resetRemoteCheckpoint(number: number | null): void {
-  remoteCheckpoint.number = number;
-  remoteCheckpoint.historyId = null;
-}
-
-export async function recordRemoteCheckpoint(
-  _client: OperatorClient,
-  _workspaceId: string,
-  _namespace: string,
-  number: number,
-  historyId?: string,
-): Promise<boolean> {
-  remoteCheckpoint.number = number;
-  remoteCheckpoint.historyId = historyId ?? null;
-  return true;
-}
-
-export function createMockClient(
-  overrides: Partial<Record<keyof OperatorClient, unknown>> = {},
-): OperatorClient {
+export function createMockClient(overrides: MockClientOverrides = {}): OperatorClient {
   return {
     createTailorDBService: vi.fn().mockResolvedValue({}),
-    getMetadata: vi.fn(async () => ({
-      metadata: {
-        labels: {
-          ...(remoteCheckpoint.number !== null && {
-            "sdk-migration": `m${String(remoteCheckpoint.number).padStart(4, "0")}`,
-          }),
-          ...(remoteCheckpoint.historyId && {
-            "sdk-migration-history": remoteCheckpoint.historyId,
-          }),
-        },
-      },
-    })),
+    getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     setMetadata: vi.fn().mockResolvedValue({}),
     listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
     createTailorDBType: vi.fn().mockResolvedValue({}),
@@ -69,6 +42,41 @@ export function createMockClient(
     deleteTailorDBService: vi.fn().mockResolvedValue({}),
     ...overrides,
   } as unknown as OperatorClient;
+}
+
+export type RemoteCheckpoint = ReturnType<typeof createRemoteCheckpoint>;
+
+export function createRemoteCheckpoint(number: number | null) {
+  const state = { number, historyId: null as string | null };
+  const record: typeof updateMigrationLabel = async (
+    _client,
+    _workspaceId,
+    _namespace,
+    number,
+    historyId,
+  ) => {
+    state.number = number;
+    state.historyId = historyId ?? null;
+    return true;
+  };
+  return {
+    state,
+    record,
+    createMockClient: (overrides: MockClientOverrides = {}): OperatorClient =>
+      createMockClient({
+        getMetadata: vi.fn(async () => ({
+          metadata: {
+            labels: {
+              ...(state.number !== null && {
+                "sdk-migration": sanitizeMigrationLabel(state.number),
+              }),
+              ...(state.historyId && { "sdk-migration-history": state.historyId }),
+            },
+          },
+        })),
+        ...overrides,
+      }),
+  };
 }
 
 export const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;

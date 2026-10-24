@@ -11,11 +11,10 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import * as migrationModule from "./migration";
 import {
-  createMockClient,
   createPlanResult,
+  createRemoteCheckpoint,
   mkPendingMigration,
-  recordRemoteCheckpoint,
-  resetRemoteCheckpoint,
+  type RemoteCheckpoint,
   snapshotAt,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
@@ -116,16 +115,18 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     return mkPendingMigration([change], { number, hasScript: false });
   }
 
+  let checkpoint: RemoteCheckpoint;
+
   beforeEach(() => {
-    resetRemoteCheckpoint(null);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(recordRemoteCheckpoint);
+    checkpoint = createRemoteCheckpoint(null);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
     vi.mocked(reconstructSnapshotFromMigrations).mockImplementation((_migrationsDir, maxVersion) =>
       snapshotAt(tablesByMigration, maxVersion),
     );
   });
 
   test("per-migration semantics: migration #1 prePhase must NOT apply removals declared in later migration #5", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
     setPendingMigrations([
@@ -153,7 +154,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
   });
 
   test("verification: only User-affecting migrations trigger updateTailorDBType for User", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
     setPendingMigrations([mkFieldMigration("field_added", 1, "SomeOtherType", "foo")]);
@@ -179,7 +180,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
       releaseFirstCreate = resolve;
     });
 
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
       const tableName = request.tailordbType?.name ?? "unknown";
       createStarts.push(tableName);

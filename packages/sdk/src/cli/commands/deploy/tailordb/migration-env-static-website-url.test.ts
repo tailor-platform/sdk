@@ -10,11 +10,10 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import * as migrationModule from "./migration";
 import {
-  createMockClient as createBaseMockClient,
   createPlanResult,
+  createRemoteCheckpoint,
   mkPendingMigration,
-  recordRemoteCheckpoint,
-  resetRemoteCheckpoint,
+  type RemoteCheckpoint,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -46,8 +45,10 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
 }));
 
 describe("applyTailorDB: env static website URL resolution for migration scripts", () => {
+  let checkpoint: RemoteCheckpoint;
+
   function createMockClient() {
-    return createBaseMockClient({
+    return checkpoint.createMockClient({
       getStaticWebsite: vi.fn().mockResolvedValue({
         staticwebsite: { url: "https://my-site.tailor.tech" },
       }),
@@ -82,8 +83,8 @@ describe("applyTailorDB: env static website URL resolution for migration scripts
   }
 
   beforeEach(() => {
-    resetRemoteCheckpoint(0);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(recordRemoteCheckpoint);
+    checkpoint = createRemoteCheckpoint(0);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
   });
 
   test("re-resolves an env static website placeholder before executing the migration script", async () => {

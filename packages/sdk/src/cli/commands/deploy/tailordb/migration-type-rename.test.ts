@@ -8,13 +8,11 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import * as migrationModule from "./migration";
 import {
-  createMockClient,
   createPlanResult,
+  createRemoteCheckpoint,
   gqlPermissionDeletion,
   mkPendingMigration,
-  recordRemoteCheckpoint,
-  remoteCheckpoint,
-  resetRemoteCheckpoint,
+  type RemoteCheckpoint,
   snapshotAt,
   typeDeletion,
 } from "./test-helpers/migration-apply";
@@ -175,16 +173,18 @@ describe("applyTailorDB: type rename migration flow", () => {
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(migrations);
   }
 
+  let checkpoint: RemoteCheckpoint;
+
   beforeEach(() => {
-    resetRemoteCheckpoint(0);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(recordRemoteCheckpoint);
+    checkpoint = createRemoteCheckpoint(0);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
     vi.mocked(reconstructSnapshotFromMigrations).mockImplementation((_migrationsDir, maxVersion) =>
       snapshotAt(tablesByMigration, maxVersion),
     );
   });
 
   test("creates the new table before the script and drops the old table after the checkpoint", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = buildPlanResult();
     setPendingMigrations([mkTypeRenameMigration(1)]);
 
@@ -197,14 +197,10 @@ describe("applyTailorDB: type rename migration flow", () => {
     vi.mocked(migrationModule.executeMigrations).mockImplementation(async () => {
       order.push("script");
     });
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
-      async (_client, _workspaceId, _namespace, number, historyId) => {
-        remoteCheckpoint.number = number;
-        remoteCheckpoint.historyId = historyId ?? null;
-        order.push("checkpoint");
-        return true;
-      },
-    );
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(async (...args) => {
+      order.push("checkpoint");
+      return checkpoint.record(...args);
+    });
     vi.mocked(client.deleteTailorDBGQLPermission).mockImplementation(async (req: unknown) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       order.push(`delete-perm:${(req as any)?.typeName}`);
@@ -228,7 +224,7 @@ describe("applyTailorDB: type rename migration flow", () => {
   });
 
   test("keeps the old type and does not advance the checkpoint when the script fails", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = buildPlanResult();
     setPendingMigrations([mkTypeRenameMigration(1)]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
@@ -249,7 +245,7 @@ describe("applyTailorDB: type rename migration flow", () => {
   });
 
   test("restores retargeted tables before deleting the new table on rollback", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = buildPlanResult({ withOrderUpdate: true });
     setPendingMigrations([mkTypeRenameMigration(1, { withOrderRetarget: true })]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(

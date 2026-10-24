@@ -8,11 +8,10 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import * as migrationModule from "./migration";
 import {
-  createMockClient,
   createPlanResult,
+  createRemoteCheckpoint,
   mkPendingMigration,
-  recordRemoteCheckpoint,
-  resetRemoteCheckpoint,
+  type RemoteCheckpoint,
   snapshotAt,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
@@ -93,16 +92,18 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
     return ((call[0] as any)?.tailordbType?.schema?.indexes ?? {}) as Record<string, any>;
   }
 
+  let checkpoint: RemoteCheckpoint;
+
   beforeEach(() => {
-    resetRemoteCheckpoint(null);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(recordRemoteCheckpoint);
+    checkpoint = createRemoteCheckpoint(null);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
     vi.mocked(reconstructSnapshotFromMigrations).mockImplementation((_migrationsDir, maxVersion) =>
       snapshotAt(tablesByMigration, maxVersion),
     );
   });
 
   test("prePhase omits a newly-added unique index; postPhase applies it", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
@@ -127,7 +128,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
   });
 
   test("prePhase keeps the previous definition for an index gaining unique; postPhase enforces it", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([

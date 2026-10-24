@@ -12,12 +12,11 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import * as migrationModule from "./migration";
 import {
-  createMockClient,
   createPlanResult,
+  createRemoteCheckpoint,
   gqlPermissionEntry,
   mkPendingMigration,
-  recordRemoteCheckpoint,
-  resetRemoteCheckpoint,
+  type RemoteCheckpoint,
   snapshotAt,
   snapshotTable,
   typeEntry,
@@ -87,17 +86,19 @@ describe("migration flow: creates of types predating the pending migrations", ()
     return vi.mocked(migrationModule.executeMigrations).mock.invocationCallOrder[0];
   }
 
+  let checkpoint: RemoteCheckpoint;
+
   beforeEach(() => {
     snapshotState.tablesByVersion = {};
-    resetRemoteCheckpoint(null);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(recordRemoteCheckpoint);
+    checkpoint = createRemoteCheckpoint(null);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
     vi.mocked(reconstructSnapshotFromMigrations).mockImplementation((_migrationsDir, maxVersion) =>
       snapshotAt(snapshotState.tablesByVersion, maxVersion),
     );
   });
 
   test("creates a baseline type no pending diff names, from its snapshot, before the script", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({
       creates: ["User", "Audit"],
       updates: ["Metrics"],
@@ -140,7 +141,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
   });
 
   test("data-only migration: every baseline type is created exactly once before the script", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({
       creates: ["User", "Audit"],
       gqlPermissionTypes: ["User"],
@@ -165,7 +166,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
   });
 
   test("creates a baseline type a later migration modifies before the earlier script", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({ creates: ["User"] });
     const baselineUser = snapshotTable("User", { name: { type: "string", required: true } });
     snapshotState.tablesByVersion = {
@@ -203,7 +204,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
   });
 
   test("does not pre-create a type that a later pending migration adds", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({ creates: ["Report", "Audit"] });
     const audit = snapshotTable("Audit", { legacy: { type: "string", required: false } });
     snapshotState.tablesByVersion = {
@@ -233,7 +234,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
   });
 
   test("does not pre-create a baseline type a pending migration removes and re-adds", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({ creates: ["Draft", "Audit"] });
     const audit = snapshotTable("Audit", { legacy: { type: "string", required: false } });
     const draft = snapshotTable("Draft", { name: { type: "string", required: true } });
