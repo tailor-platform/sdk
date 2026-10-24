@@ -30,7 +30,7 @@ import {
   type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
-import { mergeBundledScripts } from "./bundled-scripts";
+import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import { type PlanSummary } from "./change-set";
 import {
   confirmImportantResourceDeletion,
@@ -818,7 +818,7 @@ export function adjustApplicationForMigrationTest(
  * @param options - Deploy execution options
  * @param cliContext - Global CLI arguments to preserve in recovery actions
  * @param internalContext - Internal deployment behavior used by composed CLI workflows
- * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
+ * @returns Promise that resolves to `{ bundledScripts, httpAdapterScripts }` when `buildOnly` is true, otherwise void
  */
 async function deployInternal(
   options?: DeployOptions,
@@ -899,7 +899,10 @@ async function deployInternal(
 
     const targets = await build();
     if (buildOnly) {
-      return { bundledScripts: mergeBundledScripts(targets) };
+      return {
+        bundledScripts: mergeBundledScripts(targets),
+        httpAdapterScripts: collectHttpAdapterScripts(targets),
+      };
     }
 
     assertUniqueGlobalResourceNames(targets);

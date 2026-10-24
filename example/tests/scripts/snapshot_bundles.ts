@@ -10,6 +10,13 @@ const __filename = url.fileURLToPath(import.meta.url);
 const configPaths = ["tailor.config.ts", "tests/tailor.config.plugins-compat.ts"];
 const inlineSourcemapModes = ["true", "false"];
 
+function writeScripts(dir: string, scripts: ReadonlyMap<string, string>, extension: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [name, code] of scripts) {
+    fs.writeFileSync(path.join(dir, `${encodeURIComponent(name)}${extension}`), code);
+  }
+}
+
 async function writeBundles(configPath: string, outDir: string): Promise<void> {
   // A fresh build directory keeps the bundle cache from serving bundles from an earlier build.
   const buildDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-bundles-"));
@@ -22,11 +29,12 @@ async function writeBundles(configPath: string, outDir: string): Promise<void> {
     for (const [kind, scripts] of Object.entries<ReadonlyMap<string, string>>(
       result.bundledScripts,
     )) {
-      const kindDir = path.join(outDir, kind);
-      fs.mkdirSync(kindDir, { recursive: true });
-      for (const [name, code] of scripts) {
-        fs.writeFileSync(path.join(kindDir, `${encodeURIComponent(name)}.js`), code);
-      }
+      writeScripts(path.join(outDir, kind), scripts, ".js");
+    }
+    for (const [appName, { bundledInputs, bundledOutputs }] of result.httpAdapterScripts) {
+      const appDir = path.join(outDir, "httpAdapters", encodeURIComponent(appName));
+      writeScripts(appDir, bundledInputs, ".input.js");
+      writeScripts(appDir, bundledOutputs, ".output.js");
     }
   } finally {
     fs.rmSync(buildDir, { recursive: true, force: true });
@@ -34,8 +42,8 @@ async function writeBundles(configPath: string, outDir: string): Promise<void> {
 }
 
 /**
- * Writes the bundled functions of each example config, with inline sourcemaps on and off,
- * under `<outDir>/<config>-inline-<true|false>/<kind>/`. Each build runs in its own process.
+ * Writes the bundled functions and HTTP adapters of each example config, with inline sourcemaps
+ * on and off, under `<outDir>/<config>-inline-<true|false>/`. Each build runs in its own process.
  * @param outDir - Directory to write the snapshot into; must not exist yet
  */
 function snapshotBundles(outDir: string): void {
