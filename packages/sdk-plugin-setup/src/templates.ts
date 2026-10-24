@@ -121,13 +121,10 @@ export type RenderTagParams = {
   seed?: RenderSeed;
 };
 
-/** What a PR must satisfy before its preview deploys. */
-export type PreviewRequirement = "ready" | "label";
+export const PREVIEW_REQUIREMENTS = ["ready", "label"] as const;
 
-export const PREVIEW_REQUIREMENTS = [
-  "ready",
-  "label",
-] as const satisfies readonly PreviewRequirement[];
+/** What a PR must satisfy before its preview deploys. */
+export type PreviewRequirement = (typeof PREVIEW_REQUIREMENTS)[number];
 
 export type RenderPreviewParams = {
   workspaceName: string;

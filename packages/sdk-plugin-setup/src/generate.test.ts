@@ -1317,16 +1317,16 @@ describe("renderPreviewWorkflow", () => {
     });
   });
 
-  test.each([false, true])(
-    "cancels a superseded run as a whole, except from an event on a closed pull request (label required: %s)",
-    (labelRequired) => {
+  test.each([undefined, "ready", "label"] as const)(
+    "cancels a superseded run as a whole, except from an event on a closed pull request (require: %s)",
+    (require) => {
       const { content } = renderPreviewWorkflow({
         workspaceName: "my-app",
         branch: "main",
         environment: "my-app",
         packageManager: "pnpm",
         region: "us-west",
-        require: labelRequired ? "label" : undefined,
+        require,
       });
       const workflow = parseYAML(content) as {
         concurrency?: { group?: string; "cancel-in-progress"?: boolean };
@@ -2882,27 +2882,6 @@ export default defineConfig({
         generated.replace(topLevelConcurrency, userConcurrency),
       );
     });
-  });
-
-  test("preview: requiring a label adds a label filter to trigger", async () => {
-    await setupTarget({
-      kind: "preview",
-      workspaceName: "my-app",
-      region: "us-west",
-      require: "label",
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
-    });
-    const content = fs.readFileSync(
-      path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
-      "utf-8",
-    );
-    expect(content).toContain("tailor:preview");
-    expect(content).toContain("labeled");
   });
 
   describe("preview: requirement", () => {

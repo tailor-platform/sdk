@@ -24,12 +24,6 @@ function recordedPackageManagerUnlessDetected(inputs: LockInputs): PackageManage
 }
 
 /**
- * Translate a lock entry back into the setup options that regenerate it.
- * @param target - Lock entry to regenerate
- * @param common - Options shared by every target in this update run
- * @returns The setup options to regenerate this entry with
- */
-/**
  * Read the requirement of a preview target recorded before `require` existed: those workflows
  * always skipped drafts, and deployed only labeled PRs when `requirePreviewLabel` was set.
  * @param inputs - Inputs recorded in the lock
@@ -39,6 +33,12 @@ function legacyPreviewRequirement(inputs: LockInputs): PreviewRequirement {
   return inputs.requirePreviewLabel ? "label" : "ready";
 }
 
+/**
+ * Translate a lock entry back into the setup options that regenerate it.
+ * @param target - Lock entry to regenerate
+ * @param common - Options shared by every target in this update run
+ * @returns The setup options to regenerate this entry with
+ */
 export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTargetOptions {
   const { kind, workspaceName, inputs } = target;
   const dir = inputs.apps ? inputs.apps.map((app) => app.dir) : inputs.dir;
