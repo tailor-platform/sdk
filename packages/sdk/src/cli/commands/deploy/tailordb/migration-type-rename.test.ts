@@ -15,6 +15,7 @@ import {
   type RemoteCheckpoint,
   snapshotAt,
   typeDeletion,
+  typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -76,47 +77,9 @@ describe("applyTailorDB: type rename migration flow", () => {
   function buildPlanResult(options: { withOrderUpdate?: boolean } = {}) {
     return createPlanResult({
       type: {
-        creates: [
-          {
-            name: "Person",
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              tailordbType: {
-                name: "Person",
-                schema: {
-                  fields: {
-                    email: { type: "string", required: false },
-                  },
-                },
-              },
-            },
-          },
-        ],
+        creates: [typeEntry("Person", { fields: personType.fields })],
         updates: options.withOrderUpdate
-          ? [
-              {
-                name: "Order",
-                request: {
-                  workspaceId: "test-workspace",
-                  namespaceName: "test-ns",
-                  tailordbType: {
-                    name: "Order",
-                    schema: {
-                      fields: {
-                        ownerId: {
-                          type: "uuid",
-                          required: false,
-                          foreignKey: true,
-                          foreignKeyType: "Person",
-                          foreignKeyField: "id",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            ]
+          ? [typeEntry("Order", { fields: orderType("Person").fields })]
           : [],
         deletes: [typeDeletion("User")],
       },

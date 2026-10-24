@@ -16,6 +16,7 @@ import {
   mkPendingMigration,
   type RemoteCheckpoint,
   snapshotAt,
+  typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
@@ -74,23 +75,13 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     return createPlanResult({
       type: {
         updates: [
-          {
-            name: "User",
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              tailordbType: {
-                name: "User",
-                schema: {
-                  fields: [
-                    { name: "id", type: "uuid", required: true },
-                    { name: "name", type: "string", required: true },
-                    { name: "permissions", type: "string", required: false, array: true },
-                  ],
-                },
-              },
+          typeEntry("User", {
+            fields: {
+              id: { type: "uuid", required: true },
+              name: { type: "string", required: true },
+              permissions: { type: "string", required: false, array: true },
             },
-          },
+          }),
         ],
       },
       application: { authService: undefined },
@@ -193,24 +184,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
 
     const planResult = createPlanResult({
       type: {
-        creates: [
-          {
-            name: "SalesOrder",
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              tailordbType: { name: "SalesOrder", schema: { fields: {} } },
-            },
-          },
-          {
-            name: "User",
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              tailordbType: { name: "User", schema: { fields: {} } },
-            },
-          },
-        ],
+        creates: [typeEntry("SalesOrder", { fields: {} }), typeEntry("User", { fields: {} })],
       },
       application: { authService: undefined },
     });

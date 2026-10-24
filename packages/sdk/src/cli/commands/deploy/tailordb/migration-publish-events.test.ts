@@ -19,6 +19,7 @@ import {
   snapshotAt,
   snapshotTable,
   type SnapshotTablesByVersion,
+  typeDeletion,
   typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB, type MaintenanceModeRelease } from "./index";
@@ -665,14 +666,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     snapshotState.historyId = "hlocal";
     checkpoint.state.historyId = "hlocal";
     snapshotState.tablesByVersion = { 0: { Retired: retired }, 1: {} };
-    planResult.changeSet.type.deletes.push({
-      name: "Retired",
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        tailordbTypeName: "Retired",
-      },
-    });
+    planResult.changeSet.type.deletes.push(typeDeletion("Retired"));
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkPendingMigration([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -797,14 +791,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const retired = snapshotTable("Retired", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Retired: retired }, 1: {} };
-    planResult.changeSet.type.deletes.push({
-      name: "Retired",
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        tailordbTypeName: "Retired",
-      },
-    });
+    planResult.changeSet.type.deletes.push(typeDeletion("Retired"));
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkPendingMigration([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

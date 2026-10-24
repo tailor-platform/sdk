@@ -18,7 +18,9 @@ import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { updateMigrationLabel } from "../migration";
-import type { TailorDBPlanResult } from "../plan";
+import type { TailorDBChangeSet, TailorDBPlanResult } from "../plan";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const WORKSPACE_ID = "test-workspace";
 const NAMESPACE = "test-ns";
@@ -107,21 +109,18 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
 
 export const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
-interface ChangeEntries {
-  creates?: unknown[];
-  updates?: unknown[];
-  deletes?: unknown[];
-  unchanged?: unknown[];
-}
+type ChangeEntries<Group extends TailorDBChangeSet[keyof TailorDBChangeSet]> = Partial<
+  Pick<Group, "creates" | "updates" | "deletes" | "unchanged">
+>;
 
 interface PlanResultOptions {
-  type?: ChangeEntries;
-  gqlPermission?: ChangeEntries;
+  type?: ChangeEntries<TailorDBChangeSet["type"]>;
+  gqlPermission?: ChangeEntries<TailorDBChangeSet["gqlPermission"]>;
   application?: Partial<Application>;
   context?: Partial<TailorDBPlanResult["context"]>;
 }
 
-function changeGroup(entries: ChangeEntries = {}) {
+function changeGroup(entries: ChangeEntries<TailorDBChangeSet[keyof TailorDBChangeSet]> = {}) {
   return {
     creates: entries.creates ?? [],
     updates: entries.updates ?? [],
@@ -167,7 +166,7 @@ export function typeMetaRequest(tableName: string, namespace = NAMESPACE) {
 
 interface TypeEntryOptions {
   namespace?: string;
-  fields?: Record<string, SnapshotFieldConfig>;
+  fields?: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>;
 }
 
 export function typeEntry(tableName: string, options: TypeEntryOptions = {}) {

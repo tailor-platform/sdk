@@ -14,6 +14,7 @@ import {
   createRemoteCheckpoint,
   mkPendingMigration,
   type RemoteCheckpoint,
+  typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -59,17 +60,7 @@ describe("applyTailorDB: env static website URL resolution for migration scripts
     return createPlanResult({
       type: {
         creates: [
-          {
-            name: "StockReservation",
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              tailordbType: {
-                name: "StockReservation",
-                schema: { fields: [{ name: "id", type: "uuid", required: true }] },
-              },
-            },
-          },
+          typeEntry("StockReservation", { fields: { id: { type: "uuid", required: true } } }),
         ],
       },
       application: { env: applicationEnv },

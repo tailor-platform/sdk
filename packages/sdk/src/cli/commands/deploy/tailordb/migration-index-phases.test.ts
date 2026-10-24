@@ -13,6 +13,7 @@ import {
   mkPendingMigration,
   type RemoteCheckpoint,
   snapshotAt,
+  typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -59,16 +60,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
   function createMockPlanResult() {
     return createPlanResult({
       type: {
-        updates: [
-          {
-            name: "User",
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              tailordbType: { name: "User", schema: { fields: {} } },
-            },
-          },
-        ],
+        updates: [typeEntry("User", { fields: {} })],
       },
       application: { authService: undefined },
     });
