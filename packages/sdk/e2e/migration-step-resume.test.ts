@@ -4,7 +4,6 @@
  */
 
 import { describe, test, expect } from "vitest";
-import { getMigrationFiles } from "../src/cli/commands/tailordb/migrate/snapshot";
 import {
   DEPLOY_TEST_TIMEOUT_MS,
   GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
@@ -29,9 +28,7 @@ describe("E2E: TailorDB Migration Step Resume", { concurrent: false }, () => {
   test(
     "deploys the initial schema",
     async ({ signal }) => {
-      await ws.runGenerate(signal);
-      await ws.runDeploy(signal);
-      expect(await ws.getTailorDBTypeFields("User")).toEqual(
+      expect(await ws.deployInitialSchema(signal)).toEqual(
         expect.arrayContaining(["name", "email", "role"]),
       );
     },
@@ -41,13 +38,7 @@ describe("E2E: TailorDB Migration Step Resume", { concurrent: false }, () => {
   test(
     "generates the multi-step verification migration",
     async ({ signal }) => {
-      ws.writeUserTable(["role: db.string({ optional: true })", "verificationMarker: db.string()"]);
-
-      await ws.runGenerate(signal);
-
-      const files = getMigrationFiles(ws.migrationsDir);
-      expect(files.length).toBe(2);
-      expect(files[1]!.number).toBe(1);
+      expect(await ws.generateVerificationMigration(signal)).toEqual([0, 1]);
     },
     GENERATE_TEST_TIMEOUT_MS,
   );

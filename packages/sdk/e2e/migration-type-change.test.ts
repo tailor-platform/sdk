@@ -29,9 +29,7 @@ describe("E2E: TailorDB Migration Failure and Type Changes", { concurrent: false
   test(
     "deploys the initial schema",
     async ({ signal }) => {
-      await ws.runGenerate(signal);
-      await ws.runDeploy(signal);
-      expect(await ws.getTailorDBTypeFields("User")).toEqual(
+      expect(await ws.deployInitialSchema(signal)).toEqual(
         expect.arrayContaining(["name", "email", "role"]),
       );
     },

@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 import { aroundAll } from "vitest";
 import { resourceTrn } from "../src/cli/commands/deploy/label";
 import { migrationWorkflowResourceName } from "../src/cli/commands/deploy/tailordb/migration-workflow";
-import { getMigrationFilePath } from "../src/cli/commands/tailordb/migrate/snapshot";
+import {
+  getMigrationFilePath,
+  getMigrationFiles,
+} from "../src/cli/commands/tailordb/migrate/snapshot";
 import {
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
@@ -341,6 +344,28 @@ export type user = typeof user;
 
   private deployArgs(): string[] {
     return ["deploy", "--config", this.createConfig(), "--workspace-id", this.workspaceId, "--yes"];
+  }
+
+  /**
+   * Generate and deploy the fixture's User table.
+   * @param signal - The calling test's signal
+   * @returns The deployed User table's field names
+   */
+  async deployInitialSchema(signal: AbortSignal | undefined): Promise<string[]> {
+    await this.runGenerate(signal);
+    await this.runDeploy(signal);
+    return this.getTailorDBTypeFields("User");
+  }
+
+  /**
+   * Add a required `verificationMarker` field to User and generate its migration.
+   * @param signal - The calling test's signal
+   * @returns The numbers of the migrations in the migrations directory
+   */
+  async generateVerificationMigration(signal: AbortSignal | undefined): Promise<number[]> {
+    this.writeUserTable(["role: db.string({ optional: true })", "verificationMarker: db.string()"]);
+    await this.runGenerate(signal);
+    return getMigrationFiles(this.migrationsDir).map((file) => file.number);
   }
 
   /**
