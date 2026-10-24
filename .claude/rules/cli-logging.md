@@ -26,7 +26,7 @@ In plugin packages (`packages/sdk-plugin-*`), import these helpers from `@tailor
 - `logger.debug(message)` - Debug messages in dim color (output to stderr)
 - `logger.out(data)` - Primary output for stdout (string, object, or object[])
 - `logger.registerSecret(value)` - Registers a value to be redacted (`<redacted>`) from stderr diagnostic output (`info`/`success`/`warn`/`error`/`log`/`debug` and spinner lines). Does not affect `out()`. Call this as soon as a secret value (token, client secret, etc.) enters the process, not at each call site that later logs it.
-- `plainRedacted(text)` / `renderRedacted(stream, text)` - Strip colors from styled text, or prepare it for a stream, with registered secrets redacted even when inline colors split them. Use these instead of `stripVTControlCharacters` / `renderFor`, which lint rejects outside `logger.ts`.
+- `plainRedacted(text)` / `renderRedacted(stream, text)` - Strip colors from styled text, or prepare it for a stream, with registered secrets redacted even when inline colors split them. Use these instead of `stripVTControlCharacters` / `renderFor`, which lint rejects in `packages/sdk/src/cli` outside `logger.ts`.
 
 **LogMode Options:**
 
@@ -158,4 +158,4 @@ A schema validation failure on user input lists its issues in `message` and carr
 (`DEFINITION_INVALID`); build other cases from `flattenZodIssues()` and `formatIssueList()` in
 `cli/shared/zod-issues.ts`. Data the SDK or the Platform produced goes through
 `invalidDataError()`, an `internalError()`. `local/no-raw-zod-error` rejects a throwing `.parse()`
-or a rethrown `safeParse` error under `src/cli`.
+or a rethrown `safeParse` error under `packages/sdk/src/cli`.
