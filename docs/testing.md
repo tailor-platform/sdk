@@ -51,6 +51,8 @@ Located in `packages/sdk/e2e/`. CI runs these in the `sdk-e2e.yml` workflow (pul
 
 ### Type Assertions
 
+In `packages/sdk`, Vitest type-checks only `*.test-d.ts`, yet reports `Type Errors  no errors` on every run. A type assertion (`assertType`, `expectTypeOf`, `@ts-expect-error`) in a `*.test.ts` fails only under `pnpm typecheck`.
+
 `toMatchTypeOf` is **deprecated**. Use one of:
 
 - `toEqualTypeOf` — Exact type match
