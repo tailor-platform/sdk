@@ -191,26 +191,29 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
       return {} as Awaited<ReturnType<typeof client.createTailorDBType>>;
     });
 
-    const planResult = createMockPlanResult();
-    planResult.changeSet.type.creates = [
-      {
-        name: "SalesOrder",
-        request: {
-          workspaceId: "test-workspace",
-          namespaceName: "test-ns",
-          tailordbType: { name: "SalesOrder", schema: { fields: {} } },
-        },
+    const planResult = createPlanResult({
+      type: {
+        creates: [
+          {
+            name: "SalesOrder",
+            request: {
+              workspaceId: "test-workspace",
+              namespaceName: "test-ns",
+              tailordbType: { name: "SalesOrder", schema: { fields: {} } },
+            },
+          },
+          {
+            name: "User",
+            request: {
+              workspaceId: "test-workspace",
+              namespaceName: "test-ns",
+              tailordbType: { name: "User", schema: { fields: {} } },
+            },
+          },
+        ],
       },
-      {
-        name: "User",
-        request: {
-          workspaceId: "test-workspace",
-          namespaceName: "test-ns",
-          tailordbType: { name: "User", schema: { fields: {} } },
-        },
-      },
-    ];
-    planResult.changeSet.type.updates = [];
+      application: { authService: undefined },
+    });
 
     const migration = mkFieldMigration("field_added", 1, "SalesOrder", "reference");
     migration.diff.changes = [

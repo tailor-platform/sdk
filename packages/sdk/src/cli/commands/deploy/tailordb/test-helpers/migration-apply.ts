@@ -124,8 +124,7 @@ function changeGroup(entries: ChangeEntries = {}) {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createPlanResult(options: PlanResultOptions = {}): any {
+export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanResult {
   const namespacesWithMigrations: NamespaceWithMigrations[] = options.context
     ?.namespacesWithMigrations ?? [{ namespace: NAMESPACE, migrationsDir: MIGRATIONS_DIR }];
   return {
@@ -150,7 +149,7 @@ export function createPlanResult(options: PlanResultOptions = {}): any {
       migrationFileState: captureMigrationFileState(namespacesWithMigrations),
       ...options.context,
     },
-  };
+  } as unknown as TailorDBPlanResult;
 }
 
 export function typeMetaRequest(tableName: string, namespace = NAMESPACE) {
