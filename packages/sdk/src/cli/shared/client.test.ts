@@ -16,11 +16,13 @@ import {
   fetchMachineUserToken,
   fetchPaged,
   fetchPlatformMachineUserToken,
+  fetchUserInfo,
   getConsoleBaseUrl,
   getEffectivePlatformConfig,
   getOAuth2ClientId,
   getOrNull,
   getPlatformBaseUrl,
+  initOAuth2Client,
   initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
@@ -56,6 +58,58 @@ describe("client environment configuration", () => {
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.staging.tailor.test");
     const client = await import("./client");
     expect(client.getPlatformBaseUrl()).toBe("https://api.staging.tailor.test");
+  });
+});
+
+describe("initOAuth2Client", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllGlobals();
+  });
+
+  test("gives every OAuth2 request a deadline", async () => {
+    const fetchSpy = vi.fn<typeof fetch>(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const client = initOAuth2Client();
+    await client.settings.fetch?.("https://api.tailor.tech/oauth2/platform/token", {
+      method: "POST",
+    });
+
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("keeps the caller's abort signal alongside the deadline", async () => {
+    const fetchSpy = vi.fn<typeof fetch>(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchSpy);
+    const caller = new AbortController();
+    caller.abort();
+
+    const client = initOAuth2Client();
+    await client.settings.fetch?.("https://api.tailor.tech/oauth2/platform/token", {
+      signal: caller.signal,
+    });
+
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  });
+});
+
+describe("fetchUserInfo", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllGlobals();
+  });
+
+  test("gives the user info request a deadline", async () => {
+    const fetchSpy = vi.fn<typeof fetch>(
+      async () =>
+        new Response(JSON.stringify({ sub: "platform-user-sub", email: "u@example.com" })),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchUserInfo("access-token");
+
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });
 
