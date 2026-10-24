@@ -25,7 +25,7 @@ export function symlinkedTmpdir(): Disposable & { readonly realDir: string } {
     realDir,
     [Symbol.dispose]() {
       vi.unstubAllEnvs();
-      fs.rmSync(linkDir, { force: true });
+      fs.unlinkSync(linkDir);
       fs.rmSync(realDir, { recursive: true, force: true });
     },
   };
