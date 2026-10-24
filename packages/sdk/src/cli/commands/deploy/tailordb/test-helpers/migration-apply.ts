@@ -248,10 +248,13 @@ export function snapshotTable(
   return { name, pluralForm: `${name.toLowerCase()}s`, fields, ...(settings && { settings }) };
 }
 
+export type SnapshotTablesByVersion = Record<number, Record<string, TailorDBSnapshotType>>;
+
 export function snapshotAt(
-  tablesByVersion: Record<number, unknown>,
+  tablesByVersion: SnapshotTablesByVersion,
   maxVersion?: number,
 ): NormalizedSchemaSnapshot {
+  assert(Object.keys(tablesByVersion).length > 0, "empty snapshot fixture");
   const number = maxVersion ?? Math.max(...Object.keys(tablesByVersion).map(Number));
   const tables = tablesByVersion[number];
   assert(tables, `No snapshot fixture configured for migration number: ${number}`);

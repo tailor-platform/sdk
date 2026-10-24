@@ -15,6 +15,7 @@ import {
   mkPendingMigration as createPendingMigration,
   snapshotAt,
   snapshotTable,
+  type SnapshotTablesByVersion,
   typeDeletion,
   typeEntry,
   typeMetaRequest,
@@ -30,7 +31,7 @@ const SUB = "sub-ns";
 const state = vi.hoisted(() => ({
   checkpoints: new Map<string, number>(),
   migratingNamespaces: [] as string[],
-  tablesByDir: {} as Record<string, Record<number, unknown>>,
+  tablesByDir: {} as Record<string, SnapshotTablesByVersion>,
 }));
 
 vi.mock("./migration", async (importOriginal) => ({

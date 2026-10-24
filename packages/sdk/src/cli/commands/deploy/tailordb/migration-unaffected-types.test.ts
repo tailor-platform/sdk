@@ -19,6 +19,7 @@ import {
   type RemoteCheckpoint,
   snapshotAt,
   snapshotTable,
+  type SnapshotTablesByVersion,
   typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
@@ -45,7 +46,7 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
 
 // Per-test schema states keyed by migration number, so reconstruction returns
 // the state as of the requested checkpoint like the real replay does.
-const snapshotState = { tablesByVersion: {} as Record<number, unknown> };
+const snapshotState = { tablesByVersion: {} as SnapshotTablesByVersion };
 
 describe("migration flow: creates of types predating the pending migrations", () => {
   function createMockPlanResult(options: {

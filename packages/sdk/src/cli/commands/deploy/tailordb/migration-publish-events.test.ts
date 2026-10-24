@@ -18,6 +18,7 @@ import {
   type RemoteCheckpoint,
   snapshotAt,
   snapshotTable,
+  type SnapshotTablesByVersion,
   typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB, type MaintenanceModeRelease } from "./index";
@@ -46,7 +47,7 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
 // Per-test schema states keyed by migration number, so reconstruction returns
 // the state as of the requested checkpoint like the real replay does.
 const snapshotState = {
-  tablesByVersion: {} as Record<number, unknown>,
+  tablesByVersion: {} as SnapshotTablesByVersion,
   historyId: null as string | null,
 };
 
@@ -72,23 +73,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   ) {
     return checkpoint.createMockClient({
       listTailorDBTypes: vi.fn().mockImplementation(async () => {
-        const tables = snapshotState.tablesByVersion[0] as
-          | Record<
-              string,
-              {
-                settings?: {
-                  bulkUpsert?: boolean;
-                  publishEvents?: boolean;
-                  gqlOperations?: {
-                    create?: boolean;
-                    update?: boolean;
-                    delete?: boolean;
-                    read?: boolean;
-                  };
-                };
-              }
-            >
-          | undefined;
+        const tables = snapshotState.tablesByVersion[0];
         const names = options.existingTableNames ?? Object.keys(tables ?? {});
         const tailordbTypes = names.map((name) => {
           const snapshotSettings = tables?.[name]?.settings;
