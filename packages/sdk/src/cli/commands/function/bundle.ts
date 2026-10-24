@@ -28,7 +28,7 @@ import {
   INVOKER_EXPR,
   resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
+import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
@@ -63,6 +63,7 @@ interface BundleForRunOptions {
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
   inlineSourcemapDependencySources?: boolean | string[];
+  inlineSourcemapProjectSources?: ProjectSourcesFilter;
   /** Log level config value from defineConfig */
   logLevel?: LogLevelInput;
   /** Treeshake config value from defineConfig */
@@ -166,6 +167,8 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     chunk: buildResult.output[0],
     inlineSourcemap,
     dependencySources: options.inlineSourcemapDependencySources ?? false,
+    projectSources: options.inlineSourcemapProjectSources,
+    sourcesDir: process.cwd(),
   });
 
   return { bundledCode, scriptName };
