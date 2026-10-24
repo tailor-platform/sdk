@@ -69,7 +69,7 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   sourceFile: string;
   /** tsconfig resolved for the owning config */
   tsconfig: string | undefined;
-  /** Generates the entry module source, which is added to the cache key */
+  /** Generates the entry module source. The source is part of the cache key, so this also runs on a cache hit and must have no side effects */
   entry: (absoluteSourcePath: string) => string;
   /** Creates the plugin that rewrites the function's sources before path resolution; defaults to the start transform */
   createTransformPlugin?: () => rolldown.Plugin | undefined;
