@@ -28,7 +28,7 @@ vi.mock("#/cli/shared/config-loader", () => ({
 
 vi.mock("#/cli/shared/prompt", () => ({
   canPrompt: vi.fn(),
-  prompt: { confirm: vi.fn(), text: vi.fn() },
+  prompt: { confirm: vi.fn(), select: vi.fn(), text: vi.fn() },
 }));
 
 vi.mock("#/cli/services/application", () => ({
@@ -66,44 +66,47 @@ function renamedType(tableName: string, fieldName: string): ReturnType<typeof pa
   return type;
 }
 
-describe("tailordb migration generate with warning-tier changes", () => {
-  let tmpDir: string;
+let tmpDir: string;
 
+beforeEach(() => {
+  vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+  // A configured editor would be spawned after a migrate.ts is scaffolded
+  // and block the test run.
+  vi.stubEnv("EDITOR", undefined);
+  vi.stubEnv("VISUAL", undefined);
+  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-test-"));
+  state.namespaces = [];
+  vi.mocked(loadConfig).mockImplementation(
+    async () =>
+      ({
+        config: {
+          path: path.join(tmpDir, "tailor.config.ts"),
+          db: Object.fromEntries(
+            state.namespaces.map(({ namespace, migrationsDir }) => [
+              namespace,
+              { migration: { directory: migrationsDir } },
+            ]),
+          ),
+        },
+        plugins: [],
+      }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+  );
+  vi.mocked(canPrompt).mockReturnValue(false);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe("tailordb migration generate with warning-tier changes", () => {
   beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would be spawned after a migrate.ts is scaffolded
-    // and block the test run.
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-test-"));
-    state.namespaces = [];
     const userWithoutName = parsedType("User");
     delete userWithoutName.fields.name;
     addNamespace(tmpDir, "tailordb", "User", userWithoutName);
-
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
     vi.mocked(canPrompt).mockReturnValue(true);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   function generatedDiffPath(): string {
@@ -168,41 +171,6 @@ describe("tailordb migration generate with warning-tier changes", () => {
 });
 
 describe("tailordb migration generate field rename preflight", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would be spawned after a migrate.ts is scaffolded
-    // and block the test run.
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-rename-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
   test("reports every unresolved namespace and writes no migration", async () => {
     const first = addNamespace(tmpDir, "tailordb", "User", renamedType("User", "displayName"));
     const second = addNamespace(tmpDir, "analyticsdb", "User", renamedType("User", "displayName"));
@@ -279,45 +247,12 @@ describe("tailordb migration generate field rename preflight", () => {
 });
 
 describe("tailordb migration generate with an unsupported field type change", () => {
-  let tmpDir: string;
-
   function retypedType(tableName: string, type: string): ReturnType<typeof parsedType> {
     const parsed = parsedType(tableName);
     const field = parsed.fields.name!;
     parsed.fields.name = { ...field, config: { ...field.config, type } };
     return parsed;
   }
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-expand-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
 
   test("still fails with the manual guidance when the conversion is not requested", async () => {
     const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
@@ -601,8 +536,6 @@ describe("tailordb migration generate with an unsupported field type change", ()
 });
 
 describe("tailordb migration generate nested member rename preflight", () => {
-  let tmpDir: string;
-
   function nestedType(memberName: string): ReturnType<typeof parsedType> {
     const type = parsedType("User");
     type.fields.address = {
@@ -633,38 +566,6 @@ describe("tailordb migration generate nested member rename preflight", () => {
     state.namespaces.push(entry);
     return entry;
   }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-nested-rename-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
 
   test("fails on an unresolved nested member rename candidate and writes no migration", async () => {
     const entry = addNestedNamespace("tailordb", "zipCode");
@@ -789,41 +690,6 @@ describe("tailordb migration generate nested member rename preflight", () => {
 });
 
 describe("tailordb migration generate type rename preflight", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would be spawned after a migrate.ts is scaffolded
-    // and block the test run.
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-type-rename-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
   function addRenamedTypeNamespace(namespace: string): TestNamespace {
     const migrationsDir = path.join(tmpDir, namespace);
     writeInitialSchema(migrationsDir, { User: snapshotType("User") });
@@ -918,42 +784,356 @@ describe("tailordb migration generate type rename preflight", () => {
   });
 });
 
-describe("tailordb migration generate --data-only", () => {
-  let tmpDir: string;
+describe("tailordb migration generate rename candidates of each kind", () => {
+  interface Schemas {
+    baseline: Record<string, ReturnType<typeof snapshotType>>;
+    local: Record<string, ReturnType<typeof parsedType>>;
+  }
+
+  function addressMembers(names: readonly string[]) {
+    return Object.fromEntries(names.map((name) => [name, { type: "string", required: false }]));
+  }
+
+  const kinds = [
+    {
+      kind: "table",
+      removed: ["User", "Account", "Order"],
+      added: ["Person", "Member", "Purchase"],
+      target: (name: string) => name,
+      schemas: (removed: readonly string[], added: readonly string[]): Schemas => ({
+        baseline: Object.fromEntries(removed.map((name) => [name, snapshotType(name)])),
+        local: Object.fromEntries(added.map((name) => [name, parsedType(name)])),
+      }),
+      renamed: (previous: string, next: string) =>
+        expect.objectContaining({
+          kind: "table_renamed",
+          previousTableName: previous,
+          tableName: next,
+        }),
+      conflictMessage: "--rename and --drop conflict for: User, Account",
+      unresolvedMessage:
+        "Possible rename(s) detected:\n  - Order → Member, Purchase? (namespace: tailordb)",
+      confirmMessage:
+        "User was removed and Person was added with a compatible schema. Was it renamed to Person?",
+      selectPrompt: {
+        message: "User was removed. Was it renamed to one of these added tables?",
+        choices: [
+          { name: "Yes, renamed to Person", value: "Person" },
+          { name: "Yes, renamed to Member", value: "Member" },
+          { name: "No, User was removed", value: null },
+        ],
+      },
+    },
+    {
+      kind: "field",
+      removed: ["name", "email", "phone"],
+      added: ["displayName", "mail", "tel"],
+      target: (name: string) => `User.${name}`,
+      schemas: (removed: readonly string[], added: readonly string[]): Schemas => {
+        const baseline = snapshotType("User");
+        const local = parsedType("User");
+        delete baseline.fields.name;
+        delete local.fields.name;
+        for (const name of removed) baseline.fields[name] = { type: "string", required: true };
+        for (const name of added) {
+          local.fields[name] = { name, config: { type: "string", required: true } };
+        }
+        return { baseline: { User: baseline }, local: { User: local } };
+      },
+      renamed: (previous: string, next: string) =>
+        expect.objectContaining({
+          kind: "field_renamed",
+          tableName: "User",
+          previousFieldName: previous,
+          fieldName: next,
+        }),
+      conflictMessage: "--rename and --drop conflict for: User.name, User.email",
+      unresolvedMessage:
+        "Possible rename(s) detected:\n  - User.phone → mail, tel? (namespace: tailordb)",
+      confirmMessage:
+        "User.name was removed and displayName was added with a compatible type. Was it renamed to displayName?",
+      selectPrompt: {
+        message: "User.name was removed. Was it renamed to one of these added fields?",
+        choices: [
+          { name: "Yes, renamed to displayName", value: "displayName" },
+          { name: "Yes, renamed to mail", value: "mail" },
+          { name: "No, name was removed", value: null },
+        ],
+      },
+    },
+    {
+      kind: "nested member",
+      removed: ["zip", "city", "street"],
+      added: ["zipCode", "town", "road"],
+      target: (name: string) => `User.address.${name}`,
+      schemas: (removed: readonly string[], added: readonly string[]): Schemas => {
+        const baseline = snapshotType("User");
+        baseline.fields.address = {
+          type: "nested",
+          required: false,
+          fields: addressMembers(removed),
+        };
+        const local = parsedType("User");
+        local.fields.address = {
+          name: "address",
+          config: { type: "nested", required: false, fields: addressMembers(added) },
+        };
+        return { baseline: { User: baseline }, local: { User: local } };
+      },
+      renamed: (previous: string, next: string) =>
+        expect.objectContaining({
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          memberRenames: [{ previousPath: [previous], path: [next] }],
+        }),
+      conflictMessage: "--rename and --drop conflict for: User.address.zip, User.address.city",
+      unresolvedMessage:
+        "Possible rename(s) detected:\n  - User.address.street → town, road? (namespace: tailordb)",
+      confirmMessage:
+        "User.address.zip was removed and zipCode was added with a compatible type. Was it renamed to zipCode?",
+      selectPrompt: {
+        message: "User.address.zip was removed. Was it renamed to one of these added members?",
+        choices: [
+          { name: "Yes, renamed to zipCode", value: "zipCode" },
+          { name: "Yes, renamed to town", value: "town" },
+          { name: "No, zip was removed", value: null },
+        ],
+      },
+    },
+  ];
+
+  function addSchemas(schemas: Schemas): string {
+    const migrationsDir = path.join(tmpDir, "tailordb");
+    writeInitialSchema(migrationsDir, schemas.baseline);
+    state.namespaces.push({ namespace: "tailordb", migrationsDir, localTypes: schemas.local });
+    return migrationsDir;
+  }
+
+  function addEveryKind(): string {
+    const baselineUser = snapshotType("User");
+    baselineUser.fields.address = {
+      type: "nested",
+      required: false,
+      fields: addressMembers(["zip"]),
+    };
+    const localUser = renamedType("User", "displayName");
+    localUser.fields.address = {
+      name: "address",
+      config: { type: "nested", required: false, fields: addressMembers(["zipCode"]) },
+    };
+    return addSchemas({
+      baseline: { Account: snapshotType("Account"), User: baselineUser },
+      local: { Person: parsedType("Person"), User: localUser },
+    });
+  }
+
+  function generatedChanges(migrationsDir: string) {
+    return loadDiff(path.join(migrationsDir, "0001", "diff.json")).changes;
+  }
 
   beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would be spawned after a migrate.ts is scaffolded
-    // and block the test run.
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-data-only-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+  });
+
+  test.each(kinds)(
+    "rejects every $kind that both --rename and --drop name",
+    async ({ removed, added, target, schemas, conflictMessage }) => {
+      const migrationsDir = addSchemas(schemas(removed, added));
+
+      const result = await runCommand(generateCommand, [
+        "--yes",
+        "--rename",
+        `${target(removed[0]!)}:${added[0]}`,
+        "--rename",
+        `${target(removed[1]!)}:${added[1]}`,
+        "--drop",
+        target(removed[0]!),
+        "--drop",
+        target(removed[1]!),
+      ]);
+
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RENAME_DROP_CONFLICT",
+        message: conflictMessage,
+      });
+      expect(fs.existsSync(path.join(migrationsDir, "0001"))).toBe(false);
+    },
+  );
+
+  test.each(kinds)(
+    "reports only the $kind candidates and targets that flags leave open",
+    async ({ removed, added, target, schemas, unresolvedMessage }) => {
+      addSchemas(schemas(removed, added));
+
+      const result = await runCommand(generateCommand, [
+        "--yes",
+        "--rename",
+        `${target(removed[0]!)}:${added[0]}`,
+        "--drop",
+        target(removed[1]!),
+      ]);
+
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RENAME_UNRESOLVED",
+        message: unresolvedMessage,
+      });
+    },
+  );
+
+  test.each(kinds)(
+    "does not ask about a $kind whose only target an earlier answer claimed",
+    async ({ removed, added, target, schemas, renamed, confirmMessage }) => {
+      const migrationsDir = addSchemas(schemas(removed.slice(0, 2), added.slice(0, 1)));
+
+      const result = await runCommand(generateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(prompt.confirm).toHaveBeenCalledWith({ message: confirmMessage, default: true });
+      expect(prompt.confirm).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining(`${target(removed[1]!)} was removed`),
+        }),
+      );
+      expect(generatedChanges(migrationsDir)).toEqual(
+        expect.arrayContaining([renamed(removed[0]!, added[0]!)]),
+      );
+    },
+  );
+
+  test.each(kinds)(
+    "offers every compatible target of a $kind to choose from",
+    async ({ removed, added, schemas, renamed, selectPrompt }) => {
+      const migrationsDir = addSchemas(schemas(removed.slice(0, 1), added.slice(0, 2)));
+      vi.mocked(prompt.select).mockResolvedValue(added[1]);
+
+      const result = await runCommand(generateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(prompt.select).toHaveBeenCalledWith(selectPrompt);
+      expect(generatedChanges(migrationsDir)).toEqual(
+        expect.arrayContaining([renamed(removed[0]!, added[1]!)]),
+      );
+    },
+  );
+
+  test("reports conflicting fields first, then nested members, then tables", async () => {
+    addEveryKind();
+    const tableFlags = ["--rename", "Account:Person", "--drop", "Account"];
+    const memberFlags = ["--rename", "User.address.zip:zipCode", "--drop", "User.address.zip"];
+    const fieldFlags = ["--rename", "User.name:displayName", "--drop", "User.name"];
+
+    const everyKind = await runCommand(generateCommand, [
+      "--yes",
+      ...tableFlags,
+      ...memberFlags,
+      ...fieldFlags,
+    ]);
+    const withoutFields = await runCommand(generateCommand, [
+      "--yes",
+      ...tableFlags,
+      ...memberFlags,
+    ]);
+
+    expect(everyKind.error).toMatchObject({
+      message: "--rename and --drop conflict for: User.name",
+    });
+    expect(withoutFields.error).toMatchObject({
+      message: "--rename and --drop conflict for: User.address.zip",
+    });
+  });
+
+  test("still offers a table whose dotted name matches a field that --rename claimed", async () => {
+    addSchemas({
+      baseline: { Account: snapshotType("Account"), User: snapshotType("User") },
+      local: {
+        "User.displayName": parsedType("User.displayName"),
+        User: renamedType("User", "displayName"),
+      },
+    });
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User.name:displayName",
+    ]);
+
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      message:
+        "Possible rename(s) detected:\n  - Account → User.displayName? (namespace: tailordb)",
+    });
+  });
+
+  test("does not offer a field whose dotted key matches a field renamed earlier in the run", async () => {
+    const snapshotWithField = (tableName: string, fieldName: string) => {
+      const type = snapshotType(tableName);
+      type.fields[fieldName] = type.fields.name!;
+      delete type.fields.name;
+      return type;
+    };
+    addSchemas({
+      baseline: { A: snapshotWithField("A", "b.c"), "A.b": snapshotWithField("A.b", "x") },
+      local: { A: renamedType("A", "d"), "A.b": renamedType("A.b", "c") },
+    });
+
+    await runCommand(generateCommand, []);
+
+    expect(prompt.confirm).toHaveBeenCalledWith({
+      message: "A.b.c was removed and d was added with a compatible type. Was it renamed to d?",
+      default: true,
+    });
+    expect(prompt.confirm).not.toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("A.b.x was removed") }),
     );
-    vi.mocked(canPrompt).mockReturnValue(false);
   });
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  test("reports unresolved tables, then fields, then nested members", async () => {
+    addEveryKind();
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      message: [
+        "Possible rename(s) detected:",
+        "  - Account → Person? (namespace: tailordb)",
+        "  - User.name → displayName? (namespace: tailordb)",
+        "  - User.address.zip → zipCode? (namespace: tailordb)",
+      ].join("\n"),
+    });
   });
 
+  test("asks about tables, then fields, then nested members", async () => {
+    const [table, field, member] = kinds;
+    const migrationsDir = addEveryKind();
+
+    const result = await runCommand(generateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(vi.mocked(prompt.confirm).mock.calls.slice(0, 3)).toEqual([
+      [
+        {
+          message:
+            "Account was removed and Person was added with a compatible schema. Was it renamed to Person?",
+          default: true,
+        },
+      ],
+      [{ message: field!.confirmMessage, default: true }],
+      [{ message: member!.confirmMessage, default: true }],
+    ]);
+    expect(generatedChanges(migrationsDir)).toEqual(
+      expect.arrayContaining([
+        table!.renamed("Account", "Person"),
+        field!.renamed("name", "displayName"),
+        member!.renamed("zip", "zipCode"),
+      ]),
+    );
+  });
+});
+
+describe("tailordb migration generate --data-only", () => {
   test("creates a script-only migration when the schema is unchanged", async () => {
     const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 
@@ -1117,38 +1297,9 @@ describe("tailordb migration generate --data-only", () => {
 });
 
 describe("tailordb migration generate declined confirmations", () => {
-  let tmpDir: string;
-
   beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-decline-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
     vi.mocked(canPrompt).mockReturnValue(true);
     vi.mocked(prompt.confirm).mockResolvedValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   test("fails without deleting migrations when --init is declined", async () => {
@@ -1211,39 +1362,6 @@ describe("tailordb migration generate declined confirmations", () => {
 });
 
 describe("tailordb migration generate JSON output", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("EDITOR", undefined);
-    vi.stubEnv("VISUAL", undefined);
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-json-test-"));
-    state.namespaces = [];
-    vi.mocked(loadConfig).mockImplementation(
-      async () =>
-        ({
-          config: {
-            path: path.join(tmpDir, "tailor.config.ts"),
-            db: Object.fromEntries(
-              state.namespaces.map(({ namespace, migrationsDir }) => [
-                namespace,
-                { migration: { directory: migrationsDir } },
-              ]),
-            ),
-          },
-          plugins: [],
-        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
-    );
-    vi.mocked(canPrompt).mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
   function migrationFile(entry: TestNamespace, number: string, name: string): string {
     return path.join(entry.migrationsDir, number, name);
   }
