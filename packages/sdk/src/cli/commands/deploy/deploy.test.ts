@@ -1,6 +1,7 @@
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger, symbols } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -811,6 +812,102 @@ describe("confirmDeploymentPlans", () => {
     expect(plain).toContain('TailorDB table "Order"');
     logSpy.mockRestore();
   });
+
+  const dryRunWarnings: Array<{
+    warning: string;
+    plan: () => Pick<
+      Parameters<typeof confirmDeploymentPlans>[0],
+      "deployments" | "missingDependentApps"
+    >;
+  }> = [
+    {
+      warning:
+        "TailorDB migration checkpoints and history IDs need to be updated before this deployment:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.context.checkpointRepairs = [
+          {
+            namespace: "tailordb",
+            from: 5,
+            to: 0,
+            fromHistoryId: null,
+            toHistoryId: "htailordb",
+          },
+        ];
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+    {
+      warning: "Applications recorded as depending on this deploy are missing:",
+      plan: () => ({
+        deployments: [plannedDeployment("my-app", emptyResults())],
+        missingDependentApps: [
+          {
+            resource: 'TailorDB table "Order"',
+            resourceType: "tailordb.type",
+            namespace: "tailordb",
+            name: "Order",
+            scope: "resource",
+            appId: "subscriber-id",
+            reason: "subscribes",
+          },
+        ],
+      }),
+    },
+    {
+      warning: "Application name mismatch detected:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.conflicts.push({
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB service",
+          resourceName: "shared",
+          currentOwner: "old-app",
+        });
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+    {
+      warning: "Existing resources not tracked by tailor were found:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.unmanaged.push({
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB service",
+          resourceName: "legacy",
+        });
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+    {
+      warning: "The following resources will be deleted:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+  ];
+
+  test.for(
+    dryRunWarnings.flatMap((testCase) => [false, true].map((yes) => ({ ...testCase, yes }))),
+  )(
+    "dry-run warns '$warning' without confirming it (yes: $yes)",
+    async ({ warning, plan, yes }) => {
+      using _logger = silenceLogger("warn", "log", "success", "newline");
+      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+
+      await confirmDeploymentPlans({ ...plan(), yes, dryRun: true });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(warning);
+      expect(
+        [...vi.mocked(logger.warn).mock.calls, ...vi.mocked(logger.success).mock.calls]
+          .flat()
+          .join("\n"),
+      ).not.toContain("--yes flag specified");
+    },
+  );
 });
 
 describe("printPlanResults", () => {
@@ -1270,6 +1367,57 @@ describe("printDeploymentPlans", () => {
     };
     expect(summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
     expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
+
+    outSpy.mockRestore();
+  });
+
+  test("lists missing dependent applications in warnings, with scope only for a workflow's jobs", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const appId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+
+    printDeploymentPlans([plannedDeployment("supplier", emptyResults())], {
+      dryRun: true,
+      missingDependentApps: [
+        {
+          resource: 'TailorDB table "Order"',
+          resourceType: "tailordb.type",
+          namespace: "db",
+          name: "Order",
+          scope: "resource",
+          appId,
+          reason: "publish-events",
+        },
+        {
+          resource: 'Jobs of workflow "nightly"',
+          resourceType: "workflow",
+          name: "nightly",
+          scope: "jobs",
+          appId,
+          reason: "publish-events",
+        },
+      ],
+    });
+
+    const payload = outSpy.mock.calls[0]?.[0] as { warnings: unknown[] };
+    expect(payload.warnings).toEqual([
+      {
+        type: "missingDependentApp",
+        resourceType: "tailordb.type",
+        namespace: "db",
+        name: "Order",
+        appId,
+        reason: "publish-events",
+      },
+      {
+        type: "missingDependentApp",
+        resourceType: "workflow",
+        name: "nightly",
+        scope: "jobs",
+        appId,
+        reason: "publish-events",
+      },
+    ]);
 
     outSpy.mockRestore();
   });

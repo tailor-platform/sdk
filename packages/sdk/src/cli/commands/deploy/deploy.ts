@@ -38,6 +38,7 @@ import {
   confirmMissingDependentApps,
   confirmOwnerConflict,
   confirmUnmanagedResources,
+  type ConfirmMode,
   type ImportantResourceDeletion,
   type MissingDependentApp,
 } from "./confirm";
@@ -636,13 +637,12 @@ export async function planDeploymentTargets(
 
 export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
   const { deployments, yes, dryRun = false, missingDependentApps = [] } = params;
-  if (!dryRun) {
-    await confirmMigrationCheckpointRepairs(
-      deployments.flatMap((deployment) => deployment.tailorDB.context.checkpointRepairs),
-      yes,
-    );
-  }
-  await confirmMissingDependentApps(missingDependentApps, yes);
+  const mode: ConfirmMode = dryRun ? "dry-run" : yes ? "yes" : "prompt";
+  await confirmMigrationCheckpointRepairs(
+    deployments.flatMap((deployment) => deployment.tailorDB.context.checkpointRepairs),
+    mode,
+  );
+  await confirmMissingDependentApps(missingDependentApps, mode);
   const targetAppNames = new Set(deployments.map((deployment) => deployment.application.name));
   const resourceOwners = collectDeploymentResourceOwners(deployments);
   const scheduledRenamedAppDeletes = new Set<string>();
@@ -654,12 +654,12 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     await confirmOwnerConflict(
       conflicts,
       deployment.application.name,
-      yes,
+      mode,
       deployment.application.id,
     );
 
     const unmanaged = collectUnmanagedResources(results);
-    await confirmUnmanagedResources(unmanaged, deployment.application.name, yes);
+    await confirmUnmanagedResources(unmanaged, deployment.application.name, mode);
 
     importantDeletions.push(...collectImportantResourceDeletions(results));
 
@@ -683,7 +683,7 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     }
   }
 
-  await confirmImportantResourceDeletion(importantDeletions, yes);
+  await confirmImportantResourceDeletion(importantDeletions, mode);
 }
 
 async function validateDeploymentPlans(
@@ -1040,7 +1040,11 @@ async function deployInternal(
         );
     let planSummary: PlanSummary | undefined =
       dryRun || !needsUrlResolution
-        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun, pendingDeployedHooks })
+        ? printDeploymentPlans(deployments, {
+            dryRun: options?.dryRun,
+            pendingDeployedHooks,
+            missingDependentApps,
+          })
         : undefined;
 
     if (dryRun) {
