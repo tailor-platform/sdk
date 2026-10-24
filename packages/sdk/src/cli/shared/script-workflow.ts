@@ -254,8 +254,6 @@ export async function withScriptWorkflow<T>(
       name,
       code: options.code,
       description: options.description,
-      appName: undefined,
-      appId: undefined,
     });
     workflowId = await createTemporaryWorkflow(
       {
@@ -263,8 +261,6 @@ export async function withScriptWorkflow<T>(
         workspaceId,
         name,
         jobFunctionNames: [name],
-        appName: undefined,
-        appId: undefined,
         subject: SUBJECT,
       },
       created,

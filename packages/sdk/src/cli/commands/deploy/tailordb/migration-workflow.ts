@@ -127,8 +127,7 @@ async function uploadMigrationFunction(
     workspaceId,
     name,
     code,
-    appName,
-    appId,
+    owner: { appName, appId },
     mode,
     description: "Temporary function for a TailorDB migration",
     prelude: `globalThis.console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n`,
@@ -179,8 +178,7 @@ interface CreateMigrationWorkflowParams {
   name: string;
   /** Job functions to create on the uploaded function, the main one included. */
   jobFunctionNames: readonly string[];
-  appName: string;
-  appId: string | undefined;
+  owner: { appName: string; appId: string | undefined };
   /** Extra labels for the workflow. */
   workflowLabels?: Record<string, string>;
 }
@@ -255,7 +253,7 @@ export async function executeMigrationAsWorkflow(
   try {
     await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
     workflowId = await createMigrationWorkflow(
-      { client, workspaceId, name, jobFunctionNames: [name], appName, appId },
+      { client, workspaceId, name, jobFunctionNames: [name], owner: { appName, appId } },
       created,
     );
     executionIdsBeforeStart = new Set(
@@ -1169,8 +1167,7 @@ export async function executeMigrationStepsAsWorkflow(
         workspaceId,
         name,
         jobFunctionNames,
-        appName,
-        appId,
+        owner: { appName, appId },
         workflowLabels: { [MIGRATION_PLAN_LABEL_KEY]: plan },
       },
       created,

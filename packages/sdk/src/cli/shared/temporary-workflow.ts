@@ -34,9 +34,24 @@ const CHUNK_SIZE = 64 * 1024;
 
 /** Owning application recorded in the labels of every temporary resource. */
 interface TemporaryResourceOwner {
-  /** Owning application, recorded in the resources' labels; no ownership labels are written when undefined */
-  appName: string | undefined;
-  appId: string | undefined;
+  /** Application recorded in the labels; the resources carry no labels at all when undefined */
+  owner?: { appName: string; appId: string | undefined };
+}
+
+interface LabelTemporaryResourceParams extends TemporaryResourceOwner {
+  client: OperatorClient;
+  trn: string;
+  /** Extra labels for the resource. */
+  metadata?: Record<string, string>;
+}
+
+async function labelTemporaryResource(params: LabelTemporaryResourceParams): Promise<void> {
+  const { client, trn, owner, metadata } = params;
+  if (!owner) return;
+  await writeMetadataLabelsDirect(
+    client,
+    await buildMetaRequest({ trn, appName: owner.appName, appId: owner.appId, metadata }),
+  );
 }
 
 export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
@@ -55,13 +70,13 @@ export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
 }
 
 /**
- * Upload a bundled script to the function registry and label it as owned by the app.
+ * Upload a bundled script to the function registry and, with an owner, label it as owned by the app.
  * @param params - Function to upload
  */
 export async function uploadTemporaryFunction(
   params: UploadTemporaryFunctionParams,
 ): Promise<void> {
-  const { client, workspaceId, name, code, description, appName, appId, mode = "create" } = params;
+  const { client, workspaceId, name, code, description, owner, mode = "create" } = params;
   const content = `${params.prelude ?? ""}${code}`;
   const buffer = Buffer.from(content, "utf-8");
   const info = {
@@ -93,15 +108,11 @@ export async function uploadTemporaryFunction(
   } else {
     await client.updateFunctionRegistry(stream());
   }
-  if (appName === undefined) return;
-  await writeMetadataLabelsDirect(
+  await labelTemporaryResource({
     client,
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "function_registry", name),
-      appName,
-      appId,
-    }),
-  );
+    trn: resourceTrn(workspaceId, "function_registry", name),
+    owner,
+  });
 }
 
 export interface TeardownTemporaryWorkflowParams {
@@ -225,7 +236,7 @@ export interface CreateTemporaryWorkflowParams extends TemporaryResourceOwner {
   jobFunctionNames: readonly string[];
   /** What the resources run, used in errors (e.g. `migration`). */
   subject: string;
-  /** Extra labels for the workflow. */
+  /** Extra labels for the workflow, written only with an owner. */
   workflowLabels?: Record<string, string>;
 }
 
@@ -245,7 +256,7 @@ export async function createTemporaryWorkflow(
   params: CreateTemporaryWorkflowParams,
   created: CreatedTemporaryWorkflow,
 ): Promise<string> {
-  const { client, workspaceId, name, appName, appId, subject } = params;
+  const { client, workspaceId, name, owner, subject } = params;
   const versions: Record<string, bigint> = {};
   for (const jobFunctionName of params.jobFunctionNames) {
     const { jobFunction } = await client.createWorkflowJobFunction({
@@ -254,16 +265,11 @@ export async function createTemporaryWorkflow(
       scriptRef: name,
       publishExecutionEvents: false,
     });
-    if (appName !== undefined) {
-      await writeMetadataLabelsDirect(
-        client,
-        await buildMetaRequest({
-          trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
-          appName,
-          appId,
-        }),
-      );
-    }
+    await labelTemporaryResource({
+      client,
+      trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
+      owner,
+    });
     const version = jobFunction?.version;
     if (version === undefined) {
       throw internalError(
@@ -284,17 +290,12 @@ export async function createTemporaryWorkflow(
     throw internalError(`Temporary ${subject} workflow '${name}' was created without an id.`);
   }
   created.workflowId = workflowId;
-  if (appName !== undefined) {
-    await writeMetadataLabelsDirect(
-      client,
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow", name),
-        appName,
-        appId,
-        ...(params.workflowLabels ? { metadata: params.workflowLabels } : {}),
-      }),
-    );
-  }
+  await labelTemporaryResource({
+    client,
+    trn: resourceTrn(workspaceId, "workflow", name),
+    owner,
+    metadata: params.workflowLabels,
+  });
   return workflowId;
 }
 
