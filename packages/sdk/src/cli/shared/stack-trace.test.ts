@@ -617,6 +617,17 @@ describe("formatMappedError without embedded source text", () => {
     expect(plain).toContain("> 3");
   });
 
+  test("reads the snippet of a file in a node_modules dot-directory from its file on disk", () => {
+    const generated =
+      "node_modules/.pnpm/@prisma+client@6.0.0/node_modules/.prisma/client/index.js";
+    const dir = projectWith({ [generated]: installedSource });
+
+    const plain = format(generated, null, dir);
+
+    expect(plain).toContain('throw new Error("from the installed package")');
+    expect(plain).toContain("> 3");
+  });
+
   test("prefers the embedded source text over the file on disk", () => {
     const dir = projectWith({ "node_modules/lib/index.js": installedSource });
     const embedded = ["a", "b", "embedded text on the error line", "d", "e"].join("\n");
