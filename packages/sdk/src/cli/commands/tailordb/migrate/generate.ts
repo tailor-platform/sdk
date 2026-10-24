@@ -937,17 +937,12 @@ interface NamespaceRenameSpecs {
 
 /** A removed field, table, or nested member with the added siblings it could have been renamed to. */
 interface RenameQuestion {
-  /** Dotted key of the removed item: `Table`, `Table.field`, or `Table.field.member`. */
   label: string;
-  /** Name of the removed item. */
+  /** Not derived from `label`: names can contain dots, so splitting `label` cannot recover it. */
   oldName: string;
-  /** Compatible added sibling names, in diff order. */
   added: string[];
-  /** Dotted key of a sibling with the given name. */
   keyOf: (name: string) => string;
-  /** Keys of this kind that a confirmed rename already uses. */
   claimed: Set<string>;
-  /** Keys of this kind whose removal `--drop` confirmed. */
   dropped: ReadonlySet<string>;
   kind: "table" | "field" | "member";
   record: (newName: string) => void;
