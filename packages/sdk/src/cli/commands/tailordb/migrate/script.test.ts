@@ -4,6 +4,7 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { canPrompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
@@ -31,6 +32,11 @@ import type { MigrationDiff } from "./diff-calculator";
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
+}));
+
+vi.mock("#/cli/shared/prompt", async (importOriginal) => ({
+  ...(await importOriginal()),
+  canPrompt: vi.fn(() => false),
 }));
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations_script__");
@@ -777,26 +783,23 @@ describe("script command results", () => {
     });
   });
 
-  test("does not open the configured editor without an interactive terminal", async () => {
+  test.each([
+    { outcome: "does not open", terminal: "without an interactive terminal", interactive: false },
+    { outcome: "opens", terminal: "in an interactive terminal", interactive: true },
+  ])("$outcome the configured editor $terminal", async ({ interactive }) => {
     vi.stubEnv("EDITOR", "true");
-    const stdinIsTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
-    Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
+    vi.mocked(canPrompt).mockReturnValueOnce(interactive);
     writeInitialSchema(testDir, { User: snapshotType("User") });
     writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
 
-    try {
-      const result = await runCommand(scriptCommand, ["0001"]);
+    const result = await runCommand(scriptCommand, ["0001"]);
 
-      expect(result.success).toBe(true);
-    } finally {
-      if (stdinIsTTY) Object.defineProperty(process.stdin, "isTTY", stdinIsTTY);
-      else delete (process.stdin as { isTTY?: boolean }).isTTY;
-    }
+    expect(result.success).toBe(true);
     const stderr = vi
       .mocked(process.stderr.write)
       .mock.calls.map(([chunk]) => String(chunk))
       .join("");
-    expect(stderr).not.toContain("Opening migrate.ts");
+    expect(stderr.includes("Opening migrate.ts")).toBe(interactive);
   });
 
   test("creates migrate.ts as steps by default", async () => {

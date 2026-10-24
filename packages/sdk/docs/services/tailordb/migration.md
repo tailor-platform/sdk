@@ -96,7 +96,7 @@ A typical change cycle:
      DB types: ./migrations/0001/db.ts
    ```
 
-   If `EDITOR` or `VISUAL` is set, `migrate.ts` opens automatically when the command runs in an interactive terminal outside CI without JSON output. `tailordb migration script` does the same.
+   If `EDITOR` or `VISUAL` is set, `migrate.ts` opens automatically when the command runs in an interactive terminal outside CI without JSON output. `tailordb migration script` opens the file it scaffolds the same way.
 
 3. **Edit `migrate.ts`** to populate data for the new required field:
 
