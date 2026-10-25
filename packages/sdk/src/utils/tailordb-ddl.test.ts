@@ -1012,22 +1012,64 @@ describe("deleting a parent that an array or nested value points at", { timeout:
     );
   });
 
-  test("a row that only points at itself can be deleted", async () => {
-    const db = await setup([
-      {
-        name: "Node",
-        fields: {
-          id: { type: "uuid" },
-          ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Node" },
-        },
+  describe("a table whose array points at its own rows", () => {
+    const node: DDLTableConfig = {
+      name: "Node",
+      fields: {
+        id: { type: "uuid" },
+        ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Node" },
       },
+    };
+    const stillReferencedFromNode =
+      /update or delete on table `Node` violates foreign key constraint: some record is still referenced from table `Node`/;
+
+    test("refuses to delete a row that only points at itself", async () => {
+      const db = await setup([node]);
+      const id = crypto.randomUUID();
+      await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [id, `{${id}}`]);
+
+      await expect(db.query(`DELETE FROM "Node" WHERE id = $1`, [id])).rejects.toThrow(
+        stillReferencedFromNode,
+      );
+    });
+
+    test("refuses to delete in one statement two rows that point at each other", async () => {
+      const db = await setup([node]);
+      const [first, second] = [crypto.randomUUID(), crypto.randomUUID()];
+      await db.query(`INSERT INTO "Node" (id) VALUES ($1)`, [second]);
+      await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [first, `{${second}}`]);
+
+      await expect(
+        db.query(`DELETE FROM "Node" WHERE id IN ($1, $2)`, [first, second]),
+      ).rejects.toThrow(stillReferencedFromNode);
+    });
+
+    test("deletes the referencing row first, then the row it pointed at", async () => {
+      const db = await setup([node]);
+      const [first, second] = [crypto.randomUUID(), crypto.randomUUID()];
+      await db.query(`INSERT INTO "Node" (id) VALUES ($1)`, [second]);
+      await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [first, `{${second}}`]);
+
+      await db.query(`DELETE FROM "Node" WHERE id = $1`, [first]);
+      await db.query(`DELETE FROM "Node" WHERE id = $1`, [second]);
+
+      const { rows } = await db.query(`SELECT 1 FROM "Node"`);
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  test("a nested value that is not a uuid does not stop deleting a parent", async () => {
+    const db = await setup();
+    const id = await insertParent(db);
+    await db.exec("SET session_replication_role = replica");
+    await db.query(`INSERT INTO "Child" (info) VALUES ($1::jsonb)`, [
+      JSON.stringify({ ownerID: "legacy-123" }),
     ]);
-    const id = crypto.randomUUID();
-    await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [id, `{${id}}`]);
+    await db.exec("SET session_replication_role = origin");
 
-    await db.query(`DELETE FROM "Node" WHERE id = $1`, [id]);
+    await db.query(`DELETE FROM "Parent" WHERE id = $1`, [id]);
 
-    const { rows } = await db.query(`SELECT 1 FROM "Node"`);
+    const { rows } = await db.query(`SELECT 1 FROM "Parent"`);
     expect(rows).toHaveLength(0);
   });
 

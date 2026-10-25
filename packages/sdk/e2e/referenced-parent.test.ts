@@ -10,62 +10,31 @@
 
 import * as fs from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
-import * as os from "node:os";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
-import { describe, test, expect, aroundAll } from "vitest";
+import { describe, test, expect } from "vitest";
 import {
   formatMigrationNumber,
   getMigrationFilePath,
   getMigrationFiles,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
-import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
-import { loadAccessToken } from "../src/cli/shared/context";
 import { createKyselyPGlite } from "../src/vitest/pglite-kysely";
-import { CLI_BUDGET_MS, cliTestTimeout, runCli, type CliResult } from "./cli";
-import {
-  resolveE2ERunId,
-  resolveE2EWorkspaceRegion,
-  trackWorkspace,
-  trackTempDir,
-} from "./globalSetup";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const FIXTURE_DIR = path.join(__dirname, "fixtures", "migration");
-
-const ciRunId = resolveE2ERunId();
-const testRunId = Date.now().toString(36);
-const testAppName = `parentref-e2e-${testRunId}`;
-const testWorkspaceName = `e2e-ws-${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
-const tailordbName = `parentrefdb-${testRunId}`;
+import { CLI_BUDGET_MS, cliTestTimeout, runCli } from "./cli";
+import { GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS, MigrationWorkspace } from "./migration-workspace";
 
 const PARENT_ID = "70000000-0000-4000-8000-000000000001";
+const SECOND_ID = "70000000-0000-4000-8000-000000000002";
+
+const REFUSED_WRITE_TIMEOUT_MS = cliTestTimeout(
+  CLI_BUDGET_MS.local,
+  CLI_BUDGET_MS.local,
+  CLI_BUDGET_MS.migratingDeploy,
+);
 
 describe("E2E: parent referenced from an array or nested value", { concurrent: false }, () => {
-  let workspaceId: string;
-  let client: OperatorClient;
-  let tempDir: string;
-  let migrationsDir: string;
+  const ws = new MigrationWorkspace("parent");
+  ws.register();
   let markerCount = 0;
-
-  function runInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
-    return runCli(args, { cwd: tempDir, timeoutMs, signal });
-  }
-
-  function createConfig(): string {
-    const template = fs.readFileSync(path.join(FIXTURE_DIR, "config.template.ts"), "utf-8");
-    const configPath = path.join(tempDir, "tailor.config.ts");
-    fs.writeFileSync(
-      configPath,
-      template
-        .replace(/\{\{APP_NAME\}\}/g, testAppName)
-        .replace(/\{\{TAILORDB_NAME\}\}/g, tailordbName),
-    );
-    return configPath;
-  }
 
   function writeOrderType(markers: number): void {
     const markerFields = Array.from(
@@ -73,13 +42,14 @@ describe("E2E: parent referenced from an array or nested value", { concurrent: f
       (_, index) => `  marker${index}: db.string({ optional: true }),\n`,
     ).join("");
     fs.writeFileSync(
-      path.join(tempDir, "tailordb", "order.ts"),
+      path.join(ws.tempDir, "tailordb", "order.ts"),
       `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 import { user } from "./user";
 
 export const order = db.table("Order", {
   ownerIDs: db.uuid({ array: true, optional: true }).relation({ type: "keyOnly", toward: { table: user } }),
   emails: db.string({ array: true, optional: true }).relation({ type: "keyOnly", toward: { table: user, key: "email" } }),
+  siblingIDs: db.uuid({ array: true, optional: true }).relation({ type: "keyOnly", toward: { table: "self" } }),
   info: db.object(
     { ownerID: db.uuid({ optional: true }).relation({ type: "keyOnly", toward: { table: user } }) },
     { optional: true },
@@ -92,18 +62,28 @@ export type order = typeof order;
   }
 
   function latestMigrationNumber(): number {
-    return Math.max(...getMigrationFiles(migrationsDir).map((f) => f.number));
+    return Math.max(...getMigrationFiles(ws.migrationsDir).map((f) => f.number));
   }
 
-  function refusedWriteScript(order: string, refused: string, email: string): string {
-    return `import type { Transaction } from "./db";
-
-export async function main(trx: Transaction): Promise<void> {
-  await trx
+  function parentAndOrder(order: string, email: string): string {
+    return `  await trx
     .insertInto("User")
     .values({ id: "${PARENT_ID}", name: "Parent", email: "${email}" })
     .execute();
-  await trx.insertInto("Order").values(${order}).execute();
+  await trx.insertInto("Order").values(${order}).execute();`;
+  }
+
+  function orders(...rows: string[]): string {
+    return rows
+      .map((row) => `  await trx.insertInto("Order").values(${row}).execute();`)
+      .join("\n");
+  }
+
+  function refusedWriteScript(setup: string, refused: string): string {
+    return `import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+${setup}
 
   let message: string | null = null;
   try {
@@ -122,8 +102,8 @@ export async function main(trx: Transaction): Promise<void> {
   }
 
   async function runOnPglite(migrationNumber: number): Promise<void> {
-    const schemaPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
-    const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+    const schemaPath = getMigrationFilePath(ws.migrationsDir, migrationNumber, "pgliteSchema");
+    const scriptPath = getMigrationFilePath(ws.migrationsDir, migrationNumber, "migrate");
     const { pgliteSchema } = await import(
       `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(schemaPath, "utf8"))).toString("base64")}`
     );
@@ -133,118 +113,46 @@ export async function main(trx: Transaction): Promise<void> {
     const pglite = new PGlite();
     const db = createKyselyPGlite(pglite);
     try {
-      await pglite.exec(pgliteSchema[tailordbName]);
+      await pglite.exec(pgliteSchema[ws.tailordbName]);
       await db.transaction().execute(main);
     } finally {
       await db.destroy();
     }
   }
 
-  async function migrateWithScript(
-    script: string,
-    signal: AbortSignal,
-    pglite = true,
-  ): Promise<CliResult> {
+  async function migrateWithScript(script: string, signal: AbortSignal) {
     markerCount += 1;
     writeOrderType(markerCount);
-    const configPath = createConfig();
-    await runInTempDir(
-      ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
-      CLI_BUDGET_MS.local,
-      signal,
-    );
+    await ws.runGenerate(signal);
     const migrationNumber = latestMigrationNumber();
-    await runInTempDir(
+    await runCli(
       [
         "tailordb",
         "migration",
         "script",
         formatMigrationNumber(migrationNumber),
         "--config",
-        configPath,
+        ws.createConfig(),
       ],
-      CLI_BUDGET_MS.local,
-      signal,
+      { cwd: ws.tempDir, timeoutMs: CLI_BUDGET_MS.local, signal },
     );
-    fs.writeFileSync(getMigrationFilePath(migrationsDir, migrationNumber, "migrate"), script);
-    if (pglite) await runOnPglite(migrationNumber);
-    return runInTempDir(
-      ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
-      CLI_BUDGET_MS.migratingDeploy,
-      signal,
-    );
+    ws.overwriteMigrationScript(migrationNumber, script);
+    await runOnPglite(migrationNumber);
+    return ws.tryDeploy(signal);
   }
-
-  aroundAll(async (runSuite) => {
-    const accessToken = await loadAccessToken();
-    client = await initOperatorClient(accessToken);
-    const region = await resolveE2EWorkspaceRegion(client);
-
-    const createResp = await client.createWorkspace({
-      workspaceName: testWorkspaceName,
-      workspaceRegion: region,
-      deleteProtection: false,
-      organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
-      folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
-    });
-    workspaceId = createResp.workspace!.id!;
-    await trackWorkspace(client, workspaceId);
-    process.env.TAILOR_PLATFORM_WORKSPACE_ID = workspaceId;
-
-    const sdkRoot = path.resolve(__dirname, "..");
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "parentref-e2e-"));
-    trackTempDir(tempDir);
-    migrationsDir = path.join(tempDir, "migrations");
-
-    fs.mkdirSync(path.join(tempDir, "tailordb"), { recursive: true });
-    fs.mkdirSync(migrationsDir, { recursive: true });
-    fs.copyFileSync(
-      path.join(FIXTURE_DIR, "tailordb", "user.ts"),
-      path.join(tempDir, "tailordb", "user.ts"),
-    );
-    const generatedDir = path.join(tempDir, "generated");
-    fs.mkdirSync(generatedDir, { recursive: true });
-    fs.copyFileSync(
-      path.join(FIXTURE_DIR, "generated", "tailordb.ts"),
-      path.join(generatedDir, "tailordb.ts"),
-    );
-    fs.mkdirSync(path.join(tempDir, "seed", "data"), { recursive: true });
-    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ type: "module" }));
-
-    const nodeModulesDir = path.join(tempDir, "node_modules");
-    const tailorPlatformDir = path.join(nodeModulesDir, "@tailor-platform");
-    fs.mkdirSync(tailorPlatformDir, { recursive: true });
-    fs.symlinkSync(sdkRoot, path.join(tailorPlatformDir, "sdk"));
-    const sdkNodeModules = path.join(sdkRoot, "node_modules");
-    fs.symlinkSync(path.join(sdkNodeModules, "kysely"), path.join(nodeModulesDir, "kysely"));
-    fs.symlinkSync(
-      path.join(sdkNodeModules, "@tailor-platform", "function-kysely-tailordb"),
-      path.join(tailorPlatformDir, "function-kysely-tailordb"),
-    );
-
-    writeOrderType(0);
-    await runSuite();
-  }, 300000);
 
   test(
     "deploys the schema the cases build on",
     async ({ signal }) => {
-      const configPath = createConfig();
+      writeOrderType(0);
+      await ws.runGenerate(signal);
+      await ws.runDeploy(signal);
 
-      await runInTempDir(
-        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
-        CLI_BUDGET_MS.local,
-        signal,
+      expect(await ws.getTailorDBTypeFields("Order")).toEqual(
+        expect.arrayContaining(["ownerIDs", "emails", "siblingIDs", "info"]),
       );
-      const deploy = await runInTempDir(
-        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
-        CLI_BUDGET_MS.deploy,
-        signal,
-      );
-
-      expect(deploy.exitCode).toBe(0);
     },
-    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.deploy),
+    GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
   );
 
   test(
@@ -252,16 +160,15 @@ export async function main(trx: Transaction): Promise<void> {
     async ({ signal }) => {
       const deploy = await migrateWithScript(
         refusedWriteScript(
-          `{ ownerIDs: ["${PARENT_ID}"] }`,
+          parentAndOrder(`{ ownerIDs: ["${PARENT_ID}"] }`, "array@example.com"),
           `trx.deleteFrom("User").where("id", "=", "${PARENT_ID}").execute()`,
-          "array@example.com",
         ),
         signal,
       );
 
-      expect(deploy.exitCode).toBe(0);
+      expect(deploy).toMatchObject({ ok: true });
     },
-    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+    REFUSED_WRITE_TIMEOUT_MS,
   );
 
   test(
@@ -269,16 +176,15 @@ export async function main(trx: Transaction): Promise<void> {
     async ({ signal }) => {
       const deploy = await migrateWithScript(
         refusedWriteScript(
-          `{ info: { ownerID: "${PARENT_ID}" } }`,
+          parentAndOrder(`{ info: { ownerID: "${PARENT_ID}" } }`, "nested@example.com"),
           `trx.deleteFrom("User").where("id", "=", "${PARENT_ID}").execute()`,
-          "nested@example.com",
         ),
         signal,
       );
 
-      expect(deploy.exitCode).toBe(0);
+      expect(deploy).toMatchObject({ ok: true });
     },
-    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+    REFUSED_WRITE_TIMEOUT_MS,
   );
 
   test(
@@ -286,16 +192,15 @@ export async function main(trx: Transaction): Promise<void> {
     async ({ signal }) => {
       const deploy = await migrateWithScript(
         refusedWriteScript(
-          `{ emails: ["keyed@example.com"] }`,
+          parentAndOrder(`{ emails: ["keyed@example.com"] }`, "keyed@example.com"),
           `trx.deleteFrom("User").where("id", "=", "${PARENT_ID}").execute()`,
-          "keyed@example.com",
         ),
         signal,
       );
 
-      expect(deploy.exitCode).toBe(0);
+      expect(deploy).toMatchObject({ ok: true });
     },
-    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+    REFUSED_WRITE_TIMEOUT_MS,
   );
 
   test(
@@ -303,15 +208,47 @@ export async function main(trx: Transaction): Promise<void> {
     async ({ signal }) => {
       const deploy = await migrateWithScript(
         refusedWriteScript(
-          `{ emails: ["renamed@example.com"] }`,
+          parentAndOrder(`{ emails: ["renamed@example.com"] }`, "renamed@example.com"),
           `trx.updateTable("User").set({ email: "other@example.com" }).where("id", "=", "${PARENT_ID}").execute()`,
-          "renamed@example.com",
         ),
         signal,
       );
 
-      expect(deploy.exitCode).toBe(0);
+      expect(deploy).toMatchObject({ ok: true });
     },
-    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+    REFUSED_WRITE_TIMEOUT_MS,
+  );
+
+  test(
+    "refuses to delete a row whose array points at the row itself",
+    async ({ signal }) => {
+      const deploy = await migrateWithScript(
+        refusedWriteScript(
+          `${orders(`{ id: "${PARENT_ID}" }`)}
+  await trx.updateTable("Order").set({ siblingIDs: ["${PARENT_ID}"] }).where("id", "=", "${PARENT_ID}").execute();`,
+          `trx.deleteFrom("Order").where("id", "=", "${PARENT_ID}").execute()`,
+        ),
+        signal,
+      );
+
+      expect(deploy).toMatchObject({ ok: true });
+    },
+    REFUSED_WRITE_TIMEOUT_MS,
+  );
+
+  test(
+    "refuses to delete in one statement two rows that point at each other",
+    async ({ signal }) => {
+      const deploy = await migrateWithScript(
+        refusedWriteScript(
+          orders(`{ id: "${SECOND_ID}" }`, `{ id: "${PARENT_ID}", siblingIDs: ["${SECOND_ID}"] }`),
+          `trx.deleteFrom("Order").where("id", "in", ["${PARENT_ID}", "${SECOND_ID}"]).execute()`,
+        ),
+        signal,
+      );
+
+      expect(deploy).toMatchObject({ ok: true });
+    },
+    REFUSED_WRITE_TIMEOUT_MS,
   );
 });
