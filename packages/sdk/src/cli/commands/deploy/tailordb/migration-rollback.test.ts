@@ -1963,6 +1963,105 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     });
   });
 
+  describe("the record of a `main` run", () => {
+    aroundEach(async (runTest) => {
+      vi.mocked(removeMigrationWorkflowResources).mockClear();
+      vi.mocked(migrationModule.clearMigrationInProgress).mockClear();
+      await runTest();
+    });
+
+    function failPostPhase(client: OperatorClient): unknown[] {
+      const goodsReceiptWrites: unknown[] = [];
+      vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+        goodsReceiptWrites.push(structuredClone(request));
+        // Restriction, Pre-phase, then the Post-phase write that fails.
+        if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
+        return {} as never;
+      });
+      return goodsReceiptWrites;
+    }
+
+    test("removes the run's resources once its checkpoint is committed", async () => {
+      const client = createMockClient();
+      setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+
+      await applyTailorDB(client, withInputs(createMockPlanResult()), "create-update");
+
+      expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
+        client,
+        "test-workspace",
+        "test-ns",
+        1,
+      );
+      expect(
+        vi.mocked(migrationModule.updateMigrationLabel).mock.invocationCallOrder[0],
+      ).toBeLessThan(vi.mocked(removeMigrationWorkflowResources).mock.invocationCallOrder[0]!);
+    });
+
+    test("clears the record before it rolls the schema back when the post-phase fails", async () => {
+      const client = createMockClient();
+      setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+      const goodsReceiptWrites = failPostPhase(client);
+
+      await expect(
+        applyTailorDB(client, withInputs(createUpdatePlanResult()), "create-update"),
+      ).rejects.toThrow("post-phase constraint violation");
+
+      expect(goodsReceiptWrites[3]).not.toEqual(goodsReceiptWrites[1]);
+      expect(migrationModule.clearMigrationInProgress).toHaveBeenCalledWith(
+        client,
+        "test-workspace",
+        "test-ns",
+      );
+      expect(
+        vi.mocked(migrationModule.clearMigrationInProgress).mock.invocationCallOrder[0],
+      ).toBeLessThan(vi.mocked(client.updateTailorDBType).mock.invocationCallOrder.at(-1)!);
+      expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
+        client,
+        "test-workspace",
+        "test-ns",
+        1,
+      );
+      expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+    });
+
+    test("keeps the pre-migration schema and points to migration resolve when the record cannot be cleared after the post-phase fails", async () => {
+      const client = createMockClient();
+      setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+      vi.mocked(migrationModule.clearMigrationInProgress).mockRejectedValueOnce(
+        new Error("label write rejected"),
+      );
+      vi.mocked(client.getMetadata).mockResolvedValue({
+        metadata: {
+          labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": "m0001-main" },
+        },
+      } as never);
+      const goodsReceiptWrites = failPostPhase(client);
+      vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      const error = await applyTailorDB(
+        client,
+        withInputs(createUpdatePlanResult()),
+        "create-update",
+      ).catch((caught: unknown) => caught);
+
+      expect(error).toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        message: expect.stringContaining("post-phase constraint violation"),
+        suggestion: expect.stringContaining(
+          "'tailor tailordb migration resolve --complete --namespace test-ns'",
+        ),
+      });
+      expect(goodsReceiptWrites[3]).toEqual(goodsReceiptWrites[1]);
+      expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
+    });
+  });
+
   describe("a multi-step migration whose steps partly committed", () => {
     const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill", "recompute"] };
 
@@ -2903,7 +3002,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     describe("a script with a single step", () => {
       const singleStep: MigrationScriptForm = { kind: "steps", order: ["backfill"] };
 
-      test("leaves no step-run resources to remove once it completes", async () => {
+      test("removes the run's resources once it completes, like a main script", async () => {
         const client = createMockClient();
         setPendingMigrations([{ ...mkStepsMigration(), scriptForm: singleStep }]);
         vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
@@ -2918,7 +3017,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           undefined,
           true,
         );
-        expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
+        expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
+          client,
+          "test-workspace",
+          "test-ns",
+          1,
+        );
       });
 
       test("is rolled back like a main script when the post-phase fails", async () => {

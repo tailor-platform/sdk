@@ -33,13 +33,18 @@ export const MIGRATION_LABEL_KEY = "sdk-migration";
 export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
 
 /**
- * Label key naming the migration whose steps have partly committed, so the
- * next deploy resumes it instead of treating the schema as drift. It only names
- * the migration right after the checkpoint, which counts as 0000 when unset;
- * keep it that way by committing the checkpoint after every migration and
- * removing this label with every checkpoint write.
+ * Label key naming the migration an earlier deploy left in progress: one whose
+ * steps have partly committed, so the next deploy resumes it instead of
+ * treating the schema as drift, or one whose `main` run has started and has
+ * not been settled. It only names the migration right after the checkpoint,
+ * which counts as 0000 when unset; keep it that way by committing the
+ * checkpoint after every migration and removing this label with every
+ * checkpoint write.
  */
 export const MIGRATION_IN_PROGRESS_LABEL_KEY = "sdk-migration-in-progress";
+
+/** Suffix of an in-progress label value that names a `main` run rather than steps. */
+const MAIN_RUN_LABEL_SUFFIX = "-main";
 
 /** Label key holding the execution of the migration named by the in-progress label. */
 export const MIGRATION_EXECUTION_LABEL_KEY = "sdk-migration-execution";
@@ -111,6 +116,30 @@ export function parseMigrationLabelNumber(label: string): number | null {
   if (!/^\d+$/.test(numStr)) return null;
   const num = parseInt(numStr, 10);
   return num > 9999 ? null : num;
+}
+
+/**
+ * Build the in-progress label value naming a migration.
+ * @param migrationNumber - Migration left in progress
+ * @param main - Whether the record is of a `main` run rather than of steps
+ * @returns Label value
+ */
+export function inProgressLabel(migrationNumber: number, main: boolean): string {
+  const label = sanitizeMigrationLabel(migrationNumber);
+  return main ? `${label}${MAIN_RUN_LABEL_SUFFIX}` : label;
+}
+
+/**
+ * Parse an in-progress label value written by {@link inProgressLabel}.
+ * @param label - Label value
+ * @returns The migration and whether the record is of a `main` run, or null for malformed input
+ */
+export function parseInProgressLabel(label: string): { number: number; main: boolean } | null {
+  const main = label.endsWith(MAIN_RUN_LABEL_SUFFIX);
+  const number = parseMigrationLabelNumber(
+    main ? label.slice(0, -MAIN_RUN_LABEL_SUFFIX.length) : label,
+  );
+  return number === null ? null : { number, main };
 }
 
 /**

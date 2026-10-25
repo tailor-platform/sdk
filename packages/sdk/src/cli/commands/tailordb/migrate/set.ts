@@ -99,7 +99,10 @@ async function set(options: SetOptions): Promise<CheckpointUpdate> {
 
   if (completesInProgress) {
     logger.warn(
-      `Migration ${formatMigrationNumber(migrationNumber)} is in progress. Setting the checkpoint to it marks it as completed and clears its in-progress record; do this only when its schema changes are already applied.`,
+      `Migration ${formatMigrationNumber(migrationNumber)} is in progress. Setting the checkpoint to it marks it as completed and clears its in-progress record; do this only when its schema changes are already applied` +
+        (currentState.inProgress?.main
+          ? ` and its run succeeded. 'tailor tailordb migration resolve' checks how the run ended before it settles the migration.`
+          : "."),
     );
     logger.newline();
   }

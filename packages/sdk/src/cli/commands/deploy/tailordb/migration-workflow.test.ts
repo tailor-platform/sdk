@@ -12,6 +12,8 @@ import {
   executeMigrationAsWorkflow,
   MIGRATION_SCRIPT_STARTED_LOG,
   migrationWorkflowResourceName,
+  readMigrationRunStatus,
+  type LongRunningMigrationOptions,
 } from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -158,7 +160,14 @@ function deletesAfter(calls: readonly string[], marker: string): string[] {
   return calls.slice(calls.indexOf(marker)).filter((call) => call.startsWith("delete"));
 }
 
-function run(client: OperatorClient, maintenanceMode = true) {
+type Recording = Pick<LongRunningMigrationOptions, "onBeforeStart" | "onExecutionStarted">;
+
+const recordsNothing: Recording = {
+  onBeforeStart: async () => {},
+  onExecutionStarted: async () => {},
+};
+
+function run(client: OperatorClient, maintenanceMode = true, recording: Partial<Recording> = {}) {
   return executeMigrationAsWorkflow({
     client,
     workspaceId: "ws-1",
@@ -170,6 +179,8 @@ function run(client: OperatorClient, maintenanceMode = true) {
     appId: "app-1",
     maintenanceMode,
     pollIntervalMs: 0,
+    ...recordsNothing,
+    ...recording,
   });
 }
 
@@ -185,7 +196,7 @@ describe("executeMigrationAsWorkflow", () => {
     vi.mocked(writeMetadataLabelsDirect).mockClear();
   });
 
-  test("registers, starts, and tears down the temporary resources", async () => {
+  test("registers and starts the temporary resources, and keeps them once the run finished", async () => {
     const { client, raw, calls } = createMockClient();
 
     const result = await run(client);
@@ -203,9 +214,6 @@ describe("executeMigrationAsWorkflow", () => {
       "listWorkflowExecutions",
       "startWorkflow",
       "getWorkflowExecution",
-      "deleteWorkflow",
-      "deleteWorkflowJobFunction",
-      "deleteFunctionRegistry",
     ]);
     expect(raw.createWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -214,6 +222,72 @@ describe("executeMigrationAsWorkflow", () => {
         jobFunctions: { "tailordb-migration--tailordb--0003": 1n },
       }),
     );
+  });
+
+  test("records the run before it reclaims leftovers and starts it, and its execution once started", async () => {
+    const { client, calls } = createMockClient();
+    const onBeforeStart = vi.fn(async () => {
+      calls.push("onBeforeStart");
+    });
+    const onExecutionStarted = vi.fn(async (executionId: string) => {
+      calls.push(`onExecutionStarted:${executionId}`);
+    });
+
+    await run(client, true, { onBeforeStart, onExecutionStarted });
+
+    expect(calls.indexOf("onBeforeStart")).toBeLessThan(calls.indexOf("getWorkflowByName"));
+    expect(calls.indexOf("startWorkflow")).toBeLessThan(calls.indexOf("onExecutionStarted:exec-1"));
+    expect(calls.indexOf("onExecutionStarted:exec-1")).toBeLessThan(
+      calls.indexOf("getWorkflowExecution"),
+    );
+  });
+
+  test("records nothing while an earlier run of the migration is still running", async () => {
+    const { client } = createMockClient({
+      leftoverWorkflowId: "stale-wf",
+      leftoverExecutions: [{ id: "exec-0", status: WorkflowExecution_Status.RUNNING }],
+    });
+    const onBeforeStart = vi.fn(async () => {});
+
+    await expect(run(client, true, { onBeforeStart })).rejects.toMatchObject({
+      code: "MIGRATION_OUTCOME_UNKNOWN",
+    });
+    expect(onBeforeStart).not.toHaveBeenCalled();
+  });
+
+  test("records the execution a start with a lost response created", async () => {
+    const { client } = createMockClient({
+      startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: true },
+    });
+    const onExecutionStarted = vi.fn(async () => {});
+
+    await run(client, true, { onExecutionStarted });
+
+    expect(onExecutionStarted).toHaveBeenCalledWith("exec-1");
+  });
+
+  test("reports a run whose execution it could not record as one whose outcome is unknown", async () => {
+    const { client, calls } = createMockClient();
+    const rejected = new ConnectError("label write rejected", Code.Unavailable);
+
+    await expect(
+      run(client, true, { onExecutionStarted: () => Promise.reject(rejected) }),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_OUTCOME_UNKNOWN",
+      context: expect.objectContaining({ executionId: "exec-1" }),
+      cause: rejected,
+    });
+    expect(calls).not.toContain("getWorkflowExecution");
+    expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
+  });
+
+  test("keeps the temporary resources of a failed run", async () => {
+    const { client, calls } = createMockClient({ statuses: [WorkflowExecution_Status.FAILED] });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(false);
+    expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
   });
 
   test("polls until the execution reaches a terminal status", async () => {
@@ -263,7 +337,7 @@ describe("executeMigrationAsWorkflow", () => {
   );
 
   test("keeps polling through a transient error", async () => {
-    const { client, raw, calls } = createMockClient();
+    const { client, raw } = createMockClient();
     raw.getWorkflowExecution.mockRejectedValueOnce(
       new ConnectError("unavailable", Code.Unavailable),
     );
@@ -272,7 +346,6 @@ describe("executeMigrationAsWorkflow", () => {
 
     expect(result.success).toBe(true);
     expect(raw.getWorkflowExecution).toHaveBeenCalledTimes(2);
-    expect(deletesAfter(calls, "startWorkflow")).toContain("deleteWorkflow");
   });
 
   test("keeps the workflow when polling fails with an error that is not transient", async () => {
@@ -343,17 +416,16 @@ describe("executeMigrationAsWorkflow", () => {
   });
 
   test("reports success from the execution status when its logs cannot be read", async () => {
-    const { client, raw, calls } = createMockClient();
+    const { client, raw } = createMockClient();
     raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
 
     const result = await run(client);
 
     expect(result).toEqual({ success: true, logs: "" });
-    expect(deletesAfter(calls, "getWorkflowExecution")).toContain("deleteWorkflow");
   });
 
   test("reports failure from the execution status when its logs cannot be read", async () => {
-    const { client, raw, calls } = createMockClient({
+    const { client, raw } = createMockClient({
       statuses: [WorkflowExecution_Status.FAILED],
     });
     raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
@@ -365,7 +437,6 @@ describe("executeMigrationAsWorkflow", () => {
       logs: "",
       error: "Migration workflow execution failed.",
     });
-    expect(deletesAfter(calls, "getWorkflowExecution")).toContain("deleteWorkflow");
   });
 
   test.each(
@@ -457,9 +528,22 @@ describe("executeMigrationAsWorkflow", () => {
     expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(7);
   });
 
-  test("names both checkpoints to sync to once the outcome is known", async () => {
+  test("names both ways to settle the recorded run once its outcome is known", async () => {
     const { client } = createMockClient({
       startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: false },
+    });
+
+    await expect(run(client)).rejects.toMatchObject({
+      suggestion: expect.stringMatching(
+        /succeeded, run `tailor tailordb migration resolve --complete --namespace tailordb`; otherwise run `tailor tailordb migration resolve --rollback --namespace tailordb`\. Deploys stop before changing anything until then\./,
+      ),
+    });
+  });
+
+  test("names both checkpoints to sync to for an earlier run it did not record", async () => {
+    const { client } = createMockClient({
+      leftoverWorkflowId: "stale-wf",
+      leftoverExecutions: [{ id: "exec-0", status: WorkflowExecution_Status.RUNNING }],
     });
 
     await expect(run(client)).rejects.toMatchObject({
@@ -469,9 +553,10 @@ describe("executeMigrationAsWorkflow", () => {
     });
   });
 
-  test("warns against deploying before the sync", async () => {
+  test("warns against deploying before the sync for an earlier run it did not record", async () => {
     const { client } = createMockClient({
-      startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: false },
+      leftoverWorkflowId: "stale-wf",
+      leftoverExecutions: [{ id: "exec-0", status: WorkflowExecution_Status.RUNNING }],
     });
 
     await expect(run(client)).rejects.toMatchObject({
@@ -531,10 +616,7 @@ describe("executeMigrationAsWorkflow", () => {
       expect(raw.getWorkflowExecution).toHaveBeenCalledWith(
         expect.objectContaining({ executionId: "exec-1" }),
       );
-      const afterStart = calls.slice(calls.indexOf("startWorkflow"));
-      expect(afterStart.indexOf("getWorkflowExecution")).toBeLessThan(
-        afterStart.findIndex((call) => call.startsWith("delete")),
-      );
+      expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
     },
   );
 
@@ -594,27 +676,6 @@ describe("executeMigrationAsWorkflow", () => {
     });
 
     expect(raw.getWorkflowExecution).not.toHaveBeenCalled();
-  });
-
-  test("keeps the migration result when teardown fails", async () => {
-    const { client } = createMockClient({ failOn: "deleteWorkflow" });
-
-    const result = await run(client);
-
-    expect(result.success).toBe(true);
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Could not remove"));
-  });
-
-  test("stays quiet when a temporary resource is already gone", async () => {
-    const { client } = createMockClient({
-      failOn: "deleteWorkflow",
-      failWith: new ConnectError("not found", Code.NotFound),
-    });
-
-    const result = await run(client);
-
-    expect(result.success).toBe(true);
-    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   test("does not attempt to delete a workflow that was never created", async () => {
@@ -702,6 +763,7 @@ describe("observing when the migration script runs", () => {
       appId: "app-1",
       maintenanceMode: true,
       pollIntervalMs: 0,
+      ...recordsNothing,
       onRunEvent: (event) => {
         if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
         else if (event.type !== "polled") events.push(event.type);
@@ -726,6 +788,7 @@ describe("observing when the migration script runs", () => {
       appId: "app-1",
       maintenanceMode: true,
       pollIntervalMs: 0,
+      ...recordsNothing,
     });
     const [stream] = raw.createFunctionRegistry.mock.calls[0] as unknown as [
       AsyncIterable<{ payload: { case: string; value: unknown } }>,
@@ -998,5 +1061,64 @@ describe("observing when the migration script runs", () => {
 
     expect(await result).toMatchObject({ success: true });
     expect(events).toEqual(["waiting", "unknown", "running", "finished:true"]);
+  });
+});
+
+describe("readMigrationRunStatus", () => {
+  test.each([
+    { status: WorkflowExecution_Status.SUCCESS, expected: "succeeded" },
+    { status: WorkflowExecution_Status.FAILED, expected: "failed" },
+    { status: WorkflowExecution_Status.CANCELED, expected: "canceled" },
+    { status: WorkflowExecution_Status.RUNNING, expected: "running" },
+    { status: WorkflowExecution_Status.PENDING, expected: "running" },
+  ])("reads $expected from the recorded execution", async ({ status, expected }) => {
+    const { client, raw } = createMockClient({ statuses: [status] });
+
+    await expect(
+      readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3, executionId: "exec-1" }),
+    ).resolves.toBe(expected);
+    expect(raw.getWorkflowExecution).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      executionId: "exec-1",
+    });
+  });
+
+  test("reads the newest execution of the run when its execution was never recorded", async () => {
+    const { client } = createMockClient({
+      leftoverWorkflowId: "wf-1",
+      leftoverExecutions: [{ id: "exec-1", status: WorkflowExecution_Status.SUCCESS }],
+    });
+
+    await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
+      "succeeded",
+    );
+  });
+
+  test("reports a run whose workflow has no execution as not started", async () => {
+    const { client } = createMockClient({ leftoverWorkflowId: "wf-1" });
+
+    await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
+      "not_started",
+    );
+  });
+
+  test("reports a run whose workflow is gone as unknown", async () => {
+    const { client } = createMockClient();
+
+    await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
+      "unknown",
+    );
+  });
+
+  test.each([
+    ["is gone", new ConnectError("not found", Code.NotFound)],
+    ["cannot be read", new ConnectError("unavailable", Code.Unavailable)],
+  ])("reports a recorded execution that %s as unknown", async (_label, error) => {
+    const { client, raw } = createMockClient();
+    raw.getWorkflowExecution.mockRejectedValueOnce(error);
+
+    await expect(
+      readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3, executionId: "exec-1" }),
+    ).resolves.toBe("unknown");
   });
 });

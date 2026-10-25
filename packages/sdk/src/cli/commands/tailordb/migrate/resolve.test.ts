@@ -33,6 +33,7 @@ const state = vi.hoisted(() => ({
   setMetadata: vi.fn(),
   removeMigrationWorkflowResources: vi.fn(),
   assertNoActiveMigrationExecution: vi.fn(),
+  readMigrationRunStatus: vi.fn(),
   stderr: [] as string[],
 }));
 
@@ -62,6 +63,7 @@ vi.mock("#/cli/commands/deploy/tailordb/migration-workflow", async (importOrigin
   ...(await importOriginal()),
   removeMigrationWorkflowResources: state.removeMigrationWorkflowResources,
   assertNoActiveMigrationExecution: state.assertNoActiveMigrationExecution,
+  readMigrationRunStatus: state.readMigrationRunStatus,
 }));
 
 vi.mock("#/cli/services/application", () => ({
@@ -512,6 +514,130 @@ describe("tailordb migration resolve", () => {
     expect(result.success).toBe(false);
     expect(state.stderr.join("")).toMatch(/run the command again.*stays in progress/s);
     expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  describe("a `main` run whose outcome an earlier deploy could not settle", () => {
+    const executionId = "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60";
+
+    aroundEach(async (runTest) => {
+      remoteLabels({
+        "sdk-migration": "m0001",
+        "sdk-migration-in-progress": "m0002-main",
+        "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60",
+      });
+      state.readMigrationRunStatus.mockResolvedValue("succeeded");
+      await runTest();
+    });
+
+    test("reads the outcome of the recorded run", async () => {
+      const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(state.readMigrationRunStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "12345678-1234-4abc-8def-123456789012",
+        "tailordb",
+        { number: 2, executionId, main: true },
+      );
+      expect(state.stderr.join("")).toMatch(/Run: succeeded/);
+      expect(state.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: { "sdk-migration": "m0002", "sdk-name": "my-app" } }),
+      );
+    });
+
+    test("reports the outcome of the run under JSON output", async () => {
+      using _json = jsonMode();
+      using stdout = captureStdout();
+
+      const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        resolution: "complete",
+        migrationNumber: 2,
+        checkpoint: 2,
+        runStatus: "succeeded",
+      });
+    });
+
+    test("--rollback warns that the data a succeeded run wrote is lost", async () => {
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      const output = state.stderr.join("");
+      expect(output).toMatch(/run of migration 0002 succeeded/);
+      expect(output).toMatch(/--complete/);
+      expect(output).not.toMatch(/from the first step/);
+    });
+
+    test.each(["failed", "canceled", "not_started"])(
+      "--complete warns that a run that %s left the data unmigrated",
+      async (runStatus) => {
+        state.readMigrationRunStatus.mockResolvedValue(runStatus);
+
+        const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+        expect(result.success).toBe(true);
+        const output = state.stderr.join("");
+        expect(output).toMatch(/did not succeed/);
+        expect(output).toMatch(/--rollback/);
+      },
+    );
+
+    test("warns that the outcome could not be confirmed", async () => {
+      state.readMigrationRunStatus.mockResolvedValue("unknown");
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(state.stderr.join("")).toMatch(/could not be confirmed/);
+    });
+
+    test("refuses before asking for confirmation while the run is still running", async () => {
+      state.readMigrationRunStatus.mockResolvedValue("running");
+      vi.mocked(prompt.confirm).mockClear();
+
+      const result = await runCommand(resolveCommand, ["--complete"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_EXECUTION_ACTIVE" });
+      expect(prompt.confirm).not.toHaveBeenCalled();
+      expectNothingWritten();
+    });
+
+    test("refuses when the record changed from a `main` run to steps while the command ran", async () => {
+      state.getMetadata
+        .mockResolvedValueOnce({
+          metadata: {
+            labels: {
+              "sdk-name": "my-app",
+              "sdk-migration": "m0001",
+              "sdk-migration-in-progress": "m0002-main",
+            },
+          },
+        })
+        .mockResolvedValue({
+          metadata: {
+            labels: {
+              "sdk-name": "my-app",
+              "sdk-migration": "m0001",
+              "sdk-migration-in-progress": "m0002",
+            },
+          },
+        });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toMatch(/changed while the command was running/);
+      expectNothingWritten();
+    });
+  });
+
+  test("does not read the run of a migration whose steps partly committed", async () => {
+    await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(state.readMigrationRunStatus).not.toHaveBeenCalled();
   });
 
   test("declining the confirmation writes nothing", async () => {

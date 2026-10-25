@@ -5,6 +5,8 @@ import {
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
+  describeMainRunSettlement,
+  fetchRemoteMigrationState,
   isStaleMigrationInProgress,
   type MigrationInProgress,
   type RemoteMigrationState,
@@ -26,7 +28,13 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { resourceTrn } from "../label";
 import { detectPendingMigrations } from "./migration";
+import {
+  migrationWorkflowResourceName,
+  readMigrationRunStatus,
+  type MigrationRunStatus,
+} from "./migration-workflow";
 import type {
   MigrationCheckpointRepair,
   PendingMigration,
@@ -73,27 +81,120 @@ export function migrationFileStatesEqual(
   );
 }
 
+const RUN_STATUS_DESCRIPTIONS: Record<MigrationRunStatus, string> = {
+  running: "its run is still running",
+  succeeded: "its run succeeded",
+  failed: "its run failed",
+  canceled: "its run was canceled",
+  not_started: "its run did not start",
+  unknown: "whether its run succeeded could not be confirmed",
+};
+
+/**
+ * Build the refusal of a deploy while a `main` run an earlier deploy recorded is not settled,
+ * naming the way to settle it that fits how the run stands.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ * @param record - The record of the run
+ * @returns Error refusing the deploy
+ */
+async function unsettledMainRunError(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  record: MigrationInProgress,
+): Promise<Error> {
+  const runStatus = await readMigrationRunStatus(client, workspaceId, namespace, record);
+  const migrationLabel = `${namespace}/${formatMigrationNumber(record.number)}`;
+  const workflowName = migrationWorkflowResourceName(namespace, record.number);
+  const executionsHint = `'tailor workflow executions --workflow-name ${workflowName}'`;
+  const direction =
+    runStatus === "succeeded"
+      ? "complete"
+      : runStatus === "running" || runStatus === "unknown"
+        ? undefined
+        : "rollback";
+  const resolveArgs = (resolution: string) => [
+    "tailordb",
+    "migration",
+    "resolve",
+    `--${resolution}`,
+    "--namespace",
+    namespace,
+  ];
+  const suggestion =
+    direction === "complete"
+      ? `Run 'tailor ${resolveArgs(direction).join(" ")}' to apply the migration's schema without running its script again, then deploy again.`
+      : direction === "rollback"
+        ? `Run 'tailor ${resolveArgs(direction).join(" ")}' to return to migration ${formatMigrationNumber(record.number - 1)}, then deploy again to run the migration again.`
+        : runStatus === "running"
+          ? `Wait until ${executionsHint} shows that the run finished, then deploy again to see how to settle it.`
+          : `Check the run with ${executionsHint}. ${describeMainRunSettlement(namespace)}`;
+  return CLIError({
+    code: "MIGRATION_OUTCOME_UNSETTLED",
+    message: `An earlier deploy did not settle the run of migration ${migrationLabel}: ${RUN_STATUS_DESCRIPTIONS[runStatus]}.`,
+    suggestion,
+    ...(direction ? { next: { command: "tailor", args: resolveArgs(direction) } } : {}),
+    context: {
+      namespace,
+      migrationNumber: record.number,
+      workflowName,
+      ...(record.executionId ? { executionId: record.executionId } : {}),
+      runStatus,
+    },
+  });
+}
+
+/**
+ * Refuse to deploy while a namespace records a `main` run that is not settled. Run before a
+ * check that would report the schema the run left as drift, whose remedies the record refuses.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespaces - Namespaces to check
+ */
+async function assertMainRunsSettled(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaces: readonly string[],
+): Promise<void> {
+  for (const namespace of namespaces) {
+    const state = await fetchRemoteMigrationState(
+      client,
+      resourceTrn(workspaceId, "tailordb", namespace),
+    );
+    if (state.inProgress?.main && !isStaleMigrationInProgress(state)) {
+      throw await unsettledMainRunError(client, workspaceId, namespace, state.inProgress);
+    }
+  }
+}
+
 /**
  * Validate what earlier deploys recorded as in progress against the remote
  * checkpoint and the local migrations, so a deploy never resumes the wrong
- * migration. Runs even when schema checks are skipped.
+ * migration nor runs a `main` script whose earlier run is not settled. Runs
+ * even when schema checks are skipped.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
  * @param remoteStates - Remote migration state of each namespace whose checkpoint is not being repaired
  * @param repairedInProgress - Namespaces under checkpoint repair that also record a migration in progress
  * @param pendingMigrations - Pending migrations, sorted by namespace and number
  * @returns In-progress migrations to resume and stale records to clear
  */
-function validateMigrationsInProgress(
+async function validateMigrationsInProgress(
+  client: OperatorClient,
+  workspaceId: string,
   remoteStates: ReadonlyMap<string, RemoteMigrationState>,
   repairedInProgress: readonly string[],
   pendingMigrations: readonly PendingMigration[],
-): InProgressValidation {
+): Promise<InProgressValidation> {
   const repaired = repairedInProgress[0];
   if (repaired !== undefined) {
     throw CLIError({
       code: "MIGRATION_IN_PROGRESS_CONFLICT",
       message: `A migration is in progress in namespace "${repaired}", so its checkpoint cannot be repaired.`,
       suggestion:
-        "Deploy the migration history that started the migration and let it complete first.",
+        "From a checkout of the migration history that started the migration, finish it with a deploy or settle it with 'tailor tailordb migration resolve' first.",
     });
   }
 
@@ -113,6 +214,9 @@ function validateMigrationsInProgress(
     if (isStaleMigrationInProgress(state)) {
       result.staleInProgress.push({ namespace, migrationNumber: inProgress.number });
       continue;
+    }
+    if (inProgress.main) {
+      throw await unsettledMainRunError(client, workspaceId, namespace, inProgress);
     }
     const next = pendingMigrations.find((migration) => migration.namespace === namespace);
     if (next?.number !== inProgress.number) {
@@ -232,6 +336,13 @@ export async function validateAndDetectMigrations(
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
 
       if (hasRemoteDrift) {
+        await assertMainRunsSettled(
+          client,
+          workspaceId,
+          remoteVerificationResults
+            .filter((result) => result.hasDrift && result.migrationInProgress)
+            .map((result) => result.namespace),
+        );
         logger.error("Remote schema drift detected:");
         logger.log(formatRemoteVerificationResults(remoteVerificationResults));
         logger.newline();
@@ -263,7 +374,13 @@ export async function validateAndDetectMigrations(
       currentMigrationOverrides,
       remoteStates,
     );
-    inProgress = validateMigrationsInProgress(remoteStates, repairedInProgress, pendingMigrations);
+    inProgress = await validateMigrationsInProgress(
+      client,
+      workspaceId,
+      remoteStates,
+      repairedInProgress,
+      pendingMigrations,
+    );
     for (const [namespace, state] of remoteStates) {
       if (state.maintenanceModeCheckpoint === null) continue;
       maintenanceModeCheckpoints[namespace] = state.maintenanceModeCheckpoint;

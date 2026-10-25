@@ -1,8 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test } from "vitest";
 import {
+  assertNoMigrationInProgress,
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
+  type MigrationInProgress,
   type RemoteMigrationState,
 } from "./remote-state";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -49,8 +51,25 @@ describe("fetchRemoteMigrationState", () => {
     expect(state.inProgress).toEqual({ number: 3 });
   });
 
+  test("reads an in-progress record of a `main` run", async () => {
+    const state = await fetchRemoteMigrationState(
+      clientWithLabels({
+        "sdk-migration": "m0002",
+        "sdk-migration-in-progress": "m0003-main",
+        "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60",
+      }),
+      "trn",
+    );
+    expect(state.inProgress).toEqual({
+      number: 3,
+      executionId: "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60",
+      main: true,
+    });
+  });
+
   test.each([
     [{ "sdk-migration-in-progress": "three" }],
+    [{ "sdk-migration-in-progress": "m0003-steps" }],
     [{ "sdk-migration-in-progress": "m0003", "sdk-migration-execution": "e123" }],
     [{ "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60" }],
   ])("flags unreadable in-progress labels %o", async (labels) => {
@@ -80,6 +99,39 @@ describe("fetchRemoteMigrationState", () => {
       inProgressInvalid: false,
       maintenanceModeCheckpoint: null,
     });
+  });
+});
+
+describe("assertNoMigrationInProgress", () => {
+  const state = (inProgress: MigrationInProgress): RemoteMigrationState => ({
+    metadataExists: true,
+    number: 2,
+    historyId: null,
+    historyIdInvalid: false,
+    inProgress,
+    inProgressInvalid: false,
+    maintenanceModeCheckpoint: null,
+  });
+
+  test("asks to finish a migration whose steps partly committed with a deploy", () => {
+    expect(() => assertNoMigrationInProgress(state({ number: 3 }), "tailordb")).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_IN_PROGRESS",
+        suggestion: expect.stringContaining("Finish the migration with a deploy"),
+      }),
+    );
+  });
+
+  test("asks to settle a `main` run whose outcome is not settled with migration resolve", () => {
+    expect(() => assertNoMigrationInProgress(state({ number: 3, main: true }), "tailordb")).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_IN_PROGRESS",
+        message: expect.stringContaining("tailordb/0003"),
+        suggestion: expect.stringContaining(
+          "'tailor tailordb migration resolve --complete --namespace tailordb'",
+        ),
+      }),
+    );
   });
 });
 

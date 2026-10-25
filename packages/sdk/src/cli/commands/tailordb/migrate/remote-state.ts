@@ -8,15 +8,21 @@ import {
   MIGRATION_IN_PROGRESS_LABEL_KEY,
   MIGRATION_LABEL_KEY,
   parseExecutionLabel,
+  parseInProgressLabel,
   parseMigrationHistoryId,
   parseMigrationLabelNumber,
 } from "./types";
 
-/** A migration an earlier deploy left partially applied. */
+/** A migration an earlier deploy left partially applied, or whose `main` run it left unsettled. */
 export interface MigrationInProgress {
   number: number;
-  /** The run to resume; absent when the deploy stopped before recording it. */
+  /** The run to resume or settle; absent when the deploy stopped before recording it. */
   executionId?: string;
+  /**
+   * Set when the record is of a run of the whole script as one job, as a `main` script runs.
+   * A deploy does not resume such a run; `migration resolve` settles it.
+   */
+  main?: true;
 }
 
 export interface RemoteMigrationState {
@@ -40,14 +46,18 @@ function parseInProgress(labels: Record<string, string>): {
   if (migrationLabel === undefined) {
     return { inProgress: null, inProgressInvalid: executionLabel !== undefined };
   }
-  const number = parseMigrationLabelNumber(migrationLabel);
+  const parsed = parseInProgressLabel(migrationLabel);
   const executionId =
     executionLabel === undefined ? undefined : parseExecutionLabel(executionLabel);
-  if (number === null || executionId === null) {
+  if (parsed === null || executionId === null) {
     return { inProgress: null, inProgressInvalid: true };
   }
   return {
-    inProgress: executionId === undefined ? { number } : { number, executionId },
+    inProgress: {
+      number: parsed.number,
+      ...(executionId === undefined ? {} : { executionId }),
+      ...(parsed.main ? { main: true } : {}),
+    },
     inProgressInvalid: false,
   };
 }
@@ -108,19 +118,39 @@ export function isStaleMigrationInProgress(state: RemoteMigrationState): boolean
 }
 
 /**
+ * Describe how to settle a `main` run whose outcome an earlier deploy did not settle.
+ * @param namespace - TailorDB namespace
+ * @returns Both commands, each with the outcome it applies to
+ */
+export function describeMainRunSettlement(namespace: string): string {
+  return (
+    `Settle it with 'tailor tailordb migration resolve --complete --namespace ${namespace}' if its run succeeded, ` +
+    `or with 'tailor tailordb migration resolve --rollback --namespace ${namespace}' otherwise; ` +
+    "the command shows the outcome of the run before it changes anything."
+  );
+}
+
+/**
  * Refuse a command that rewrites migration state while a migration is
- * partially applied; only a deploy can finish it consistently.
+ * partially applied, or its `main` run is unsettled; only a deploy or
+ * `migration resolve` can finish it consistently.
  * @param state - Remote migration state of the namespace
  * @param namespace - TailorDB namespace
  */
 export function assertNoMigrationInProgress(state: RemoteMigrationState, namespace: string): void {
   if (!state.inProgress && !state.inProgressInvalid) return;
+  const migrationLabel = state.inProgress
+    ? `${namespace}/${formatMigrationNumber(state.inProgress.number)}`
+    : undefined;
   throw CLIError({
     code: "MIGRATION_IN_PROGRESS",
-    message: state.inProgress
-      ? `Migration ${namespace}/${formatMigrationNumber(state.inProgress.number)} is partially applied by an earlier deploy.`
-      : `Namespace "${namespace}" records a partially applied migration that cannot be read.`,
-    suggestion:
-      "Finish the migration with a deploy first; steps that already completed do not run again.",
+    message: !state.inProgress
+      ? `Namespace "${namespace}" records a partially applied migration that cannot be read.`
+      : state.inProgress.main
+        ? `The outcome of the run of migration ${migrationLabel} that an earlier deploy started is not settled.`
+        : `Migration ${migrationLabel} is partially applied by an earlier deploy.`,
+    suggestion: state.inProgress?.main
+      ? describeMainRunSettlement(namespace)
+      : "Finish the migration with a deploy first; steps that already completed do not run again.",
   });
 }

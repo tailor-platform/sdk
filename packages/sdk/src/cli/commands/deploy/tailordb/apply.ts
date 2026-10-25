@@ -29,6 +29,7 @@ import {
   isMigrationPartiallyApplied,
   isMigrationRunEnded,
   isRollbackSkippedWithRecord,
+  removeRunResources,
   rolledBackError,
   rollbackSkippedError,
   updateMigrationLabel,
@@ -74,7 +75,6 @@ import {
   validateAndDetectMigrations,
   type ValidateAndDetectResult,
 } from "./migration-validation";
-import { removeMigrationWorkflowResources } from "./migration-workflow";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { ApplyPhase } from "../types";
@@ -330,22 +330,6 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
     logger.warn(
       `Could not return migration ${migration.namespace}/${formatMigrationNumber(migration.number)} to its pre-migration schema: ` +
         `${error instanceof Error ? error.message : String(error)}. The original migration error is reported below.`,
-    );
-  }
-}
-
-async function removeRunResources(
-  client: OperatorClient,
-  workspaceId: string,
-  namespace: string,
-  migrationNumber: number,
-): Promise<void> {
-  try {
-    await removeMigrationWorkflowResources(client, workspaceId, namespace, migrationNumber);
-  } catch (error) {
-    logger.warn(
-      `Could not remove the temporary resources of migration ${namespace}/${formatMigrationNumber(migrationNumber)}: ` +
-        `${error instanceof Error ? error.message : String(error)}. A later deploy removes them.`,
     );
   }
 }
@@ -771,6 +755,8 @@ interface MigrationAttempt {
   attemptedTables: Set<string>;
   inProgress: boolean;
   runsSteps: boolean;
+  /** The script runs as one job, recorded as in progress until its checkpoint is committed. */
+  runsMain: boolean;
   rollsBackOnFailure: boolean;
   gqlPermissionUndo: GqlPermissionUndo;
 }
@@ -1114,6 +1100,7 @@ async function runMigration(
     attemptedTables,
     inProgress,
     runsSteps,
+    runsMain: migration.hasScript && !runsSteps,
     rollsBackOnFailure:
       runsSteps &&
       migration.scriptForm?.kind === "steps" &&
@@ -1235,9 +1222,9 @@ async function runPostMigrationPhase(
 }
 
 /**
- * Roll a failed migration's schema back. A migration that asked to be rolled back
- * clears its in-progress record first, because a record that survives a rollback
- * makes the next deploy resume against a schema its completed steps no longer match.
+ * Roll a failed migration's schema back. A migration that asked to be rolled back, or whose `main`
+ * run is recorded, clears its in-progress record first, because a record that survives a rollback
+ * describes a schema the namespace no longer has.
  * @param flow - Migration flow
  * @param attempt - Attempt that failed
  * @param restoration - What the tables return to, updated in place
@@ -1256,12 +1243,12 @@ async function rollbackMigration(
   recordMayExist: boolean,
 ): Promise<unknown> {
   const { client, migrationContext, phaseSettings } = flow;
-  const { migration, rollsBackOnFailure, inProgress, gqlPermissionUndo } = attempt;
+  const { migration, rollsBackOnFailure, runsMain, inProgress, gqlPermissionUndo } = attempt;
   const { workspaceId } = migrationContext;
-  const record =
-    rollsBackOnFailure && recordMayExist
-      ? await clearRolledBackRecord(client, workspaceId, migration)
-      : "cleared";
+  const clearsRecord = (rollsBackOnFailure || runsMain) && recordMayExist;
+  const record = clearsRecord
+    ? await clearRolledBackRecord(client, workspaceId, migration)
+    : "cleared";
   if (record !== "cleared") {
     runLog.partial.set(migration.namespace, migration);
     return rollbackSkippedError(
@@ -1269,6 +1256,7 @@ async function rollbackMigration(
       error,
       phaseSettings.restricted,
       record === "in-progress",
+      runsMain,
     );
   }
   const attemptedTables = new Set(attempt.attemptedTables);
@@ -1293,8 +1281,10 @@ async function rollbackMigration(
       gqlPermissionUndo,
     )),
   });
+  if (rollsBackOnFailure || clearsRecord) {
+    await removeRunResources(client, workspaceId, migration.namespace, migration.number);
+  }
   if (!rollsBackOnFailure) return error;
-  await removeRunResources(client, workspaceId, migration.namespace, migration.number);
   if (inProgress) settleRolledBackRestorationSettings(flow, migration, restoration);
   return rolledBackError(migration, error);
 }
@@ -1377,7 +1367,7 @@ async function commitMigration(
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, migrationContext, phaseSettings } = flow;
-  const { migration, inProgress, runsSteps } = attempt;
+  const { migration, inProgress, runsSteps, runsMain } = attempt;
   const previousRestorationSnapshot = restoration.snapshots.get(migration.namespace);
   const previousRestorationSettings = restoration.settings.get(migration.namespace);
   const postMigrationSnapshot = migrationSnapshotCache.load(migration);
@@ -1432,7 +1422,7 @@ async function commitMigration(
     historyId: expectedHistoryId,
   });
   if (recordsMaintenanceMode) runLog.recordedNamespaces.add(migration.namespace);
-  if (runsSteps) {
+  if (runsSteps || runsMain) {
     await removeRunResources(
       client,
       migrationContext.workspaceId,
