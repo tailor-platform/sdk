@@ -2042,7 +2042,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         },
       } as never);
       const goodsReceiptWrites = failPostPhase(client);
-      vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
       const error = await applyTailorDB(
         client,
@@ -2057,6 +2057,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           "'tailor tailordb migration resolve --complete --namespace test-ns'",
         ),
       });
+      const warnings = warn.mock.calls.map(([line]) => line).join("\n");
+      expect(warnings).toContain("Could not clear the in-progress record");
+      expect(warnings).toContain("tailor tailordb migration resolve");
+      expect(warnings).not.toContain("deploy again to resume it");
       expect(goodsReceiptWrites[3]).toEqual(goodsReceiptWrites[1]);
       expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
     });

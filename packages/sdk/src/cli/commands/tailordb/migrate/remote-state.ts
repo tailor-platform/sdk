@@ -117,6 +117,32 @@ export function isStaleMigrationInProgress(state: RemoteMigrationState): boolean
   );
 }
 
+/** How `migration resolve` settles a migration left in progress. */
+export type MigrationResolution = "rollback" | "complete";
+
+/**
+ * Arguments of the `tailor` command that settles a namespace's migration left in progress.
+ * @param resolution - How to settle it
+ * @param namespace - TailorDB namespace
+ * @returns Command arguments
+ */
+export function migrationResolveArgs(resolution: MigrationResolution, namespace: string): string[] {
+  return ["tailordb", "migration", "resolve", `--${resolution}`, "--namespace", namespace];
+}
+
+/**
+ * Quote the command that settles a namespace's migration left in progress, for an error suggestion.
+ * @param resolution - How to settle it
+ * @param namespace - TailorDB namespace
+ * @returns The quoted command
+ */
+export function formatMigrationResolveHint(
+  resolution: MigrationResolution,
+  namespace: string,
+): string {
+  return `'tailor ${migrationResolveArgs(resolution, namespace).join(" ")}'`;
+}
+
 /**
  * Describe how to settle a `main` run whose outcome an earlier deploy did not settle.
  * @param namespace - TailorDB namespace
@@ -124,8 +150,8 @@ export function isStaleMigrationInProgress(state: RemoteMigrationState): boolean
  */
 export function describeMainRunSettlement(namespace: string): string {
   return (
-    `Settle it with 'tailor tailordb migration resolve --complete --namespace ${namespace}' if its run succeeded, ` +
-    `or with 'tailor tailordb migration resolve --rollback --namespace ${namespace}' otherwise; ` +
+    `Settle it with ${formatMigrationResolveHint("complete", namespace)} if its run succeeded, ` +
+    `or with ${formatMigrationResolveHint("rollback", namespace)} otherwise; ` +
     "the command shows the outcome of the run before it changes anything."
   );
 }

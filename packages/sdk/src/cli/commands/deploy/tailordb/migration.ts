@@ -26,6 +26,7 @@ import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/co
 import { formatMigrationScriptHint } from "#/cli/commands/tailordb/migrate/hints";
 import {
   fetchRemoteMigrationState,
+  formatMigrationResolveHint,
   type MigrationInProgress,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
@@ -68,6 +69,7 @@ import {
   migrationStepRunnerName,
   migrationWorkflowResourceName,
   removeMigrationWorkflowResources,
+  type LongRunningMigrationResult,
   type MigrationRunEvent,
   type MigrationStepsWorkflowResult,
 } from "./migration-workflow";
@@ -392,8 +394,8 @@ async function executeSingleMigration(
         );
 
   const notify = notifyAround(sp);
-  const record = { mayExist: false };
-  let result: Awaited<ReturnType<typeof executeMigrationAsWorkflow>>;
+  const recording = { mayBeRecorded: false };
+  let result: LongRunningMigrationResult;
   try {
     result = await executeMigrationAsWorkflow({
       client,
@@ -406,7 +408,7 @@ async function executeSingleMigration(
       appId,
       maintenanceMode: options.maintenanceMode,
       onBeforeStart: async () => {
-        record.mayExist = true;
+        recording.mayBeRecorded = true;
         await writeMigrationInProgress(client, workspaceId, migration.namespace, {
           number: migration.number,
           main: true,
@@ -422,7 +424,7 @@ async function executeSingleMigration(
     });
   } catch (error) {
     const failure =
-      record.mayExist && !isMigrationOutcomeUnknown(error)
+      recording.mayBeRecorded && !isMigrationOutcomeUnknown(error)
         ? await releaseMigrationInProgress(options, migration, error, notify, true)
         : undefined;
     throw failure ?? error;
@@ -436,7 +438,7 @@ async function executeSingleMigration(
     error: result.error,
   };
   if (result.success) return executed;
-  const failure = record.mayExist
+  const failure = recording.mayBeRecorded
     ? await releaseMigrationInProgress(
         options,
         migration,
@@ -697,8 +699,12 @@ export function rolledBackError(migration: PendingMigration, cause: unknown): Er
   });
 }
 
-function resolveHint(direction: "complete" | "rollback", namespace: string): string {
-  return `'tailor tailordb migration resolve --${direction} --namespace ${namespace}'`;
+/** An in-progress record a failed migration could not clear. */
+export interface RemainingRecord {
+  /** Whether the remote state confirmed the migration's own record remains. */
+  confirmed: boolean;
+  /** Whether the record is of a `main` run, which a deploy does not resume. */
+  main: boolean;
 }
 
 /**
@@ -707,24 +713,22 @@ function resolveHint(direction: "complete" | "rollback", namespace: string): str
  * @param migration - Migration that stays in progress
  * @param cause - The failure that triggered the rollback
  * @param maintenanceMode - Whether the namespace's tables stay in maintenance mode
- * @param recordConfirmed - Whether the remote state confirmed the migration's own record remains
- * @param main - Whether the record is of a `main` run that succeeded, which a deploy does not resume
+ * @param record - The record that remains; a `main` one is of a run that succeeded
  * @returns The error to raise in place of the original failure
  */
 export function rollbackSkippedError(
   migration: PendingMigration,
   cause: unknown,
   maintenanceMode: boolean,
-  recordConfirmed: boolean,
-  main: boolean,
+  record: RemainingRecord,
 ): Error {
   const { namespace } = migration;
-  const next = main
+  const next = record.main
     ? "Its in-progress record could not be cleared, so its schema was not rolled back, and deploys stop before changing anything until the migration is settled. " +
-      `Once the data meets the migration's schema, run ${resolveHint("complete", namespace)} to keep what its script wrote; ` +
-      `or run ${resolveHint("rollback", namespace)} to return to migration ${formatMigrationNumber(migration.number - 1)}.`
+      `Once the data meets the migration's schema, run ${formatMigrationResolveHint("complete", namespace)} to keep what its script wrote; ` +
+      `or run ${formatMigrationResolveHint("rollback", namespace)} to return to migration ${formatMigrationNumber(migration.number - 1)}.`
     : "Its in-progress record could not be cleared, so its schema was not rolled back and the migration stays in progress. " +
-      `Deploy again to resume it, or run ${resolveHint("rollback", namespace)} to roll it back without deploying.`;
+      `Deploy again to resume it, or run ${formatMigrationResolveHint("rollback", namespace)} to roll it back without deploying.`;
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
     message: cause instanceof Error ? cause.message : String(cause),
@@ -733,7 +737,7 @@ export function rollbackSkippedError(
       namespace,
       migrationNumber: migration.number,
       rollbackSkipped: true,
-      ...(recordConfirmed ? { recordConfirmed: true } : {}),
+      ...(record.confirmed ? { recordConfirmed: true } : {}),
     },
     cause,
   });
@@ -754,23 +758,16 @@ export function isRollbackSkippedWithRecord(error: unknown): boolean {
   );
 }
 
-interface UnreleasedRecord {
-  /** Whether the remote state confirmed the migration's own record remains. */
-  confirmed: boolean;
-  /** Whether the record is of a `main` run, which a deploy does not resume. */
-  main: boolean;
-}
-
 function unreleasedRecordError(
   migration: PendingMigration,
   cause: unknown,
-  record: UnreleasedRecord,
+  record: RemainingRecord,
   maintenanceMode: boolean,
 ): Error {
   const { namespace } = migration;
   const number = formatMigrationNumber(migration.number);
   const checkpoint = formatMigrationNumber(migration.number - 1);
-  const resolveRollback = resolveHint("rollback", namespace);
+  const resolveRollback = formatMigrationResolveHint("rollback", namespace);
   const next = !record.confirmed
     ? `Whether it is still recorded as in progress could not be confirmed, so its pre-migration schema stays in place. ` +
       `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, ` +

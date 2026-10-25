@@ -11,6 +11,8 @@ import {
   migrationWorkflowResourceName,
   readMigrationRunStatus,
   removeMigrationWorkflowResources,
+  retryCommandActiveError,
+  settlingResolution,
   type MigrationRunStatus,
 } from "#/cli/commands/deploy/tailordb/migration-workflow";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
@@ -28,6 +30,7 @@ import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import {
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
+  type MigrationResolution,
   type RemoteMigrationState,
 } from "./remote-state";
 import {
@@ -40,11 +43,9 @@ import { applySnapshotPlan, planSnapshotApply } from "./snapshot-apply";
 import { assertMigrationsReproduceLocalTypes } from "./sync";
 import { handleOptionalToRequiredError } from "./types";
 
-type Resolution = "rollback" | "complete";
-
 interface ResolveOptions {
   configPath?: string;
-  resolution: Resolution;
+  resolution: MigrationResolution;
   namespace?: string;
   yes?: boolean;
   workspaceId?: string;
@@ -55,7 +56,7 @@ type ResolveResult = {
   changed: boolean;
   workspaceId: string;
   namespace: string;
-  resolution: Resolution;
+  resolution: MigrationResolution;
   migrationNumber: number;
   checkpoint: number;
   /** How the recorded `main` run stood; absent for a migration whose steps partly committed. */
@@ -95,7 +96,7 @@ async function assertMigrationStateUnchanged(params: AssertStateUnchangedParams)
 type MainRunResolution = {
   namespace: string;
   migrationNumber: number;
-  resolution: Resolution;
+  resolution: MigrationResolution;
   runStatus: MigrationRunStatus;
 };
 
@@ -107,12 +108,13 @@ type MainRunResolution = {
 function warnMainRunResolution(params: MainRunResolution): void {
   const { namespace, migrationNumber, resolution, runStatus } = params;
   const label = formatMigrationNumber(migrationNumber);
+  const fitting = settlingResolution(runStatus);
   if (resolution === "rollback") {
     logger.warn(
       `Rolling back does not undo what the script of migration ${label} changed in existing fields, and deletes the tables and fields the migration introduced together with their data. ` +
         `When migration ${label} is deployed again, its script runs again, so make sure it is safe to run twice.`,
     );
-    if (runStatus === "succeeded") {
+    if (fitting === "complete") {
       logger.warn(
         `The run of migration ${label} succeeded. To keep what its script wrote, run the command with --complete instead.`,
       );
@@ -121,7 +123,7 @@ function warnMainRunResolution(params: MainRunResolution): void {
     logger.warn(
       `Completing applies the schema of migration ${label} without running its migrate.ts again; do this only after the data it needs is in place.`,
     );
-    if (runStatus !== "succeeded" && runStatus !== "unknown") {
+    if (fitting === "rollback") {
       logger.warn(
         `The run of migration ${label} did not succeed, so the data it migrates may not be in place. ` +
           "To run the script again on the next deploy, run the command with --rollback instead.",
@@ -214,14 +216,10 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     ? await readMigrationRunStatus(client, workspaceId, namespace, state.inProgress)
     : undefined;
   if (runStatus === "running") {
-    throw CLIError({
-      code: "MIGRATION_EXECUTION_ACTIVE",
-      message: `The run of migration ${namespace}/${migrationLabel} is still running.`,
-      suggestion: "Wait for it to finish, then run the command again.",
-      ...(state.inProgress.executionId
-        ? { context: { executionId: state.inProgress.executionId } }
-        : {}),
-    });
+    throw retryCommandActiveError(
+      `The run of migration ${namespace}/${migrationLabel} is still running.`,
+      state.inProgress.executionId,
+    );
   }
   const checkpoint = options.resolution === "rollback" ? migrationNumber - 1 : migrationNumber;
   assertMigrationNumberExists(target.migrationsDir, checkpoint);

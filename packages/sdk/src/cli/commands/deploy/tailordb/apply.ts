@@ -369,6 +369,7 @@ async function clearRolledBackRecord(
   client: OperatorClient,
   workspaceId: string,
   migration: PendingMigration,
+  main: boolean,
 ): Promise<RecordState> {
   const { namespace } = migration;
   try {
@@ -380,7 +381,10 @@ async function clearRolledBackRecord(
     logger.warn(
       `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migration.number)}: ` +
         `${error instanceof Error ? error.message : String(error)}. ` +
-        "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; deploy again to resume it.",
+        "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; " +
+        (main
+          ? "settle it with 'tailor tailordb migration resolve'."
+          : "deploy again to resume it."),
     );
     return state;
   }
@@ -755,7 +759,6 @@ interface MigrationAttempt {
   attemptedTables: Set<string>;
   inProgress: boolean;
   runsSteps: boolean;
-  /** The script runs as one job, recorded as in progress until its checkpoint is committed. */
   runsMain: boolean;
   rollsBackOnFailure: boolean;
   gqlPermissionUndo: GqlPermissionUndo;
@@ -1247,17 +1250,14 @@ async function rollbackMigration(
   const { workspaceId } = migrationContext;
   const clearsRecord = (rollsBackOnFailure || runsMain) && recordMayExist;
   const record = clearsRecord
-    ? await clearRolledBackRecord(client, workspaceId, migration)
+    ? await clearRolledBackRecord(client, workspaceId, migration, runsMain)
     : "cleared";
   if (record !== "cleared") {
     runLog.partial.set(migration.namespace, migration);
-    return rollbackSkippedError(
-      migration,
-      error,
-      phaseSettings.restricted,
-      record === "in-progress",
-      runsMain,
-    );
+    return rollbackSkippedError(migration, error, phaseSettings.restricted, {
+      confirmed: record === "in-progress",
+      main: runsMain,
+    });
   }
   const attemptedTables = new Set(attempt.attemptedTables);
   const resumedRollback = rollsBackOnFailure && inProgress;

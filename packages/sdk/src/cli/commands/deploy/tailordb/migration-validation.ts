@@ -7,7 +7,9 @@ import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-
 import {
   describeMainRunSettlement,
   fetchRemoteMigrationState,
+  formatMigrationResolveHint,
   isStaleMigrationInProgress,
+  migrationResolveArgs,
   type MigrationInProgress,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
@@ -33,6 +35,7 @@ import { detectPendingMigrations } from "./migration";
 import {
   migrationWorkflowResourceName,
   readMigrationRunStatus,
+  settlingResolution,
   type MigrationRunStatus,
 } from "./migration-workflow";
 import type {
@@ -109,25 +112,12 @@ async function unsettledMainRunError(
   const migrationLabel = `${namespace}/${formatMigrationNumber(record.number)}`;
   const workflowName = migrationWorkflowResourceName(namespace, record.number);
   const executionsHint = `'tailor workflow executions --workflow-name ${workflowName}'`;
-  const direction =
-    runStatus === "succeeded"
-      ? "complete"
-      : runStatus === "running" || runStatus === "unknown"
-        ? undefined
-        : "rollback";
-  const resolveArgs = (resolution: string) => [
-    "tailordb",
-    "migration",
-    "resolve",
-    `--${resolution}`,
-    "--namespace",
-    namespace,
-  ];
+  const resolution = settlingResolution(runStatus);
   const suggestion =
-    direction === "complete"
-      ? `Run 'tailor ${resolveArgs(direction).join(" ")}' to apply the migration's schema without running its script again, then deploy again.`
-      : direction === "rollback"
-        ? `Run 'tailor ${resolveArgs(direction).join(" ")}' to return to migration ${formatMigrationNumber(record.number - 1)}, then deploy again to run the migration again.`
+    resolution === "complete"
+      ? `Run ${formatMigrationResolveHint(resolution, namespace)} to apply the migration's schema without running its script again, then deploy again.`
+      : resolution === "rollback"
+        ? `Run ${formatMigrationResolveHint(resolution, namespace)} to return to migration ${formatMigrationNumber(record.number - 1)}, then deploy again to run the migration again.`
         : runStatus === "running"
           ? `Wait until ${executionsHint} shows that the run finished, then deploy again to see how to settle it.`
           : `Check the run with ${executionsHint}. ${describeMainRunSettlement(namespace)}`;
@@ -135,7 +125,9 @@ async function unsettledMainRunError(
     code: "MIGRATION_OUTCOME_UNSETTLED",
     message: `An earlier deploy did not settle the run of migration ${migrationLabel}: ${RUN_STATUS_DESCRIPTIONS[runStatus]}.`,
     suggestion,
-    ...(direction ? { next: { command: "tailor", args: resolveArgs(direction) } } : {}),
+    ...(resolution
+      ? { next: { command: "tailor", args: migrationResolveArgs(resolution, namespace) } }
+      : {}),
     context: {
       namespace,
       migrationNumber: record.number,
@@ -340,7 +332,7 @@ export async function validateAndDetectMigrations(
           client,
           workspaceId,
           remoteVerificationResults
-            .filter((result) => result.hasDrift && result.migrationInProgress)
+            .filter((result) => result.migrationInProgress)
             .map((result) => result.namespace),
         );
         logger.error("Remote schema drift detected:");

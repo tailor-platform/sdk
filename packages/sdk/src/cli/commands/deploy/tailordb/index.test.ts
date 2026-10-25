@@ -2501,6 +2501,49 @@ describe("applyTailorDB migration label reconciliation", () => {
       },
     );
 
+    test("asks to check a run it cannot read before settling it either way", async () => {
+      writeMainMigration();
+      const { client } = createMigrationClient({ "sdk-migration": "m0000", ...unsettledRecord });
+      Object.assign(client, {
+        getWorkflowExecution: vi.fn().mockRejectedValue(new ConnectError("gone", Code.NotFound)),
+      });
+
+      const error = await runValidation(client, makePlanResult(true)).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toMatchObject({
+        code: "MIGRATION_OUTCOME_UNSETTLED",
+        context: { runStatus: "unknown" },
+        suggestion: expect.stringMatching(
+          /tailor workflow executions --workflow-name tailordb-migration--test-tailordb--0001.*resolve --complete.*resolve --rollback/s,
+        ),
+      });
+      expect((error as { next?: unknown }).next).toBeUndefined();
+    });
+
+    test("names --rollback for a run that never started", async () => {
+      writeMainMigration();
+      const { client } = createMigrationClient({
+        "sdk-migration": "m0000",
+        "sdk-migration-in-progress": "m0001-main",
+      });
+      Object.assign(client, {
+        listWorkflowExecutions: vi.fn().mockResolvedValue({ executions: [], nextPageToken: "" }),
+        getWorkflowByName: vi.fn().mockResolvedValue({ workflow: { id: "wf-1" } }),
+      });
+
+      const error = await runValidation(client, makePlanResult(true)).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toMatchObject({
+        code: "MIGRATION_OUTCOME_UNSETTLED",
+        context: { runStatus: "not_started" },
+        next: resolveCommand("--rollback"),
+      });
+    });
+
     test("refuses in a namespace that has no checkpoint yet", async () => {
       writeMainMigration();
       const { client } = createMigrationClient(unsettledRecord);

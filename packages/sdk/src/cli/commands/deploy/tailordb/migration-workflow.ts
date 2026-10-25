@@ -22,6 +22,11 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  migrationResolveArgs,
+  type MigrationInProgress,
+  type MigrationResolution,
+} from "#/cli/commands/tailordb/migrate/remote-state";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
 import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
 import { getOrNull, isNotFoundError } from "#/cli/shared/client";
@@ -30,7 +35,6 @@ import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
-import type { MigrationInProgress } from "#/cli/commands/tailordb/migrate/remote-state";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -364,8 +368,8 @@ export async function executeMigrationAsWorkflow(
         { cause: error, recorded: false },
       ),
   });
-  await options.onBeforeStart();
   await reclaimLeftovers(client, workspaceId, name);
+  await options.onBeforeStart();
 
   const created: CreatedMigrationWorkflow = {};
   let workflowId: string;
@@ -516,13 +520,10 @@ function outcomeUnknownError(
         namespace,
       ],
     });
-  const resolveHint = (direction: "--complete" | "--rollback") =>
-    formatCommandHint({
-      command: "tailor",
-      args: ["tailordb", "migration", "resolve", direction, "--namespace", namespace],
-    });
+  const resolveHint = (resolution: MigrationResolution) =>
+    formatCommandHint({ command: "tailor", args: migrationResolveArgs(resolution, namespace) });
   const settle = details.recorded
-    ? `If the execution succeeded, run ${resolveHint("--complete")}; otherwise run ${resolveHint("--rollback")}. ` +
+    ? `If the execution succeeded, run ${resolveHint("complete")}; otherwise run ${resolveHint("rollback")}. ` +
       "Deploys stop before changing anything until then."
     : `If the execution succeeded, run ${syncHint(migrationNumber)}; otherwise run ${syncHint(migrationNumber - 1)}. ` +
       "Then deploy again. Do not deploy before running sync, even with `--no-schema-check` to skip the drift check: " +
@@ -1156,15 +1157,22 @@ async function assertNoActiveExecution(
   }
 }
 
-const RETRY_COMMAND_ACTIVE_ERRORS: ActiveExecutionErrors = {
-  active: (message, executionId) =>
-    CLIError({
-      code: "MIGRATION_EXECUTION_ACTIVE",
-      message,
-      suggestion: "Wait for it to finish, then run the command again.",
-      context: { executionId },
-    }),
-};
+/**
+ * Refuse a command while a run of the migration it would settle or rewrite is still executing.
+ * @param message - Which run is still executing
+ * @param executionId - The execution, when it is known
+ * @returns Error asking to run the command again once the run finished
+ */
+export function retryCommandActiveError(message: string, executionId?: string): Error {
+  return CLIError({
+    code: "MIGRATION_EXECUTION_ACTIVE",
+    message,
+    suggestion: "Wait for it to finish, then run the command again.",
+    ...(executionId ? { context: { executionId } } : {}),
+  });
+}
+
+const RETRY_COMMAND_ACTIVE_ERRORS: ActiveExecutionErrors = { active: retryCommandActiveError };
 
 /**
  * Refuse to go on while a run of a multi-step migration is still executing, so a
@@ -1234,16 +1242,26 @@ export async function readMigrationRunStatus(
       if (execution.status === WorkflowExecution_Status.SUCCESS) return "succeeded";
       return execution.status === WorkflowExecution_Status.CANCELED ? "canceled" : "failed";
     }
-    if (record.executionId !== undefined) return "unknown";
-    return (await findMigrationWorkflowId(client, workspaceId, name)) === undefined
-      ? "unknown"
-      : "not_started";
+    // A run is recorded only after earlier leftovers are reclaimed, and its workflow is removed
+    // only after the record is cleared, so no execution under its name means it never started.
+    return record.executionId === undefined ? "not_started" : "unknown";
   } catch (error) {
     logger.debug(
       `Could not read the run of migration ${namespace}/${formatMigrationNumber(record.number)}: ${formatWaitError(error)}`,
     );
     return "unknown";
   }
+}
+
+/**
+ * The way to settle a recorded `main` run that fits how it stands.
+ * @param status - Status of the run
+ * @returns The resolution, or undefined while the run is running or its outcome cannot be read
+ */
+export function settlingResolution(status: MigrationRunStatus): MigrationResolution | undefined {
+  if (status === "succeeded") return "complete";
+  if (status === "running" || status === "unknown") return undefined;
+  return "rollback";
 }
 
 async function readWorkflowPlan(

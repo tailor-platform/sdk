@@ -13,6 +13,7 @@ import {
   MIGRATION_SCRIPT_STARTED_LOG,
   migrationWorkflowResourceName,
   readMigrationRunStatus,
+  settlingResolution,
   type LongRunningMigrationOptions,
 } from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -224,8 +225,8 @@ describe("executeMigrationAsWorkflow", () => {
     );
   });
 
-  test("records the run before it reclaims leftovers and starts it, and its execution once started", async () => {
-    const { client, calls } = createMockClient();
+  test("records the run once leftovers are reclaimed and before it creates the run, and its execution once started", async () => {
+    const { client, calls } = createMockClient({ leftoverWorkflowId: "stale-wf" });
     const onBeforeStart = vi.fn(async () => {
       calls.push("onBeforeStart");
     });
@@ -235,7 +236,8 @@ describe("executeMigrationAsWorkflow", () => {
 
     await run(client, true, { onBeforeStart, onExecutionStarted });
 
-    expect(calls.indexOf("onBeforeStart")).toBeLessThan(calls.indexOf("getWorkflowByName"));
+    expect(calls.indexOf("deleteWorkflow")).toBeLessThan(calls.indexOf("onBeforeStart"));
+    expect(calls.indexOf("onBeforeStart")).toBeLessThan(calls.indexOf("createFunctionRegistry"));
     expect(calls.indexOf("startWorkflow")).toBeLessThan(calls.indexOf("onExecutionStarted:exec-1"));
     expect(calls.indexOf("onExecutionStarted:exec-1")).toBeLessThan(
       calls.indexOf("getWorkflowExecution"),
@@ -1102,12 +1104,34 @@ describe("readMigrationRunStatus", () => {
     );
   });
 
-  test("reports a run whose workflow is gone as unknown", async () => {
+  test("reports a run that never got as far as creating its workflow as not started", async () => {
     const { client } = createMockClient();
+
+    await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
+      "not_started",
+    );
+  });
+
+  test("reports a run whose executions cannot be listed as unknown", async () => {
+    const { client, raw } = createMockClient();
+    raw.listWorkflowExecutions.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
+    );
 
     await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
       "unknown",
     );
+  });
+
+  test.each([
+    { status: "succeeded", resolution: "complete" },
+    { status: "failed", resolution: "rollback" },
+    { status: "canceled", resolution: "rollback" },
+    { status: "not_started", resolution: "rollback" },
+    { status: "running", resolution: undefined },
+    { status: "unknown", resolution: undefined },
+  ] as const)("settles a run that is $status with $resolution", ({ status, resolution }) => {
+    expect(settlingResolution(status)).toBe(resolution);
   });
 
   test.each([
