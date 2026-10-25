@@ -156,6 +156,25 @@ describe("buildFunctionBundle start transform", () => {
   });
 });
 
+describe("buildFunctionBundle comments", () => {
+  test("strips annotation comments but keeps legal comments", async () => {
+    using tmp = tempCwd("sdk-function-bundle-comments-");
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `/*! LEGAL_MARKER */\n` +
+        `/* @__NO_SIDE_EFFECTS__ */\n` +
+        `const makeBox = (value) => ({ value });\n` +
+        `export default async (value) => [makeBox(value), makeBox(value)];\n`,
+    );
+
+    const code = await bundle(sourceFile);
+
+    expect(code).toContain("LEGAL_MARKER");
+    expect(code).not.toContain("@__PURE__");
+    expect(code).not.toContain("@__NO_SIDE_EFFECTS__");
+  });
+});
+
 describe("buildFunctionBundle cache", () => {
   test("rebuilds a cached bundle when a value its entry embeds changes", async () => {
     using tmp = tempCwd("sdk-function-bundle-cached-entry-");

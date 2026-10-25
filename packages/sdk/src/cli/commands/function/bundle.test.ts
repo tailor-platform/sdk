@@ -150,6 +150,26 @@ export function main() {
       expect(result.bundledCode).toContain("console.warn");
       expect(result.bundledCode).toContain("console.error");
     });
+
+    test("strips annotation comments but keeps legal comments", async () => {
+      const detected: DetectedFunction = { type: "plain", name: "comments", namedMain: true };
+      const result = await bundle(
+        "comments.ts",
+        `
+/*! LEGAL_MARKER */
+/* @__NO_SIDE_EFFECTS__ */
+const makeBox = (value: unknown) => ({ value });
+export function main(value: unknown) {
+  return [makeBox(value), makeBox(value)];
+}
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).toContain("LEGAL_MARKER");
+      expect(result.bundledCode).not.toContain("@__PURE__");
+      expect(result.bundledCode).not.toContain("@__NO_SIDE_EFFECTS__");
+    });
   });
 
   describe("source text in inline sourcemaps", () => {

@@ -18,6 +18,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import {
   composeFunctionTreeshakeOptions,
   createUserTreeshakeOptions,
+  FUNCTION_BUNDLE_COMMENT_OPTIONS,
 } from "#/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -147,6 +148,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
             },
           }
         : true,
+      comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
       codeSplitting: false,
       // Emit sourcemap `sources` relative to cwd so stack traces resolve
       // back to paths a user can open (e.g. `resolvers/add.ts`), not the

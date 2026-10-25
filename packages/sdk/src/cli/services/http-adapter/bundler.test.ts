@@ -207,6 +207,36 @@ export default createHttpAdapter({
     }
   });
 
+  test("strips annotation comments but keeps legal comments", async () => {
+    const sourceFile = writeAdapterFiles({
+      "adapter.ts": `
+/*! LEGAL_MARKER */
+import { createHttpAdapter } from "@tailor-platform/sdk";
+
+/* @__NO_SIDE_EFFECTS__ */
+const makeBox = (value: unknown) => ({ value });
+
+export default createHttpAdapter({
+  name: "comments",
+  pathPattern: "/comments",
+  input: {
+    get: (req) => ({ query: "{}", variables: { a: makeBox(req.path), b: makeBox(req.path) } }),
+  },
+});
+`,
+    });
+
+    const result = await bundleHttpAdapters(
+      [{ name: "comments", sourceFile, methods: ["get"], hasOutput: false }],
+      process.cwd(),
+    );
+
+    const inputCode = result.bundledInputs.get("comments");
+    expect(inputCode).toContain("LEGAL_MARKER");
+    expect(inputCode).not.toContain("@__PURE__");
+    expect(inputCode).not.toContain("@__NO_SIDE_EFFECTS__");
+  });
+
   test("rejects bundles that import Node built-in modules", async () => {
     const sourceFile = writeAdapterFiles({
       "adapter.ts": `

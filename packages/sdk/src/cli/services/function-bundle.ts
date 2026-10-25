@@ -11,6 +11,7 @@ import {
 import {
   composeFunctionTreeshakeOptions,
   createUserTreeshakeOptions,
+  FUNCTION_BUNDLE_COMMENT_OPTIONS,
 } from "#/cli/shared/function-treeshake";
 import {
   createPlatformBundleDefinePlugin,
@@ -170,6 +171,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
                 },
               }
             : true,
+          comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
           codeSplitting: false,
         },
         tsconfig,
