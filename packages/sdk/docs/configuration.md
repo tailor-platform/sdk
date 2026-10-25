@@ -64,7 +64,7 @@ export default defineConfig({
 
 Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. Because those retained labels count towards the platform's limit of 20 labels per resource, `deploy` reports the overflow and stops before changing the application when the labels it would leave behind exceed that limit. The labels are written when the application itself is deployed, so a config with no TailorDB, Resolver, IdP, or Auth service has no application to carry them.
 
-**Build Options**: `buildOptions` groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `logLevel` (below), `inlineSourcemap` (whether bundled functions embed an inline sourcemap for readable error stack traces; default `true`), `inlineSourcemapDependencySources` (below), `allowedRuntimeGlobals` (see [Node-only globals](#node-only-globals)), and `treeshake` (see [Removing unused code](#removing-unused-code)). The top-level `logLevel` and `inlineSourcemap` fields still work but are deprecated; `tailor upgrade` moves them into `buildOptions`. Setting the same option both at the top level and in `buildOptions` is rejected.
+**Build Options**: `buildOptions` groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `logLevel` (below), `inlineSourcemap` (whether bundled functions embed an inline sourcemap for readable error stack traces; default `true`), `inlineSourcemapDependencySources` and `inlineSourcemapProjectSources` (below), `allowedRuntimeGlobals` (see [Node-only globals](#node-only-globals)), and `treeshake` (see [Removing unused code](#removing-unused-code)). The top-level `logLevel` and `inlineSourcemap` fields still work but are deprecated; `tailor upgrade` moves them into `buildOptions`. Setting the same option both at the top level and in `buildOptions` is rejected.
 
 **Sourcemap Sources** (`buildOptions.inlineSourcemapDependencySources`): Whether the inline sourcemap embeds the source text of installed packages, that is, everything under `node_modules`. The default is `false`: only your own source files are embedded, which makes bundled functions much smaller. Error positions in stack traces resolve to the original files and lines either way. With the default, `tailor function run` and `tailor function logs` show the code snippet for a frame inside an installed package from the package's file on your machine, so the snippet is missing when that file is not installed locally (for `tailor function logs`, run it from the project directory you deployed from). Set it to `true` to embed the source text of installed packages as well, or to a list of package names such as `["kysely", "@scope/lib"]` to embed only those packages. A listed package's own dependencies are not embedded unless they are listed too. Files under `node_modules` that belong to no package, such as a generated client in `node_modules/.prisma`, are embedded only when the option is `true`. It has no effect when `inlineSourcemap` is `false`.
 
@@ -78,6 +78,17 @@ export default defineConfig({
 ```
 
 This is a bundle-time setting. It affects newly bundled deployments; already deployed functions keep the sourcemap they were deployed with until they are redeployed.
+
+**Project Sourcemap Sources** (`buildOptions.inlineSourcemapProjectSources`): Which of your own source files embed their text in the inline sourcemap. By default all of them do. `include` and `exclude` are globs relative to the directory containing your config file, written without a leading `./` (a `./` prefix is ignored). Only files matching `include` (all files when omitted) and not matching `exclude` keep their text. `**` does not match a dot-directory such as `src/.cache`. Files under `node_modules` are controlled by `inlineSourcemapDependencySources` instead. Error positions still resolve to the original files and lines, but `tailor function run` shows no code snippet for a frame in a file whose text is left out. It has no effect when `inlineSourcemap` is `false`.
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  buildOptions: {
+    inlineSourcemapProjectSources: { exclude: ["src/generated/**"] },
+  },
+});
+```
 
 **Log Level** (`buildOptions.logLevel`): Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`) calls are kept when deployment functions are bundled. Supported values are `"DEBUG"`, `"INFO"`, `"WARN"`, `"ERROR"`, and `"SILENT"`. The default is `"DEBUG"` and keeps all calls. `console.log` is treated as a DEBUG-level call (matching the platform's OpenTelemetry severity mapping), so it is dropped at `"INFO"` and above, alongside `console.debug` and `logger.debug`. `logger.setAttributes` has no severity and is never dropped, regardless of `logLevel`. For production deployments, use `"WARN"` to keep warn/error calls while dropping debug, log, and info calls:
 

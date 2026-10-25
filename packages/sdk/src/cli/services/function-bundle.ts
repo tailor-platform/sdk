@@ -16,7 +16,7 @@ import {
   createPlatformBundleDefinePlugin,
   type BundledDateRepresentations,
 } from "#/cli/shared/platform-bundle-plugin";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
+import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -38,6 +38,8 @@ export interface FunctionBundleSettings {
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
   inlineSourcemapDependencySources?: boolean | string[];
+  /** Which of the project's own sources keep their text in inline sourcemaps */
+  inlineSourcemapProjectSources?: ProjectSourcesFilter;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */
@@ -103,6 +105,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     cache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     tsconfigCache,
@@ -121,6 +124,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
     bundleTreeshake,
   });
@@ -185,6 +189,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
           chunk,
           inlineSourcemap: inlineSourcemap ?? false,
           dependencySources: inlineSourcemapDependencySources ?? false,
+          projectSources: inlineSourcemapProjectSources,
         }),
         packageRuntimeGlobals: runtimeGlobals
           ? checkForbiddenRuntimeGlobals(chunk, runtimeGlobals.label)

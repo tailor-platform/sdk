@@ -24,7 +24,7 @@ import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { buildOptionsOf } from "#/cli/shared/build-options";
+import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
@@ -60,6 +60,7 @@ import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-poin
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
+import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
 import type { EffectiveDateDefault } from "#/runtime/types";
@@ -104,6 +105,7 @@ interface ReusableBuildState {
   readonly tsconfigCache: TsconfigLookupCache;
   readonly inlineSourcemap: boolean;
   readonly inlineSourcemapDependencySources: boolean | string[];
+  readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
   readonly bundleLogLevel: LogLevel;
 }
 
@@ -819,6 +821,7 @@ export async function loadApplication(
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
+  const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
 
@@ -842,6 +845,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
@@ -862,6 +866,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
@@ -884,6 +889,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
@@ -923,6 +929,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
@@ -979,6 +986,7 @@ export async function loadApplication(
       tsconfigCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
     },
   };
@@ -1016,6 +1024,7 @@ async function reloadEnvDependentBundles(params: {
     tsconfigCache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
   } = reusableBuildState;
 
@@ -1043,6 +1052,7 @@ async function reloadEnvDependentBundles(params: {
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptionsOf(config).treeshake,
       tsconfigCache,
@@ -1064,6 +1074,7 @@ async function reloadEnvDependentBundles(params: {
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptionsOf(config).treeshake,
       baseDir,
