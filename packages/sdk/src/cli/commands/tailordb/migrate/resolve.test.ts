@@ -226,6 +226,7 @@ describe("tailordb migration resolve", () => {
       const result = await runCommand(resolveCommand, [flag, "--yes"]);
 
       expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_RECORD_INVALID" });
       expect(String(result.error)).toMatch(
         /records migration 0002 as in progress, but its checkpoint is 0000; the next migration to run would be 0001/,
       );
@@ -241,6 +242,7 @@ describe("tailordb migration resolve", () => {
       const result = await runCommand(resolveCommand, [flag, "--yes"]);
 
       expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_RECORD_INVALID" });
       expect(String(result.error)).toMatch(
         /records migration 0002 as in progress, but its checkpoint is 0000; the next migration to run would be 0001/,
       );
