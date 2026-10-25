@@ -172,6 +172,27 @@ export function main(value: unknown) {
     });
   });
 
+  describe("SDK builder chains", () => {
+    test("drops an unused call whose arguments hold a db builder chain", async () => {
+      const detected: DetectedFunction = { type: "plain", name: "builders", namedMain: true };
+
+      const result = await bundle(
+        "builders.ts",
+        `
+import { db } from "@tailor-platform/sdk";
+const define = /* @__NO_SIDE_EFFECTS__ */ (options: unknown) => ({ options });
+const unused = define({ field: db.string().index().description("UNUSED_FIELD") });
+export function main() {
+  return 1;
+}
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).not.toContain("UNUSED_FIELD");
+    });
+  });
+
   describe("source text in inline sourcemaps", () => {
     async function embeddedSourceTexts(options: {
       inlineSourcemapDependencySources?: boolean;

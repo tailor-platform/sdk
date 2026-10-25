@@ -17,6 +17,10 @@ import {
   createPlatformBundleDefinePlugin,
   type BundledDateRepresentations,
 } from "#/cli/shared/platform-bundle-plugin";
+import {
+  createSdkBuilderPurePlugin,
+  type SdkBuilderAnnotationCache,
+} from "#/cli/shared/sdk-builder-pure-plugin";
 import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
@@ -47,6 +51,8 @@ export interface FunctionBundleSettings {
   bundleTreeshake?: TreeshakeOptions;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
+  /** Optional SDK builder annotation results shared across bundles in this CLI run */
+  sdkBuilderAnnotationCache?: SdkBuilderAnnotationCache;
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault;
 }
@@ -110,6 +116,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     tsconfigCache,
+    sdkBuilderAnnotationCache,
     dateDefault = "legacy",
   } = options;
 
@@ -154,6 +161,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
       plugins.push(
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         createPlatformBundleDefinePlugin(dateRepresentations, dateDefault),
+        createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
         ...cachePlugins,
       );
 

@@ -211,6 +211,8 @@ export default defineConfig({
 
 With `false`, a property read whose result is unused is removed, and so is a call that only exists to receive such a read. This also removes a read that exists only for its effect: a getter that initializes something when it is read, or a statement such as `settings.db.url;` that throws when `settings.db` is missing. Keep the default if your code or an installed package relies on a read like that.
 
+Field and table definitions written with `db` and `t` count as having no effect, so they do not keep such a call in the bundle: with `propertyReadSideEffects: false`, `createService({ db: { company: shared.db.company }, fields: { note: db.string().index() } })` is removed when nothing uses its result. This applies to `db` and `t` that your own code imports by name from `@tailor-platform/sdk`, not to definitions in installed packages, and not when `treeshake.annotations` is `false`. A function called in a definition's arguments still runs, and keeps the whole definition in the bundle unless it is passed to the last method, as `label()` is in `db.string().description(label())` but not in `db.string().description(label()).index()`. A property read in a definition's arguments can be removed even with the default `propertyReadSideEffects`.
+
 `treeshake` has four switches that control how unused code is removed from bundles. The values below are the SDK's defaults, which are tuned for the Tailor Platform runtime and rarely need changing. Most switches ask whether something has side effects, so `true` keeps it, while `annotations` asks whether to honor annotations, so `true` removes more:
 
 ```typescript
