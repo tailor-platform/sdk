@@ -913,9 +913,6 @@ importers:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
-      eslint-plugin-zod:
-        specifier: 5.2.0
-        version: 5.2.0(eslint@10.13.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.88.0(oxlint-tsgolint@7.0.2004))(zod@4.6.7)
       oxlint:
         specifier: 1.88.0
         version: 1.88.0(oxlint-tsgolint@7.0.2004)
@@ -953,9 +950,6 @@ importers:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
-      eslint-plugin-zod:
-        specifier: 5.2.0
-        version: 5.2.0(eslint@10.13.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.88.0(oxlint-tsgolint@7.0.2004))(zod@4.6.7)
       oxlint:
         specifier: 1.88.0
         version: 1.88.0(oxlint-tsgolint@7.0.2004)
@@ -1008,9 +1002,6 @@ importers:
       confbox:
         specifier: 0.3.1
         version: 0.3.1
-      eslint-plugin-zod:
-        specifier: 5.2.0
-        version: 5.2.0(eslint@10.13.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.88.0(oxlint-tsgolint@7.0.2004))(zod@4.6.7)
       oxlint:
         specifier: 1.88.0
         version: 1.88.0(oxlint-tsgolint@7.0.2004)
@@ -1060,9 +1051,6 @@ importers:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
-      eslint-plugin-zod:
-        specifier: 5.2.0
-        version: 5.2.0(eslint@10.13.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.88.0(oxlint-tsgolint@7.0.2004))(zod@4.6.7)
       oxlint:
         specifier: 1.88.0
         version: 1.88.0(oxlint-tsgolint@7.0.2004)
