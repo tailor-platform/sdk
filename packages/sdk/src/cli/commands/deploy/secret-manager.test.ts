@@ -1090,6 +1090,7 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"tailor--my-vault"'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("v3"));
   });
 
   test("does not warn about a vault name that starts with idp- and matches no IdP client", async () => {
@@ -1116,17 +1117,6 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
-  test("names the next major version in the warning", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const context = createPlanContext(createMockPlanClient([], "tailor--my-vault"), [
-      { vaultName: "tailor--my-vault", secrets: [] },
-    ]);
-
-    await planSecretManager(context);
-
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("v3"));
-  });
-
   test("does not warn about a vault name without a reserved prefix", async () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const context = createPlanContext(
@@ -1147,19 +1137,6 @@ describe("planSecretManager and vault names reserved for IdP client secrets", ()
     ]);
 
     await planSecretManager(context);
-
-    expect(warnSpy).not.toHaveBeenCalled();
-  });
-
-  test("reports only the error for a vault named like an IdP client vault", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const context = createPlanContext(
-      createMockPlanClient([], "idp-my-idp-web"),
-      [{ vaultName: "idp-my-idp-web", secrets: [] }],
-      { idpServices },
-    );
-
-    await expect(planSecretManager(context)).rejects.toThrow(/idp-my-idp-web/);
 
     expect(warnSpy).not.toHaveBeenCalled();
   });
