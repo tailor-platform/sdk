@@ -49,8 +49,10 @@ jobs:
       matrix:
         node: [22, 24]
         shard: [1, 2, 3, 4]
+        # Must equal the number of `shard` values.
+        shard-total: [4]
     runs-on: ubuntu-latest
-    name: Test (Node ${{ matrix.node }}, shard ${{ matrix.shard }}/4)
+    name: Test (Node ${{ matrix.node }}, shard ${{ matrix.shard }}/${{ matrix.shard-total }})
     timeout-minutes: 15
     permissions:
       contents: read
@@ -70,13 +72,14 @@ jobs:
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
       - name: Run SDK tests
-        run: pnpm --filter @tailor-platform/sdk run test --project 'unit*' --shard="${SHARD}/4"
+        run: pnpm --filter @tailor-platform/sdk run test --project 'unit*' --shard="${SHARD}/${SHARD_TOTAL}"
         env:
           SHARD: ${{ matrix.shard }}
+          SHARD_TOTAL: ${{ matrix.shard-total }}
 
       # More concurrent packages push eslint-plugin-sdk's oxlint-spawning tests past their 5s timeout.
       - name: Run other package tests
-        if: ${{ !cancelled() && matrix.shard == 4 }}
+        if: ${{ !cancelled() && matrix.shard == matrix.shard-total }}
         run: pnpm -r --workspace-concurrency=2 --filter '!@tailor-platform/sdk' run test --project 'unit*'
 
   plugin-windows:
