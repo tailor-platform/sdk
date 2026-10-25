@@ -24,6 +24,36 @@ describe("snapshot", () => {
       tables: {},
     });
 
+    test("reports a foreign key newly set on a nested member as a non-breaking modification", () => {
+      const withOwner = (owner: SnapshotFieldConfig): SchemaSnapshot => ({
+        ...createEmptySnapshot(),
+        tables: {
+          Order: {
+            name: "Order",
+            pluralForm: "Orders",
+            fields: {
+              id: { type: "uuid", required: true },
+              info: { type: "nested", required: true, fields: { ownerID: owner } },
+            },
+          },
+        },
+      });
+
+      const diff = compareRawSnapshots(
+        withOwner({ type: "uuid", required: true }),
+        withOwner({
+          type: "uuid",
+          required: true,
+          foreignKey: true,
+          foreignKeyType: "User",
+          foreignKeyField: "id",
+        }),
+      );
+
+      expect(diff.changes.map((c) => [c.kind, c.tableName])).toEqual([["field_modified", "Order"]]);
+      expect(diff.hasBreakingChanges).toBe(false);
+    });
+
     test("detects table addition", () => {
       const previous = createEmptySnapshot();
       const current: SchemaSnapshot = {

@@ -315,7 +315,9 @@ export function processNestedFieldsFromSnapshot(
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,
-        foreignKey: false,
+        foreignKey: fieldConfig.foreignKey ?? false,
+        foreignKeyType: fieldConfig.foreignKeyType,
+        foreignKeyField: fieldConfig.foreignKeyField,
         vector: false,
         ...optionalOnCreate(fieldConfig),
         ...(fieldConfig.serial && {
