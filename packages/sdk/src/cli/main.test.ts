@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { makeTempDir, tempDir } from "./shared/test-helpers/temp-dir";
 
 const cliEntry = fileURLToPath(new URL("../../bin/tailor.mjs", import.meta.url));
 const builtEntry = fileURLToPath(new URL("../../dist/cli/main.mjs", import.meta.url));
@@ -11,22 +11,12 @@ const builtEntry = fileURLToPath(new URL("../../dist/cli/main.mjs", import.meta.
 let compileCacheDir: string;
 
 beforeAll(() => {
-  compileCacheDir = mkdtempSync(path.join(tmpdir(), "cli-compile-cache-"));
+  compileCacheDir = makeTempDir("cli-compile-cache-");
 });
 
 afterAll(() => {
   rmSync(compileCacheDir, { recursive: true, force: true });
 });
-
-function tempDir(prefix: string): Disposable & { readonly dir: string } {
-  const dir = mkdtempSync(path.join(tmpdir(), prefix));
-  return {
-    dir,
-    [Symbol.dispose]() {
-      rmSync(dir, { recursive: true, force: true });
-    },
-  };
-}
 
 const CLI_TIMEOUT_MS = 15_000;
 

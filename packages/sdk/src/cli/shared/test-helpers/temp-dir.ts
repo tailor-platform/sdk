@@ -13,3 +13,19 @@ import * as path from "pathe";
 export function makeTempDir(prefix: string): string {
   return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 }
+
+/**
+ * Creates a temporary directory with {@link makeTempDir} for the lifetime of
+ * the returned disposable. Unlike `tempCwd`, the process CWD is left untouched.
+ * @param prefix - Prefix for the temporary directory name
+ * @returns A `Disposable` exposing `dir`; removes the directory on dispose
+ */
+export function tempDir(prefix: string): Disposable & { readonly dir: string } {
+  const dir = makeTempDir(prefix);
+  return {
+    dir,
+    [Symbol.dispose]() {
+      fs.rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
