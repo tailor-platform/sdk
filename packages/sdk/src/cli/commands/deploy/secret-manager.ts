@@ -1,7 +1,9 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
+import { idpClientVaultName } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, writeMetadataLabels } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import {
@@ -104,6 +106,28 @@ export function secretUpdateRequest(
   };
 }
 
+function collectIdPClientVaultNames(idpServices: Application["idpServices"]) {
+  return new Set(
+    idpServices.flatMap((idp) => idp.clients.map((name) => idpClientVaultName(idp.name, name))),
+  );
+}
+
+function validateIdPClientVaultNames(
+  secretVaults: ReadonlyArray<{ vaultName: string }>,
+  idpClientVaultNames: ReadonlySet<string>,
+) {
+  for (const { vaultName } of secretVaults) {
+    if (idpClientVaultNames.has(vaultName)) {
+      throw CLIError({
+        code: "RESERVED_VAULT_NAME",
+        message: `Vault "${vaultName}" has the name of the vault the SDK creates for an IdP client.`,
+        suggestion:
+          "Rename the vault in defineSecretManager(). If this application already manages a vault with that name, renaming it and removing the declaration both delete the old vault and its secrets on the next deploy, including the secret of an IdP client that already exists.",
+      });
+    }
+  }
+}
+
 /**
  * Plan secret manager changes based on current and desired state.
  * @param context - Planning context
@@ -112,6 +136,8 @@ export function secretUpdateRequest(
 export async function planSecretManager(context: PlanContext) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
+  const idpClientVaultNames = collectIdPClientVaultNames(application.idpServices);
+  validateIdPClientVaultNames(secretVaults, idpClientVaultNames);
 
   const vaultChangeSet = createChangeSet<CreateVault, ExistingVault, DeleteVault>(
     "Secret Manager vaults",
