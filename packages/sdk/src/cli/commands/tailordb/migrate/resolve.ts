@@ -133,6 +133,16 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     });
   }
 
+  const currentCheckpoint = state.number ?? 0;
+  const nextMigrationNumber = currentCheckpoint + 1;
+  if (state.inProgress.number !== nextMigrationNumber) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_RECORD_INVALID",
+      message: `Namespace "${namespace}" records migration ${formatMigrationNumber(state.inProgress.number)} as in progress, but its checkpoint is ${formatMigrationNumber(currentCheckpoint)}; the next migration to run would be ${formatMigrationNumber(nextMigrationNumber)}.`,
+      suggestion: `The checkpoint or the in-progress record changed after the deploy that started the migration wrote it. Run 'tailor tailordb migration status --namespace ${namespace}' to compare them, and restore the label that changed before resolving.`,
+    });
+  }
+
   const localHistoryId =
     reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
   const firstRun = state.number === null && state.historyId === null && !state.historyIdInvalid;
