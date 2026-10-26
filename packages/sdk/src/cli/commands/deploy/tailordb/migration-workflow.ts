@@ -1242,8 +1242,6 @@ export async function readMigrationRunStatus(
       if (execution.status === WorkflowExecution_Status.SUCCESS) return "succeeded";
       return execution.status === WorkflowExecution_Status.CANCELED ? "canceled" : "failed";
     }
-    // A run is recorded only after earlier leftovers are reclaimed, and its workflow is removed
-    // only after the record is cleared, so no execution under its name means it never started.
     return record.executionId === undefined ? "not_started" : "unknown";
   } catch (error) {
     logger.debug(
