@@ -403,7 +403,7 @@ describe("tailordb migration status --json", () => {
         path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
         db: {
           tailordb: { migration: { directory: state.migrationsDir } },
-          analyticsdb: { migration: { directory: state.migrationsDir } },
+          analyticsdb: { migration: { directory: `${state.migrationsDir}-analyticsdb` } },
         },
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);

@@ -42,8 +42,9 @@ vi.mock("#/cli/shared/prompt", () => ({
 
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
   const db: Record<string, unknown> = {};
-  for (const namespace of namespaces) {
-    db[namespace] = { migration: { directory: state.migrationsDir } };
+  for (const [index, namespace] of namespaces.entries()) {
+    const directory = index === 0 ? state.migrationsDir : `${state.migrationsDir}-${namespace}`;
+    db[namespace] = { migration: { directory } };
   }
   vi.mocked(loadConfig).mockResolvedValue({
     config: {
