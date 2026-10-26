@@ -16,9 +16,9 @@ export type RetryPolicy = {
   /** Maximum number of retries (1-10) */
   maxRetries: number;
   /** Initial backoff duration (e.g., '1s', '500ms', '1m', max 1h) */
-  initialBackoff: `${number}ms` | `${number}s` | `${number}m`;
+  initialBackoff: `${number}m` | `${number}ms` | `${number}s`;
   /** Maximum backoff duration (e.g., '30s', '5m', max 24h) */
-  maxBackoff: `${number}ms` | `${number}s` | `${number}m`;
+  maxBackoff: `${number}m` | `${number}ms` | `${number}s`;
   /** Backoff multiplier (>= 1) */
   backoffMultiplier: number;
 };
