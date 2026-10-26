@@ -7,13 +7,21 @@
     },
     {
       "name": "cli-logging",
-      "paths": ["packages/sdk/src/cli/**/*.ts"],
+      "paths": ["packages/sdk/src/cli/**/*.ts", "packages/sdk-plugin-*/src/**/*.ts"],
       "file": ".agents/rules/cli-logging.md"
     },
     {
       "name": "code-comments",
       "paths": ["**"],
       "file": ".agents/rules/code-comments.md"
+    },
+    {
+      "name": "deploy-managed-resources",
+      "paths": [
+        "packages/sdk/src/cli/commands/deploy/apply-phases.ts",
+        "packages/sdk/src/cli/commands/deploy/managed-resource-type.ts"
+      ],
+      "file": ".agents/rules/deploy-managed-resources.md"
     },
     {
       "name": "deprecation",

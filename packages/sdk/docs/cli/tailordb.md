@@ -286,7 +286,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Every local migration file is checked for a compatible format version, and deployed migration history IDs must match the local baseline. Compatibility errors, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
+Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. Invalid or incompatible files, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
 
 #### tailordb migration sync
 

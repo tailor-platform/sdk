@@ -120,7 +120,7 @@ describe("function script", () => {
   test("scaffolds a skeleton importing the project's generated types when kyselyTypePlugin is configured", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { plugins: [kyselyPluginStub] });
+    mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
 
     await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
 
@@ -135,7 +135,7 @@ describe("function script", () => {
   test("generates db.ts and db.snapshot.json from local definitions without authentication by default", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
 
     await runCommand(scriptCommand, ["scripts/fix.ts"]);
 
@@ -165,7 +165,7 @@ describe("function script", () => {
   test("generates db.ts and db.snapshot.json from the deployed schema with --remote", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
 
     await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb", "--remote"]);
@@ -187,7 +187,7 @@ describe("function script", () => {
   test("uses script-scoped remote types instead of kyselyTypePlugin with --remote", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { plugins: [kyselyPluginStub] });
+    mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
 
     await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
@@ -201,7 +201,7 @@ describe("function script", () => {
   test("generates Temporal remote types when kyselyTypePlugin is configured with temporal", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), {
+    mockConfig(tmp.dir, {
       plugins: [
         { ...kyselyPluginStub, pluginConfig: { ...kyselyPluginStub.pluginConfig, temporal: true } },
       ],
@@ -220,7 +220,7 @@ describe("function script", () => {
   test("refuses to add remote types to an existing kyselyTypePlugin script", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { plugins: [kyselyPluginStub] });
+    mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
     fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
     fs.writeFileSync(path.join(tmp.dir, "scripts/fix.ts"), "export default function main() {}\n");
 
@@ -237,7 +237,7 @@ describe("function script", () => {
   test("refuses to re-scaffold an existing kyselyTypePlugin script", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { plugins: [kyselyPluginStub] });
+    mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
     fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
     fs.writeFileSync(path.join(tmp.dir, "scripts/fix.ts"), "export default function main() {}\n");
 
@@ -255,7 +255,7 @@ describe("function script", () => {
   test("refreshes generated types and keeps the script when it already exists", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
     await runCommand(scriptCommand, ["scripts/fix.ts"]);
 
     const scriptPath = path.join(tmp.dir, "scripts/fix.ts");
@@ -277,7 +277,7 @@ describe("function script", () => {
   test("refuses to overwrite a db.ts the scaffold did not generate", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
     fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
     fs.writeFileSync(path.join(tmp.dir, "scripts", SCRIPT_DB_TYPES_FILE_NAME), "export {};\n");
@@ -290,7 +290,7 @@ describe("function script", () => {
   test("rejects a script named db.ts when the generated types would share the path", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
 
     const result = await runCommand(scriptCommand, ["scripts/db.ts"]);
@@ -301,7 +301,7 @@ describe("function script", () => {
   test("re-scaffolds over a corrupt snapshot sidecar", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
     fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
     fs.writeFileSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME), "{broken");
@@ -319,7 +319,7 @@ describe("function script", () => {
     async (attach) => {
       using tmp = tempCwd("sdk-function-script-");
       using _logger = silenceLogger("info", "success", "warn");
-      mockConfig(fs.realpathSync(tmp.dir), {
+      mockConfig(tmp.dir, {
         plugins: [kyselyPluginStub],
         db: { own: { files: [] }, shared: { attach, schemaFrom: "owner.ts" } },
       });
@@ -335,7 +335,7 @@ describe("function script", () => {
 
   test("requires remote schema for referenced definitions without kyselyTypePlugin", async () => {
     using tmp = tempCwd("sdk-function-script-");
-    mockConfig(fs.realpathSync(tmp.dir), {
+    mockConfig(tmp.dir, {
       db: { shared: { attach: false, schemaFrom: "owner.ts" } },
     });
     const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "shared"]);
@@ -347,7 +347,7 @@ describe("function script", () => {
   test("rejects --namespace outside the owned namespaces when kyselyTypePlugin is configured", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), {
+    mockConfig(tmp.dir, {
       plugins: [kyselyPluginStub],
       db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
@@ -360,7 +360,7 @@ describe("function script", () => {
   test("auto-selects the single owned namespace over external ones when kyselyTypePlugin is configured", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), {
+    mockConfig(tmp.dir, {
       plugins: [kyselyPluginStub],
       db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
@@ -374,7 +374,7 @@ describe("function script", () => {
   test("rejects a namespace conflicting with the directory's existing sidecar", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { db: { tailordb: { files: [] }, other: { files: [] } } });
+    mockConfig(tmp.dir, { db: { tailordb: { files: [] }, other: { files: [] } } });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
     await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
 
@@ -386,10 +386,10 @@ describe("function script", () => {
   test("keeps refreshing generated types when kyselyTypePlugin is added later", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
     await runCommand(scriptCommand, ["scripts/fix.ts"]);
 
-    mockConfig(fs.realpathSync(tmp.dir), { plugins: [kyselyPluginStub] });
+    mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
     const refreshed = makeSnapshot();
     refreshed.tables.Product!.fields.price = { type: "float", required: false };
     mockLocalNamespace(refreshed);
@@ -409,7 +409,7 @@ describe("function script", () => {
   test("requires --namespace when the config defines multiple namespaces", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { db: { one: { files: [] }, two: { files: [] } } });
+    mockConfig(tmp.dir, { db: { one: { files: [] }, two: { files: [] } } });
 
     const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
     expect(result.success).toBe(false);
@@ -419,7 +419,7 @@ describe("function script", () => {
   test("auto-selects the single owned namespace over external ones for local generation", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), {
+    mockConfig(tmp.dir, {
       db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
 
@@ -435,7 +435,7 @@ describe("function script", () => {
   test("requires --remote for an external-only config and auto-selects it remotely", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { db: { theirs: { attach: true } } });
+    mockConfig(tmp.dir, { db: { theirs: { attach: true } } });
 
     const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
 
@@ -458,7 +458,7 @@ describe("function script", () => {
   test("requires --remote for an external namespace", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), {
+    mockConfig(tmp.dir, {
       db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
 
@@ -473,7 +473,7 @@ describe("function script", () => {
   test("uses the deployed schema for an external namespace with --remote", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), {
+    mockConfig(tmp.dir, {
       db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(
@@ -493,7 +493,7 @@ describe("function script", () => {
   test("requires --namespace when --remote includes owned and external namespaces", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), {
+    mockConfig(tmp.dir, {
       db: { tailordb: { files: [] }, theirs: { attach: true } },
     });
 
@@ -507,7 +507,7 @@ describe("function script", () => {
   test("switches an owned namespace sidecar back to local unless --remote is repeated", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
     await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
 
@@ -528,7 +528,7 @@ describe("function script", () => {
   test("requires --remote to refresh a sidecar pinned to an external namespace", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir), { db: { theirs: { attach: true } } });
+    mockConfig(tmp.dir, { db: { theirs: { attach: true } } });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(
       normalizeSchemaSnapshot({ ...makeSnapshot(), namespace: "theirs" }),
     );
@@ -543,7 +543,7 @@ describe("function script", () => {
   test("rejects a namespace with no deployed tables", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(fs.realpathSync(tmp.dir));
+    mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(
       normalizeSchemaSnapshot({ ...makeSnapshot(), tables: {} }),
     );

@@ -38,6 +38,12 @@ export type AppConfigParsedInput = {
     | {
         inlineSourcemap?: boolean | undefined;
         inlineSourcemapDependencySources?: boolean | string[] | undefined;
+        inlineSourcemapProjectSources?:
+          | {
+              include?: string[] | undefined;
+              exclude?: string[] | undefined;
+            }
+          | undefined;
         logLevel?: string | undefined;
         allowedRuntimeGlobals?:
           | {
@@ -135,6 +141,12 @@ export type AppConfigParsed = {
     | {
         inlineSourcemap?: boolean | undefined;
         inlineSourcemapDependencySources?: boolean | string[] | undefined;
+        inlineSourcemapProjectSources?:
+          | {
+              include?: string[] | undefined;
+              exclude?: string[] | undefined;
+            }
+          | undefined;
         logLevel?: string | undefined;
         allowedRuntimeGlobals?:
           | {

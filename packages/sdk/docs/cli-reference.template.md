@@ -75,13 +75,13 @@ unexpected argument, or an option value that fails validation (including one set
 environment variable), and `1` for other failures, including checks a command makes after reading
 its arguments. A command that only warns about an unknown option or an extra argument keeps
 running. Cancelling an interactive prompt exits with `130`, and a CLI plugin exits with its own
-code. A command group run without a subcommand, such as `tailor` or `tailor tailordb`, can exit
-with `0` after printing its help or a warning even when an option is unknown or its value is
-invalid, so name the subcommand to rely on `2`.
+code.
 
 Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
-(`AUTH_TOKEN_REFRESH_FAILED`). Login recovery preserves the selected profile. For saved identities,
+(`AUTH_TOKEN_REFRESH_FAILED`). `CONFIG_LOCK_TIMEOUT` means another `tailor` command kept the saved
+credentials locked for too long; `error.context.lockPath` names the lock file to delete if no other
+command is running. Login recovery preserves the selected profile. For saved identities,
 the next step opens login help so you can reuse the original browser or machine-user login method. Permission and
 connection failures include guidance in `error.suggestion`; API failures also identify the operation
 and affected resources in `error.context`.
@@ -100,7 +100,8 @@ excluded from that list.
 Use `--verbose` to include debug diagnostics and error stack traces. `DEBUG=true` or
 `RUNNER_DEBUG=1` also enables verbose output, including stacks in JSON errors. GitHub Actions
 sets `RUNNER_DEBUG=1` when debug logging is enabled, so the same command automatically includes
-these details in a debug run. These settings do not enable JSON output; pass `--json` separately.
+these details in a debug run. `--no-verbose` turns verbose output off even when these are set.
+These settings do not enable JSON output; pass `--json` separately.
 
 Capture the original failure's stderr and exit code before retrying. Failures before the CLI starts,
 a rejected `--json` or `TAILOR_JSON_OUTPUT` value, argument errors in the bundled CLI plugins, and
@@ -293,7 +294,7 @@ the plugin does not need to re-implement authentication or re-resolve the active
 The token, workspace ID, and user are best-effort: whatever the current context can resolve is injected,
 and auth-free plugins still run when you are not logged in. A long-running plugin (or one started on its
 own) can obtain a fresh token at any time with `tailor auth token`, which prints a valid access token to
-stdout, refreshing it first if it has expired.
+stdout, refreshing it first if it expires within five minutes.
 
 ## Commands
 

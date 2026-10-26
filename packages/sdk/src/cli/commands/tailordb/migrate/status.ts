@@ -12,6 +12,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
 import { fetchRemoteMigrationState, isStaleMigrationInProgress } from "./remote-state";
 import {
+  assertValidMigrationFiles,
   getMigrationFiles,
   loadDiff,
   loadSnapshot,
@@ -89,6 +90,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
     try {
+      assertValidMigrationFiles(migrationsDir, namespace);
       const migrationFiles = getMigrationFiles(migrationsDir);
       const descriptions = new Map<number, string>();
       let historyId: string | null = null;
@@ -284,7 +286,7 @@ export const statusCommand = defineAppCommand({
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   notes:
-    "Every local migration file is checked for a compatible format version, and deployed migration history IDs must match the local baseline. Compatibility errors, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
+    "Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. Invalid or incompatible files, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {

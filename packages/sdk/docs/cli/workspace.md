@@ -253,7 +253,7 @@ Manage when a workspace becomes prunable.
 **Usage**
 
 ```
-tailor workspace ttl [command]
+tailor workspace ttl <command>
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.

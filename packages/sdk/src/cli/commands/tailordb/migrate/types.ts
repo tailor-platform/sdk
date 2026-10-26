@@ -34,7 +34,10 @@ export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
 
 /**
  * Label key naming the migration whose steps have partly committed, so the
- * next deploy resumes it instead of treating the schema as drift.
+ * next deploy resumes it instead of treating the schema as drift. It only names
+ * the migration right after the checkpoint, which counts as 0000 when unset;
+ * keep it that way by committing the checkpoint after every migration and
+ * removing this label with every checkpoint write.
  */
 export const MIGRATION_IN_PROGRESS_LABEL_KEY = "sdk-migration-in-progress";
 

@@ -79,6 +79,38 @@ describe("migration test runtime", () => {
     });
   });
 
+  test("orders a table after the table that a field inside its nested field points at", () => {
+    const snapshot = normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "tailordb",
+      createdAt: "2026-08-05T00:00:00.000Z",
+      tables: {
+        Order: {
+          name: "Order",
+          pluralForm: "Orders",
+          fields: {
+            id: { type: "uuid", required: true },
+            info: {
+              type: "nested",
+              required: false,
+              fields: {
+                customerId: {
+                  type: "uuid",
+                  required: false,
+                  foreignKey: true,
+                  foreignKeyType: "Customer",
+                },
+              },
+            },
+          },
+        },
+        Customer: { name: "Customer", pluralForm: "Customers", fields: {} },
+      },
+    });
+
+    expect(sortSeedTypesForSnapshot(snapshot).order).toEqual(["Customer", "Order"]);
+  });
+
   test("loads JSONL for baseline types, removes pending fields, and treats a missing file as empty", () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
     temporaryDirectories.push(dataDir);

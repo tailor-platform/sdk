@@ -70,10 +70,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                       | Description                                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
-| [`auth status`](#auth-status) | Show the active Tailor Platform authentication status without printing tokens.        |
-| [`auth token`](#auth-token)   | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
+| Command                       | Description                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [`auth status`](#auth-status) | Show the active Tailor Platform authentication status without printing tokens.                               |
+| [`auth token`](#auth-token)   | Print a valid Tailor Platform access token to stdout, refreshing it first if it expires within five minutes. |
 
 ### auth status
 
@@ -95,7 +95,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### auth token
 
-Print a valid Tailor Platform access token to stdout, refreshing it first if expired.
+Print a valid Tailor Platform access token to stdout, refreshing it first if it expires within five minutes.
 
 **Usage**
 

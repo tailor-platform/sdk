@@ -128,6 +128,33 @@ describe("buildSeedNamespaceConfigs", () => {
       expect(config?.omitFields?.Order).toEqual([]);
     });
 
+    test("keeps a serial field that a field inside a nested field is keyed to", () => {
+      const user = makeType("User", {
+        id: { name: "id", config: { type: "string" } },
+        code: { name: "code", config: { type: "integer", serial: { start: 1 } } },
+      });
+      const order = makeType("Order", {
+        id: { name: "id", config: { type: "string" } },
+        info: {
+          name: "info",
+          config: {
+            type: "nested",
+            fields: {
+              userCode: {
+                type: "integer",
+                foreignKeyType: "User",
+                foreignKeyField: "code",
+              },
+            },
+          },
+        },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [user, order])]);
+
+      expect(config?.omitFields?.User).toEqual([]);
+    });
+
     test("keeps a serial field a keyOnly relation is keyed to", () => {
       // A keyOnly relation never populates `field.relation` (see
       // buildRelationInfo in relation.ts); it only sets
@@ -246,5 +273,22 @@ describe("buildSeedNamespaceConfigs", () => {
 
       expect(config?.selfRefKeys?.Category).toEqual({ parentId: "id" });
     });
+  });
+});
+
+describe("dependencies", () => {
+  test("lists a table that a field inside a nested field points at", () => {
+    const owner = db.table("Owner", { name: db.string() });
+    const order = db.table("Order", {
+      info: db.object({
+        ownerID: db
+          .uuid({ optional: true })
+          .relation({ type: "keyOnly", toward: { table: owner } }),
+      }),
+    });
+
+    const [config] = buildSeedNamespaceConfigs([namespaceData({ Order: order, Owner: owner })]);
+
+    expect(config?.dependencies.Order).toEqual(["Owner"]);
   });
 });

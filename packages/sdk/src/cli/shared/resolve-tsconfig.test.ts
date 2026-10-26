@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { resolveTSConfigWithFallback } from "./resolve-tsconfig";
 
 describe("resolveTSConfigWithFallback", () => {
@@ -16,7 +16,7 @@ describe("resolveTSConfigWithFallback", () => {
   });
 
   function makeDirWithTsconfig(prefix: string): string {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+    const dir = makeTempDir(prefix);
     tmpDirs.push(dir);
     fs.writeFileSync(path.join(dir, "tsconfig.json"), "{}\n");
     return dir;
@@ -25,7 +25,7 @@ describe("resolveTSConfigWithFallback", () => {
   // A tsconfig-less directory tree, so resolveTSConfig(baseDir) genuinely
   // finds nothing while walking up baseDir's own ancestry.
   function makeIsolatedBaseDir(prefix: string): string {
-    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-root-`)));
+    const root = makeTempDir(`${prefix}-root-`);
     tmpDirs.push(root);
     return fs.mkdtempSync(path.join(root, "no-tsconfig-"));
   }

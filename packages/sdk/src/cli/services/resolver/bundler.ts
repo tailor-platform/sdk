@@ -1,20 +1,6 @@
-import * as path from "pathe";
-import * as rolldown from "rolldown";
-import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/cache/bundle-cache";
-import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
+import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
-import { createBundleLog } from "#/cli/shared/bundle-log";
-import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import {
-  checkForbiddenRuntimeGlobals,
-  assertPackageRuntimeGlobalsAllowed,
-} from "#/cli/shared/forbidden-runtime-globals";
-import {
-  composeFunctionTreeshakeOptions,
-  createUserTreeshakeOptions,
-} from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
-import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import {
   buildResolverResultSerialization,
@@ -22,17 +8,9 @@ import {
   INVOKER_EXPR,
   resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
-import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
-import {
-  createTsconfigPathsPlugin,
-  type TsconfigLookupCache,
-} from "#/cli/shared/tsconfig-paths-plugin";
-import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
-import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/types";
+import type { AllowedRuntimeGlobals } from "#/configure/config/types";
 import type { Resolver } from "#/types/resolver.generated";
 
 interface ResolverInfo {
@@ -43,7 +21,7 @@ interface ResolverInfo {
   output: Resolver["output"];
 }
 
-export interface BundleResolversOptions {
+export interface BundleResolversOptions extends FunctionBundleSettings {
   /** Resolver namespace name */
   namespace: string;
   /** Absolute paths of the resolver files to bundle */
@@ -52,24 +30,8 @@ export interface BundleResolversOptions {
   baseDir: string;
   /** The namespace's `defaultPermission`, applied to resolvers declaring none */
   defaultPermission?: Resolver["permission"];
-  /** Start context for workflow/job transformations */
-  startContext?: StartContext;
-  /** Optional bundle cache for skipping unchanged builds */
-  cache?: BundleCache;
-  /** Whether to enable inline sourcemaps */
-  inlineSourcemap?: boolean;
-  /** Whether inline sourcemaps embed the source text of installed packages */
-  inlineSourcemapDependencySources?: boolean | string[];
-  /** Controls which console calls are kept in bundled code */
-  bundleLogLevel?: LogLevel;
-  /** Overrides how unused code is removed from bundled code */
-  bundleTreeshake?: TreeshakeOptions;
-  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
-  tsconfigCache?: TsconfigLookupCache;
   /** Globals each installed package may reference */
   allowedRuntimeGlobals?: AllowedRuntimeGlobals;
-  /** Representation applied to `t` date fields that omit `as` */
-  dateDefault?: EffectiveDateDefault;
 }
 
 /**
@@ -90,15 +52,8 @@ export async function bundleResolvers(
     files,
     baseDir,
     defaultPermission,
-    startContext,
-    cache,
-    inlineSourcemap,
-    inlineSourcemapDependencySources,
-    bundleLogLevel = "DEBUG",
-    bundleTreeshake,
-    tsconfigCache,
     allowedRuntimeGlobals,
-    dateDefault,
+    dateDefault = "legacy",
   } = options;
   const bundledCode = new Map<string, string>();
   if (files.length === 0) {
@@ -133,23 +88,44 @@ export async function bundleResolvers(
 
   // Process each resolver, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
-  const results = await withBundleConcurrency(resolvers, (resolver) =>
-    bundleSingleResolver({
+  const results = await withBundleConcurrency(resolvers, async (resolver) => {
+    const code = await buildFunctionBundle({
+      ...options,
+      kind: "resolver",
       namespace,
-      resolver,
+      name: resolver.name,
+      sourceFile: resolver.sourceFile,
       tsconfig,
-      defaultPermission,
-      startContext,
-      cache,
-      inlineSourcemap,
-      inlineSourcemapDependencySources,
-      bundleLogLevel,
-      bundleTreeshake,
-      tsconfigCache,
-      allowedRuntimeGlobals,
       dateDefault,
-    }),
-  );
+      dateRepresentations: resolverDateRepresentations(resolver, dateDefault),
+      runtimeGlobals: { label: `Resolver "${resolver.name}"`, allowed: allowedRuntimeGlobals },
+      entry: (absoluteSourcePath) => {
+        const validatedInputExpr = buildResolverValidatedInputExpr({
+          permission: resolver.permission,
+          defaultPermission,
+        });
+        const { importStatement, resultExpr } = buildResolverResultSerialization(
+          resolver.output,
+          dateDefault,
+        );
+        return ml /* js */ `
+          import _internalResolver from "${absoluteSourcePath}";
+          import { t } from "@tailor-platform/sdk";
+          ${importStatement}
+
+          const $tailor_resolver_body = async (context) => {
+            const invoker = ${INVOKER_EXPR};
+            const input = ${validatedInputExpr};
+            const result = await _internalResolver.body({ ...context, input, invoker });
+            return ${resultExpr};
+          };
+
+          export { $tailor_resolver_body as main };
+        `;
+      },
+    });
+    return [resolver.name, code] as const;
+  });
 
   for (const [name, code] of results) {
     bundledCode.set(name, code);
@@ -158,143 +134,4 @@ export async function bundleResolvers(
   logger.log(`${styles.success("Bundled")} ${styles.info(`"${namespace}"`)}`);
 
   return bundledCode;
-}
-
-type BundleSingleResolverOptions = Omit<BundleResolversOptions, "files" | "baseDir"> & {
-  resolver: ResolverInfo;
-  tsconfig: string | undefined;
-};
-
-async function bundleSingleResolver(
-  options: BundleSingleResolverOptions,
-): Promise<[string, string]> {
-  const {
-    namespace,
-    resolver,
-    tsconfig,
-    defaultPermission,
-    startContext,
-    cache,
-    inlineSourcemap,
-    inlineSourcemapDependencySources,
-    bundleLogLevel = "DEBUG",
-    bundleTreeshake,
-    tsconfigCache,
-    allowedRuntimeGlobals,
-    dateDefault = "legacy",
-  } = options;
-  const serializedStartContext = serializeStartContext(startContext);
-
-  const contextHash = computeBundlerContextHash({
-    sourceFile: resolver.sourceFile,
-    // The namespace default and the date default are part of the generated
-    // entry but live in the config file, not in any resolver source, so a
-    // cached bundle would otherwise survive a change to them. Encoded as a
-    // tuple rather than joined, so no separator has to be a character neither
-    // value can contain.
-    extraContext: JSON.stringify([serializedStartContext, defaultPermission ?? null, dateDefault]),
-    tsconfig,
-    inlineSourcemap,
-    inlineSourcemapDependencySources,
-    bundleLogLevel,
-    bundleTreeshake,
-  });
-
-  const { code, packageRuntimeGlobals } = await withCache({
-    cache,
-    kind: "resolver",
-    namespace,
-    name: resolver.name,
-    sourceFile: resolver.sourceFile,
-    contextHash,
-    async build(cachePlugins, trackDependency) {
-      const absoluteSourcePath = path.resolve(resolver.sourceFile);
-      const validatedInputExpr = buildResolverValidatedInputExpr({
-        permission: resolver.permission,
-        defaultPermission,
-      });
-      const { importStatement, resultExpr } = buildResolverResultSerialization(
-        resolver.output,
-        dateDefault,
-      );
-
-      const entryContent = ml /* js */ `
-        import _internalResolver from "${absoluteSourcePath}";
-        import { t } from "@tailor-platform/sdk";
-        ${importStatement}
-
-        const $tailor_resolver_body = async (context) => {
-          const invoker = ${INVOKER_EXPR};
-          const input = ${validatedInputExpr};
-          const result = await _internalResolver.body({ ...context, input, invoker });
-          return ${resultExpr};
-        };
-
-        export { $tailor_resolver_body as main };
-      `;
-      const entry = createVirtualEntry(
-        `resolver:${resolver.name}`,
-        entryContent,
-        "js",
-        absoluteSourcePath,
-      );
-
-      const startPlugin = createStartTransformPlugin(startContext);
-      const plugins: rolldown.Plugin[] = [entry.plugin];
-      if (startPlugin) {
-        plugins.push(startPlugin);
-      }
-      plugins.push(
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(
-          resolverDateRepresentations(resolver, dateDefault),
-          dateDefault,
-        ),
-        ...cachePlugins,
-      );
-
-      const bundleLog = createBundleLog({ tsconfig });
-      const result = await rolldown.build({
-        input: entry.input,
-        write: false,
-        output: {
-          format: "esm",
-          sourcemap: true,
-          minify: inlineSourcemap
-            ? {
-                mangle: {
-                  keepNames: true,
-                },
-              }
-            : true,
-          codeSplitting: false,
-        },
-        tsconfig,
-        plugins,
-        treeshake: composeFunctionTreeshakeOptions([
-          createLogLevelTreeshakeOptions(bundleLogLevel),
-          createUserTreeshakeOptions(bundleTreeshake),
-        ]),
-        ...bundleLog.options,
-      } as rolldown.BuildOptions);
-      bundleLog.assertAllResolved();
-
-      const [chunk] = result.output;
-      return {
-        code: chunkCodeWithSourcemap({
-          chunk,
-          inlineSourcemap: inlineSourcemap ?? false,
-          dependencySources: inlineSourcemapDependencySources ?? false,
-        }),
-        packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Resolver "${resolver.name}"`),
-      };
-    },
-  });
-  assertPackageRuntimeGlobalsAllowed(
-    packageRuntimeGlobals,
-    `Resolver "${resolver.name}"`,
-    allowedRuntimeGlobals,
-  );
-
-  return [resolver.name, code];
 }

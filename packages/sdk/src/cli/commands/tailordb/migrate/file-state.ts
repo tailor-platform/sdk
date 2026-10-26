@@ -1,31 +1,8 @@
 import { createHash, type Hash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "pathe";
-import {
-  formatMigrationNumber,
-  getMigrationFilePath,
-  MIGRATION_FILE_NAMES,
-  MIGRATION_NUMBER_PATTERN,
-  type MigrationFileType,
-} from "./snapshot";
+import { formatMigrationNumber, getMigrationArtifacts } from "./snapshot";
 import type { NamespaceWithMigrations } from "./config";
-
-const MIGRATION_FILE_KINDS = Object.keys(MIGRATION_FILE_NAMES) as MigrationFileType[];
-
-function getMigrationArtifactNumbers(migrationsDir: string): number[] {
-  if (!fs.existsSync(migrationsDir)) return [];
-
-  return fs
-    .readdirSync(migrationsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && MIGRATION_NUMBER_PATTERN.test(entry.name))
-    .map((entry) => Number.parseInt(entry.name, 10))
-    .filter((migrationNumber) =>
-      MIGRATION_FILE_KINDS.some((kind) =>
-        fs.existsSync(getMigrationFilePath(migrationsDir, migrationNumber, kind)),
-      ),
-    )
-    .toSorted((a, b) => a - b);
-}
 
 function updateHashWithDirectory(
   hash: Hash,
@@ -114,8 +91,7 @@ export function captureMigrationFileState(
     a.namespace.localeCompare(b.namespace),
   )) {
     const hash = createHash("sha256");
-    const migrationNumbers = getMigrationArtifactNumbers(migrationsDir);
-    for (const migrationNumber of migrationNumbers) {
+    for (const { number: migrationNumber } of getMigrationArtifacts(migrationsDir)) {
       const migrationDirectoryName = formatMigrationNumber(migrationNumber);
       hash.update(`migration\0${migrationDirectoryName}\0`);
       updateHashWithDirectory(hash, path.join(migrationsDir, migrationDirectoryName));

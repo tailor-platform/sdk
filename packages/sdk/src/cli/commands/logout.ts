@@ -9,6 +9,7 @@ import {
   loadStoredUserTokens,
   platformConfigFromProfile,
   readPlatformConfig,
+  withPlatformConfigLock,
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
@@ -26,77 +27,75 @@ export const logoutCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    const profile = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
-    const pfConfig = await readPlatformConfig();
-    const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
-    if (profile && !profileEntry) {
-      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profile}" not found` });
-    }
-    const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-    const currentUser = profileEntry ? profileEntry.user : pfConfig.current_user;
-    const deletesDefaultToken = isDefaultPlatform(platformConfig);
-    const lookupOptions = profile ? { allowLegacyUserKey: true } : undefined;
-    if (!currentUser) {
-      logger.info("You are not logged in.");
-      printMutationResult({ changed: false, user: null, revoked: false });
-      return;
-    }
-    const hasDefaultUserToken = () =>
-      hasUserTokenEntry(pfConfig, currentUser, { platformUrl: defaultPlatformBaseUrl });
-    const shouldClearCurrentUser = () =>
-      pfConfig.current_user === currentUser &&
-      (deletesDefaultToken
-        ? !hasDefaultUserToken()
-        : !hasAnyUserTokenEntry(pfConfig, currentUser) && !hasDefaultUserToken());
-    let storedTokens: Awaited<ReturnType<typeof loadStoredUserTokens>>;
-    let tokenLoadFailed = false;
-    try {
-      storedTokens = await loadStoredUserTokens(
-        pfConfig,
-        currentUser,
-        platformConfig,
-        lookupOptions,
-      );
-    } catch (error) {
-      tokenLoadFailed = true;
-      logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
-    }
-    if (!storedTokens && !tokenLoadFailed) {
-      logger.info("You are not logged in.");
-      const clearsCurrentUser = shouldClearCurrentUser();
-      if (clearsCurrentUser) {
-        pfConfig.current_user = null;
-      }
-      writePlatformConfig(pfConfig);
-      printMutationResult({ changed: clearsCurrentUser, user: currentUser, revoked: false });
-      return;
-    }
+    await withPlatformConfigLock(() => logout(args.profile || process.env.TAILOR_PLATFORM_PROFILE));
+  },
+});
 
-    let revoked = false;
-    if (storedTokens) {
-      try {
-        const client = initOAuth2Client(platformConfig);
-        const tokenTypeHint = storedTokens.refreshToken ? "refresh_token" : "access_token";
-        await client.revoke(
-          {
-            accessToken: storedTokens.accessToken,
-            refreshToken: storedTokens.refreshToken ?? null,
-            expiresAt: Date.parse(storedTokens.userEntry.token_expires_at),
-          },
-          tokenTypeHint,
-        );
-        revoked = true;
-      } catch (error) {
-        logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
-      }
-    }
-
-    await deleteUserTokens(pfConfig, currentUser, platformConfig, lookupOptions);
-    if (shouldClearCurrentUser()) {
+async function logout(profile: string | undefined) {
+  const pfConfig = await readPlatformConfig();
+  const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
+  if (profile && !profileEntry) {
+    throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profile}" not found` });
+  }
+  const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  const currentUser = profileEntry ? profileEntry.user : pfConfig.current_user;
+  const deletesDefaultToken = isDefaultPlatform(platformConfig);
+  const lookupOptions = profile ? { allowLegacyUserKey: true } : undefined;
+  if (!currentUser) {
+    logger.info("You are not logged in.");
+    printMutationResult({ changed: false, user: null, revoked: false });
+    return;
+  }
+  const hasDefaultUserToken = () =>
+    hasUserTokenEntry(pfConfig, currentUser, { platformUrl: defaultPlatformBaseUrl });
+  const shouldClearCurrentUser = () =>
+    pfConfig.current_user === currentUser &&
+    (deletesDefaultToken
+      ? !hasDefaultUserToken()
+      : !hasAnyUserTokenEntry(pfConfig, currentUser) && !hasDefaultUserToken());
+  let storedTokens: Awaited<ReturnType<typeof loadStoredUserTokens>>;
+  let tokenLoadFailed = false;
+  try {
+    storedTokens = await loadStoredUserTokens(pfConfig, currentUser, platformConfig, lookupOptions);
+  } catch (error) {
+    tokenLoadFailed = true;
+    logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
+  }
+  if (!storedTokens && !tokenLoadFailed) {
+    logger.info("You are not logged in.");
+    const clearsCurrentUser = shouldClearCurrentUser();
+    if (clearsCurrentUser) {
       pfConfig.current_user = null;
     }
     writePlatformConfig(pfConfig);
-    logger.success("Successfully logged out from Tailor Platform.");
-    printMutationResult({ changed: true, user: currentUser, revoked });
-  },
-});
+    printMutationResult({ changed: clearsCurrentUser, user: currentUser, revoked: false });
+    return;
+  }
+
+  let revoked = false;
+  if (storedTokens) {
+    try {
+      const client = initOAuth2Client(platformConfig);
+      const tokenTypeHint = storedTokens.refreshToken ? "refresh_token" : "access_token";
+      await client.revoke(
+        {
+          accessToken: storedTokens.accessToken,
+          refreshToken: storedTokens.refreshToken ?? null,
+          expiresAt: Date.parse(storedTokens.userEntry.token_expires_at),
+        },
+        tokenTypeHint,
+      );
+      revoked = true;
+    } catch (error) {
+      logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  await deleteUserTokens(pfConfig, currentUser, platformConfig, lookupOptions);
+  if (shouldClearCurrentUser()) {
+    pfConfig.current_user = null;
+  }
+  writePlatformConfig(pfConfig);
+  logger.success("Successfully logged out from Tailor Platform.");
+  printMutationResult({ changed: true, user: currentUser, revoked });
+}

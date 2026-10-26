@@ -131,13 +131,13 @@ describe("planUpdate", () => {
     expect(plan).toMatchObject({ kind: "tag", branch: undefined });
   });
 
-  test("preview: regenerates with the recorded region, label requirement and branch", () => {
+  test("preview: regenerates with the recorded region, requirement and branch", () => {
     const plan = planUpdate(
       lockTarget("preview", "my-app", {
         branch: "develop",
         branchAutoDetected: false,
         region: "asia-northeast",
-        requirePreviewLabel: true,
+        require: "label",
         environment: "preview",
         dir: "apps/api",
       }),
@@ -151,11 +151,48 @@ describe("planUpdate", () => {
       environment: "preview",
       branch: "develop",
       region: "asia-northeast",
-      requirePreviewLabel: true,
+      require: "label",
       force: false,
       outputDir: "/repo",
     });
   });
+
+  test.each([null, "ready", "label"] as const)(
+    "preview: regenerates with the recorded requirement (%s)",
+    (require) => {
+      const plan = planUpdate(
+        lockTarget("preview", "my-app", {
+          branch: "main",
+          branchAutoDetected: false,
+          region: "us-west",
+          require,
+        }),
+        common,
+      );
+
+      expect(plan).toMatchObject({ kind: "preview", require: require ?? undefined });
+    },
+  );
+
+  test.each([
+    [false, "ready"],
+    [true, "label"],
+  ] as const)(
+    "preview: reads a lock from before the requirement (requirePreviewLabel: %s) as %s",
+    (requirePreviewLabel, expected) => {
+      const plan = planUpdate(
+        lockTarget("preview", "my-app", {
+          branch: "main",
+          branchAutoDetected: false,
+          region: "us-west",
+          requirePreviewLabel,
+        }),
+        common,
+      );
+
+      expect(plan).toMatchObject({ kind: "preview", require: expected });
+    },
+  );
 
   test.each(["branch", "tag", "preview"] as const)(
     "%s: regenerates with the recorded seed datasets",

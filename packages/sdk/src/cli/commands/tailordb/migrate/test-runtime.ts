@@ -35,6 +35,7 @@ import { loadApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
+import { collectForeignKeyTargets } from "#/utils/foreign-key-targets";
 import { bundleMigrationScript } from "./bundler";
 import {
   getNamespacesWithMigrations,
@@ -396,9 +397,7 @@ export function sortSeedTypesForSnapshot(snapshot: NormalizedSchemaSnapshot): {
   const selfRefTypes: string[] = [];
   for (const [tableName, type] of Object.entries(snapshot.tables)) {
     const referenced = new Set<string>();
-    for (const field of Object.values(type.fields)) {
-      const target = field.foreignKeyType;
-      if (!target) continue;
+    for (const target of collectForeignKeyTargets(type.fields)) {
       if (target === tableName) {
         selfRefTypes.push(tableName);
       } else if (available.has(target)) {

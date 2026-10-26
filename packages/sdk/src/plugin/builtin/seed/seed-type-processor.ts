@@ -1,4 +1,5 @@
 import { assertDefined } from "#/utils/assert";
+import { collectForeignKeyReferences, collectForeignKeyTargets } from "#/utils/foreign-key-targets";
 import { processLinesDb } from "./lines-db-processor";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { TailorDBNamespaceData } from "#/plugin/types";
@@ -32,6 +33,12 @@ function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInf
       selfRefKeys[fieldName] = field.relation?.key ?? field.config.foreignKeyField ?? "id";
     } else {
       dependencies.add(targetType);
+    }
+  }
+  for (const field of Object.values(type.fields)) {
+    if (!field.config.fields) continue;
+    for (const target of collectForeignKeyTargets(field.config.fields)) {
+      if (target !== type.name) dependencies.add(target);
     }
   }
 
@@ -93,13 +100,20 @@ function collectRelationTargetKeys(tailordb: TailorDBNamespaceData[]): Map<strin
   const targetKeysByType = new Map<string, Set<string>>();
   for (const ns of tailordb) {
     for (const type of Object.values(ns.tables)) {
-      for (const field of Object.values(type.fields)) {
-        const targetType = field.relation?.targetType ?? field.config.foreignKeyType;
-        const key = field.relation?.key ?? field.config.foreignKeyField;
-        if (!targetType || !key) continue;
+      const addTarget = (targetType: string | undefined, key: string | undefined): void => {
+        if (!targetType || !key) return;
         const keys = targetKeysByType.get(targetType) ?? new Set<string>();
         keys.add(key);
         targetKeysByType.set(targetType, keys);
+      };
+      for (const field of Object.values(type.fields)) {
+        addTarget(
+          field.relation?.targetType ?? field.config.foreignKeyType,
+          field.relation?.key ?? field.config.foreignKeyField,
+        );
+        for (const reference of collectForeignKeyReferences(field.config.fields ?? {})) {
+          addTarget(reference.table, reference.field);
+        }
       }
     }
   }

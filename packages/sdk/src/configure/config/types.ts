@@ -62,6 +62,17 @@ export interface TreeshakeOptions {
   propertyReadSideEffects?: boolean;
 }
 
+/**
+ * Which of your own source files embed their text in the inline sourcemap. Both fields
+ * are globs relative to the directory containing the config file, without a leading `./`.
+ */
+export interface InlineSourcemapProjectSources {
+  /** Only files matching one of these keep their text. All files when omitted. */
+  include?: string[];
+  /** Files matching one of these lose their text, even when `include` matches them. */
+  exclude?: string[];
+}
+
 /** Options for how `defineConfig()` bundles functions. */
 export interface BuildOptions {
   /**
@@ -74,13 +85,28 @@ export interface BuildOptions {
    * the inline sourcemap. By default only your own source text is embedded, which
    * makes bundled functions much smaller. Set `true` to embed all installed packages,
    * or list package names (such as `["kysely", "@scope/lib"]`) to embed only those.
-   * A listed package's own dependencies are not embedded unless they are listed too. Error positions still resolve to the
+   * A listed package's own dependencies are not embedded unless they are listed too.
+   * Files under `node_modules` that belong to no package, such as `node_modules/.prisma`,
+   * are embedded only with `true`. Error positions still resolve to the
    * original files and lines; `tailor function run` shows a code snippet for a frame
    * inside an installed package only when that package's file exists locally.
    * Only applies when `inlineSourcemap` is enabled.
    * @default false
    */
   inlineSourcemapDependencySources?: boolean | string[];
+  /**
+   * Choose which of your own source files embed their text in the inline sourcemap.
+   * `include` and `exclude` are globs relative to the directory containing the config
+   * file, without a leading `./` (such as `["src/**"]` or `["src/generated/**"]`). Only
+   * files matching `include` (all files when omitted) and not matching `exclude` keep
+   * their text. `**` does not match a dot-directory such as `src/.cache`. Files under
+   * `node_modules` are controlled by `inlineSourcemapDependencySources` instead.
+   * Error positions still resolve to the original files and lines; `tailor function
+   * run` shows no code snippet for a frame in a file whose text is left out.
+   * Only applies when `inlineSourcemap` is enabled.
+   * @example inlineSourcemapProjectSources: { exclude: ["src/generated/**"] }
+   */
+  inlineSourcemapProjectSources?: InlineSourcemapProjectSources;
   /**
    * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
    * calls remain in bundled functions. `logger.setAttributes` has no severity and

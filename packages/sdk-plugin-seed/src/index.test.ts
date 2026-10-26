@@ -107,10 +107,13 @@ describe("seed CLI JSON errors", () => {
     CLI_TEST_TIMEOUT_MS,
   );
 
-  test(
-    "exits with 2 for an unknown option",
-    () => {
-      const result = runCli(["validate", "--bogus"]);
+  test.each([
+    { name: "a command", args: ["validate", "--bogus"] },
+    { name: "the plugin without a subcommand", args: ["--bogus"] },
+  ])(
+    "exits with 2 for an unknown option given to $name",
+    ({ args }) => {
+      const result = runCli(args);
 
       expect(result.error).toBeUndefined();
       expect(result.status).toBe(2);

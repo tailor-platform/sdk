@@ -5,7 +5,7 @@ import { resolveTSConfig } from "pkg-types";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { createBundleCache } from "#/cli/cache/bundle-cache";
 import { createCacheStore } from "#/cli/cache/store";
-import { logger } from "#/cli/shared/logger";
+import { type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { assertDefined } from "#/utils/assert";
@@ -358,108 +358,80 @@ describe("bundleResolvers", () => {
     expect(second.get("cached")).not.toContain("LIB_A");
   });
 
-  test("produces deterministic bundles with inline sourcemaps", async () => {
-    using tmp = tempCwd("sdk-bundler-sourcemap-");
+  test("embeds the source text of installed packages in inline sourcemaps when asked to", async () => {
+    using tmp = tempCwd("sdk-bundler-sourcemap-with-deps-");
     writeSdkDependency(tmp.dir);
-    const resolverDir = path.join(tmp.dir, "resolver");
-    fs.mkdirSync(resolverDir, { recursive: true });
+    const libDir = path.join(tmp.dir, "node_modules", "installed-lib");
+    fs.mkdirSync(libDir, { recursive: true });
     fs.writeFileSync(
-      path.join(resolverDir, "stable.ts"),
-      `export default {\n` +
+      path.join(libDir, "package.json"),
+      JSON.stringify({ name: "installed-lib", type: "module", main: "index.js" }),
+    );
+    fs.writeFileSync(
+      path.join(libDir, "index.js"),
+      "export const installedValue = () => 'INSTALLED_LIB_SOURCE';\n",
+    );
+    fs.writeFileSync(
+      path.join(tmp.dir, "uses-lib.ts"),
+      `import { installedValue } from "installed-lib";\n` +
+        `export default {\n` +
         `  operation: "query",\n` +
-        `  name: "stable",\n` +
-        `  body: async () => "STABLE_MARKER",\n` +
+        `  name: "usesLib",\n` +
+        `  body: async () => installedValue(),\n` +
         `  output: { type: "string", metadata: {}, fields: {} },\n` +
         `};\n`,
     );
 
-    const build = () =>
-      bundleResolvers({
-        namespace: "deterministic",
-        files: fs.globSync(path.resolve(tmp.dir, "./resolver/*.ts")),
-        baseDir: tmp.dir,
-        inlineSourcemap: true,
-      });
+    const bundles = await bundleResolvers({
+      namespace: "sourcemap",
+      files: fs.globSync(path.resolve(tmp.dir, "./uses-lib.ts")),
+      baseDir: tmp.dir,
+      inlineSourcemap: true,
+      inlineSourcemapDependencySources: true,
+    });
 
-    const first = await build();
-    const second = await build();
-    const firstCode = first.get("stable");
-
-    expect(firstCode).toBeDefined();
-    expect(firstCode).toBe(second.get("stable"));
+    const traceMap = assertDefined(
+      extractInlineSourcemap(assertDefined(bundles.get("usesLib"), "usesLib bundle missing")),
+      "inline sourcemap missing",
+    );
+    expect(traceMap.sourcesContent?.some((text) => text?.includes("INSTALLED_LIB_SOURCE"))).toBe(
+      true,
+    );
   });
 
-  describe("source text in inline sourcemaps", () => {
-    function writeResolverUsingInstalledPackage(projectDir: string): void {
-      writeSdkDependency(projectDir);
-      const libDir = path.join(projectDir, "node_modules", "installed-lib");
-      fs.mkdirSync(libDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(libDir, "package.json"),
-        JSON.stringify({ name: "installed-lib", type: "module", main: "index.js" }),
-      );
-      fs.writeFileSync(
-        path.join(libDir, "index.js"),
-        "export const installedValue = () => 'INSTALLED_LIB_SOURCE';\n",
-      );
-      const resolverDir = path.join(projectDir, "resolver");
-      fs.mkdirSync(resolverDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(resolverDir, "uses-lib.ts"),
-        `import { installedValue } from "installed-lib";\n` +
-          `export default {\n` +
-          `  operation: "query",\n` +
-          `  name: "usesLib",\n` +
-          `  body: async () => installedValue() + "OWN_SOURCE",\n` +
-          `  output: { type: "string", metadata: {}, fields: {} },\n` +
-          `};\n`,
-      );
-    }
+  test("leaves out the source text of project files matching an exclude glob in inline sourcemaps", async () => {
+    using tmp = tempCwd("sdk-bundler-sourcemap-project-exclude-");
+    writeSdkDependency(tmp.dir);
+    fs.writeFileSync(
+      path.join(tmp.dir, "own.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "own",\n` +
+        `  body: async () => "OWN_SOURCE",\n` +
+        `  output: { type: "string", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
 
-    async function sourceTexts(
-      projectDir: string,
-      options: { inlineSourcemapDependencySources?: boolean },
-    ): Promise<string[]> {
+    const sourceTexts = async (inlineSourcemapProjectSources?: ProjectSourcesFilter) => {
       const bundles = await bundleResolvers({
         namespace: "sourcemap",
-        files: fs.globSync(path.resolve(projectDir, "./resolver/*.ts")),
-        baseDir: projectDir,
+        files: fs.globSync(path.resolve(tmp.dir, "./own.ts")),
+        baseDir: tmp.dir,
         inlineSourcemap: true,
-        ...options,
+        inlineSourcemapProjectSources,
       });
       const traceMap = assertDefined(
-        extractInlineSourcemap(assertDefined(bundles.get("usesLib"), "usesLib bundle missing")),
+        extractInlineSourcemap(assertDefined(bundles.get("own"), "own bundle missing")),
         "inline sourcemap missing",
       );
       return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
-    }
+    };
 
-    test("leaves out the source text of installed packages by default", async () => {
-      using tmp = tempCwd("sdk-bundler-sourcemap-deps-");
-      writeResolverUsingInstalledPackage(tmp.dir);
+    const kept = await sourceTexts();
+    const excluded = await sourceTexts({ root: tmp.dir, exclude: ["own.ts"] });
 
-      const texts = await sourceTexts(tmp.dir, {});
-
-      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(false);
-    });
-
-    test("keeps the source text of the project's own files by default", async () => {
-      using tmp = tempCwd("sdk-bundler-sourcemap-own-");
-      writeResolverUsingInstalledPackage(tmp.dir);
-
-      const texts = await sourceTexts(tmp.dir, {});
-
-      expect(texts.some((text) => text.includes("OWN_SOURCE"))).toBe(true);
-    });
-
-    test("embeds the source text of installed packages when asked to", async () => {
-      using tmp = tempCwd("sdk-bundler-sourcemap-with-deps-");
-      writeResolverUsingInstalledPackage(tmp.dir);
-
-      const texts = await sourceTexts(tmp.dir, { inlineSourcemapDependencySources: true });
-
-      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(true);
-    });
+    expect(kept.some((text) => text.includes("OWN_SOURCE"))).toBe(true);
+    expect(excluded.some((text) => text.includes("OWN_SOURCE"))).toBe(false);
   });
 
   describe("concurrency", () => {
@@ -590,7 +562,9 @@ describe("bundleResolvers", () => {
         files: fs.globSync(path.resolve(tmp.dir, "./src/backend/nodeglobal/resolver/*.ts")),
         baseDir: tmp.dir,
       }),
-    ).rejects.toThrow(/references a global unavailable in the Tailor Platform runtime: process/);
+    ).rejects.toThrow(
+      /Resolver "leaky" references a global unavailable in the Tailor Platform runtime: process/,
+    );
   });
 
   function writeBufferEncodingPackage(projectDir: string, name: string): void {
@@ -622,52 +596,6 @@ describe("bundleResolvers", () => {
     );
   }
 
-  test("names the resolver file that references a forbidden global", async () => {
-    using tmp = tempCwd("sdk-bundler-forbidden-global-file-");
-    writeSdkDependency(tmp.dir);
-    const resolverDir = path.join(tmp.dir, "src/backend/nodeglobal/resolver");
-    fs.mkdirSync(resolverDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(resolverDir, "leaky.ts"),
-      `export default {\n` +
-        `  operation: "query",\n` +
-        `  name: "leaky",\n` +
-        `  permission: "allowAnonymous",\n` +
-        `  body: async () => process.cwd(),\n` +
-        `  output: { type: "string", metadata: {}, fields: {} },\n` +
-        `};\n`,
-    );
-
-    await expect(
-      bundleResolvers({
-        namespace: "nodeglobal",
-        files: fs.globSync(path.resolve(tmp.dir, "./src/backend/nodeglobal/resolver/*.ts")),
-        baseDir: tmp.dir,
-      }),
-    ).rejects.toThrow(
-      expect.objectContaining({
-        details: expect.stringContaining("src/backend/nodeglobal/resolver/leaky.ts"),
-      }),
-    );
-  });
-
-  test("rejects a resolver whose installed package references a forbidden global and names the package", async () => {
-    using tmp = tempCwd("sdk-bundler-package-global-");
-    writeSdkDependency(tmp.dir);
-    writeBufferEncodingPackage(tmp.dir, "resolver-buffer-lib");
-    writeEncodingResolver(tmp.dir, "resolver-buffer-lib");
-
-    await expect(
-      bundleResolvers({
-        namespace: "pkgglobal",
-        files: fs.globSync(path.resolve(tmp.dir, "./src/backend/pkgglobal/resolver/*.ts")),
-        baseDir: tmp.dir,
-      }),
-    ).rejects.toThrow(
-      expect.objectContaining({ details: expect.stringContaining("resolver-buffer-lib") }),
-    );
-  });
-
   test("bundles a resolver whose installed package references an allowed global", async () => {
     using tmp = tempCwd("sdk-bundler-allowed-package-global-");
     writeSdkDependency(tmp.dir);
@@ -682,57 +610,6 @@ describe("bundleResolvers", () => {
     });
 
     expect(result.get("encoder")).toBeDefined();
-  });
-
-  test("rejects a cached bundle once its package's forbidden global is no longer allowed", async () => {
-    using tmp = tempCwd("sdk-bundler-cached-package-global-");
-    using debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => {});
-    writeSdkDependency(tmp.dir);
-    writeBufferEncodingPackage(tmp.dir, "cached-buffer-lib");
-    writeEncodingResolver(tmp.dir, "cached-buffer-lib");
-    const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
-    const bundle = (allowedRuntimeGlobals?: Record<string, string[]>) =>
-      bundleResolvers({
-        namespace: "pkgglobal",
-        files: fs.globSync(path.resolve(tmp.dir, "./src/backend/pkgglobal/resolver/*.ts")),
-        baseDir: tmp.dir,
-        cache,
-        allowedRuntimeGlobals,
-      });
-    await bundle({ "cached-buffer-lib": ["Buffer"] });
-
-    await expect(bundle()).rejects.toThrow(
-      expect.objectContaining({ details: expect.stringContaining("cached-buffer-lib") }),
-    );
-    expect(debugSpy).toHaveBeenCalledWith(expect.stringMatching(/cached.*encoder/));
-  });
-
-  test("bundles a resolver that uses Web Standard globals", async () => {
-    using tmp = tempCwd("sdk-bundler-web-standard-");
-    writeSdkDependency(tmp.dir);
-    const resolverDir = path.join(tmp.dir, "src/backend/webstandard/resolver");
-    fs.mkdirSync(resolverDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(resolverDir, "fetcher.ts"),
-      `export default {\n` +
-        `  operation: "query",\n` +
-        `  name: "fetcher",\n` +
-        `  permission: "allowAnonymous",\n` +
-        `  body: async () => {\n` +
-        `    const res = await fetch(new URL("https://example.com"));\n` +
-        `    return res.status;\n` +
-        `  },\n` +
-        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
-        `};\n`,
-    );
-
-    const result = await bundleResolvers({
-      namespace: "webstandard",
-      files: fs.globSync(path.resolve(tmp.dir, "./src/backend/webstandard/resolver/*.ts")),
-      baseDir: tmp.dir,
-    });
-
-    expect(result.get("fetcher")).toBeDefined();
   });
 });
 

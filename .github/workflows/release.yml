@@ -15,7 +15,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     permissions:
       contents: write # push release commits/tags and create GitHub releases
       id-token: write # OIDC for npm trusted publishing
@@ -54,7 +54,7 @@ jobs:
         id: changesets
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          publish-script: "pnpm changeset publish"
+          publish-script: "node .github/scripts/changeset-publish.mjs"
           create-github-releases: true
           pr-title: "Release - ${{ github.ref_name }}"
           github-token: ${{ steps.get_access_token.outputs.token }}

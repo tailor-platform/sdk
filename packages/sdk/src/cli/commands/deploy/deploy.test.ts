@@ -1,11 +1,12 @@
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger, symbols } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
-import { mergeBundledScripts } from "./bundled-scripts";
+import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import { createChangeSet } from "./change-set";
 import {
   adjustApplicationForMigrationTest,
@@ -811,6 +812,102 @@ describe("confirmDeploymentPlans", () => {
     expect(plain).toContain('TailorDB table "Order"');
     logSpy.mockRestore();
   });
+
+  const dryRunWarnings: Array<{
+    warning: string;
+    plan: () => Pick<
+      Parameters<typeof confirmDeploymentPlans>[0],
+      "deployments" | "missingDependentApps"
+    >;
+  }> = [
+    {
+      warning:
+        "TailorDB migration checkpoints and history IDs need to be updated before this deployment:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.context.checkpointRepairs = [
+          {
+            namespace: "tailordb",
+            from: 5,
+            to: 0,
+            fromHistoryId: null,
+            toHistoryId: "htailordb",
+          },
+        ];
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+    {
+      warning: "Applications recorded as depending on this deploy are missing:",
+      plan: () => ({
+        deployments: [plannedDeployment("my-app", emptyResults())],
+        missingDependentApps: [
+          {
+            resource: 'TailorDB table "Order"',
+            resourceType: "tailordb.type",
+            namespace: "tailordb",
+            name: "Order",
+            scope: "resource",
+            appId: "subscriber-id",
+            reason: "subscribes",
+          },
+        ],
+      }),
+    },
+    {
+      warning: "Application name mismatch detected:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.conflicts.push({
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB service",
+          resourceName: "shared",
+          currentOwner: "old-app",
+        });
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+    {
+      warning: "Existing resources not tracked by tailor were found:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.unmanaged.push({
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB service",
+          resourceName: "legacy",
+        });
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+    {
+      warning: "The following resources will be deleted:",
+      plan: () => {
+        const results = emptyResults();
+        results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+        return { deployments: [plannedDeployment("my-app", results)] };
+      },
+    },
+  ];
+
+  test.for(
+    dryRunWarnings.flatMap((testCase) => [false, true].map((yes) => ({ ...testCase, yes }))),
+  )(
+    "dry-run warns '$warning' without confirming it (yes: $yes)",
+    async ({ warning, plan, yes }) => {
+      using _logger = silenceLogger("warn", "log", "success", "newline");
+      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+
+      await confirmDeploymentPlans({ ...plan(), yes, dryRun: true });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(warning);
+      expect(
+        [...vi.mocked(logger.warn).mock.calls, ...vi.mocked(logger.success).mock.calls]
+          .flat()
+          .join("\n"),
+      ).not.toContain("--yes flag specified");
+    },
+  );
 });
 
 describe("printPlanResults", () => {
@@ -1273,6 +1370,57 @@ describe("printDeploymentPlans", () => {
 
     outSpy.mockRestore();
   });
+
+  test("lists missing dependent applications in warnings, with scope only for a workflow's jobs", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const appId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+
+    printDeploymentPlans([plannedDeployment("supplier", emptyResults())], {
+      dryRun: true,
+      missingDependentApps: [
+        {
+          resource: 'TailorDB table "Order"',
+          resourceType: "tailordb.type",
+          namespace: "db",
+          name: "Order",
+          scope: "resource",
+          appId,
+          reason: "publish-events",
+        },
+        {
+          resource: 'Jobs of workflow "nightly"',
+          resourceType: "workflow",
+          name: "nightly",
+          scope: "jobs",
+          appId,
+          reason: "publish-events",
+        },
+      ],
+    });
+
+    const payload = outSpy.mock.calls[0]?.[0] as { warnings: unknown[] };
+    expect(payload.warnings).toEqual([
+      {
+        type: "missingDependentApp",
+        resourceType: "tailordb.type",
+        namespace: "db",
+        name: "Order",
+        appId,
+        reason: "publish-events",
+      },
+      {
+        type: "missingDependentApp",
+        resourceType: "workflow",
+        name: "nightly",
+        scope: "jobs",
+        appId,
+        reason: "publish-events",
+      },
+    ]);
+
+    outSpy.mockRestore();
+  });
 });
 
 type FakeBundledScripts = {
@@ -1282,6 +1430,7 @@ type FakeBundledScripts = {
   executors?: Record<string, string>;
   workflowJobs?: Record<string, string>;
   authHooks?: Record<string, string>;
+  httpAdapters?: { inputs: Record<string, string>; outputs?: Record<string, string> };
   executorNames?: string[];
   staticWebsiteNames?: string[];
   tailorDBNamespaces?: string[];
@@ -1349,6 +1498,10 @@ function fakeTarget(
       executors: new Map(Object.entries(bundles.executors ?? {})),
       workflowJobs: new Map(Object.entries(bundles.workflowJobs ?? {})),
       authHooks: new Map(Object.entries(bundles.authHooks ?? {})),
+    },
+    httpAdapterBuildResult: bundles.httpAdapters && {
+      bundledInputs: new Map(Object.entries(bundles.httpAdapters.inputs)),
+      bundledOutputs: new Map(Object.entries(bundles.httpAdapters.outputs ?? {})),
     },
   } as unknown as Parameters<typeof assertUniqueGlobalResourceNames>[0][number];
 }
@@ -1732,6 +1885,68 @@ describe("mergeBundledScripts", () => {
             },
           ],
         },
+      }),
+    );
+  });
+});
+
+describe("collectHttpAdapterScripts", () => {
+  test("groups HTTP adapter bundles by application so same-named adapters stay apart", () => {
+    const httpAdapterScripts = collectHttpAdapterScripts([
+      fakeTarget({
+        appName: "buyer",
+        httpAdapters: { inputs: { echo: "buyer-in" }, outputs: { echo: "buyer-out" } },
+      }),
+      fakeTarget({ appName: "supplier", httpAdapters: { inputs: { echo: "supplier-in" } } }),
+      fakeTarget({ appName: "no-adapters" }),
+    ]);
+
+    expect(httpAdapterScripts).toEqual(
+      new Map([
+        [
+          "buyer",
+          {
+            bundledInputs: new Map([["echo", "buyer-in"]]),
+            bundledOutputs: new Map([["echo", "buyer-out"]]),
+          },
+        ],
+        [
+          "supplier",
+          { bundledInputs: new Map([["echo", "supplier-in"]]), bundledOutputs: new Map() },
+        ],
+      ]),
+    );
+  });
+
+  test("ignores configs without HTTP adapters when checking application names", () => {
+    const httpAdapterScripts = collectHttpAdapterScripts([
+      fakeTarget({ appName: "shared", httpAdapters: { inputs: { echo: "in" } } }),
+      fakeTarget({ appName: "shared" }),
+    ]);
+
+    expect([...httpAdapterScripts.keys()]).toEqual(["shared"]);
+  });
+
+  test("rejects HTTP adapter bundles of the same application name across configs", () => {
+    const configPaths = [fakeConfigPath("apps/buyer"), fakeConfigPath("apps/supplier")];
+
+    expect(() =>
+      collectHttpAdapterScripts([
+        fakeTarget({
+          configDir: "apps/buyer",
+          appName: "shared",
+          httpAdapters: { inputs: { echo: "buyer" } },
+        }),
+        fakeTarget({
+          configDir: "apps/supplier",
+          appName: "shared",
+          httpAdapters: { inputs: { echo: "supplier" } },
+        }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
+        context: { duplicates: [{ resourceType: "application", name: "shared", configPaths }] },
       }),
     );
   });

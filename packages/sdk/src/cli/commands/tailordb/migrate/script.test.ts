@@ -4,6 +4,7 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { canPrompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
@@ -31,6 +32,11 @@ import type { MigrationDiff } from "./diff-calculator";
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
+}));
+
+vi.mock("#/cli/shared/prompt", async (importOriginal) => ({
+  ...(await importOriginal()),
+  canPrompt: vi.fn(() => false),
 }));
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations_script__");
@@ -775,6 +781,25 @@ describe("script command results", () => {
       pgliteTestPath: null,
       clearedScriptSkip: false,
     });
+  });
+
+  test.each([
+    { outcome: "does not open", terminal: "without an interactive terminal", interactive: false },
+    { outcome: "opens", terminal: "in an interactive terminal", interactive: true },
+  ])("$outcome the configured editor $terminal", async ({ interactive }) => {
+    vi.stubEnv("EDITOR", "true");
+    vi.mocked(canPrompt).mockReturnValueOnce(interactive);
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(true);
+    const stderr = vi
+      .mocked(process.stderr.write)
+      .mock.calls.map(([chunk]) => String(chunk))
+      .join("");
+    expect(stderr.includes("Opening migrate.ts")).toBe(interactive);
   });
 
   test("creates migrate.ts as steps by default", async () => {

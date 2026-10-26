@@ -22,6 +22,7 @@ import { collectOwnerConflicts, collectUnmanagedResources } from "./managed-reso
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
+import type { MissingDependentApp } from "./confirm";
 import type { ManagedResourceType } from "./managed-resource-type";
 import type { CustomDomainNoteKind } from "./staticwebsite";
 type PrintPlanOptions = {
@@ -36,6 +37,8 @@ interface PendingDeployedHook {
 
 type PrintDeploymentPlansOptions = PrintPlanOptions & {
   pendingDeployedHooks?: readonly PendingDeployedHook[];
+  /** Applications recorded as dependencies but absent from this deploy. */
+  missingDependentApps?: readonly MissingDependentApp[];
 };
 
 type JsonPlanPayload = {
@@ -60,6 +63,20 @@ type JsonPlanPayload = {
     name: string;
     message: string;
   }>;
+};
+
+type MissingDependentAppWarning = Pick<
+  MissingDependentApp,
+  "resourceType" | "namespace" | "name" | "appId" | "reason"
+> & {
+  type: "missingDependentApp";
+  /** Set only on the records about a workflow's jobs. */
+  scope?: "jobs";
+};
+
+type JsonDeploymentPlansPayload = Omit<JsonPlanPayload, "warnings"> & {
+  warnings: Array<JsonPlanPayload["warnings"][number] | MissingDependentAppWarning>;
+  pendingDeployedHooks?: readonly PendingDeployedHook[];
 };
 
 type PlanReport = {
@@ -387,13 +404,33 @@ export function printDeploymentPlans(
     logger.out({
       summary,
       changes: reports.flatMap((report) => report.json.changes),
-      warnings: reports.flatMap((report) => report.json.warnings),
+      warnings: [
+        ...reports.flatMap((report) => report.json.warnings),
+        ...(opts.missingDependentApps ?? []).map(
+          ({
+            resourceType,
+            namespace,
+            name,
+            scope,
+            appId,
+            reason,
+          }): MissingDependentAppWarning => ({
+            type: "missingDependentApp",
+            resourceType,
+            namespace,
+            name,
+            ...(scope === "jobs" && { scope }),
+            appId,
+            reason,
+          }),
+        ),
+      ],
       conflicts: reports.flatMap((report) => report.json.conflicts),
       notes: reports.flatMap((report) => report.json.notes),
       ...(opts.pendingDeployedHooks?.length
         ? { pendingDeployedHooks: opts.pendingDeployedHooks }
         : {}),
-    });
+    } satisfies JsonDeploymentPlansPayload);
     return summary;
   }
 
