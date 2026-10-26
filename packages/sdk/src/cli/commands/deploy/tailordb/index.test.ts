@@ -2574,6 +2574,26 @@ describe("applyTailorDB migration label reconciliation", () => {
       expect(stderr.output).not.toContain("Remote schema drift detected");
     });
 
+    test("reports drift instead when the record names a migration the checkpoint covers", async () => {
+      using _stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType);
+      writeMainMigration();
+      const planResult = planWithDeployDerivedSettings(userType);
+      const client = schemaVerificationClient(unchangedRemoteSettings());
+      vi.mocked(client.getMetadata).mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0001", ...unsettledRecord } },
+      } as never);
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [],
+        nextPageToken: "",
+      } as never);
+
+      await expect(
+        runValidation(withRun(client, WorkflowExecution_Status.SUCCESS), planResult),
+      ).rejects.toMatchObject({ code: "MIGRATION_REMOTE_DRIFT" });
+    });
+
     test("refuses from the same read of the record that found the drift", async () => {
       using _stderr = captureStderr();
       const userType = userSnapshotType();
@@ -2860,6 +2880,32 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(stderr.output).toContain("will be reset to 0000");
     expect(client.listTailorDBTypes).toHaveBeenCalledOnce();
     expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { record: "a main run", labels: { "sdk-migration-in-progress": "m0006-main" } },
+    {
+      record: "an unreadable record",
+      labels: { "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60" },
+    },
+  ])("refuses a checkpoint reset while the namespace records $record", async ({ labels }) => {
+    using _stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
+    writeEmptyMigrationsThrough(5);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005", ...labels } },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toMatchObject({
+      code: "MIGRATION_IN_PROGRESS_CONFLICT",
+    });
   });
 
   test("rejects a missing remote checkpoint when the remote schema differs from baseline", async () => {
