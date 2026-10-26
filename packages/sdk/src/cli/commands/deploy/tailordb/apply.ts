@@ -1383,8 +1383,7 @@ async function commitMigration(
   const postMigrationSnapshot = migrationSnapshotCache.load(migration);
   restoration.snapshots.set(migration.namespace, postMigrationSnapshot);
   const expectedHistoryId = flow.validation.migrationHistoryIds[migration.namespace] ?? null;
-  const recordsMaintenanceMode =
-    phaseSettings.restricted && flow.pending.lastByNamespace.get(migration.namespace) === migration;
+  const recordsMaintenanceMode = phaseSettings.restricted;
   const capturedSettingsAreEarlierRestrictions = inProgress;
   const settleRestorationSettings = () => {
     const input = migrationContext.tailorDBInputs.find(

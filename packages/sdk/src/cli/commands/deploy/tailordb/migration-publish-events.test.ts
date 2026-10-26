@@ -1529,7 +1529,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
     });
 
-    test("records only the last checkpoint of a namespace, together with it", async () => {
+    test("records the maintenance mode with every checkpoint of a namespace", async () => {
       const client = createMockClient();
       const planResult = createMockPlanResult({
         creates: ["Order"],
@@ -1556,10 +1556,10 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             recordMaintenanceMode,
           ]),
       ).toEqual([
-        [1, false],
+        [1, true],
         [2, true],
       ]);
-      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0002", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", "m0002", null]);
     });
 
     test("releases tables an earlier deploy left in maintenance mode when the next migration fails", async () => {

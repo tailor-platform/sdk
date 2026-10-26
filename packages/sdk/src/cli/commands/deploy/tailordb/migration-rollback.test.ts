@@ -934,7 +934,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(restoredFields).not.toContain("extra");
   });
 
-  test.fails("records the maintenance mode after the first checkpoint of a multi-migration run that stops at the second migration", async () => {
+  test("records the maintenance mode after the first checkpoint of a multi-migration run that stops at the second migration", async () => {
     const client = createMockClient();
     setPendingMigrations([
       mkAddFieldMigration(1, "GoodsReceipt", "note"),
