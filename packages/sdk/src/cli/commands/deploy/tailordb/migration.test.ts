@@ -1172,6 +1172,41 @@ describe("migration", () => {
       );
     });
 
+    test("records a run of steps without the `main` suffix", async () => {
+      const store = createMetadataStore({});
+      const recorded: Record<string, string>[] = [];
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: {
+          onBeforeStart: () => Promise<void>;
+          onExecutionStarted: (executionId: string) => Promise<void>;
+        }) => {
+          await options.onBeforeStart();
+          recorded.push({ ...store.labels() });
+          await options.onExecutionStarted("0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60");
+          recorded.push({ ...store.labels() });
+          return {
+            success: true,
+            logs: "",
+            completedSteps: ["backfill", "recompute"],
+            failedSteps: [],
+            stepsMayHaveCommitted: true,
+          };
+        },
+      );
+
+      await executeMigrations({ ...createMockContext(), client: store.client }, [
+        createMockMigration({ number: 3, scriptForm: stepsForm }),
+      ]);
+
+      expect(recorded).toEqual([
+        { [MIGRATION_IN_PROGRESS_LABEL_KEY]: "m0003" },
+        {
+          [MIGRATION_IN_PROGRESS_LABEL_KEY]: "m0003",
+          [MIGRATION_EXECUTION_LABEL_KEY]: "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60",
+        },
+      ]);
+    });
+
     describe("the record of a `main` run", () => {
       const executionId = "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60";
       const executionLabel = "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60";
