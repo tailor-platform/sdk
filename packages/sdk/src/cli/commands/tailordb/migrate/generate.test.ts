@@ -1339,18 +1339,23 @@ describe("tailordb migration generate --data-only", () => {
     expect(fs.existsSync(path.join(kept.migrationsDir, "0000", "schema.json"))).toBe(true);
   });
 
-  test("lists only the target namespace in the --init confirmation", async () => {
-    vi.mocked(canPrompt).mockReturnValue(true);
-    vi.mocked(prompt.confirm).mockResolvedValue(false);
-    const kept = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
-    const reset = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
-    using stderr = captureStderr();
+  test("rejects --init --namespace when another namespace's migrations are nested inside the target's", async () => {
+    const parent = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const nested = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    const nestedDir = path.join(parent.migrationsDir, "analyticsdb");
+    fs.renameSync(nested.migrationsDir, nestedDir);
+    nested.migrationsDir = nestedDir;
 
-    const result = await runCommand(generateCommand, ["--init", "--namespace", "analyticsdb"]);
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "tailordb",
+    ]);
 
-    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_CANCELLED" });
-    expect(stderr.output).toContain(reset.migrationsDir);
-    expect(stderr.output).not.toContain(kept.migrationsDir);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_OPTIONS_CONFLICT" });
+    expect(fs.existsSync(path.join(nestedDir, "0000", "schema.json"))).toBe(true);
   });
 
   test("rejects --init --namespace combined with --data-only", async () => {
@@ -1368,7 +1373,7 @@ describe("tailordb migration generate --data-only", () => {
     expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_OPTIONS_CONFLICT" });
   });
 
-  test("rejects --namespace without --data-only", async () => {
+  test("rejects --namespace without --data-only or --init", async () => {
     addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 
     const result = await runCommand(generateCommand, ["--yes", "--namespace", "tailordb"]);
@@ -1384,6 +1389,18 @@ describe("tailordb migration generate declined confirmations", () => {
   beforeEach(() => {
     vi.mocked(canPrompt).mockReturnValue(true);
     vi.mocked(prompt.confirm).mockResolvedValue(false);
+  });
+
+  test("lists only the target namespace in the --init confirmation", async () => {
+    const kept = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const reset = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    using stderr = captureStderr();
+
+    const result = await runCommand(generateCommand, ["--init", "--namespace", "analyticsdb"]);
+
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_CANCELLED" });
+    expect(stderr.output).toContain(reset.migrationsDir);
+    expect(stderr.output).not.toContain(kept.migrationsDir);
   });
 
   test("fails without deleting migrations when --init is declined", async () => {

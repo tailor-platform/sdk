@@ -98,7 +98,7 @@ export interface GenerateOptions {
   init?: boolean;
   /** Create a migration with no schema changes that exists to run a migration script. */
   dataOnly?: boolean;
-  /** Namespace the `--data-only` migration targets. */
+  /** Namespace targeted by `--data-only`, or the only namespace `--init` resets. */
   namespace?: string;
   /**
    * `--rename Table.oldField:newField` / `--rename OldTable:NewTable` /
@@ -128,6 +128,24 @@ export function getUnsupportedMigrationHintLines(): string[] {
     "               migrate data from the temporary field, then remove it",
     "  Important: Reusing the name while stored old values remain can make subsequent reads fail",
   ];
+}
+
+function assertNoNestedNamespaceMigrations(
+  target: NamespaceWithMigrations,
+  all: NamespaceWithMigrations[],
+): void {
+  const nested = all.filter(
+    ({ namespace, migrationsDir }) =>
+      namespace !== target.namespace &&
+      path.relative(target.migrationsDir, migrationsDir).split("/")[0] !== "..",
+  );
+  if (nested.length === 0) return;
+  throw CLIError({
+    code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
+    message: `--init --namespace ${target.namespace} would also delete the migrations of ${nested.map(({ namespace }) => namespace).join(", ")}, whose directories are inside ${target.migrationsDir}.`,
+    suggestion: "Run --init without --namespace, or move the nested migration directories out.",
+    command: "tailordb migration generate",
+  });
 }
 
 /**
@@ -350,13 +368,17 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   }
 
   const targetNamespace =
-    options.dataOnly || (options.init && options.namespace !== undefined)
+    options.dataOnly || options.namespace !== undefined
       ? resolveTargetNamespace(namespacesWithMigrations, options.namespace)
       : undefined;
   const namespacesToLoad =
     targetNamespace === undefined
       ? namespacesWithMigrations
       : namespacesWithMigrations.filter(({ namespace }) => namespace === targetNamespace);
+  const initTarget = options.init ? namespacesToLoad[0] : undefined;
+  if (initTarget && targetNamespace !== undefined) {
+    assertNoNestedNamespaceMigrations(initTarget, namespacesWithMigrations);
+  }
 
   // Handle --init option: delete existing migrations directory
   const clearedNamespaces = options.init
