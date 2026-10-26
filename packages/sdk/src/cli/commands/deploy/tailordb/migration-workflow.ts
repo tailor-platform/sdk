@@ -16,33 +16,38 @@
  */
 
 import * as crypto from "node:crypto";
-import { Code, ConnectError } from "@connectrpc/connect";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
-import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
-import { getOrNull, isNotFoundError } from "#/cli/shared/client";
-import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
+import { getOrNull } from "#/cli/shared/client";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
-import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
-import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
+import {
+  createTemporaryWorkflow,
+  isExecutionActive,
+  isStartRefused,
+  pollUntilTerminal as pollTemporaryWorkflowExecution,
+  reclaimTemporaryWorkflow,
+  teardownTemporaryWorkflow,
+  uploadTemporaryFunction,
+  findTemporaryWorkflowId,
+} from "#/cli/shared/temporary-workflow";
+import { formatWaitError } from "#/cli/shared/wait-error";
+import { resourceTrn } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type {
-  CreateFunctionRegistryRequestSchema,
-  UpdateFunctionRegistryRequestSchema,
-} from "@tailor-platform/tailor-proto/function_registry_pb";
+  CreatedTemporaryWorkflow,
+  PollExecutionOptions,
+} from "#/cli/shared/temporary-workflow";
+import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type {
   WorkflowExecution,
   WorkflowJobExecution,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-
-const CHUNK_SIZE = 64 * 1024;
 
 /** Poll interval while waiting for the migration workflow to finish. */
 const POLL_INTERVAL_MS = 3000;
@@ -93,17 +98,9 @@ export interface LongRunningMigrationResult {
   error?: string;
 }
 
-/**
- * Build the shared resource name for a migration's temporary workflow resources.
- * The name is stable per migration so a retry reclaims an interrupted run's
- * leftovers rather than duplicating them.
- * @param namespace - TailorDB namespace
- * @param migrationNumber - Migration number
- * @returns Resource name
- */
-export function migrationWorkflowResourceName(namespace: string, migrationNumber: number): string {
-  return `tailordb-migration--${namespace}--${formatMigrationNumber(migrationNumber)}`;
-}
+const MIGRATION_SUBJECT = "migration";
+const MIGRATION_LEFTOVER_NOTE =
+  "It is labeled as owned by this app and can be removed by a later deploy.";
 
 /**
  * Upload the bundled migration script to the function registry, behind a line logging
@@ -125,59 +122,19 @@ async function uploadMigrationFunction(
   appId: string | undefined,
   mode: "create" | "update" = "create",
 ): Promise<void> {
-  const content = `globalThis.console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n${code}`;
-  const buffer = Buffer.from(content, "utf-8");
-  const info = {
+  await uploadTemporaryFunction({
+    client,
     workspaceId,
     name,
+    code,
+    appName,
+    appId,
+    mode,
     description: "Temporary function for a TailorDB migration",
-    sizeBytes: BigInt(buffer.length),
-    contentHash: crypto.createHash("sha256").update(content, "utf-8").digest("hex"),
-  };
-
-  /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Info header followed by content chunks */
-  async function* stream(): AsyncIterable<
-    MessageInitShape<typeof CreateFunctionRegistryRequestSchema> &
-      MessageInitShape<typeof UpdateFunctionRegistryRequestSchema>
-  > {
-    yield { payload: { case: "info" as const, value: info } };
-    for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
-      yield {
-        payload: {
-          case: "chunk" as const,
-          value: buffer.subarray(i, Math.min(i + CHUNK_SIZE, buffer.length)),
-        },
-      };
-    }
-  }
-
-  if (mode === "create") {
-    await client.createFunctionRegistry(stream());
-  } else {
-    await client.updateFunctionRegistry(stream());
-  }
-  await writeMetadataLabelsDirect(
-    client,
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "function_registry", name),
-      appName,
-      appId,
-    }),
-  );
+    prelude: `globalThis.console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n`,
+  });
 }
 
-/**
- * Remove the temporary resources created for a migration.
- *
- * Teardown is best effort: a failure here must not mask the migration's own
- * outcome, so every removal is attempted and an unexpected failure is reported
- * as a warning rather than raised.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param name - Shared resource name
- * @param workflowId - Created workflow id, when it was created
- * @param jobFunctionNames - Job functions created under the shared name
- */
 async function teardown(
   client: OperatorClient,
   workspaceId: string,
@@ -185,73 +142,34 @@ async function teardown(
   workflowId: string | undefined,
   jobFunctionNames: readonly string[] = [name],
 ): Promise<void> {
-  const steps: [label: string, resource: string, run: () => Promise<unknown>][] = [];
-  if (workflowId) {
-    steps.push(["workflow", name, () => client.deleteWorkflow({ workspaceId, workflowId })]);
-  }
-  for (const jobFunctionName of jobFunctionNames) {
-    steps.push([
-      "job function",
-      jobFunctionName,
-      () => client.deleteWorkflowJobFunction({ workspaceId, jobFunctionName }),
-    ]);
-  }
-  steps.push(["function", name, () => client.deleteFunctionRegistry({ workspaceId, name })]);
-
-  for (const [label, resource, run] of steps) {
-    try {
-      await run();
-    } catch (error) {
-      // An already-absent resource means teardown's goal is met; anything else
-      // leaves a resource behind and has to stay diagnosable.
-      if (isNotFoundError(error)) continue;
-      logger.warn(
-        `Could not remove the temporary migration ${label} '${resource}': ` +
-          `${error instanceof Error ? error.message : String(error)}. ` +
-          "It is labeled as owned by this app and can be removed by a later deploy.",
-      );
-    }
-  }
+  await teardownTemporaryWorkflow({
+    client,
+    workspaceId,
+    name,
+    workflowId,
+    jobFunctionNames,
+    subject: MIGRATION_SUBJECT,
+    leftoverNote: MIGRATION_LEFTOVER_NOTE,
+  });
 }
 
-/**
- * Remove any leftovers from an earlier interrupted run of this migration.
- *
- * The resource name is stable per migration and `createFunctionRegistry` is
- * create-only, so a retry would otherwise fail on a name collision. Deleting
- * first makes the create path idempotent across retries.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param name - Shared resource name
- * @param jobFunctionNames - Job functions created under the shared name
- */
 async function reclaimLeftovers(
   client: OperatorClient,
   workspaceId: string,
   name: string,
   jobFunctionNames: readonly string[] = [name],
 ): Promise<void> {
-  const workflowId = await findMigrationWorkflowId(client, workspaceId, name);
-  await teardown(client, workspaceId, name, workflowId, jobFunctionNames);
+  await reclaimTemporaryWorkflow({
+    client,
+    workspaceId,
+    name,
+    jobFunctionNames,
+    subject: MIGRATION_SUBJECT,
+    leftoverNote: MIGRATION_LEFTOVER_NOTE,
+  });
 }
 
-/**
- * Find the temporary workflow created for this migration, if it still exists.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param name - Shared resource name
- * @returns Workflow id, or undefined when no such workflow exists
- */
-async function findMigrationWorkflowId(
-  client: OperatorClient,
-  workspaceId: string,
-  name: string,
-): Promise<string | undefined> {
-  const response = await getOrNull(() =>
-    client.getWorkflowByName({ workspaceId, workflowName: name }),
-  );
-  return response?.workflow?.id;
-}
+const findMigrationWorkflowId = findTemporaryWorkflowId;
 
 interface CreateMigrationWorkflowParams {
   client: OperatorClient;
@@ -266,69 +184,40 @@ interface CreateMigrationWorkflowParams {
   workflowLabels?: Record<string, string>;
 }
 
-/** Ids of the resources {@link createMigrationWorkflow} created, as soon as each exists. */
-interface CreatedMigrationWorkflow {
-  workflowId?: string;
+async function createMigrationWorkflow(
+  params: CreateMigrationWorkflowParams,
+  created: CreatedTemporaryWorkflow,
+): Promise<string> {
+  return await createTemporaryWorkflow({ ...params, subject: MIGRATION_SUBJECT }, created);
+}
+
+async function pollUntilTerminal(
+  client: OperatorClient,
+  workspaceId: string,
+  executionId: string,
+  pollInterval: number,
+  options: PollExecutionOptions = {},
+): Promise<WorkflowExecution> {
+  return await pollTemporaryWorkflowExecution({
+    client,
+    workspaceId,
+    executionId,
+    pollInterval,
+    subject: "Migration",
+    options,
+  });
 }
 
 /**
- * Create the job functions and the workflow for an uploaded migration
- * function, labeling each as it is created.
- * @param params - Resources to create
- * @param created - Receives the workflow id before labeling, so teardown can remove it
- * @returns Workflow id
+ * Build the shared resource name for a migration's temporary workflow resources.
+ * The name is stable per migration so a retry reclaims an interrupted run's
+ * leftovers rather than duplicating them.
+ * @param namespace - TailorDB namespace
+ * @param migrationNumber - Migration number
+ * @returns Resource name
  */
-async function createMigrationWorkflow(
-  params: CreateMigrationWorkflowParams,
-  created: CreatedMigrationWorkflow,
-): Promise<string> {
-  const { client, workspaceId, name, appName, appId } = params;
-  const versions: Record<string, bigint> = {};
-  for (const jobFunctionName of params.jobFunctionNames) {
-    const { jobFunction } = await client.createWorkflowJobFunction({
-      workspaceId,
-      jobFunctionName,
-      scriptRef: name,
-      publishExecutionEvents: false,
-    });
-    await writeMetadataLabelsDirect(
-      client,
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
-        appName,
-        appId,
-      }),
-    );
-    const version = jobFunction?.version;
-    if (version === undefined) {
-      throw internalError(
-        `Temporary migration job function '${jobFunctionName}' was created without a version.`,
-      );
-    }
-    versions[jobFunctionName] = version;
-  }
-
-  const { workflow } = await client.createWorkflow({
-    workspaceId,
-    workflowName: name,
-    mainJobFunctionName: name,
-    jobFunctions: versions,
-  });
-  const workflowId = workflow?.id;
-  if (!workflowId) {
-    throw internalError(`Temporary migration workflow '${name}' was created without an id.`);
-  }
-  created.workflowId = workflowId;
-  await writeMetadataLabelsDirect(
-    client,
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "workflow", name),
-      appName,
-      appId,
-      ...(params.workflowLabels ? { metadata: params.workflowLabels } : {}),
-    }),
-  );
-  return workflowId;
+export function migrationWorkflowResourceName(namespace: string, migrationNumber: number): string {
+  return `tailordb-migration--${namespace}--${formatMigrationNumber(migrationNumber)}`;
 }
 
 /**
@@ -359,7 +248,7 @@ export async function executeMigrationAsWorkflow(
   });
   await reclaimLeftovers(client, workspaceId, name);
 
-  const created: CreatedMigrationWorkflow = {};
+  const created: CreatedTemporaryWorkflow = {};
   let workflowId: string;
   let executionIdsBeforeStart: ReadonlySet<string>;
   try {
@@ -518,54 +407,6 @@ function outcomeUnknownError(
     },
     cause: details.cause,
   });
-}
-
-interface PollExecutionOptions {
-  /** Called with each polled execution that is still active. */
-  onActive?: (execution: WorkflowExecution) => void | Promise<void>;
-  /** Called for each poll whose transient error was retried. */
-  onPollFailed?: () => void;
-}
-
-/**
- * Poll a migration workflow execution until it reaches a terminal state,
- * polling through transient errors.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param executionId - Workflow execution id
- * @param pollInterval - Poll interval in milliseconds
- * @param options - Progress options
- * @returns The execution in its terminal state
- */
-async function pollUntilTerminal(
-  client: OperatorClient,
-  workspaceId: string,
-  executionId: string,
-  pollInterval: number,
-  options: PollExecutionOptions = {},
-): Promise<WorkflowExecution> {
-  // loop exits when the workflow execution reaches a terminal status
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  while (true) {
-    let execution: WorkflowExecution | undefined;
-    try {
-      ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
-    } catch (error) {
-      if (!isRetryableWaitError(error)) throw error;
-      options.onPollFailed?.();
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
-      continue;
-    }
-    if (!execution) {
-      throw CLIError({
-        code: "WORKFLOW_EXECUTION_NOT_FOUND",
-        message: `Migration workflow execution '${executionId}' not found.`,
-      });
-    }
-    if (!isExecutionActive(execution)) return execution;
-    await options.onActive?.(execution);
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
-  }
 }
 
 type ObserveRunParams = CollectJobOutcomesOptions & {
@@ -792,25 +633,6 @@ function prefixLines(text: string, prefix: string): string {
 
 /** Label recording which step plan a temporary migration workflow was created for. */
 const MIGRATION_PLAN_LABEL_KEY = "sdk-migration-plan";
-
-function isExecutionActive(execution: WorkflowExecution): boolean {
-  return (
-    execution.status !== WorkflowExecution_Status.SUCCESS &&
-    !isWorkflowExecutionFailureStatus(execution.status)
-  );
-}
-
-/** Codes the platform returns for a start before it creates the execution. */
-const START_REFUSED_CODES: ReadonlySet<Code> = new Set([
-  Code.InvalidArgument,
-  Code.NotFound,
-  Code.PermissionDenied,
-  Code.Unauthenticated,
-]);
-
-function isStartRefused(error: unknown): boolean {
-  return error instanceof ConnectError && START_REFUSED_CODES.has(error.code);
-}
 
 /**
  * Name of the job function that runs one step of a multi-step migration.
@@ -1356,7 +1178,7 @@ export async function executeMigrationStepsAsWorkflow(
   await options.onBeforeStart();
   await reclaimLeftovers(client, workspaceId, name, jobFunctionNames);
 
-  const created: CreatedMigrationWorkflow = {};
+  const created: CreatedTemporaryWorkflow = {};
   let workflowId: string;
   try {
     await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
