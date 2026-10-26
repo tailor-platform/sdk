@@ -149,8 +149,9 @@ export function describeMainRunSettlement(namespace: string): string {
 
 /**
  * Refuse a command that rewrites migration state while a migration is
- * partially applied, or its `main` run is unsettled; only a deploy or
- * `migration resolve` can finish it consistently.
+ * partially applied, which only a deploy or `migration resolve` can finish
+ * consistently, or its `main` run is unsettled, which only `migration resolve`
+ * can settle consistently.
  * @param state - Remote migration state of the namespace
  * @param namespace - TailorDB namespace
  */

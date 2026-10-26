@@ -163,7 +163,7 @@ async function validateMigrationsInProgress(
       code: "MIGRATION_IN_PROGRESS_CONFLICT",
       message: `A migration is in progress in namespace "${repaired}", so its checkpoint cannot be repaired.`,
       suggestion:
-        "From a checkout of the migration history that started the migration, finish it with a deploy or settle it with 'tailor tailordb migration resolve' first.",
+        "From a checkout of the migration history that started the migration, finish a multi-step migration with a deploy, or settle the migration with 'tailor tailordb migration resolve' first.",
     });
   }
 
