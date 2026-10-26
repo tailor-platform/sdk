@@ -107,7 +107,7 @@ async function assertMainRunSettled(
   state: Pick<RemoteMigrationState, "number" | "inProgress">,
 ): Promise<void> {
   const record = state.inProgress;
-  if (!record?.main || isStaleMigrationInProgress(state)) return;
+  if (record?.kind !== "main" || isStaleMigrationInProgress(state)) return;
   const runStatus = await readMigrationRunStatus(client, workspaceId, namespace, record);
   const migrationLabel = `${namespace}/${formatMigrationNumber(record.number)}`;
   const workflowName = migrationWorkflowResourceName(namespace, record.number);

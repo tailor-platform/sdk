@@ -83,7 +83,7 @@ async function assertMigrationStateUnchanged(params: AssertStateUnchangedParams)
     now.historyId !== before.historyId ||
     now.inProgress?.number !== before.inProgress?.number ||
     now.inProgress?.executionId !== before.inProgress?.executionId ||
-    now.inProgress?.main !== before.inProgress?.main
+    now.inProgress?.kind !== before.inProgress?.kind
   ) {
     throw CLIError({
       code: "MIGRATION_RESOLVE_STATE_CHANGED",
@@ -212,9 +212,10 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
 
   const migrationNumber = state.inProgress.number;
   const migrationLabel = formatMigrationNumber(migrationNumber);
-  const runStatus = state.inProgress.main
-    ? await readMigrationRunStatus(client, workspaceId, namespace, state.inProgress)
-    : undefined;
+  const runStatus =
+    state.inProgress.kind === "main"
+      ? await readMigrationRunStatus(client, workspaceId, namespace, state.inProgress)
+      : undefined;
   if (runStatus === "running") {
     throw retryCommandActiveError(
       `The run of migration ${namespace}/${migrationLabel} is still running.`,

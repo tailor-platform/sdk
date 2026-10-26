@@ -1077,7 +1077,11 @@ describe("readMigrationRunStatus", () => {
     const { client, raw } = createMockClient({ statuses: [status] });
 
     await expect(
-      readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3, executionId: "exec-1" }),
+      readMigrationRunStatus(client, "ws-1", "tailordb", {
+        number: 3,
+        executionId: "exec-1",
+        kind: "main",
+      }),
     ).resolves.toBe(expected);
     expect(raw.getWorkflowExecution).toHaveBeenCalledWith({
       workspaceId: "ws-1",
@@ -1091,25 +1095,25 @@ describe("readMigrationRunStatus", () => {
       leftoverExecutions: [{ id: "exec-1", status: WorkflowExecution_Status.SUCCESS }],
     });
 
-    await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
-      "succeeded",
-    );
+    await expect(
+      readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3, kind: "main" }),
+    ).resolves.toBe("succeeded");
   });
 
   test("reports a run whose workflow has no execution as not started", async () => {
     const { client } = createMockClient({ leftoverWorkflowId: "wf-1" });
 
-    await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
-      "not_started",
-    );
+    await expect(
+      readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3, kind: "main" }),
+    ).resolves.toBe("not_started");
   });
 
   test("reports a run that never got as far as creating its workflow as not started", async () => {
     const { client } = createMockClient();
 
-    await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
-      "not_started",
-    );
+    await expect(
+      readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3, kind: "main" }),
+    ).resolves.toBe("not_started");
   });
 
   test("reports a run whose executions cannot be listed as unknown", async () => {
@@ -1118,9 +1122,9 @@ describe("readMigrationRunStatus", () => {
       new ConnectError("unavailable", Code.Unavailable),
     );
 
-    await expect(readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3 })).resolves.toBe(
-      "unknown",
-    );
+    await expect(
+      readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3, kind: "main" }),
+    ).resolves.toBe("unknown");
   });
 
   test.each([
@@ -1142,7 +1146,11 @@ describe("readMigrationRunStatus", () => {
     raw.getWorkflowExecution.mockRejectedValueOnce(error);
 
     await expect(
-      readMigrationRunStatus(client, "ws-1", "tailordb", { number: 3, executionId: "exec-1" }),
+      readMigrationRunStatus(client, "ws-1", "tailordb", {
+        number: 3,
+        executionId: "exec-1",
+        kind: "main",
+      }),
     ).resolves.toBe("unknown");
   });
 });

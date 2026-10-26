@@ -85,16 +85,19 @@ export interface PendingMigration {
   diff: MigrationDiff;
 }
 
+/** How a run executes a migration's script: `main` as one job, `steps` each step as its own job. */
+export type MigrationRunKind = "main" | "steps";
+
 /** A migration an earlier deploy left partially applied, or whose `main` run it left unsettled. */
 export interface MigrationInProgress {
   number: number;
   /** The run to resume or settle; absent when the deploy stopped before recording it. */
   executionId?: string;
   /**
-   * Set when the record is of a run of the whole script as one job, as a `main` script runs.
-   * A deploy does not resume such a run; `migration resolve` settles it.
+   * A deploy resumes a `steps` run; it does not resume a `main` run, which `migration resolve`
+   * settles.
    */
-  main?: true;
+  kind: MigrationRunKind;
 }
 
 // ============================================================================
@@ -133,25 +136,27 @@ export function parseMigrationLabelNumber(label: string): number | null {
 /**
  * Build the in-progress label value naming a migration.
  * @param migrationNumber - Migration left in progress
- * @param main - Whether the record is of a `main` run rather than of steps
+ * @param kind - How the recorded run executes the script
  * @returns Label value
  */
-export function inProgressLabel(migrationNumber: number, main: boolean): string {
+export function inProgressLabel(migrationNumber: number, kind: MigrationRunKind): string {
   const label = sanitizeMigrationLabel(migrationNumber);
-  return main ? `${label}${MAIN_RUN_LABEL_SUFFIX}` : label;
+  return kind === "main" ? `${label}${MAIN_RUN_LABEL_SUFFIX}` : label;
 }
 
 /**
  * Parse an in-progress label value written by {@link inProgressLabel}.
  * @param label - Label value
- * @returns The migration and whether the record is of a `main` run, or null for malformed input
+ * @returns The migration and how the recorded run executes its script, or null for malformed input
  */
-export function parseInProgressLabel(label: string): { number: number; main: boolean } | null {
-  const main = label.endsWith(MAIN_RUN_LABEL_SUFFIX);
+export function parseInProgressLabel(
+  label: string,
+): { number: number; kind: MigrationRunKind } | null {
+  const kind = label.endsWith(MAIN_RUN_LABEL_SUFFIX) ? "main" : "steps";
   const number = parseMigrationLabelNumber(
-    main ? label.slice(0, -MAIN_RUN_LABEL_SUFFIX.length) : label,
+    kind === "main" ? label.slice(0, -MAIN_RUN_LABEL_SUFFIX.length) : label,
   );
-  return number === null ? null : { number, main };
+  return number === null ? null : { number, kind };
 }
 
 /**

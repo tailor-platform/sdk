@@ -44,6 +44,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
   type MigrationInProgress,
+  type MigrationRunKind,
   type PendingMigration,
   executionIdToLabel,
   inProgressLabel,
@@ -411,21 +412,21 @@ async function executeSingleMigration(
         recording.mayBeRecorded = true;
         await writeMigrationInProgress(client, workspaceId, migration.namespace, {
           number: migration.number,
-          main: true,
+          kind: "main",
         });
       },
       onExecutionStarted: (executionId) =>
         writeMigrationInProgress(client, workspaceId, migration.namespace, {
           number: migration.number,
           executionId,
-          main: true,
+          kind: "main",
         }),
       onRunEvent: display.onRunEvent,
     });
   } catch (error) {
     const failure =
       recording.mayBeRecorded && !isMigrationOutcomeUnknown(error)
-        ? await releaseMigrationInProgress(options, migration, error, notify, true)
+        ? await releaseMigrationInProgress(options, migration, error, notify, "main")
         : undefined;
     throw failure ?? error;
   }
@@ -444,7 +445,7 @@ async function executeSingleMigration(
         migration,
         result.error ?? "Migration failed",
         notify,
-        true,
+        "main",
       )
     : undefined;
   if (failure) return { ...executed, failure };
@@ -546,7 +547,7 @@ async function writeMigrationInProgress(
   await writeMetadataLabelsDirect(client, {
     trn: resourceTrn(workspaceId, "tailordb", namespace),
     labels: {
-      [MIGRATION_IN_PROGRESS_LABEL_KEY]: inProgressLabel(record.number, record.main === true),
+      [MIGRATION_IN_PROGRESS_LABEL_KEY]: inProgressLabel(record.number, record.kind),
       ...(executionId ? { [MIGRATION_EXECUTION_LABEL_KEY]: executionIdToLabel(executionId) } : {}),
     },
     remove: executionId ? undefined : [MIGRATION_EXECUTION_LABEL_KEY],
@@ -703,8 +704,8 @@ export function rolledBackError(migration: PendingMigration, cause: unknown): Er
 export interface RemainingRecord {
   /** Whether the remote state confirmed the migration's own record remains. */
   confirmed: boolean;
-  /** Whether the record is of a `main` run, which a deploy does not resume. */
-  main: boolean;
+  /** How the record's run executes the script; a deploy does not resume a `main` run. */
+  kind: MigrationRunKind;
 }
 
 /**
@@ -723,12 +724,13 @@ export function rollbackSkippedError(
   record: RemainingRecord,
 ): Error {
   const { namespace } = migration;
-  const next = record.main
-    ? "Its in-progress record could not be cleared, so its schema was not rolled back, and deploys stop before changing anything until the migration is settled. " +
-      `Once the data meets the migration's schema, run ${formatMigrationResolveHint("complete", namespace)} to keep what its script wrote; ` +
-      `or run ${formatMigrationResolveHint("rollback", namespace)} to return to migration ${formatMigrationNumber(migration.number - 1)}.`
-    : "Its in-progress record could not be cleared, so its schema was not rolled back and the migration stays in progress. " +
-      `Deploy again to resume it, or run ${formatMigrationResolveHint("rollback", namespace)} to roll it back without deploying.`;
+  const next =
+    record.kind === "main"
+      ? "Its in-progress record could not be cleared, so its schema was not rolled back, and deploys stop before changing anything until the migration is settled. " +
+        `Once the data meets the migration's schema, run ${formatMigrationResolveHint("complete", namespace)} to keep what its script wrote; ` +
+        `or run ${formatMigrationResolveHint("rollback", namespace)} to return to migration ${formatMigrationNumber(migration.number - 1)}.`
+      : "Its in-progress record could not be cleared, so its schema was not rolled back and the migration stays in progress. " +
+        `Deploy again to resume it, or run ${formatMigrationResolveHint("rollback", namespace)} to roll it back without deploying.`;
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
     message: cause instanceof Error ? cause.message : String(cause),
@@ -771,11 +773,11 @@ function unreleasedRecordError(
   const next = !record.confirmed
     ? `Whether it is still recorded as in progress could not be confirmed, so its pre-migration schema stays in place. ` +
       `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, ` +
-      (record.main
+      (record.kind === "main"
         ? `run ${resolveRollback} to clear the record, then fix the failure and deploy again; `
         : `fix the failure and deploy again, or run ${resolveRollback} to clear the record without deploying; `) +
       `otherwise run 'tailor tailordb migration sync ${checkpoint} --namespace ${namespace}' to return the schema to migration ${checkpoint}, then deploy again.`
-    : record.main
+    : record.kind === "main"
       ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place, and deploys stop before changing anything until the record is cleared. " +
         `Run ${resolveRollback} to clear it, then fix the failure and deploy again.`
       : "Its in-progress record could not be cleared, so its pre-migration schema stays in place and the next deploy runs every step again. " +
@@ -783,14 +785,15 @@ function unreleasedRecordError(
   const reason = cause instanceof Error ? cause.message : String(cause);
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
-    message: record.main
-      ? `Migration ${namespace}/${number} failed: ${reason}`
-      : `Migration ${namespace}/${number} failed before any step completed: ${reason}`,
+    message:
+      record.kind === "main"
+        ? `Migration ${namespace}/${number} failed: ${reason}`
+        : `Migration ${namespace}/${number} failed before any step completed: ${reason}`,
     suggestion: withMaintenanceModeNote(next, namespace, maintenanceMode, "Until then"),
     context: {
       namespace,
       migrationNumber: migration.number,
-      ...(record.main ? {} : { completedSteps: [], failedSteps: [] }),
+      ...(record.kind === "main" ? {} : { completedSteps: [], failedSteps: [] }),
     },
     cause,
   });
@@ -824,7 +827,7 @@ function unconfirmedStartError(
  * @param migration - Migration whose run failed
  * @param cause - The run's failure
  * @param notify - Reports the record that could not be cleared
- * @param main - Whether the record is of a `main` run
+ * @param kind - How the run executes the script
  * @returns The error to raise instead when the record may remain
  */
 async function releaseMigrationInProgress(
@@ -832,7 +835,7 @@ async function releaseMigrationInProgress(
   migration: PendingMigration,
   cause: unknown,
   notify: (level: "warn", message: string) => void,
-  main: boolean,
+  kind: MigrationRunKind,
 ): Promise<Error | undefined> {
   try {
     await clearMigrationInProgress(options.client, options.workspaceId, migration.namespace);
@@ -848,7 +851,7 @@ async function releaseMigrationInProgress(
       return unreleasedRecordError(
         migration,
         cause,
-        { confirmed: false, main },
+        { confirmed: false, kind },
         options.maintenanceMode,
       );
     }
@@ -863,7 +866,7 @@ async function releaseMigrationInProgress(
     return unreleasedRecordError(
       migration,
       cause,
-      { confirmed: true, main },
+      { confirmed: true, kind },
       options.maintenanceMode,
     );
   }
@@ -928,6 +931,7 @@ async function executeStepsMigration(
         mayBeRecorded = true;
         await writeMigrationInProgress(client, workspaceId, migration.namespace, {
           number: migration.number,
+          kind: "steps",
         });
       },
       onExecutionStarted: async (executionId) => {
@@ -935,6 +939,7 @@ async function executeStepsMigration(
         await writeMigrationInProgress(client, workspaceId, migration.namespace, {
           number: migration.number,
           executionId,
+          kind: "steps",
         });
       },
       onProgress: display.onProgress,
@@ -954,7 +959,7 @@ async function executeStepsMigration(
       );
     }
     const failure = mayBeRecorded
-      ? await releaseMigrationInProgress(options, migration, error, notify, false)
+      ? await releaseMigrationInProgress(options, migration, error, notify, "steps")
       : undefined;
     throw failure ?? error;
   }
@@ -990,7 +995,7 @@ async function executeStepsMigration(
     migration,
     result.error ?? "Migration failed",
     notify,
-    false,
+    "steps",
   );
   return failure ? { ...failed, failure } : failed;
 }

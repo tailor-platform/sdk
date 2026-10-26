@@ -843,7 +843,7 @@ describe("migration", () => {
       const skipSteps = new Map([["tailordb", ["backfill"]]]);
 
       await executeMigrations({ ...stepsContext(vi.fn()), skipSteps }, [migration], {
-        tailordb: { number: 3 },
+        tailordb: { number: 3, kind: "steps" },
       });
 
       expect(bundleMigrationStepsMock.mock.calls[0]![0]).toMatchObject({ skipSteps: ["backfill"] });
@@ -866,7 +866,7 @@ describe("migration", () => {
       await executeMigrations(
         { ...stepsContext(vi.fn()), skipSteps: new Map([["tailordb", ["backfill"]]]) },
         [migration],
-        { tailordb: { number: 3 } },
+        { tailordb: { number: 3, kind: "steps" } },
       );
 
       expect(bundleMigrationStepsMock.mock.calls[0]![0].skipSteps ?? []).toEqual([]);
@@ -895,7 +895,9 @@ describe("migration", () => {
       vi.mocked(logger.warn).mockClear();
       vi.mocked(logger.log).mockClear();
 
-      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+      await executeMigrations(stepsContext(vi.fn()), [migration], {
+        tailordb: { number: 1, kind: "steps" },
+      });
 
       expect(logger.warn).toHaveBeenCalledWith("every step runs again");
       expect(logger.log).toHaveBeenCalledWith("skip them with --migration-skip-steps");
@@ -1119,7 +1121,9 @@ describe("migration", () => {
       spinnerMock.fail.mockClear();
 
       await expect(
-        executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } }),
+        executeMigrations(stepsContext(vi.fn()), [migration], {
+          tailordb: { number: 1, kind: "steps" },
+        }),
       ).rejects.toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
 
       const order = (mock: { mock: { invocationCallOrder: number[] } }) =>
@@ -1143,7 +1147,9 @@ describe("migration", () => {
       );
 
       await expect(
-        executeMigrations(createMockContext(), [migration], { tailordb: { number: 1 } }),
+        executeMigrations(createMockContext(), [migration], {
+          tailordb: { number: 1, kind: "steps" },
+        }),
       ).rejects.toMatchObject({
         code: "MIGRATION_PARTIALLY_APPLIED",
         suggestion: expect.stringContaining("Wait for it to finish, then deploy again."),
@@ -1366,7 +1372,9 @@ describe("migration", () => {
         stepsMayHaveCommitted: true,
       });
 
-      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+      await executeMigrations(stepsContext(vi.fn()), [migration], {
+        tailordb: { number: 1, kind: "steps" },
+      });
 
       expect(executeMigrationStepsAsWorkflowMock).toHaveBeenCalledTimes(1);
       expect(executeMigrationAsWorkflowMock).not.toHaveBeenCalled();

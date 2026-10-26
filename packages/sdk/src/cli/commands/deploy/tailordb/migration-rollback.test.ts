@@ -2125,7 +2125,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("names a table an earlier deploy already restricted when the retry stops again", async () => {
       const client = createMockClient();
-      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
       vi.mocked(client.listTailorDBTypes).mockResolvedValue({
         tailordbTypes: [
           {
@@ -2470,7 +2470,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         migration: PendingMigration,
         ...following: PendingMigration[]
       ): void {
-        remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+        remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
         vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
           async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
             remoteStates?.set("test-ns", {
@@ -2478,7 +2478,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
               number: 0,
               historyId: null,
               historyIdInvalid: false,
-              inProgress: { number: 1, executionId: "exec-1" },
+              inProgress: { number: 1, executionId: "exec-1", kind: "steps" },
               inProgressInvalid: false,
               maintenanceModeCheckpoint: null,
             });
@@ -2961,7 +2961,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("passes the recorded run to the migration and never rolls back while it is in progress", async () => {
       const client = createMockClient();
-      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
       vi.mocked(migrationModule.executeMigrations).mockRejectedValue(new Error("still failing"));
 
       await expect(applyTailorDB(client, createMockPlanResult(), "create-update")).rejects.toThrow(
@@ -2969,7 +2969,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       );
 
       expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]?.[2]).toEqual({
-        "test-ns": { number: 1, executionId: "exec-1" },
+        "test-ns": { number: 1, executionId: "exec-1", kind: "steps" },
       });
       expect(deletedTableNames(client)).not.toContain("StockReservation");
       expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
@@ -3081,7 +3081,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     test("clears an in-progress record whose migration is already committed", async () => {
       const client = createMockClient();
       remoteCheckpoint.number = 1;
-      remoteInProgress({ number: 1, inProgress: { number: 1 } });
+      remoteInProgress({ number: 1, inProgress: { number: 1, kind: "steps" } });
       vi.mocked(client.getMetadata).mockResolvedValue({
         metadata: {
           labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0001" },
@@ -3104,7 +3104,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("rejects a step that cannot be skipped before it changes any table or runs the migration", async () => {
       const client = createMockClient();
-      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
       vi.mocked(assertSkippableSteps).mockRejectedValueOnce(
         CLIError({ code: "MIGRATION_SKIP_STEPS_INVALID", message: "cannot skip recompute" }),
       );
@@ -3131,7 +3131,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("rejects a step that cannot be skipped in the preflight that runs before any deployment is applied", async () => {
       const client = createMockClient();
-      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
       vi.mocked(assertSkippableSteps).mockRejectedValueOnce(
         CLIError({ code: "MIGRATION_SKIP_STEPS_INVALID", message: "cannot skip recompute" }),
       );
@@ -3146,7 +3146,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("ignores steps requested for a namespace this config does not define", async () => {
       const client = createMockClient();
-      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
       vi.mocked(assertSkippableSteps).mockClear();
       vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
       const plan = withInputs(createMockPlanResult());
@@ -3159,7 +3159,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("lifts maintenance mode on the tables the resumed migration created", async () => {
       const client = createMockClient();
-      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
       const restrictedOperations = { create: true, update: true, delete: true, read: true };
       const restricted = {
         bulkUpsert: false,
@@ -3188,7 +3188,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("lifts maintenance mode when a resumed migration's checkpoint write cannot be confirmed", async () => {
       const client = createMockClient();
-      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
       const restrictedOperations = { create: true, update: true, delete: true, read: true };
       const restricted = {
         bulkUpsert: false,
@@ -3228,7 +3228,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("leaves an in-progress migration's schema alone when the deploy fails before reaching it", async () => {
       const client = createMockClient();
-      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1" } });
+      remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
       vi.mocked(client.updateTailorDBType).mockRejectedValueOnce(
         new Error("restriction write failed"),
       );

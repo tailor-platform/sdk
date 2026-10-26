@@ -222,7 +222,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
         ? {
             inProgressMigration: inProgress.number,
             inProgressMigrationLabel: formatMigrationNumber(inProgress.number),
-            inProgressMigrationRun: inProgress.main ? ("main" as const) : ("steps" as const),
+            inProgressMigrationRun: inProgress.kind,
           }
         : {}),
     });

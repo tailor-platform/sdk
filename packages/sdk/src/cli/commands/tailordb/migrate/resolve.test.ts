@@ -540,7 +540,7 @@ describe("tailordb migration resolve", () => {
         expect.anything(),
         "12345678-1234-4abc-8def-123456789012",
         "tailordb",
-        { number: 2, executionId, main: true },
+        { number: 2, executionId, kind: "main" },
       );
       expect(state.stderr.join("")).toMatch(/Run: succeeded/);
       expect(state.setMetadata).toHaveBeenCalledWith(

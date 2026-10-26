@@ -75,7 +75,7 @@ import {
   validateAndDetectMigrations,
   type ValidateAndDetectResult,
 } from "./migration-validation";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
+import type { MigrationRunKind, PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { ApplyPhase } from "../types";
 import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan";
@@ -369,7 +369,7 @@ async function clearRolledBackRecord(
   client: OperatorClient,
   workspaceId: string,
   migration: PendingMigration,
-  main: boolean,
+  kind: MigrationRunKind,
 ): Promise<RecordState> {
   const { namespace } = migration;
   try {
@@ -382,7 +382,7 @@ async function clearRolledBackRecord(
       `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migration.number)}: ` +
         `${error instanceof Error ? error.message : String(error)}. ` +
         "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; " +
-        (main
+        (kind === "main"
           ? "settle it with 'tailor tailordb migration resolve'."
           : "deploy again to resume it."),
     );
@@ -1248,15 +1248,16 @@ async function rollbackMigration(
   const { client, migrationContext, phaseSettings } = flow;
   const { migration, rollsBackOnFailure, runsMain, inProgress, gqlPermissionUndo } = attempt;
   const { workspaceId } = migrationContext;
+  const kind = runsMain ? "main" : "steps";
   const clearsRecord = (rollsBackOnFailure || runsMain) && recordMayExist;
   const record = clearsRecord
-    ? await clearRolledBackRecord(client, workspaceId, migration, runsMain)
+    ? await clearRolledBackRecord(client, workspaceId, migration, kind)
     : "cleared";
   if (record !== "cleared") {
     runLog.partial.set(migration.namespace, migration);
     return rollbackSkippedError(migration, error, phaseSettings.restricted, {
       confirmed: record === "in-progress",
-      main: runsMain,
+      kind,
     });
   }
   const attemptedTables = new Set(attempt.attemptedTables);

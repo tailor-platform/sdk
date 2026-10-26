@@ -45,7 +45,7 @@ function parseInProgress(labels: Record<string, string>): {
     inProgress: {
       number: parsed.number,
       ...(executionId === undefined ? {} : { executionId }),
-      ...(parsed.main ? { main: true } : {}),
+      kind: parsed.kind,
     },
     inProgressInvalid: false,
   };
@@ -164,11 +164,12 @@ export function assertNoMigrationInProgress(state: RemoteMigrationState, namespa
     code: "MIGRATION_IN_PROGRESS",
     message: !state.inProgress
       ? `Namespace "${namespace}" records a partially applied migration that cannot be read.`
-      : state.inProgress.main
+      : state.inProgress.kind === "main"
         ? `The outcome of the run of migration ${migrationLabel} that an earlier deploy started is not settled.`
         : `Migration ${migrationLabel} is partially applied by an earlier deploy.`,
-    suggestion: state.inProgress?.main
-      ? describeMainRunSettlement(namespace)
-      : "Finish the migration with a deploy first; steps that already completed do not run again.",
+    suggestion:
+      state.inProgress?.kind === "main"
+        ? describeMainRunSettlement(namespace)
+        : "Finish the migration with a deploy first; steps that already completed do not run again.",
   });
 }

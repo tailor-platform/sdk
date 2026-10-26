@@ -39,6 +39,7 @@ describe("fetchRemoteMigrationState", () => {
     expect(state.inProgress).toEqual({
       number: 3,
       executionId: "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60",
+      kind: "steps",
     });
     expect(state.inProgressInvalid).toBe(false);
   });
@@ -48,7 +49,7 @@ describe("fetchRemoteMigrationState", () => {
       clientWithLabels({ "sdk-migration": "m0002", "sdk-migration-in-progress": "m0003" }),
       "trn",
     );
-    expect(state.inProgress).toEqual({ number: 3 });
+    expect(state.inProgress).toEqual({ number: 3, kind: "steps" });
   });
 
   test("reads an in-progress record of a `main` run", async () => {
@@ -63,7 +64,7 @@ describe("fetchRemoteMigrationState", () => {
     expect(state.inProgress).toEqual({
       number: 3,
       executionId: "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60",
-      main: true,
+      kind: "main",
     });
   });
 
@@ -114,7 +115,9 @@ describe("assertNoMigrationInProgress", () => {
   });
 
   test("asks to finish a migration whose steps partly committed with a deploy", () => {
-    expect(() => assertNoMigrationInProgress(state({ number: 3 }), "tailordb")).toThrow(
+    expect(() =>
+      assertNoMigrationInProgress(state({ number: 3, kind: "steps" }), "tailordb"),
+    ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_IN_PROGRESS",
         suggestion: expect.stringContaining("Finish the migration with a deploy"),
@@ -123,7 +126,9 @@ describe("assertNoMigrationInProgress", () => {
   });
 
   test("asks to settle a `main` run whose outcome is not settled with migration resolve", () => {
-    expect(() => assertNoMigrationInProgress(state({ number: 3, main: true }), "tailordb")).toThrow(
+    expect(() =>
+      assertNoMigrationInProgress(state({ number: 3, kind: "main" }), "tailordb"),
+    ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_IN_PROGRESS",
         message: expect.stringContaining("tailordb/0003"),
@@ -141,7 +146,7 @@ describe("isStaleMigrationInProgress", () => {
     number,
     historyId: null,
     historyIdInvalid: false,
-    inProgress: inProgress === null ? null : { number: inProgress },
+    inProgress: inProgress === null ? null : { number: inProgress, kind: "steps" },
     inProgressInvalid: false,
     maintenanceModeCheckpoint: null,
   });
