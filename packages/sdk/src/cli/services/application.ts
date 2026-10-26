@@ -60,6 +60,7 @@ import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-poin
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
+import type { SdkBuilderAnnotationCache } from "#/cli/shared/sdk-builder-pure-plugin";
 import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
@@ -103,6 +104,7 @@ export type Application = {
 interface ReusableBuildState {
   readonly startContext: StartContext;
   readonly tsconfigCache: TsconfigLookupCache;
+  readonly sdkBuilderAnnotationCache: SdkBuilderAnnotationCache;
   readonly inlineSourcemap: boolean;
   readonly inlineSourcemapDependencySources: boolean | string[];
   readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
@@ -807,6 +809,7 @@ export async function loadApplication(
   // Shared across the start context and every bundle below so a project with many
   // resolvers/executors/etc. reads and parses each ancestor tsconfig once instead of once per item.
   const tsconfigCache = createTsconfigLookupCache();
+  const sdkBuilderAnnotationCache: SdkBuilderAnnotationCache = new Map();
 
   // 8. Build start context for workflow/job start transformation
   const startContext = await buildStartContext(
@@ -849,6 +852,7 @@ export async function loadApplication(
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
     });
@@ -871,6 +875,7 @@ export async function loadApplication(
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
     });
@@ -893,6 +898,7 @@ export async function loadApplication(
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
     });
@@ -934,6 +940,7 @@ export async function loadApplication(
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       dateDefault,
     });
   }
@@ -984,6 +991,7 @@ export async function loadApplication(
     reusableBuildState: {
       startContext,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
       inlineSourcemapProjectSources,
@@ -1022,6 +1030,7 @@ async function reloadEnvDependentBundles(params: {
   const {
     startContext,
     tsconfigCache,
+    sdkBuilderAnnotationCache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
     inlineSourcemapProjectSources,
@@ -1056,6 +1065,7 @@ async function reloadEnvDependentBundles(params: {
       bundleLogLevel,
       bundleTreeshake: buildOptionsOf(config).treeshake,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       previousUsedJobs: previous.workflowBuildResult,
       allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
       dateDefault: effectiveDateDefault(config),
@@ -1079,6 +1089,7 @@ async function reloadEnvDependentBundles(params: {
       bundleTreeshake: buildOptionsOf(config).treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       dateDefault: effectiveDateDefault(config),
     });
   }
