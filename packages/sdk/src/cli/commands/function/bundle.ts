@@ -29,6 +29,7 @@ import {
   INVOKER_EXPR,
   resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
+import { createSdkBuilderPurePlugin } from "#/cli/shared/sdk-builder-pure-plugin";
 import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
@@ -135,6 +136,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
           : { date: true, temporal: true },
         dateDefault,
       ),
+      createSdkBuilderPurePlugin(),
     ],
     input: entryPath,
     write: false,

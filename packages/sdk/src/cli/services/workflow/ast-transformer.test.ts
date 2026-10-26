@@ -1240,6 +1240,49 @@ export async function run(syncWorkflow: { start(input: unknown): Promise<string>
       );
     });
 
+    test.each([
+      [
+        "a switch case",
+        `export function run(kind: string) {
+  switch (kind) {
+    case "local":
+      const syncWorkflow = { start: (input: unknown) => input };
+      return syncWorkflow.start({ id: 1 });
+  }
+}`,
+      ],
+      [
+        "a named class expression",
+        `export const Runner = class syncWorkflow {
+  static start(input: unknown) { return input; }
+  static run() { return syncWorkflow.start({ id: 1 }); }
+};`,
+      ],
+      [
+        "a namespace",
+        `export namespace Local {
+  const syncWorkflow = { start: (input: unknown) => input };
+  export const run = () => syncWorkflow.start({ id: 1 });
+}`,
+      ],
+      [
+        "a static block",
+        `export class Runner {
+  static result: unknown;
+  static {
+    const syncWorkflow = { start: (input: unknown) => input };
+    Runner.result = syncWorkflow.start({ id: 1 });
+  }
+}`,
+      ],
+    ])("does not throw when the undetectable import is shadowed in %s", (_, body) => {
+      const source = `import { syncWorkflow } from "../workflow/sync";\n\n${body}\n`;
+
+      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+        "syncWorkflow.start({ id: 1 })",
+      );
+    });
+
     test("does not throw when the namespace import is shadowed by a local binding", () => {
       const source = `
 import * as sync from "../workflow/sync";
