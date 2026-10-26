@@ -24,10 +24,10 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import {
   migrationResolveArgs,
-  type MigrationInProgress,
   type MigrationResolution,
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
+import { type MigrationInProgress } from "#/cli/commands/tailordb/migrate/types";
 import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
 import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";

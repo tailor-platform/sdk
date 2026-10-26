@@ -6,11 +6,9 @@ import {
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
   describeMainRunSettlement,
-  fetchRemoteMigrationState,
   formatMigrationResolveHint,
   isStaleMigrationInProgress,
   migrationResolveArgs,
-  type MigrationInProgress,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
@@ -30,7 +28,6 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
-import { resourceTrn } from "../label";
 import { detectPendingMigrations } from "./migration";
 import {
   migrationWorkflowResourceName,
@@ -40,6 +37,7 @@ import {
 } from "./migration-workflow";
 import type {
   MigrationCheckpointRepair,
+  MigrationInProgress,
   PendingMigration,
 } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -94,20 +92,22 @@ const RUN_STATUS_DESCRIPTIONS: Record<MigrationRunStatus, string> = {
 };
 
 /**
- * Build the refusal of a deploy while a `main` run an earlier deploy recorded is not settled,
- * naming the way to settle it that fits how the run stands.
+ * Refuse to deploy while a namespace records a `main` run that is not settled, naming the way to
+ * settle it that fits how the run stands. Run before reporting the schema the run left as drift,
+ * whose remedies the record refuses.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespace - TailorDB namespace
- * @param record - The record of the run
- * @returns Error refusing the deploy
+ * @param state - Checkpoint and in-progress record of the namespace
  */
-async function unsettledMainRunError(
+async function assertMainRunSettled(
   client: OperatorClient,
   workspaceId: string,
   namespace: string,
-  record: MigrationInProgress,
-): Promise<Error> {
+  state: Pick<RemoteMigrationState, "number" | "inProgress">,
+): Promise<void> {
+  const record = state.inProgress;
+  if (!record?.main || isStaleMigrationInProgress(state)) return;
   const runStatus = await readMigrationRunStatus(client, workspaceId, namespace, record);
   const migrationLabel = `${namespace}/${formatMigrationNumber(record.number)}`;
   const workflowName = migrationWorkflowResourceName(namespace, record.number);
@@ -121,7 +121,7 @@ async function unsettledMainRunError(
         : runStatus === "running"
           ? `Wait until ${executionsHint} shows that the run finished, then deploy again to see how to settle it.`
           : `Check the run with ${executionsHint}. ${describeMainRunSettlement(namespace)}`;
-  return CLIError({
+  throw CLIError({
     code: "MIGRATION_OUTCOME_UNSETTLED",
     message: `An earlier deploy did not settle the run of migration ${migrationLabel}: ${RUN_STATUS_DESCRIPTIONS[runStatus]}.`,
     suggestion,
@@ -136,29 +136,6 @@ async function unsettledMainRunError(
       runStatus,
     },
   });
-}
-
-/**
- * Refuse to deploy while a namespace records a `main` run that is not settled. Run before a
- * check that would report the schema the run left as drift, whose remedies the record refuses.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param namespaces - Namespaces to check
- */
-async function assertMainRunsSettled(
-  client: OperatorClient,
-  workspaceId: string,
-  namespaces: readonly string[],
-): Promise<void> {
-  for (const namespace of namespaces) {
-    const state = await fetchRemoteMigrationState(
-      client,
-      resourceTrn(workspaceId, "tailordb", namespace),
-    );
-    if (state.inProgress?.main && !isStaleMigrationInProgress(state)) {
-      throw await unsettledMainRunError(client, workspaceId, namespace, state.inProgress);
-    }
-  }
 }
 
 /**
@@ -207,9 +184,7 @@ async function validateMigrationsInProgress(
       result.staleInProgress.push({ namespace, migrationNumber: inProgress.number });
       continue;
     }
-    if (inProgress.main) {
-      throw await unsettledMainRunError(client, workspaceId, namespace, inProgress);
-    }
+    await assertMainRunSettled(client, workspaceId, namespace, state);
     const next = pendingMigrations.find((migration) => migration.namespace === namespace);
     if (next?.number !== inProgress.number) {
       throw CLIError({
@@ -306,7 +281,11 @@ export async function validateAndDetectMigrations(
           : [],
       );
       repairedInProgress = remoteVerificationResults
-        .filter((result) => result.checkpointRepair && result.migrationInProgress)
+        .filter(
+          (result) =>
+            result.checkpointRepair &&
+            (result.migrationInProgress || result.migrationInProgressInvalid),
+        )
         .map((result) => result.namespace);
       const missingCheckpointResults = remoteVerificationResults.filter(
         (result) => result.checkpointMissingLocal,
@@ -328,13 +307,12 @@ export async function validateAndDetectMigrations(
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
 
       if (hasRemoteDrift) {
-        await assertMainRunsSettled(
-          client,
-          workspaceId,
-          remoteVerificationResults
-            .filter((result) => result.migrationInProgress)
-            .map((result) => result.namespace),
-        );
+        for (const result of remoteVerificationResults) {
+          await assertMainRunSettled(client, workspaceId, result.namespace, {
+            number: result.remoteMigrationNumber,
+            inProgress: result.migrationInProgress ?? null,
+          });
+        }
         logger.error("Remote schema drift detected:");
         logger.log(formatRemoteVerificationResults(remoteVerificationResults));
         logger.newline();

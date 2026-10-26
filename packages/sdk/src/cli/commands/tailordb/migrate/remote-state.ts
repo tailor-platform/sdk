@@ -11,19 +11,8 @@ import {
   parseInProgressLabel,
   parseMigrationHistoryId,
   parseMigrationLabelNumber,
+  type MigrationInProgress,
 } from "./types";
-
-/** A migration an earlier deploy left partially applied, or whose `main` run it left unsettled. */
-export interface MigrationInProgress {
-  number: number;
-  /** The run to resume or settle; absent when the deploy stopped before recording it. */
-  executionId?: string;
-  /**
-   * Set when the record is of a run of the whole script as one job, as a `main` script runs.
-   * A deploy does not resume such a run; `migration resolve` settles it.
-   */
-  main?: true;
-}
 
 export interface RemoteMigrationState {
   metadataExists: boolean;
@@ -108,10 +97,12 @@ export async function fetchRemoteMigrationState(
 /**
  * Whether the in-progress record names a migration the checkpoint already
  * covers, so it no longer describes the namespace.
- * @param state - Remote migration state of the namespace
+ * @param state - Checkpoint and in-progress record of the namespace
  * @returns True for a leftover record
  */
-export function isStaleMigrationInProgress(state: RemoteMigrationState): boolean {
+export function isStaleMigrationInProgress(
+  state: Pick<RemoteMigrationState, "number" | "inProgress">,
+): boolean {
   return (
     state.inProgress !== null && state.number !== null && state.inProgress.number <= state.number
   );

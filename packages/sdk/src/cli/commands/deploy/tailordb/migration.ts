@@ -27,7 +27,6 @@ import { formatMigrationScriptHint } from "#/cli/commands/tailordb/migrate/hints
 import {
   fetchRemoteMigrationState,
   formatMigrationResolveHint,
-  type MigrationInProgress,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
@@ -44,6 +43,7 @@ import {
   formatMigrationNumber,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
+  type MigrationInProgress,
   type PendingMigration,
   executionIdToLabel,
   inProgressLabel,

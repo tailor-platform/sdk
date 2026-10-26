@@ -4,10 +4,10 @@ import {
   assertNoMigrationInProgress,
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
-  type MigrationInProgress,
   type RemoteMigrationState,
 } from "./remote-state";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { MigrationInProgress } from "./types";
 
 function clientWithLabels(labels: Record<string, string> | undefined): OperatorClient {
   return {

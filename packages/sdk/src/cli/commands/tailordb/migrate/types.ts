@@ -85,6 +85,18 @@ export interface PendingMigration {
   diff: MigrationDiff;
 }
 
+/** A migration an earlier deploy left partially applied, or whose `main` run it left unsettled. */
+export interface MigrationInProgress {
+  number: number;
+  /** The run to resume or settle; absent when the deploy stopped before recording it. */
+  executionId?: string;
+  /**
+   * Set when the record is of a run of the whole script as one job, as a `main` script runs.
+   * A deploy does not resume such a run; `migration resolve` settles it.
+   */
+  main?: true;
+}
+
 // ============================================================================
 // Label Helper Functions
 // ============================================================================
@@ -287,8 +299,10 @@ export interface RemoteSchemaVerificationResult {
   rebaselinePending?: RebaselinePendingInfo;
   /** Safe checkpoint reset offered after the remote schema matched the local baseline */
   checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
-  /** Set when the namespace records a migration left in progress */
-  migrationInProgress?: boolean;
+  /** Migration the namespace records as left in progress */
+  migrationInProgress?: MigrationInProgress;
+  /** Set when the namespace records a migration left in progress that cannot be read */
+  migrationInProgressInvalid?: true;
   /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

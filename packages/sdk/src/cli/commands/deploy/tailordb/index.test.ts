@@ -2573,6 +2573,28 @@ describe("applyTailorDB migration label reconciliation", () => {
       ).rejects.toMatchObject({ code: "MIGRATION_OUTCOME_UNSETTLED" });
       expect(stderr.output).not.toContain("Remote schema drift detected");
     });
+
+    test("refuses from the same read of the record that found the drift", async () => {
+      using _stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType);
+      writeMainMigration();
+      const planResult = planWithDeployDerivedSettings(userType);
+      const client = schemaVerificationClient(unchangedRemoteSettings());
+      vi.mocked(client.getMetadata)
+        .mockResolvedValueOnce({
+          metadata: { labels: { "sdk-migration": "m0000", ...unsettledRecord } },
+        } as never)
+        .mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0000" } } } as never);
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [],
+        nextPageToken: "",
+      } as never);
+
+      await expect(
+        runValidation(withRun(client, WorkflowExecution_Status.SUCCESS), planResult),
+      ).rejects.toMatchObject({ code: "MIGRATION_OUTCOME_UNSETTLED" });
+    });
   });
 
   test("revalidates local migration history immediately before apply", async () => {
