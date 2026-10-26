@@ -328,10 +328,10 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     typeRenameFlags.map(({ spec }) => spec.previousTableName),
     typeDropFlags.map(({ spec }) => spec.tableName),
   );
-  if (options.namespace !== undefined && !options.dataOnly) {
+  if (options.namespace !== undefined && !options.dataOnly && !options.init) {
     throw CLIError({
       code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
-      message: "--namespace can only be used together with --data-only.",
+      message: "--namespace can only be used together with --data-only or --init.",
       command: "tailordb migration generate",
     });
   }
@@ -349,17 +349,18 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     });
   }
 
-  const dataOnlyTargetNamespace = options.dataOnly
-    ? resolveTargetNamespace(namespacesWithMigrations, options.namespace)
-    : undefined;
+  const targetNamespace =
+    options.dataOnly || (options.init && options.namespace !== undefined)
+      ? resolveTargetNamespace(namespacesWithMigrations, options.namespace)
+      : undefined;
   const namespacesToLoad =
-    dataOnlyTargetNamespace === undefined
+    targetNamespace === undefined
       ? namespacesWithMigrations
-      : namespacesWithMigrations.filter(({ namespace }) => namespace === dataOnlyTargetNamespace);
+      : namespacesWithMigrations.filter(({ namespace }) => namespace === targetNamespace);
 
   // Handle --init option: delete existing migrations directory
   const clearedNamespaces = options.init
-    ? await handleInitOption(namespacesWithMigrations, options.yes)
+    ? await handleInitOption(namespacesToLoad, options.yes)
     : [];
 
   // Initialize plugin manager if plugins are provided
@@ -405,10 +406,10 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     });
   }
 
-  if (dataOnlyTargetNamespace !== undefined) {
+  if (options.dataOnly && targetNamespace !== undefined) {
     const migration = await generateDataOnlyMigration(
       generations,
-      dataOnlyTargetNamespace,
+      targetNamespace,
       options,
       temporal,
       dateDefault,
@@ -1481,7 +1482,8 @@ export const generateCommand = defineAppCommand({
       description: "Optional description for the migration",
     }),
     init: arg(z.boolean().default(false), {
-      description: "Delete existing migrations and start fresh",
+      description:
+        "Delete existing migrations and start fresh (all namespaces with migrations configured, or only the one given by --namespace)",
     }),
     "data-only": arg(z.boolean().default(false), {
       description:
@@ -1489,7 +1491,7 @@ export const generateCommand = defineAppCommand({
     }),
     namespace: arg(z.string().optional(), {
       description:
-        "Target TailorDB namespace for --data-only (required if multiple namespaces exist)",
+        "Target TailorDB namespace for --data-only (required if multiple namespaces exist), or the only namespace --init resets",
     }),
     rename: arg(z.array(z.string()).optional(), {
       description:

@@ -1299,6 +1299,75 @@ describe("tailordb migration generate --data-only", () => {
     expect(fs.existsSync(path.join(unrelated.migrationsDir, "0001"))).toBe(false);
   });
 
+  test("resets only the target namespace with --init --namespace", async () => {
+    const kept = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const reset = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    fs.writeFileSync(path.join(reset.migrationsDir, "0000", "stale.txt"), "");
+    const keptSchema = fs.readFileSync(
+      path.join(kept.migrationsDir, "0000", "schema.json"),
+      "utf8",
+    );
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "analyticsdb",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(reset.migrationsDir, "0000", "stale.txt"))).toBe(false);
+    expect(fs.existsSync(path.join(reset.migrationsDir, "0000", "schema.json"))).toBe(true);
+    expect(fs.readFileSync(path.join(kept.migrationsDir, "0000", "schema.json"), "utf8")).toBe(
+      keptSchema,
+    );
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      clearedNamespaces: ["analyticsdb"],
+      migrations: [expect.objectContaining({ namespace: "analyticsdb" })],
+    });
+  });
+
+  test("rejects --init --namespace for an unknown namespace without deleting anything", async () => {
+    const kept = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--init", "--yes", "--namespace", "missing"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "TAILORDB_NAMESPACE_NOT_FOUND" });
+    expect(fs.existsSync(path.join(kept.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("lists only the target namespace in the --init confirmation", async () => {
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+    const kept = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const reset = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    using stderr = captureStderr();
+
+    const result = await runCommand(generateCommand, ["--init", "--namespace", "analyticsdb"]);
+
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_CANCELLED" });
+    expect(stderr.output).toContain(reset.migrationsDir);
+    expect(stderr.output).not.toContain(kept.migrationsDir);
+  });
+
+  test("rejects --init --namespace combined with --data-only", async () => {
+    addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--data-only",
+      "--yes",
+      "--namespace",
+      "tailordb",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_OPTIONS_CONFLICT" });
+  });
+
   test("rejects --namespace without --data-only", async () => {
     addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 
@@ -1306,7 +1375,7 @@ describe("tailordb migration generate --data-only", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain(
-      "--namespace can only be used together with --data-only",
+      "--namespace can only be used together with --data-only or --init",
     );
   });
 });
