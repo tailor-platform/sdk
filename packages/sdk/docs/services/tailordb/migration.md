@@ -64,7 +64,7 @@ If your local tables and remote schema have **diverged**, reconcile them before 
 
 ### Resetting
 
-`tailor tailordb migration generate --init` deletes the existing `migrations/` directory and creates `0000` from the current local tables. Use it only before the project is deployed. For a deployed migration history, use [`migration rebaseline`](#re-baselining-a-deployed-migration-history), which verifies the history and connected workspace before replacing any files.
+`tailor tailordb migration generate --init` deletes the existing `migrations/` directory of every namespace with migrations configured and creates `0000` from the current local tables. Add `--namespace <name>` to reset only that namespace and leave the others untouched. Use it only before the project is deployed. For a deployed migration history, use [`migration rebaseline`](#re-baselining-a-deployed-migration-history), which verifies the history and connected workspace before replacing any files.
 
 ## Migration Workflow
 

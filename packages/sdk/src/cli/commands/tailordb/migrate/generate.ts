@@ -98,7 +98,7 @@ export interface GenerateOptions {
   init?: boolean;
   /** Create a migration with no schema changes that exists to run a migration script. */
   dataOnly?: boolean;
-  /** Namespace the `--data-only` migration targets. */
+  /** Namespace targeted by `--data-only`, or the only namespace `--init` resets. */
   namespace?: string;
   /**
    * `--rename Table.oldField:newField` / `--rename OldTable:NewTable` /
@@ -128,6 +128,29 @@ export function getUnsupportedMigrationHintLines(): string[] {
     "               migrate data from the temporary field, then remove it",
     "  Important: Reusing the name while stored old values remain can make subsequent reads fail",
   ];
+}
+
+function assertNoNestedNamespaceMigrations(
+  target: NamespaceWithMigrations,
+  all: NamespaceWithMigrations[],
+): void {
+  const realPath = (dir: string) => (fs.existsSync(dir) ? fs.realpathSync(dir) : dir);
+  const isInside = (parent: string, child: string) =>
+    path.relative(parent, child).split("/")[0] !== "..";
+  const targetDir = realPath(target.migrationsDir);
+  const nested = all.filter(
+    ({ namespace, migrationsDir }) =>
+      namespace !== target.namespace &&
+      (isInside(target.migrationsDir, migrationsDir) ||
+        isInside(targetDir, realPath(migrationsDir))),
+  );
+  if (nested.length === 0) return;
+  throw CLIError({
+    code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
+    message: `--init --namespace ${target.namespace} would also delete the migrations of ${nested.map(({ namespace }) => namespace).join(", ")}, whose directories are inside ${target.migrationsDir}.`,
+    suggestion: "Run --init without --namespace, or move the nested migration directories out.",
+    command: "tailordb migration generate",
+  });
 }
 
 /**
@@ -328,10 +351,10 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     typeRenameFlags.map(({ spec }) => spec.previousTableName),
     typeDropFlags.map(({ spec }) => spec.tableName),
   );
-  if (options.namespace !== undefined && !options.dataOnly) {
+  if (options.namespace !== undefined && !options.dataOnly && !options.init) {
     throw CLIError({
       code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
-      message: "--namespace can only be used together with --data-only.",
+      message: "--namespace can only be used together with --data-only or --init.",
       command: "tailordb migration generate",
     });
   }
@@ -349,17 +372,22 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     });
   }
 
-  const dataOnlyTargetNamespace = options.dataOnly
-    ? resolveTargetNamespace(namespacesWithMigrations, options.namespace)
-    : undefined;
+  const targetNamespace =
+    options.dataOnly || options.namespace !== undefined
+      ? resolveTargetNamespace(namespacesWithMigrations, options.namespace)
+      : undefined;
   const namespacesToLoad =
-    dataOnlyTargetNamespace === undefined
+    targetNamespace === undefined
       ? namespacesWithMigrations
-      : namespacesWithMigrations.filter(({ namespace }) => namespace === dataOnlyTargetNamespace);
+      : namespacesWithMigrations.filter(({ namespace }) => namespace === targetNamespace);
+  const initTarget = options.init ? namespacesToLoad[0] : undefined;
+  if (initTarget && targetNamespace !== undefined) {
+    assertNoNestedNamespaceMigrations(initTarget, namespacesWithMigrations);
+  }
 
   // Handle --init option: delete existing migrations directory
   const clearedNamespaces = options.init
-    ? await handleInitOption(namespacesWithMigrations, options.yes)
+    ? await handleInitOption(namespacesToLoad, options.yes)
     : [];
 
   // Initialize plugin manager if plugins are provided
@@ -373,7 +401,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   const application = defineApplication({ config, pluginManager });
 
   // Schema generation loads every namespace before writing so --rename flags
-  // can be validated globally; data-only generation loads only its target.
+  // can be validated globally; --data-only and --init --namespace load only their target.
   const generations: NamespaceGeneration[] = [];
   for (const { namespace, migrationsDir } of namespacesToLoad) {
     logger.info(`Processing namespace: ${styles.bold(namespace)}`);
@@ -405,10 +433,10 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     });
   }
 
-  if (dataOnlyTargetNamespace !== undefined) {
+  if (options.dataOnly && targetNamespace !== undefined) {
     const migration = await generateDataOnlyMigration(
       generations,
-      dataOnlyTargetNamespace,
+      targetNamespace,
       options,
       temporal,
       dateDefault,
@@ -1518,7 +1546,8 @@ export const generateCommand = defineAppCommand({
       description: "Optional description for the migration",
     }),
     init: arg(z.boolean().default(false), {
-      description: "Delete existing migrations and start fresh",
+      description:
+        "Delete existing migrations and start fresh (all namespaces with migrations configured, or only the one given by --namespace)",
     }),
     "data-only": arg(z.boolean().default(false), {
       description:
@@ -1526,7 +1555,7 @@ export const generateCommand = defineAppCommand({
     }),
     namespace: arg(z.string().optional(), {
       description:
-        "Target TailorDB namespace for --data-only (required if multiple namespaces exist)",
+        "Target TailorDB namespace for --data-only (required if multiple namespaces exist), or the only namespace --init resets",
     }),
     rename: arg(z.array(z.string()).optional(), {
       description:
