@@ -51,6 +51,15 @@ export function getNamespacesWithMigrations(
     if (!hasMigrationConfig(dbConfig)) continue;
 
     const migrationsDir = path.resolve(configDir, dbConfig.migration.directory);
+    const shared = result.find((entry) => entry.migrationsDir === migrationsDir);
+    if (shared) {
+      throw CLIError({
+        code: "MIGRATION_DIRECTORY_CONFLICT",
+        message: `TailorDB namespaces "${shared.namespace}" and "${namespace}" share the migration directory ${migrationsDir}`,
+        suggestion: "Set a different `migration.directory` for each namespace in tailor.config.ts.",
+        context: { directory: migrationsDir, namespaces: [shared.namespace, namespace] },
+      });
+    }
     result.push({ namespace, migrationsDir });
   }
 

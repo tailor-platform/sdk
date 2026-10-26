@@ -222,6 +222,21 @@ describe("tailordb migration generate field rename preflight", () => {
     expect(fs.existsSync(baselinePath)).toBe(true);
   });
 
+  test("fails before writing when two namespaces share one migration directory", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    state.namespaces.push({
+      namespace: "analyticsdb",
+      migrationsDir: entry.migrationsDir,
+      localTypes: { Account: parsedType("Account") },
+    });
+
+    const result = await runCommand(generateCommand, ["--yes", "--init"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_DIRECTORY_CONFLICT" });
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
   test("resolves a rename and a drop across namespaces in one run", async () => {
     const renamed = addNamespace(tmpDir, "tailordb", "User", renamedType("User", "displayName"));
     const accountWithoutName = parsedType("Account");
