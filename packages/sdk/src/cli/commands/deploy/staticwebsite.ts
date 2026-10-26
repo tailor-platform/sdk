@@ -23,16 +23,10 @@ import {
   isOwnedByApp,
   type MetadataLabelWrite,
   resourceTrn,
-  sdkNameLabelKey,
   writeMetadataLabels,
 } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type {
   CustomDomainTransfer,
   StaticWebsite as ProtoStaticWebsite,
@@ -298,9 +292,7 @@ export async function planStaticWebsite(context: PlanContext) {
     CancelCustomDomainTransferEntry
   >("CustomDomainTransfers");
   const customDomainNotes: CustomDomainNote[] = [];
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(application.name, application.id);
 
   const existingWebsites = await fetchExistingResourcesWithLabels({
     client,
@@ -340,16 +332,10 @@ export async function planStaticWebsite(context: PlanContext) {
     };
 
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName: application.name,
-        appId: application.id,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "staticwebsite",
         resourceLabel: "StaticWebsite",
         resourceName: name,
-        conflicts,
-        unmanaged,
       });
 
       const configUnchanged = owned && areStaticWebsitesEqual(existing.resource, desired);
@@ -380,15 +366,7 @@ export async function planStaticWebsite(context: PlanContext) {
   }
   Object.entries(existingWebsites).forEach(([name]) => {
     const entry = existingWebsites[name];
-    const label = entry?.label;
-    const owned = trackRemainingResourceOwner({
-      labels: entry?.allLabels,
-      ownerLabel: label,
-      appName: application.name,
-      appId: application.id,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(entry?.allLabels)) {
       changeSet.deletes.push({
         name,
         request: {
@@ -545,16 +523,10 @@ export async function planStaticWebsite(context: PlanContext) {
         continue;
       }
 
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.allLabels?.[sdkNameLabelKey],
-        appName: application.name,
-        appId: application.id,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "staticwebsite.custom_domain",
         resourceLabel: "StaticWebsite custom domain",
         resourceName: domain,
-        conflicts,
-        unmanaged,
       });
       if (owned) {
         customDomainChangeSet.unchanged.push({ name: domain });
@@ -690,8 +662,6 @@ export async function planStaticWebsite(context: PlanContext) {
     customDomainTransferChangeSet,
     customDomainNotes,
     customDomainLiveOffers: liveOffersByDomain,
-    conflicts,
-    unmanaged,
-    resourceOwners,
+    ...ownership.result,
   };
 }

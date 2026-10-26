@@ -1,11 +1,19 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Linter } from "eslint";
-import { describe, expect, test } from "vitest";
+import { describe, expect, onTestFinished, test } from "vitest";
 import plugin from "./index.js";
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
+
+// Invoke oxlint's JS bin script via `node` directly rather than the
+// platform-specific `.bin/` shim, which is `.cmd`/`.ps1` on Windows.
+const oxlintBinScript = fileURLToPath(
+  new URL("bin/oxlint", import.meta.resolve("oxlint/package.json")),
+);
 
 describe("plugin", () => {
   test("exports every rule in the recommended ESLint flat config", () => {
@@ -55,6 +63,40 @@ describe("plugin", () => {
         }),
       ]),
     );
+  });
+
+  test("runs the built plugin through an Oxlint jsPlugins config", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tailor-sdk-lint-"));
+    onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
+    writeFileSync(
+      join(dir, "adapter.ts"),
+      'import { createHttpAdapter } from "@tailor-platform/sdk";\nexport default createHttpAdapter({ pathPattern: "/api/users/*" });',
+    );
+    writeFileSync(
+      join(dir, ".oxlintrc.json"),
+      JSON.stringify({
+        jsPlugins: [
+          { name: "tailor-sdk", specifier: new URL("../dist/index.js", import.meta.url).href },
+        ],
+        rules: plugin.configs.recommended.rules,
+      }),
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [oxlintBinScript, "--config", ".oxlintrc.json", "--format=json", "adapter.ts"],
+      { cwd: dir, encoding: "utf8" },
+    );
+
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
+    const { diagnostics } = JSON.parse(result.stdout) as {
+      diagnostics: { code: string; severity: string }[];
+    };
+    expect(
+      diagnostics
+        .filter(({ code }) => code.startsWith("tailor-sdk("))
+        .map(({ code, severity }) => ({ code, severity })),
+    ).toEqual([{ code: "tailor-sdk(no-api-prefix-in-path-pattern)", severity: "warning" }]);
   });
 
   test("keeps scaffolded Oxlint configs aligned with required rules", () => {

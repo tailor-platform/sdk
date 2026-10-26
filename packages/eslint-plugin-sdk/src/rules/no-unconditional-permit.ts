@@ -140,13 +140,13 @@ const rule = {
   create(context) {
     const imports = configureImportTracker(context);
     const calls: AstCallExpression[] = [];
-    const identifiers: IdentifierNode[] = [];
+    const identifiers = new Set<IdentifierNode>();
     const members: MemberExpressionNode[] = [];
 
     return {
       ImportDeclaration: (node) => imports.track(node),
       CallExpression: (node) => calls.push(node),
-      Identifier: (node) => identifiers.push(node),
+      Identifier: (node) => identifiers.add(node),
       MemberExpression: (node) => {
         if (UNSAFE_CONSTANTS.has(memberName(node) ?? "")) members.push(node);
       },

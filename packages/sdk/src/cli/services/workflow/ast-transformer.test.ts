@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -10,6 +9,7 @@ import {
   type StartModuleBindings,
   type StartTarget,
 } from "#/cli/shared/start-context";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import {
@@ -1105,7 +1105,7 @@ const result = await myWorkflow.start({ id: 1 });
     });
 
     function createProject(paths: Record<string, string[]>) {
-      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "start-import-test-")));
+      tmpDir = makeTempDir("start-import-test-");
       fs.writeFileSync(
         path.join(tmpDir, "tsconfig.json"),
         JSON.stringify({ compilerOptions: { paths } }),
@@ -1234,6 +1234,49 @@ export async function run(syncWorkflow: { start(input: unknown): Promise<string>
   return await syncWorkflow.start({ id: 1 });
 }
 `;
+
+      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+        "syncWorkflow.start({ id: 1 })",
+      );
+    });
+
+    test.each([
+      [
+        "a switch case",
+        `export function run(kind: string) {
+  switch (kind) {
+    case "local":
+      const syncWorkflow = { start: (input: unknown) => input };
+      return syncWorkflow.start({ id: 1 });
+  }
+}`,
+      ],
+      [
+        "a named class expression",
+        `export const Runner = class syncWorkflow {
+  static start(input: unknown) { return input; }
+  static run() { return syncWorkflow.start({ id: 1 }); }
+};`,
+      ],
+      [
+        "a namespace",
+        `export namespace Local {
+  const syncWorkflow = { start: (input: unknown) => input };
+  export const run = () => syncWorkflow.start({ id: 1 });
+}`,
+      ],
+      [
+        "a static block",
+        `export class Runner {
+  static result: unknown;
+  static {
+    const syncWorkflow = { start: (input: unknown) => input };
+    Runner.result = syncWorkflow.start({ id: 1 });
+  }
+}`,
+      ],
+    ])("does not throw when the undetectable import is shadowed in %s", (_, body) => {
+      const source = `import { syncWorkflow } from "../workflow/sync";\n\n${body}\n`;
 
       expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
         "syncWorkflow.start({ id: 1 })",

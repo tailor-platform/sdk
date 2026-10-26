@@ -1622,7 +1622,7 @@ describe("migration", () => {
         try {
           await executeMigrations(createMockContext(), [createMockMigration()]);
         } finally {
-          logger.verbose = false;
+          logger.verbose = undefined;
         }
 
         const statusLines = vi
@@ -1653,7 +1653,7 @@ describe("migration", () => {
             createMockMigration({ number: 2 }),
           ]);
         } finally {
-          logger.verbose = false;
+          logger.verbose = undefined;
         }
 
         const unsplit = vi

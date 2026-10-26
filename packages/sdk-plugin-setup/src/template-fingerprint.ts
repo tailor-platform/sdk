@@ -114,9 +114,13 @@ function renderAll(): RenderedTemplate[] {
       ...full,
       branch: "main",
       region: "us-west",
-      requirePreviewLabel: true,
+      require: "label",
       seed: { datasets: ["preview"] },
     }),
+  );
+  add(
+    "preview/require-ready",
+    renderPreviewWorkflow({ ...full, branch: "main", region: "us-west", require: "ready" }),
   );
   const apps = [
     { dir: "apps/erp/backend", seedValidate: true, migrationDriftCheck: true },

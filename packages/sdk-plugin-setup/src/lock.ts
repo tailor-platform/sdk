@@ -53,8 +53,15 @@ export type LockInputs = {
   /** For `preview` kind: workspace region used when creating the preview workspace. */
   region?: string;
   /**
-   * For `preview` kind: when true, the preview workflow deploys only for PRs labeled
-   * `tailor:preview`. False (default) means all PRs trigger a preview deploy.
+   * For `preview` kind: what a PR must satisfy before its preview deploys. `ready` skips draft
+   * PRs and deploys once the draft is marked ready for review; `label` deploys only PRs labeled
+   * `tailor:preview`. Null means every PR, drafts included.
+   */
+  require?: "ready" | "label" | null;
+  /**
+   * For `preview` kind, written by versions that predate `require`: true means only PRs labeled
+   * `tailor:preview` deployed. Those versions always skipped drafts. Read by `update`, never
+   * written.
    */
   requirePreviewLabel?: boolean;
   /**

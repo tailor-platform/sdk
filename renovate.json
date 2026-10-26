@@ -2,7 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>tailor-inc/renovate-config",
-    "github>aquaproj/aqua-renovate-config#2.13.0",
+    "github>aquaproj/aqua-renovate-config#2.14.0",
     ":pinAllExceptPeerDependencies",
     ":disableDependencyDashboard"
   ],
@@ -11,7 +11,7 @@
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
   "constraints": {
-    "ghActionsLock": "v0.3.0"
+    "ghActionsLock": "v0.4.0"
   },
   "customManagers": [
     {
@@ -99,6 +99,13 @@
       "description": "Group aquaproj tooling to reduce review overhead",
       "matchPackageNames": ["aquaproj/*"],
       "groupName": "aquaproj"
+    },
+    {
+      "description": "Wait for aqua-registry to catch up with a new tool release's signing format before updating",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["aqua.yaml"],
+      "matchDepNames": ["!aquaproj/aqua-registry"],
+      "minimumReleaseAge": "3 days"
     },
     {
       "description": "Group all tailor-platform/actions pins so every generated reference bumps atomically",

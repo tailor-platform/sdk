@@ -1,11 +1,10 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "pathe";
+import { tempDir } from "./temp-dir";
 
 /**
- * Creates a temporary directory and switches the process CWD into it for the
- * lifetime of the returned disposable. Use with `using` so the original CWD is
- * restored and the directory removed when the enclosing block exits:
+ * Creates a temporary directory with {@link tempDir} and switches the
+ * process CWD into it for the lifetime of the returned disposable. Use with
+ * `using` so the original CWD is restored and the directory removed when the
+ * enclosing block exits:
  *
  * ```ts
  * it("...", async () => {
@@ -20,14 +19,14 @@ import * as path from "pathe";
 export function tempCwd(prefix: string): Disposable & { readonly dir: string } {
   // Avoid `DisposableStack` — not in Node 22 (V8 12.4), which the SDK supports
   // (`engines.node: >=22`). `Symbol.dispose` is available since Node 20.4.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const tmp = tempDir(prefix);
   const originalCwd = process.cwd();
-  process.chdir(dir);
+  process.chdir(tmp.dir);
   return {
-    dir,
+    dir: tmp.dir,
     [Symbol.dispose]() {
       process.chdir(originalCwd);
-      fs.rmSync(dir, { recursive: true, force: true });
+      tmp[Symbol.dispose]();
     },
   };
 }

@@ -96,7 +96,7 @@ A typical change cycle:
      DB types: ./migrations/0001/db.ts
    ```
 
-   If `EDITOR` or `VISUAL` is set, `migrate.ts` opens automatically unless JSON output is enabled.
+   If `EDITOR` or `VISUAL` is set, `migrate.ts` opens automatically when the command runs in an interactive terminal outside CI without JSON output. `tailordb migration script` opens the file it scaffolds the same way.
 
 3. **Edit `migrate.ts`** to populate data for the new required field:
 
@@ -915,7 +915,7 @@ When your branch and main each generated the same number, merging or rebasing st
 
 - For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
 - Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
-- `tailor tailordb migration status` validates file-format compatibility across the full local history, compares its history ID with the deployed namespace, and shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero on incompatible files, migration history mismatches, and remote read errors, so check the output.
+- `tailor tailordb migration status` validates the layout and file-format compatibility of the full local history, compares its history ID with the deployed namespace, and shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero on invalid or incompatible files, migration history mismatches, and remote read errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 
 ### Resetting a deployed project
@@ -1056,7 +1056,7 @@ npm install -D @electric-sql/pglite
 
 The generated `db.pglite.ts` exports the `CREATE TABLE` script for the same schema `db.ts` types — the tables as the pre-migration phase leaves them while `migrate.ts` runs, including relaxed constraints, renamed fields under both names, and retained removed fields. Run it once on the PGlite instance, stage rows, then run the script in a transaction. `tailor tailordb migration script <N> --with-test` scaffolds this test too when `@electric-sql/pglite` is installed. Type the instance with `Unmigrated<Database>` rather than `Database`: `db.ts` types a column the migration makes required as `T | null` on read but `T` on write (and an enum it narrows as the old values on read but the new ones on write), so that `migrate.ts` cannot write what the migration is removing — which would also stop the test from staging the rows the script has to convert. `Unmigrated` lets every column be written with whatever it can still be read as; `main` still receives a `Transaction<Database>`.
 
-Relations are enforced as on the platform: a row that points at a parent that does not exist is rejected. Write the records the test starts from inside `prepareFixtures`, which leaves relations unchecked while it runs, so you can stage rows that predate a relation, such as rows whose parent does not exist that the script repairs. Relations are checked again when it returns, so the script itself still cannot write a missing parent. NOT NULL, UNIQUE, and CHECK constraints stay enforced. A relation is left unenforced while the pre-migration schema cannot satisfy it: when a pending type change leaves the field a different type from its target, when the migration retargets the relation to another table, or when the target field's unique constraint is still withheld. How relations on array fields and inside nested objects behave is described under [Real SQL execution with PGlite](../../testing.md#real-sql-execution-with-pglite-mocktailordbwithpglite).
+Relations are enforced as on the platform: a row that points at a parent that does not exist is rejected. Write the records the test starts from inside `prepareFixtures`, which leaves relations unchecked while it runs, so you can stage rows that predate a relation, such as rows whose parent does not exist that the script repairs. Relations are checked again when it returns, so the script itself still cannot write a missing parent. The same holds in reverse: the script cannot delete a parent that a row still points at, or change the key a row points at, so delete rows in the opposite order of staging them. NOT NULL, UNIQUE, and CHECK constraints stay enforced. A relation is left unenforced while the pre-migration schema cannot satisfy it: when a pending type change leaves the field a different type from its target, when the migration retargets the relation to another table, or when the target field's unique constraint is still withheld. How relations on array fields and inside nested objects behave is described under [Real SQL execution with PGlite](../../testing.md#real-sql-execution-with-pglite-mocktailordbwithpglite).
 
 ```typescript
 // migrations/0005/migrate.pglite.test.ts

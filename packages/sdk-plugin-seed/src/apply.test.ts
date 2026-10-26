@@ -11,6 +11,7 @@ const sdk = vi.hoisted(() => ({
   loadAccessToken: vi.fn(),
   loadSeedContext: vi.fn(),
   loadWorkspaceId: vi.fn(),
+  prompt: { confirm: vi.fn() },
   show: vi.fn(),
   truncate: vi.fn(),
 }));
@@ -128,8 +129,8 @@ function idpScriptResult(name: string, users: IdpUserRef[], chunk?: unknown[]): 
 
 function runApplyCommand(args: string[]) {
   return runCommand(seedApplyCommand, args, {
-    // Strip unknown global arguments like the plugin entrypoint.
-    globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
+    // Parse global arguments like the plugin entrypoint.
+    globalArgs: z.strictObject(createCommonArgs({ verboseAlias: "v" })),
   });
 }
 
@@ -453,6 +454,40 @@ describe("seedApplyCommand", () => {
 
     expect(sdk.truncate).toHaveBeenCalledWith(expect.objectContaining({ all: true }));
     expect(sdk.executeScript).not.toHaveBeenCalled();
+  });
+
+  test("asks for confirmation before truncating without --yes", async () => {
+    sdk.prompt.confirm.mockResolvedValue(true);
+
+    await runApply(["--truncate"]);
+
+    expect(sdk.prompt.confirm).toHaveBeenCalledWith({
+      message: "Are you sure you want to truncate?",
+      default: false,
+    });
+    expect(sdk.truncate).toHaveBeenCalledWith(expect.objectContaining({ all: true }));
+  });
+
+  test("does not truncate when the confirmation is declined", async () => {
+    sdk.prompt.confirm.mockResolvedValue(false);
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--truncate"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("Truncate cancelled.");
+    expect(sdk.truncate).not.toHaveBeenCalled();
+  });
+
+  test("fails without a result on stdout when the confirmation is refused", async () => {
+    const refusal = new Error("Interactive confirmations are not available in this environment.");
+    sdk.prompt.confirm.mockRejectedValue(refusal);
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--truncate", "--json"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toBe(refusal);
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(logger.out).not.toHaveBeenCalled();
   });
 
   test("does not print a success line when every _User row fails", async () => {

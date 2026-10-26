@@ -1,4 +1,3 @@
-import { createInterface } from "node:readline";
 import {
   bundleSeedScript,
   chunkSeedData,
@@ -12,10 +11,10 @@ import {
   deploymentArgs,
   defineAppCommand,
   logger,
+  prompt,
   styles,
   arg,
 } from "@tailor-platform/sdk/cli";
-import { renderFor } from "@tailor-platform/shared/color";
 import * as path from "pathe";
 import { z } from "zod";
 import {
@@ -64,20 +63,6 @@ interface NamespaceSeedPlanParams {
   typesToSeed: string[];
   dataDirs: string[];
   upsert: boolean;
-}
-
-function promptConfirmation(question: string): Promise<boolean> {
-  if (!process.stdin.isTTY) {
-    logger.warn("Interactive confirmation is not available; pass --yes to proceed.");
-    return Promise.resolve(false);
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(renderFor(process.stdout, styles.warning(question)), (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase().trim() === "y");
-    });
-  });
 }
 
 interface SeedResult {
@@ -602,11 +587,9 @@ export const seedApplyCommand = defineAppCommand({
 
     if (args.truncate) {
       const confirmed =
-        args.yes || (await promptConfirmation("Are you sure you want to truncate? (y/n): "));
+        args.yes ||
+        (await prompt.confirm({ message: "Are you sure you want to truncate?", default: false }));
       if (!confirmed) {
-        if (args.json) {
-          logger.out({ success: false, cancelled: true, processed: {} });
-        }
         throw new Error("Truncate cancelled.");
       }
 

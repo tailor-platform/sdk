@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { afterEach, describe, expect, test } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { createBundleLog } from "./bundle-log";
 import { isCLIError } from "./errors";
@@ -20,7 +20,7 @@ describe("createBundleLog", () => {
   // in the project-root tsconfig, and a nested tsconfig without `paths` that
   // rolldown picks instead because it sits nearer to the importing file.
   function makeProject(): { dir: string; entry: string; nestedTsconfig: string } {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-")));
+    const dir = makeTempDir("bundle-log-");
     tmpDirs.push(dir);
     fs.mkdirSync(path.join(dir, "lib"));
     fs.mkdirSync(path.join(dir, "nested"));
@@ -114,7 +114,7 @@ describe("createBundleLog", () => {
   test.each(["node:crypto", "fs/promises"])(
     "suggests Web Standard APIs for the Node built-in %s",
     async (specifier) => {
-      const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-node-")));
+      const dir = makeTempDir("bundle-log-node-");
       tmpDirs.push(dir);
       const tsconfig = path.join(dir, "tsconfig.json");
       const entry = path.join(dir, "entry.ts");
@@ -162,7 +162,7 @@ describe("createBundleLog", () => {
     "@tailor-platform/sdk/kysely",
     "@tailor-platform/function-kysely-tailordb",
   ])("fails when the regular dependency %s cannot be resolved", async (specifier) => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-dependency-")));
+    const dir = makeTempDir("bundle-log-dependency-");
     tmpDirs.push(dir);
     const tsconfig = path.join(dir, "tsconfig.json");
     const entry = path.join(dir, "entry.ts");
@@ -183,7 +183,7 @@ describe("createBundleLog", () => {
     "@tailor-platform/sdk/no-such-subpath",
     "@tailor-platform/sdk-typo",
   ])("escalates the unresolved in-scope specifier %s", async (specifier) => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-scope-")));
+    const dir = makeTempDir("bundle-log-scope-");
     tmpDirs.push(dir);
     fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
     fs.writeFileSync(
@@ -197,7 +197,7 @@ describe("createBundleLog", () => {
   });
 
   test("escalates an unresolved import inside a generated entry", async () => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-inlined-")));
+    const dir = makeTempDir("bundle-log-inlined-");
     tmpDirs.push(dir);
     fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
     const entry = createVirtualEntry(
@@ -221,7 +221,7 @@ describe("createBundleLog", () => {
   });
 
   test("names a generated entry without leaking its control-character prefix", async () => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-idlabel-")));
+    const dir = makeTempDir("bundle-log-idlabel-");
     tmpDirs.push(dir);
     fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
     const entry = createVirtualEntry(
@@ -251,7 +251,7 @@ describe("createBundleLog", () => {
   });
 
   test("keeps non-escalated rolldown logs from failing the build", async () => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-circular-")));
+    const dir = makeTempDir("bundle-log-circular-");
     tmpDirs.push(dir);
     fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
     // A circular import warns (CIRCULAR_DEPENDENCY) without indicating a broken bundle.

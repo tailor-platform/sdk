@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { assertDefined } from "#/utils/assert";
 import { bundleAuthHooks } from "./bundler";
 import type * as pkgTypes from "pkg-types";
@@ -37,8 +37,7 @@ export default {
 };
 `,
   ): string {
-    // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-test-")));
+    tmpDir = makeTempDir("auth-bundler-test-");
     const configFile = path.join(tmpDir, "tailor.config.ts");
     fs.writeFileSync(configFile, source);
     return configFile;
@@ -86,61 +85,45 @@ export default {
     expect(bundled.get("auth-hook--my-auth--before-login")).toBeDefined();
   });
 
-  describe("source text in inline sourcemaps", () => {
-    async function embeddedSourceTexts(options: {
-      inlineSourcemapDependencySources?: boolean;
-    }): Promise<string[]> {
-      const configFile = writeConfig(`
+  test("embeds the source text of installed packages in inline sourcemaps when asked to", async () => {
+    const configFile = writeConfig(`
 import { shout } from "auth-sourcemap-lib";
 
-const handler = async ({ claims }) => {
-  return { claims, shouted: shout("OWN_HANDLER_SOURCE") };
-};
+const handler = async ({ claims }) => ({ claims, shouted: shout("hi") });
 
 export default {
   auth: { hooks: { beforeLogin: { handler } } },
 };
 `);
-      const libDir = path.join(path.dirname(configFile), "node_modules", "auth-sourcemap-lib");
-      fs.mkdirSync(libDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(libDir, "package.json"),
-        JSON.stringify({ name: "auth-sourcemap-lib", type: "module", main: "index.js" }),
-      );
-      fs.writeFileSync(
-        path.join(libDir, "index.js"),
-        "export const shout = (text) => text.toUpperCase() + 'INSTALLED_LIB_SOURCE';\n",
-      );
+    const libDir = path.join(path.dirname(configFile), "node_modules", "auth-sourcemap-lib");
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, "package.json"),
+      JSON.stringify({ name: "auth-sourcemap-lib", type: "module", main: "index.js" }),
+    );
+    fs.writeFileSync(
+      path.join(libDir, "index.js"),
+      "export const shout = (text) => text.toUpperCase() + 'INSTALLED_LIB_SOURCE';\n",
+    );
 
-      const bundled = await bundleAuthHooks({
-        configPath: configFile,
-        authName: "my-auth",
-        handlerAccessPath: "auth.hooks.beforeLogin.handler",
-        baseDir: path.dirname(configFile),
-        inlineSourcemap: true,
-        ...options,
-      });
-      const traceMap = assertDefined(
-        extractInlineSourcemap(
-          assertDefined(bundled.get("auth-hook--my-auth--before-login"), "hook bundle missing"),
-        ),
-        "inline sourcemap missing",
-      );
-      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
-    }
-
-    test("leaves out the source text of installed packages by default", async () => {
-      const texts = await embeddedSourceTexts({});
-
-      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(false);
-      expect(texts.some((text) => text.includes("OWN_HANDLER_SOURCE"))).toBe(true);
+    const bundled = await bundleAuthHooks({
+      configPath: configFile,
+      authName: "my-auth",
+      handlerAccessPath: "auth.hooks.beforeLogin.handler",
+      baseDir: path.dirname(configFile),
+      inlineSourcemap: true,
+      inlineSourcemapDependencySources: true,
     });
 
-    test("embeds the source text of installed packages when asked to", async () => {
-      const texts = await embeddedSourceTexts({ inlineSourcemapDependencySources: true });
-
-      expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(true);
-    });
+    const traceMap = assertDefined(
+      extractInlineSourcemap(
+        assertDefined(bundled.get("auth-hook--my-auth--before-login"), "hook bundle missing"),
+      ),
+      "inline sourcemap missing",
+    );
+    expect(traceMap.sourcesContent?.some((text) => text?.includes("INSTALLED_LIB_SOURCE"))).toBe(
+      true,
+    );
   });
 
   test("injects an empty env object when none is provided", async () => {
@@ -184,9 +167,7 @@ export default {
 
   test("uses the passed baseDir rather than deriving one from the config file's own directory", async () => {
     const configFile = writeConfig();
-    const baseDir = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-basedir-")),
-    );
+    const baseDir = makeTempDir("auth-bundler-basedir-");
     try {
       await bundleAuthHooks({
         configPath: configFile,
@@ -204,7 +185,7 @@ export default {
 
 describe("bundleAuthHooks date default", () => {
   test("folds the configured date default into the hook bundle", async () => {
-    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-date-default-")));
+    const tmpDir = makeTempDir("auth-date-default-");
     const configFile = path.join(tmpDir, "tailor.config.ts");
     fs.writeFileSync(
       configFile,

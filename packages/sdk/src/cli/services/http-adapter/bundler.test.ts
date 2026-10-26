@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
-import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { bundleHttpAdapters } from "./bundler";
 
 const nodeRequire = createRequire(import.meta.url);
@@ -20,7 +20,7 @@ describe("bundleHttpAdapters", () => {
   });
 
   function writeAdapterFiles(files: Record<string, string>): string {
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
+    tmpDir = makeTempDir("http-adapter-bundle-");
     for (const [name, content] of Object.entries(files)) {
       fs.writeFileSync(path.join(tmpDir, name), content);
     }
@@ -125,7 +125,7 @@ export default createHttpAdapter({
   });
 
   test("passes through nullish input handler results", async () => {
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
+    tmpDir = makeTempDir("http-adapter-bundle-");
     const sourceFile = path.join(tmpDir, "adapter.ts");
     fs.writeFileSync(
       sourceFile,
@@ -205,6 +205,36 @@ export default createHttpAdapter({
       expect(code).toContain("console.warn");
       expect(code).toContain("console.error");
     }
+  });
+
+  test("strips annotation comments but keeps legal comments", async () => {
+    const sourceFile = writeAdapterFiles({
+      "adapter.ts": `
+/*! LEGAL_MARKER */
+import { createHttpAdapter } from "@tailor-platform/sdk";
+
+/* @__NO_SIDE_EFFECTS__ */
+const makeBox = (value: unknown) => ({ value });
+
+export default createHttpAdapter({
+  name: "comments",
+  pathPattern: "/comments",
+  input: {
+    get: (req) => ({ query: "{}", variables: { a: makeBox(req.path), b: makeBox(req.path) } }),
+  },
+});
+`,
+    });
+
+    const result = await bundleHttpAdapters(
+      [{ name: "comments", sourceFile, methods: ["get"], hasOutput: false }],
+      process.cwd(),
+    );
+
+    const inputCode = result.bundledInputs.get("comments");
+    expect(inputCode).toContain("LEGAL_MARKER");
+    expect(inputCode).not.toContain("@__PURE__");
+    expect(inputCode).not.toContain("@__NO_SIDE_EFFECTS__");
   });
 
   test("rejects bundles that import Node built-in modules", async () => {

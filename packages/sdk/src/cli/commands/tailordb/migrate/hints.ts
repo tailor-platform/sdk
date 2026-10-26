@@ -40,3 +40,25 @@ export function formatMigrationScriptHint(options: MigrationScriptCommandOptions
   }
   return formatCommandHint({ command: "tailor", args });
 }
+
+export interface RebaselineCommandOptions {
+  namespace: string;
+  /** Config path the current run used; omitted from the command when it resolves to the default */
+  configPath?: string;
+}
+
+/**
+ * Render the `tailor tailordb migration rebaseline` command as a remediation
+ * hint, reproducing the current run's invocation context.
+ * @param {RebaselineCommandOptions} options - Target namespace and invocation context
+ * @returns {string} The command part of the hint, as rendered by `formatCommandHint`
+ */
+export function formatRebaselineHint(options: RebaselineCommandOptions): string {
+  const { namespace, configPath } = options;
+  const args = ["tailordb", "migration", "rebaseline", "--namespace", namespace];
+  const configArg = formatConfigArg(configPath);
+  if (configArg !== undefined) {
+    args.push(configArg);
+  }
+  return formatCommandHint({ command: "tailor", args });
+}

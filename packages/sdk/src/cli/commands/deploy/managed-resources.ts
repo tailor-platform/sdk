@@ -5,6 +5,7 @@ import type { HasName } from "./change-set";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { ManagedResourceType } from "./managed-resource-type";
+import type { OwnershipResult } from "./owned-resource";
 
 /**
  * Decide which renamed-away applications should be deleted. Excludes the
@@ -41,11 +42,6 @@ export function assertUniqueGlobalResourceNames(
 ): void {
   assertNoDuplicateResourceNames(targets, DEPLOY_MANAGED_RESOURCE_DEFINITIONS);
 }
-type OwnershipTrackedPlan = {
-  conflicts: OwnerConflict[];
-  unmanaged: UnmanagedResource[];
-  resourceOwners: Set<string>;
-};
 
 /**
  * Every `PlanResults` entry carries ownership-tracking fields; deriving the
@@ -54,7 +50,7 @@ type OwnershipTrackedPlan = {
  * @param results - Plan results for a single deployment
  * @returns The ownership-tracking plan entries
  */
-function ownershipTrackedPlans(results: PlanResults): ReadonlyArray<OwnershipTrackedPlan> {
+function ownershipTrackedPlans(results: PlanResults): ReadonlyArray<OwnershipResult> {
   return Object.values(results);
 }
 

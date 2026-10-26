@@ -15,9 +15,10 @@ const tailorBin = path.resolve(
   "tailor.mjs",
 );
 
-/** Budgets for CLI calls: local commands, deploys, and deploys given extra room for slow data migrations. */
+/** Budgets for CLI calls: local commands, scripts run on the Platform, deploys, and deploys given extra room for slow data migrations. */
 export const CLI_BUDGET_MS = {
   local: 120_000,
+  script: 120_000,
   deploy: 300_000,
   migratingDeploy: 900_000,
 } as const;

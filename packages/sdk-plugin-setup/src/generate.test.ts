@@ -1317,16 +1317,16 @@ describe("renderPreviewWorkflow", () => {
     });
   });
 
-  test.each([false, true])(
-    "cancels a superseded run as a whole, except from an event on a closed pull request (requirePreviewLabel: %s)",
-    (requirePreviewLabel) => {
+  test.each([undefined, "ready", "label"] as const)(
+    "cancels a superseded run as a whole, except from an event on a closed pull request (require: %s)",
+    (require) => {
       const { content } = renderPreviewWorkflow({
         workspaceName: "my-app",
         branch: "main",
         environment: "my-app",
         packageManager: "pnpm",
         region: "us-west",
-        requirePreviewLabel,
+        require,
       });
       const workflow = parseYAML(content) as {
         concurrency?: { group?: string; "cancel-in-progress"?: boolean };
@@ -2884,25 +2884,78 @@ export default defineConfig({
     });
   });
 
-  test("preview: require-preview-label variant adds label filter to trigger", async () => {
-    await setupTarget({
-      kind: "preview",
-      workspaceName: "my-app",
-      region: "us-west",
-      requirePreviewLabel: true,
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
+  describe("preview: requirement", () => {
+    async function generatePreview(extra: { require?: "ready" | "label" }) {
+      await setupTarget({
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west",
+        ...extra,
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
+      });
+      return fs.readFileSync(
+        path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
+        "utf-8",
+      );
+    }
+
+    test("deploys every PR, drafts included, when nothing is required", async () => {
+      const content = await generatePreview({});
+
+      expect(content).toContain("types: [opened, synchronize, reopened, closed]");
+      expect(content).not.toContain("pull_request.draft");
+      expect(content).not.toContain("pull_request.labels");
     });
-    const content = fs.readFileSync(
-      path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
-      "utf-8",
-    );
-    expect(content).toContain("tailor:preview");
-    expect(content).toContain("labeled");
+
+    test("skips draft PRs and deploys when the draft is marked ready for review when ready is required", async () => {
+      const content = await generatePreview({ require: "ready" });
+
+      expect(content).toContain("types: [opened, synchronize, reopened, ready_for_review, closed]");
+      expect(content).toContain("!github.event.pull_request.draft");
+      expect(content).not.toContain("pull_request.labels");
+    });
+
+    test("deploys only labeled PRs, drafts included, when a label is required", async () => {
+      const content = await generatePreview({ require: "label" });
+
+      expect(content).toContain("types: [labeled, synchronize, reopened, closed]");
+      expect(content).toContain("pull_request.labels");
+      expect(content).not.toContain("pull_request.draft");
+    });
+
+    test("still guards fork PRs whatever is required", async () => {
+      for (const require of [undefined, "ready", "label"] as const) {
+        const content = await generatePreview({ require });
+
+        expect(content).toContain("!github.event.pull_request.head.repo.fork");
+      }
+    });
+
+    test("records the requirement in the lock so update regenerates the same workflow", async () => {
+      await generatePreview({ require: "ready" });
+
+      expect(readLock(testDir)?.targets[0]).toMatchObject({ inputs: { require: "ready" } });
+    });
+
+    test("records that nothing is required when no requirement is given", async () => {
+      await generatePreview({});
+
+      expect(readLock(testDir)?.targets[0]).toMatchObject({ inputs: { require: null } });
+    });
+
+    test("switches an existing target to deploying drafts when it is generated again without the requirement", async () => {
+      await generatePreview({ require: "ready" });
+
+      const content = await generatePreview({});
+
+      expect(content).not.toContain("pull_request.draft");
+      expect(readLock(testDir)?.targets[0]).toMatchObject({ inputs: { require: null } });
+    });
   });
 
   test("preview: rejects an invalid region", async () => {

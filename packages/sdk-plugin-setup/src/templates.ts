@@ -4,8 +4,8 @@ import tagTemplate from "./tag.workflow.yml";
 
 // Only the release PR changes RELEASED_TEMPLATE_VERSION and the fingerprint below; a PR that
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
-// Released template fingerprint: 8193f6daa4185dd544589352df77f13785b14570a84ab8f60be19a8dee80b382
-const RELEASED_TEMPLATE_VERSION = 21;
+// Released template fingerprint: 65fef953eac654ad98514cedca78053db6c64d7a05187bf9ed8ce37b98b05cdc
+const RELEASED_TEMPLATE_VERSION = 22;
 const TEMPLATE_CHANGED_SINCE_RELEASE = false;
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
@@ -121,6 +121,11 @@ export type RenderTagParams = {
   seed?: RenderSeed;
 };
 
+export const PREVIEW_REQUIREMENTS = ["ready", "label"] as const;
+
+/** What a PR must satisfy before its preview deploys. */
+export type PreviewRequirement = (typeof PREVIEW_REQUIREMENTS)[number];
+
 export type RenderPreviewParams = {
   workspaceName: string;
   branch: string;
@@ -135,10 +140,11 @@ export type RenderPreviewParams = {
   /** Workspace region passed to `workspace create` on first PR push. */
   region: string;
   /**
-   * When true, deploy preview only for PRs labeled `tailor:preview` (label-triggered mode).
-   * Default false: preview deploys on every PR (open, sync, reopen).
+   * What a PR must satisfy before its preview deploys. `ready` skips draft PRs and deploys once
+   * the draft is marked ready for review; `label` deploys only PRs labeled `tailor:preview`.
+   * Default none: every PR, drafts included, gets a preview.
    */
-  requirePreviewLabel?: boolean;
+  require?: PreviewRequirement;
   /** Reseed the preview workspace after each deploy (single-app targets only). */
   seed?: RenderSeed;
 };
@@ -678,33 +684,41 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
 /**
  * Render the preview workflow (PR open/sync/close triggers).
  *
- * The deploy job runs on opened/synchronize/reopened events; the cleanup job
- * runs on the closed event.  Both jobs run in the same workflow so PR number
- * context is always available.
+ * The deploy job runs on opened/synchronize/reopened events, plus ready_for_review
+ * when `ready` is required; the cleanup job runs on the closed event.  Both jobs
+ * run in the same workflow so PR number context is always available.
  * @param params - Workspace and rendering configuration
  * @returns Rendered YAML and the list of managed job/step ids
  */
 export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult {
   const { branch } = params;
-  const requirePreviewLabel = params.requirePreviewLabel ?? false;
+  const requireLabel = params.require === "label";
+  const requireReady = params.require === "ready";
   const seed = params.apps ? undefined : params.seed;
 
   let out = previewTemplate;
   out = applySeed(out, seed);
 
   // PR trigger event types — single line() marker avoids duplicate YAML map keys in the template.
-  out = line(
-    out,
-    "PR_TYPES",
-    requirePreviewLabel
-      ? "types: [labeled, synchronize, reopened, closed]"
-      : "types: [opened, synchronize, reopened, closed]",
-  );
+  const types = [
+    requireLabel ? "labeled" : "opened",
+    "synchronize",
+    "reopened",
+    ...(requireReady ? ["ready_for_review"] : []),
+    "closed",
+  ];
+  out = line(out, "PR_TYPES", `types: [${types.join(", ")}]`);
 
   // Deploy job if condition. Fork PRs don't have access to secrets/vars, so guard them out.
-  const deployIf = requirePreviewLabel
-    ? `if: |-\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`
-    : `if: |-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`;
+  const deployConditions = [
+    ...(requireLabel
+      ? ["contains(github.event.pull_request.labels.*.name, 'tailor:preview')"]
+      : []),
+    "github.event.action != 'closed'",
+    ...(requireReady ? ["!github.event.pull_request.draft"] : []),
+    "!github.event.pull_request.head.repo.fork",
+  ];
+  const deployIf = `if: |-\n  ${deployConditions.join(" &&\n  ")}`;
   const patterns = changePatterns({
     ...params,
     workflowFile: workflowFilePath("preview", params.workspaceName),

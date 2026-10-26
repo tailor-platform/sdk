@@ -35,8 +35,7 @@ const mainCommand = defineCommand({
 
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
-  // strip unknown keys
-  globalArgs: z.object(createCommonArgs()),
+  globalArgs: z.strictObject(createCommonArgs()),
   displayErrors: false,
   // Render errors the way the host CLI does: `setup` used to run inside it, so
   // dropping either branch would regress `--json` consumers and CLIError detail.
@@ -51,7 +50,7 @@ void runMain(mainCommand, {
     } else {
       logger.error(`Unknown error: ${String(error)}`);
     }
-    if (error instanceof Error && error.stack) {
+    if (!logger.jsonMode && error instanceof Error && error.stack) {
       logger.debug(`\nStack trace:\n${error.stack}`);
     }
     annotateTerminalError(error, { jsonMode: logger.jsonMode });

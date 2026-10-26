@@ -1,4 +1,5 @@
 import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
+import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { BundledScripts } from "./function-registry-types";
 
@@ -34,4 +35,28 @@ export function mergeBundledScripts(targets: ReadonlyArray<BuiltDeploymentTarget
     workflowJobs: mergeKind("workflowJobs"),
     authHooks: mergeKind("authHooks"),
   };
+}
+
+/**
+ * Collect per-config HTTP adapter bundles into one build-only result.
+ * Adapter names are unique only within an application, so bundles stay
+ * grouped by application name.
+ * @param targets - Built deployment targets to collect from
+ * @returns HTTP adapter bundles keyed by application name
+ */
+export function collectHttpAdapterScripts(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): Map<string, HttpAdapterBundleResult> {
+  assertNoDuplicateResourceNames(targets, [
+    {
+      resourceType: "application",
+      resourceLabel: "Application",
+      namesOf: (target) => (target.httpAdapterBuildResult ? [target.application.name] : []),
+    },
+  ]);
+  return new Map(
+    targets.flatMap(({ application, httpAdapterBuildResult }) =>
+      httpAdapterBuildResult ? [[application.name, httpAdapterBuildResult] as const] : [],
+    ),
+  );
 }

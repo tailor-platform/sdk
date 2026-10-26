@@ -144,6 +144,24 @@ CREATE TABLE IF NOT EXISTS "User" (
   "createdAt" timestamptz NOT NULL DEFAULT now(),
   "updatedAt" timestamptz NOT NULL DEFAULT now()
 );
+CREATE OR REPLACE FUNCTION "User_referenced_delete_30e4e772_fk"() RETURNS trigger LANGUAGE plpgsql AS $fk$
+BEGIN
+  IF EXISTS (SELECT 1 FROM "SalesOrder" AS child WHERE OLD."id" = ANY(child."approvedByUserIDs")) THEN
+    RAISE EXCEPTION 'update or delete on table \`User\` violates foreign key constraint: some record is still referenced from table \`SalesOrder\`' USING ERRCODE = 'foreign_key_violation';
+  END IF;
+  RETURN NULL;
+END
+$fk$;
+CREATE OR REPLACE TRIGGER "User_referenced_delete_30e4e772_fk" AFTER DELETE ON "User" FOR EACH ROW EXECUTE FUNCTION "User_referenced_delete_30e4e772_fk"();
+CREATE OR REPLACE FUNCTION "User_referenced_update_6ecc6844_fk"() RETURNS trigger LANGUAGE plpgsql AS $fk$
+BEGIN
+  IF NEW."id" IS DISTINCT FROM OLD."id" AND EXISTS (SELECT 1 FROM "SalesOrder" AS child WHERE OLD."id" = ANY(child."approvedByUserIDs")) THEN
+    RAISE EXCEPTION 'update or delete on table \`User\` violates foreign key constraint: some record is still referenced from table \`SalesOrder\`' USING ERRCODE = 'foreign_key_violation';
+  END IF;
+  RETURN NULL;
+END
+$fk$;
+CREATE OR REPLACE TRIGGER "User_referenced_update_6ecc6844_fk" AFTER UPDATE ON "User" FOR EACH ROW EXECUTE FUNCTION "User_referenced_update_6ecc6844_fk"();
 
 CREATE TABLE IF NOT EXISTS "UserLog" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -24,7 +24,7 @@ import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { buildOptionsOf } from "#/cli/shared/build-options";
+import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
@@ -60,6 +60,8 @@ import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-poin
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
+import type { SdkBuilderAnnotationCache } from "#/cli/shared/sdk-builder-pure-plugin";
+import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
 import type { EffectiveDateDefault } from "#/runtime/types";
@@ -102,8 +104,10 @@ export type Application = {
 interface ReusableBuildState {
   readonly startContext: StartContext;
   readonly tsconfigCache: TsconfigLookupCache;
+  readonly sdkBuilderAnnotationCache: SdkBuilderAnnotationCache;
   readonly inlineSourcemap: boolean;
   readonly inlineSourcemapDependencySources: boolean | string[];
+  readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
   readonly bundleLogLevel: LogLevel;
 }
 
@@ -805,6 +809,7 @@ export async function loadApplication(
   // Shared across the start context and every bundle below so a project with many
   // resolvers/executors/etc. reads and parses each ancestor tsconfig once instead of once per item.
   const tsconfigCache = createTsconfigLookupCache();
+  const sdkBuilderAnnotationCache: SdkBuilderAnnotationCache = new Map();
 
   // 8. Build start context for workflow/job start transformation
   const startContext = await buildStartContext(
@@ -819,6 +824,7 @@ export async function loadApplication(
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
+  const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
 
@@ -842,9 +848,11 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
     });
@@ -862,10 +870,12 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
     });
@@ -875,22 +885,23 @@ export async function loadApplication(
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs(
-      workflowService.jobs,
+    workflowBuildResult = await bundleWorkflowJobs({
+      allJobs: workflowService.jobs,
       mainJobNames,
       env,
       startContext,
       baseDir,
-      bundleCache,
+      cache: bundleCache,
       inlineSourcemap,
-      bundleLogLevel,
-      tsconfigCache,
-      undefined,
-      buildOptions.allowedRuntimeGlobals,
-      dateDefault,
-      buildOptions.treeshake,
       inlineSourcemapDependencySources,
-    );
+      inlineSourcemapProjectSources,
+      bundleLogLevel,
+      bundleTreeshake: buildOptions.treeshake,
+      tsconfigCache,
+      sdkBuilderAnnotationCache,
+      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault,
+    });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
@@ -924,10 +935,12 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       dateDefault,
     });
   }
@@ -978,8 +991,10 @@ export async function loadApplication(
     reusableBuildState: {
       startContext,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
     },
   };
@@ -1015,8 +1030,10 @@ async function reloadEnvDependentBundles(params: {
   const {
     startContext,
     tsconfigCache,
+    sdkBuilderAnnotationCache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
   } = reusableBuildState;
 
@@ -1035,22 +1052,24 @@ async function reloadEnvDependentBundles(params: {
   let workflowBuildResult = previous.workflowBuildResult;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs(
-      workflowService.jobs,
+    workflowBuildResult = await bundleWorkflowJobs({
+      allJobs: workflowService.jobs,
       mainJobNames,
       env,
       startContext,
       baseDir,
-      bundleCache,
+      cache: bundleCache,
       inlineSourcemap,
-      bundleLogLevel,
-      tsconfigCache,
-      previous.workflowBuildResult,
-      buildOptionsOf(config).allowedRuntimeGlobals,
-      effectiveDateDefault(config),
-      buildOptionsOf(config).treeshake,
       inlineSourcemapDependencySources,
-    );
+      inlineSourcemapProjectSources,
+      bundleLogLevel,
+      bundleTreeshake: buildOptionsOf(config).treeshake,
+      tsconfigCache,
+      sdkBuilderAnnotationCache,
+      previousUsedJobs: previous.workflowBuildResult,
+      allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
+      dateDefault: effectiveDateDefault(config),
+    });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
@@ -1065,10 +1084,12 @@ async function reloadEnvDependentBundles(params: {
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptionsOf(config).treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       dateDefault: effectiveDateDefault(config),
     });
   }

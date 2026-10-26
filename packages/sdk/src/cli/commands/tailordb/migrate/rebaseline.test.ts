@@ -175,9 +175,6 @@ describe("tailordb migration rebaseline", () => {
     fs.writeFileSync(path.join(state.migrationsDir, "fixtures", "seed.json"), "{}");
     fs.mkdirSync(path.join(state.migrationsDir, "2026"));
     fs.writeFileSync(path.join(state.migrationsDir, "2026", "notes.md"), "not a migration");
-    fs.mkdirSync(path.join(state.migrationsDir, "0005"));
-    fs.writeFileSync(path.join(state.migrationsDir, "0005", "migrate.ts"), "export {};");
-    fs.writeFileSync(path.join(state.migrationsDir, "0005", "db.ts"), "export {};");
     fs.writeFileSync(path.join(state.migrationsDir, "9999"), "not a migration directory");
 
     const result = await runCommand(rebaselineCommand, ["--yes"]);
@@ -495,7 +492,7 @@ describe("tailordb migration rebaseline", () => {
     const result = await runCommand(rebaselineCommand, []);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
+    expect(String(result.error)).toContain("Migration 0005 has migrate.ts but no diff.json");
     expect(migrationDirectories()).toEqual(["0000", "0001", "0005"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
@@ -511,7 +508,7 @@ describe("tailordb migration rebaseline", () => {
     const result = await runCommand(rebaselineCommand, []);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
+    expect(String(result.error)).toContain("Migration 0005 has migrate.test.ts but no diff.json");
     expect(migrationDirectories()).toEqual(["0000", "0001", "0005"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
   });

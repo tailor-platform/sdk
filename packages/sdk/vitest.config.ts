@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import { configDefaults, defineConfig } from "vitest/config";
 
@@ -55,17 +55,23 @@ const integrationTestIncludes = [
   "src/plugin/compat.test.ts",
 ];
 
-// The CLI plugin test exercises Windows-specific PATHEXT/`.cmd`/`.ps1` spawn
-// branches, so it gets its own project ("unit-plugin", which the `unit*` glob
-// still picks up on Linux) that a Windows CI job can run via `--project
-// unit-plugin` — no separator-sensitive path filter needed. Excluded from the
-// general unit split below so it does not run twice.
-const pluginTestInclude = "src/cli/shared/plugin.test.ts";
+// Tests whose behavior differs on Windows get their own project ("unit-windows",
+// which the `unit*` glob still picks up on Linux) that the Windows CI job runs
+// via `--project unit-windows` — no separator-sensitive path filter needed.
+// Excluded from the general unit split below so they do not run twice.
+const windowsTestIncludes = [
+  "src/cli/shared/plugin.test.ts",
+  "src/cli/shared/shell-quote.test.ts",
+  "src/cli/shared/test-helpers/temp-cwd.test.ts",
+  "src/cli/shared/test-helpers/temp-dir.test.ts",
+];
 
-// Runs suggested command lines through the platform's real shells (cmd.exe and
-// PowerShell on Windows), so the Windows CI job runs it too via `--project
-// unit-shell`.
-const shellQuoteTestInclude = "src/cli/shared/shell-quote.test.ts";
+const missingWindowsTests = windowsTestIncludes.filter(
+  (file) => !existsSync(path.resolve(import.meta.dirname, file)),
+);
+if (missingWindowsTests.length > 0) {
+  throw new Error(`windowsTestIncludes lists missing files: ${missingWindowsTests.join(", ")}`);
+}
 
 // Split unit tests by whether they mutate worker-global state. With
 // `isolate: false` a worker shares one module registry and one global object
@@ -83,9 +89,7 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
     file.includes("/node_modules/") ||
     file.includes("/__test_fixtures__/") ||
     integrationTestFiles.has(file) ||
-    // Carved into their own "unit-plugin" and "unit-shell" projects (see below).
-    file === pluginTestInclude ||
-    file === shellQuoteTestInclude ||
+    windowsTestIncludes.includes(file) ||
     // Self-contained nested vitest project with its own config.
     file.startsWith("src/vitest/integration/");
 
@@ -151,18 +155,8 @@ export default defineConfig({
       },
       {
         test: {
-          // Carved out so a Windows CI job can run just the plugin test via
-          // `--project unit-plugin`; the `unit*` glob still runs it on Linux.
-          name: "unit-plugin",
-          include: [pluginTestInclude],
-          setupFiles: ["./vitest.setup.ts"],
-          typecheck: { enabled: false },
-        },
-      },
-      {
-        test: {
-          name: "unit-shell",
-          include: [shellQuoteTestInclude],
+          name: "unit-windows",
+          include: windowsTestIncludes,
           setupFiles: ["./vitest.setup.ts"],
           typecheck: { enabled: false },
         },

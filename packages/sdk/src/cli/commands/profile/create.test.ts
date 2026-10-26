@@ -3,6 +3,7 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { writeHeldConfigLock } from "#/cli/shared/test-helpers/config-lock";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { createCommand } from "./create";
@@ -11,6 +12,7 @@ import type * as ClientModule from "#/cli/shared/client";
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-create-${Date.now()}-${Math.random()}`);
 const keyringPasswords = vi.hoisted(() => new Map<string, string>());
 const validUUID = "12345678-1234-4abc-8def-123456789012";
+const otherUUID = "abcdef12-3456-4abc-8def-abcdef123456";
 
 vi.mock("xdg-basedir", () => ({ xdgConfig: xdgTempDir }));
 
@@ -119,5 +121,65 @@ describe("profile create with a migrating legacy email user", () => {
       JSON.stringify({ accessToken: "new-access-token", refreshToken: "new-refresh-token" }),
     );
     expect(config.users["legacy@example.com"]).toBeUndefined();
+  });
+});
+
+describe("profile create while another process updates the config", () => {
+  beforeEach(() => {
+    resetKeyringState();
+    keyringPasswords.clear();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("does not overwrite a profile another process created while the token was refreshed", async () => {
+    clientMocks.initOperatorClient.mockClear();
+    clientMocks.refreshToken.mockResolvedValue({
+      accessToken: "new-access-token",
+      refreshToken: "new-refresh-token",
+      expiresAt: Date.now() + 3600 * 1000,
+    });
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "platform-user-sub": {
+          storage: "file",
+          access_token: "expired-access-token",
+          refresh_token: "refresh",
+          token_expires_at: new Date(Date.now() - 1000).toISOString(),
+        },
+      },
+      profiles: {},
+      current_user: "platform-user-sub",
+    });
+    const otherProfile = { user: "platform-user-sub", workspace_id: otherUUID };
+    const lockPath = path.join(xdgTempDir, "tailor-platform", "config.yaml.lock");
+    writeHeldConfigLock(lockPath);
+    setTimeout(() => {
+      void (async () => {
+        const config = await readPlatformConfig();
+        config.profiles.myprofile = otherProfile;
+        writePlatformConfig(config);
+        fs.rmSync(lockPath);
+      })();
+    }, 100);
+
+    const result = await runCommand(createCommand, [
+      "myprofile",
+      "--user",
+      "platform-user-sub",
+      "--workspace-id",
+      validUUID,
+    ]);
+
+    expect(result).toMatchObject({ success: false, error: { code: "PROFILE_EXISTS" } });
+    expect((await readPlatformConfig()).profiles.myprofile).toEqual(otherProfile);
+    expect(clientMocks.initOperatorClient).not.toHaveBeenCalled();
   });
 });

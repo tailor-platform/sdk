@@ -304,6 +304,9 @@ describe("requestedJsonModeSource", () => {
     { argv: ["workspace", "list"], env: "yes", expected: undefined },
     { argv: ["function", "test-run", "--", "--json"], env: undefined, expected: undefined },
     { argv: ["deploy", "--no-json", "--jsonish"], env: undefined, expected: undefined },
+    { argv: ["workspace", "list", "--json", "--no-json"], env: undefined, expected: undefined },
+    { argv: ["--no-json", "workspace", "list", "--json"], env: undefined, expected: "flag" },
+    { argv: ["workspace", "list", "--no-json"], env: "1", expected: undefined },
   ])("returns $expected for $argv with TAILOR_JSON_OUTPUT=$env", ({ argv, env, expected }) => {
     vi.stubEnv("TAILOR_JSON_OUTPUT", env);
     expect(requestedJsonModeSource(argv)).toBe(expected);
@@ -318,6 +321,7 @@ describe("requestedJsonModeSource", () => {
     { argv: ["workspace", "list"], env: "false", expected: undefined },
     { argv: ["workspace", "list"], env: "", expected: undefined },
     { argv: ["function", "test-run", "--", "--json=false"], env: undefined, expected: "agent" },
+    { argv: ["workspace", "list", "--no-json"], env: undefined, expected: undefined },
   ])(
     "returns $expected for $argv with TAILOR_JSON_OUTPUT=$env under an AI coding agent",
     ({ argv, env, expected }) => {
@@ -368,37 +372,42 @@ describe("resolveEarlyFailure", () => {
   });
 
   test.each([
-    { argv: ["--json", "--verbose"], verbose: true },
-    { argv: ["--verbose"], verbose: true },
-    { argv: ["--json", "--verbose=false"], verbose: false },
-    { argv: ["--json"], verbose: false },
-  ])("applies verbose output from $argv", ({ argv, verbose }) => {
-    vi.stubEnv("DEBUG", undefined);
-    vi.stubEnv("RUNNER_DEBUG", undefined);
-    const previous = logger.verbose;
-    logger.verbose = false;
-    try {
-      resolve(new Error("Unknown flags: bogus"), argv);
-      expect(logger.verbose).toBe(verbose);
-    } finally {
-      logger.verbose = previous;
-      vi.unstubAllEnvs();
-    }
-  });
+    { runnerDebug: undefined, argv: ["--json", "--verbose"], verbose: true },
+    { runnerDebug: undefined, argv: ["--verbose"], verbose: true },
+    { runnerDebug: undefined, argv: ["--json", "--verbose=false"], verbose: false },
+    { runnerDebug: undefined, argv: ["--json", "--verbose", "--no-verbose"], verbose: false },
+    { runnerDebug: undefined, argv: ["--json"], verbose: false },
+    { runnerDebug: "1", argv: ["--json"], verbose: true },
+    { runnerDebug: "1", argv: ["--json", "--no-verbose"], verbose: false },
+    { runnerDebug: "1", argv: ["--json", "--verbose=false"], verbose: false },
+  ])(
+    "applies verbose output from $argv with RUNNER_DEBUG=$runnerDebug",
+    ({ runnerDebug, argv, verbose }) => {
+      vi.stubEnv("DEBUG", undefined);
+      vi.stubEnv("RUNNER_DEBUG", runnerDebug);
+      logger.verbose = undefined;
+      try {
+        resolve(new Error("Unknown flags: bogus"), argv);
+        expect(logger.verbose).toBe(verbose);
+      } finally {
+        logger.verbose = undefined;
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 });
 
 describe("createCommonArgs effects", () => {
   aroundEach(async (runTest) => {
     const previousJsonMode = logger.jsonMode;
-    const previousVerbose = logger.verbose;
     logger.jsonMode = false;
-    logger.verbose = false;
+    logger.verbose = undefined;
     try {
       await runTest();
     } finally {
       vi.unstubAllEnvs();
       logger.jsonMode = previousJsonMode;
-      logger.verbose = previousVerbose;
+      logger.verbose = undefined;
     }
   });
 
@@ -407,6 +416,14 @@ describe("createCommonArgs effects", () => {
     { runnerDebug: undefined, debug: "true", argv: [], enabled: true },
     { runnerDebug: "0", debug: undefined, argv: ["--verbose"], enabled: true },
     { runnerDebug: undefined, debug: undefined, argv: [], enabled: false },
+    {
+      runnerDebug: undefined,
+      debug: undefined,
+      argv: ["--verbose", "--no-verbose"],
+      enabled: false,
+    },
+    { runnerDebug: "1", debug: "true", argv: ["--no-verbose"], enabled: false },
+    { runnerDebug: "1", debug: "true", argv: ["--verbose=false"], enabled: false },
     { runnerDebug: "true", debug: "false", argv: [], enabled: false },
   ])(
     "resolves verbose output from $runnerDebug / $debug / $argv",
@@ -420,8 +437,8 @@ describe("createCommonArgs effects", () => {
         run: () => logger.debug("verbosity-sentinel"),
       });
       const result = await runCommand(command, argv, {
-        // Strip unknown keys the same way the CLI entrypoint parses global args.
-        globalArgs: z.object(createCommonArgs()),
+        // Parse global args the same way the CLI entrypoint does.
+        globalArgs: z.strictObject(createCommonArgs()),
       });
       expect(result.exitCode).toBe(0);
       expect(logger.verbose).toBe(enabled);
@@ -434,8 +451,8 @@ describe("createCommonArgs effects", () => {
   test("--json and --verbose set the shared logger state", async () => {
     const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
     const result = await runCommand(command, ["--json", "--verbose"], {
-      // Strip unknown keys the same way the CLI entrypoint parses global args.
-      globalArgs: z.object(createCommonArgs()),
+      // Parse global args the same way the CLI entrypoint does.
+      globalArgs: z.strictObject(createCommonArgs()),
     });
     expect(result.exitCode).toBe(0);
     expect(globalArgsApplied()).toBe(true);
@@ -456,6 +473,7 @@ describe("createCommonArgs effects", () => {
     { output: "true", argv: ["--json"], expected: true },
     { output: "false", argv: ["--json"], expected: true },
     { output: "true", argv: ["--json=false"], expected: false },
+    { output: "true", argv: ["--no-json"], expected: false },
     { output: "false", argv: ["--", "--json"], expected: false },
   ])(
     "resolves JSON output from TAILOR_JSON_OUTPUT=$output with $argv",
@@ -463,8 +481,8 @@ describe("createCommonArgs effects", () => {
       vi.stubEnv("TAILOR_JSON_OUTPUT", output);
       const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
       const result = await runCommand(command, argv, {
-        // Strip unknown keys the same way the CLI entrypoint parses global args.
-        globalArgs: z.object(createCommonArgs()),
+        // Parse global args the same way the CLI entrypoint does.
+        globalArgs: z.strictObject(createCommonArgs()),
       });
       expect(result.exitCode).toBe(0);
       expect(logger.jsonMode).toBe(expected);
@@ -482,8 +500,8 @@ describe("createCommonArgs effects", () => {
       },
     });
     const result = await runCommand(command, [], {
-      // Strip unknown keys the same way the CLI entrypoint parses global args.
-      globalArgs: z.object(createCommonArgs()),
+      // Parse global args the same way the CLI entrypoint does.
+      globalArgs: z.strictObject(createCommonArgs()),
     });
     expect(result.exitCode).toBe(2);
     expect(ran).toBe(false);
@@ -510,8 +528,8 @@ describe("createCommonArgs effects", () => {
         },
       });
       const result = await runCommand(command, argv, {
-        // Strip unknown keys the same way the CLI entrypoint parses global args.
-        globalArgs: z.object(createCommonArgs()),
+        // Parse global args the same way the CLI entrypoint does.
+        globalArgs: z.strictObject(createCommonArgs()),
       });
       expect(result.exitCode).toBe(0);
       expect(seen).toBe(expected);
@@ -524,8 +542,8 @@ describe("createCommonArgs effects", () => {
     using setJsonMode = vi.spyOn(logger, "setJsonMode");
     const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
     const result = await runCommand(command, ["--json"], {
-      // Strip unknown keys the same way the CLI entrypoint parses global args.
-      globalArgs: z.object(createCommonArgs()),
+      // Parse global args the same way the CLI entrypoint does.
+      globalArgs: z.strictObject(createCommonArgs()),
     });
     expect(result.exitCode).toBe(0);
     expect(setJsonMode).toHaveBeenCalledWith(true, "both");
@@ -552,8 +570,8 @@ describe("createCommonArgs effects", () => {
         },
       });
       const result = await runCommand(command, argv, {
-        // Strip unknown keys the same way the CLI entrypoint parses global args.
-        globalArgs: z.object(createCommonArgs()),
+        // Parse global args the same way the CLI entrypoint does.
+        globalArgs: z.strictObject(createCommonArgs()),
       });
       expect(result.exitCode).toBe(0);
       expect(seen).toBe(expected);
@@ -573,8 +591,8 @@ describe("createCommonArgs effects", () => {
       vi.stubEnv("TAILOR_JSON_OUTPUT", output);
       const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
       const result = await runCommand(command, argv, {
-        // Strip unknown keys the same way the CLI entrypoint parses global args.
-        globalArgs: z.object(createCommonArgs()),
+        // Parse global args the same way the CLI entrypoint does.
+        globalArgs: z.strictObject(createCommonArgs()),
       });
       expect(result.exitCode).toBe(0);
       expect(setJsonMode).toHaveBeenCalledWith(true, source);
@@ -586,8 +604,8 @@ describe("createCommonArgs effects", () => {
     vi.stubEnv("POLITTY_NO_AGENT", undefined);
     const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
     const result = await runCommand(command, [], {
-      // Strip unknown keys the same way the plugin entrypoints parse global args.
-      globalArgs: z.object(createCommonArgs()),
+      // Parse global args the same way the plugin entrypoints do.
+      globalArgs: z.strictObject(createCommonArgs()),
     });
     expect(result.exitCode).toBe(0);
     expect(logger.jsonMode).toBe(false);
@@ -596,8 +614,8 @@ describe("createCommonArgs effects", () => {
   test("verboseAlias adds a short alias for --verbose", async () => {
     const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
     const result = await runCommand(command, ["-v"], {
-      // Strip unknown keys the same way the plugin entrypoints parse global args.
-      globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
+      // Parse global args the same way the plugin entrypoints do.
+      globalArgs: z.strictObject(createCommonArgs({ verboseAlias: "v" })),
     });
     expect(result.exitCode).toBe(0);
     expect(logger.verbose).toBe(true);

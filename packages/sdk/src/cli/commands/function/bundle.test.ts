@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { assertDefined } from "#/utils/assert";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
@@ -150,6 +150,47 @@ export function main() {
       expect(result.bundledCode).toContain("console.warn");
       expect(result.bundledCode).toContain("console.error");
     });
+
+    test("strips annotation comments but keeps legal comments", async () => {
+      const detected: DetectedFunction = { type: "plain", name: "comments", namedMain: true };
+      const result = await bundle(
+        "comments.ts",
+        `
+/*! LEGAL_MARKER */
+/* @__NO_SIDE_EFFECTS__ */
+const makeBox = (value: unknown) => ({ value });
+export function main(value: unknown) {
+  return [makeBox(value), makeBox(value)];
+}
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).toContain("LEGAL_MARKER");
+      expect(result.bundledCode).not.toContain("@__PURE__");
+      expect(result.bundledCode).not.toContain("@__NO_SIDE_EFFECTS__");
+    });
+  });
+
+  describe("SDK builder chains", () => {
+    test("drops an unused call whose arguments hold a db builder chain", async () => {
+      const detected: DetectedFunction = { type: "plain", name: "builders", namedMain: true };
+
+      const result = await bundle(
+        "builders.ts",
+        `
+import { db } from "@tailor-platform/sdk";
+const define = /* @__NO_SIDE_EFFECTS__ */ (options: unknown) => ({ options });
+const unused = define({ field: db.string().index().description("UNUSED_FIELD") });
+export function main() {
+  return 1;
+}
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).not.toContain("UNUSED_FIELD");
+    });
   });
 
   describe("source text in inline sourcemaps", () => {
@@ -197,9 +238,7 @@ export function main() {
 
   describe("resolver", () => {
     test("resolves generated imports from the configured project directory", async () => {
-      const root = fs.realpathSync(
-        fs.mkdtempSync(path.join(os.tmpdir(), "function-bundler-cross-project-")),
-      );
+      const root = makeTempDir("function-bundler-cross-project-");
       try {
         const projectDir = path.join(root, "project");
         const dependencyDir = path.join(projectDir, "node_modules", "@tailor-platform", "sdk");

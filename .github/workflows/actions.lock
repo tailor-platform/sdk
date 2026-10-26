@@ -9,48 +9,50 @@ workflows:
     '.github/workflows/changeset-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
+    '.github/workflows/changeset-publish.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/check-license.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
         - 'tailor-platform/actions@26a3cae341adecfaf0e6c81bd969de09c72dad55'
     '.github/workflows/check-workspace-regions.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/ci.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
         - 'suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7'
     '.github/workflows/cleanup-e2e-workspaces.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/deploy-drift-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/deploy.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/docs-consistency-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6'
+        - 'anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13'
     '.github/workflows/erd-schema.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
         - 'tailor-platform/actions@26a3cae341adecfaf0e6c81bd969de09c72dad55'
     '.github/workflows/generate.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
         - 'suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7'
     '.github/workflows/github-actions-lint.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
         - 'tailor-platform/actions@26a3cae341adecfaf0e6c81bd969de09c72dad55'
     '.github/workflows/link-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -63,7 +65,7 @@ workflows:
         - 'tailor-platform/actions@26a3cae341adecfaf0e6c81bd969de09c72dad55'
     '.github/workflows/lockfile-audit.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
         - 'tailor-platform/actions@26a3cae341adecfaf0e6c81bd969de09c72dad55'
     '.github/workflows/lockfile-runtime-diff.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -71,7 +73,7 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/neutralize-mentions.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/pkg-pr-new.yml':
@@ -79,38 +81,38 @@ workflows:
         - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
         - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
         - 'pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/release.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
         - 'changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/renovate-auto-review.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6'
+        - 'anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13'
     '.github/workflows/renovate-policy-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/sdk-e2e.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/sdk-metrics.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         - 'k1low/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278'
         - 'moznion/cccc-action@1d5313811f8451953e46a268c61791a01e40b7df'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/skills-sync-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7'
     '.github/workflows/template-tests.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/test.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+        - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/update_aqua_checksum.yml': []
 dependencies:
     'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830':
@@ -158,9 +160,9 @@ dependencies:
         commit: 'sha1-cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         owner_id: 44036562
         repo_id: 192625955
-    'anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6':
-        ref: 'v1.0.259'
-        commit: 'sha1-ae68417a745a5df4b2124873632bd73a2255e6f6'
+    'anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13':
+        ref: 'v1.0.262'
+        commit: 'sha1-925afb53776cf1a2b738c6bdbed37b4d4000ef13'
         owner_id: 76263028
         repo_id: 986421638
         uses:
@@ -220,9 +222,9 @@ dependencies:
         commit: 'sha1-ea17c68df8912ef543352723c149a84f56e3d413'
         owner_id: 21320719
         repo_id: 262289747
-    'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4':
-        ref: 'v3.1.1'
-        commit: 'sha1-a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
+    'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e':
+        ref: 'v3.1.2'
+        commit: 'sha1-fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
         owner_id: 21320719
         repo_id: 1235693694
     'suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7':

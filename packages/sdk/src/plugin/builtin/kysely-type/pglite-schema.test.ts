@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, aroundEach, beforeAll, describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { parseTypes } from "#/parser/service/tailordb/index";
 import { generateSchemaDDL, type DDLTableConfig } from "#/utils/tailordb-ddl";
@@ -343,5 +343,79 @@ describe("sequence ownership on PGlite", () => {
 
     await pglite.exec(ddl);
     expect(await nextCode()).toBe("T-00FF");
+  });
+});
+
+describe("relations written in the table definition", { timeout: 30_000 }, () => {
+  const owner = db.table("Owner", { name: db.string() });
+  const order = db.table("Order", {
+    ownerID: db.uuid().relation({ type: "n-1", toward: { table: owner } }),
+    ownerIDs: db.uuid({ array: true }).relation({ type: "keyOnly", toward: { table: owner } }),
+    info: db.object({
+      reviewerID: db
+        .uuid({ optional: true })
+        .relation({ type: "keyOnly", toward: { table: owner } }),
+    }),
+    lines: db.object(
+      { assigneeID: db.uuid().relation({ type: "keyOnly", toward: { table: owner } }) },
+      { array: true },
+    ),
+  });
+
+  let pglite: PGlite;
+
+  aroundEach(async (runTest) => {
+    pglite = new PGlite();
+    try {
+      await pglite.exec(generateSchemaDDL(toDDLTables(parsed({ Owner: owner, Order: order }))));
+      await runTest();
+    } finally {
+      await pglite.close();
+    }
+  });
+
+  test("rejects a row pointing at a missing parent, in every position a relation can be written", async () => {
+    const { rows } = await pglite.query<{ id: string }>(
+      `INSERT INTO "Owner" (name) VALUES ('a') RETURNING id`,
+    );
+    const id = rows[0]!.id;
+    const missing = crypto.randomUUID();
+    const insert = (ownerID: string, ownerIDs: string[], info: unknown, lines: unknown) =>
+      pglite.query(
+        `INSERT INTO "Order" ("ownerID", "ownerIDs", info, lines) VALUES ($1, $2, $3::jsonb, $4::jsonb)`,
+        [ownerID, `{${ownerIDs.join(",")}}`, JSON.stringify(info), JSON.stringify(lines)],
+      );
+
+    await insert(id, [id], { reviewerID: id }, [{ assigneeID: id }]);
+    await expect(insert(missing, [id], { reviewerID: id }, [])).rejects.toThrow(/foreign key/);
+    await expect(insert(id, [missing], { reviewerID: id }, [])).rejects.toThrow(/not found/);
+    await expect(insert(id, [id], { reviewerID: missing }, [])).rejects.toThrow(/not found/);
+    await expect(insert(id, [id], {}, [{ assigneeID: missing }])).rejects.toThrow(/not found/);
+  });
+
+  test.each([
+    ["an array field", { ownerIDs: true }],
+    ["a field inside an object", { info: true }],
+    ["a field inside an object array", { lines: true }],
+  ] as const)("refuses to delete a parent that %s still points at", async (_, position) => {
+    const { rows } = await pglite.query<{ id: string }>(
+      `INSERT INTO "Owner" (name) VALUES ('a'), ('b') RETURNING id`,
+    );
+    const [held, spare] = [rows[0]!.id, rows[1]!.id];
+    const pointing = (use: boolean, value: unknown, none: unknown) =>
+      use ? JSON.stringify(value) : JSON.stringify(none);
+    await pglite.query(
+      `INSERT INTO "Order" ("ownerID", "ownerIDs", info, lines) VALUES ($1, $2, $3::jsonb, $4::jsonb)`,
+      [
+        spare,
+        "ownerIDs" in position ? `{${held}}` : `{${spare}}`,
+        pointing("info" in position, { reviewerID: held }, { reviewerID: spare }),
+        pointing("lines" in position, [{ assigneeID: held }], [{ assigneeID: spare }]),
+      ],
+    );
+
+    await expect(pglite.query(`DELETE FROM "Owner" WHERE id = $1`, [held])).rejects.toThrow(
+      /still referenced from table `Order`/,
+    );
   });
 });

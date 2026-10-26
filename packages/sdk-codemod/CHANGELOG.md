@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-codemod
 
+## 0.10.4
+
+### Patch Changes
+
+- [#2669](https://github.com/tailor-platform/sdk/pull/2669) [`704cfa1`](https://github.com/tailor-platform/sdk/commit/704cfa16b3a287ccb6e46657fa075d9bce86eed7) Thanks [@dqn](https://github.com/dqn)! - Update `@politty/zod` to 0.6.0. The codemod CLI now reports a mistyped subcommand, with a suggestion, before an unknown option given after it.
+
+- [#2765](https://github.com/tailor-platform/sdk/pull/2765) [`eb01ec6`](https://github.com/tailor-platform/sdk/commit/eb01ec6b2286e71c04a1b009f859846f91c603d0) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.6.0
+
 ## 0.10.3
 
 ### Patch Changes

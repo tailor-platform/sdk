@@ -254,6 +254,32 @@ export function getMigrationFiles(
   return migrations.toSorted((a, b) => a.number - b.number);
 }
 
+const MIGRATION_FILE_TYPES = Object.keys(MIGRATION_FILE_NAMES) as MigrationFileType[];
+
+/**
+ * Get the known migration files present in each migration directory, sorted by number
+ * @param {string} migrationsDir - Migrations directory path
+ * @returns {Array<{number: number, fileTypes: MigrationFileType[]}>} Directories holding at least one known migration file
+ */
+export function getMigrationArtifacts(
+  migrationsDir: string,
+): { number: number; fileTypes: MigrationFileType[] }[] {
+  if (!fs.existsSync(migrationsDir)) return [];
+
+  return fs
+    .readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && isValidMigrationNumber(entry.name))
+    .map((entry) => {
+      const number = Number.parseInt(entry.name, 10);
+      const fileTypes = MIGRATION_FILE_TYPES.filter((type) =>
+        fs.existsSync(getMigrationFilePath(migrationsDir, number, type)),
+      );
+      return { number, fileTypes };
+    })
+    .filter(({ fileTypes }) => fileTypes.length > 0)
+    .toSorted((a, b) => a.number - b.number);
+}
+
 /**
  * Get the next migration number for a directory
  * Returns INITIAL_SCHEMA_NUMBER (0) if no migrations exist

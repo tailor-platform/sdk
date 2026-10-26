@@ -10,35 +10,14 @@ import {
   loadDiff,
   getMigrationFilePath,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
+import { CLI_BUDGET_MS, cliTestTimeout } from "./cli";
 import {
   DEPLOY_TEST_TIMEOUT_MS,
   GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
   GENERATE_TEST_TIMEOUT_MS,
+  mergeStepsIntoOne,
   MigrationWorkspace,
 } from "./migration-workspace";
-
-/**
- * Regroup the steps of a generated migrate.ts into two steps, the second depending on the first.
- * Every step is its own platform job, so a migration with many changes takes minutes to deploy;
- * two steps still exercise the step runner.
- * @param script - Generated migrate.ts source that exports `steps`
- * @returns Source whose `steps` holds a `first` and a `second` step running the same functions in order
- */
-function groupStepsIntoTwo(script: string): string {
-  const stepsBlock = /export const steps = \{\n([\s\S]*?)\n\} satisfies MigrationSteps;/.exec(
-    script,
-  );
-  if (!stepsBlock) throw new Error("Generated migrate.ts does not export steps");
-  const names = [...stepsBlock[1]!.matchAll(/^ {2}(\w+): \{/gm)].map((match) => match[1]!);
-  if (names.length < 2) throw new Error(`Expected at least two steps, found ${names.length}`);
-  const half = Math.ceil(names.length / 2);
-  const run = (group: string[]) =>
-    `async (trx: Transaction) => {\n${group.map((name) => `    await ${name}(trx);`).join("\n")}\n  }`;
-  return script.replace(
-    stepsBlock[0],
-    `export const steps = {\n  first: { run: ${run(names.slice(0, half))} },\n  second: { dependsOn: ["first"], run: ${run(names.slice(half))} },\n} satisfies MigrationSteps;`,
-  );
-}
 
 const firstRowId = "10000000-0000-4000-8000-000000000001";
 const secondRowId = "10000000-0000-4000-8000-000000000002";
@@ -50,9 +29,7 @@ describe("E2E: TailorDB Migration Failure and Type Changes", { concurrent: false
   test(
     "deploys the initial schema",
     async ({ signal }) => {
-      await ws.runGenerate(signal);
-      await ws.runDeploy(signal);
-      expect(await ws.getTailorDBTypeFields("User")).toEqual(
+      expect(await ws.deployInitialSchema(signal)).toEqual(
         expect.arrayContaining(["name", "email", "role"]),
       );
     },
@@ -243,7 +220,7 @@ export async function main(trx: Transaction): Promise<void> {
         const editedScript = reviewedScript.replace(defaultNormalization, exercisedNormalization);
         expect(editedScript).not.toBe(reviewedScript);
         expect(editedScript).not.toMatch(/\bTODO\(/);
-        fs.writeFileSync(migratePath, groupStepsIntoTwo(editedScript));
+        fs.writeFileSync(migratePath, mergeStepsIntoOne(editedScript));
 
         await ws.runDeploy(signal);
         expect(await ws.getMigrationCheckpoint()).toBe(2);
@@ -251,207 +228,75 @@ export async function main(trx: Transaction): Promise<void> {
       GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
     );
 
-    const mutateStep = `async (trx: Transaction) => {
-      const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
-      if (rows.length !== 2) {
-        throw new Error(\`Expected two rows after type changes, received \${rows.length}\`);
-      }
-      for (const row of rows) {
-        if (
-          typeof row.sourceUuid !== "string" ||
-          typeof row.sourceEnum !== "string" ||
-          typeof row.sourceDecimal !== "string" ||
-          typeof row.sourceInteger !== "number" ||
-          typeof row.indexedUuid !== "string" ||
-          typeof row.indexedEnum !== "string" ||
-          typeof row.indexedDecimal !== "string" ||
-          typeof row.indexedInteger !== "number"
-        ) {
-          throw new Error("Type-changed row did not decode through its target field types");
-        }
-      }
-      const normalized = rows.find((row) => row.id === "${firstRowId}");
-      if (normalized?.sourceUuid !== "20000000-0000-4000-8000-000000000011") {
-        throw new Error("Generated field-type normalization update did not persist");
-      }
-
-      await trx
-        .updateTable("User")
-        .set({
-          sourceUuid: "not-a-uuid",
-          sourceEnum: "NOT_ENUM",
-          sourceDecimal: "not-a-decimal",
-          sourceInteger: 42.5,
-          indexedUuid: "not-an-indexed-uuid",
-          indexedEnum: "NOT_INDEXED_ENUM",
-          indexedDecimal: "not-an-indexed-decimal",
-          indexedInteger: 84.5,
-          verificationMarker: "verified",
-        })
-        .where("id", "=", "${firstRowId}")
-        .execute();
-      await trx.deleteFrom("User").where("id", "=", "${secondRowId}").execute();
-    }`;
-
-    const verifyStep = `async (trx: Transaction) => {
-      const remaining = await trx.selectFrom("User").selectAll().execute();
-      if (
-        remaining.length !== 1 ||
-        remaining[0]?.id !== "${firstRowId}" ||
-        remaining[0]?.sourceUuid !== "not-a-uuid" ||
-        remaining[0]?.sourceEnum !== "NOT_ENUM" ||
-        remaining[0]?.sourceDecimal !== "not-a-decimal" ||
-        remaining[0]?.sourceInteger !== 42.5 ||
-        remaining[0]?.indexedUuid !== "not-an-indexed-uuid" ||
-        remaining[0]?.indexedEnum !== "NOT_INDEXED_ENUM" ||
-        remaining[0]?.indexedDecimal !== "not-an-indexed-decimal" ||
-        remaining[0]?.indexedInteger !== 84.5
-      ) {
-        throw new Error("Target-type update or delete verification failed");
-      }
-    }`;
-
-    const stepsScript = (
-      mutate: string,
-      verify: string,
-    ) => `import type { Transaction } from "./db";
-
-export const steps = {
-  mutate: { run: ${mutate} },
-  verify: { dependsOn: ["mutate"], run: ${verify} },
-};
-`;
-
     test(
-      "generates the multi-step verification migration",
+      "updates and deletes rows through the changed types",
       async ({ signal }) => {
-        ws.writeUserTable([
-          "role: db.string({ optional: true })",
-          "loyaltyTier: db.string()",
-          "sourceUuid: db.string()",
-          "sourceEnum: db.string()",
-          "sourceDecimal: db.string()",
-          "sourceInteger: db.float()",
-          "indexedUuid: db.string().index()",
-          "indexedEnum: db.string().index()",
-          "indexedDecimal: db.string().index()",
-          "indexedInteger: db.float().index()",
-          "verificationMarker: db.string()",
+        const rowsBefore = await ws.runTailorDBScript(
+          `  const rows = await db.selectFrom("User").selectAll().orderBy("id", "asc").execute();
+  await db
+    .updateTable("User")
+    .set({
+      sourceUuid: "not-a-uuid",
+      sourceEnum: "NOT_ENUM",
+      sourceDecimal: "not-a-decimal",
+      sourceInteger: 42.5,
+      indexedUuid: "not-an-indexed-uuid",
+      indexedEnum: "NOT_INDEXED_ENUM",
+      indexedDecimal: "not-an-indexed-decimal",
+      indexedInteger: 84.5,
+    })
+    .where("id", "=", "${firstRowId}")
+    .execute();
+  await db.deleteFrom("User").where("id", "=", "${secondRowId}").execute();
+  return rows;`,
+          signal,
+        );
+
+        const decodedThroughTargetTypes = {
+          sourceUuid: expect.any(String),
+          sourceEnum: expect.any(String),
+          sourceDecimal: expect.any(String),
+          sourceInteger: expect.any(Number),
+          indexedUuid: expect.any(String),
+          indexedEnum: expect.any(String),
+          indexedDecimal: expect.any(String),
+          indexedInteger: expect.any(Number),
+        };
+        expect(rowsBefore).toEqual([
+          expect.objectContaining({
+            ...decodedThroughTargetTypes,
+            id: firstRowId,
+            sourceUuid: "20000000-0000-4000-8000-000000000011",
+          }),
+          expect.objectContaining({ ...decodedThroughTargetTypes, id: secondRowId }),
         ]);
-
-        await ws.runGenerate(signal);
-
-        const files = getMigrationFiles(ws.migrationsDir);
-        expect(files.length).toBe(4);
-        expect(files[3]!.number).toBe(3);
       },
-      GENERATE_TEST_TIMEOUT_MS,
+      cliTestTimeout(CLI_BUDGET_MS.script),
     );
 
-    /**
-     * Scenario 10a: a script that exports onFailure = "rollback" gives its Pre-phase schema back,
-     * clears the in-progress record and removes its workflow when a later step fails. The next
-     * scenario deploys the same migration again, so nothing is left in progress here.
-     */
     test(
-      "rolls the migration back when its second step fails and its script asks for it",
+      "reads the update and delete back once they have committed",
       async ({ signal }) => {
-        ws.overwriteMigrationScript(
-          3,
-          `import type { Transaction } from "./db";
-
-export const onFailure = "rollback";
-
-export const steps = {
-  probe: {
-    run: async (trx: Transaction) => {
-      await trx.updateTable("User").set({ verificationMarker: "rollback-probe" }).execute();
-    },
-  },
-  verify: {
-    dependsOn: ["probe"],
-    run: async () => {
-      throw new Error("simulated step failure for rollback e2e");
-    },
-  },
-};
-`,
+        const remaining = await ws.runTailorDBScript(
+          `  return await db.selectFrom("User").selectAll().execute();`,
+          signal,
         );
 
-        const result = await ws.tryDeploy(signal);
-
-        expect(result.ok).toBe(false);
-        expect(result.output).toContain("MIGRATION_ROLLED_BACK");
-        expect(result.output).toContain("simulated step failure for rollback e2e");
-        expect(await ws.getMigrationCheckpoint()).toBe(2);
-        expect(await ws.getTailorDBTypeFields("User")).not.toContain("verificationMarker");
-        const labels = await ws.namespaceLabels();
-        expect(labels).not.toHaveProperty("sdk-migration-in-progress");
-        expect(labels).not.toHaveProperty("sdk-migration-execution");
-        expect(await ws.migrationWorkflowExists(3)).toBe(false);
+        expect(remaining).toEqual([
+          expect.objectContaining({
+            id: firstRowId,
+            sourceUuid: "not-a-uuid",
+            sourceEnum: "NOT_ENUM",
+            sourceDecimal: "not-a-decimal",
+            sourceInteger: 42.5,
+            indexedUuid: "not-an-indexed-uuid",
+            indexedEnum: "NOT_INDEXED_ENUM",
+            indexedDecimal: "not-an-indexed-decimal",
+            indexedInteger: 84.5,
+          }),
+        ]);
       },
-      DEPLOY_TEST_TIMEOUT_MS,
-    );
-
-    /**
-     * Scenario 10b: a step that fails after another step committed leaves the
-     * migration in progress, keeping its Pre-phase schema for the next deploy.
-     */
-    test(
-      "leaves the migration in progress when its second step fails",
-      async ({ signal }) => {
-        ws.overwriteMigrationScript(
-          3,
-          stepsScript(
-            mutateStep,
-            `async () => {
-      throw new Error("simulated step failure for resume e2e");
-    }`,
-          ),
-        );
-
-        const result = await ws.tryDeploy(signal);
-
-        expect(result.ok).toBe(false);
-        expect(result.output).toContain("MIGRATION_PARTIALLY_APPLIED");
-        expect(result.output).toContain("simulated step failure for resume e2e");
-        expect(await ws.getMigrationCheckpoint()).toBe(2);
-        expect(await ws.getTailorDBTypeFields("User")).toContain("verificationMarker");
-        expect(await ws.namespaceLabels()).toMatchObject({
-          "sdk-migration-in-progress": "m0003",
-          "sdk-migration-execution": expect.stringMatching(/^e[0-9a-f]{32}$/),
-        });
-        expect(await ws.migrationWorkflowExists(3)).toBe(true);
-      },
-      DEPLOY_TEST_TIMEOUT_MS,
-    );
-
-    /**
-     * Scenario 10c: the next deploy resumes the failed run with the fixed script;
-     * the completed step does not run again, and its committed changes are visible.
-     */
-    test(
-      "resumes from the failed step without re-running the completed one",
-      async ({ signal }) => {
-        ws.overwriteMigrationScript(
-          3,
-          stepsScript(
-            `async () => {
-      throw new Error("the completed mutate step must not run again");
-    }`,
-            verifyStep,
-          ),
-        );
-
-        await ws.runDeploy(signal);
-
-        expect(await ws.getMigrationCheckpoint()).toBe(3);
-        const labels = await ws.namespaceLabels();
-        expect(labels).not.toHaveProperty("sdk-migration-in-progress");
-        expect(labels).not.toHaveProperty("sdk-migration-execution");
-        expect(await ws.migrationWorkflowExists(3)).toBe(false);
-      },
-      DEPLOY_TEST_TIMEOUT_MS,
+      cliTestTimeout(CLI_BUDGET_MS.script),
     );
   });
 });

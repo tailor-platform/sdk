@@ -1,7 +1,11 @@
 // MessageInitShape makes every proto field optional
 /* oxlint-disable typescript/no-unnecessary-condition */
 import { describe, expect, test } from "vitest";
+import { db } from "#/configure/services/tailordb/schema";
+import { parseTypes } from "#/parser/service/tailordb/type-parser";
+import { toSchemaOutputs } from "#/utils/test/internal";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
+import { createSnapshotFromLocalTypes } from "./snapshot-local";
 import {
   generateTailorDBTypeManifestFromSnapshot,
   generateAllTypeManifestsFromSnapshot,
@@ -213,6 +217,61 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.authorId?.foreignKey).toBe(true);
       expect(manifest.schema?.fields?.authorId?.foreignKeyType).toBe("User");
       expect(manifest.schema?.fields?.authorId?.foreignKeyField).toBe("id");
+    });
+
+    test("sends the foreign key of a field inside a nested field", () => {
+      const snapshotType = createTestSnapshotType("Order", {
+        fields: {
+          id: { type: "uuid", required: true },
+          items: {
+            type: "nested",
+            required: true,
+            array: true,
+            fields: {
+              ownerID: {
+                type: "uuid",
+                required: true,
+                foreignKey: true,
+                foreignKeyType: "User",
+                foreignKeyField: "id",
+              },
+              note: { type: "string", required: false },
+            },
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      const inner = manifest.schema?.fields?.items?.fields;
+      expect(inner?.ownerID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "id",
+        index: false,
+        unique: false,
+      });
+      expect(inner?.note?.foreignKey).toBe(false);
+    });
+
+    test("carries a relation written inside db.object() from the table definition to the manifest", () => {
+      const user = db.table("User", { name: db.string() });
+      const order = db.table("Order", {
+        items: db.object(
+          { ownerID: db.uuid().relation({ type: "keyOnly", toward: { table: user } }) },
+          { array: true },
+        ),
+      });
+
+      const parsed = parseTypes(toSchemaOutputs({ User: user, Order: order }), "tailordb");
+      const { tables } = createSnapshotFromLocalTypes(parsed, "tailordb");
+      const manifest = generateTailorDBTypeManifestFromSnapshot(tables.Order!);
+
+      expect(manifest.schema?.fields?.items?.fields?.ownerID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "id",
+      });
     });
 
     test("handles indexes", () => {
