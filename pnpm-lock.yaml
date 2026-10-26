@@ -695,8 +695,8 @@ importers:
         specifier: 6.0.3
         version: 6.0.3(graphql@17.0.2)
       amaro:
-        specifier: 1.2.1
-        version: 1.2.1
+        specifier: 1.2.2
+        version: 1.2.2
       confbox:
         specifier: 0.3.1
         version: 0.3.1
@@ -2937,8 +2937,8 @@ packages:
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
 
-  amaro@1.2.1:
-    resolution: {integrity: sha512-RXNB1/mbpbpwr4mVlQgYZVdY4CHl7rFExwov+XOTWfghpsM1s2sD/5u4oTQkKL4Pt0BGNIExSVjRcLMjcytIDQ==}
+  amaro@1.2.2:
+    resolution: {integrity: sha512-H1ReZZ8Te6HHaWAy9171A/iWkGZOusKCtdzmh6EnTgluiNiAV9OSmUIN5rZI1TZnw6+NAUNz+n6pAWoJAHhRIQ==}
     engines: {node: '>=22'}
 
   ansi-regex@5.0.1:
@@ -5949,7 +5949,7 @@ snapshots:
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
 
-  amaro@1.2.1: {}
+  amaro@1.2.2: {}
 
   ansi-regex@5.0.1: {}
 
@@ -6688,7 +6688,7 @@ snapshots:
     dependencies:
       '@politty/loculus': 0.1.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.4(@types/node@24.19.2))(loculus@0.2.5)
       '@standard-schema/spec': 1.1.0
-      amaro: 1.2.1
+      amaro: 1.2.2
       loculus: 0.2.5
       zod: 4.6.7
     optionalDependencies:
