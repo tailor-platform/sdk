@@ -251,7 +251,7 @@
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.0.5",
-    "zinfer": "0.4.7"
+    "zinfer": "0.5.0"
   },
   "peerDependencies": {
     "@electric-sql/pglite": ">=0.2.0",
