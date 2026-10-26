@@ -460,6 +460,107 @@ function referenceTrigger(
   ];
 }
 
+interface IncomingReference extends Reference {
+  /** Table whose array or nested column holds the reference */
+  child: string;
+  pgType: string;
+}
+
+function incomingReferences(
+  table: DDLTableConfig,
+  tables: ReadonlyMap<string, DDLTableConfig>,
+): IncomingReference[] {
+  return [...tables.values()].flatMap((child) =>
+    tableReferences(child)
+      .filter(
+        (reference) => !isConstraintReference(reference, tables) && reference.table === table.name,
+      )
+      .flatMap((reference) => {
+        const check = checkReference(reference, tables);
+        return "pgType" in check ? [{ ...reference, child: child.name, pgType: check.pgType }] : [];
+      }),
+  );
+}
+
+function holdsParent(reference: IncomingReference): string {
+  const column = `child.${identifier(reference.column)}`;
+  const parentValue = `OLD.${identifier(reference.field)}`;
+  const sameType = reference.pgType === mapFieldTypeToPostgresType(reference.type);
+  if (sameType && reference.path === "$[*]") return `${parentValue} = ANY(${column})`;
+  const comparison = sameType
+    ? `(held.v #>> '{}')::${reference.pgType} = ${parentValue}`
+    : `(held.v #>> '{}') = ${parentValue}::text`;
+  const notComparable = sameType
+    ? `WHEN NOT pg_input_is_valid(held.v #>> '{}', ${stringLiteral(reference.pgType)}) THEN false `
+    : "";
+  return `EXISTS (SELECT 1 FROM jsonb_path_query(to_jsonb(${column}), ${stringLiteral(reference.path)}) AS held(v) WHERE CASE WHEN jsonb_typeof(held.v) = 'null' THEN false ${notComparable}ELSE ${comparison} END)`;
+}
+
+const DELETED_ROWS = "old_rows";
+
+function holds(reference: IncomingReference, source: string): string {
+  return `EXISTS (SELECT 1 FROM ${source} AS child WHERE ${holdsParent(reference)})`;
+}
+
+function refuseWhen(
+  table: DDLTableConfig,
+  reference: IncomingReference,
+  condition: string,
+): string {
+  const message = `update or delete on table \`${table.name}\` violates foreign key constraint: some record is still referenced from table \`${reference.child}\``;
+  return [
+    `  IF ${condition} THEN`,
+    `    RAISE EXCEPTION ${stringLiteral(message.replaceAll("%", "%%"))} USING ERRCODE = 'foreign_key_violation';`,
+    "  END IF;",
+  ].join("\n");
+}
+
+function referencedDeleteCheck(table: DDLTableConfig, reference: IncomingReference): string {
+  const remaining = holds(reference, identifier(reference.child));
+  const condition =
+    reference.child === table.name
+      ? `${remaining} OR ${holds(reference, DELETED_ROWS)}`
+      : remaining;
+  return refuseWhen(table, reference, condition);
+}
+
+function referencedUpdateCheck(table: DDLTableConfig, reference: IncomingReference): string {
+  const field = identifier(reference.field);
+  return refuseWhen(
+    table,
+    reference,
+    `NEW.${field} IS DISTINCT FROM OLD.${field} AND ${holds(reference, identifier(reference.child))}`,
+  );
+}
+
+function referencedTrigger(
+  table: DDLTableConfig,
+  tables: ReadonlyMap<string, DDLTableConfig>,
+): string[] {
+  const references = incomingReferences(table, tables);
+  if (references.length === 0) return [];
+  const selfReferencing = references.some((reference) => reference.child === table.name);
+  const deletedRows = selfReferencing ? ` REFERENCING OLD TABLE AS ${DELETED_ROWS}` : "";
+  return (
+    [
+      ["referenced_delete", "DELETE", deletedRows, referencedDeleteCheck],
+      ["referenced_update", "UPDATE", "", referencedUpdateCheck],
+    ] as const
+  ).flatMap(([member, event, transition, check]) => {
+    const name = derivedIdentifier(table.name, member, "fk");
+    const body = [
+      "BEGIN",
+      ...references.map((reference) => check(table, reference)),
+      "  RETURN NULL;",
+      "END",
+    ].join("\n");
+    return [
+      `CREATE OR REPLACE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(body)}`,
+      `CREATE OR REPLACE TRIGGER ${name} AFTER ${event} ON ${identifier(table.name)}${transition} FOR EACH ROW EXECUTE FUNCTION ${name}()`,
+    ];
+  });
+}
+
 /** What {@link generateTableDDL} needs to know about the other tables of the schema. */
 export interface TableDDLOptions {
   /** Every table of the schema, to resolve the types referenced columns point at */
@@ -471,8 +572,11 @@ export interface TableDDLOptions {
 /**
  * DDL statements that create one table: any sequences its string serial
  * fields draw from, the table, the sequences' ownership of their columns,
- * its unique indexes, then a trigger checking the references Postgres cannot
- * express as a FOREIGN KEY (inside array and nested columns). Every statement
+ * its unique indexes, then the triggers that enforce the references Postgres
+ * cannot express as a FOREIGN KEY (inside array and nested columns): one
+ * checking the references the table holds, one refusing to delete a row, and
+ * one refusing to change the key of a row, that another table's array or
+ * nested value still points at. Every statement
  * is `IF NOT EXISTS` or otherwise idempotent, so re-applying the script on a
  * database that already has the table is a no-op. Owning a sequence makes
  * `DROP TABLE` drop it and `TRUNCATE ... RESTART IDENTITY` reset it to the
@@ -533,6 +637,7 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
       references.filter((r) => !isConstraintReference(r, tables)),
       tables,
     ),
+    ...referencedTrigger(table, tables),
   ];
 }
 
