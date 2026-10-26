@@ -337,7 +337,7 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
-  test.fails("reports a remote checkpoint ahead of the local migration history as an error", async () => {
+  test("reports a remote checkpoint ahead of the local migration history as an error", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0009" } },
     });
@@ -348,7 +348,13 @@ describe("tailordb migration status --json", () => {
     const result = await runCommand(statusCommand, []);
 
     expect(result.success).toBe(false);
-    expect(JSON.parse(stdout.output)).toMatchObject([{ status: "error", namespace: "tailordb" }]);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "error",
+        namespace: "tailordb",
+        error: expect.stringMatching(/checkpoint 0009.*ahead.*latest local migration 0002/i),
+      },
+    ]);
   });
 
   test("identifies a migration history mismatch in human-readable output", async () => {

@@ -198,6 +198,17 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       .map((f) => f.number)
       .filter((n, i, arr) => arr.indexOf(n) === i) // deduplicate
       .toSorted((a, b) => a - b);
+    const latestLocalMigration = availableNumbers.at(-1) ?? 0;
+    if (currentMigration > latestLocalMigration) {
+      rows.push({
+        status: "error",
+        namespace,
+        error:
+          `Remote migration checkpoint ${formatMigrationNumber(currentMigration)} is ahead of ` +
+          `the latest local migration ${formatMigrationNumber(latestLocalMigration)}.`,
+      });
+      continue;
+    }
     const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
 
     const pendingMigrations = pendingNumbers.map((num) => ({
