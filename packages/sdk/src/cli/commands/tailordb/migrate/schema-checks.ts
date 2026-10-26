@@ -476,9 +476,8 @@ export async function verifyRemoteSchema(
       drifts,
       hasDrift: drifts.length > 0,
       ...(checkpointRepair && drifts.length === 0 ? { checkpointRepair } : {}),
-      ...(remoteState.inProgress || remoteState.inProgressInvalid
-        ? { migrationInProgress: true }
-        : {}),
+      ...(remoteState.inProgress ? { migrationInProgress: remoteState.inProgress } : {}),
+      ...(remoteState.inProgressInvalid ? { migrationInProgressInvalid: true } : {}),
     });
   }
 

@@ -40,9 +40,14 @@ interface MigrationStatusInfo {
   currentMigration: number;
   currentMigrationLabel: string;
   pendingMigrations: PendingMigrationStatusInfo[];
-  /** Migration an earlier deploy left partially applied; the next deploy resumes it. */
+  /** Migration an earlier deploy left in progress. */
   inProgressMigration?: number;
   inProgressMigrationLabel?: string;
+  /**
+   * How the in-progress migration ran: `steps` partly committed, which the next deploy resumes, or
+   * a `main` run whose outcome `migration resolve` settles before the next deploy.
+   */
+  inProgressMigrationRun?: "steps" | "main";
 }
 
 interface MigrationStatusFailure {
@@ -217,6 +222,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
         ? {
             inProgressMigration: inProgress.number,
             inProgressMigrationLabel: formatMigrationNumber(inProgress.number),
+            inProgressMigrationRun: inProgress.kind,
           }
         : {}),
     });
@@ -236,7 +242,9 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
     logger.log(`  Current migration: ${styles.bold(row.currentMigrationLabel)}`);
     if (row.inProgressMigrationLabel) {
       logger.log(
-        `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (partially applied; the next deploy resumes it)`,
+        row.inProgressMigrationRun === "main"
+          ? `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (the outcome of its run is not settled; settle it with 'tailor tailordb migration resolve')`
+          : `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (partially applied; the next deploy resumes it)`,
       );
     }
 

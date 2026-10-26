@@ -126,8 +126,45 @@ describe("tailordb migration status --json", () => {
     await runCommand(statusCommand, []);
 
     expect(JSON.parse(stdout.output)).toMatchObject([
-      { status: "ok", inProgressMigration: 2, inProgressMigrationLabel: "0002" },
+      {
+        status: "ok",
+        inProgressMigration: 2,
+        inProgressMigrationLabel: "0002",
+        inProgressMigrationRun: "steps",
+      },
     ]);
+  });
+
+  test("reports a `main` run whose outcome an earlier deploy could not settle", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002-main" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      { status: "ok", inProgressMigration: 2, inProgressMigrationRun: "main" },
+    ]);
+  });
+
+  test("tells the user to settle a `main` run whose outcome is not settled", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002-main" },
+      },
+    });
+    using stderr = captureStderr();
+
+    await runCommand(statusCommand, []);
+
+    expect(stderr.output).toContain("In progress: 0002");
+    expect(stderr.output).toContain("tailor tailordb migration resolve");
+    expect(stderr.output).not.toContain("the next deploy resumes it");
   });
 
   test("does not report an in-progress record the checkpoint already passed", async () => {

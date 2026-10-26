@@ -18,6 +18,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
 import {
+  MIGRATION_EXECUTION_LABEL_KEY,
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_IN_PROGRESS_LABEL_KEY,
   MIGRATION_LABEL_KEY,
@@ -100,10 +101,13 @@ vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
 const executeMigrationStepsAsWorkflowMock = vi.fn();
+const removeMigrationWorkflowResourcesMock = vi.fn();
 vi.mock("./migration-workflow", () => ({
   executeMigrationAsWorkflow: (...args: unknown[]) => executeMigrationAsWorkflowMock(...args),
   executeMigrationStepsAsWorkflow: (...args: unknown[]) =>
     executeMigrationStepsAsWorkflowMock(...args),
+  removeMigrationWorkflowResources: (...args: unknown[]) =>
+    removeMigrationWorkflowResourcesMock(...args),
   migrationStepRunnerName: (name: string) => `${name}--step`,
   migrationWorkflowResourceName: (namespace: string, number: number) =>
     `tailordb-migration--${namespace}--${number}`,
@@ -839,7 +843,7 @@ describe("migration", () => {
       const skipSteps = new Map([["tailordb", ["backfill"]]]);
 
       await executeMigrations({ ...stepsContext(vi.fn()), skipSteps }, [migration], {
-        tailordb: { number: 3 },
+        tailordb: { number: 3, kind: "steps" },
       });
 
       expect(bundleMigrationStepsMock.mock.calls[0]![0]).toMatchObject({ skipSteps: ["backfill"] });
@@ -862,7 +866,7 @@ describe("migration", () => {
       await executeMigrations(
         { ...stepsContext(vi.fn()), skipSteps: new Map([["tailordb", ["backfill"]]]) },
         [migration],
-        { tailordb: { number: 3 } },
+        { tailordb: { number: 3, kind: "steps" } },
       );
 
       expect(bundleMigrationStepsMock.mock.calls[0]![0].skipSteps ?? []).toEqual([]);
@@ -891,7 +895,9 @@ describe("migration", () => {
       vi.mocked(logger.warn).mockClear();
       vi.mocked(logger.log).mockClear();
 
-      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+      await executeMigrations(stepsContext(vi.fn()), [migration], {
+        tailordb: { number: 1, kind: "steps" },
+      });
 
       expect(logger.warn).toHaveBeenCalledWith("every step runs again");
       expect(logger.log).toHaveBeenCalledWith("skip them with --migration-skip-steps");
@@ -1115,7 +1121,9 @@ describe("migration", () => {
       spinnerMock.fail.mockClear();
 
       await expect(
-        executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } }),
+        executeMigrations(stepsContext(vi.fn()), [migration], {
+          tailordb: { number: 1, kind: "steps" },
+        }),
       ).rejects.toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
 
       const order = (mock: { mock: { invocationCallOrder: number[] } }) =>
@@ -1139,7 +1147,9 @@ describe("migration", () => {
       );
 
       await expect(
-        executeMigrations(createMockContext(), [migration], { tailordb: { number: 1 } }),
+        executeMigrations(createMockContext(), [migration], {
+          tailordb: { number: 1, kind: "steps" },
+        }),
       ).rejects.toMatchObject({
         code: "MIGRATION_PARTIALLY_APPLIED",
         suggestion: expect.stringContaining("Wait for it to finish, then deploy again."),
@@ -1160,6 +1170,178 @@ describe("migration", () => {
       expect(spinnerMock.fail).toHaveBeenCalledWith(
         "Could not confirm the outcome of migration tailordb/0001",
       );
+    });
+
+    test("records a run of steps without the `main` suffix", async () => {
+      const store = createMetadataStore({});
+      const recorded: Record<string, string>[] = [];
+      executeMigrationStepsAsWorkflowMock.mockImplementationOnce(
+        async (options: {
+          onBeforeStart: () => Promise<void>;
+          onExecutionStarted: (executionId: string) => Promise<void>;
+        }) => {
+          await options.onBeforeStart();
+          recorded.push({ ...store.labels() });
+          await options.onExecutionStarted("0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60");
+          recorded.push({ ...store.labels() });
+          return {
+            success: true,
+            logs: "",
+            completedSteps: ["backfill", "recompute"],
+            failedSteps: [],
+            stepsMayHaveCommitted: true,
+          };
+        },
+      );
+
+      await executeMigrations({ ...createMockContext(), client: store.client }, [
+        createMockMigration({ number: 3, scriptForm: stepsForm }),
+      ]);
+
+      expect(recorded).toEqual([
+        { [MIGRATION_IN_PROGRESS_LABEL_KEY]: "m0003" },
+        {
+          [MIGRATION_IN_PROGRESS_LABEL_KEY]: "m0003",
+          [MIGRATION_EXECUTION_LABEL_KEY]: "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60",
+        },
+      ]);
+    });
+
+    describe("the record of a `main` run", () => {
+      const executionId = "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60";
+      const executionLabel = "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60";
+
+      interface RecordingOptions {
+        onBeforeStart: () => Promise<void>;
+        onExecutionStarted: (executionId: string) => Promise<void>;
+      }
+
+      function runThat(finish: () => unknown) {
+        return async (options: RecordingOptions) => {
+          await options.onBeforeStart();
+          await options.onExecutionStarted(executionId);
+          return finish();
+        };
+      }
+
+      aroundEach(async (runTest) => {
+        removeMigrationWorkflowResourcesMock.mockReset();
+        removeMigrationWorkflowResourcesMock.mockResolvedValue(undefined);
+        await runTest();
+      });
+
+      test.each<{ name: string; scriptForm: MigrationScriptForm }>([
+        { name: "a `main` script", scriptForm: { kind: "main" } },
+        { name: "a script with a single step", scriptForm: { kind: "steps", order: ["backfill"] } },
+      ])(
+        "records the run of $name before it starts, adds its execution once started, and keeps the record for the checkpoint to clear",
+        async ({ scriptForm }) => {
+          const store = createMetadataStore({});
+          const recorded: Record<string, string>[] = [];
+          executeMigrationAsWorkflowMock.mockImplementationOnce(
+            async (options: RecordingOptions) => {
+              await options.onBeforeStart();
+              recorded.push({ ...store.labels() });
+              await options.onExecutionStarted(executionId);
+              recorded.push({ ...store.labels() });
+              return { success: true, logs: "" };
+            },
+          );
+
+          await executeMigrations({ ...createMockContext(), client: store.client }, [
+            createMockMigration({ number: 3, scriptForm }),
+          ]);
+
+          expect(recorded).toEqual([
+            { [MIGRATION_IN_PROGRESS_LABEL_KEY]: "m0003-main" },
+            {
+              [MIGRATION_IN_PROGRESS_LABEL_KEY]: "m0003-main",
+              [MIGRATION_EXECUTION_LABEL_KEY]: executionLabel,
+            },
+          ]);
+          expect(store.labels()).toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY, "m0003-main");
+          expect(removeMigrationWorkflowResourcesMock).not.toHaveBeenCalled();
+        },
+      );
+
+      test("clears the record and removes the run's resources when the run fails", async () => {
+        const store = createMetadataStore({});
+        executeMigrationAsWorkflowMock.mockImplementationOnce(
+          runThat(() => ({ success: false, logs: "", error: "boom" })),
+        );
+
+        await expect(
+          executeMigrations({ ...createMockContext(), client: store.client }, [
+            createMockMigration({ number: 3 }),
+          ]),
+        ).rejects.toMatchObject({ code: "MIGRATION_FAILED", message: "boom" });
+        expect(store.labels()).not.toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
+        expect(store.labels()).not.toHaveProperty(MIGRATION_EXECUTION_LABEL_KEY);
+        expect(removeMigrationWorkflowResourcesMock).toHaveBeenCalledWith(
+          store.client,
+          workspaceId,
+          "tailordb",
+          3,
+        );
+      });
+
+      test("clears the record when the run fails before it starts", async () => {
+        const store = createMetadataStore({});
+        executeMigrationAsWorkflowMock.mockImplementationOnce(async (options: RecordingOptions) => {
+          await options.onBeforeStart();
+          throw new Error("could not create the workflow");
+        });
+
+        await expect(
+          executeMigrations({ ...createMockContext(), client: store.client }, [
+            createMockMigration({ number: 3 }),
+          ]),
+        ).rejects.toThrow("could not create the workflow");
+        expect(store.labels()).not.toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
+      });
+
+      test("keeps the record and the run's resources when the outcome of the run is unknown", async () => {
+        const store = createMetadataStore({});
+        const unknown = CLIError({ code: "MIGRATION_OUTCOME_UNKNOWN", message: "lost track" });
+        executeMigrationAsWorkflowMock.mockImplementationOnce(
+          runThat(() => {
+            throw unknown;
+          }),
+        );
+
+        await expect(
+          executeMigrations({ ...createMockContext(), client: store.client }, [
+            createMockMigration({ number: 3 }),
+          ]),
+        ).rejects.toBe(unknown);
+        expect(store.labels()).toEqual({
+          [MIGRATION_IN_PROGRESS_LABEL_KEY]: "m0003-main",
+          [MIGRATION_EXECUTION_LABEL_KEY]: executionLabel,
+        });
+        expect(removeMigrationWorkflowResourcesMock).not.toHaveBeenCalled();
+      });
+
+      test("keeps the pre-migration schema and points to migration resolve when the record of a failed run cannot be cleared", async () => {
+        // Writes: the record, its execution, then the clear that fails.
+        const store = createMetadataStore({ failSets: [2] });
+        executeMigrationAsWorkflowMock.mockImplementationOnce(
+          runThat(() => ({ success: false, logs: "", error: "boom" })),
+        );
+
+        await expect(
+          executeMigrations({ ...createMockContext(), client: store.client }, [
+            createMockMigration({ number: 3 }),
+          ]),
+        ).rejects.toMatchObject({
+          code: "MIGRATION_PARTIALLY_APPLIED",
+          message: "Migration tailordb/0003 failed: boom",
+          suggestion: expect.stringContaining(
+            "'tailor tailordb migration resolve --rollback --namespace tailordb'",
+          ),
+        });
+        expect(store.labels()).toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY, "m0003-main");
+        expect(removeMigrationWorkflowResourcesMock).not.toHaveBeenCalled();
+      });
     });
 
     test("runs a migration as a workflow rather than a synchronous script execution", async () => {
@@ -1225,7 +1407,9 @@ describe("migration", () => {
         stepsMayHaveCommitted: true,
       });
 
-      await executeMigrations(stepsContext(vi.fn()), [migration], { tailordb: { number: 1 } });
+      await executeMigrations(stepsContext(vi.fn()), [migration], {
+        tailordb: { number: 1, kind: "steps" },
+      });
 
       expect(executeMigrationStepsAsWorkflowMock).toHaveBeenCalledTimes(1);
       expect(executeMigrationAsWorkflowMock).not.toHaveBeenCalled();
