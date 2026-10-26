@@ -135,11 +135,14 @@ function assertNoNestedNamespaceMigrations(
   all: NamespaceWithMigrations[],
 ): void {
   const realPath = (dir: string) => (fs.existsSync(dir) ? fs.realpathSync(dir) : dir);
+  const isInside = (parent: string, child: string) =>
+    path.relative(parent, child).split("/")[0] !== "..";
   const targetDir = realPath(target.migrationsDir);
   const nested = all.filter(
     ({ namespace, migrationsDir }) =>
       namespace !== target.namespace &&
-      path.relative(targetDir, realPath(migrationsDir)).split("/")[0] !== "..",
+      (isInside(target.migrationsDir, migrationsDir) ||
+        isInside(targetDir, realPath(migrationsDir))),
   );
   if (nested.length === 0) return;
   throw CLIError({

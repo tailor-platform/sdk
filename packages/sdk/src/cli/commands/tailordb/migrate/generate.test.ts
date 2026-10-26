@@ -1379,6 +1379,25 @@ describe("tailordb migration generate --data-only", () => {
     expect(fs.existsSync(path.join(nestedDir, "0000", "schema.json"))).toBe(true);
   });
 
+  test("rejects --init --namespace when another namespace's configured path inside the target is a symlink to elsewhere", async () => {
+    const parent = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const outside = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    const link = path.join(parent.migrationsDir, "analyticsdb");
+    fs.symlinkSync(outside.migrationsDir, link);
+    outside.migrationsDir = link;
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "tailordb",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_OPTIONS_CONFLICT" });
+    expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+  });
+
   test("rejects --init --namespace combined with --data-only", async () => {
     addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 
