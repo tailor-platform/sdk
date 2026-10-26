@@ -229,13 +229,14 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
         const parentMembers = getNestedMember(field, member.path.slice(0, -1))?.fields;
         const memberName = member.path.at(-1);
         if (!parentMembers || memberName === undefined) continue;
-        defineRecordEntry(parentMembers, memberName, structuredClone(member.before));
+        const restored = structuredClone(member.before);
+        relaxMemberUnique(restored);
+        defineRecordEntry(parentMembers, memberName, restored);
       }
       for (const rename of change.memberRenames ?? []) {
         const renamed = getNestedMember(field, rename.path);
         if (renamed?.required) renamed.required = false;
-        if (renamed?.unique) renamed.unique = false;
-        if (renamed) relaxNestedUnique(renamed);
+        if (renamed) relaxMemberUnique(renamed);
       }
     },
   });
@@ -256,6 +257,11 @@ interface PreMigrationFieldStrategy<F extends PreMigrationField> {
   adjustNestedMembers?: (field: F, change: FieldModifiedChange) => void;
 }
 
+function relaxMemberUnique(member: PreMigrationField): void {
+  if (member.unique) member.unique = false;
+  relaxNestedUnique(member);
+}
+
 function relaxNestedUnique(field: PreMigrationField): void {
   for (const member of Object.values(field.fields ?? {})) {
     if (member.unique) member.unique = false;
@@ -268,9 +274,15 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
   typeChanges: Map<string, FieldDiffChange>,
   strategy: PreMigrationFieldStrategy<F>,
 ): void {
+  const restoreField = (config: SnapshotFieldConfig): F => {
+    const restored = strategy.toField(config);
+    relaxNestedUnique(restored);
+    return restored;
+  };
+
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
-      defineRecordEntry(fields, fieldName, strategy.toField(change.before));
+      defineRecordEntry(fields, fieldName, restoreField(change.before));
       continue;
     }
 
@@ -281,7 +293,7 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
       // constraints. Unique is always deferred because stored values of a
       // previously removed field with the new name may still contain
       // duplicates until the copy overwrites them.
-      defineRecordEntry(fields, change.previousFieldName, strategy.toField(change.before));
+      defineRecordEntry(fields, change.previousFieldName, restoreField(change.before));
       const newField: PreMigrationField | undefined = fields[fieldName];
       if (newField) {
         if (change.after.required) newField.required = false;
@@ -304,7 +316,7 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
     }
 
     if (change.kind === "field_type_modified") {
-      defineRecordEntry(fields, fieldName, strategy.toField(change.before));
+      defineRecordEntry(fields, fieldName, restoreField(change.before));
       continue;
     }
 
@@ -402,12 +414,12 @@ function restoreRemovedNestedMembers(
       `parent of removed nested member "${memberPath}" missing from the Pre-phase field`,
     );
     const memberName = assertDefined(change.path.at(-1), "removed nested member path is empty");
-    const restored = processNestedFieldsFromSnapshot({ [memberName]: change.before });
-    defineRecordEntry(
-      parentMembers,
-      memberName,
-      assertDefined(restored[memberName], `restored nested member "${memberPath}" missing`),
+    const restored = assertDefined(
+      processNestedFieldsFromSnapshot({ [memberName]: change.before })[memberName],
+      `restored nested member "${memberPath}" missing`,
     );
+    relaxMemberUnique(restored);
+    defineRecordEntry(parentMembers, memberName, restored);
   }
 }
 
@@ -425,8 +437,7 @@ function relaxRenamedNestedMembers(
   for (const rename of memberRenames) {
     const member = getProtoNestedMember(field, rename.path);
     if (member?.required) member.required = false;
-    if (member?.unique) member.unique = false;
-    if (member) relaxNestedUnique(member);
+    if (member) relaxMemberUnique(member);
   }
 }
 

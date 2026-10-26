@@ -179,6 +179,26 @@ describe("buildPreMigrationSnapshot", () => {
     expect(after.fields?.zipCode).toMatchObject({ required: true });
     expect(Object.keys(after.fields?.geo?.fields ?? {})).toEqual(["lat"]);
   });
+
+  test("a removed unique member stays readable without its unique constraint", () => {
+    const before = snapshotField("nested", {
+      fields: {
+        code: snapshotField("string", { unique: true, index: true }),
+        geo: snapshotField("nested", {
+          fields: { token: snapshotField("uuid", { unique: true, index: true }) },
+        }),
+      },
+    });
+    const after = snapshotField("nested", { fields: {} });
+    const result = buildPreMigrationSnapshot(
+      snapshot(table("Item", { info: before })),
+      diff([{ kind: "field_modified", tableName: "Item", fieldName: "info", before, after }]),
+    );
+
+    const info = result.tables.Item!.fields.info!;
+    expect(info.fields?.code).toMatchObject({ unique: false, index: true });
+    expect(info.fields?.geo?.fields?.token).toMatchObject({ unique: false, index: true });
+  });
 });
 
 describe("buildPreMigrationTables", () => {
@@ -252,7 +272,7 @@ describe("buildPreMigrationTables", () => {
     expect(fields.handle).toMatchObject({ required: false, unique: false });
   });
 
-  test("a renamed object field defers the unique members of its new name", () => {
+  test("a renamed object field defers the unique members of both its new and old names", () => {
     const details = snapshotField("nested", {
       fields: {
         code: snapshotField("string", { required: true, unique: true, index: true }),
@@ -272,11 +292,11 @@ describe("buildPreMigrationTables", () => {
       ]),
     );
     const fields = tableNamed(tables, "Post").fields;
-    expect(fields.info!.fields!.code).toMatchObject({ unique: true });
+    expect(fields.info!.fields!.code).toMatchObject({ unique: false });
     expect(fields.details!.fields!.code).toMatchObject({ unique: false });
   });
 
-  test("a renamed object member defers the unique members inside its new name", () => {
+  test("a renamed object member defers the unique members inside both its new and old names", () => {
     const member = () =>
       snapshotField("nested", {
         fields: { code: snapshotField("string", { unique: true, index: true }) },
@@ -298,7 +318,7 @@ describe("buildPreMigrationTables", () => {
     );
     const address = tableNamed(tables, "Post").fields.address!.fields!;
     expect(address.location!.fields!.code).toMatchObject({ unique: false });
-    expect(address.geo!.fields!.code).toMatchObject({ unique: true });
+    expect(address.geo!.fields!.code).toMatchObject({ unique: false });
   });
 
   test("a removed field stays readable with the config the diff recorded", () => {
