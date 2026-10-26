@@ -347,6 +347,9 @@ describe("tailordb migration resolve", () => {
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
     expect(result.success).toBe(true);
+    expect(state.stderr.join("")).toMatch(
+      /Could not remove the temporary resources of migration tailordb\/0002: cleanup failed\. A later deploy removes them\./,
+    );
   });
 
   test("keeps the in-progress record when sending the schema fails", async () => {

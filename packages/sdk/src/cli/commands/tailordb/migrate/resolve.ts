@@ -4,13 +4,13 @@ import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import {
   clearMaintenanceModeRecord,
+  removeRunResources,
   updateMigrationLabel,
 } from "#/cli/commands/deploy/tailordb/migration";
 import {
   assertNoActiveMigrationExecution,
   migrationWorkflowResourceName,
   readMigrationRunStatus,
-  removeMigrationWorkflowResources,
   retryCommandActiveError,
   settlingResolution,
   type MigrationRunStatus,
@@ -306,14 +306,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     snapshot.rebaseline?.historyId,
   );
 
-  try {
-    await removeMigrationWorkflowResources(client, workspaceId, namespace, migrationNumber);
-  } catch (error) {
-    logger.warn(
-      `Could not remove the temporary resources of migration ${formatMigrationNumber(migrationNumber)}: ` +
-        `${error instanceof Error ? error.message : String(error)}. The next deploy removes them.`,
-    );
-  }
+  await removeRunResources(client, workspaceId, namespace, migrationNumber);
 
   logger.success(
     `Resolved migration ${styles.bold(formatMigrationNumber(migrationNumber))} of namespace ${styles.bold(namespace)} (${options.resolution}); the checkpoint is ${styles.bold(formatMigrationNumber(checkpoint))}.`,
