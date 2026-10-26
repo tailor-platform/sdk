@@ -1,5 +1,6 @@
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateIdPClientRequestSchema,
   type CreateIdPServiceRequestSchema,
@@ -180,11 +181,25 @@ export async function applyIdP(
           });
         });
         if (vault) return;
-        const { client: idpClient } = await client.getIdPClient({
-          workspaceId: update.workspaceId,
-          namespaceName: update.namespaceName,
-          name: update.name,
-        });
+        const idpClient = await client
+          .getIdPClient({
+            workspaceId: update.workspaceId,
+            namespaceName: update.namespaceName,
+            name: update.name,
+          })
+          .then((res) => res.client)
+          .catch((error: unknown) => {
+            if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
+              return null;
+            }
+            throw error;
+          });
+        if (idpClient === null) {
+          logger.warn(
+            `IdP client "${update.name}" in "${update.namespaceName}" has no secret vault, and the platform rejects its name when reading the client, so the vault was not restored.`,
+          );
+          return;
+        }
         if (idpClient?.clientSecret) logger.registerSecret(idpClient.clientSecret);
         await client.createSecretManagerVault({
           workspaceId: update.workspaceId,
