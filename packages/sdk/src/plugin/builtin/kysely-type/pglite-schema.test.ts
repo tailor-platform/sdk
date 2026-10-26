@@ -425,9 +425,19 @@ describe("unique written inside db.object() in the table definition", { timeout:
     info: db.object({ code: db.string().unique(), tag: db.string({ optional: true }) }),
   });
 
+  let pglite: PGlite;
+
+  aroundEach(async (runTest) => {
+    pglite = new PGlite();
+    try {
+      await pglite.exec(generateSchemaDDL(toDDLTables(parsed({ Order: order }))));
+      await runTest();
+    } finally {
+      await pglite.close();
+    }
+  });
+
   test("rejects a second row with the same value of the unique member", async () => {
-    const pglite = new PGlite();
-    await pglite.exec(generateSchemaDDL(toDDLTables(parsed({ Order: order }))));
     const insert = (info: unknown) =>
       pglite.query(`INSERT INTO "Order" (info) VALUES ($1::jsonb)`, [JSON.stringify(info)]);
 
