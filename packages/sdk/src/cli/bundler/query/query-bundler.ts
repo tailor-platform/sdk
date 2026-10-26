@@ -3,6 +3,7 @@ import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { FUNCTION_BUNDLE_COMMENT_OPTIONS } from "#/cli/shared/function-treeshake";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
@@ -108,7 +109,8 @@ export async function bundleQueryScript(engine: QueryEngine, baseDir: string): P
     output: {
       format: "esm",
       sourcemap: false,
-      minify: false,
+      minify: true,
+      comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
       codeSplitting: false,
       globals: {
         tailordb: "tailordb",
