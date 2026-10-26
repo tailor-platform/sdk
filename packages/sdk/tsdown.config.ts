@@ -19,7 +19,7 @@ const jsPlugins = [
 ];
 
 const GRAPHQL_DIR = "node_modules/graphql/";
-const WORKSPACE_DIR = /^.*?packages\//;
+const WORKSPACE_DIR = /^(?:.*\/)?packages\//;
 
 function stableChunkName(name: string): string {
   const graphqlAt = name.indexOf(GRAPHQL_DIR);
