@@ -43,7 +43,7 @@ import {
   type ExpandContractPlan,
 } from "./expand-contract";
 import { formatFieldShape, hasFieldShapeChange } from "./field-type-change";
-import { formatMigrationScriptHint } from "./hints";
+import { formatMigrationScriptHint, formatRebaselineHint } from "./hints";
 import {
   dropSpecApplies,
   findNestedMemberRenameCandidates,
@@ -557,6 +557,13 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     });
   }
 
+  assertMigrationNumbersAvailable(
+    generations.filter(
+      ({ previousSnapshot, diff }) => previousSnapshot && diff && hasChanges(diff),
+    ),
+    options.configPath,
+  );
+
   const declinedNamespaces: string[] = [];
   const migrations: GeneratedMigration[] = [];
   for (const {
@@ -644,6 +651,7 @@ async function generateDataOnlyMigration(
     });
   }
 
+  assertMigrationNumbersAvailable([generation], options.configPath);
   const migrationNumber = getNextMigrationNumber(migrationsDir);
   const result = await generateDataOnlyMigrationFiles({
     diff: { ...diff, requiresMigrationScript: true },
@@ -897,6 +905,42 @@ function matchFlagsToNamespaces<S>(
     });
   }
   return specsByNamespace;
+}
+
+/**
+ * Fail before any migration file is written when a namespace has too few
+ * migration numbers left within {@link MAX_MIGRATION_NUMBER}.
+ * @param {readonly NamespaceGeneration[]} generations - Namespaces about to receive migrations
+ * @param {string | undefined} configPath - Config path the current run used, for the re-baseline command
+ */
+function assertMigrationNumbersAvailable(
+  generations: readonly NamespaceGeneration[],
+  configPath: string | undefined,
+): void {
+  const last = formatMigrationNumber(MAX_MIGRATION_NUMBER);
+  const exhausted = generations.flatMap(({ namespace, migrationsDir, expandPlans }) => {
+    const convertsFieldType = (expandPlans?.length ?? 0) > 0;
+    const lastNeeded = getNextMigrationNumber(migrationsDir) + (convertsFieldType ? 1 : 0);
+    if (lastNeeded <= MAX_MIGRATION_NUMBER) return [];
+    return [
+      {
+        namespace,
+        reason: convertsFieldType
+          ? `Namespace "${namespace}" needs two migration numbers to convert a field type, and ${last} is the last one available.`
+          : `Namespace "${namespace}" has reached migration ${last}, the last number available.`,
+      },
+    ];
+  });
+  if (exhausted.length === 0) return;
+  const rebaselineCommands = exhausted
+    .map(({ namespace }) => formatRebaselineHint({ namespace, configPath }))
+    .join(" and ");
+  throw CLIError({
+    code: "MIGRATION_NUMBER_EXHAUSTED",
+    message: exhausted.map(({ reason }) => reason).join("\n"),
+    suggestion: `Re-baseline the migration history with ${rebaselineCommands}, then generate again. Re-baselining requires the history to reproduce the local schema, so set aside schema changes not yet in a migration until it finishes.`,
+    context: { namespaces: exhausted.map(({ namespace }) => namespace) },
+  });
 }
 
 /** Snapshots collected for one namespace before any migration file is written. */
@@ -1367,13 +1411,6 @@ async function generateExpandContractMigrations(
   });
 
   const expandNumber = getNextMigrationNumber(migrationsDir);
-  if (expandNumber + 1 > MAX_MIGRATION_NUMBER) {
-    throw CLIError({
-      code: "MIGRATION_NUMBER_EXHAUSTED",
-      message: `Converting a field type needs two migration numbers, and ${formatMigrationNumber(MAX_MIGRATION_NUMBER)} is the last one available.`,
-      suggestion: "Re-baseline the migration history first.",
-    });
-  }
   const expand = await generateDiffFiles(
     expandDiff,
     migrationsDir,

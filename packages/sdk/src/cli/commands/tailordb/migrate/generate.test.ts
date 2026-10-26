@@ -9,8 +9,9 @@ import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { generateCommand } from "./generate";
 import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
-import { loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
+import { getNextMigrationNumber, loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import type * as SnapshotModule from "./snapshot";
 
 interface TestNamespace {
   namespace: string;
@@ -30,6 +31,12 @@ vi.mock("#/cli/shared/prompt", () => ({
   canPrompt: vi.fn(),
   prompt: { confirm: vi.fn(), select: vi.fn(), text: vi.fn() },
 }));
+
+// A real history reaching 9999 takes too long to write in a unit test.
+vi.mock("./snapshot", async (importOriginal) => {
+  const actual = await importOriginal<typeof SnapshotModule>();
+  return { ...actual, getNextMigrationNumber: vi.fn(actual.getNextMigrationNumber) };
+});
 
 vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({
@@ -1373,6 +1380,125 @@ describe("tailordb migration generate declined confirmations", () => {
     });
     expect(fs.existsSync(path.join(declined.migrationsDir, "0001"))).toBe(false);
     expect(fs.existsSync(path.join(accepted.migrationsDir, "0001", "diff.json"))).toBe(true);
+  });
+});
+
+describe("tailordb migration generate at the last migration number", () => {
+  function userWithoutName(): ReturnType<typeof parsedType> {
+    const type = parsedType("User");
+    delete type.fields.name;
+    return type;
+  }
+
+  afterEach(() => {
+    vi.mocked(getNextMigrationNumber).mockReset();
+  });
+
+  test("writes migration 9999", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    vi.mocked(getNextMigrationNumber).mockReturnValue(9999);
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(entry.migrationsDir, "9999", "diff.json"))).toBe(true);
+  });
+
+  test("fails without writing a migration after 9999", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    vi.mocked(getNextMigrationNumber).mockReturnValue(10000);
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      message: 'Namespace "tailordb" has reached migration 9999, the last number available.',
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration rebaseline --namespace tailordb`",
+      ),
+    });
+    expect(fs.readdirSync(entry.migrationsDir)).toEqual(["0000"]);
+  });
+
+  test("includes the active --config in the re-baseline command", async () => {
+    addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    vi.mocked(getNextMigrationNumber).mockReturnValue(10000);
+
+    const result = await runCommand(generateCommand, ["--yes", "--config", "custom.config.ts"]);
+
+    expect(result.error).toMatchObject({
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration rebaseline --namespace tailordb --config=custom.config.ts`",
+      ),
+    });
+  });
+
+  test("writes no namespace when a later one has no number left", async () => {
+    const first = addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    const accountWithoutName = parsedType("Account");
+    delete accountWithoutName.fields.name;
+    const exhausted = addNamespace(tmpDir, "analyticsdb", "Account", accountWithoutName);
+    vi.mocked(getNextMigrationNumber).mockImplementation((migrationsDir) =>
+      migrationsDir === exhausted.migrationsDir ? 10000 : 1,
+    );
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      suggestion: expect.not.stringContaining("--namespace tailordb"),
+      context: { namespaces: ["analyticsdb"] },
+    });
+    expect(fs.readdirSync(first.migrationsDir)).toEqual(["0000"]);
+    expect(fs.readdirSync(exhausted.migrationsDir)).toEqual(["0000"]);
+  });
+
+  test("fails without writing a data-only migration after 9999", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    vi.mocked(getNextMigrationNumber).mockReturnValue(10000);
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration rebaseline --namespace tailordb`",
+      ),
+    });
+    expect(fs.readdirSync(entry.migrationsDir)).toEqual(["0000"]);
+  });
+
+  test("writes no namespace when a field conversion would need 9999 and 10000", async () => {
+    const first = addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    const retyped = parsedType("Account");
+    const field = retyped.fields.name!;
+    retyped.fields.name = { ...field, config: { ...field.config, type: "integer" } };
+    const converting = addNamespace(tmpDir, "analyticsdb", "Account", retyped);
+    vi.mocked(getNextMigrationNumber).mockImplementation((migrationsDir) =>
+      migrationsDir === converting.migrationsDir ? 9999 : 1,
+    );
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--expand-contract",
+      "Account.name",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      message:
+        'Namespace "analyticsdb" needs two migration numbers to convert a field type, and 9999 is the last one available.',
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration rebaseline --namespace analyticsdb`",
+      ),
+      context: { namespaces: ["analyticsdb"] },
+    });
+    expect(fs.readdirSync(first.migrationsDir)).toEqual(["0000"]);
+    expect(fs.readdirSync(converting.migrationsDir)).toEqual(["0000"]);
   });
 });
 
