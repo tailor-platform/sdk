@@ -251,4 +251,27 @@ ${setup}
     },
     REFUSED_WRITE_TIMEOUT_MS,
   );
+
+  test(
+    "deletes a row that pointed at itself once its reference is cleared",
+    async ({ signal }) => {
+      const deploy = await migrateWithScript(
+        `import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+${orders(`{ id: "${PARENT_ID}" }`)}
+  await trx.updateTable("Order").set({ siblingIDs: ["${PARENT_ID}"] }).where("id", "=", "${PARENT_ID}").execute();
+  await trx.updateTable("Order").set({ siblingIDs: null }).where("id", "=", "${PARENT_ID}").execute();
+  await trx.deleteFrom("Order").where("id", "=", "${PARENT_ID}").execute();
+  const rest = await trx.selectFrom("Order").select("id").execute();
+  if (rest.length !== 0) throw new Error("the row was not deleted");
+}
+`,
+        signal,
+      );
+
+      expect(deploy).toMatchObject({ ok: true });
+    },
+    REFUSED_WRITE_TIMEOUT_MS,
+  );
 });
