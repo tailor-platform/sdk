@@ -230,11 +230,15 @@ describe("tailordb migration generate field rename preflight", () => {
       localTypes: { Account: parsedType("Account") },
     });
 
+    const schemaPath = path.join(entry.migrationsDir, "0000", "schema.json");
+    const before = fs.readFileSync(schemaPath, "utf8");
+
     const result = await runCommand(generateCommand, ["--yes", "--init"]);
 
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "MIGRATION_DIRECTORY_CONFLICT" });
-    expect(fs.existsSync(path.join(entry.migrationsDir, "0000", "schema.json"))).toBe(true);
+    expect(fs.readFileSync(schemaPath, "utf8")).toBe(before);
+    expect(fs.readdirSync(entry.migrationsDir)).toEqual(["0000"]);
   });
 
   test("resolves a rename and a drop across namespaces in one run", async () => {
