@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -292,6 +293,27 @@ describe("applyIdP client updates forced by the SDK version", () => {
     expect(client.createSecretManagerSecret).toHaveBeenCalledWith(
       expect.objectContaining({ secretmanagerSecretValue: "secret-from-get" }),
     );
+  });
+
+  test("warns and skips the vault when getIdPClient rejects the client name", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = createClient({ vaultExists: false });
+    vi.mocked(client.getIdPClient).mockRejectedValue(
+      new ConnectError("name: does not match regex pattern", Code.InvalidArgument),
+    );
+
+    await expect(applyIdP(client, createPlanResult(), "create-update")).resolves.toBeUndefined();
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("test-client"));
+    expect(client.createSecretManagerVault).not.toHaveBeenCalled();
+    expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
+  });
+
+  test("still fails the deploy when getIdPClient raises another error", async () => {
+    const client = createClient({ vaultExists: false });
+    vi.mocked(client.getIdPClient).mockRejectedValue(new ConnectError("boom", Code.Internal));
+
+    await expect(applyIdP(client, createPlanResult(), "create-update")).rejects.toThrow("boom");
   });
 
   test("does not call getIdPClient or create anything when the vault already exists", async () => {
