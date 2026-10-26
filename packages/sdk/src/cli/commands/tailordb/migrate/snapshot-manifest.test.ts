@@ -258,10 +258,9 @@ describe("snapshot-manifest", () => {
       const snapshotType = createTestSnapshotType("Order", {
         fields: {
           id: { type: "uuid", required: true },
-          items: {
+          info: {
             type: "nested",
             required: true,
-            array: true,
             fields: {
               code: { type: "string", required: true, unique: true, index: true },
               note: { type: "string", required: false },
@@ -272,7 +271,7 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
-      const inner = manifest.schema?.fields?.items?.fields;
+      const inner = manifest.schema?.fields?.info?.fields;
       expect(inner?.code).toMatchObject({ unique: true, index: true });
       expect(inner?.note).toMatchObject({ unique: false, index: false });
     });
