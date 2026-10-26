@@ -102,7 +102,9 @@
     },
     {
       "description": "Wait for aqua-registry to catch up with a new tool release's signing format before updating",
-      "matchManagers": ["aqua"],
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["aqua.yaml"],
+      "matchDepNames": ["!aquaproj/aqua-registry"],
       "minimumReleaseAge": "3 days"
     },
     {
