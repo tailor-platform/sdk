@@ -237,8 +237,8 @@ importers:
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))
       '@electric-sql/pglite':
-        specifier: 0.5.10
-        version: 0.5.10
+        specifier: 0.5.11
+        version: 0.5.11
       '@tailor-platform/sdk-plugin-seed':
         specifier: workspace:^
         version: link:../packages/sdk-plugin-seed
@@ -789,8 +789,8 @@ importers:
         specifier: 0.57.0
         version: 0.57.0(supports-color@7.2.0)(typescript@6.0.3)
       '@electric-sql/pglite':
-        specifier: 0.5.10
-        version: 0.5.10
+        specifier: 0.5.11
+        version: 0.5.11
       '@tailor-platform/shared':
         specifier: workspace:^
         version: link:../shared
@@ -1330,8 +1330,8 @@ packages:
     resolution: {integrity: sha512-Xc3VhU02wqZ1HvHRJUwL09HkZSTvidqY5Ya0NXBSYOxAp+Ln9dcJr9fySI+CkONzP3PekQo9WdzCv0PGER/mOA==}
     engines: {node: '>=14.17.0'}
 
-  '@electric-sql/pglite@0.5.10':
-    resolution: {integrity: sha512-tXc/25U3ulOkiRQuTFdwIv+JhBqtMdAF7Gvo6CfZZWtSB4+hgC4Wr2vwK5ngvvN5PJfAAEGIsfyCVy1JhCOBYw==}
+  '@electric-sql/pglite@0.5.11':
+    resolution: {integrity: sha512-SWuqsTjA4DDWqgZ05PC1RJaq8e00p5KACxbqaikDFQ8dIGA0SLRzuPniky7IW+q/c5RDNMdEXwv7mFBWIx9Hxw==}
 
   '@emnapi/core@1.11.2':
     resolution: {integrity: sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA==}
@@ -4855,7 +4855,7 @@ snapshots:
 
   '@discoveryjs/json-ext@1.1.0': {}
 
-  '@electric-sql/pglite@0.5.10': {}
+  '@electric-sql/pglite@0.5.11': {}
 
   '@emnapi/core@1.11.2':
     dependencies:
