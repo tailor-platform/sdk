@@ -374,7 +374,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   const application = defineApplication({ config, pluginManager });
 
   // Schema generation loads every namespace before writing so --rename flags
-  // can be validated globally; data-only generation loads only its target.
+  // can be validated globally; --data-only and --init --namespace load only their target.
   const generations: NamespaceGeneration[] = [];
   for (const { namespace, migrationsDir } of namespacesToLoad) {
     logger.info(`Processing namespace: ${styles.bold(namespace)}`);
