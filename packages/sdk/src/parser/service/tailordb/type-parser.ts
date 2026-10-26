@@ -11,6 +11,7 @@ import {
 } from "./relation";
 import type { TailorDBField } from "#/configure/services/tailordb/types";
 import type {
+  OperatorFieldConfig,
   TypeSourceInfo,
   ParsedField,
   ParsedRelationship,
@@ -18,6 +19,30 @@ import type {
 } from "#/parser/service/tailordb/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
+
+function assertNoUniqueOrIndexInsideObjectArray(
+  fieldConfig: OperatorFieldConfig,
+  path: readonly string[],
+  tableName: string,
+  insideArray = false,
+): void {
+  const underArray = insideArray || fieldConfig.array === true;
+  for (const [memberName, member] of Object.entries(fieldConfig.fields ?? {})) {
+    const memberPath = [...path, memberName];
+    for (const modifier of ["unique", "index"] as const) {
+      if (!member[modifier]) continue;
+      const reason = member.array
+        ? `${modifier} cannot be set on array fields`
+        : underArray
+          ? `${modifier} cannot be set on a field inside an array of objects`
+          : undefined;
+      if (reason) {
+        throw new Error(`Field "${memberPath.join(".")}" on table "${tableName}": ${reason}`);
+      }
+    }
+    assertNoUniqueOrIndexInsideObjectArray(member, memberPath, tableName, underArray);
+  }
+}
 
 /**
  * Parse multiple TailorDB tables, build relationships, and validate uniqueness.
@@ -119,6 +144,8 @@ function parseTailorDBType(
         `Field "${fieldName}" on table "${type.name}": unique cannot be set on array fields`,
       );
     }
+
+    assertNoUniqueOrIndexInsideObjectArray(fieldConfig, [fieldName], type.name);
 
     const parsedField: ParsedField = { name: fieldName, config: fieldConfig };
 

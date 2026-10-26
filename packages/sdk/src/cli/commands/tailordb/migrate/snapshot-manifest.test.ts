@@ -254,6 +254,89 @@ describe("snapshot-manifest", () => {
       expect(inner?.note?.foreignKey).toBe(false);
     });
 
+    test("sends a unique field inside a nested field as unique and indexed", () => {
+      const snapshotType = createTestSnapshotType("Order", {
+        fields: {
+          id: { type: "uuid", required: true },
+          info: {
+            type: "nested",
+            required: true,
+            fields: {
+              code: { type: "string", required: true, unique: true, index: true },
+              note: { type: "string", required: false },
+            },
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      const inner = manifest.schema?.fields?.info?.fields;
+      expect(inner?.code).toMatchObject({ unique: true, index: true });
+      expect(inner?.note).toMatchObject({ unique: false, index: false });
+    });
+
+    test("sends an indexed field inside a nested field as indexed but not unique", () => {
+      const snapshotType = createTestSnapshotType("Order", {
+        fields: {
+          id: { type: "uuid", required: true },
+          info: {
+            type: "nested",
+            required: true,
+            fields: { tag: { type: "string", required: true, index: true } },
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      expect(manifest.schema?.fields?.info?.fields?.tag).toMatchObject({
+        index: true,
+        unique: false,
+      });
+    });
+
+    test("carries .unique() written inside db.object() from the table definition to the manifest", () => {
+      const order = db.table("Order", {
+        info: db.object({ code: db.string().unique() }),
+      });
+
+      const parsed = parseTypes(toSchemaOutputs({ Order: order }), "tailordb");
+      const { tables } = createSnapshotFromLocalTypes(parsed, "tailordb");
+      const manifest = generateTailorDBTypeManifestFromSnapshot(tables.Order!);
+
+      expect(manifest.schema?.fields?.info?.fields?.code).toMatchObject({
+        unique: true,
+        index: true,
+      });
+    });
+
+    test("sends the foreign key of one member and the unique and index settings of another from the same db.object()", () => {
+      const user = db.table("User", { name: db.string() });
+      const order = db.table("Order", {
+        info: db.object({
+          ownerID: db.uuid().relation({ type: "keyOnly", toward: { table: user } }),
+          code: db.string().unique(),
+          tag: db.string({ optional: true }).index(),
+        }),
+      });
+
+      const parsed = parseTypes(toSchemaOutputs({ User: user, Order: order }), "tailordb");
+      const { tables } = createSnapshotFromLocalTypes(parsed, "tailordb");
+      const members = generateTailorDBTypeManifestFromSnapshot(tables.Order!).schema?.fields?.info
+        ?.fields;
+
+      expect(members?.ownerID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "id",
+        index: false,
+        unique: false,
+      });
+      expect(members?.code).toMatchObject({ foreignKey: false, index: true, unique: true });
+      expect(members?.tag).toMatchObject({ foreignKey: false, index: true, unique: false });
+    });
+
     test("carries a relation written inside db.object() from the table definition to the manifest", () => {
       const user = db.table("User", { name: db.string() });
       const order = db.table("Order", {
