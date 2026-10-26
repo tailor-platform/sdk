@@ -38,7 +38,7 @@ workflows:
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
     '.github/workflows/docs-consistency-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6'
+        - 'anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13'
     '.github/workflows/erd-schema.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
@@ -89,7 +89,7 @@ workflows:
         - 'pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4'
     '.github/workflows/renovate-auto-review.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6'
+        - 'anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13'
     '.github/workflows/renovate-policy-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/sdk-e2e.yml':
@@ -160,9 +160,9 @@ dependencies:
         commit: 'sha1-cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         owner_id: 44036562
         repo_id: 192625955
-    'anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6':
-        ref: 'v1.0.259'
-        commit: 'sha1-ae68417a745a5df4b2124873632bd73a2255e6f6'
+    'anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13':
+        ref: 'v1.0.262'
+        commit: 'sha1-925afb53776cf1a2b738c6bdbed37b4d4000ef13'
         owner_id: 76263028
         repo_id: 986421638
         uses:
