@@ -101,6 +101,13 @@
       "groupName": "aquaproj"
     },
     {
+      "description": "Wait for aqua-registry to catch up with a new tool release's signing format before updating",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["aqua.yaml"],
+      "matchDepNames": ["!aquaproj/aqua-registry"],
+      "minimumReleaseAge": "3 days"
+    },
+    {
       "description": "Group all tailor-platform/actions pins so every generated reference bumps atomically",
       "matchPackageNames": ["tailor-platform/actions"],
       "groupName": "tailor-platform/actions"
