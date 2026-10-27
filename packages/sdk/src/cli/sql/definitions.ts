@@ -2,10 +2,8 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { getDistDir } from "#/cli/shared/dist-dir";
-import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { serializeSqlDefinitions, type SqlDefinitions } from "#/utils/sql/analyze";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
-import type { PluginManager } from "#/plugin/manager";
 
 /** What bundling a `.sql` import needs. */
 export interface SqlBundleContext {
@@ -20,18 +18,18 @@ export type SqlContextLoader = () => Promise<SqlBundleContext>;
 /**
  * Collect the definitions `.sql` files are checked against from loaded TailorDB services.
  * @param services - TailorDB services whose types are loaded
- * @param pluginManager - Configured plugins; `kyselyTypePlugin`'s `temporal` sets how dates are typed
+ * @param temporal - Whether date/datetime/time values come back as Temporal objects
  * @returns The definitions
  */
 export function sqlDefinitionsOf(
   services: readonly Pick<TailorDBService, "namespace" | "types">[],
-  pluginManager: PluginManager | undefined,
+  temporal: boolean,
 ): SqlDefinitions {
   return {
     namespaces: new Map(
       services.map((service) => [service.namespace, Object.values(service.types)]),
     ),
-    temporal: pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false,
+    temporal,
   };
 }
 

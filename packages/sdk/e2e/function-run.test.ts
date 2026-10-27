@@ -56,6 +56,8 @@ let workspaceId: string;
 let client: OperatorClient;
 let invoker: AuthInvoker;
 let machineUser: ResolvedMachineUser;
+let fixtureDir: string;
+let fixtureConfigPath: string;
 const env = { foo: 1, bar: "hello", baz: true };
 const AUTH_NAMESPACE = "my-auth";
 const MACHINE_USER_NAME = "manager-machine-user";
@@ -175,6 +177,8 @@ describe("E2E: function run", { concurrent: false }, () => {
       fs.mkdirSync(tailorPlatformDir, { recursive: true });
       fs.symlinkSync(sdkRoot, path.join(tailorPlatformDir, "sdk"));
       const configPath = writeFixtureConfig(tempDir);
+      fixtureDir = tempDir;
+      fixtureConfigPath = configPath;
 
       await runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"], {
         cwd: tempDir,
@@ -317,6 +321,73 @@ describe("E2E: function run", { concurrent: false }, () => {
       const parsed = JSON.parse(result.result);
       expect(parsed).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     });
+  });
+
+  describe(".sql imports", () => {
+    test(
+      "runs queries imported from .sql files with their placeholders bound by name",
+      async ({ signal }) => {
+        fs.writeFileSync(
+          path.join(fixtureDir, "insert_user.sql"),
+          'INSERT INTO "User" ("name", "email", "role") VALUES (:name, :email, :role) RETURNING "email", "role"\n',
+        );
+        fs.writeFileSync(
+          path.join(fixtureDir, "user_by_email.sql"),
+          '-- the same placeholder twice\nSELECT "name", "role" FROM "User" WHERE "email" = :email AND "name" <> :email\n',
+        );
+        const sourceFile = path.join(fixtureDir, "sql-users.ts");
+        fs.writeFileSync(
+          sourceFile,
+          `import "@tailor-platform/sdk/runtime/globals";
+import insertUser from "./insert_user.sql";
+import userByEmail from "./user_by_email.sql";
+
+export default async function (input: { email: string }) {
+  const client = new tailordb.Client({ namespace: insertUser.namespace });
+  await client.connect();
+  try {
+    const inserted = await insertUser.run(client, { name: "SQL User", email: input.email, role: "STAFF" });
+    const found = await userByEmail.run(client, { email: input.email });
+    const missing = await userByEmail.run(client, { email: \`missing-\${input.email}\` });
+    return { namespace: insertUser.namespace, inserted, found, missing };
+  } finally {
+    await client.end();
+  }
+}
+`,
+        );
+        const email = `sql-${testRunId}@example.com`;
+
+        const run = await runCli(
+          [
+            "function",
+            "run",
+            sourceFile,
+            "--config",
+            fixtureConfigPath,
+            "--workspace-id",
+            workspaceId,
+            "--machine-user",
+            MACHINE_USER_NAME,
+            "--arg",
+            JSON.stringify({ email }),
+            "--json",
+          ],
+          { cwd: fixtureDir, timeoutMs: CLI_BUDGET_MS.script, signal },
+        );
+
+        expect(run.ok).toBe(true);
+        const output = JSON.parse(run.stdout) as { success: boolean; result: string };
+        expect(output).toMatchObject({ success: true });
+        expect(JSON.parse(output.result)).toEqual({
+          namespace: "tailordb",
+          inserted: { email, role: "STAFF" },
+          found: { name: "SQL User", role: "STAFF" },
+          missing: null,
+        });
+      },
+      cliTestTimeout(CLI_BUDGET_MS.script),
+    );
   });
 
   describe("pre-bundled .js file", () => {

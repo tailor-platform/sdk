@@ -46,6 +46,7 @@ import {
   sqlFingerprintFile,
   type SqlContextLoader,
 } from "#/cli/sql/definitions";
+import { sqlTemporal } from "#/cli/sql/temporal";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -783,7 +784,7 @@ export async function loadApplication(
     tailorDBServices: tailordbResult.tailorDBServices,
   });
   const sql = createSqlContext(
-    sqlDefinitionsOf(tailordbResult.tailorDBServices, pluginManager),
+    sqlDefinitionsOf(tailordbResult.tailorDBServices, sqlTemporal(pluginManager)),
     sqlFingerprintFile(config.path),
   );
   const pluginResolverServices = definePluginResolverServices(config, pluginManager);

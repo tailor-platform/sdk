@@ -254,6 +254,21 @@ function resolveTsSync(specifier, context, nextResolve) {
 export function loadSync(url, context, nextLoad) {
   if (url.startsWith("file:")) {
     const parsedUrl = new URL(url);
+    // The CLI imports functions only to read their definitions; a query runs from the bundle.
+    if (parsedUrl.pathname.endsWith(".sql")) {
+      parsedUrl.search = "";
+      parsedUrl.hash = "";
+      const message = `${fileURLToPath(parsedUrl)} runs only in a deployed function or with \`tailor function run\``;
+      return {
+        format: "module",
+        shortCircuit: true,
+        source: [
+          `const message = ${JSON.stringify(message)};`,
+          "export default { run: () => Promise.reject(new Error(message)) };",
+          "",
+        ].join("\n"),
+      };
+    }
     if (
       TS_EXTENSIONS.some((ext) => parsedUrl.pathname.endsWith(ext)) &&
       !parsedUrl.pathname.endsWith(".d.ts") &&

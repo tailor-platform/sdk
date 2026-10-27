@@ -25,6 +25,22 @@ describe("loadSync", () => {
     expect(nextLoad).not.toHaveBeenCalled();
   });
 
+  test("loads a .sql file as a query that rejects when run outside a function bundle", () => {
+    const nextLoad = vi.fn();
+    const result = loadSync("file:///path/to/query.sql?tailorImportNonce=1", {}, nextLoad);
+
+    expect(nextLoad).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      format: "module",
+      shortCircuit: true,
+      source: [
+        `const message = ${JSON.stringify("/path/to/query.sql runs only in a deployed function or with `tailor function run`")};`,
+        "export default { run: () => Promise.reject(new Error(message)) };",
+        "",
+      ].join("\n"),
+    });
+  });
+
   test("delegates non-file: URLs to nextLoad", () => {
     const nextLoad = vi.fn();
     loadSync("node:path", {}, nextLoad);

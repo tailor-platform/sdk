@@ -2,6 +2,7 @@ import { defineApplication } from "#/cli/services/application";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { PluginManager } from "#/plugin/manager";
 import { sqlDefinitionsOf, type SqlBundleContext, type SqlContextLoader } from "./definitions";
+import { sqlTemporal } from "./temporal";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { Plugin } from "#/plugin/types";
@@ -27,7 +28,7 @@ export async function loadSqlDefinitions(
   assertUniqueLocalTailorDBTypeNames({ tailorDBServices });
   return {
     services: tailorDBServices,
-    definitions: sqlDefinitionsOf(tailorDBServices, pluginManager),
+    definitions: sqlDefinitionsOf(tailorDBServices, sqlTemporal(pluginManager)),
   };
 }
 
