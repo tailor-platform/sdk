@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@ast-grep/napi": "0.51.0",
-    "@politty/zod": "0.6.1",
+    "@politty/zod": "0.6.3",
     "diff": "9.0.0",
     "pathe": "2.0.3",
     "picomatch": "4.0.7",
