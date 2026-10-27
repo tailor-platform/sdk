@@ -3,6 +3,12 @@ import { db } from "#/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "#/utils/test/internal";
 import { parseTypes } from "./type-parser";
 
+// Bypass type check by directly setting metadata
+function withMetadataFlag<F>(field: F, key: "index" | "unique"): F {
+  (field as unknown as { _metadata: Record<string, boolean> })._metadata[key] = true;
+  return field;
+}
+
 describe("parseTypes", () => {
   test("allows type names that match Object prototype properties", () => {
     const testType = db.table("toString", {
@@ -32,18 +38,27 @@ describe("parseTypes", () => {
       ["index", "index cannot be set on array fields"],
       ["unique", "unique cannot be set on array fields"],
     ] as const)("should throw error when %s is set on array field", (metadataKey, message) => {
-      // Bypass type check by directly setting metadata
-      const field = db.string({ array: true });
-      (field as unknown as { _metadata: Record<string, boolean> })._metadata[metadataKey] = true;
-
       const testType = db.table("Test", {
-        tags: field,
+        tags: withMetadataFlag(db.string({ array: true }), metadataKey),
       });
 
       expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
         `Field "tags" on table "Test": ${message}`,
       );
     });
+
+    test.each(["index", "unique"] as const)(
+      "should report array fields when %s is set on an array of objects",
+      (metadataKey) => {
+        const testType = db.table("Test", {
+          geos: withMetadataFlag(db.object({ lat: db.float() }, { array: true }), metadataKey),
+        });
+
+        expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+          `Field "geos" on table "Test": ${metadataKey} cannot be set on array fields`,
+        );
+      },
+    );
 
     test.each([
       ["index", () => db.string().index()],
@@ -55,6 +70,46 @@ describe("parseTypes", () => {
 
       const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
       expect(result.Test!.fields.email!.config[metadataKey]).toBe(true);
+    });
+  });
+
+  describe("nested type field validation", () => {
+    test.each(["index", "unique"] as const)("rejects %s on a nested type field", (modifier) => {
+      const testType = db.table("Test", {
+        geo: withMetadataFlag(db.object({ lat: db.float() }), modifier),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        `Field "geo" on table "Test": ${modifier} cannot be set on nested type fields`,
+      );
+    });
+
+    test.each(["index", "unique"] as const)(
+      "rejects %s on a member that is itself an object",
+      (modifier) => {
+        const testType = db.table("Test", {
+          info: db.object({
+            geo: withMetadataFlag(db.object({ lat: db.float() }), modifier),
+          } as never),
+        });
+
+        expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+          `Field "info.geo" on table "Test": ${modifier} cannot be set on nested type fields`,
+        );
+      },
+    );
+
+    test("reports nested type fields for an object member inside an array of objects", () => {
+      const testType = db.table("Test", {
+        info: db.object(
+          { geo: withMetadataFlag(db.object({ lat: db.float() }), "index") } as never,
+          { array: true },
+        ),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        'Field "info.geo" on table "Test": index cannot be set on nested type fields',
+      );
     });
   });
 

@@ -177,7 +177,11 @@ db.string().unique();
 
 `.unique()` and `.index()` also work on a field inside a `db.object()` that is not an array: with `.unique()` the value must be unique across rows, while `.index()` only indexes it and still allows duplicates. Inside an array of objects (`db.object(..., { array: true })`) the platform does not reject duplicate values, so both are rejected there with an error, as on an array field.
 
-A project whose `db.object()` field already uses `.unique()` or `.index()` was deployed with the setting stored as off, so its next `tailor deploy` stops with `MIGRATION_REMOTE_DRIFT`, and `tailor tailordb migration validate` fails the same way. `tailor tailordb migration generate` reports no differences. Run `tailor deploy --no-schema-check` once to apply the setting. If stored rows already hold duplicate values for a field that gains `.unique()`, that deploy fails and the schema stays unchanged until the duplicates are resolved.
+`.unique()` and `.index()` cannot be set on a `db.object()` field itself, whether it is a table field or a member of another `db.object()`, because the platform cannot index an object value.
+
+A project that already uses `.unique()` or `.index()` on a field inside a `db.object()` was deployed with the setting stored as off, so its next `tailor deploy` stops with `MIGRATION_REMOTE_DRIFT`, and `tailor tailordb migration validate` fails the same way. `tailor tailordb migration generate` reports no differences. Run `tailor deploy --no-schema-check` once to apply the setting. If stored rows already hold duplicate values for a field that gains `.unique()`, that deploy fails and the schema stays unchanged until the duplicates are resolved.
+
+A project that sets `.unique()` or `.index()` on a member that is itself a `db.object()` now fails with an error naming the field. Remove the modifier. Then, in a namespace with `migration.directory`, run `tailor tailordb migration generate` and `tailor deploy --no-schema-check` once; later deploys need no flag.
 
 ### Relations
 

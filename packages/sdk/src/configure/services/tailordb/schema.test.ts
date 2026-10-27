@@ -311,6 +311,20 @@ describe("TailorDBField type error message tests", () => {
     expectTypeOf(nested.hooks).toEqualTypeOf<
       TypeLevelError<"hooks cannot be set on nested type fields">
     >();
+    expectTypeOf(nested.index).toEqualTypeOf<
+      TypeLevelError<"index cannot be set on nested type fields">
+    >();
+    expectTypeOf(nested.unique).toEqualTypeOf<
+      TypeLevelError<"unique cannot be set on nested type fields">
+    >();
+
+    const nestedArray = db.object({ name: db.string() }, { array: true });
+    expectTypeOf(nestedArray.index).toEqualTypeOf<
+      TypeLevelError<"index cannot be set on array fields">
+    >();
+    expectTypeOf(nestedArray.unique).toEqualTypeOf<
+      TypeLevelError<"unique cannot be set on array fields">
+    >();
 
     const validated = db.string().validate(() => undefined);
     expectTypeOf(validated.validate).toEqualTypeOf<
