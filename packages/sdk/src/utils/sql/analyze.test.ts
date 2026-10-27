@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { parseTypes } from "#/parser/service/tailordb/index";
 import { toSchemaOutput } from "#/utils/test/internal";
-import { analyzeSql, type SqlDefinitions } from "./analyze";
+import { analyzeSql, serializeSqlDefinitions, type SqlDefinitions } from "./analyze";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 
 const customer = db.table("Customer", {
@@ -665,20 +665,24 @@ describe("analyzeSql", () => {
         { name: "?column?", type: "number" },
       ]);
     });
+  });
 
-    test("reports a table defined in two namespaces", () => {
-      const result = analyzeSql('SELECT "name" FROM "Event"', {
-        namespaces: new Map([
-          ["main", namespace(event)],
-          ["other", namespace(event)],
-        ]),
-        temporal: false,
+  describe("serializeSqlDefinitions", () => {
+    test("changes when a field or a table gains an update hook", () => {
+      const serialize = (...types: TailorAnyDBType[]) =>
+        serializeSqlDefinitions({
+          namespaces: new Map([["main", namespace(...types)]]),
+          temporal: false,
+        });
+      const plain = db.table("Item", { memo: db.string({ optional: true }) });
+      const fieldHook = db.table("Item", {
+        memo: db.string({ optional: true }).hooks({ update: ({ input }) => input }),
       });
-      expect(result.diagnostics).toEqual([
-        expect.objectContaining({
-          message: 'Table "Event" is defined in more than one namespace: main, other',
-        }),
-      ]);
+      const typeHook = db
+        .table("Item", { memo: db.string({ optional: true }) })
+        .hooks({ update: () => ({}) });
+
+      expect(new Set([serialize(plain), serialize(fieldHook), serialize(typeHook)]).size).toBe(3);
     });
   });
 
@@ -689,6 +693,7 @@ describe("analyzeSql", () => {
       'SELECT "id" FROM "Order" WHERE "amount" IN (:a + 1, 2) AND "amount" BETWEEN :x - 1 AND "amount" * 2',
       'SELECT "id" FROM "Order" WHERE "amount" + \'1\' > 0',
       'SELECT "id" FROM "Order" WHERE "status" LIKE \'PA%\' AND "status" ~ \'^P[A-Z]+$\'',
+      'SELECT "id" FROM "Customer" WHERE "name" LIKE "tier"',
       'SELECT "id" FROM "Order" WHERE "orderDate" = \'2026-1-5\' AND "customerID" = \'{aaaaaaaa-0000-4000-8000-000000000001}\' AND "paid" = \'TRUE\' AND "deliveryTime" = \'9:05\' AND "total" > 1e3',
       'SELECT "status", count("tags") AS n FROM "Order" GROUP BY "status" HAVING count("tags") > 0',
       'SELECT "id" FROM "Order" WHERE "id" = :id FOR UPDATE SKIP LOCKED',
@@ -1045,12 +1050,124 @@ describe("analyzeSql", () => {
         at: 'EXCLUDED."tier"',
       },
       {
+        source: 'SELECT "amount" / -0 AS a FROM "Order"',
+        message: "Dividing by zero fails in TailorDB SQL",
+        at: "-0",
+      },
+      {
+        source: 'SELECT :a FROM "Order"',
+        message: "Placeholders are not supported in the select list",
+        at: ":a",
+      },
+      {
+        source: 'SELECT "amount" + :a AS x FROM "Order"',
+        message: "Placeholders are not supported in the select list",
+        at: ":a",
+      },
+      {
+        source: 'SELECT sum(:a) FROM "Order"',
+        message: "Placeholders are not supported in an aggregate",
+        at: ":a",
+      },
+      {
+        source: 'SELECT NULL AS x FROM "Order"',
+        message: "NULL is not supported in the select list",
+        at: "NULL",
+      },
+      {
+        source: 'SELECT "amount" + NULL AS x FROM "Order"',
+        message: "NULL is not supported in the select list",
+        at: "NULL",
+      },
+      {
+        source: 'SELECT sum(NULL) FROM "Order"',
+        message: "NULL is not supported in an aggregate",
+        at: "NULL",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE count(*) > 1',
+        message: "Aggregates are only allowed in HAVING and the select list",
+        at: "count(*)",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "status" = ARRAY[\'a\']',
+        message: "Array literals are only supported in VALUES and SET",
+        at: "ARRAY['a']",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "amount" = 1_000',
+        message: "1_000 is not a number TailorDB SQL reads",
+        at: "1_000",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE :p LIKE \'x%\'',
+        message: "LIKE needs a String or Enum value on its left",
+        at: ":p",
+      },
+      {
+        source: 'SELECT "id" FROM "Customer" WHERE "name" LIKE 1',
+        message: "LIKE needs a String or Enum pattern, and 1 is integer",
+        at: "1",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "paid" AND "amount"',
+        message: 'AND needs conditions, and "amount" is integer',
+        at: '"amount"',
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE :p IN (1, 2)',
+        message: "The left side of IN needs a column or a typed value",
+        at: ":p",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE :a = :b',
+        message: "One side of the comparison needs a column or a typed value to know its type",
+        at: ":a",
+      },
+      {
+        source: 'SELECT "id" FROM "Customer" WHERE "name" ~ \'(a)\\1\'',
+        message: "The pattern uses a backreference",
+        at: "'(a)\\1'",
+      },
+      {
+        source: 'SELECT "id" FROM "Customer" WHERE "name" ~ \'\\yab\'',
+        message: "The pattern uses \\y, which TailorDB does not support",
+        at: "'\\yab'",
+      },
+      {
+        source: 'UPDATE "Order" SET "tags" = ARRAY[:t]',
+        message: "Array elements cannot be placeholders",
+        at: ":t",
+      },
+      {
+        source: 'SELECT "status" FROM "Order" WHERE "amount" > 1 HAVING count(*) > 1',
+        message: 'Column "status" must appear in GROUP BY or be used in an aggregate',
+        at: '"status"',
+      },
+      {
+        source: 'SELECT x.* FROM "Order"',
+        message: 'Table or alias "x" is not in the query',
+        at: "x",
+      },
+      {
         source: 'SELECT "status", count(*) AS n FROM "Order" GROUP BY "status" HAVING n > :min',
         message: 'Column "n" does not exist in "Order"',
         at: "n",
       },
     ])("$source", ({ source, message, at }) => {
       expect(rejected(source)).toEqual([{ message, at }]);
+    });
+
+    test("reports row locks with HAVING and ORDER BY names that match several columns", () => {
+      expect(
+        rejected('SELECT "id" FROM "Order" GROUP BY "id" HAVING "id" = :id FOR UPDATE'),
+      ).toContainEqual({
+        message: "FOR UPDATE and FOR SHARE cannot be used with GROUP BY or HAVING",
+        at: "FOR UPDATE",
+      });
+      expect(
+        rejected('SELECT "amount" AS x, "weight" AS x FROM "Order" ORDER BY x'),
+      ).toContainEqual({ message: 'ORDER BY "x" matches more than one result column', at: "x" });
     });
 
     test("reports parse errors at their place", () => {

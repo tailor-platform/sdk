@@ -78,13 +78,13 @@ A `.sql` file holds one `SELECT`, `INSERT`, `UPDATE`, or `DELETE` statement in t
 - `NOT` before a condition, a Boolean column or parameter as a condition, `!=`, and expressions on either side of a comparison and in `IN` and `BETWEEN`.
 - Self-joins, which join a table to itself under different aliases. Read permissions apply to each alias.
 - `SUM`, `AVG`, `MIN`, and `MAX` of Decimal fields.
-- `ARRAY[...]` values for array fields, and `FOR NO KEY UPDATE`, `FOR KEY SHARE`, `NOWAIT`, and `SKIP LOCKED`.
+- `FOR NO KEY UPDATE`, `FOR KEY SHARE`, `NOWAIT`, and `SKIP LOCKED`.
 
 Anything else is an error at its place in the file: for example a cast (`::`), a function other than `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`, a subquery, `NULLS FIRST`, arithmetic in `ORDER BY` (order by the name you give it with `AS` instead), anything but columns and `*` in `RETURNING`, or `WHERE` after `ON CONFLICT ... DO UPDATE`, which the reference lists but TailorDB rejects. So is a query TailorDB would reject when it runs:
 
-- Compared values must have the same type, except that numbers compare with numbers, and a string compared with or written to a column must be a valid value of its type.
+- Compared values must have the same type, except that numbers compare with numbers. A string compared with or written to a column must be a valid value of the column's type.
 - Conditions, `GROUP BY`, and `ORDER BY` cannot use array or nested fields.
-- With `GROUP BY`, an aggregate in the select list, or `HAVING`, every column outside an aggregate must be in `GROUP BY`.
+- With `GROUP BY`, an aggregate in the select list, or `HAVING`, every column that the select list, `HAVING`, or `ORDER BY` reads outside an aggregate must be in `GROUP BY`.
 - `LIKE` and the regular-expression operators need a String or Enum value on their left. A regular expression cannot nest repetition, as in `(a+)+`, or repeat more than 255 times.
 - Integers must fit in 32 bits, and dividing by a literal zero fails.
 
@@ -111,7 +111,7 @@ Call `.run()` with a `tailordb.Client` for the query's namespace, `query.namespa
 
 A query matches a table's key when `WHERE` compares each column of the key with `=` to a value, or to a column of a table the query already matches, outside any `OR`. A join counts too: joining a table on its `id` or another unique key to a matched table's column, as when you join an order's customer, matches that table. The `ON` of a `LEFT JOIN` matches only the joined table, unless `WHERE` needs a value in a column of that table, and the `ON` of a `RIGHT JOIN` or `FULL JOIN` matches no table.
 
-A column is nullable when its field is optional or its table is outer-joined, and arithmetic is nullable when one of its columns is. A column that the statement's `WHERE` compares, or tests with `IS NOT NULL`, `IN`, `BETWEEN`, or `LIKE`, or a Boolean column it tests, is typed without `null` when the test is outside any `OR`, also when the column is part of arithmetic there. A test under `NOT` counts when it needs a value either way, as `NOT ("weight" > 1)` and `NOT ("paidAt" IS NULL)` do. That also proves the column's table has a row, so the required columns of an outer-joined table lose `null` too. In `UPDATE ... RETURNING`, a field the `UPDATE` sets or an update hook may set keeps `null`, and so do all fields of a table with a type-level update hook, as hooks run after `WHERE`. With `GROUP BY`, `SUM`, `AVG`, `MIN`, and `MAX` of a column or arithmetic that is not nullable are not nullable either, as every group has a row.
+A column is nullable when its field is optional or its table is outer-joined, and arithmetic is nullable when one of its columns is. A column that the statement's `WHERE` compares, or tests with `IS NOT NULL`, `IN`, `BETWEEN`, or `LIKE`, or a Boolean column it tests, is typed without `null` when every row must pass the test, so not for a test inside an `OR`; this also holds when the column is part of arithmetic there. Under `NOT`, a test counts when every row must fail it and failing still needs a value: `NOT ("weight" > 1)`, `NOT ("paidAt" IS NULL)`, and each test of `NOT ("weight" > 1 OR "paidAt" IS NULL)` drop `null`, while `NOT ("paidAt" IS NOT NULL)` keeps it. That also proves the column's table has a row, so the required columns of an outer-joined table lose `null` too. In `UPDATE ... RETURNING`, a field the `UPDATE` sets or an update hook may set keeps `null`, and so do all fields of a table with a type-level update hook, as hooks run after `WHERE`. With `GROUP BY`, `SUM`, `AVG`, `MIN`, and `MAX` of a column or arithmetic that is not nullable are not nullable either, as every group has a row.
 
 Arithmetic in the select list is typed as `number`, except that arithmetic with a Decimal column and no Float column or number with a decimal point is a string, as TailorDB returns decimals as strings; `/` on integers drops the remainder. `SUM`, `AVG`, `MIN`, and `MAX` of Decimal values are strings too.
 

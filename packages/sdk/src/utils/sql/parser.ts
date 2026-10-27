@@ -347,7 +347,7 @@ const OPERATOR_PRECEDENCE: Readonly<Record<string, number>> = {
   "!~*": PRECEDENCE.pattern,
 };
 
-const ARITHMETIC_OPERATORS = ["+", "-", "*", "/"];
+export const ARITHMETIC_OPERATORS = ["+", "-", "*", "/"];
 const AGGREGATES = new Set<string>(["COUNT", "SUM", "AVG", "MIN", "MAX"]);
 
 // Words that end a table reference instead of naming its alias.
@@ -375,8 +375,8 @@ const STANDALONE_AGGREGATE =
 const OPERATOR_PART = /[+\-*/<>=~!@#%^&|`?]/;
 const WHITESPACE = /[ \t\n\r\v\f]/;
 const DIGIT = /[0-9]/;
-const IDENT_START = /[A-Za-z_\u0080-￿]/;
-const IDENT_PART = /[A-Za-z0-9_$\u0080-￿]/;
+const IDENT_START = /[A-Za-z_\u0080-\uffff]/;
+const IDENT_PART = /[A-Za-z0-9_$\u0080-\uffff]/;
 
 function tokenize(source: string): Token[] {
   const tokens: Token[] = [];

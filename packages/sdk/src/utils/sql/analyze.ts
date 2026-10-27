@@ -1,5 +1,6 @@
 import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import {
+  ARITHMETIC_OPERATORS,
   parseSql,
   PATTERN_OPERATORS,
   type SqlAggregate,
@@ -88,11 +89,12 @@ const NUMERIC_TYPES = ["integer", "float", "decimal"];
 const COMPARABLE_TYPES = [...NUMERIC_TYPES, "string", "enum", "date", "time", "datetime"];
 // Arithmetic yields the first of these its operands include.
 const ARITHMETIC_RESULT_TYPES = ["float", "decimal", "integer"];
-const ARITHMETIC_OPERATORS = new Set(["+", "-", "*", "/"]);
+const ARITHMETIC = new Set(ARITHMETIC_OPERATORS);
 const COMPARISON_OPERATORS = new Set(["=", "<>", "<", "<=", ">", ">="]);
 const REGEX_OPERATORS = new Set(["~", "!~", "~*", "!~*"]);
 const PATTERNS = new Set<string>(PATTERN_OPERATORS);
 const INTEGER_LITERAL = /^[+-]?[0-9]+$/;
+const NUMBER_TEXT = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 const INT32_MAX = 2147483647;
 const TYPE_LABELS: Readonly<Record<string, string>> = {
   integer: "Integer",
@@ -212,7 +214,7 @@ function isInt32(text: string): boolean {
 function nullPropagatingColumns(expr: SqlExpression): SqlColumnRef[] {
   if (expr.kind === "column") return [expr];
   if (expr.kind === "unary" && expr.op !== "NOT") return nullPropagatingColumns(expr.operand);
-  if (expr.kind === "binary" && ARITHMETIC_OPERATORS.has(expr.op)) {
+  if (expr.kind === "binary" && ARITHMETIC.has(expr.op)) {
     return [...nullPropagatingColumns(expr.left), ...nullPropagatingColumns(expr.right)];
   }
   return [];
@@ -242,7 +244,7 @@ function columnsOf(expr: SqlExpression): SqlColumnRef[] {
 function isFixed(expr: SqlExpression): boolean {
   if (expr.kind === "param" || expr.kind === "literal" || expr.kind === "array") return true;
   if (expr.kind === "unary" && expr.op !== "NOT") return isFixed(expr.operand);
-  if (expr.kind === "binary" && ARITHMETIC_OPERATORS.has(expr.op)) {
+  if (expr.kind === "binary" && ARITHMETIC.has(expr.op)) {
     return isFixed(expr.left) && isFixed(expr.right);
   }
   return false;
@@ -348,7 +350,7 @@ function textProblem(config: SqlFieldConfig, text: string): string | undefined {
           text,
         );
       case "decimal":
-        return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text);
+        return NUMBER_TEXT.test(text);
       case "date":
       case "datetime":
         return DATE_TIME.test(text) && validDate(text);
@@ -420,10 +422,11 @@ function jsonProblem(config: SqlFieldConfig, value: unknown): string | undefined
       : `has a string for a ${config.type} field`;
   }
   if (typeof value === "number") {
-    if (config.type === "integer")
+    if (config.type === "integer") {
       return Number.isInteger(value) && Math.abs(value) <= INT32_MAX
         ? undefined
         : "has a number that is not a 32-bit integer";
+    }
     return config.type === "float" ? undefined : `has a number for a ${config.type} field`;
   }
   if (typeof value === "boolean") {
@@ -486,8 +489,9 @@ function regexProblem(pattern: string): string | undefined {
       if (/[1-9]/.test(escaped)) return "uses a backreference";
       if (/[yYmMZ]/.test(escaped)) return `uses \\${escaped}, which TailorDB does not support`;
       i += 2;
-      if (/[pP]/.test(escaped) && pattern[i] === "{")
+      if (/[pP]/.test(escaped) && pattern[i] === "{") {
         i = pattern.indexOf("}", i) + 1 || pattern.length;
+      }
       return 0;
     }
     i++;
@@ -525,7 +529,7 @@ function regexProblem(pattern: string): string | undefined {
 class Analyzer {
   readonly diagnostics: SqlDiagnostic[] = [];
   usesTemporal = false;
-  readonly #tables = new Map<string, Table[]>();
+  readonly #tables = new Map<string, Table>();
   readonly #params = new Map<string, { base: string; nullable: boolean }>();
   // The columns of each source a WHERE test proves not null.
   readonly #notNull = new Map<Source, Set<string>>();
@@ -545,8 +549,7 @@ class Analyzer {
         for (const [name, field] of Object.entries(definition.fields)) {
           if (name !== "id") fields.set(name, field.config);
         }
-        const table = { definition, namespace, fields };
-        this.#tables.set(definition.name, [...(this.#tables.get(definition.name) ?? []), table]);
+        this.#tables.set(definition.name, { definition, namespace, fields });
       }
     }
   }
@@ -556,7 +559,11 @@ class Analyzer {
   }
 
   report(message: string, span: SqlSpan): void {
-    this.diagnostics.push({ message, start: span.start, length: span.end - span.start });
+    const length = span.end - span.start;
+    const repeated = this.diagnostics.some(
+      (d) => d.message === message && d.start === span.start && d.length === length,
+    );
+    if (!repeated) this.diagnostics.push({ message, start: span.start, length });
   }
 
   #text(span: SqlSpan): string {
@@ -610,21 +617,13 @@ class Analyzer {
   }
 
   table(identifier: SqlIdentifier): Table | undefined {
-    const tables = this.#tables.get(identifier.name) ?? [];
-    const [table] = tables;
+    const table = this.#tables.get(identifier.name);
     if (!table) {
       const similar = [...this.#tables.keys()].find(
         (name) => name.toLowerCase() === identifier.name.toLowerCase(),
       );
       this.report(
         `Table ${quoteName(identifier.name)} is not defined in any TailorDB namespace${similar ? `; did you mean ${quoteName(similar)}?` : ""}`,
-        identifier.span,
-      );
-      return undefined;
-    }
-    if (tables.length > 1) {
-      this.report(
-        `Table ${quoteName(identifier.name)} is defined in more than one namespace: ${tables.map((t) => t.namespace).join(", ")}`,
         identifier.span,
       );
       return undefined;
@@ -768,7 +767,7 @@ class Analyzer {
             ...this.#requiredColumns(condition.right, negated),
           ];
         }
-        if (ARITHMETIC_OPERATORS.has(condition.op)) return [];
+        if (ARITHMETIC.has(condition.op)) return [];
         return [
           ...nullPropagatingColumns(condition.left),
           ...nullPropagatingColumns(condition.right),
@@ -850,8 +849,9 @@ class Analyzer {
         const operand = this.#scalar(scope, expr.operand, where);
         if (!operand) return undefined;
         const text = this.#text(expr.operand.span);
-        if (!this.arithmeticOperand(operand.schema.config, text, expr.operand.span))
+        if (!this.arithmeticOperand(operand.schema.config, text, expr.operand.span)) {
           return undefined;
+        }
         return operand;
       }
       case "binary": {
@@ -900,10 +900,12 @@ class Analyzer {
   }
 
   // Whether `operator` does not divide by a literal zero, which fails in TailorDB.
-  #checkDivisor(operator: string, divisor: SqlExpression): boolean {
+  #checkDivisor(operator: string, expr: SqlExpression): boolean {
+    let divisor = expr;
+    while (divisor.kind === "unary" && divisor.op !== "NOT") divisor = divisor.operand;
     if (operator !== "/" || divisor.kind !== "literal" || divisor.type !== "number") return true;
     if (Number(divisor.value) !== 0) return true;
-    this.report("Dividing by zero fails in TailorDB SQL", divisor.span);
+    this.report("Dividing by zero fails in TailorDB SQL", expr.span);
     return false;
   }
 
@@ -994,7 +996,7 @@ class Analyzer {
   ): Operand {
     const left = this.#operand(scope, expr.left, aggregates);
     const right = this.#operand(scope, expr.right, aggregates);
-    if (ARITHMETIC_OPERATORS.has(expr.op)) {
+    if (ARITHMETIC.has(expr.op)) {
       const divisor = this.#checkDivisor(expr.op, expr.right);
       const types = this.#arithmetic(left, right);
       if (!types || !divisor) return { kind: "broken" };
@@ -1007,7 +1009,7 @@ class Analyzer {
     }
     if (PATTERNS.has(expr.op)) {
       if (left.kind === "untyped") {
-        this.report(`${expr.op} needs a String or Enum column on its left`, expr.left.span);
+        this.report(`${expr.op} needs a String or Enum value on its left`, expr.left.span);
       } else if (left.kind === "typed" && !isTextual(left.schema.config)) {
         this.report(
           `${expr.op} needs a String or Enum value on its left, and ${this.#text(expr.left.span)} is ${typeOf(left.schema.config)}`,
@@ -1019,7 +1021,7 @@ class Analyzer {
           `${expr.op} needs a String or Enum pattern, and ${this.#text(expr.right.span)} is ${typeOf(right.schema.config)}`,
           expr.right.span,
         );
-      } else {
+      } else if (right.kind === "untyped") {
         this.#resolve(right, STRING);
       }
       const pattern = expr.right;
@@ -1160,11 +1162,13 @@ class Analyzer {
         }
         const element = { config: { ...config, array: false, required: true }, name };
         for (const item of value.items) {
-          if (item.kind === "param")
+          if (item.kind === "param") {
             this.report("Array elements cannot be placeholders", item.span);
-          else if (item.kind === "literal" && item.type === "null") {
+          } else if (item.kind === "literal" && item.type === "null") {
             this.report("Array elements cannot be NULL", item.span);
-          } else this.value(item, element);
+          } else {
+            this.value(item, element);
+          }
         }
         return;
       }
@@ -1188,7 +1192,7 @@ class Analyzer {
           (config.type === "integer"
             ? isInt32(value.value)
             : config.type === "float" || config.type === "decimal"
-              ? /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value.value)
+              ? NUMBER_TEXT.test(value.value)
               : false);
     if (!valid) {
       this.report(
@@ -1596,8 +1600,8 @@ class Analyzer {
         ? "aggregates"
         : joined.some((join) => join.type !== "inner" && join.type !== "cross")
           ? "outer joins"
-          : statement.groupBy.length > 0
-            ? "GROUP BY"
+          : statement.groupBy.length > 0 || statement.having
+            ? "GROUP BY or HAVING"
             : undefined;
       if (reason) this.report(`FOR UPDATE and FOR SHARE cannot be used with ${reason}`, lock);
     }
