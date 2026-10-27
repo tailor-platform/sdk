@@ -6,7 +6,7 @@ import { captureStderr, captureStdoutStream } from "#/cli/shared/test-helpers/ca
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
-import { createChangeSet } from "./change-set";
+import { emptyPlanResults } from "./test-helpers/plan-results";
 import type { Plugin } from "#/plugin/types";
 import type { PlanResults } from "./apply-phases";
 import type { BuiltDeploymentTarget } from "./deployment-target";
@@ -103,130 +103,6 @@ vi.mock(import("./secret-manager"), async (original) => ({
   planSecretManager: async () => mocks.results.secretManager,
 }));
 import { deploy, deployMigrationTestBaseline, deployMigrationTestTarget } from "./deploy";
-function emptyFunctionChanges() {
-  return { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] };
-}
-
-function emptyOwnership() {
-  return { conflicts: [], unmanaged: [], resourceOwners: new Set<string>() };
-}
-
-function emptyResults(): PlanResults {
-  return {
-    functionRegistry: {
-      changeSet: createChangeSet("Function registry"),
-      workflowJobChanges: emptyFunctionChanges(),
-      resolverFunctionChanges: emptyFunctionChanges(),
-      executorFunctionChanges: emptyFunctionChanges(),
-      authHookFunctionChanges: emptyFunctionChanges(),
-      ...emptyOwnership(),
-      existingMap: {},
-    },
-    tailorDB: {
-      changeSet: {
-        service: createChangeSet("TailorDB services"),
-        type: createChangeSet("TailorDB tables"),
-        gqlPermission: createChangeSet("TailorDB gqlPermissions"),
-      },
-      ...emptyOwnership(),
-      context: {
-        workspaceId: "ws",
-        application: {} as PlanResults["tailorDB"]["context"]["application"],
-        tailorDBInputs: [],
-        executorUsedTables: new Set<string>(),
-        config: {} as PlanResults["tailorDB"]["context"]["config"],
-        noSchemaCheck: false,
-        namespacesWithMigrations: [],
-        migrationFileState: {},
-        checkpointRepairs: [],
-      },
-    },
-    staticWebsite: {
-      changeSet: createChangeSet("StaticWebsites"),
-      customDomainChangeSet: createChangeSet("CustomDomains"),
-      customDomainTransferChangeSet: createChangeSet("CustomDomainTransfers"),
-      customDomainNotes: [],
-      customDomainLiveOffers: new Map(),
-      ...emptyOwnership(),
-    },
-    aiGateway: {
-      changeSet: createChangeSet("AIGateways"),
-      ...emptyOwnership(),
-    },
-    idp: {
-      changeSet: {
-        service: createChangeSet("IdP services"),
-        client: createChangeSet("IdP clients"),
-      },
-      ...emptyOwnership(),
-    },
-    auth: {
-      connectionStateScope: {
-        workspaceId: "workspace-id",
-        applicationId: "application-id",
-        applicationName: "my-app",
-      },
-      changeSet: {
-        service: createChangeSet("Auth services"),
-        idpConfig: createChangeSet("Auth idpConfigs"),
-        userProfileConfig: createChangeSet("Auth userProfileConfigs"),
-        tenantConfig: createChangeSet("Auth tenantConfigs"),
-        machineUser: createChangeSet("Auth machineUsers"),
-        oauth2Client: createChangeSet("Auth oauth2Clients"),
-        authHook: createChangeSet("Auth hooks"),
-        scim: createChangeSet("Auth scim"),
-        scimResource: createChangeSet("Auth scimResources"),
-        connection: createChangeSet("Auth connections"),
-      },
-      ...emptyOwnership(),
-    },
-    pipeline: {
-      changeSet: {
-        service: createChangeSet("Pipeline services"),
-        resolver: createChangeSet("Pipeline resolvers"),
-      },
-      ...emptyOwnership(),
-      existingServices: {},
-      existingResolvers: new Map(),
-    },
-    app: Object.assign(
-      createChangeSet("Applications"),
-      emptyOwnership(),
-    ) as unknown as PlanResults["app"],
-    executor: {
-      changeSet: createChangeSet("Executors"),
-      ...emptyOwnership(),
-      existingExecutors: {},
-    },
-    workflow: {
-      changeSet: createChangeSet("Workflows"),
-      unchangedWorkflowJobNames: new Set<string>(),
-      jobFunctionDeletes: [],
-      jobFunctionPublishEvents: new Map<string, boolean>(),
-      ...emptyOwnership(),
-      appName: "my-app",
-      appId: undefined,
-      existingJobFunctions: new Map(),
-      existingWorkflows: {},
-    },
-    workflowExecutionPolicy: {
-      changeSet: createChangeSet("Workflow execution policies"),
-      ...emptyOwnership(),
-    },
-    secretManager: {
-      stateScope: {
-        workspaceId: "workspace-id",
-        applicationId: "application-id",
-        applicationName: "my-app",
-      },
-      vaultChangeSet: createChangeSet("Vaults"),
-      secretChangeSet: createChangeSet("Secrets"),
-      skippedSecrets: [],
-      ...emptyOwnership(),
-    },
-  } satisfies PlanResults;
-}
-
 beforeEach(() => {
   const application = {
     name: "app",
@@ -254,7 +130,7 @@ beforeEach(() => {
       authHooks: new Map(),
     },
   } as unknown as BuiltDeploymentTarget;
-  mocks.results = emptyResults();
+  mocks.results = emptyPlanResults();
   mocks.apply.mockResolvedValue([]);
   mocks.fetchMissingDependentApps.mockResolvedValue([]);
   mocks.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });

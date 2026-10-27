@@ -4,9 +4,16 @@
 truth for which resource types `deploy` manages. Adding a key there does not
 automatically wire the resource into every consumer — check each of these:
 
-- `cli/commands/remove.ts` — its `plans` object is `satisfies Omit<PlannedDeployment, "application">`,
-  so a missing key fails to compile, but the `create-update`/`delete` apply calls
-  and the dry-run `removeLines`/`deletes.length === 0` checks still need a manual update.
+- `cli/commands/deploy/test-helpers/plan-results.ts`'s `emptyPlanResults` — add the new
+  plan result. `remove.test.ts` and `deploy.test.ts` put one delete into each of its delete
+  lists and fail for a list that `remove` or the deploy plan report leaves out. They find a
+  list as a change set's `deletes` or as an array named `*Deletes`, so name a delete list
+  outside a change set that way; add a list removal never plans to
+  `DELETE_LISTS_REMOVAL_NEVER_PLANS` in `remove.test.ts`.
+- `cli/commands/remove.ts` — its `plans` object is `satisfies PlanResults`, so a missing key
+  fails to compile, but the `delete` apply calls and the `deletions` list it prints and
+  decides from still need a manual update.
+- `cli/commands/deploy/plan-report.ts` — `buildPlanReport` lists each change set by hand.
 - `cli/commands/deploy/validate-plan.ts` — `ValidatePlanInput` is a `PlannedDeployment`
   alias, but `validatePlan` still needs `creates`/`updates` calls added for the
   new resource's proto schema.
