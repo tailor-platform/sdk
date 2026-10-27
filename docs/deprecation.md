@@ -4,6 +4,10 @@ Anything reachable from `packages/sdk/package.json#exports` leaves through a cyc
 `@deprecated`, ship a codemod that migrates callers, delete it in the next major. `pnpm
 check:deprecations` enforces the mechanical parts.
 
+A [beta feature](changeset.md#breaking-changes-to-beta-features) need not go through this cycle: it can
+be renamed or removed directly. A codemod for such a break is optional; one that ships follows the
+rules below, except that `until` is `NEXT_RELEASE`, the release that ships the break.
+
 ## Tag format
 
 ```ts
@@ -43,15 +47,14 @@ check:deprecations` enforces the mechanical parts.
   is one version. `tailor upgrade` offers a codemod when `since <= from < until <= to`: `since` bounds
   the caller's current version and `until` is the boundary they must cross to be offered the migration.
 - `until` is the **next major**, `<current major + 1>.0.0`. That is not a convention to weigh but where
-  the removal has to land: removing or renaming a public API is a `major` changeset (see
+  the removal has to land: removing or renaming a non-beta public API is a `major` changeset (see
   [docs/changeset.md](changeset.md)), so the release that drops the API is the only boundary
-  worth pointing at. Every entry in the registry today reads `until: "2.0.0"`. On a prerelease line the
-  stable major stays in `until` and the `2.0.0-next.N` goes in `prereleaseUntil` — a `-next` version in
-  `until` is rejected. A codemod that only modernizes call sites without removing anything is outside
-  this cycle and may sit at a minor — the minor that ships it, which is unknown while you write it, so
-  write `until: NEXT_RELEASE` and let the release step resolve it. A hand-written minor goes stale
-  whenever another release ships before the change does, and every caller on the releases in between is
-  then never offered the migration.
+  worth pointing at. On a prerelease line the stable major stays in `until` and the `2.0.0-next.N`
+  goes in `prereleaseUntil` — a `-next` version in `until` is rejected. A codemod that only modernizes
+  call sites without removing anything is outside this cycle and may sit at a minor — the minor that
+  ships it, which is unknown while you write it, so write `until: NEXT_RELEASE` and let the release
+  step resolve it. A hand-written minor goes stale whenever another release ships before the change
+  does, and every caller on the releases in between is then never offered the migration.
 - `since` is the version that **introduced** the API being migrated away from, not the version that
   deprecated it. `--from` is whatever the caller passes, so a project can jump several majors in one
   run; a `since` set at the deprecating version drops every caller older than it, and their code breaks
