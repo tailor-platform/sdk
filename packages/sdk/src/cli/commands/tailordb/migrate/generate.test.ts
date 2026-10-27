@@ -17,6 +17,7 @@ interface TestNamespace {
   namespace: string;
   migrationsDir: string;
   localTypes: Record<string, unknown>;
+  loadError?: Error;
 }
 
 const state = vi.hoisted(() => ({
@@ -44,7 +45,9 @@ vi.mock("#/cli/services/application", () => ({
       namespace: entry.namespace,
       config: {},
       typeSourceInfo: {},
-      loadTypes: vi.fn().mockResolvedValue(undefined),
+      loadTypes: entry.loadError
+        ? vi.fn().mockRejectedValue(entry.loadError)
+        : vi.fn().mockResolvedValue(undefined),
       processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
       get types() {
         return entry.localTypes;
@@ -1448,6 +1451,62 @@ describe("tailordb migration generate --data-only", () => {
     expect(String(result.error)).toContain(
       "--namespace can only be used together with --data-only or --init",
     );
+  });
+});
+
+describe("tailordb migration generate --init", () => {
+  test("keeps every namespace's migrations when a namespace's tables fail to load", async () => {
+    const loaded = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const failing = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    failing.loadError = new Error("Unexpected token in account.ts");
+
+    const result = await runCommand(generateCommand, ["--init", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Unexpected token in account.ts");
+    expect(fs.existsSync(path.join(loaded.migrationsDir, "0000", "schema.json"))).toBe(true);
+    expect(fs.existsSync(path.join(failing.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("keeps the target's migrations when its tables fail to load with --namespace", async () => {
+    addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const failing = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    failing.loadError = new Error("Unexpected token in account.ts");
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "analyticsdb",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Unexpected token in account.ts");
+    expect(fs.existsSync(path.join(failing.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("fails before asking for the deletion confirmation when the tables fail to load", async () => {
+    const failing = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    failing.loadError = new Error("Unexpected token in user.ts");
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(generateCommand, ["--init"]);
+
+    expect(result.success).toBe(false);
+    expect(prompt.confirm).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(failing.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("rebuilds the baseline when the existing migration files are invalid", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    fs.writeFileSync(path.join(entry.migrationsDir, "0000", "schema.json"), "{");
+
+    const result = await runCommand(generateCommand, ["--init", "--yes"]);
+
+    expect(result.success).toBe(true);
+    const replayed = reconstructSnapshotFromMigrations(entry.migrationsDir);
+    expect(replayed?.tables.User?.fields.name?.type).toBe("string");
   });
 });
 

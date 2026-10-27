@@ -290,8 +290,6 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     return { changed: false, clearedNamespaces: [], migrations: [] };
   }
 
-  // Parse --rename/--drop flags before any destructive step so a malformed
-  // value fails the command while the migrations directories are still intact.
   // The dots before any ":" pick the target: none for a table, one for a
   // field, two or more for a member inside a nested field.
   const renameFlags: ParsedFlag<FieldRenameSpec>[] = [];
@@ -385,11 +383,6 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     assertNoNestedNamespaceMigrations(initTarget, namespacesWithMigrations);
   }
 
-  // Handle --init option: delete existing migrations directory
-  const clearedNamespaces = options.init
-    ? await handleInitOption(namespacesToLoad, options.yes)
-    : [];
-
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
   if (plugins.length > 0) {
@@ -406,8 +399,9 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   for (const { namespace, migrationsDir } of namespacesToLoad) {
     logger.info(`Processing namespace: ${styles.bold(namespace)}`);
 
-    // Validate existing migration files before generating new ones
-    assertValidMigrationFiles(migrationsDir, namespace);
+    // Validate existing migration files before generating new ones; --init
+    // discards them, so a broken history must not block it
+    if (!options.init) assertValidMigrationFiles(migrationsDir, namespace);
 
     // Find the TailorDB service for this namespace
     const tailordbService = application.tailorDBServices.find((s) => s.namespace === namespace);
@@ -429,7 +423,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       currentSnapshot: createSnapshotFromLocalTypes(localTypesObj, namespace),
       // Returns null when the migrations directory is missing or empty;
       // throws when existing migration files are invalid.
-      previousSnapshot: reconstructSnapshotFromMigrations(migrationsDir),
+      previousSnapshot: options.init ? null : reconstructSnapshotFromMigrations(migrationsDir),
     });
   }
 
@@ -441,7 +435,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       temporal,
       dateDefault,
     );
-    return { changed: true, clearedNamespaces, migrations: [migration] };
+    return { changed: true, clearedNamespaces: [], migrations: [migration] };
   }
 
   // A flag applies to a namespace only when that namespace actually removed
@@ -591,6 +585,11 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     ),
     options.configPath,
   );
+
+  // --init deletes only after every step above, so their failures keep the migrations intact
+  const clearedNamespaces = options.init
+    ? await handleInitOption(namespacesToLoad, options.yes)
+    : [];
 
   const declinedNamespaces: string[] = [];
   const migrations: GeneratedMigration[] = [];
