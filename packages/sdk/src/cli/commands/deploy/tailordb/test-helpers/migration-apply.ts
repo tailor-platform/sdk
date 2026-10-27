@@ -6,6 +6,7 @@ import {
   sanitizeMigrationLabel,
   type PendingMigration,
 } from "#/cli/commands/tailordb/migrate/types";
+import { detectPendingMigrations, type updateMigrationLabel } from "../migration";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { DiffChange, MigrationDiff } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type {
@@ -17,7 +18,6 @@ import type {
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
-import type { updateMigrationLabel } from "../migration";
 import type { TailorDBChangeSet, TailorDBPlanResult } from "../plan";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
@@ -50,6 +50,34 @@ export function createMockClient(overrides: MockClientOverrides = {}): OperatorC
   } as unknown as OperatorClient;
 }
 
+/**
+ * Have the mocked detection find `migrations` pending and read each namespace's checkpoint the way
+ * the real detection does, so the deploy expects that checkpoint.
+ * @param migrations - Migrations to report as pending
+ * @param checkpointOf - Checkpoint and history ID of a namespace when the detection runs
+ */
+export function mockPendingMigrations(
+  migrations: PendingMigration[],
+  checkpointOf: (namespace: string) => { number: number | null; historyId: string | null },
+): void {
+  vi.mocked(detectPendingMigrations).mockImplementation(
+    async (_client, _workspaceId, namespaces, _configPath, overrides, remoteStates) => {
+      for (const { namespace } of namespaces) {
+        if (overrides?.has(namespace)) continue;
+        remoteStates?.set(namespace, {
+          metadataExists: true,
+          ...checkpointOf(namespace),
+          historyIdInvalid: false,
+          inProgress: null,
+          inProgressInvalid: false,
+          maintenanceModeCheckpoint: null,
+        });
+      }
+      return migrations;
+    },
+  );
+}
+
 export type RemoteCheckpoint = ReturnType<typeof createRemoteCheckpoint>;
 
 export function createRemoteCheckpoint(initialNumber: number | null) {
@@ -78,6 +106,16 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
   return {
     state,
     record,
+    /**
+     * Has the mocked detection find `migrations` pending on the checkpoint as it stands then.
+     * @param migrations - Migrations to report as pending
+     */
+    mockPending: (migrations: PendingMigration[]): void => {
+      mockPendingMigrations(migrations, () => ({
+        number: state.number,
+        historyId: state.historyId,
+      }));
+    },
     createMockClient: (overrides: MockClientOverrides = {}): OperatorClient =>
       createMockClient({
         getMetadata: vi.fn(async () => ({

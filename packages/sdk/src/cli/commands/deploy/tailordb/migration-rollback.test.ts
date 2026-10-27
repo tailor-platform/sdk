@@ -157,6 +157,7 @@ import { CLIError } from "#/cli/shared/errors";
 import * as migrationModule from "./migration";
 import { MaintenanceTimeline, ScriptRunTimer } from "./migration-timing";
 import { assertSkippableSteps, removeMigrationWorkflowResources } from "./migration-workflow";
+import { mockPendingMigrations } from "./test-helpers/migration-apply";
 import type { RemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 import type { SnapshotGqlPermission } from "#/cli/commands/tailordb/migrate/snapshot";
@@ -267,7 +268,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   }
 
   function setPendingMigrations(migrations: PendingMigration[]): void {
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(migrations);
+    mockPendingMigrations(migrations, () => ({ ...remoteCheckpoint }));
   }
 
   function createMockPlanResult() {
@@ -782,7 +783,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
     let clock = 0;
     vi.mocked(migrationModule.executeMigrations).mockImplementationOnce(
-      async (_ctx, migrations, _inProgress, timeline) => {
+      async (_ctx, migrations, _checkpoints, _inProgress, timeline) => {
         const run = new ScriptRunTimer("test-ns", migrations[0]!.number, clock);
         clock += 2_000;
         run.waiting(clock);
@@ -808,7 +809,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     try {
       const report = await applyTailorDB(client, createUpdatePlanResult(), "create-update");
 
-      expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]![3]).toBeInstanceOf(
+      expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]![4]).toBeInstanceOf(
         MaintenanceTimeline,
       );
       expect(report).toEqual({
@@ -2422,6 +2423,40 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         });
       });
 
+      test.each([
+        {
+          reason: "the checkpoint changed",
+          code: "MIGRATION_CHECKPOINT_CONFLICT",
+          message:
+            "Migration checkpoint test-ns/0000 changed to 0002 before migration test-ns/0001 started.",
+        },
+        {
+          reason: "the checkpoint could not be read",
+          code: "MIGRATION_CHECKPOINT_UNVERIFIED",
+          message:
+            "Could not confirm migration checkpoint test-ns/0000 before migration test-ns/0001 started: [unavailable] lost",
+        },
+      ])(
+        "rolls back the Pre-phase schema and reports the refusal itself when $reason before the run",
+        async ({ code, message }) => {
+          const client = createMockClient();
+          setPendingMigrations([mkRollbackMigration()]);
+          vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+            CLIError({ code, message }),
+          );
+
+          const error = await applyTailorDB(
+            client,
+            withInputs(createMockPlanResult()),
+            "create-update",
+          ).catch((caught: unknown) => caught);
+
+          expect(error).toMatchObject({ code, message });
+          expect(deletedTableNames(client)).toContain("StockReservation");
+          expect(migrationModule.clearMigrationInProgress).not.toHaveBeenCalled();
+        },
+      );
+
       test("rolls back a Pre-phase schema failure without touching the in-progress record", async () => {
         const client = createMockClient();
         setPendingMigrations([mkRollbackMigration()]);
@@ -2992,7 +3027,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         "still failing",
       );
 
-      expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]?.[2]).toEqual({
+      expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]?.[3]).toEqual({
         "test-ns": { number: 1, executionId: "exec-1", kind: "steps" },
       });
       expect(deletedTableNames(client)).not.toContain("StockReservation");

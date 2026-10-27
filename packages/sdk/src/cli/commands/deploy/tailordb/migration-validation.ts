@@ -9,6 +9,7 @@ import {
   formatMigrationResolveHint,
   isStaleMigrationInProgress,
   migrationResolveArgs,
+  type ExpectedMigrationCheckpoint,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
@@ -49,6 +50,8 @@ export type ValidateAndDetectResult = {
   namespacesWithMigrations: NamespaceWithMigrations[];
   migrationFileState: Record<string, string>;
   migrationHistoryIds: Record<string, string | null>;
+  /** Checkpoint each namespace had when validated, or is confirmed to be repaired to, by namespace. */
+  checkpoints: ReadonlyMap<string, ExpectedMigrationCheckpoint>;
   /** Migrations an earlier deploy left partially applied, by namespace. */
   inProgressMigrations: Record<string, MigrationInProgress>;
   /** In-progress records naming a migration whose checkpoint is already committed. */
@@ -234,6 +237,7 @@ export async function validateAndDetectMigrations(
   let inProgress: InProgressValidation = { inProgressMigrations: {}, staleInProgress: [] };
   let repairedInProgress: string[] = [];
   const migrationHistoryIds = Object.create(null) as Record<string, string | null>;
+  const checkpoints = new Map<string, ExpectedMigrationCheckpoint>();
   const maintenanceModeCheckpoints = Object.create(null) as Record<string, number>;
 
   if (namespacesWithMigrations.length > 0) {
@@ -351,7 +355,15 @@ export async function validateAndDetectMigrations(
       repairedInProgress,
       pendingMigrations,
     );
+    for (const repair of checkpointRepairs) {
+      checkpoints.set(repair.namespace, { number: repair.to, historyId: repair.toHistoryId });
+    }
     for (const [namespace, state] of remoteStates) {
+      checkpoints.set(namespace, {
+        number: state.number,
+        historyId: state.historyId,
+        ...(state.historyIdInvalid && { historyIdInvalid: true }),
+      });
       if (state.maintenanceModeCheckpoint === null) continue;
       maintenanceModeCheckpoints[namespace] = state.maintenanceModeCheckpoint;
     }
@@ -385,6 +397,7 @@ export async function validateAndDetectMigrations(
     namespacesWithMigrations,
     migrationFileState: captureMigrationFileState(namespacesWithMigrations),
     migrationHistoryIds,
+    checkpoints,
     ...inProgress,
     maintenanceModeCheckpoints,
   };

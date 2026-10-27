@@ -13,6 +13,7 @@ import {
   createPlanResult,
   gqlPermissionDeletion,
   mkPendingMigration as createPendingMigration,
+  mockPendingMigrations,
   snapshotAt,
   snapshotTable,
   type SnapshotTablesByVersion,
@@ -146,6 +147,13 @@ function createMockClient() {
       };
     }),
   });
+}
+
+function mockPending(pending: PendingMigration[]): void {
+  mockPendingMigrations(pending, (namespace) => ({
+    number: state.checkpoints.get(namespace) ?? null,
+    historyId: null,
+  }));
 }
 
 function typeWritesOf(mock: { calls: unknown[][] }, namespace: string, tableName: string) {
@@ -283,7 +291,7 @@ describe("migration flow: a table name shared across namespaces", () => {
         [migrationsDirOf(SUB)]: { 0: {}, 1: { Item: snapshotTable("Item", subItem) } },
       };
       for (const namespace of migrating) state.checkpoints.set(namespace, 0);
-      vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(pending);
+      mockPending(pending);
       const client = createMockClient();
       const subEntry = typeEntry("Item", { namespace: SUB, fields: subItem });
 
@@ -317,7 +325,7 @@ describe("migration flow: a table name shared across namespaces", () => {
     };
     state.checkpoints.set(MAIN, 0);
     state.checkpoints.set(SUB, 0);
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    mockPending([
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")]),
       mkPendingMigration(SUB, 1, [tableRemoved("Legacy")]),
     ]);
@@ -344,7 +352,7 @@ describe("migration flow: a table name shared across namespaces", () => {
       [migrationsDirOf(MAIN)]: { 0: { Legacy: snapshotTable("Legacy", legacy) }, 1: {}, 2: {} },
     };
     state.checkpoints.set(MAIN, 0);
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    mockPending([
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
       mkPendingMigration(MAIN, 2, []),
     ]);
@@ -371,9 +379,7 @@ describe("migration flow: a table name shared across namespaces", () => {
       [migrationsDirOf(MAIN)]: { 0: { Legacy: snapshotTable("Legacy", legacy) }, 1: {} },
     };
     state.checkpoints.set(MAIN, 0);
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
-    ]);
+    mockPending([mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false)]);
     const client = createMockClient();
     const unchanged = { name: "Legacy", metaRequest: typeMetaRequest("Legacy", SUB) };
 

@@ -25,8 +25,11 @@ import {
 import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import { formatMigrationScriptHint } from "#/cli/commands/tailordb/migrate/hints";
 import {
+  describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   formatMigrationResolveHint,
+  isCheckpointStillOwned,
+  type ExpectedMigrationCheckpoint,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
@@ -92,6 +95,8 @@ interface MigrationExecutionOptions {
   appId: string | undefined;
   maintenanceMode: boolean;
   skipSteps?: ReadonlyMap<string, readonly string[]>;
+  /** Checkpoint each namespace must still have when one of its migrations starts running. */
+  checkpoints: ReadonlyMap<string, ExpectedMigrationCheckpoint>;
 }
 
 /**
@@ -409,6 +414,7 @@ async function executeSingleMigration(
       appId,
       maintenanceMode: options.maintenanceMode,
       onBeforeStart: async () => {
+        await assertCheckpointUnchanged(options, migration);
         recording.mayBeRecorded = true;
         await writeMigrationInProgress(client, workspaceId, migration.namespace, {
           number: migration.number,
@@ -529,6 +535,62 @@ export async function updateMigrationLabel(
 }
 
 /**
+ * Refuse to start a migration's run once its namespace no longer has the checkpoint this deploy
+ * expects, since a record of the run would then not follow the checkpoint.
+ * @param options - Execution options
+ * @param migration - Migration about to start
+ */
+async function assertCheckpointUnchanged(
+  options: MigrationExecutionOptions,
+  migration: PendingMigration,
+): Promise<void> {
+  const expected = assertDefined(
+    options.checkpoints.get(migration.namespace),
+    "every namespace with a migration to run has an expected checkpoint",
+  );
+  const { namespace } = migration;
+  let remoteState: RemoteMigrationState;
+  try {
+    remoteState = await fetchRemoteMigrationState(
+      options.client,
+      resourceTrn(options.workspaceId, "tailordb", namespace),
+    );
+  } catch (error) {
+    throw CLIError({
+      code: "MIGRATION_CHECKPOINT_UNVERIFIED",
+      message:
+        `Could not confirm migration checkpoint ${namespace}/${describeMigrationCheckpoint(expected.number)} before migration ${namespace}/${formatMigrationNumber(migration.number)} started: ` +
+        (error instanceof Error ? error.message : String(error)),
+      suggestion: "Deploy again.",
+      cause: error,
+    });
+  }
+  if (isCheckpointStillOwned(remoteState, expected)) return;
+  const history = remoteState.historyIdInvalid
+    ? " with a migration history label that cannot be read"
+    : remoteState.historyId === expected.historyId
+      ? ""
+      : " in a different migration history";
+  throw CLIError({
+    code: "MIGRATION_CHECKPOINT_CONFLICT",
+    message: `Migration checkpoint ${namespace}/${describeMigrationCheckpoint(expected.number)} changed to ${describeMigrationCheckpoint(remoteState.number)}${history} before migration ${namespace}/${formatMigrationNumber(migration.number)} started.`,
+    suggestion:
+      "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
+      `Run 'tailor tailordb migration status --namespace ${namespace}' to see it. ` +
+      "If another deploy is running, wait for it to finish; otherwise return the namespace to the checkpoint with " +
+      `'tailor tailordb migration sync ${formatMigrationNumber(expected.number ?? 0)} --namespace ${namespace}'. Then deploy again.`,
+    context: {
+      namespace,
+      migrationNumber: migration.number,
+      expectedCheckpoint: expected.number,
+      remoteCheckpoint: remoteState.number,
+      expectedHistoryId: expected.historyId,
+      remoteHistoryId: remoteState.historyId,
+    },
+  });
+}
+
+/**
  * Record that a migration's script is running, so a deploy that stops or fails
  * after a step committed leaves the next deploy able to resume it, and one that
  * loses track of a `main` run leaves the run to be settled.
@@ -608,6 +670,20 @@ export function isMigrationPartiallyApplied(error: unknown): boolean {
  */
 export function isMigrationOutcomeUnknown(error: unknown): boolean {
   return isCLIError(error) && error.code === "MIGRATION_OUTCOME_UNKNOWN";
+}
+
+/**
+ * Whether a migration's run was refused before it started because its namespace's checkpoint
+ * changed or could not be confirmed, so the failure is not the script's.
+ * @param error - Failure raised while executing migrations
+ * @returns True for a run refused before it started
+ */
+export function isMigrationStartRefused(error: unknown): boolean {
+  return (
+    isCLIError(error) &&
+    (error.code === "MIGRATION_CHECKPOINT_CONFLICT" ||
+      error.code === "MIGRATION_CHECKPOINT_UNVERIFIED")
+  );
 }
 
 /**
@@ -928,6 +1004,7 @@ async function executeStepsMigration(
       inProgress,
       notify,
       onBeforeStart: async () => {
+        await assertCheckpointUnchanged(options, migration);
         mayBeRecorded = true;
         await writeMigrationInProgress(client, workspaceId, migration.namespace, {
           number: migration.number,
@@ -949,6 +1026,7 @@ async function executeStepsMigration(
     if (isCLIError(error) && error.code === "MIGRATION_START_UNCONFIRMED") {
       throw unconfirmedStartError(migration, error, options.maintenanceMode);
     }
+    if (isMigrationStartRefused(error)) throw error;
     const anotherRunActive = isCLIError(error) && error.code === "MIGRATION_EXECUTION_ACTIVE";
     if (started || anotherRunActive) {
       throw partiallyAppliedError(
@@ -1004,6 +1082,7 @@ async function executeStepsMigration(
  * Execute all pending migrations, grouping by namespace and using appropriate machine user
  * @param {MigrationContext} context - Migration context with per-namespace configuration
  * @param {PendingMigration[]} migrations - Migrations to execute
+ * @param checkpoints - Checkpoint each namespace must still have when its migration starts running
  * @param inProgressByNamespace - Migrations an earlier deploy left in progress, by namespace
  * @param timeline - Receives the phases of each migration run
  * @returns {Promise<void>}
@@ -1011,6 +1090,7 @@ async function executeStepsMigration(
 export async function executeMigrations(
   context: MigrationContext,
   migrations: PendingMigration[],
+  checkpoints: ReadonlyMap<string, ExpectedMigrationCheckpoint>,
   inProgressByNamespace: Readonly<Record<string, MigrationInProgress>> = {},
   timeline?: MaintenanceTimeline,
 ): Promise<void> {
@@ -1056,6 +1136,7 @@ export async function executeMigrations(
       appId: context.appId,
       maintenanceMode: context.maintenanceMode,
       skipSteps: context.skipSteps,
+      checkpoints,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);
@@ -1079,7 +1160,9 @@ export async function executeMigrations(
         sp.fail(
           isMigrationOutcomeUnknown(error)
             ? `Could not confirm the outcome of migration ${migrationLabel}`
-            : `Migration ${migrationLabel} failed`,
+            : isMigrationStartRefused(error)
+              ? `Migration ${migrationLabel} did not start`
+              : `Migration ${migrationLabel} failed`,
         );
         throw error;
       } finally {
