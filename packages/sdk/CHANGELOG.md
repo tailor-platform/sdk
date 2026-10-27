@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.85.5
+
+### Patch Changes
+
+- [#2796](https://github.com/tailor-platform/sdk/pull/2796) [`ddb5b92`](https://github.com/tailor-platform/sdk/commit/ddb5b92ad13fd5eba404420659cfdf9383aea3b0) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor-sdk deploy` keeps restoring a missing IdP client secret vault with the client's secret after an SDK upgrade, once the platform stops returning secrets when listing clients.
+
 ## 1.85.4
 
 ### Patch Changes
