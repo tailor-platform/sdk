@@ -8,7 +8,7 @@ import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
-import { configInvalidError } from "./validation-errors";
+import { configInvalidError, syntaxInvalidError } from "./validation-errors";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
 
@@ -156,30 +156,6 @@ function atConfigFile<T extends Error>(error: T, resolvedPath: string): T {
 }
 
 /**
- * Diagnostic the TypeScript transform throws for source it cannot parse.
- *
- * It arrives as a plain object rather than an Error, so a failure to parse the
- * config would otherwise reach the caller as `[object Object]`.
- */
-interface SyntaxDiagnostic {
-  code: "InvalidSyntax";
-  message: string;
-  filename: string;
-  startLine?: number;
-}
-
-function isSyntaxDiagnostic(value: unknown): value is SyntaxDiagnostic {
-  if (typeof value !== "object" || value === null || value instanceof Error) return false;
-  const { code, message, filename, startLine } = value as Record<string, unknown>;
-  return (
-    code === "InvalidSyntax" &&
-    typeof message === "string" &&
-    typeof filename === "string" &&
-    (startLine === undefined || typeof startLine === "number")
-  );
-}
-
-/**
  * Point a failure raised while importing the config at the source it came from.
  *
  * Unparsable source names the file it was found in, which is the imported
@@ -191,14 +167,8 @@ function isSyntaxDiagnostic(value: unknown): value is SyntaxDiagnostic {
  * @returns An Error carrying the source location the failure points at
  */
 export function atConfigSource(error: unknown, resolvedPath: string): unknown {
-  if (isSyntaxDiagnostic(error)) {
-    return withErrorDiagnostics(new SyntaxError(error.message, { cause: error }), {
-      location: {
-        file: error.filename,
-        ...(error.startLine === undefined ? {} : { line: error.startLine }),
-      },
-    });
-  }
+  const syntaxError = syntaxInvalidError(error);
+  if (syntaxError) return syntaxError;
   if (!(error instanceof Error)) return error;
   return getErrorDiagnostics(error).location ? error : atConfigFile(error, resolvedPath);
 }

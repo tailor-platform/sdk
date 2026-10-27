@@ -142,9 +142,11 @@ those messages describe the workflow's own checks, which can fail even when the 
 
 When the failure has a known source, the annotation carries it: `seed validate` reports the
 offending JSONL file and line, including a line that is not valid JSON, and a rejected config
-reports its file — or, when the config or a file it imports cannot be parsed, that file and the line
-it failed on. Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated
-without a location rather than with a path the runner cannot resolve.
+reports its file. A `.ts` or `.mts` file that cannot be parsed — the config, a TailorDB type,
+resolver, executor, workflow, or HTTP adapter file, the file passed to `function run`, or a file one
+of them imports — reports that file and the line it failed on. Locations are written relative to
+`GITHUB_WORKSPACE`; a file outside it is annotated without a location rather than with a path the
+runner cannot resolve.
 
 For a JSONL file containing a blank line, the annotation's line and the line printed in the report
 text differ: the annotation counts every line in the file, while the printed line counts only the

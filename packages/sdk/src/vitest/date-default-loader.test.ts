@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { aroundAll, describe, expect, test } from "vitest";
+import { runWithTsHook } from "#/cli/shared/test-helpers/ts-hook-child";
 import { dateDefaultFromConfig } from "./date-default-loader";
 
 describe("dateDefaultFromConfig", () => {
@@ -41,8 +41,6 @@ describe("dateDefaultFromConfig", () => {
 describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const loaderPath = resolve(here, "date-default-loader.ts");
-  const hookPath = resolve(here, "../cli/ts-hook.mjs");
-  const srcDir = resolve(here, "..");
   let tmpDir: string;
 
   aroundAll(async (runSuite) => {
@@ -53,21 +51,9 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
 
   type Outcome = { value?: string; error?: string; warnings: string[] };
 
-  const run = (configPath: string): Outcome => {
-    const script = `
-      import * as mod from "node:module";
-      const { resolveSync, loadSync } = await import(${JSON.stringify(pathToFileURL(hookPath).href)});
-      mod.registerHooks({ resolve: resolveSync, load: loadSync });
-      // The source under test uses the package's "#/" path alias, which only
-      // the bundler resolves; map it onto src/ for this native import.
-      mod.registerHooks({
-        resolve(specifier, context, next) {
-          if (specifier.startsWith("#/")) {
-            return next(${JSON.stringify(pathToFileURL(srcDir + "/").href)} + specifier.slice(2) + ".ts", context);
-          }
-          return next(specifier, context);
-        },
-      });
+  const run = (configPath: string): Outcome =>
+    runWithTsHook(
+      `
       const { loadDateDefaultFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
       const warnings = [];
       console.warn = (...args) => warnings.push(args.join(" "));
@@ -77,14 +63,9 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
       } catch (error) {
         console.log(JSON.stringify({ error: error instanceof Error ? error.message : String(error), warnings }));
       }
-    `;
-    const stdout = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
-      cwd: here,
-      encoding: "utf8",
-      env: { ...process.env, NODE_NO_WARNINGS: "1" },
-    });
-    return JSON.parse(stdout.trim().split("\n").at(-1) ?? "{}") as Outcome;
-  };
+      `,
+      here,
+    ) as Outcome;
 
   const fixture = (name: string, files: Record<string, string>): string => {
     const dir = join(tmpDir, name);
