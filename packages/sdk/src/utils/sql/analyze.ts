@@ -160,6 +160,9 @@ class Analyzer {
   usesTemporal = false;
   readonly #tables = new Map<string, Table>();
   readonly #params = new Map<string, { type: string }>();
+  // Sources whose row a WHERE test proves present, and their columns it proves not null.
+  readonly #present = new Set<Source>();
+  readonly #notNull = new Map<Source, Set<string>>();
   #namespace: { name: string; table: string } | undefined;
 
   constructor(private readonly definitions: SqlDefinitions) {
@@ -285,18 +288,19 @@ class Analyzer {
     ref: SqlColumnRef,
     outputNames?: ReadonlySet<string>,
   ): { config: SqlFieldConfig; nullable: boolean; source: Source } | undefined {
+    const found = this.#find(scope, ref);
+    if (found) {
+      const { source, config } = found;
+      return { source, config, nullable: this.#nullable(source, ref.column.name, config) };
+    }
     if (ref.table) {
       const table = ref.table;
       const source = scope.find((candidate) => candidate.name === table.name);
-      if (!source) {
-        this.#missingSource(scope, table);
-        return undefined;
-      }
-      return this.#field(source, ref.column);
+      if (source) this.#missingColumn(ref.column, [source.table]);
+      else this.#missingSource(scope, table);
+      return undefined;
     }
     const owners = scope.filter((source) => source.table.fields.has(ref.column.name));
-    const [owner] = owners;
-    if (owner && owners.length === 1) return this.#field(owner, ref.column);
     if (owners.length > 1) {
       this.report(
         `Column ${quoteName(ref.column.name)} is ambiguous: it exists in ${owners.map((owner) => quoteName(owner.table.definition.name)).join(" and ")}`,
@@ -314,9 +318,46 @@ class Analyzer {
     return undefined;
   }
 
-  #field(source: Source, column: SqlIdentifier) {
-    const config = this.fieldOf(source.table, column);
-    return config && { config, nullable: source.nullable || config.required !== true, source };
+  // The source and field a column reference names, when exactly one does.
+  #find(
+    scope: Source[],
+    ref: SqlColumnRef,
+  ): { source: Source; config: SqlFieldConfig } | undefined {
+    const tableName = ref.table?.name;
+    const sources = scope.filter((source) =>
+      tableName === undefined
+        ? source.table.fields.has(ref.column.name)
+        : source.name === tableName,
+    );
+    const [source] = sources;
+    const config = sources.length === 1 ? source?.table.fields.get(ref.column.name) : undefined;
+    return source && config ? { source, config } : undefined;
+  }
+
+  #nullable(source: Source, column: string, config: SqlFieldConfig): boolean {
+    if (this.#notNull.get(source)?.has(column)) return false;
+    return (source.nullable && !this.#present.has(source)) || config.required !== true;
+  }
+
+  #conjuncts(condition: SqlCondition | undefined): SqlCondition[] {
+    if (!condition) return [];
+    if (condition.kind !== "and") return [condition];
+    return [...this.#conjuncts(condition.left), ...this.#conjuncts(condition.right)];
+  }
+
+  // Record what the AND-ed IS NOT NULL tests of `where` prove, except for the columns an UPDATE sets.
+  narrow(scope: Source[], where: SqlCondition | undefined, assigned?: ReadonlySet<string>): void {
+    for (const condition of this.#conjuncts(where)) {
+      if (condition.kind !== "isNull" || !condition.not || condition.left.kind !== "column")
+        continue;
+      const found = this.#find(scope, condition.left);
+      if (!found) continue;
+      this.#present.add(found.source);
+      const column = condition.left.column.name;
+      if (assigned?.has(column)) continue;
+      const columns = this.#notNull.get(found.source) ?? new Set<string>();
+      this.#notNull.set(found.source, columns.add(column));
+    }
   }
 
   // The aggregate's result type, or undefined when its argument cannot be aggregated.
@@ -455,7 +496,7 @@ class Analyzer {
         for (const source of sources) {
           for (const [name, config] of source.table.fields) {
             const type = this.type(config, "select");
-            add(item, name, source.nullable || config.required !== true ? nullable(type) : type);
+            add(item, name, this.#nullable(source, name, config) ? nullable(type) : type);
           }
         }
       } else if (expr.kind === "column") {
@@ -478,11 +519,8 @@ class Analyzer {
     if (scope.length !== 1 || !where) return false;
     const [{ table, name }] = scope as [Source];
     const pinned = new Set<string>();
-    const visit = (condition: SqlCondition) => {
-      if (condition.kind === "and") {
-        visit(condition.left);
-        visit(condition.right);
-      } else if (
+    for (const condition of this.#conjuncts(where)) {
+      if (
         condition.kind === "compare" &&
         condition.op === "=" &&
         condition.left.kind === "column" &&
@@ -491,8 +529,7 @@ class Analyzer {
       ) {
         pinned.add(condition.left.column.name);
       }
-    };
-    visit(where);
+    }
     const keys: string[][] = [
       ...[...table.fields]
         .filter(([, config]) => config.unique && !config.array)
@@ -532,6 +569,7 @@ class Analyzer {
           }
         }
         for (const join of statement.joins) this.condition(scope, join.on);
+        this.narrow(scope, statement.where);
         const columns = this.columns(scope, statement.items);
         const outputNames = new Set(columns.map((column) => column.name));
         this.condition(scope, statement.where);
@@ -649,6 +687,11 @@ class Analyzer {
         }
         this.condition(scope, statement.where);
         if (!statement.returning) return { columns: [], cardinality: "none" };
+        const assigned =
+          statement.kind === "update"
+            ? new Set(statement.sets.map((set) => set.column.name))
+            : undefined;
+        this.narrow(scope, statement.where, assigned);
         const columns = this.columns(scope, statement.returning);
         return {
           columns,

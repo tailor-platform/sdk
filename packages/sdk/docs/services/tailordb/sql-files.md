@@ -90,6 +90,8 @@ Call `.run()` with a `tailordb.Client` for the query's namespace, `query.namespa
 | Inserts, updates, or deletes without `RETURNING`                                                                    | Nothing              |
 | Anything else                                                                                                       | An array of rows     |
 
+A column is nullable when its field is optional or its table is outer-joined. A column that `WHERE` tests with `IS NOT NULL`, in a condition joined to the rest with `AND`, is typed without `null`; the test also proves that its outer-joined table has a row, so that table's required columns lose `null` too.
+
 Date and datetime columns are typed as `Date` and time columns as `string`, or as `Temporal` values when `kyselyTypePlugin` is configured with `temporal: true`; time fields inside nested objects stay strings. Create the client with the same setting, `new tailordb.Client({ namespace, temporal: true })`, so the values it returns match the types.
 
 ## Limitations

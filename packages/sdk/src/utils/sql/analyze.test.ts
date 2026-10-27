@@ -150,6 +150,52 @@ describe("analyzeSql", () => {
     });
   });
 
+  describe("IS NOT NULL", () => {
+    test("drops null from a column the WHERE clause tests with IS NOT NULL", () => {
+      const analysis = analyzed(
+        'SELECT "paidAt", "weight", "priority" FROM "Order" WHERE "paidAt" IS NOT NULL AND ("weight" IS NOT NULL OR "amount" > 1) AND "priority" IS NULL',
+      );
+
+      expect(analysis.columns).toEqual([
+        { name: "paidAt", type: "Date" },
+        { name: "weight", type: "number | null" },
+        { name: "priority", type: '"LOW" | "HIGH" | null' },
+      ]);
+    });
+
+    test("drops null from the columns a * selects", () => {
+      expect(
+        analyzed('SELECT * FROM "Order" WHERE "Order"."paidAt" IS NOT NULL').columns,
+      ).toContainEqual({ name: "paidAt", type: "Date" });
+    });
+
+    test("keeps the row of an outer-joined table once one of its columns is tested", () => {
+      expect(
+        analyzed(
+          'SELECT c."name", o."amount", o."weight" FROM "Customer" c LEFT JOIN "Order" o ON o."customerID" = c."id" WHERE o."id" IS NOT NULL',
+        ).columns,
+      ).toEqual([
+        { name: "name", type: "string" },
+        { name: "amount", type: "number" },
+        { name: "weight", type: "number | null" },
+      ]);
+    });
+
+    test("drops null from RETURNING, except for a column UPDATE sets", () => {
+      expect(
+        analyzed(
+          'UPDATE "Order" SET "weight" = :weight WHERE "paidAt" IS NOT NULL AND "weight" IS NOT NULL RETURNING "paidAt", "weight"',
+        ).columns,
+      ).toEqual([
+        { name: "paidAt", type: "Date" },
+        { name: "weight", type: "number | null" },
+      ]);
+      expect(
+        analyzed('DELETE FROM "Order" WHERE "paidAt" IS NOT NULL RETURNING "paidAt"').columns,
+      ).toEqual([{ name: "paidAt", type: "Date" }]);
+    });
+  });
+
   describe("parameters", () => {
     test("types each placeholder from the column it is compared with", () => {
       const analysis = analyzed(
