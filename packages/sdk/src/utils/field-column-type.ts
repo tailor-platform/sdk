@@ -15,7 +15,8 @@ export type FieldColumnType =
  * `time` to `string`, because that's what the function runtime hands back for them by
  * default. With `temporal: true`, `date`/`datetime`/`time` resolve to their
  * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` counterparts instead,
- * matching a `getDB` created with `createGetDB({ temporal: true })`.
+ * matching a `getDB` created with `createGetDB({ temporal: true })`. A `time`
+ * field inside a nested object stays `string` either way, as the runtime returns it.
  *
  * `enum` and `nested` carry their own shape, so each generator resolves them
  * before reaching here; passing either is a caller bug rather than a `string`
@@ -23,10 +24,16 @@ export type FieldColumnType =
  * @param fieldType - TailorDB scalar field type name
  * @param temporal - Whether to map date/datetime/time fields to their Temporal column
  * types instead of their `Date`/`string` defaults
+ * @param nested - Whether the field is inside a nested object
  * @returns The column type for the field, defaulting to `string`
  * @throws If given `enum` or `nested`
  */
-export function mapFieldTypeToColumnType(fieldType: string, temporal = false): FieldColumnType {
+export function mapFieldTypeToColumnType(
+  fieldType: string,
+  temporal = false,
+  nested = false,
+): FieldColumnType {
+  if (nested && fieldType === "time") return "string";
   switch (fieldType) {
     case "uuid":
     case "string":

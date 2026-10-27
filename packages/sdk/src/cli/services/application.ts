@@ -41,6 +41,12 @@ import {
 } from "#/cli/shared/tsconfig-paths-plugin";
 import { configInvalidError } from "#/cli/shared/validation-errors";
 import {
+  createSqlContext,
+  sqlDefinitionsOf,
+  sqlFingerprintFile,
+  type SqlContextLoader,
+} from "#/cli/sql/definitions";
+import {
   type AppConfig,
   type ExecutorServiceInput,
   type HttpAdapterServiceInput,
@@ -57,6 +63,7 @@ import { SecretsSchema } from "#/parser/service/secrets/index";
 import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
 import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
@@ -109,6 +116,7 @@ interface ReusableBuildState {
   readonly inlineSourcemapDependencySources: boolean | string[];
   readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
   readonly bundleLogLevel: LogLevel;
+  readonly sql: SqlContextLoader;
 }
 
 /**
@@ -775,6 +783,13 @@ export async function loadApplication(
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
   });
+  const sql = createSqlContext(
+    sqlDefinitionsOf(
+      tailordbResult.tailorDBServices.map(({ namespace, types }) => ({ namespace, tables: types })),
+      pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false,
+    ),
+    sqlFingerprintFile(config.path),
+  );
   const pluginResolverServices = definePluginResolverServices(config, pluginManager);
   const resolverResult: DefineResolverResult = {
     resolverServices: [...configuredResolverResult.resolverServices, ...pluginResolverServices],
@@ -855,6 +870,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      sql,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -878,6 +894,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      sql,
     });
   }
 
@@ -901,6 +918,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      sql,
     });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -942,6 +960,7 @@ export async function loadApplication(
       tsconfigCache,
       sdkBuilderAnnotationCache,
       dateDefault,
+      sql,
     });
   }
 
@@ -996,6 +1015,7 @@ export async function loadApplication(
       inlineSourcemapDependencySources,
       inlineSourcemapProjectSources,
       bundleLogLevel,
+      sql,
     },
   };
 }
@@ -1035,6 +1055,7 @@ async function reloadEnvDependentBundles(params: {
     inlineSourcemapDependencySources,
     inlineSourcemapProjectSources,
     bundleLogLevel,
+    sql,
   } = reusableBuildState;
 
   const env =
@@ -1069,6 +1090,7 @@ async function reloadEnvDependentBundles(params: {
       previousUsedJobs: previous.workflowBuildResult,
       allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
       dateDefault: effectiveDateDefault(config),
+      sql,
     });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -1091,6 +1113,7 @@ async function reloadEnvDependentBundles(params: {
       tsconfigCache,
       sdkBuilderAnnotationCache,
       dateDefault: effectiveDateDefault(config),
+      sql,
     });
   }
 

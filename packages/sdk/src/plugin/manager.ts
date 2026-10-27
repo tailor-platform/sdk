@@ -1,4 +1,5 @@
 import { db, type TailorAnyDBType } from "#/configure/services/tailordb/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { getRawPluginTableName, hasGenerationHooks } from "#/plugin/guards";
 import { assertDefined } from "#/utils/assert";
 import type {
@@ -13,6 +14,7 @@ import type {
 import type {
   Plugin,
   PluginAttachment,
+  PluginConfigRegistry,
   PluginGeneratedExecutor,
   PluginGeneratedResolver,
   PluginGeneratedTable,
@@ -432,6 +434,17 @@ export class PluginManager {
    */
   getPlugin(pluginId: string): Plugin | undefined {
     return this.plugins.get(pluginId);
+  }
+
+  /**
+   * Get the config of a registered plugin by its ID
+   * @param pluginId - A plugin ID registered on {@link PluginConfigRegistry}
+   * @returns The plugin's config, or undefined if the plugin is not configured
+   */
+  getPluginConfig<Id extends keyof PluginConfigRegistry>(
+    pluginId: Id,
+  ): PluginConfigRegistry[Id] | undefined {
+    return resolvePluginConfig([...this.plugins.values()], pluginId);
   }
 
   /**

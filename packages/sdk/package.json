@@ -151,6 +151,11 @@
       "types": "./dist/runtime/logger.d.mts",
       "import": "./dist/runtime/logger.mjs",
       "default": "./dist/runtime/logger.mjs"
+    },
+    "./runtime/sql": {
+      "types": "./dist/runtime/sql.d.mts",
+      "import": "./dist/runtime/sql.mjs",
+      "default": "./dist/runtime/sql.mjs"
     }
   },
   "scripts": {
@@ -267,6 +272,16 @@
     },
     "vitest": {
       "optional": true
+    }
+  },
+  "typescript": {
+    "contentMapper": {
+      "compilerOptions": [],
+      "dynamicConfig": true,
+      "exec": [
+        "node",
+        "dist/cli/sql/mapper-main.mjs"
+      ]
     }
   },
   "engines": {
