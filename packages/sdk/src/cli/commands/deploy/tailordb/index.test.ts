@@ -3,6 +3,7 @@ import * as os from "node:os";
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -1518,7 +1519,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
       type: "string",
       required: true,
       description: "Postal code",
-      index: false,
+      index: true,
     });
     expect(Object.keys(address.fields!.geo!.fields ?? {})).toEqual(["lat", "lng"]);
     expect(address.fields!.geo!.fields!.lng).toMatchObject({ type: "float", required: true });
@@ -1907,6 +1908,139 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.sku).toBeDefined();
     expect(fields.code!.required).toBe(false);
     expect(fields.code!.unique).toBe(false);
+  });
+
+  test("defers the unique members inside a renamed object member and inside the kept old member", () => {
+    const member = (): SnapshotFieldConfig => ({
+      type: "nested",
+      required: false,
+      fields: { code: { type: "string", required: false, unique: true, index: true } },
+    });
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: { location: structuredClone(member()) as unknown as ProtoField },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: { type: "nested", required: false, fields: { geo: member() } },
+          after: { type: "nested", required: false, fields: { location: member() } },
+          memberRenames: [{ previousPath: ["geo"], path: ["location"] }],
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(address.fields!.location!.fields!.code).toMatchObject({ unique: false, index: true });
+    expect(address.fields!.geo!.fields!.code).toMatchObject({ unique: false });
+  });
+
+  test("defers the unique members of a renamed object field until the copy script has filled them", () => {
+    const members = {
+      type: "nested",
+      required: false,
+      fields: {
+        code: { type: "string", required: true, unique: true, index: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { token: { type: "uuid", required: false, unique: true, index: true } },
+        },
+      },
+    } as const;
+    const fields: Record<string, ProtoField> = {
+      details: structuredClone(members),
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "details",
+        {
+          kind: "field_renamed",
+          tableName: "Item",
+          fieldName: "details",
+          previousFieldName: "info",
+          before: structuredClone(members) as unknown as SnapshotFieldConfig,
+          after: structuredClone(members) as unknown as SnapshotFieldConfig,
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.info).toBeDefined();
+    const details = fields.details!;
+    expect(details.fields!.code).toMatchObject({ unique: false, index: true });
+    expect(details.fields!.geo!.fields!.token).toMatchObject({ unique: false, index: true });
+  });
+
+  test("restores a removed object field and the old name of a renamed one without the unique members inside them", () => {
+    const members = (): SnapshotFieldConfig => ({
+      type: "nested",
+      required: false,
+      fields: { code: { type: "string", required: false, unique: true, index: true } },
+    });
+    const fields: Record<string, ProtoField> = {
+      details: structuredClone(members()) as unknown as ProtoField,
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "legacy",
+        { kind: "field_removed", tableName: "Item", fieldName: "legacy", before: members() },
+      ],
+      [
+        "details",
+        {
+          kind: "field_renamed",
+          tableName: "Item",
+          fieldName: "details",
+          previousFieldName: "info",
+          before: members(),
+          after: members(),
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.legacy!.fields!.code).toMatchObject({ unique: false, index: true });
+    expect(fields.info!.fields!.code).toMatchObject({ unique: false, index: true });
+  });
+
+  test("restores a removed unique member and the unique members under it without their unique constraint", () => {
+    const before: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        code: { type: "string", required: false, unique: true, index: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { token: { type: "uuid", required: false, unique: true, index: true } },
+        },
+      },
+    };
+    const after: SnapshotFieldConfig = { type: "nested", required: false, fields: {} };
+    const fields: Record<string, ProtoField> = {
+      info: { type: "nested", required: false, fields: {} },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      ["info", { kind: "field_modified", tableName: "Item", fieldName: "info", before, after }],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const info = fields.info!;
+    expect(info.fields!.code).toMatchObject({ unique: false, index: true });
+    expect(info.fields!.geo!.fields!.token).toMatchObject({ unique: false, index: true });
   });
 });
 
@@ -2421,6 +2555,201 @@ describe("applyTailorDB migration label reconciliation", () => {
     }
   }
 
+  describe("a `main` run whose outcome an earlier deploy could not settle", () => {
+    const executionId = "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60";
+    const unsettledRecord = {
+      "sdk-migration-in-progress": "m0001-main",
+      "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60",
+    };
+
+    function writeMainMigration(): void {
+      writeEmptyMigrationsThrough(1);
+      fs.writeFileSync(
+        path.join(tmpDir, "0001", "migrate.ts"),
+        "export async function main() {}\n",
+      );
+    }
+
+    function withRun(client: OperatorClient, status: WorkflowExecution_Status): OperatorClient {
+      return Object.assign(client, {
+        getWorkflowExecution: vi.fn().mockResolvedValue({
+          execution: { id: executionId, status, jobExecutions: [] },
+        }),
+      });
+    }
+
+    function resolveCommand(direction: string): unknown {
+      return {
+        command: "tailor",
+        args: ["tailordb", "migration", "resolve", direction, "--namespace", "test-tailordb"],
+      };
+    }
+
+    test.each([
+      {
+        status: WorkflowExecution_Status.SUCCESS,
+        runStatus: "succeeded",
+        next: resolveCommand("--complete"),
+      },
+      {
+        status: WorkflowExecution_Status.FAILED,
+        runStatus: "failed",
+        next: resolveCommand("--rollback"),
+      },
+      {
+        status: WorkflowExecution_Status.CANCELED,
+        runStatus: "canceled",
+        next: resolveCommand("--rollback"),
+      },
+      { status: WorkflowExecution_Status.RUNNING, runStatus: "running", next: undefined },
+    ])(
+      "refuses before changing anything when the run is $runStatus, even with --no-schema-check",
+      async ({ status, runStatus, next }) => {
+        writeMainMigration();
+        const planResult = makePlanResult(true);
+        addSentinelTypeCreate(planResult);
+        planResult.context.migrationFileState = captureMigrationFileState(
+          planResult.context.namespacesWithMigrations,
+        );
+        const { client, setMetadata } = createMigrationClient({
+          "sdk-migration": "m0000",
+          ...unsettledRecord,
+        });
+
+        const error = await applyTailorDB(
+          withRun(client, status),
+          planResult,
+          "create-update",
+        ).catch((caught: unknown) => caught);
+
+        expect(error).toMatchObject({
+          code: "MIGRATION_OUTCOME_UNSETTLED",
+          message: expect.stringContaining("test-tailordb/0001"),
+          context: { namespace: "test-tailordb", migrationNumber: 1, executionId, runStatus },
+        });
+        expect((error as { next?: unknown }).next).toEqual(next);
+        expect(client.createTailorDBService).not.toHaveBeenCalled();
+        expect(client.createTailorDBType).not.toHaveBeenCalled();
+        expect(setMetadata).not.toHaveBeenCalled();
+      },
+    );
+
+    test("asks to check a run it cannot read before settling it either way", async () => {
+      writeMainMigration();
+      const { client } = createMigrationClient({ "sdk-migration": "m0000", ...unsettledRecord });
+      Object.assign(client, {
+        getWorkflowExecution: vi.fn().mockRejectedValue(new ConnectError("gone", Code.NotFound)),
+      });
+
+      const error = await runValidation(client, makePlanResult(true)).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toMatchObject({
+        code: "MIGRATION_OUTCOME_UNSETTLED",
+        context: { runStatus: "unknown" },
+        suggestion: expect.stringMatching(
+          /tailor workflow executions --workflow-name tailordb-migration--test-tailordb--0001.*resolve --complete.*resolve --rollback/s,
+        ),
+      });
+      expect((error as { next?: unknown }).next).toBeUndefined();
+    });
+
+    test("names --rollback for a run that never started", async () => {
+      writeMainMigration();
+      const { client } = createMigrationClient({
+        "sdk-migration": "m0000",
+        "sdk-migration-in-progress": "m0001-main",
+      });
+      Object.assign(client, {
+        listWorkflowExecutions: vi.fn().mockResolvedValue({ executions: [], nextPageToken: "" }),
+        getWorkflowByName: vi.fn().mockResolvedValue({ workflow: { id: "wf-1" } }),
+      });
+
+      const error = await runValidation(client, makePlanResult(true)).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toMatchObject({
+        code: "MIGRATION_OUTCOME_UNSETTLED",
+        context: { runStatus: "not_started" },
+        next: resolveCommand("--rollback"),
+      });
+    });
+
+    test("refuses in a namespace that has no checkpoint yet", async () => {
+      writeMainMigration();
+      const { client } = createMigrationClient(unsettledRecord);
+
+      await expect(
+        runValidation(withRun(client, WorkflowExecution_Status.SUCCESS), makePlanResult()),
+      ).rejects.toMatchObject({ code: "MIGRATION_OUTCOME_UNSETTLED" });
+    });
+
+    test("refuses instead of reporting drift when the schema is not the one the run left", async () => {
+      using stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType);
+      writeMainMigration();
+      const planResult = planWithDeployDerivedSettings(userType);
+      const client = schemaVerificationClient(unchangedRemoteSettings());
+      vi.mocked(client.getMetadata).mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0000", ...unsettledRecord } },
+      } as never);
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [],
+        nextPageToken: "",
+      } as never);
+
+      await expect(
+        runValidation(withRun(client, WorkflowExecution_Status.SUCCESS), planResult),
+      ).rejects.toMatchObject({ code: "MIGRATION_OUTCOME_UNSETTLED" });
+      expect(stderr.output).not.toContain("Remote schema drift detected");
+    });
+
+    test("reports drift instead when the record names a migration the checkpoint covers", async () => {
+      using _stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType);
+      writeMainMigration();
+      const planResult = planWithDeployDerivedSettings(userType);
+      const client = schemaVerificationClient(unchangedRemoteSettings());
+      vi.mocked(client.getMetadata).mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0001", ...unsettledRecord } },
+      } as never);
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [],
+        nextPageToken: "",
+      } as never);
+
+      await expect(
+        runValidation(withRun(client, WorkflowExecution_Status.SUCCESS), planResult),
+      ).rejects.toMatchObject({ code: "MIGRATION_REMOTE_DRIFT" });
+    });
+
+    test("refuses from the same read of the record that found the drift", async () => {
+      using _stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType);
+      writeMainMigration();
+      const planResult = planWithDeployDerivedSettings(userType);
+      const client = schemaVerificationClient(unchangedRemoteSettings());
+      vi.mocked(client.getMetadata)
+        .mockResolvedValueOnce({
+          metadata: { labels: { "sdk-migration": "m0000", ...unsettledRecord } },
+        } as never)
+        .mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0000" } } } as never);
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: [],
+        nextPageToken: "",
+      } as never);
+
+      await expect(
+        runValidation(withRun(client, WorkflowExecution_Status.SUCCESS), planResult),
+      ).rejects.toMatchObject({ code: "MIGRATION_OUTCOME_UNSETTLED" });
+    });
+  });
+
   test("revalidates local migration history immediately before apply", async () => {
     const userType = userSnapshotType();
     const userWithEmail: TailorDBSnapshotType = {
@@ -2684,6 +3013,32 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(stderr.output).toContain("will be reset to 0000");
     expect(client.listTailorDBTypes).toHaveBeenCalledOnce();
     expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { record: "a main run", labels: { "sdk-migration-in-progress": "m0006-main" } },
+    {
+      record: "an unreadable record",
+      labels: { "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60" },
+    },
+  ])("refuses a checkpoint reset while the namespace records $record", async ({ labels }) => {
+    using _stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
+    writeEmptyMigrationsThrough(5);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005", ...labels } },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toMatchObject({
+      code: "MIGRATION_IN_PROGRESS_CONFLICT",
+    });
   });
 
   test("rejects a missing remote checkpoint when the remote schema differs from baseline", async () => {

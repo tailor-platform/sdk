@@ -8,16 +8,11 @@ import {
   MIGRATION_IN_PROGRESS_LABEL_KEY,
   MIGRATION_LABEL_KEY,
   parseExecutionLabel,
+  parseInProgressLabel,
   parseMigrationHistoryId,
   parseMigrationLabelNumber,
+  type MigrationInProgress,
 } from "./types";
-
-/** A migration an earlier deploy left partially applied. */
-export interface MigrationInProgress {
-  number: number;
-  /** The run to resume; absent when the deploy stopped before recording it. */
-  executionId?: string;
-}
 
 export interface RemoteMigrationState {
   metadataExists: boolean;
@@ -40,14 +35,18 @@ function parseInProgress(labels: Record<string, string>): {
   if (migrationLabel === undefined) {
     return { inProgress: null, inProgressInvalid: executionLabel !== undefined };
   }
-  const number = parseMigrationLabelNumber(migrationLabel);
+  const parsed = parseInProgressLabel(migrationLabel);
   const executionId =
     executionLabel === undefined ? undefined : parseExecutionLabel(executionLabel);
-  if (number === null || executionId === null) {
+  if (parsed === null || executionId === null) {
     return { inProgress: null, inProgressInvalid: true };
   }
   return {
-    inProgress: executionId === undefined ? { number } : { number, executionId },
+    inProgress: {
+      number: parsed.number,
+      ...(executionId === undefined ? {} : { executionId }),
+      kind: parsed.kind,
+    },
     inProgressInvalid: false,
   };
 }
@@ -98,29 +97,79 @@ export async function fetchRemoteMigrationState(
 /**
  * Whether the in-progress record names a migration the checkpoint already
  * covers, so it no longer describes the namespace.
- * @param state - Remote migration state of the namespace
+ * @param state - Checkpoint and in-progress record of the namespace
  * @returns True for a leftover record
  */
-export function isStaleMigrationInProgress(state: RemoteMigrationState): boolean {
+export function isStaleMigrationInProgress(
+  state: Pick<RemoteMigrationState, "number" | "inProgress">,
+): boolean {
   return (
     state.inProgress !== null && state.number !== null && state.inProgress.number <= state.number
   );
 }
 
+/** How `migration resolve` settles a migration left in progress. */
+export type MigrationResolution = "rollback" | "complete";
+
+/**
+ * Arguments of the `tailor` command that settles a namespace's migration left in progress.
+ * @param resolution - How to settle it
+ * @param namespace - TailorDB namespace
+ * @returns Command arguments
+ */
+export function migrationResolveArgs(resolution: MigrationResolution, namespace: string): string[] {
+  return ["tailordb", "migration", "resolve", `--${resolution}`, "--namespace", namespace];
+}
+
+/**
+ * Quote the command that settles a namespace's migration left in progress, for an error suggestion.
+ * @param resolution - How to settle it
+ * @param namespace - TailorDB namespace
+ * @returns The quoted command
+ */
+export function formatMigrationResolveHint(
+  resolution: MigrationResolution,
+  namespace: string,
+): string {
+  return `'tailor ${migrationResolveArgs(resolution, namespace).join(" ")}'`;
+}
+
+/**
+ * Describe how to settle a `main` run whose outcome an earlier deploy did not settle.
+ * @param namespace - TailorDB namespace
+ * @returns Both commands, each with the outcome it applies to
+ */
+export function describeMainRunSettlement(namespace: string): string {
+  return (
+    `Settle it with ${formatMigrationResolveHint("complete", namespace)} if its run succeeded, ` +
+    `or with ${formatMigrationResolveHint("rollback", namespace)} otherwise; ` +
+    "the command shows the outcome of the run before it changes anything."
+  );
+}
+
 /**
  * Refuse a command that rewrites migration state while a migration is
- * partially applied; only a deploy can finish it consistently.
+ * partially applied, which only a deploy or `migration resolve` can finish
+ * consistently, or its `main` run is unsettled, which only `migration resolve`
+ * can settle consistently.
  * @param state - Remote migration state of the namespace
  * @param namespace - TailorDB namespace
  */
 export function assertNoMigrationInProgress(state: RemoteMigrationState, namespace: string): void {
   if (!state.inProgress && !state.inProgressInvalid) return;
+  const migrationLabel = state.inProgress
+    ? `${namespace}/${formatMigrationNumber(state.inProgress.number)}`
+    : undefined;
   throw CLIError({
     code: "MIGRATION_IN_PROGRESS",
-    message: state.inProgress
-      ? `Migration ${namespace}/${formatMigrationNumber(state.inProgress.number)} is partially applied by an earlier deploy.`
-      : `Namespace "${namespace}" records a partially applied migration that cannot be read.`,
+    message: !state.inProgress
+      ? `Namespace "${namespace}" records a partially applied migration that cannot be read.`
+      : state.inProgress.kind === "main"
+        ? `The outcome of the run of migration ${migrationLabel} that an earlier deploy started is not settled.`
+        : `Migration ${migrationLabel} is partially applied by an earlier deploy.`,
     suggestion:
-      "Finish the migration with a deploy first; steps that already completed do not run again.",
+      state.inProgress?.kind === "main"
+        ? describeMainRunSettlement(namespace)
+        : "Finish the migration with a deploy first; steps that already completed do not run again.",
   });
 }

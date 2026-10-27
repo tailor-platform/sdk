@@ -281,6 +281,31 @@ describe("tailordb migration set", () => {
     );
   });
 
+  test("asks to complete a `main` run only once it succeeded, pointing to migration resolve", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-migration-in-progress": "m0002-main",
+          "sdk-name": "my-app",
+        },
+      },
+    });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const result = await runCommand(setCommand, ["2", "--yes"]);
+
+    const output = stderr.mock.calls.map((call) => String(call[0])).join("");
+    expect(result.success).toBe(true);
+    expect(output).toMatch(/its run succeeded/);
+    expect(output).toMatch(/tailor tailordb migration resolve/);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0002", "sdk-name": "my-app" },
+      }),
+    );
+  });
+
   test("rejects migration numbers above 9999", async () => {
     const result = await runCommand(setCommand, ["12345", "--yes"]);
 

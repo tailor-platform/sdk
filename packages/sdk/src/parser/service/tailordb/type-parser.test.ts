@@ -58,6 +58,57 @@ describe("parseTypes", () => {
     });
   });
 
+  describe("fields inside an array of objects", () => {
+    test.each([
+      ["unique", () => db.string().unique()],
+      ["index", () => db.string().index()],
+    ] as const)("rejects %s on a member of an array of objects", (modifier, buildField) => {
+      const testType = db.table("Test", {
+        info: db.object({ code: buildField() }, { array: true }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        `Field "info.code" on table "Test": ${modifier} cannot be set on a field inside an array of objects`,
+      );
+    });
+
+    test("rejects unique on a member nested deeper inside an array of objects", () => {
+      const testType = db.table("Test", {
+        info: db.object({ geo: db.object({ code: db.string().unique() }) } as never, {
+          array: true,
+        }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        'Field "info.geo.code" on table "Test": unique cannot be set on a field inside an array of objects',
+      );
+    });
+
+    test.each([
+      ["unique", () => db.string().unique().clone({ array: true })],
+      ["index", () => db.string().index().clone({ array: true })],
+    ] as const)("rejects %s on a member that is itself an array", (modifier, buildField) => {
+      const testType = db.table("Test", {
+        info: db.object({ codes: buildField() as never }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        `Field "info.codes" on table "Test": ${modifier} cannot be set on array fields`,
+      );
+    });
+
+    test("allows unique and index on members of an object that is not an array", () => {
+      const testType = db.table("Test", {
+        info: db.object({ code: db.string().unique(), tag: db.string().index() }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
+
+      expect(result.Test!.fields.info!.config.fields?.code?.unique).toBe(true);
+      expect(result.Test!.fields.info!.config.fields?.tag?.index).toBe(true);
+    });
+  });
+
   describe("buildBackwardRelationships", () => {
     test("should build backward relationships correctly", () => {
       const employee = db.table("Employee", {

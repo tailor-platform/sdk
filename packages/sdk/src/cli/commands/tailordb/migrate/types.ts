@@ -33,13 +33,18 @@ export const MIGRATION_LABEL_KEY = "sdk-migration";
 export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
 
 /**
- * Label key naming the migration whose steps have partly committed, so the
- * next deploy resumes it instead of treating the schema as drift. It only names
- * the migration right after the checkpoint, which counts as 0000 when unset;
- * keep it that way by committing the checkpoint after every migration and
- * removing this label with every checkpoint write.
+ * Label key naming the migration an earlier deploy left in progress: one whose
+ * steps have partly committed, so the next deploy resumes it instead of
+ * treating the schema as drift, or one whose `main` run has started and has
+ * not been settled. It only names the migration right after the checkpoint,
+ * which counts as 0000 when unset; keep it that way by committing the
+ * checkpoint after every migration and removing this label with every
+ * checkpoint write.
  */
 export const MIGRATION_IN_PROGRESS_LABEL_KEY = "sdk-migration-in-progress";
+
+/** Suffix of an in-progress label value that names a `main` run rather than steps. */
+const MAIN_RUN_LABEL_SUFFIX = "-main";
 
 /** Label key holding the execution of the migration named by the in-progress label. */
 export const MIGRATION_EXECUTION_LABEL_KEY = "sdk-migration-execution";
@@ -80,6 +85,21 @@ export interface PendingMigration {
   diff: MigrationDiff;
 }
 
+/** How a run executes a migration's script: `main` as one job, `steps` each step as its own job. */
+export type MigrationRunKind = "main" | "steps";
+
+/** A migration an earlier deploy left partially applied, or whose `main` run it left unsettled. */
+export interface MigrationInProgress {
+  number: number;
+  /** The run to resume or settle; absent when the deploy stopped before recording it. */
+  executionId?: string;
+  /**
+   * A deploy resumes a `steps` run; it does not resume a `main` run, which `migration resolve`
+   * settles.
+   */
+  kind: MigrationRunKind;
+}
+
 // ============================================================================
 // Label Helper Functions
 // ============================================================================
@@ -111,6 +131,32 @@ export function parseMigrationLabelNumber(label: string): number | null {
   if (!/^\d+$/.test(numStr)) return null;
   const num = parseInt(numStr, 10);
   return num > 9999 ? null : num;
+}
+
+/**
+ * Build the in-progress label value naming a migration.
+ * @param migrationNumber - Migration left in progress
+ * @param kind - How the recorded run executes the script
+ * @returns Label value
+ */
+export function inProgressLabel(migrationNumber: number, kind: MigrationRunKind): string {
+  const label = sanitizeMigrationLabel(migrationNumber);
+  return kind === "main" ? `${label}${MAIN_RUN_LABEL_SUFFIX}` : label;
+}
+
+/**
+ * Parse an in-progress label value written by {@link inProgressLabel}.
+ * @param label - Label value
+ * @returns The migration and how the recorded run executes its script, or null for malformed input
+ */
+export function parseInProgressLabel(
+  label: string,
+): { number: number; kind: MigrationRunKind } | null {
+  const kind = label.endsWith(MAIN_RUN_LABEL_SUFFIX) ? "main" : "steps";
+  const number = parseMigrationLabelNumber(
+    kind === "main" ? label.slice(0, -MAIN_RUN_LABEL_SUFFIX.length) : label,
+  );
+  return number === null ? null : { number, kind };
 }
 
 /**
@@ -258,8 +304,10 @@ export interface RemoteSchemaVerificationResult {
   rebaselinePending?: RebaselinePendingInfo;
   /** Safe checkpoint reset offered after the remote schema matched the local baseline */
   checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
-  /** Set when the namespace records a migration left in progress */
-  migrationInProgress?: boolean;
+  /** Migration the namespace records as left in progress */
+  migrationInProgress?: MigrationInProgress;
+  /** Set when the namespace records a migration left in progress that cannot be read */
+  migrationInProgressInvalid?: true;
   /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }
