@@ -530,8 +530,10 @@ export default createExecutor({
     kind: "function",
     body: async ({ body, headers, rawBody }) => {
       const secret = await secretmanager.getSecret("api-keys", "stripe-webhook-secret");
-      // Verify headers["stripe-signature"] against rawBody with the secret and throw on mismatch
-      // https://docs.stripe.com/webhooks#verify-manually
+      // Implement verifyStripeSignature following https://docs.stripe.com/webhooks#verify-manually
+      if (!(await verifyStripeSignature(headers["stripe-signature"], rawBody, secret))) {
+        throw new Error("Invalid Stripe signature");
+      }
       console.log(`Received ${body.type} event`);
       // Process webhook...
     },
