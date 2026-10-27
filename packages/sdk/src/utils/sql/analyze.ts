@@ -610,7 +610,7 @@ class Analyzer {
         }
       }
     }
-    return scope.length > 0 && pinned.size === scope.length;
+    return pinned.size === scope.length;
   }
 
   // Check a value written to `target`, a column of the only table in `scope`.

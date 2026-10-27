@@ -171,14 +171,9 @@ describe("analyzeSql", () => {
       ).toEqual([{ name: "weight", type: "number | null" }]);
     });
 
-    test("drops null from both columns a WHERE equality compares", () => {
-      expect(
-        analyzed(
-          'SELECT c."note", o."weight" FROM "Customer" c JOIN "Order" o ON o."customerID" = c."id" WHERE c."note" = o."status"',
-        ).columns,
-      ).toEqual([
-        { name: "note", type: "string" },
-        { name: "weight", type: "number | null" },
+    test("drops null from a column on either side of a WHERE comparison", () => {
+      expect(analyzed('SELECT "weight" FROM "Order" WHERE "amount" = "weight"').columns).toEqual([
+        { name: "weight", type: "number" },
       ]);
     });
 
@@ -410,6 +405,11 @@ describe("analyzeSql", () => {
       {
         source:
           'SELECT o."id" FROM "Order" o FULL JOIN "Customer" c ON c."id" = o."customerID" WHERE o."id" = :id',
+        cardinality: "many",
+      },
+      {
+        source:
+          'SELECT o."id" FROM "Customer" c RIGHT JOIN "Order" o ON o."id" = :id AND c."id" = o."customerID"',
         cardinality: "many",
       },
       { source: 'SELECT "id" FROM "Order" LIMIT 1', cardinality: "maybeOne" },
