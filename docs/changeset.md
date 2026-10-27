@@ -36,9 +36,20 @@ external system is not an SDK breaking change when it preserves existing SDK inv
 code, and configuration. If that distinction cannot be established from the repository, confirm the
 expected compatibility with the user before choosing `major`.
 
+#### Breaking changes to beta features
+
+A feature is beta when the user docs under `packages/sdk/docs/` mark it so: a callout that calls it
+beta, a `(Beta)` heading on its page or section, or `(beta)` in its CLI command description. An API
+whose usage is explained on a beta page or section is beta, even when other pages or sections
+mention or link to it.
+
+A breaking change to a beta feature is `minor`, and its description starts with
+`**Breaking change (beta)**:` followed by the user impact and migration steps.
+
 ### `minor` — New capabilities
 
 SDK users can do something new that they couldn't before. Their existing code continues to work without changes.
+[Breaking changes to beta features](#breaking-changes-to-beta-features) are also `minor`.
 
 - New CLI command (e.g., `function logs`, `executor list`, `completion`)
 - New field type (e.g., `t.decimal()`, `db.decimal()`)
@@ -62,14 +73,15 @@ SDK users don't need to know about this change. Their code works exactly the sam
 
 ## Common Mistakes
 
-| Change                  | Wrong | Correct   | Reason                                         |
-| ----------------------- | ----- | --------- | ---------------------------------------------- |
-| New CLI command         | patch | **minor** | Users can do something new                     |
-| New config option       | patch | **minor** | Users can configure something new              |
-| New field type          | patch | **minor** | Users can define new schemas                   |
-| Internal refactoring    | minor | **patch** | Invisible to users                             |
-| Performance improvement | minor | **patch** | Same behavior, just faster                     |
-| Better validation error | minor | **patch** | Existing behavior improved, not new capability |
+| Change                            | Wrong | Correct   | Reason                                          |
+| --------------------------------- | ----- | --------- | ----------------------------------------------- |
+| New CLI command                   | patch | **minor** | Users can do something new                      |
+| New config option                 | patch | **minor** | Users can configure something new               |
+| New field type                    | patch | **minor** | Users can define new schemas                    |
+| Internal refactoring              | minor | **patch** | Invisible to users                              |
+| Performance improvement           | minor | **patch** | Same behavior, just faster                      |
+| Better validation error           | minor | **patch** | Existing behavior improved, not new capability  |
+| Breaking change to a beta feature | major | **minor** | Beta features can break outside a major release |
 
 ## When No Changeset Is Needed
 
