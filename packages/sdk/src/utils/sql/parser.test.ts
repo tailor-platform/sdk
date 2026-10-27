@@ -67,6 +67,86 @@ describe("parseSql", () => {
       });
     });
 
+    test("parses arithmetic with precedence, parentheses and unary minus", () => {
+      expect(
+        parsed('SELECT "a" + "b" * 2 AS x, -("a" - 1) / 2, 1.5, -1, \'s\', true FROM "T"'),
+      ).toMatchObject({
+        items: [
+          {
+            expr: {
+              kind: "arithmetic",
+              op: "+",
+              left: { kind: "column", column: { name: "a" } },
+              right: {
+                kind: "arithmetic",
+                op: "*",
+                left: { kind: "column" },
+                right: { kind: "literal", value: "2" },
+              },
+            },
+            alias: { name: "x" },
+          },
+          {
+            expr: {
+              kind: "arithmetic",
+              op: "/",
+              left: { kind: "negation", operand: { kind: "arithmetic", op: "-" } },
+            },
+          },
+          { expr: { kind: "literal", type: "number", value: "1.5" } },
+          { expr: { kind: "literal", type: "number", value: "-1" } },
+          { expr: { kind: "literal", type: "string", value: "s" } },
+          { expr: { kind: "literal", type: "boolean", value: "true" } },
+        ],
+      });
+    });
+
+    test("parses arithmetic in conditions and aggregates", () => {
+      expect(
+        parsed(
+          'SELECT sum("a" * 2) FROM "T" WHERE "a" + :d > "b" - 1 AND ("a" + 1) * 2 IN (1, 2) AND ("a") = :a GROUP BY "c" HAVING sum("a") + 1 > :n',
+        ),
+      ).toMatchObject({
+        items: [{ expr: { kind: "aggregate", fn: "sum", arg: { kind: "arithmetic", op: "*" } } }],
+        where: {
+          kind: "and",
+          left: {
+            kind: "and",
+            left: {
+              kind: "compare",
+              left: { kind: "arithmetic", right: { kind: "param", name: "d" } },
+              right: { kind: "arithmetic", op: "-" },
+            },
+            right: { kind: "in", left: { kind: "arithmetic", op: "*" } },
+          },
+          right: { kind: "compare", left: { kind: "column" }, right: { kind: "param" } },
+        },
+        having: { kind: "compare", left: { kind: "arithmetic", left: { kind: "aggregate" } } },
+      });
+    });
+
+    test("tells *, a qualified * and count(*) from multiplication", () => {
+      expect(
+        parsed('SELECT *, t.*, "a" * 2 AS x FROM "T" t GROUP BY "a" HAVING count(*) * 2 > 1'),
+      ).toMatchObject({
+        items: [
+          { expr: { kind: "star" } },
+          { expr: { kind: "star", table: { name: "t" } } },
+          { expr: { kind: "arithmetic", op: "*" } },
+        ],
+        having: { left: { kind: "arithmetic", left: { kind: "aggregate", arg: undefined } } },
+      });
+    });
+
+    test("tells a parenthesized condition from a parenthesized expression", () => {
+      expect(parsed('SELECT "a" FROM "T" WHERE (("a" = 1) OR "b" = 2)')).toMatchObject({
+        where: { kind: "or", left: { kind: "compare" } },
+      });
+      expect(parsed('SELECT "a" FROM "T" WHERE (("a" + 1) * 2) >= 3')).toMatchObject({
+        where: { kind: "compare", left: { kind: "arithmetic", op: "*" } },
+      });
+    });
+
     test("parses vector_similarity in ORDER BY", () => {
       expect(
         parsed('SELECT "id" FROM "Product" ORDER BY vector_similarity("description", :q) DESC'),
@@ -80,7 +160,7 @@ describe("parseSql", () => {
     test("parses INSERT with several rows, DEFAULT, ON CONFLICT and RETURNING", () => {
       expect(
         parsed(
-          'INSERT INTO "Customer" ("name", "tier") VALUES (:name, DEFAULT), (\'Bob\', \'PRO\') ON CONFLICT ("email") DO UPDATE SET "name" = EXCLUDED."name", "tier" = :tier WHERE "tier" = \'FREE\' RETURNING *',
+          'INSERT INTO "Customer" ("name", "tier") VALUES (:name, DEFAULT), (\'Bob\', \'PRO\') ON CONFLICT ("email") DO UPDATE SET "name" = EXCLUDED."name", "tier" = :tier RETURNING *',
         ),
       ).toMatchObject({
         kind: "insert",
@@ -165,13 +245,27 @@ describe("parseSql", () => {
         message: /NULLS/,
         at: "NULLS",
       },
-      { source: 'SELECT "a" + 1 FROM "T"', message: /\+/, at: "+" },
-      { source: 'SELECT 1 FROM "T"', message: /column/i, at: "1" },
+      { source: 'SELECT "a" % 2 FROM "T"', message: /%/, at: "%" },
       { source: 'SELECT :a FROM "T"', message: /placeholder/i, at: ":a" },
+      { source: 'SELECT "a" + :a FROM "T"', message: /placeholder/i, at: ":a" },
+      { source: 'SELECT NULL AS "x" FROM "T"', message: /NULL/, at: "NULL" },
+      { source: 'SELECT "a" + NULL AS "x" FROM "T"', message: /NULL/, at: "NULL" },
+      { source: 'SELECT sum("a") + 1 FROM "T"', message: /HAVING/, at: "+" },
+      { source: 'SELECT 1 + count(*) FROM "T"', message: /HAVING/, at: "count" },
+      { source: 'SELECT sum(:a) FROM "T"', message: /placeholder/i, at: ":a" },
+      { source: 'SELECT sum(max("a")) FROM "T"', message: /nested/i, at: "max" },
+      { source: 'SELECT "a" FROM "T" ORDER BY "a" + 1', message: /AS/, at: "+" },
       { source: 'SELECT "a" FROM "T" WHERE NOT ("a" = 1)', message: /NOT/, at: "NOT" },
-      { source: 'SELECT "a" FROM "T" WHERE "a" + 1 > :x', message: /\+/, at: "+" },
       { source: 'SELECT "a" FROM "T" WHERE "a" = ANY(:ids)', message: /ANY/, at: "ANY" },
       { source: 'SELECT "a" FROM "T" WHERE :x = "a"', message: /left/i, at: ":x" },
+      { source: 'SELECT "a" FROM "T" WHERE ("a" != 1)', message: /!=/, at: "!=" },
+      { source: 'SELECT "a" FROM "T" WHERE "a" + 1 LIKE :p', message: /LIKE/, at: '"a" + 1' },
+      {
+        source:
+          'INSERT INTO "T" ("id", "a") VALUES (:id, 1) ON CONFLICT ("id") DO UPDATE SET "a" = EXCLUDED."a" WHERE "a" > 0',
+        message: /WHERE/,
+        at: "WHERE",
+      },
       { source: "BEGIN", message: /transaction/i, at: "BEGIN" },
       {
         source: 'SELECT "a" FROM "T"; SELECT "b" FROM "U"',

@@ -1,16 +1,19 @@
 import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import {
   parseSql,
+  PATTERN_OPERATORS,
   type SqlAggregate,
+  type SqlArithmetic,
   type SqlColumnRef,
   type SqlCondition,
   type SqlDefault,
   type SqlDiagnostic,
   type SqlExcluded,
+  type SqlExpression,
   type SqlIdentifier,
   type SqlJoin,
   type SqlLiteral,
-  type SqlOperand,
+  type SqlNegation,
   type SqlParam,
   type SqlSelectItem,
   type SqlSpan,
@@ -82,9 +85,10 @@ export interface SqlAnalysisResult {
 }
 
 const ID_FIELD: SqlFieldConfig = { type: "uuid", required: true, unique: true };
-const COMPARABLE_TYPES = ["integer", "float", "string", "enum", "date", "time", "datetime"];
-const NUMERIC_TYPES = ["integer", "float"];
 const ARITHMETIC_TYPES = ["integer", "float", "decimal"];
+const COMPARABLE_TYPES = [...ARITHMETIC_TYPES, "string", "enum", "date", "time", "datetime"];
+// Arithmetic yields the first of these its operands include.
+const ARITHMETIC_RESULT_TYPES = ["float", "decimal", "integer"];
 const TYPE_LABELS: Readonly<Record<string, string>> = {
   integer: "Integer",
   float: "Float",
@@ -95,20 +99,8 @@ const TYPE_LABELS: Readonly<Record<string, string>> = {
   time: "Time",
   datetime: "DateTime",
 };
-const PATTERN_OPERATORS = new Set([
-  "LIKE",
-  "NOT LIKE",
-  "ILIKE",
-  "NOT ILIKE",
-  "~~",
-  "!~~",
-  "~~*",
-  "!~~*",
-  "~",
-  "!~",
-  "~*",
-  "!~*",
-]);
+const INTEGER_LITERAL = /^-?[0-9]+$/;
+const INT32_MAX = 2147483647;
 
 interface Table {
   definition: SqlTableDefinition;
@@ -127,6 +119,12 @@ interface JoinedSource {
   type: SqlJoin["type"];
   on?: SqlCondition;
   source: Source;
+}
+
+/** The type of the value an expression yields. */
+interface ValueType {
+  config: SqlFieldConfig;
+  nullable: boolean;
 }
 
 /** The column a value is compared with or written to. */
@@ -152,15 +150,81 @@ function nullable(type: string): string {
   return `${type} | null`;
 }
 
+function listOf(items: readonly string[], conjunction: string): string {
+  const rest = items.slice(0, -1);
+  const last = items.at(-1) ?? "";
+  return rest.length > 0 ? `${rest.join(", ")} ${conjunction} ${last}` : last;
+}
+
 function fieldOfTypes(types: readonly string[]): string {
-  const labels = types.map((type) => TYPE_LABELS[type] ?? type);
-  const last = labels.pop();
-  const list = labels.length > 0 ? `${labels.join(", ")} or ${last}` : `${last}`;
+  const list = listOf(
+    types.map((type) => TYPE_LABELS[type] ?? type),
+    "or",
+  );
   return `${/^[AEIOU]/.test(list) ? "an" : "a"} ${list} field`;
 }
 
 function typeOf(config: SqlFieldConfig): string {
   return `${config.type}${config.array ? "[]" : ""}`;
+}
+
+function literalType(literal: SqlLiteral): ValueType | undefined {
+  if (literal.type === "null") return undefined;
+  const type =
+    literal.type === "number"
+      ? INTEGER_LITERAL.test(literal.value)
+        ? "integer"
+        : "float"
+      : literal.type;
+  return { config: { type }, nullable: false };
+}
+
+// The columns without whose value an expression's value is null.
+function nullPropagatingColumns(expr: SqlExpression): SqlColumnRef[] {
+  switch (expr.kind) {
+    case "column":
+      return [expr];
+    case "arithmetic":
+      return [...nullPropagatingColumns(expr.left), ...nullPropagatingColumns(expr.right)];
+    case "negation":
+      return nullPropagatingColumns(expr.operand);
+    default:
+      return [];
+  }
+}
+
+// The name TailorDB gives a result column that has no alias, when it is known.
+function defaultName(expr: SqlExpression): string | undefined {
+  switch (expr.kind) {
+    case "column":
+      return expr.column.name;
+    case "aggregate":
+      return expr.fn;
+    case "arithmetic":
+      return "expression";
+    case "literal":
+      return "?column?";
+    case "negation":
+      return expr.operand.kind === "literal" ? undefined : defaultName(expr.operand);
+    default:
+      return undefined;
+  }
+}
+
+function describeOperand(operand: SqlColumnRef | SqlLiteral | SqlAggregate): string {
+  switch (operand.kind) {
+    case "column":
+      return quoteName(operand.column.name);
+    case "literal":
+      return operand.type === "string" ? `'${operand.value}'` : operand.value;
+    case "aggregate":
+      return operand.fn.toUpperCase();
+  }
+}
+
+function describeSource(source: Source): string {
+  const table = quoteName(source.table.definition.name);
+  return source.name === source.table.definition.name ? table : `${table} ${source.name}`;
 }
 
 class Analyzer {
@@ -260,13 +324,6 @@ class Analyzer {
   bind(scope: Source[], ref: SqlTableRef): void {
     const table = this.table(ref.table);
     if (!table) return;
-    if (scope.some((source) => source.table === table)) {
-      this.report(
-        `Joining ${quoteName(table.definition.name)} more than once is not supported by TailorDB SQL`,
-        ref.table.span,
-      );
-      return;
-    }
     const name = ref.alias ?? ref.table;
     if (scope.some((source) => source.name === name.name)) {
       this.report(`Table or alias ${quoteName(name.name)} is used more than once`, name.span);
@@ -301,7 +358,7 @@ class Analyzer {
     scope: Source[],
     ref: SqlColumnRef,
     outputNames?: ReadonlySet<string>,
-  ): { config: SqlFieldConfig; nullable: boolean; source: Source } | undefined {
+  ): (ValueType & { source: Source }) | undefined {
     const { candidates, found } = this.#lookup(scope, ref);
     if (found) {
       const { source, config } = found;
@@ -315,7 +372,7 @@ class Analyzer {
     }
     if (candidates.length > 1) {
       this.report(
-        `Column ${quoteName(ref.column.name)} is ambiguous: it exists in ${candidates.map((owner) => quoteName(owner.table.definition.name)).join(" and ")}`,
+        `Column ${quoteName(ref.column.name)} is ambiguous: it exists in ${listOf(candidates.map(describeSource), "and")}`,
         ref.column.span,
       );
       return undefined;
@@ -361,14 +418,15 @@ class Analyzer {
   #requiredColumns(condition: SqlCondition): SqlColumnRef[] {
     switch (condition.kind) {
       case "isNull":
-        return condition.not && condition.left.kind === "column" ? [condition.left] : [];
+        return condition.not ? nullPropagatingColumns(condition.left) : [];
       case "compare":
-        return [condition.left, condition.right].filter(
-          (operand): operand is SqlColumnRef => operand.kind === "column",
-        );
+        return [
+          ...nullPropagatingColumns(condition.left),
+          ...nullPropagatingColumns(condition.right),
+        ];
       case "in":
       case "between":
-        return condition.left.kind === "column" ? [condition.left] : [];
+        return nullPropagatingColumns(condition.left);
       case "and":
       case "or":
         return [];
@@ -390,19 +448,13 @@ class Analyzer {
   }
 
   // The aggregate's result type, or undefined when its argument cannot be aggregated.
-  aggregate(
-    scope: Source[],
-    aggregate: SqlAggregate,
-  ): { select: string; write: string } | undefined {
-    if (aggregate.fn === "count") {
-      if (aggregate.arg) this.column(scope, aggregate.arg);
-      return { select: "number", write: "number" };
-    }
-    const arg = aggregate.arg ? this.column(scope, aggregate.arg) : undefined;
+  aggregate(scope: Source[], aggregate: SqlAggregate): ValueType | undefined {
+    const arg = aggregate.arg && this.expression(scope, aggregate.arg);
+    if (aggregate.fn === "count") return { config: { type: "integer" }, nullable: false };
     if (!arg) return undefined;
     const name = aggregate.fn.toUpperCase();
     const allowed =
-      aggregate.fn === "sum" || aggregate.fn === "avg" ? NUMERIC_TYPES : COMPARABLE_TYPES;
+      aggregate.fn === "sum" || aggregate.fn === "avg" ? ARITHMETIC_TYPES : COMPARABLE_TYPES;
     if (arg.config.array || !allowed.includes(arg.config.type)) {
       this.report(
         `${name} takes ${fieldOfTypes(allowed)}, not ${typeOf(arg.config)}`,
@@ -410,12 +462,87 @@ class Analyzer {
       );
       return undefined;
     }
-    const result = (type: string) => (this.#grouped && !arg.nullable ? type : nullable(type));
-    if (allowed === NUMERIC_TYPES) return { select: result("number"), write: "number" };
-    return {
-      select: result(this.type(arg.config, "select")),
-      write: this.type(arg.config, "write"),
+    const nullable = !this.#grouped || arg.nullable;
+    if (aggregate.fn === "min" || aggregate.fn === "max") return { config: arg.config, nullable };
+    const type =
+      arg.config.type === "decimal"
+        ? "decimal"
+        : aggregate.fn === "sum" && arg.config.type === "integer"
+          ? "integer"
+          : "float";
+    return { config: { type }, nullable };
+  }
+
+  // The type of an expression's value, after typing the placeholders in it; undefined for a lone
+  // placeholder, a NULL, or an expression with a problem.
+  expression(scope: Source[], expr: SqlExpression): ValueType | undefined {
+    switch (expr.kind) {
+      case "column":
+        return this.column(scope, expr);
+      case "param":
+        return undefined;
+      case "literal":
+        this.#checkInteger(expr);
+        return literalType(expr);
+      case "aggregate":
+        return this.aggregate(scope, expr);
+      case "arithmetic":
+      case "negation":
+        return this.#arithmetic(scope, expr);
+    }
+  }
+
+  // Arithmetic is null when any operand is, and its placeholders take its operands' write type.
+  #arithmetic(scope: Source[], expr: SqlArithmetic | SqlNegation): ValueType | undefined {
+    const params: SqlParam[] = [];
+    const types = new Set<string>();
+    let nullable = false;
+    // Whether the operand can take part in arithmetic.
+    const visit = (operand: SqlExpression): boolean => {
+      if (operand.kind === "arithmetic") {
+        const valid = [visit(operand.left), visit(operand.right)].every(Boolean);
+        const divisor = operand.right;
+        if (operand.op === "/" && divisor.kind === "literal" && Number(divisor.value) === 0) {
+          this.report("Dividing by zero fails in TailorDB SQL", divisor.span);
+          return false;
+        }
+        return valid;
+      }
+      if (operand.kind === "negation") return visit(operand.operand);
+      if (operand.kind === "param") {
+        params.push(operand);
+        return true;
+      }
+      const type = this.expression(scope, operand);
+      if (!type || !this.arithmeticOperand(type.config, describeOperand(operand), operand.span)) {
+        return false;
+      }
+      types.add(type.config.type);
+      nullable ||= type.nullable;
+      return true;
     };
+    const valid = visit(expr);
+    const type = ARITHMETIC_RESULT_TYPES.find((candidate) => types.has(candidate)) ?? "integer";
+    for (const param of params) this.typeParam(param, this.type({ type }, "write"));
+    return valid ? { config: { type }, nullable } : undefined;
+  }
+
+  #checkInteger(literal: SqlLiteral): void {
+    if (literal.type !== "number" || !INTEGER_LITERAL.test(literal.value)) return;
+    if (Math.abs(Number(literal.value)) <= INT32_MAX) return;
+    this.report(
+      `TailorDB SQL takes integers in the 32-bit range, and ${literal.value} is not`,
+      literal.span,
+    );
+  }
+
+  arithmeticOperand(config: SqlFieldConfig, name: string, span: SqlSpan): boolean {
+    if (!config.array && ARITHMETIC_TYPES.includes(config.type)) return true;
+    this.report(
+      `Arithmetic needs ${fieldOfTypes(ARITHMETIC_TYPES)}, and ${name} is ${typeOf(config)}`,
+      span,
+    );
+    return false;
   }
 
   checkLiteral(target: Target, literal: SqlLiteral): void {
@@ -431,7 +558,7 @@ class Analyzer {
 
   checkValue(
     scope: Source[],
-    value: SqlValue,
+    value: SqlExpression,
     paramType: string | undefined,
     target?: Target,
   ): void {
@@ -440,7 +567,7 @@ class Analyzer {
     } else if (value.kind === "literal") {
       if (target) this.checkLiteral(target, value);
     } else {
-      this.column(scope, value);
+      this.expression(scope, value);
     }
   }
 
@@ -458,34 +585,44 @@ class Analyzer {
       case "compare": {
         const left = this.#operand(scope, condition.left, true);
         const paramType = PATTERN_OPERATORS.has(condition.op) ? "string" : left?.paramType;
-        this.checkValue(scope, condition.right, paramType, left?.target);
+        this.#compared(scope, condition.right, paramType, left?.target);
         return;
       }
       case "in": {
         const left = this.#operand(scope, condition.left, true);
         for (const item of condition.items)
-          this.checkValue(scope, item, left?.paramType, left?.target);
+          this.#compared(scope, item, left?.paramType, left?.target);
         return;
       }
       case "between": {
         const left = this.#operand(scope, condition.left, true);
-        this.checkValue(scope, condition.low, left?.paramType, left?.target);
-        this.checkValue(scope, condition.high, left?.paramType, left?.target);
+        this.#compared(scope, condition.low, left?.paramType, left?.target);
+        this.#compared(scope, condition.high, left?.paramType, left?.target);
         return;
       }
     }
   }
 
+  // Check a value a condition compares with its left side.
+  #compared(
+    scope: Source[],
+    value: SqlExpression,
+    paramType: string | undefined,
+    target: Target | undefined,
+  ): void {
+    if (value.kind === "literal") this.#checkInteger(value);
+    this.checkValue(scope, value, paramType, target);
+  }
+
   #operand(
     scope: Source[],
-    operand: SqlOperand,
+    operand: SqlExpression,
     compared: boolean,
   ): { paramType: string; target?: Target } | undefined {
-    if (operand.kind === "aggregate") {
-      const type = this.aggregate(scope, operand);
-      return type && { paramType: type.write };
+    if (operand.kind !== "column") {
+      const type = this.expression(scope, operand);
+      return type && { paramType: this.type(type.config, "write") };
     }
-    if (operand.kind !== "column") return undefined;
     const column = this.column(scope, operand);
     if (!column) return undefined;
     if (compared && (column.config.array || column.config.type === "nested")) {
@@ -505,19 +642,19 @@ class Analyzer {
   columns(scope: Source[], items: SqlSelectItem[]): SqlTypedName[] {
     const columns: SqlTypedName[] = [];
     const seen = new Set<string>();
-    const add = (item: SqlSelectItem, name: string, type: string | undefined) => {
-      if (seen.has(name)) {
-        this.report(
-          `Column ${quoteName(name)} appears more than once in the result, and TailorDB keeps only the last; give the columns distinct names with AS`,
-          item.span,
-        );
-        return;
-      }
-      seen.add(name);
-      if (type !== undefined) columns.push({ name, type });
-    };
     for (const item of items) {
       const { expr } = item;
+      const duplicates: string[] = [];
+      const add = (name: string, type: ValueType | undefined) => {
+        if (seen.has(name)) {
+          duplicates.push(name);
+          return;
+        }
+        seen.add(name);
+        if (!type) return;
+        const selected = this.type(type.config, "select");
+        columns.push({ name, type: type.nullable ? nullable(selected) : selected });
+      };
       if (expr.kind === "star") {
         const tableName = expr.table?.name;
         const sources =
@@ -525,23 +662,36 @@ class Analyzer {
         if (expr.table && sources.length === 0) this.#missingSource(scope, expr.table);
         for (const source of sources) {
           for (const [name, config] of source.table.fields) {
-            const type = this.type(config, "select");
-            add(item, name, this.#nullable(source, name, config) ? nullable(type) : type);
+            add(name, { config, nullable: this.#nullable(source, name, config) });
           }
         }
-      } else if (expr.kind === "column") {
-        const column = this.column(scope, expr);
-        const type = column && this.type(column.config, "select");
-        add(
-          item,
-          item.alias?.name ?? expr.column.name,
-          column?.nullable && type ? nullable(type) : type,
-        );
       } else {
-        add(item, item.alias?.name ?? expr.fn, this.aggregate(scope, expr)?.select);
+        const name = item.alias?.name ?? defaultName(expr);
+        const type = this.expression(scope, expr);
+        if (name === undefined) this.report("Name this column with AS", item.span);
+        else add(name, type);
+      }
+      if (duplicates.length > 0) {
+        const [only] = duplicates;
+        this.report(
+          duplicates.length === 1 && only
+            ? `Column ${quoteName(only)} appears more than once in the result, and TailorDB keeps only the last; give the columns distinct names with AS`
+            : `Columns ${listOf(duplicates.map(quoteName), "and")} appear more than once in the result, and TailorDB keeps only the last of each; give the columns distinct names with AS`,
+          item.span,
+        );
       }
     }
     return columns;
+  }
+
+  // The result columns of RETURNING, which can only return columns.
+  returning(scope: Source[], items: SqlSelectItem[]): SqlTypedName[] {
+    const columns = items.filter((item) => {
+      if (item.expr.kind === "column" || item.expr.kind === "star") return true;
+      this.report("RETURNING takes only columns and * in TailorDB SQL", item.span);
+      return false;
+    });
+    return this.columns(scope, columns);
   }
 
   #uniqueKeys(table: Table): string[][] {
@@ -579,7 +729,7 @@ class Analyzer {
           ),
         ),
     ];
-    const sourceOf = (operand: SqlOperand) =>
+    const sourceOf = (operand: SqlExpression) =>
       operand.kind === "column" ? this.#lookup(scope, operand).found?.source : undefined;
     const pinned = new Set<Source>();
     for (let changed = true; changed;) {
@@ -724,15 +874,12 @@ class Analyzer {
               if (target)
                 this.checkWritten(scope, { config: target, name: set.column.name }, set.value);
             }
-            this.condition(scope, conflict.action.where);
           }
         }
         if (!statement.returning) return { columns: [], cardinality: "none" };
-        const columns = this.columns(scope, statement.returning);
+        const columns = this.returning(scope, statement.returning);
         const single = statement.rows === "default" || statement.rows.length === 1;
-        const skippable =
-          conflict?.action.kind === "nothing" ||
-          (conflict?.action.kind === "update" && conflict.action.where !== undefined);
+        const skippable = conflict?.action.kind === "nothing";
         return { columns, cardinality: single ? (skippable ? "maybeOne" : "one") : "many" };
       }
       case "update":
@@ -748,11 +895,7 @@ class Analyzer {
               this.checkWritten(scope, { config, name: set.column.name }, set.value);
               continue;
             }
-            if (config.array || !ARITHMETIC_TYPES.includes(config.type)) {
-              this.report(
-                `Arithmetic needs ${fieldOfTypes(ARITHMETIC_TYPES)}, and ${quoteName(set.column.name)} is ${typeOf(config)}`,
-                set.value.span,
-              );
+            if (!this.arithmeticOperand(config, quoteName(set.column.name), set.value.span)) {
               continue;
             }
             const operandType = this.type(config, "write");
@@ -767,7 +910,7 @@ class Analyzer {
             ? new Set(statement.sets.map((set) => set.column.name))
             : undefined;
         this.narrow(scope, statement.where, assigned);
-        const columns = this.columns(scope, statement.returning);
+        const columns = this.returning(scope, statement.returning);
         return {
           columns,
           cardinality: this.atMostOneRow(scope, statement.where, []) ? "maybeOne" : "many",

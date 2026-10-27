@@ -140,6 +140,71 @@ describe("analyzeSql", () => {
       ]);
     });
 
+    test("types arithmetic by its operands, as TailorDB returns it", () => {
+      expect(
+        analyzed(
+          'SELECT "amount" + 1 AS a, "amount" / 7 AS b, "amount" * "weight" AS c, "total" - 1 AS d, "total" + "amount" * 2 AS e, "total" * 1.5 AS f, "total" + "weight" AS g, 1 + 1 AS h FROM "Order"',
+        ).columns,
+      ).toEqual([
+        { name: "a", type: "number" },
+        { name: "b", type: "number" },
+        { name: "c", type: "number | null" },
+        { name: "d", type: "string" },
+        { name: "e", type: "string" },
+        { name: "f", type: "number" },
+        { name: "g", type: "number | null" },
+        { name: "h", type: "number" },
+      ]);
+    });
+
+    test("types literals and names unaliased arithmetic and literals as TailorDB does", () => {
+      expect(
+        analyzed('SELECT "amount" + 1, \'a\' AS s, true AS b, 1.5 AS f FROM "Order"').columns,
+      ).toEqual([
+        { name: "expression", type: "number" },
+        { name: "s", type: "string" },
+        { name: "b", type: "boolean" },
+        { name: "f", type: "number" },
+      ]);
+      expect(analyzed('SELECT 1 FROM "Order"').columns).toEqual([
+        { name: "?column?", type: "number" },
+      ]);
+      expect(
+        analyzed('SELECT -"total", ("weight"), -("amount" + 1), -2147483647 FROM "Order"').columns,
+      ).toEqual([
+        { name: "total", type: "string" },
+        { name: "weight", type: "number | null" },
+        { name: "expression", type: "number" },
+        { name: "?column?", type: "number" },
+      ]);
+    });
+
+    test("types SUM, AVG, MIN and MAX of decimal fields and of arithmetic", () => {
+      expect(
+        analyzed(
+          'SELECT sum("total") AS s, avg("total") AS a, min("total") AS mn, sum("total" + 1) AS se, count("amount" + 1) AS c, max("amount" * 2) AS m FROM "Order"',
+        ).columns,
+      ).toEqual([
+        { name: "s", type: "string | null" },
+        { name: "a", type: "string | null" },
+        { name: "mn", type: "string | null" },
+        { name: "se", type: "string | null" },
+        { name: "c", type: "number" },
+        { name: "m", type: "number | null" },
+      ]);
+    });
+
+    test("types a self-join by alias", () => {
+      expect(
+        analyzed(
+          'SELECT a."id" AS aid, b."amount" AS later FROM "Order" a LEFT JOIN "Order" b ON b."customerID" = a."customerID" AND b."amount" > a."amount"',
+        ).columns,
+      ).toEqual([
+        { name: "aid", type: "string" },
+        { name: "later", type: "number | null" },
+      ]);
+    });
+
     test("types sum and avg as nullable numbers", () => {
       expect(
         analyzed('SELECT sum("amount") AS s, avg("weight") AS a FROM "Order"').columns,
@@ -174,6 +239,16 @@ describe("analyzeSql", () => {
     test("drops null from a column on either side of a WHERE comparison", () => {
       expect(analyzed('SELECT "weight" FROM "Order" WHERE "amount" = "weight"').columns).toEqual([
         { name: "weight", type: "number" },
+      ]);
+    });
+
+    test("drops null from the columns of arithmetic a WHERE comparison needs a value for", () => {
+      expect(
+        analyzed('SELECT "weight", "amount" * "weight" AS x FROM "Order" WHERE "weight" * 2 > 1')
+          .columns,
+      ).toEqual([
+        { name: "weight", type: "number" },
+        { name: "x", type: "number" },
       ]);
     });
 
@@ -309,6 +384,27 @@ describe("analyzeSql", () => {
       ]);
     });
 
+    test("types placeholders in arithmetic and compared with it", () => {
+      expect(
+        analyzed(
+          'SELECT "id" FROM "Order" WHERE "amount" + :d > :min AND "total" * 2 > :t AND "amount" > :e + 1',
+        ).params,
+      ).toEqual([
+        { name: "d", type: "number" },
+        { name: "min", type: "number" },
+        { name: "t", type: "string" },
+        { name: "e", type: "number" },
+      ]);
+      expect(
+        analyzed(
+          'SELECT "customerID" FROM "Order" GROUP BY "customerID" HAVING sum("total") > :x AND sum("amount") + 1 > :y',
+        ).params,
+      ).toEqual([
+        { name: "x", type: "string" },
+        { name: "y", type: "number" },
+      ]);
+    });
+
     test("binds a placeholder used twice once per occurrence", () => {
       const analysis = analyzed('SELECT "id" FROM "Order" WHERE "amount" > :n OR "amount" = :n');
 
@@ -412,6 +508,10 @@ describe("analyzeSql", () => {
           'SELECT o."id" FROM "Customer" c RIGHT JOIN "Order" o ON o."id" = :id AND c."id" = o."customerID"',
         cardinality: "many",
       },
+      {
+        source: 'SELECT a."id" FROM "Order" a JOIN "Order" b ON b."id" = a."id" WHERE a."id" = :id',
+        cardinality: "maybeOne",
+      },
       { source: 'SELECT "id" FROM "Order" LIMIT 1', cardinality: "maybeOne" },
       { source: 'SELECT count(*) FROM "Order"', cardinality: "one" },
       { source: 'SELECT count(*) FROM "Order" HAVING count(*) > 1', cardinality: "maybeOne" },
@@ -436,8 +536,8 @@ describe("analyzeSql", () => {
       },
       {
         source:
-          'INSERT INTO "Event" ("id", "name") VALUES (:id, :name) ON CONFLICT ("id") DO UPDATE SET "name" = :n WHERE "name" = :old RETURNING "id"',
-        cardinality: "maybeOne",
+          'INSERT INTO "Event" ("id", "name") VALUES (:id, :name) ON CONFLICT ("id") DO UPDATE SET "name" = :n RETURNING "id"',
+        cardinality: "one",
       },
       { source: 'INSERT INTO "Event" ("name") VALUES (:name)', cardinality: "none" },
       {
@@ -479,8 +579,13 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT "name" FROM "Customer" c JOIN "Product" p ON c."id" = p."id"',
-        message: 'Column "name" is ambiguous: it exists in "Customer" and "Product"',
+        message: 'Column "name" is ambiguous: it exists in "Customer" c and "Product" p',
         at: '"name"',
+      },
+      {
+        source: 'SELECT "amount" FROM "Order" a JOIN "Order" b ON a."id" = b."id"',
+        message: 'Column "amount" is ambiguous: it exists in "Order" a and "Order" b',
+        at: '"amount"',
       },
       {
         source: 'SELECT x."name" FROM "Customer" x JOIN "Order" x ON x."id" = x."id"',
@@ -493,20 +598,27 @@ describe("analyzeSql", () => {
         at: "x",
       },
       {
-        source: 'SELECT a."id" FROM "Order" a JOIN "Order" b ON a."id" = b."id"',
-        message: 'Joining "Order" more than once is not supported by TailorDB SQL',
-        at: '"Order"',
-      },
-      {
         source: 'SELECT c."id" FROM "Customer" c JOIN "Event" e ON c."name" = e."name"',
         message: "Query references tables from multiple namespaces: main, other.",
         at: '"Event"',
       },
       {
-        source: 'SELECT * FROM "Customer" c JOIN "Product" p ON c."id" = p."id"',
+        source: 'SELECT * FROM "Order" o JOIN "Customer" c ON c."id" = o."customerID"',
         message:
           'Column "id" appears more than once in the result, and TailorDB keeps only the last; give the columns distinct names with AS',
         at: "*",
+      },
+      {
+        source: 'SELECT * FROM "Customer" c JOIN "Product" p ON c."id" = p."id"',
+        message:
+          'Columns "id" and "name" appear more than once in the result, and TailorDB keeps only the last of each; give the columns distinct names with AS',
+        at: "*",
+      },
+      {
+        source: 'SELECT "amount" + 1, "amount" * 2 FROM "Order"',
+        message:
+          'Column "expression" appears more than once in the result, and TailorDB keeps only the last; give the columns distinct names with AS',
+        at: '"amount" * 2',
       },
       {
         source: 'SELECT count(*), count("weight") FROM "Order"',
@@ -532,13 +644,54 @@ describe("analyzeSql", () => {
       {
         source: 'SELECT min("id") FROM "Order"',
         message:
-          "MIN takes an Integer, Float, String, Enum, Date, Time or DateTime field, not uuid",
+          "MIN takes an Integer, Float, Decimal, String, Enum, Date, Time or DateTime field, not uuid",
         at: 'min("id")',
       },
       {
-        source: 'SELECT sum("total") FROM "Order"',
-        message: "SUM takes an Integer or Float field, not decimal",
-        at: 'sum("total")',
+        source: 'SELECT sum("status") FROM "Order"',
+        message: "SUM takes an Integer, Float or Decimal field, not enum",
+        at: 'sum("status")',
+      },
+      {
+        source: 'SELECT "paid" + 1 AS x FROM "Order"',
+        message: 'Arithmetic needs an Integer, Float or Decimal field, and "paid" is boolean',
+        at: '"paid"',
+      },
+      {
+        source: "SELECT 'a' + 1 AS x FROM \"Order\"",
+        message: "Arithmetic needs an Integer, Float or Decimal field, and 'a' is string",
+        at: "'a'",
+      },
+      {
+        source: 'SELECT -(1) FROM "Order"',
+        message: "Name this column with AS",
+        at: "-(1)",
+      },
+      {
+        source: 'SELECT "amount" / 0 AS a, "weight" / 0.0 AS b FROM "Order"',
+        message: "Dividing by zero fails in TailorDB SQL",
+        at: "0.0",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "amount" > 2147483648',
+        message: "TailorDB SQL takes integers in the 32-bit range, and 2147483648 is not",
+        at: "2147483648",
+      },
+      {
+        source: 'SELECT -2147483648 AS x FROM "Order" WHERE "amount" IN (1, 2147483648)',
+        message: "TailorDB SQL takes integers in the 32-bit range, and -2147483648 is not",
+        at: "-2147483648",
+      },
+      {
+        source:
+          'UPDATE "Order" SET "amount" = :a WHERE "id" = :id RETURNING "id", "amount" + 1 AS x',
+        message: "RETURNING takes only columns and * in TailorDB SQL",
+        at: '"amount" + 1 AS x',
+      },
+      {
+        source: 'DELETE FROM "Order" WHERE "id" = :id RETURNING count(*)',
+        message: "RETURNING takes only columns and * in TailorDB SQL",
+        at: "count(*)",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount" = :x AND "status" = :x',

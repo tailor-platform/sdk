@@ -1,7 +1,8 @@
 /**
- * Parser for the SQL subset TailorDB accepts through `tailordb.Client`, as
- * documented in the platform's "Supported SQL queries" grammar. Unquoted
- * identifiers keep their case, as TailorDB does not fold them.
+ * Parser for the SQL subset TailorDB accepts through `tailordb.Client`: the
+ * platform's documented "Supported SQL queries" grammar, plus the arithmetic
+ * and select-list literals the platform also runs. Unquoted identifiers keep
+ * their case, as TailorDB does not fold them.
  */
 
 import { assertDefined } from "#/utils/assert";
@@ -57,29 +58,44 @@ export interface SqlAggregate {
   fn: SqlAggregateFunction;
   distinct: boolean;
   /** Absent for `count(*)`. */
-  arg?: SqlColumnRef;
+  arg?: SqlExpression;
   span: SqlSpan;
 }
 
 export type SqlValue = SqlColumnRef | SqlParam | SqlLiteral;
-export type SqlOperand = SqlValue | SqlAggregate;
+
+export interface SqlArithmetic<Operand = SqlExpression> {
+  kind: "arithmetic";
+  op: "+" | "-" | "*" | "/";
+  left: Operand;
+  right: Operand;
+  span: SqlSpan;
+}
+
+export interface SqlNegation {
+  kind: "negation";
+  operand: SqlExpression;
+  span: SqlSpan;
+}
+
+export type SqlExpression = SqlValue | SqlAggregate | SqlArithmetic | SqlNegation;
 
 export type SqlCondition =
-  | { kind: "compare"; op: string; left: SqlOperand; right: SqlValue; span: SqlSpan }
-  | { kind: "in"; not: boolean; left: SqlOperand; items: SqlValue[]; span: SqlSpan }
+  | { kind: "compare"; op: string; left: SqlExpression; right: SqlExpression; span: SqlSpan }
+  | { kind: "in"; not: boolean; left: SqlExpression; items: SqlValue[]; span: SqlSpan }
   | {
       kind: "between";
       not: boolean;
-      left: SqlOperand;
+      left: SqlExpression;
       low: SqlValue;
       high: SqlValue;
       span: SqlSpan;
     }
-  | { kind: "isNull"; not: boolean; left: SqlOperand; span: SqlSpan }
+  | { kind: "isNull"; not: boolean; left: SqlExpression; span: SqlSpan }
   | { kind: "and" | "or"; left: SqlCondition; right: SqlCondition; span: SqlSpan };
 
 export interface SqlSelectItem {
-  expr: SqlColumnRef | SqlStar | SqlAggregate;
+  expr: SqlStar | SqlExpression;
   alias?: SqlIdentifier;
   span: SqlSpan;
 }
@@ -135,14 +151,6 @@ export interface SqlExcluded {
   span: SqlSpan;
 }
 
-interface SqlArithmetic {
-  kind: "arithmetic";
-  op: "+" | "-" | "*" | "/";
-  left: SqlValue;
-  right: SqlValue;
-  span: SqlSpan;
-}
-
 interface SqlAssignment<Value> {
   column: SqlIdentifier;
   value: Value;
@@ -163,11 +171,7 @@ interface SqlInsert {
     column: SqlIdentifier;
     action:
       | { kind: "nothing" }
-      | {
-          kind: "update";
-          sets: SqlAssignment<SqlParam | SqlLiteral | SqlExcluded>[];
-          where?: SqlCondition;
-        };
+      | { kind: "update"; sets: SqlAssignment<SqlParam | SqlLiteral | SqlExcluded>[] };
   };
   returning?: SqlSelectItem[];
   span: SqlSpan;
@@ -176,7 +180,7 @@ interface SqlInsert {
 interface SqlUpdate {
   kind: "update";
   table: SqlIdentifier;
-  sets: SqlAssignment<SqlValue | SqlArithmetic>[];
+  sets: SqlAssignment<SqlValue | SqlArithmetic<SqlValue>>[];
   where?: SqlCondition;
   returning?: SqlSelectItem[];
   span: SqlSpan;
@@ -279,7 +283,46 @@ const COMPARISON_OPERATORS = new Set([
   "!~*",
 ]);
 
+/** Operators that match a column against a pattern. */
+export const PATTERN_OPERATORS: ReadonlySet<string> = new Set([
+  "LIKE",
+  "NOT LIKE",
+  "ILIKE",
+  "NOT ILIKE",
+  "~~",
+  "!~~",
+  "~~*",
+  "!~~*",
+  "~",
+  "!~",
+  "~*",
+  "!~*",
+]);
+
+const ARITHMETIC_OPERATORS = ["+", "-", "*", "/"];
+const CONDITION_KEYWORDS = ["AND", "OR", "NOT", "IS", "IN", "BETWEEN", "LIKE", "ILIKE"];
+
 const AGGREGATES = new Set<string>(["COUNT", "SUM", "AVG", "MIN", "MAX"]);
+
+/** What an expression may not contain where it is parsed, as the message reporting it. */
+interface ExpressionRules {
+  params?: string;
+  aggregates?: string;
+}
+
+const AGGREGATE_ARITHMETIC = "Arithmetic on an aggregate is only supported in HAVING";
+const SELECT_LIST: ExpressionRules = {
+  params: "Placeholders are not supported in the select list",
+  aggregates: AGGREGATE_ARITHMETIC,
+};
+const AGGREGATE_ARGUMENT: ExpressionRules = {
+  params: "Placeholders are not supported in an aggregate",
+  aggregates: "Aggregates cannot be nested",
+};
+const ROW_CONDITION: ExpressionRules = {
+  aggregates: "Aggregates are only allowed in HAVING and the select list",
+};
+const GROUP_CONDITION: ExpressionRules = {};
 
 const RESERVED = new Set([
   "ALL",
@@ -478,6 +521,10 @@ class Parser {
     throw new SqlSyntaxError(message, token.start, token.end);
   }
 
+  #failAt(message: string, span: SqlSpan): never {
+    throw new SqlSyntaxError(message, span.start, span.end);
+  }
+
   #unexpected(expected: string, token: Token = this.#token): never {
     if (this.#isOp("::", token)) this.#fail("Casts (::) are not supported by TailorDB SQL", token);
     if (this.#isKeyword("NULLS", token)) {
@@ -555,14 +602,14 @@ class Parser {
       joins.push(join);
     }
     if (this.#isOp(",")) this.#fail("Comma-separated tables are not supported; use JOIN");
-    const where = this.#acceptKeyword("WHERE") ? this.#condition(false) : undefined;
+    const where = this.#acceptKeyword("WHERE") ? this.#condition(ROW_CONDITION) : undefined;
     const groupBy: SqlColumnRef[] = [];
     if (this.#acceptKeyword("GROUP")) {
       this.#expectKeyword("BY");
       do groupBy.push(this.#columnRef("a column"));
       while (this.#acceptOp(","));
     }
-    const having = this.#acceptKeyword("HAVING") ? this.#condition(true) : undefined;
+    const having = this.#acceptKeyword("HAVING") ? this.#condition(GROUP_CONDITION) : undefined;
     const orderBy: SqlOrderItem[] = [];
     if (this.#acceptKeyword("ORDER")) {
       this.#expectKeyword("BY");
@@ -615,16 +662,12 @@ class Parser {
       expr = { kind: "star", table, span: this.#span(start) };
     } else if (this.#isAggregateStart()) {
       expr = this.#aggregate();
-    } else if (token.kind === "param") {
-      this.#fail("Placeholders are not supported in the select list");
-    } else if (token.kind === "ident" && this.#isOp("(", this.#peek())) {
-      this.#unsupportedFunction();
-    } else if (token.kind === "number" || token.kind === "string" || this.#isLiteralKeyword()) {
-      this.#fail(
-        "Select a column, *, or an aggregate; literals are not supported in the select list",
-      );
+      if (this.#isArithmeticOperator()) this.#fail(AGGREGATE_ARITHMETIC);
     } else {
-      expr = this.#columnRef("a column, *, or an aggregate");
+      expr = this.#expression(SELECT_LIST);
+      if (expr.kind === "literal" && expr.type === "null") {
+        this.#failAt("NULL is not supported in the select list", expr.span);
+      }
     }
     const alias = this.#alias();
     return { expr, alias, span: this.#span(start) };
@@ -635,8 +678,8 @@ class Parser {
     return this.#isName() ? this.#identifier("an alias") : undefined;
   }
 
-  #isLiteralKeyword(): boolean {
-    return this.#isKeyword("TRUE") || this.#isKeyword("FALSE") || this.#isKeyword("NULL");
+  #isArithmeticOperator(): boolean {
+    return ARITHMETIC_OPERATORS.some((op) => this.#isOp(op));
   }
 
   #isAggregateStart(): boolean {
@@ -664,11 +707,11 @@ class Parser {
     ).toLowerCase() as SqlAggregateFunction;
     this.#expectOp("(");
     const distinct = this.#acceptKeyword("DISTINCT");
-    let arg: SqlColumnRef | undefined;
+    let arg: SqlExpression | undefined;
     if (fn === "count" && !distinct && this.#acceptOp("*")) {
       arg = undefined;
     } else {
-      arg = this.#columnRef("a column");
+      arg = this.#expression(AGGREGATE_ARGUMENT);
     }
     this.#expectOp(")");
     return { kind: "aggregate", fn, distinct, arg, span: this.#span(nameToken.start) };
@@ -717,7 +760,7 @@ class Parser {
     const table = this.#tableRef();
     if (type === "cross") return { type, table, span: this.#span(start) };
     this.#expectKeyword("ON");
-    const on = this.#condition(false);
+    const on = this.#condition(ROW_CONDITION);
     return { type, table, on, span: this.#span(start) };
   }
 
@@ -742,6 +785,11 @@ class Parser {
       by = { kind: "vector", column, value, span: this.#span(token.start) };
     } else {
       by = this.#columnRef("a column");
+      if (this.#isArithmeticOperator()) {
+        this.#fail(
+          "ORDER BY takes a column or a result column name; name the expression with AS and order by that name",
+        );
+      }
     }
     const desc = this.#acceptKeyword("DESC");
     if (!desc) this.#acceptKeyword("ASC");
@@ -767,41 +815,49 @@ class Parser {
     this.#unexpected(`an integer or a placeholder after ${clause}`);
   }
 
-  #condition(allowAggregates: boolean): SqlCondition {
-    let left = this.#conjunction(allowAggregates);
+  #condition(rules: ExpressionRules): SqlCondition {
+    let left = this.#conjunction(rules);
     while (this.#isKeyword("OR")) {
       this.#advance();
-      const right = this.#conjunction(allowAggregates);
+      const right = this.#conjunction(rules);
       left = { kind: "or", left, right, span: { start: left.span.start, end: right.span.end } };
     }
     return left;
   }
 
-  #conjunction(allowAggregates: boolean): SqlCondition {
-    let left = this.#predicate(allowAggregates);
+  #conjunction(rules: ExpressionRules): SqlCondition {
+    let left = this.#predicate(rules);
     while (this.#isKeyword("AND")) {
       this.#advance();
-      const right = this.#predicate(allowAggregates);
+      const right = this.#predicate(rules);
       left = { kind: "and", left, right, span: { start: left.span.start, end: right.span.end } };
     }
     return left;
   }
 
-  #predicate(allowAggregates: boolean): SqlCondition {
+  #predicate(rules: ExpressionRules): SqlCondition {
     const start = this.#token.start;
     if (this.#isOp("(")) {
       if (this.#isKeyword("SELECT", this.#peek())) this.#subquery(this.#peek());
-      this.#advance();
-      const inner = this.#condition(allowAggregates);
-      this.#expectOp(")");
-      return { ...inner, span: this.#span(start) };
+      if (this.#parenthesizesCondition()) {
+        this.#advance();
+        const inner = this.#condition(rules);
+        this.#expectOp(")");
+        return { ...inner, span: this.#span(start) };
+      }
     }
     if (this.#isKeyword("NOT")) {
       this.#fail(
         "NOT before a condition is not supported by TailorDB SQL; use NOT IN, NOT BETWEEN, NOT LIKE, NOT ILIKE or IS NOT NULL",
       );
     }
-    const left = this.#leftOperand(allowAggregates);
+    const left = this.#expression(rules);
+    if (left.kind === "param" || left.kind === "literal") {
+      this.#failAt(
+        "The left side of a condition must be a column, an aggregate or arithmetic",
+        left.span,
+      );
+    }
     if (this.#acceptKeyword("IS")) {
       const not = this.#acceptKeyword("NOT");
       this.#expectKeyword("NULL");
@@ -825,9 +881,14 @@ class Parser {
     }
     for (const keyword of ["LIKE", "ILIKE"]) {
       if (this.#acceptKeyword(keyword)) {
-        const right = this.#value();
         const op = not ? `NOT ${keyword}` : keyword;
-        return { kind: "compare", op, left, right, span: this.#span(start) };
+        return {
+          kind: "compare",
+          op,
+          left,
+          right: this.#pattern(op, left),
+          span: this.#span(start),
+        };
       }
     }
     if (not) this.#unexpected("IN, BETWEEN, LIKE or ILIKE");
@@ -843,20 +904,86 @@ class Parser {
     ) {
       this.#unsupportedFunction();
     }
-    const right = this.#value();
-    return { kind: "compare", op: opToken.text, left, right, span: this.#span(start) };
+    const op = opToken.text;
+    const right = PATTERN_OPERATORS.has(op) ? this.#pattern(op, left) : this.#expression(rules);
+    return { kind: "compare", op, left, right, span: this.#span(start) };
   }
 
-  #leftOperand(allowAggregates: boolean): SqlOperand {
+  // Whether the parenthesis at the current token encloses a condition rather than an expression.
+  #parenthesizesCondition(): boolean {
+    let depth = 0;
+    for (const token of this.tokens.slice(this.#index)) {
+      if (this.#isOp("(", token)) depth++;
+      else if (this.#isOp(")", token)) depth--;
+      else if (
+        (token.kind === "op" && (COMPARISON_OPERATORS.has(token.text) || token.text === "!=")) ||
+        CONDITION_KEYWORDS.some((keyword) => this.#isKeyword(keyword, token))
+      ) {
+        return true;
+      }
+      if (depth === 0 || token.kind === "eof") return false;
+    }
+    return false;
+  }
+
+  // The pattern a pattern operator matches `left` against.
+  #pattern(op: string, left: SqlExpression): SqlValue {
+    if (left.kind === "arithmetic" || left.kind === "negation") {
+      this.#failAt(`${op} takes a column on its left, not arithmetic`, left.span);
+    }
+    return this.#value();
+  }
+
+  #expression(rules: ExpressionRules): SqlExpression {
+    return this.#arithmetic(["+", "-"], () =>
+      this.#arithmetic(["*", "/"], () => this.#factor(rules)),
+    );
+  }
+
+  // A left-associative chain of `operand` joined by `operators`.
+  #arithmetic(operators: string[], operand: () => SqlExpression): SqlExpression {
+    let left = operand();
+    for (;;) {
+      const token = this.#token;
+      if (token.kind !== "op" || !operators.includes(token.text)) return left;
+      this.#advance();
+      const right = operand();
+      left = {
+        kind: "arithmetic",
+        op: token.text as SqlArithmetic["op"],
+        left: this.#numeric(left),
+        right: this.#numeric(right),
+        span: { start: left.span.start, end: right.span.end },
+      };
+    }
+  }
+
+  #numeric(operand: SqlExpression): SqlExpression {
+    if (operand.kind === "literal" && operand.type === "null") {
+      this.#failAt("NULL is not supported in arithmetic", operand.span);
+    }
+    return operand;
+  }
+
+  #factor(rules: ExpressionRules): SqlExpression {
     const token = this.#token;
-    if (token.kind === "param" || token.kind === "string" || token.kind === "number") {
-      this.#fail("The left side of a condition must be a column or an aggregate");
+    if (this.#isOp("-") && this.#peek().kind !== "number") {
+      this.#advance();
+      const operand = this.#numeric(this.#factor(rules));
+      return { kind: "negation", operand, span: this.#span(token.start) };
+    }
+    if (this.#isOp("(") && !this.#isKeyword("SELECT", this.#peek())) {
+      this.#advance();
+      const inner = this.#expression(rules);
+      this.#expectOp(")");
+      return inner;
     }
     if (this.#isAggregateStart()) {
-      if (!allowAggregates) this.#fail("Aggregates are only allowed in HAVING and the select list");
+      if (rules.aggregates) this.#fail(rules.aggregates);
       return this.#aggregate();
     }
-    return this.#columnRef("a column");
+    if (token.kind === "param" && rules.params) this.#fail(rules.params);
+    return this.#value();
   }
 
   #value(): SqlValue {
@@ -946,8 +1073,10 @@ class Parser {
         const sets: SqlAssignment<SqlParam | SqlLiteral | SqlExcluded>[] = [];
         do sets.push(this.#conflictAssignment());
         while (this.#acceptOp(","));
-        const where = this.#acceptKeyword("WHERE") ? this.#condition(false) : undefined;
-        onConflict = { column, action: { kind: "update", sets, where } };
+        if (this.#isKeyword("WHERE")) {
+          this.#fail("WHERE after ON CONFLICT DO UPDATE is not supported by TailorDB SQL");
+        }
+        onConflict = { column, action: { kind: "update", sets } };
       }
     }
     const returning = this.#returning();
@@ -990,7 +1119,7 @@ class Parser {
     this.#expectKeyword("UPDATE");
     const table = this.#identifier("a table");
     this.#expectKeyword("SET");
-    const sets: SqlAssignment<SqlValue | SqlArithmetic>[] = [];
+    const sets: SqlAssignment<SqlValue | SqlArithmetic<SqlValue>>[] = [];
     do {
       const setStart = this.#token.start;
       const column = this.#identifier("a column");
@@ -1015,7 +1144,7 @@ class Parser {
         sets.push({ column, value: left, span: this.#span(setStart) });
       }
     } while (this.#acceptOp(","));
-    const where = this.#acceptKeyword("WHERE") ? this.#condition(false) : undefined;
+    const where = this.#acceptKeyword("WHERE") ? this.#condition(ROW_CONDITION) : undefined;
     const returning = this.#returning();
     return { kind: "update", table, sets, where, returning, span: this.#span(start) };
   }
@@ -1025,7 +1154,7 @@ class Parser {
     this.#expectKeyword("DELETE");
     this.#expectKeyword("FROM");
     const table = this.#identifier("a table");
-    const where = this.#acceptKeyword("WHERE") ? this.#condition(false) : undefined;
+    const where = this.#acceptKeyword("WHERE") ? this.#condition(ROW_CONDITION) : undefined;
     const returning = this.#returning();
     return { kind: "delete", table, where, returning, span: this.#span(start) };
   }
