@@ -3,19 +3,15 @@ import {
   parseSql,
   PATTERN_OPERATORS,
   type SqlAggregate,
-  type SqlArithmetic,
   type SqlColumnRef,
-  type SqlCondition,
-  type SqlDefault,
   type SqlDiagnostic,
-  type SqlExcluded,
   type SqlExpression,
   type SqlIdentifier,
   type SqlJoin,
   type SqlLiteral,
-  type SqlNegation,
   type SqlParam,
   type SqlSelectItem,
+  type SqlSetOperand,
   type SqlSpan,
   type SqlStatement,
   type SqlTableRef,
@@ -32,6 +28,7 @@ interface SqlFieldConfig {
   vector?: boolean;
   allowedValues?: { value: string }[];
   fields?: Record<string, SqlFieldConfig>;
+  hooks?: { update?: unknown };
 }
 
 const SQL_FIELD_KEYS = Object.keys({
@@ -42,6 +39,7 @@ const SQL_FIELD_KEYS = Object.keys({
   vector: true,
   allowedValues: true,
   fields: true,
+  hooks: true,
 } satisfies Record<keyof SqlFieldConfig, true>) as (keyof SqlFieldConfig)[];
 
 /** The parts of a parsed TailorDB table the analysis reads. */
@@ -49,6 +47,7 @@ interface SqlTableDefinition {
   name: string;
   fields: Record<string, { config: SqlFieldConfig }>;
   indexes?: Record<string, { fields: string[]; unique?: boolean }>;
+  typeHookExpr?: { update?: string };
 }
 
 /** The TailorDB tables statements are checked against. */
@@ -85,10 +84,16 @@ export interface SqlAnalysisResult {
 }
 
 const ID_FIELD: SqlFieldConfig = { type: "uuid", required: true, unique: true };
-const ARITHMETIC_TYPES = ["integer", "float", "decimal"];
-const COMPARABLE_TYPES = [...ARITHMETIC_TYPES, "string", "enum", "date", "time", "datetime"];
+const NUMERIC_TYPES = ["integer", "float", "decimal"];
+const COMPARABLE_TYPES = [...NUMERIC_TYPES, "string", "enum", "date", "time", "datetime"];
 // Arithmetic yields the first of these its operands include.
 const ARITHMETIC_RESULT_TYPES = ["float", "decimal", "integer"];
+const ARITHMETIC_OPERATORS = new Set(["+", "-", "*", "/"]);
+const COMPARISON_OPERATORS = new Set(["=", "<>", "<", "<=", ">", ">="]);
+const REGEX_OPERATORS = new Set(["~", "!~", "~*", "!~*"]);
+const PATTERNS = new Set<string>(PATTERN_OPERATORS);
+const INTEGER_LITERAL = /^[+-]?[0-9]+$/;
+const INT32_MAX = 2147483647;
 const TYPE_LABELS: Readonly<Record<string, string>> = {
   integer: "Integer",
   float: "Float",
@@ -98,9 +103,10 @@ const TYPE_LABELS: Readonly<Record<string, string>> = {
   date: "Date",
   time: "Time",
   datetime: "DateTime",
+  boolean: "Boolean",
+  uuid: "UUID",
+  nested: "nested object",
 };
-const INTEGER_LITERAL = /^-?[0-9]+$/;
-const INT32_MAX = 2147483647;
 
 interface Table {
   definition: SqlTableDefinition;
@@ -114,24 +120,39 @@ interface Source {
   nullable: boolean;
 }
 
-/** A joined table, with its join's kind and condition. */
-interface JoinedSource {
-  type: SqlJoin["type"];
-  on?: SqlCondition;
-  source: Source;
+/** The type TailorDB gives a value: a field's, or one it derives for an expression. */
+interface Schema {
+  /** `required` says whether TailorDB rejects NULL for it, as for a placeholder bound to it. */
+  config: SqlFieldConfig;
+  /** The name TailorDB gives the value as a result column. */
+  name: string;
 }
 
-/** The type of the value an expression yields. */
-interface ValueType {
-  config: SqlFieldConfig;
+/** A select-list value: its schema, and whether a row can hold NULL for it. */
+interface Selected {
+  schema: Schema;
   nullable: boolean;
 }
 
-/** The column a value is compared with or written to. */
-interface Target {
-  config: SqlFieldConfig;
-  name: string;
+/** A condition operand: typed, typed by its context (a placeholder, string or NULL), or broken. */
+type Operand =
+  | { kind: "typed"; schema: Schema; node: SqlExpression }
+  | { kind: "untyped"; node: SqlParam | SqlLiteral }
+  | { kind: "broken" };
+
+/** A joined table, with its join's kind and condition. */
+interface JoinedSource {
+  type: SqlJoin["type"];
+  on?: SqlExpression;
+  source: Source;
 }
+
+function schemaOf(type: string, name = "?column?"): Schema {
+  return { config: { type }, name };
+}
+
+const BOOLEAN = schemaOf("boolean");
+const STRING = schemaOf("string");
 
 function quoteName(name: string): string {
   return `"${name}"`;
@@ -168,57 +189,78 @@ function typeOf(config: SqlFieldConfig): string {
   return `${config.type}${config.array ? "[]" : ""}`;
 }
 
-function literalType(literal: SqlLiteral): ValueType | undefined {
-  if (literal.type === "null") return undefined;
-  const type =
-    literal.type === "number"
-      ? INTEGER_LITERAL.test(literal.value)
-        ? "integer"
-        : "float"
-      : literal.type;
-  return { config: { type }, nullable: false };
+function sameType(a: SqlFieldConfig, b: SqlFieldConfig): boolean {
+  return a.type === b.type && Boolean(a.array) === Boolean(b.array);
+}
+
+function isNumeric(config: SqlFieldConfig): boolean {
+  return !config.array && NUMERIC_TYPES.includes(config.type);
+}
+
+function isTextual(config: SqlFieldConfig): boolean {
+  return !config.array && (config.type === "string" || config.type === "enum");
+}
+
+function isInt32(text: string): boolean {
+  return (
+    INTEGER_LITERAL.test(text) &&
+    Math.abs(Number(text)) <= INT32_MAX + (text.startsWith("-") ? 1 : 0)
+  );
 }
 
 // The columns without whose value an expression's value is null.
 function nullPropagatingColumns(expr: SqlExpression): SqlColumnRef[] {
+  if (expr.kind === "column") return [expr];
+  if (expr.kind === "unary" && expr.op !== "NOT") return nullPropagatingColumns(expr.operand);
+  if (expr.kind === "binary" && ARITHMETIC_OPERATORS.has(expr.op)) {
+    return [...nullPropagatingColumns(expr.left), ...nullPropagatingColumns(expr.right)];
+  }
+  return [];
+}
+
+// The column references of an expression, outside aggregates.
+function columnsOf(expr: SqlExpression): SqlColumnRef[] {
   switch (expr.kind) {
     case "column":
       return [expr];
-    case "arithmetic":
-      return [...nullPropagatingColumns(expr.left), ...nullPropagatingColumns(expr.right)];
-    case "negation":
-      return nullPropagatingColumns(expr.operand);
+    case "unary":
+      return columnsOf(expr.operand);
+    case "binary":
+      return [...columnsOf(expr.left), ...columnsOf(expr.right)];
+    case "in":
+      return [expr.left, ...expr.items].flatMap(columnsOf);
+    case "between":
+      return [expr.left, expr.low, expr.high].flatMap(columnsOf);
+    case "isNull":
+      return columnsOf(expr.left);
     default:
       return [];
   }
 }
 
-// The name TailorDB gives a result column that has no alias, when it is known.
-function defaultName(expr: SqlExpression): string | undefined {
+// Whether an expression has the same value on every row: literals, placeholders and arithmetic of them.
+function isFixed(expr: SqlExpression): boolean {
+  if (expr.kind === "param" || expr.kind === "literal" || expr.kind === "array") return true;
+  if (expr.kind === "unary" && expr.op !== "NOT") return isFixed(expr.operand);
+  if (expr.kind === "binary" && ARITHMETIC_OPERATORS.has(expr.op)) {
+    return isFixed(expr.left) && isFixed(expr.right);
+  }
+  return false;
+}
+
+// The name TailorDB gives a result column that has no alias.
+function defaultName(expr: SqlExpression): string {
   switch (expr.kind) {
     case "column":
       return expr.column.name;
     case "aggregate":
       return expr.fn;
-    case "arithmetic":
+    case "unary":
+      return defaultName(expr.operand);
+    case "binary":
       return "expression";
-    case "literal":
-      return "?column?";
-    case "negation":
-      return expr.operand.kind === "literal" ? undefined : defaultName(expr.operand);
     default:
-      return undefined;
-  }
-}
-
-function describeOperand(operand: SqlColumnRef | SqlLiteral | SqlAggregate): string {
-  switch (operand.kind) {
-    case "column":
-      return quoteName(operand.column.name);
-    case "literal":
-      return operand.type === "string" ? `'${operand.value}'` : operand.value;
-    case "aggregate":
-      return operand.fn.toUpperCase();
+      return "?column?";
   }
 }
 
@@ -227,25 +269,284 @@ function describeSource(source: Source): string {
   return source.name === source.table.definition.name ? table : `${table} ${source.name}`;
 }
 
+const DATE = String.raw`[+-]?\d{4,}-\d{1,2}-\d{1,2}`;
+const TIME = String.raw`\d{1,2}:\d{1,2}(?::\d{1,2}(?:\.\d+)?)?`;
+const DATE_TIME = new RegExp(
+  String.raw`^${DATE}(?:[Tt ]${TIME}(?:[Zz]|[+-]\d{1,2}(?::?\d{2})?)?)?$`,
+);
+const TIME_ONLY = new RegExp(`^${TIME}$`);
+
+function validDate(text: string): boolean {
+  const match = /^[+-]?(\d+)-(\d+)-(\d+)/.exec(text);
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(2000, month - 1, day));
+  return month >= 1 && month <= 12 && date.getUTCDate() === day && year >= 0;
+}
+
+function validTime(text: string): boolean {
+  const [hour = 0, minute = 0, second = 0] = text.split(":").map(Number);
+  return hour < 24 && minute < 60 && second < 61;
+}
+
+// Split PostgreSQL array text such as `{a,"b c"}`, or undefined when it is malformed.
+function arrayElements(text: string): string[] | undefined {
+  const body = /^\s*\{(.*)\}\s*$/s.exec(text)?.[1];
+  if (body === undefined) return undefined;
+  if (body.trim() === "") return [];
+  const elements: string[] = [];
+  let i = 0;
+  for (;;) {
+    while (/\s/.test(body.charAt(i))) i++;
+    let element = "";
+    if (body[i] === '"') {
+      for (i++; body[i] !== '"'; i++) {
+        if (i >= body.length) return undefined;
+        if (body[i] === "\\") i++;
+        element += body.charAt(i);
+      }
+      i++;
+      while (/\s/.test(body.charAt(i))) i++;
+    } else {
+      for (; i < body.length && body[i] !== ","; i++) {
+        if (body[i] === "{" || body[i] === '"') return undefined;
+        if (body[i] === "\\") i++;
+        element += body.charAt(i);
+      }
+      element = element.trimEnd();
+      if (element === "" || element.toUpperCase() === "NULL") return undefined;
+    }
+    elements.push(element);
+    if (i >= body.length) return elements;
+    if (body[i] !== ",") return undefined;
+    i++;
+  }
+}
+
+// Why `text` is not a value of `config` as TailorDB reads text, or undefined when it is one.
+function textProblem(config: SqlFieldConfig, text: string): string | undefined {
+  if (config.array) {
+    const elements = arrayElements(text);
+    if (!elements) return "is not array text such as {a,b}";
+    const element = { ...config, array: false };
+    for (const value of elements) {
+      const problem = textProblem(element, value);
+      if (problem) return problem;
+    }
+    return undefined;
+  }
+  const valid = (() => {
+    switch (config.type) {
+      case "uuid":
+        return /^(?:urn:uuid:)?\{?[0-9a-f]{8}(?:-?[0-9a-f]{4}){3}-?[0-9a-f]{12}\}?$/i.test(text);
+      case "boolean":
+        return /^(?:t|true|f|false)$/i.test(text);
+      case "integer":
+        return isInt32(text);
+      case "float":
+        return /^[+-]?(?:\d+\.?\d*(?:e[+-]?\d+)?|\.\d+(?:e[+-]?\d+)?|inf|infinity|nan)$/i.test(
+          text,
+        );
+      case "decimal":
+        return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text);
+      case "date":
+      case "datetime":
+        return DATE_TIME.test(text) && validDate(text);
+      case "time":
+        return TIME_ONLY.test(text) && validTime(text);
+      case "enum":
+        return (config.allowedValues ?? []).some((v) => v.value === text);
+      case "nested":
+        return true;
+      default:
+        return true;
+    }
+  })();
+  if (!valid) {
+    if (config.type === "enum") {
+      const values = (config.allowedValues ?? []).map((v) => v.value);
+      return `is not one of its values: ${values.join(", ")}`;
+    }
+    return `is not a valid ${TYPE_LABELS[config.type] ?? config.type} value`;
+  }
+  if (config.type === "nested") {
+    try {
+      return jsonProblem(config, JSON.parse(text) as unknown);
+    } catch {
+      return "is not JSON";
+    }
+  }
+  return undefined;
+}
+
+// Why a JSON value does not fit a nested field, or undefined when it does.
+function jsonProblem(config: SqlFieldConfig, value: unknown): string | undefined {
+  if (value === null) return config.required ? "has null for a required field" : undefined;
+  if (config.array) {
+    if (!Array.isArray(value)) return "has a non-array value for an array field";
+    const element = { ...config, array: false, required: true };
+    return value.map((item) => jsonProblem(element, item)).find(Boolean);
+  }
+  if (config.type === "nested") {
+    if (typeof value !== "object" || Array.isArray(value)) return "is not a JSON object";
+    const object = value as Record<string, unknown>;
+    const fields = config.fields ?? {};
+    const unknown = Object.keys(object).find((key) => !(key in fields));
+    if (unknown !== undefined) return `has the unknown key "${unknown}"`;
+    for (const [key, field] of Object.entries(fields)) {
+      if (!(key in object)) {
+        if (field.required) return `lacks the required key "${key}"`;
+        continue;
+      }
+      const problem = jsonProblem(field, object[key]);
+      if (problem) return problem;
+    }
+    return undefined;
+  }
+  if (typeof value === "string") {
+    return [
+      "string",
+      "uuid",
+      "enum",
+      "boolean",
+      "integer",
+      "float",
+      "decimal",
+      "date",
+      "time",
+      "datetime",
+    ].includes(config.type)
+      ? textProblem(config, value)
+      : `has a string for a ${config.type} field`;
+  }
+  if (typeof value === "number") {
+    if (config.type === "integer")
+      return Number.isInteger(value) && Math.abs(value) <= INT32_MAX
+        ? undefined
+        : "has a number that is not a 32-bit integer";
+    return config.type === "float" ? undefined : `has a number for a ${config.type} field`;
+  }
+  if (typeof value === "boolean") {
+    return config.type === "boolean" ? undefined : `has a boolean for a ${config.type} field`;
+  }
+  return `has an unexpected value for a ${config.type} field`;
+}
+
+// Why a regular expression is one TailorDB rejects, or undefined. TailorDB parses patterns with
+// Rust's regex syntax and limits nested repetition and repeat bounds.
+function regexProblem(pattern: string): string | undefined {
+  let i = 0;
+  let maxBound = 0;
+  const unsupported = (): string | undefined => {
+    const lookaround = /^\(\?<?[=!]/.exec(pattern.slice(i));
+    if (lookaround) return "uses lookaround";
+    return undefined;
+  };
+  // The nesting depth of repetition in the alternation that starts at `i`.
+  const alternation = (): number | string => {
+    let height = 0;
+    while (i < pattern.length && pattern[i] !== ")") {
+      if (pattern[i] === "|") {
+        i++;
+        continue;
+      }
+      const atom = atomHeight();
+      if (typeof atom === "string") return atom;
+      const repeat = quantifier();
+      if (typeof repeat === "string") return repeat;
+      height = Math.max(height, atom + repeat);
+    }
+    return height;
+  };
+  const atomHeight = (): number | string => {
+    const c = pattern[i];
+    if (c === "(") {
+      const problem = unsupported();
+      if (problem) return problem;
+      i++;
+      const flags = /^\?(?:P?<[A-Za-z_][A-Za-z0-9_]*>|[a-zA-Z-]*:?)/.exec(pattern.slice(i));
+      if (flags) i += flags[0].length;
+      const inner = alternation();
+      if (pattern[i] !== ")") return "has an unclosed group";
+      i++;
+      return inner;
+    }
+    if (c === "[") {
+      let depth = 0;
+      do {
+        if (pattern[i] === "\\") i++;
+        else if (pattern[i] === "[") depth++;
+        else if (pattern[i] === "]" && pattern[i - 1] !== "[" && pattern[i - 1] !== "^") depth--;
+        i++;
+      } while (depth > 0 && i < pattern.length);
+      return depth > 0 ? "has an unclosed character class" : 0;
+    }
+    if (c === "\\") {
+      const escaped = pattern.charAt(i + 1);
+      if (/[1-9]/.test(escaped)) return "uses a backreference";
+      if (/[yYmMZ]/.test(escaped)) return `uses \\${escaped}, which TailorDB does not support`;
+      i += 2;
+      if (/[pP]/.test(escaped) && pattern[i] === "{")
+        i = pattern.indexOf("}", i) + 1 || pattern.length;
+      return 0;
+    }
+    i++;
+    return 0;
+  };
+  // How much a quantifier at `i` adds to the repetition depth.
+  const quantifier = (): number | string => {
+    let added = 0;
+    for (;;) {
+      const counted = /^\{(\d+)(,(\d*))?\}/.exec(pattern.slice(i));
+      if (pattern[i] === "*" || pattern[i] === "+" || pattern[i] === "?") {
+        i++;
+        added++;
+      } else if (counted) {
+        i += counted[0].length;
+        const min = Number(counted[1]);
+        const max =
+          counted[2] === undefined ? min : counted[3] === "" ? undefined : Number(counted[3]);
+        if (max !== undefined) maxBound = Math.max(maxBound, max);
+        if (!(min === 1 && max === 1) && max !== 0) added++;
+      } else {
+        return added;
+      }
+      if (pattern[i] === "?") i++;
+    }
+  };
+  const height = alternation();
+  if (typeof height === "string") return height;
+  if (i < pattern.length) return "has an unmatched )";
+  if (height > 1) return "nests repetition, which TailorDB rejects as too complex";
+  if (maxBound > 255) return "repeats more than 255 times, which TailorDB rejects as too complex";
+  return undefined;
+}
+
 class Analyzer {
   readonly diagnostics: SqlDiagnostic[] = [];
   usesTemporal = false;
-  readonly #tables = new Map<string, Table>();
-  readonly #params = new Map<string, { type: string }>();
+  readonly #tables = new Map<string, Table[]>();
+  readonly #params = new Map<string, { base: string; nullable: boolean }>();
   // The columns of each source a WHERE test proves not null.
   readonly #notNull = new Map<Source, Set<string>>();
   // Whether the SELECT groups its rows, so that every group an aggregate reads has a row.
   #grouped = false;
+  // Aliases joined after the ON being analyzed.
+  #later = new Set<string>();
   #namespace: { name: string; table: string } | undefined;
 
-  constructor(private readonly definitions: SqlDefinitions) {
+  constructor(
+    private readonly definitions: SqlDefinitions,
+    private readonly source: string,
+  ) {
     for (const [namespace, tables] of definitions.namespaces) {
       for (const definition of tables) {
         const fields = new Map<string, SqlFieldConfig>([["id", ID_FIELD]]);
         for (const [name, field] of Object.entries(definition.fields)) {
           if (name !== "id") fields.set(name, field.config);
         }
-        this.#tables.set(definition.name, { definition, namespace, fields });
+        const table = { definition, namespace, fields };
+        this.#tables.set(definition.name, [...(this.#tables.get(definition.name) ?? []), table]);
       }
     }
   }
@@ -256,6 +557,10 @@ class Analyzer {
 
   report(message: string, span: SqlSpan): void {
     this.diagnostics.push({ message, start: span.start, length: span.end - span.start });
+  }
+
+  #text(span: SqlSpan): string {
+    return this.source.slice(span.start, span.end);
   }
 
   type(config: SqlFieldConfig, mode: "select" | "write", nested = false): string {
@@ -280,32 +585,46 @@ class Analyzer {
 
   params(names: string[]): SqlTypedName[] {
     return [...new Set(names)].map((name) => {
-      const type = this.#params.get(name)?.type;
-      if (type === undefined) throw new Error(`No type was inferred for placeholder :${name}`);
-      return { name, type };
+      const param = this.#params.get(name);
+      if (param === undefined) throw new Error(`No type was inferred for placeholder :${name}`);
+      return { name, type: param.nullable ? nullable(param.base) : param.base };
     });
   }
 
-  typeParam(param: SqlParam, type: string): void {
+  // Type a placeholder as TailorDB binds it to `schema`: NULL is accepted unless the schema requires a value.
+  typeParam(param: SqlParam, schema: Schema): void {
+    const { config } = schema;
+    const base =
+      config.type === "decimal" && !config.array ? "string | number" : this.type(config, "write");
     const existing = this.#params.get(param.name);
     if (!existing) {
-      this.#params.set(param.name, { type });
-    } else if (existing.type !== type) {
+      this.#params.set(param.name, { base, nullable: config.required !== true });
+    } else if (existing.base !== base) {
       this.report(
-        `Placeholder :${param.name} is used as both ${existing.type} and ${type}; use separate placeholders`,
+        `Placeholder :${param.name} is used as both ${existing.base} and ${base}; use separate placeholders`,
         param.span,
       );
+    } else {
+      existing.nullable &&= config.required !== true;
     }
   }
 
   table(identifier: SqlIdentifier): Table | undefined {
-    const table = this.#tables.get(identifier.name);
+    const tables = this.#tables.get(identifier.name) ?? [];
+    const [table] = tables;
     if (!table) {
       const similar = [...this.#tables.keys()].find(
         (name) => name.toLowerCase() === identifier.name.toLowerCase(),
       );
       this.report(
         `Table ${quoteName(identifier.name)} is not defined in any TailorDB namespace${similar ? `; did you mean ${quoteName(similar)}?` : ""}`,
+        identifier.span,
+      );
+      return undefined;
+    }
+    if (tables.length > 1) {
+      this.report(
+        `Table ${quoteName(identifier.name)} is defined in more than one namespace: ${tables.map((t) => t.namespace).join(", ")}`,
         identifier.span,
       );
       return undefined;
@@ -321,24 +640,27 @@ class Analyzer {
     return table;
   }
 
-  bind(scope: Source[], ref: SqlTableRef): void {
+  bind(scope: Source[], ref: SqlTableRef): Source | undefined {
     const table = this.table(ref.table);
-    if (!table) return;
+    if (!table) return undefined;
     const name = ref.alias ?? ref.table;
     if (scope.some((source) => source.name === name.name)) {
       this.report(`Table or alias ${quoteName(name.name)} is used more than once`, name.span);
-      return;
+      return undefined;
     }
-    scope.push({ table, name: name.name, nullable: false });
+    const source = { table, name: name.name, nullable: false };
+    scope.push(source);
+    return source;
   }
 
   #missingSource(scope: Source[], identifier: SqlIdentifier): void {
-    if (scope.length > 0) {
-      this.report(
-        `Table or alias ${quoteName(identifier.name)} is not in the query`,
-        identifier.span,
-      );
-    }
+    if (scope.length === 0) return;
+    this.report(
+      this.#later.has(identifier.name)
+        ? `${quoteName(identifier.name)} is joined after this ON, which can only use the tables joined so far`
+        : `Table or alias ${quoteName(identifier.name)} is not in the query`,
+      identifier.span,
+    );
   }
 
   #missingColumn(column: SqlIdentifier, tables: readonly Table[]): void {
@@ -354,15 +676,15 @@ class Analyzer {
     return config;
   }
 
-  column(
-    scope: Source[],
-    ref: SqlColumnRef,
-    outputNames?: ReadonlySet<string>,
-  ): (ValueType & { source: Source }) | undefined {
+  column(scope: Source[], ref: SqlColumnRef): (Selected & { source: Source }) | undefined {
     const { candidates, found } = this.#lookup(scope, ref);
     if (found) {
       const { source, config } = found;
-      return { source, config, nullable: this.#nullable(source, ref.column.name, config) };
+      return {
+        source,
+        schema: { config, name: ref.column.name },
+        nullable: this.#nullable(source, ref.column.name, config),
+      };
     }
     const [candidate] = candidates;
     if (ref.table) {
@@ -377,7 +699,6 @@ class Analyzer {
       );
       return undefined;
     }
-    if (outputNames?.has(ref.column.name)) return undefined;
     if (scope.length > 0) {
       this.#missingColumn(
         ref.column,
@@ -385,6 +706,24 @@ class Analyzer {
       );
     }
     return undefined;
+  }
+
+  // A column read as a value of a condition, GROUP BY or ORDER BY, which cannot be an array or nested.
+  #queryable(scope: Source[], ref: SqlColumnRef): (Selected & { source: Source }) | undefined {
+    const column = this.column(scope, ref);
+    if (column && !this.#checkQueryable(column.schema.config, ref.column.name, ref.span)) {
+      return undefined;
+    }
+    return column;
+  }
+
+  #checkQueryable(config: SqlFieldConfig, name: string, span: SqlSpan): boolean {
+    if (!config.array && config.type !== "nested") return true;
+    this.report(
+      `${config.array ? "The array field" : "The nested field"} ${quoteName(name)} can only be selected or returned in TailorDB SQL`,
+      span,
+    );
+    return false;
   }
 
   // The sources a column reference may name, and the field when exactly one source holds it.
@@ -408,18 +747,28 @@ class Analyzer {
     return source.nullable || config.required !== true;
   }
 
-  #conjuncts(condition: SqlCondition | undefined): SqlCondition[] {
+  #conjuncts(condition: SqlExpression | undefined): SqlExpression[] {
     if (!condition) return [];
-    if (condition.kind !== "and") return [condition];
+    if (condition.kind !== "binary" || condition.op !== "AND") return [condition];
     return [...this.#conjuncts(condition.left), ...this.#conjuncts(condition.right)];
   }
 
-  // The columns a condition holds for only when they have a value.
-  #requiredColumns(condition: SqlCondition): SqlColumnRef[] {
+  // The columns that must hold a value for `condition` to be true, or false when `negated`.
+  #requiredColumns(condition: SqlExpression, negated = false): SqlColumnRef[] {
     switch (condition.kind) {
-      case "isNull":
-        return condition.not ? nullPropagatingColumns(condition.left) : [];
-      case "compare":
+      case "column":
+        return [condition];
+      case "unary":
+        return condition.op === "NOT" ? this.#requiredColumns(condition.operand, !negated) : [];
+      case "binary":
+        if (condition.op === "AND" || condition.op === "OR") {
+          if ((condition.op === "AND") === negated) return [];
+          return [
+            ...this.#requiredColumns(condition.left, negated),
+            ...this.#requiredColumns(condition.right, negated),
+          ];
+        }
+        if (ARITHMETIC_OPERATORS.has(condition.op)) return [];
         return [
           ...nullPropagatingColumns(condition.left),
           ...nullPropagatingColumns(condition.right),
@@ -427,222 +776,426 @@ class Analyzer {
       case "in":
       case "between":
         return nullPropagatingColumns(condition.left);
-      case "and":
-      case "or":
+      case "isNull":
+        return condition.not === negated ? [] : nullPropagatingColumns(condition.left);
+      default:
         return [];
     }
   }
 
-  // Record the columns the AND-ed conditions of `where` need a value in, except for the columns an UPDATE sets.
-  narrow(scope: Source[], where: SqlCondition | undefined, assigned?: ReadonlySet<string>): void {
-    for (const ref of this.#conjuncts(where).flatMap((condition) =>
-      this.#requiredColumns(condition),
-    )) {
+  // Record the columns `where` needs a value in, except `excluded`.
+  narrow(scope: Source[], where: SqlExpression | undefined, excluded?: ReadonlySet<string>): void {
+    if (!where) return;
+    for (const ref of this.#requiredColumns(where)) {
       const { found } = this.#lookup(scope, ref);
       if (!found) continue;
       found.source.nullable = false;
-      if (assigned?.has(ref.column.name)) continue;
+      if (excluded?.has(ref.column.name)) continue;
       const columns = this.#notNull.get(found.source) ?? new Set<string>();
       this.#notNull.set(found.source, columns.add(ref.column.name));
     }
   }
 
-  // The aggregate's result type, or undefined when its argument cannot be aggregated.
-  aggregate(scope: Source[], aggregate: SqlAggregate): ValueType | undefined {
-    const arg = aggregate.arg && this.expression(scope, aggregate.arg);
-    if (aggregate.fn === "count") return { config: { type: "integer" }, nullable: false };
+  // The aggregate's result, or undefined when its argument cannot be aggregated.
+  aggregate(scope: Source[], aggregate: SqlAggregate): Selected | undefined {
+    const arg = aggregate.arg && this.#scalar(scope, aggregate.arg, "an aggregate");
+    if (aggregate.fn === "count") {
+      return {
+        schema: { config: { type: "integer", required: true }, name: aggregate.fn },
+        nullable: false,
+      };
+    }
     if (!arg) return undefined;
     const name = aggregate.fn.toUpperCase();
     const allowed =
-      aggregate.fn === "sum" || aggregate.fn === "avg" ? ARITHMETIC_TYPES : COMPARABLE_TYPES;
-    if (arg.config.array || !allowed.includes(arg.config.type)) {
-      this.report(
-        `${name} takes ${fieldOfTypes(allowed)}, not ${typeOf(arg.config)}`,
-        aggregate.span,
-      );
+      aggregate.fn === "sum" || aggregate.fn === "avg" ? NUMERIC_TYPES : COMPARABLE_TYPES;
+    const { config } = arg.schema;
+    if (config.array || !allowed.includes(config.type)) {
+      this.report(`${name} takes ${fieldOfTypes(allowed)}, not ${typeOf(config)}`, aggregate.span);
       return undefined;
     }
-    const nullable = !this.#grouped || arg.nullable;
-    if (aggregate.fn === "min" || aggregate.fn === "max") return { config: arg.config, nullable };
-    const type =
-      arg.config.type === "decimal"
-        ? "decimal"
-        : aggregate.fn === "sum" && arg.config.type === "integer"
-          ? "integer"
-          : "float";
-    return { config: { type }, nullable };
+    const type = aggregate.fn === "avg" && config.type !== "decimal" ? "float" : config.type;
+    return {
+      schema: {
+        config: { type, allowedValues: config.allowedValues },
+        name: aggregate.fn,
+      },
+      nullable: !this.#grouped || arg.nullable,
+    };
   }
 
-  // The type of an expression's value, after typing the placeholders in it; undefined for a lone
-  // placeholder, a NULL, or an expression with a problem.
-  expression(scope: Source[], expr: SqlExpression): ValueType | undefined {
+  // A value of the select list, RETURNING or an aggregate argument (`where`).
+  #scalar(scope: Source[], expr: SqlExpression, where: string): Selected | undefined {
     switch (expr.kind) {
       case "column":
         return this.column(scope, expr);
+      case "literal": {
+        if (expr.type === "null") {
+          this.report(`NULL is not supported in ${where}`, expr.span);
+          return undefined;
+        }
+        const type = expr.type === "number" ? this.#numberType(expr, "float") : expr.type;
+        if (!type) return undefined;
+        return { schema: { config: { type, required: true }, name: "?column?" }, nullable: false };
+      }
       case "param":
+        this.report(`Placeholders are not supported in ${where}`, expr.span);
         return undefined;
-      case "literal":
-        this.#checkInteger(expr);
-        return literalType(expr);
+      case "array":
+        this.report("Array literals are only supported in VALUES and SET", expr.span);
+        return undefined;
       case "aggregate":
         return this.aggregate(scope, expr);
-      case "arithmetic":
-      case "negation":
-        return this.#arithmetic(scope, expr);
+      case "unary": {
+        const operand = this.#scalar(scope, expr.operand, where);
+        if (!operand) return undefined;
+        const text = this.#text(expr.operand.span);
+        if (!this.arithmeticOperand(operand.schema.config, text, expr.operand.span))
+          return undefined;
+        return operand;
+      }
+      case "binary": {
+        const left = this.#scalar(scope, expr.left, where);
+        const right = this.#scalar(scope, expr.right, where);
+        if (!left || !right) return undefined;
+        const valid = [
+          this.arithmeticOperand(left.schema.config, this.#text(expr.left.span), expr.left.span),
+          this.arithmeticOperand(right.schema.config, this.#text(expr.right.span), expr.right.span),
+          this.#checkDivisor(expr.op, expr.right),
+        ].every(Boolean);
+        if (!valid) return undefined;
+        const types = [left.schema.config.type, right.schema.config.type];
+        const type = ARITHMETIC_RESULT_TYPES.find((t) => types.includes(t)) ?? "integer";
+        return {
+          schema: { config: { type }, name: "expression" },
+          nullable: left.nullable || right.nullable,
+        };
+      }
+      default:
+        return undefined;
     }
   }
 
-  // Arithmetic is null when any operand is, and its placeholders take its operands' write type.
-  #arithmetic(scope: Source[], expr: SqlArithmetic | SqlNegation): ValueType | undefined {
-    const params: SqlParam[] = [];
-    const types = new Set<string>();
-    let nullable = false;
-    // Whether the operand can take part in arithmetic.
-    const visit = (operand: SqlExpression): boolean => {
-      if (operand.kind === "arithmetic") {
-        return [visit(operand.left), visit(operand.right), this.#checkDivisor(operand)].every(
-          Boolean,
-        );
+  // The type of a number literal: an Integer when it has no point or exponent, else `fractional`.
+  #numberType(literal: SqlLiteral, fractional: string): string | undefined {
+    if (/[.eE]/.test(literal.value)) {
+      if (!/^\d*\.?\d*(?:[eE][+-]?\d+)?$/.test(literal.value)) {
+        this.report(`${literal.value} is not a number TailorDB SQL reads`, literal.span);
+        return undefined;
       }
-      if (operand.kind === "negation") return visit(operand.operand);
-      if (operand.kind === "param") {
-        params.push(operand);
-        return true;
-      }
-      const type = this.expression(scope, operand);
-      if (!type || !this.arithmeticOperand(type.config, describeOperand(operand), operand.span)) {
-        return false;
-      }
-      types.add(type.config.type);
-      nullable ||= type.nullable;
-      return true;
-    };
-    const valid = visit(expr);
-    const type = ARITHMETIC_RESULT_TYPES.find((candidate) => types.has(candidate)) ?? "integer";
-    for (const param of params) this.typeParam(param, this.type({ type }, "write"));
-    return valid ? { config: { type }, nullable } : undefined;
+      return fractional;
+    }
+    if (!INTEGER_LITERAL.test(literal.value)) {
+      this.report(`${literal.value} is not a number TailorDB SQL reads`, literal.span);
+      return undefined;
+    }
+    if (!isInt32(literal.value)) {
+      this.report(
+        `TailorDB SQL takes integers in the 32-bit range, and ${literal.value} is not`,
+        literal.span,
+      );
+      return undefined;
+    }
+    return "integer";
   }
 
-  // Whether the arithmetic does not divide by a literal zero, which fails in TailorDB.
-  #checkDivisor(arithmetic: SqlArithmetic): boolean {
-    const divisor = arithmetic.right;
-    if (arithmetic.op !== "/" || divisor.kind !== "literal" || divisor.type !== "number") {
-      return true;
-    }
+  // Whether `operator` does not divide by a literal zero, which fails in TailorDB.
+  #checkDivisor(operator: string, divisor: SqlExpression): boolean {
+    if (operator !== "/" || divisor.kind !== "literal" || divisor.type !== "number") return true;
     if (Number(divisor.value) !== 0) return true;
     this.report("Dividing by zero fails in TailorDB SQL", divisor.span);
     return false;
   }
 
-  #checkInteger(literal: SqlLiteral): void {
-    if (literal.type !== "number" || !INTEGER_LITERAL.test(literal.value)) return;
-    if (Math.abs(Number(literal.value)) <= INT32_MAX) return;
-    this.report(
-      `TailorDB SQL takes integers in the 32-bit range, and ${literal.value} is not`,
-      literal.span,
-    );
-  }
-
   arithmeticOperand(config: SqlFieldConfig, name: string, span: SqlSpan): boolean {
-    if (!config.array && ARITHMETIC_TYPES.includes(config.type)) return true;
+    if (isNumeric(config)) return true;
     this.report(
-      `Arithmetic needs ${fieldOfTypes(ARITHMETIC_TYPES)}, and ${name} is ${typeOf(config)}`,
+      `Arithmetic needs ${fieldOfTypes(NUMERIC_TYPES)}, and ${name} is ${typeOf(config)}`,
       span,
     );
     return false;
   }
 
-  checkLiteral(target: Target, literal: SqlLiteral): void {
-    if (target.config.type !== "enum" || literal.type !== "string") return;
-    const values = (target.config.allowedValues ?? []).map((v) => v.value);
-    if (!values.includes(literal.value)) {
-      this.report(
-        `'${literal.value}' is not a value of ${quoteName(target.name)}: ${values.join(", ")}`,
-        literal.span,
-      );
-    }
+  // Check a condition of WHERE, ON or HAVING, which must be true or false.
+  condition(scope: Source[], expr: SqlExpression | undefined, aggregates: boolean): void {
+    if (!expr) return;
+    this.#resolve(this.#operand(scope, expr, aggregates), BOOLEAN);
   }
 
-  checkValue(
-    scope: Source[],
-    value: SqlExpression,
-    paramType: string | undefined,
-    target?: Target,
-  ): void {
-    if (value.kind === "param") {
-      if (paramType !== undefined) this.typeParam(value, paramType);
-    } else if (value.kind === "literal") {
-      if (target) this.checkLiteral(target, value);
-    } else {
-      this.expression(scope, value);
-    }
-  }
-
-  condition(scope: Source[], condition: SqlCondition | undefined): void {
-    if (!condition) return;
-    switch (condition.kind) {
-      case "and":
-      case "or":
-        this.condition(scope, condition.left);
-        this.condition(scope, condition.right);
-        return;
-      case "isNull":
-        this.#operand(scope, condition.left, false);
-        return;
-      case "compare": {
-        const left = this.#operand(scope, condition.left, true);
-        const paramType = PATTERN_OPERATORS.has(condition.op) ? "string" : left?.paramType;
-        this.#compared(scope, condition.right, paramType, left?.target);
-        return;
+  #operand(scope: Source[], expr: SqlExpression, aggregates: boolean): Operand {
+    const typed = (schema: Schema): Operand => ({ kind: "typed", schema, node: expr });
+    switch (expr.kind) {
+      case "column": {
+        const column = this.#queryable(scope, expr);
+        return column ? typed(column.schema) : { kind: "broken" };
       }
+      case "literal":
+        if (expr.type === "string" || expr.type === "null") return { kind: "untyped", node: expr };
+        if (expr.type === "boolean") return typed(BOOLEAN);
+        {
+          const type = this.#numberType(expr, "decimal");
+          return type ? typed(schemaOf(type)) : { kind: "broken" };
+        }
+      case "param":
+        return { kind: "untyped", node: expr };
+      case "array":
+        this.report("Array literals are only supported in VALUES and SET", expr.span);
+        return { kind: "broken" };
+      case "aggregate": {
+        if (!aggregates) {
+          this.report("Aggregates are only allowed in HAVING and the select list", expr.span);
+          return { kind: "broken" };
+        }
+        const aggregate = this.aggregate(scope, expr);
+        return aggregate ? typed(aggregate.schema) : { kind: "broken" };
+      }
+      case "unary": {
+        const operand = this.#operand(scope, expr.operand, aggregates);
+        if (expr.op === "NOT") {
+          this.#resolve(operand, BOOLEAN);
+          return typed(BOOLEAN);
+        }
+        if (operand.kind === "untyped") {
+          this.report("A sign needs a column or a number to know its type", expr.span);
+          return { kind: "broken" };
+        }
+        if (operand.kind === "broken") return operand;
+        const text = this.#text(expr.operand.span);
+        return this.arithmeticOperand(operand.schema.config, text, expr.operand.span)
+          ? typed(operand.schema)
+          : { kind: "broken" };
+      }
+      case "binary":
+        return this.#binary(scope, expr, aggregates, typed);
       case "in": {
-        const left = this.#operand(scope, condition.left, true);
-        for (const item of condition.items)
-          this.#compared(scope, item, left?.paramType, left?.target);
-        return;
+        const left = this.#typedLeft(this.#operand(scope, expr.left, aggregates), "IN");
+        for (const item of expr.items) {
+          this.#compare(left, this.#operand(scope, item, aggregates));
+        }
+        return typed(BOOLEAN);
       }
       case "between": {
-        const left = this.#operand(scope, condition.left, true);
-        this.#compared(scope, condition.low, left?.paramType, left?.target);
-        this.#compared(scope, condition.high, left?.paramType, left?.target);
-        return;
+        const left = this.#typedLeft(this.#operand(scope, expr.left, aggregates), "BETWEEN");
+        this.#compare(left, this.#operand(scope, expr.low, aggregates));
+        this.#compare(left, this.#operand(scope, expr.high, aggregates));
+        return typed(BOOLEAN);
+      }
+      case "isNull":
+        this.#typedLeft(this.#operand(scope, expr.left, aggregates), "IS NULL");
+        return typed(BOOLEAN);
+    }
+  }
+
+  #binary(
+    scope: Source[],
+    expr: Extract<SqlExpression, { kind: "binary" }>,
+    aggregates: boolean,
+    typed: (schema: Schema) => Operand,
+  ): Operand {
+    const left = this.#operand(scope, expr.left, aggregates);
+    const right = this.#operand(scope, expr.right, aggregates);
+    if (ARITHMETIC_OPERATORS.has(expr.op)) {
+      const divisor = this.#checkDivisor(expr.op, expr.right);
+      const types = this.#arithmetic(left, right);
+      if (!types || !divisor) return { kind: "broken" };
+      const type = ARITHMETIC_RESULT_TYPES.find((t) => types.includes(t)) ?? "integer";
+      return typed(schemaOf(type));
+    }
+    if (COMPARISON_OPERATORS.has(expr.op)) {
+      this.#compare(left, right);
+      return typed(BOOLEAN);
+    }
+    if (PATTERNS.has(expr.op)) {
+      if (left.kind === "untyped") {
+        this.report(`${expr.op} needs a String or Enum column on its left`, expr.left.span);
+      } else if (left.kind === "typed" && !isTextual(left.schema.config)) {
+        this.report(
+          `${expr.op} needs a String or Enum value on its left, and ${this.#text(expr.left.span)} is ${typeOf(left.schema.config)}`,
+          expr.left.span,
+        );
+      }
+      if (right.kind === "typed" && !isTextual(right.schema.config)) {
+        this.report(
+          `${expr.op} needs a String or Enum pattern, and ${this.#text(expr.right.span)} is ${typeOf(right.schema.config)}`,
+          expr.right.span,
+        );
+      } else {
+        this.#resolve(right, STRING);
+      }
+      const pattern = expr.right;
+      if (REGEX_OPERATORS.has(expr.op) && pattern.kind === "literal" && pattern.type === "string") {
+        const problem = regexProblem(pattern.value);
+        if (problem) this.report(`The pattern ${problem}`, pattern.span);
+      }
+      return typed(BOOLEAN);
+    }
+    for (const operand of [left, right]) {
+      if (operand.kind === "typed" && !sameType(operand.schema.config, BOOLEAN.config)) {
+        this.report(
+          `${expr.op} needs conditions, and ${this.#text(operand.node.span)} is ${typeOf(operand.schema.config)}`,
+          operand.node.span,
+        );
+      } else {
+        this.#resolve(operand, BOOLEAN);
       }
     }
+    return typed(BOOLEAN);
   }
 
-  // Check a value a condition compares with its left side.
-  #compared(
-    scope: Source[],
-    value: SqlExpression,
-    paramType: string | undefined,
-    target: Target | undefined,
-  ): void {
-    if (value.kind === "literal") this.#checkInteger(value);
-    this.checkValue(scope, value, paramType, target);
-  }
-
-  #operand(
-    scope: Source[],
-    operand: SqlExpression,
-    compared: boolean,
-  ): { paramType: string; target?: Target } | undefined {
-    if (operand.kind !== "column") {
-      const type = this.expression(scope, operand);
-      return type && { paramType: this.type(type.config, "write") };
-    }
-    const column = this.column(scope, operand);
-    if (!column) return undefined;
-    if (compared && (column.config.array || column.config.type === "nested")) {
+  // The field types of both operands of arithmetic, typing an untyped one from the other.
+  #arithmetic(left: Operand, right: Operand): string[] | undefined {
+    if (left.kind === "broken" || right.kind === "broken") return undefined;
+    if (left.kind === "untyped" && right.kind === "untyped") {
       this.report(
-        `Comparing the ${column.config.array ? "array" : "nested"} field ${quoteName(operand.column.name)} is not supported by TailorDB SQL`,
-        operand.span,
+        "Arithmetic needs a column or a number on one side to know its type",
+        left.node.span,
       );
       return undefined;
     }
-    return {
-      paramType: this.type(column.config, "write"),
-      target: { config: column.config, name: operand.column.name },
-    };
+    const valid = [left, right].every(
+      (operand) =>
+        operand.kind !== "typed" ||
+        this.arithmeticOperand(
+          operand.schema.config,
+          this.#text(operand.node.span),
+          operand.node.span,
+        ),
+    );
+    if (!valid) return undefined;
+    if (left.kind === "untyped" && right.kind === "typed") this.#resolve(left, right.schema);
+    if (right.kind === "untyped" && left.kind === "typed") this.#resolve(right, left.schema);
+    return [left, right].flatMap((operand) =>
+      operand.kind === "typed" ? [operand.schema.config.type] : [],
+    );
+  }
+
+  #typedLeft(left: Operand, operator: string): Operand {
+    if (left.kind !== "untyped") return left;
+    this.report(`The left side of ${operator} needs a column or a typed value`, left.node.span);
+    return { kind: "broken" };
+  }
+
+  // Check two compared operands: numbers compare with numbers, other types with the same type,
+  // and a placeholder, string or NULL takes the other side's type.
+  #compare(left: Operand, right: Operand): void {
+    if (left.kind === "broken" || right.kind === "broken") return;
+    if (left.kind === "typed" && right.kind === "untyped") {
+      this.#resolve(right, left.schema);
+    } else if (left.kind === "untyped" && right.kind === "typed") {
+      this.#resolve(left, right.schema);
+    } else if (left.kind === "typed" && right.kind === "typed") {
+      const l = left.schema.config;
+      const r = right.schema.config;
+      const numeric =
+        Boolean(l.array) === Boolean(r.array) &&
+        NUMERIC_TYPES.includes(l.type) &&
+        NUMERIC_TYPES.includes(r.type);
+      if (!numeric && !sameType(l, r)) {
+        this.report(
+          `Cannot compare ${this.#text(left.node.span)} (${typeOf(l)}) with ${this.#text(right.node.span)} (${typeOf(r)})`,
+          right.node.span,
+        );
+      }
+    } else if (left.kind === "untyped" && right.kind === "untyped") {
+      this.report(
+        "One side of the comparison needs a column or a typed value to know its type",
+        left.node.span,
+      );
+    }
+  }
+
+  // Give an untyped operand the type `target`, or check a typed one has it.
+  #resolve(operand: Operand, target: Schema): void {
+    if (operand.kind === "broken") return;
+    if (operand.kind === "typed") {
+      if (!sameType(operand.schema.config, target.config)) {
+        const expected =
+          target === BOOLEAN
+            ? "a condition"
+            : (TYPE_LABELS[target.config.type] ?? target.config.type);
+        this.report(
+          `Expected ${expected}, but ${this.#text(operand.node.span)} is ${typeOf(operand.schema.config)}`,
+          operand.node.span,
+        );
+      }
+      return;
+    }
+    const { node } = operand;
+    if (node.kind === "param") {
+      this.typeParam(node, target);
+    } else if (node.type === "string" && target.config.type !== "string") {
+      this.#checkText(target, node);
+    }
+  }
+
+  #checkText(target: Schema, literal: SqlLiteral): void {
+    const { config, name } = target;
+    if (config.type === "enum" && !config.array) {
+      const values = (config.allowedValues ?? []).map((v) => v.value);
+      if (!values.includes(literal.value)) {
+        this.report(
+          `'${literal.value}' is not a value of ${quoteName(name)}: ${values.join(", ")}`,
+          literal.span,
+        );
+      }
+      return;
+    }
+    const problem = textProblem(config, literal.value);
+    if (!problem) return;
+    const owner = name === "?column?" ? "" : ` for ${quoteName(name)}`;
+    this.report(`'${literal.value}'${owner} ${problem}`, literal.span);
+  }
+
+  // Check a value TailorDB reads as `schema`: a written value, LIMIT, OFFSET, or a vector query.
+  value(value: SqlValue, schema: Schema): void {
+    const { config, name } = schema;
+    switch (value.kind) {
+      case "param":
+        this.typeParam(value, schema);
+        return;
+      case "array": {
+        if (!config.array) {
+          this.report(`${quoteName(name)} is not an array field`, value.span);
+          return;
+        }
+        const element = { config: { ...config, array: false, required: true }, name };
+        for (const item of value.items) {
+          if (item.kind === "param")
+            this.report("Array elements cannot be placeholders", item.span);
+          else if (item.kind === "literal" && item.type === "null") {
+            this.report("Array elements cannot be NULL", item.span);
+          } else this.value(item, element);
+        }
+        return;
+      }
+      case "literal":
+        break;
+    }
+    if (value.type === "null") {
+      if (config.required) {
+        this.report(`${quoteName(name)} is required, so it cannot be NULL`, value.span);
+      }
+      return;
+    }
+    if (value.type === "string") {
+      this.#checkText(schema, value);
+      return;
+    }
+    const valid =
+      value.type === "boolean"
+        ? config.type === "boolean" && !config.array
+        : !config.array &&
+          (config.type === "integer"
+            ? isInt32(value.value)
+            : config.type === "float" || config.type === "decimal"
+              ? /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value.value)
+              : false);
+    if (!valid) {
+      this.report(
+        `${value.value} is not a valid ${TYPE_LABELS[config.type] ?? config.type}${config.array ? " array" : ""} value for ${quoteName(name)}`,
+        value.span,
+      );
+    }
   }
 
   // The result columns of a select list or RETURNING clause.
@@ -652,31 +1205,27 @@ class Analyzer {
     for (const item of items) {
       const { expr } = item;
       const duplicates: string[] = [];
-      const add = (name: string, type: ValueType | undefined) => {
+      const add = (name: string, value: Selected | undefined) => {
         if (seen.has(name)) {
           duplicates.push(name);
           return;
         }
         seen.add(name);
-        if (!type) return;
-        const selected = this.type(type.config, "select");
-        columns.push({ name, type: type.nullable ? nullable(selected) : selected });
+        if (!value) return;
+        const selected = this.type(value.schema.config, "select");
+        columns.push({ name, type: value.nullable ? nullable(selected) : selected });
       };
       if (expr.kind === "star") {
-        const tableName = expr.table?.name;
-        const sources =
-          tableName === undefined ? scope : scope.filter((source) => source.name === tableName);
-        if (expr.table && sources.length === 0) this.#missingSource(scope, expr.table);
-        for (const source of sources) {
+        for (const source of this.#starSources(scope, expr.table)) {
           for (const [name, config] of source.table.fields) {
-            add(name, { config, nullable: this.#nullable(source, name, config) });
+            add(name, {
+              schema: { config, name },
+              nullable: this.#nullable(source, name, config),
+            });
           }
         }
       } else {
-        const name = item.alias?.name ?? defaultName(expr);
-        const type = this.expression(scope, expr);
-        if (name === undefined) this.report("Name this column with AS", item.span);
-        else add(name, type);
+        add(item.alias?.name ?? defaultName(expr), this.#scalar(scope, expr, "the select list"));
       }
       if (duplicates.length > 0) {
         const [only] = duplicates;
@@ -691,6 +1240,13 @@ class Analyzer {
     return columns;
   }
 
+  #starSources(scope: Source[], table: SqlIdentifier | undefined): Source[] {
+    if (!table) return scope;
+    const sources = scope.filter((source) => source.name === table.name);
+    if (sources.length === 0) this.#missingSource(scope, table);
+    return sources;
+  }
+
   // The result columns of RETURNING, which can only return columns.
   returning(scope: Source[], items: SqlSelectItem[]): SqlTypedName[] {
     const columns = items.filter((item) => {
@@ -699,6 +1255,30 @@ class Analyzer {
       return false;
     });
     return this.columns(scope, columns);
+  }
+
+  // Check that the select list, ORDER BY and HAVING read only GROUP BY keys outside aggregates.
+  #checkGrouping(
+    scope: Source[],
+    keys: readonly SqlColumnRef[],
+    refs: readonly SqlColumnRef[],
+  ): void {
+    const fieldOf = (ref: SqlColumnRef) => {
+      const found = this.#lookup(scope, ref).found;
+      return found && `${found.source.name}\u0000${ref.column.name}`;
+    };
+    const grouped = new Set(keys.map(fieldOf));
+    const reported = new Set<number>();
+    for (const ref of refs) {
+      const field = fieldOf(ref);
+      if (field && !grouped.has(field) && !reported.has(ref.span.start)) {
+        reported.add(ref.span.start);
+        this.report(
+          `Column ${quoteName(ref.column.name)} must appear in GROUP BY or be used in an aggregate`,
+          ref.span,
+        );
+      }
+    }
   }
 
   #uniqueKeys(table: Table): string[][] {
@@ -713,17 +1293,17 @@ class Analyzer {
   }
 
   // Whether every source is pinned to at most one row: by a unique key whose columns AND-ed
-  // equalities match to values, or to columns of sources already pinned.
+  // equalities match to fixed values, or to columns of sources already pinned.
   atMostOneRow(
     scope: Source[],
-    where: SqlCondition | undefined,
+    where: SqlExpression | undefined,
     joins: readonly JoinedSource[],
   ): boolean {
     // The ON of an outer join cannot pin its preserved side; a LEFT JOIN's can pin the joined
     // table, and every side once WHERE proves the joined table has a row.
-    const equalitiesOf = (condition: SqlCondition | undefined, only: Source | undefined) =>
+    const equalitiesOf = (condition: SqlExpression | undefined, only: Source | undefined) =>
       this.#conjuncts(condition).flatMap((conjunct) =>
-        conjunct.kind === "compare" && conjunct.op === "=" ? [{ condition: conjunct, only }] : [],
+        conjunct.kind === "binary" && conjunct.op === "=" ? [{ condition: conjunct, only }] : [],
       );
     const equalities = [
       ...equalitiesOf(where, undefined),
@@ -752,11 +1332,9 @@ class Analyzer {
           ] as const) {
             if (side.kind !== "column" || sourceOf(side) !== source) continue;
             const otherSource = sourceOf(other);
-            const fixed =
-              other.kind === "param" ||
-              other.kind === "literal" ||
-              (otherSource && pinned.has(otherSource));
-            if (fixed) columns.add(side.column.name);
+            if (isFixed(other) || (otherSource && pinned.has(otherSource))) {
+              columns.add(side.column.name);
+            }
           }
         }
         if (
@@ -770,72 +1348,31 @@ class Analyzer {
     return pinned.size === scope.length;
   }
 
-  // Check a value written to `target`, a column of the only table in `scope`.
-  checkWritten(scope: Source[], target: Target, value: SqlValue | SqlDefault | SqlExcluded): void {
-    const [source] = scope;
-    if (value.kind === "default") return;
-    if (value.kind === "excluded") {
-      if (source) this.fieldOf(source.table, value.column);
+  // Check a value assigned to `target` by UPDATE or ON CONFLICT DO UPDATE.
+  #assigned(scope: Source[], target: Schema, value: SqlSetOperand): void {
+    if (value.kind !== "column") {
+      this.value(value, target);
       return;
     }
-    const type = this.type(target.config, "write");
-    this.checkValue(scope, value, target.config.required === true ? type : nullable(type), target);
+    const column = this.column(scope, value);
+    if (column && column.schema.config.type !== target.config.type) {
+      this.report(
+        `Cannot set ${quoteName(target.name)} (${typeOf(target.config)}) from ${quoteName(column.schema.name)} (${typeOf(column.schema.config)})`,
+        value.span,
+      );
+    }
+  }
+
+  #notId(column: SqlIdentifier): boolean {
+    if (column.name !== "id") return true;
+    this.report(`${quoteName("id")} cannot be updated`, column.span);
+    return false;
   }
 
   statement(statement: SqlStatement): { columns: SqlTypedName[]; cardinality: SqlCardinality } {
     switch (statement.kind) {
-      case "select": {
-        const scope: Source[] = [];
-        const joined: JoinedSource[] = [];
-        this.bind(scope, statement.from);
-        for (const join of statement.joins) {
-          this.bind(scope, join.table);
-          const source = scope.at(-1);
-          if (source && source.name === (join.table.alias?.name ?? join.table.table.name)) {
-            if (join.type === "left" || join.type === "full") source.nullable = true;
-            if (join.type === "right" || join.type === "full") {
-              for (const preceding of scope.slice(0, -1)) preceding.nullable = true;
-            }
-            joined.push({ type: join.type, on: join.on, source });
-          }
-        }
-        this.#grouped = statement.groupBy.length > 0;
-        for (const join of statement.joins) this.condition(scope, join.on);
-        this.narrow(scope, statement.where);
-        const columns = this.columns(scope, statement.items);
-        const outputNames = new Set(columns.map((column) => column.name));
-        this.condition(scope, statement.where);
-        for (const column of statement.groupBy) this.column(scope, column);
-        this.condition(scope, statement.having);
-        for (const item of statement.orderBy) {
-          if (item.by.kind === "column") {
-            this.column(scope, item.by, outputNames);
-            continue;
-          }
-          const column = this.column(scope, item.by.column);
-          if (column && (column.config.type !== "string" || !column.config.vector)) {
-            this.report(
-              `vector_similarity takes a vector field, and ${quoteName(item.by.column.column.name)} is not one`,
-              item.by.column.span,
-            );
-          }
-          if (item.by.value.kind === "param") this.typeParam(item.by.value, "string");
-        }
-        for (const count of [statement.limit, statement.offset]) {
-          if (count?.kind === "param") this.typeParam(count, "number");
-        }
-        const aggregated = statement.items.some((item) => item.expr.kind === "aggregate");
-        let cardinality: SqlCardinality = "many";
-        if (aggregated && statement.groupBy.length === 0) {
-          cardinality = statement.having || statement.offset ? "maybeOne" : "one";
-        } else if (
-          this.atMostOneRow(scope, statement.where, joined) ||
-          (statement.limit?.kind === "literal" && Number(statement.limit.value) <= 1)
-        ) {
-          cardinality = "maybeOne";
-        }
-        return { columns, cardinality };
-      }
+      case "select":
+        return this.#select(statement);
       case "insert": {
         const table = this.table(statement.table);
         if (!table) return { columns: [], cardinality: "many" };
@@ -862,7 +1399,9 @@ class Analyzer {
             row.values.forEach((value, index) => {
               const column = statement.columns[index];
               const config = column && table.fields.get(column.name);
-              if (column && config) this.checkWritten(scope, { config, name: column.name }, value);
+              if (column && config && value.kind !== "default") {
+                this.value(value, { config, name: column.name });
+              }
             });
           }
         }
@@ -878,8 +1417,19 @@ class Analyzer {
           if (conflict.action.kind === "update") {
             for (const set of conflict.action.sets) {
               const target = this.fieldOf(table, set.column);
-              if (target)
-                this.checkWritten(scope, { config: target, name: set.column.name }, set.value);
+              if (!target || !this.#notId(set.column)) continue;
+              const schema = { config: target, name: set.column.name };
+              if (set.value.kind !== "excluded") {
+                this.value(set.value, schema);
+                continue;
+              }
+              const source = this.fieldOf(table, set.value.column);
+              if (source && !sameType(source, target)) {
+                this.report(
+                  `Cannot set ${quoteName(set.column.name)} (${typeOf(target)}) from EXCLUDED.${quoteName(set.value.column.name)} (${typeOf(source)})`,
+                  set.value.span,
+                );
+              }
             }
           }
         }
@@ -897,29 +1447,37 @@ class Analyzer {
         if (statement.kind === "update") {
           for (const set of statement.sets) {
             const config = this.fieldOf(table, set.column);
-            if (!config) continue;
+            if (!config || !this.#notId(set.column)) continue;
+            const target = { config, name: set.column.name };
             if (set.value.kind !== "arithmetic") {
-              this.checkWritten(scope, { config, name: set.column.name }, set.value);
+              this.#assigned(scope, target, set.value);
               continue;
             }
             if (
               !this.arithmeticOperand(config, quoteName(set.column.name), set.value.span) ||
-              !this.#checkDivisor(set.value)
+              !this.#checkDivisor(set.value.op, set.value.right)
             ) {
               continue;
             }
-            const operandType = this.type(config, "write");
-            this.checkValue(scope, set.value.left, operandType);
-            this.checkValue(scope, set.value.right, operandType);
+            this.#assigned(scope, target, set.value.left);
+            this.#assigned(scope, target, set.value.right);
           }
         }
-        this.condition(scope, statement.where);
+        this.condition(scope, statement.where, false);
         if (!statement.returning) return { columns: [], cardinality: "none" };
-        const assigned =
-          statement.kind === "update"
-            ? new Set(statement.sets.map((set) => set.column.name))
-            : undefined;
-        this.narrow(scope, statement.where, assigned);
+        if (statement.kind === "delete") {
+          this.narrow(scope, statement.where);
+        } else if (!table.definition.typeHookExpr?.update) {
+          // An update hook runs after WHERE and may change the fields it sets.
+          const hooked = [...table.fields]
+            .filter(([, config]) => config.hooks?.update)
+            .map(([name]) => name);
+          this.narrow(
+            scope,
+            statement.where,
+            new Set([...statement.sets.map((set) => set.column.name), ...hooked]),
+          );
+        }
         const columns = this.returning(scope, statement.returning);
         return {
           columns,
@@ -928,11 +1486,144 @@ class Analyzer {
       }
     }
   }
+
+  #select(statement: Extract<SqlStatement, { kind: "select" }>): {
+    columns: SqlTypedName[];
+    cardinality: SqlCardinality;
+  } {
+    const scope: Source[] = [];
+    const joined: JoinedSource[] = [];
+    this.bind(scope, statement.from);
+    statement.joins.forEach((join, index) => {
+      this.#later = new Set(
+        statement.joins
+          .slice(index + 1)
+          .map((later) => (later.table.alias ?? later.table.table).name),
+      );
+      const source = this.bind(scope, join.table);
+      if (source) {
+        if (join.type === "left" || join.type === "full") source.nullable = true;
+        if (join.type === "right" || join.type === "full") {
+          for (const preceding of scope.slice(0, -1)) preceding.nullable = true;
+        }
+        joined.push({ type: join.type, on: join.on, source });
+      }
+      this.condition(scope, join.on, false);
+    });
+    this.#later = new Set();
+    const aggregated = statement.items.some((item) => item.expr.kind === "aggregate");
+    this.#grouped = statement.groupBy.length > 0;
+    const grouping = this.#grouped || aggregated || statement.having !== undefined;
+    this.condition(scope, statement.where, false);
+    for (const column of statement.groupBy) this.#queryable(scope, column);
+    this.condition(scope, statement.having, true);
+    this.narrow(scope, statement.where);
+    const columns = this.columns(scope, statement.items);
+    const outputs = statement.items.flatMap((item): { name: string; config?: SqlFieldConfig }[] => {
+      const { expr } = item;
+      if (expr.kind === "star") {
+        return this.#starSources(scope, expr.table).flatMap((source) =>
+          [...source.table.fields].map(([name, config]) => ({ name, config })),
+        );
+      }
+      const config = expr.kind === "column" ? this.#lookup(scope, expr).found?.config : undefined;
+      return [{ name: item.alias?.name ?? defaultName(expr), config }];
+    });
+    const ordered: SqlColumnRef[] = [];
+    for (const item of statement.orderBy) {
+      if (item.by.kind === "column") {
+        const name = item.by.column.name;
+        const matches = item.by.table ? [] : outputs.filter((output) => output.name === name);
+        const [match] = matches;
+        if (matches.length > 1) {
+          this.report(
+            `ORDER BY ${quoteName(name)} matches more than one result column`,
+            item.by.span,
+          );
+        } else if (match) {
+          if (match.config) this.#checkQueryable(match.config, name, item.by.span);
+        } else {
+          this.#queryable(scope, item.by);
+          ordered.push(item.by);
+        }
+        continue;
+      }
+      const column = this.#queryable(scope, item.by.column);
+      if (column && (column.schema.config.type !== "string" || !column.schema.config.vector)) {
+        this.report(
+          `vector_similarity takes a vector field, and ${quoteName(item.by.column.column.name)} is not one`,
+          item.by.column.span,
+        );
+      }
+      if (grouping) {
+        this.report("vector_similarity cannot be used with GROUP BY or aggregates", item.by.span);
+      }
+      if (column) this.value(item.by.value, column.schema);
+    }
+    if (grouping) {
+      const selected = statement.items.flatMap((item): SqlColumnRef[] => {
+        const { expr } = item;
+        if (expr.kind === "aggregate") return [];
+        if (expr.kind !== "star") return columnsOf(expr);
+        return this.#starSources(scope, expr.table).flatMap((source) =>
+          [...source.table.fields.keys()].map((name): SqlColumnRef => ({
+            kind: "column",
+            table: { name: source.name, quoted: true, span: expr.span },
+            column: { name, quoted: true, span: expr.span },
+            span: expr.span,
+          })),
+        );
+      });
+      const having = statement.having ? columnsOf(statement.having) : [];
+      this.#checkGrouping(scope, statement.groupBy, [...selected, ...ordered, ...having]);
+    }
+    for (const [name, count] of [
+      ["LIMIT", statement.limit],
+      ["OFFSET", statement.offset],
+    ] as const) {
+      if (!count) continue;
+      if (count.kind === "literal" && count.type === "null") {
+        this.report("LIMIT and OFFSET take a number, not NULL", count.span);
+        continue;
+      }
+      this.value(count, { config: { type: "integer", required: true }, name });
+      if (count.kind === "literal" && count.value.startsWith("-")) {
+        this.report("LIMIT and OFFSET take a number that is not negative", count.span);
+      }
+    }
+    for (const lock of statement.locks) {
+      const reason = aggregated
+        ? "aggregates"
+        : joined.some((join) => join.type !== "inner" && join.type !== "cross")
+          ? "outer joins"
+          : statement.groupBy.length > 0
+            ? "GROUP BY"
+            : undefined;
+      if (reason) this.report(`FOR UPDATE and FOR SHARE cannot be used with ${reason}`, lock);
+    }
+    const limit = statement.limit;
+    const limitValue =
+      limit?.kind === "literal" && INTEGER_LITERAL.test(limit.value)
+        ? Number(limit.value)
+        : undefined;
+    let cardinality: SqlCardinality = "many";
+    if (aggregated && statement.groupBy.length === 0) {
+      const certain = !statement.having && !statement.offset && (!limit || (limitValue ?? 0) >= 1);
+      cardinality = certain ? "one" : "maybeOne";
+    } else if (
+      this.atMostOneRow(scope, statement.where, joined) ||
+      (limitValue !== undefined && limitValue <= 1)
+    ) {
+      cardinality = "maybeOne";
+    }
+    return { columns, cardinality };
+  }
 }
 
 function serializeField(config: SqlFieldConfig): unknown[] {
   return SQL_FIELD_KEYS.map((key) => {
     if (key === "allowedValues") return config.allowedValues?.map((v) => v.value);
+    if (key === "hooks") return Boolean(config.hooks?.update);
     if (key === "fields") {
       return config.fields && Object.entries(config.fields).map(([n, f]) => [n, serializeField(f)]);
     }
@@ -953,6 +1644,7 @@ export function serializeSqlDefinitions(definitions: SqlDefinitions): string {
       namespace,
       tables.map((table) => [
         table.name,
+        Boolean(table.typeHookExpr?.update),
         Object.entries(table.fields).map(([name, field]) => [name, serializeField(field.config)]),
         Object.values(table.indexes ?? {})
           .filter((index) => index.unique)
@@ -972,11 +1664,11 @@ export function serializeSqlDefinitions(definitions: SqlDefinitions): string {
 export function analyzeSql(source: string, definitions: SqlDefinitions): SqlAnalysisResult {
   const parsed = parseSql(source);
   if (!parsed.statement) return { diagnostics: parsed.diagnostics };
-  const analyzer = new Analyzer(definitions);
+  const analyzer = new Analyzer(definitions, source);
   const { columns, cardinality } = analyzer.statement(parsed.statement);
   const namespace = analyzer.namespace;
   if (analyzer.diagnostics.length > 0 || namespace === undefined) {
-    return { diagnostics: analyzer.diagnostics };
+    return { diagnostics: analyzer.diagnostics.toSorted((a, b) => a.start - b.start) };
   }
   return {
     analysis: {

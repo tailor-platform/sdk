@@ -10,6 +10,7 @@ const customer = db.table("Customer", {
   email: db.string().unique(),
   tier: db.enum(["FREE", "PRO"]),
   note: db.string({ optional: true }),
+  nickname: db.string({ optional: true }).hooks({ update: ({ input }) => input }),
   ...db.fields.timestamps(),
 });
 
@@ -38,7 +39,13 @@ const order = db
 const product = db.table("Product", {
   name: db.string(),
   description: db.string().vector(),
+  active: db.bool({ optional: true }),
+  code: db.int({ optional: true }).unique(),
 });
+
+const ledger = db
+  .table("Ledger", { balance: db.int(), memo: db.string({ optional: true }) })
+  .hooks({ update: () => ({}) });
 
 const event = db.table("Event", { name: db.string() });
 
@@ -54,7 +61,7 @@ function namespace(...types: TailorAnyDBType[]) {
 function definitions(temporal = false): SqlDefinitions {
   return {
     namespaces: new Map([
-      ["main", namespace(customer, order, product)],
+      ["main", namespace(customer, order, product, ledger)],
       ["other", namespace(event)],
     ]),
     temporal,
@@ -205,6 +212,16 @@ describe("analyzeSql", () => {
       ]);
     });
 
+    test("types literal aggregate arguments and exponent literals", () => {
+      expect(
+        analyzed("SELECT sum(1) AS s, max('a') AS m, 1e3 AS e FROM \"Order\"").columns,
+      ).toEqual([
+        { name: "s", type: "number | null" },
+        { name: "m", type: "string | null" },
+        { name: "e", type: "number" },
+      ]);
+    });
+
     test("types sum and avg as nullable numbers", () => {
       expect(
         analyzed('SELECT sum("amount") AS s, avg("weight") AS a FROM "Order"').columns,
@@ -218,7 +235,7 @@ describe("analyzeSql", () => {
   describe("null narrowing", () => {
     test("drops null from a column a WHERE comparison needs a value for", () => {
       const analysis = analyzed(
-        'SELECT "weight", "priority", "paidAt", "tags", "deliveryTime" FROM "Order" WHERE "weight" > :w AND "priority" IN (:a, :b) AND "paidAt" NOT BETWEEN :from AND :to AND "deliveryTime" LIKE :t',
+        'SELECT "weight", "priority", "paidAt", "tags", "deliveryTime" FROM "Order" WHERE "weight" > :w AND "priority" IN (:a, :b) AND "paidAt" NOT BETWEEN :from AND :to AND "deliveryTime" = :t',
       );
 
       expect(analysis.columns).toEqual([
@@ -261,6 +278,28 @@ describe("analyzeSql", () => {
       expect(analyzed(`SELECT "weight" FROM "Order" WHERE ${condition}`).columns).toEqual([
         { name: "weight", type: "number" },
       ]);
+    });
+
+    test.each([
+      { condition: 'NOT ("weight" IS NULL)', type: "number" },
+      { condition: 'NOT ("weight" IS NOT NULL)', type: "number | null" },
+      { condition: 'NOT ("weight" > 1 OR "amount" > 2)', type: "number" },
+      { condition: 'NOT ("weight" > 1 AND "amount" > 2)', type: "number | null" },
+      { condition: 'NOT NOT ("weight" > 1)', type: "number" },
+      { condition: '("weight" > 1) IS NULL', type: "number | null" },
+      { condition: '"amount" IN ("weight", 1)', type: "number | null" },
+    ])("narrows WHERE $condition to $type", ({ condition, type }) => {
+      expect(analyzed(`SELECT "weight" FROM "Order" WHERE ${condition}`).columns).toEqual([
+        { name: "weight", type },
+      ]);
+    });
+
+    test("drops null from a boolean column a condition reads, true or false", () => {
+      for (const condition of ['"active"', 'NOT "active"']) {
+        expect(analyzed(`SELECT "active" FROM "Product" WHERE ${condition}`).columns).toEqual([
+          { name: "active", type: "boolean" },
+        ]);
+      }
     });
 
     test("proves the row of an outer-joined table a WHERE comparison reads", () => {
@@ -316,6 +355,21 @@ describe("analyzeSql", () => {
       expect(
         analyzed('DELETE FROM "Order" WHERE "paidAt" IS NOT NULL RETURNING "paidAt"').columns,
       ).toEqual([{ name: "paidAt", type: "Date" }]);
+    });
+
+    test("keeps null in UPDATE RETURNING for fields an update hook may set", () => {
+      expect(
+        analyzed(
+          'UPDATE "Customer" SET "name" = :n WHERE "note" IS NOT NULL AND "nickname" IS NOT NULL RETURNING "note", "nickname"',
+        ).columns,
+      ).toEqual([
+        { name: "note", type: "string" },
+        { name: "nickname", type: "string | null" },
+      ]);
+      expect(
+        analyzed('UPDATE "Ledger" SET "balance" = :b WHERE "memo" IS NOT NULL RETURNING "memo"')
+          .columns,
+      ).toEqual([{ name: "memo", type: "string | null" }]);
     });
   });
 
@@ -382,7 +436,7 @@ describe("analyzeSql", () => {
           'SELECT "name" FROM "Product" WHERE "name" ILIKE :pattern ORDER BY vector_similarity("description", :query) DESC',
         ).params,
       ).toEqual([
-        { name: "pattern", type: "string" },
+        { name: "pattern", type: "string | null" },
         { name: "query", type: "string" },
       ]);
       expect(
@@ -391,7 +445,7 @@ describe("analyzeSql", () => {
         ).params,
       ).toEqual([
         { name: "min", type: "number" },
-        { name: "before", type: "Date | string" },
+        { name: "before", type: "Date | string | null" },
       ]);
     });
 
@@ -402,18 +456,38 @@ describe("analyzeSql", () => {
         ).params,
       ).toEqual([
         { name: "d", type: "number" },
-        { name: "min", type: "number" },
-        { name: "t", type: "string" },
-        { name: "e", type: "number" },
+        { name: "min", type: "number | null" },
+        { name: "t", type: "string | number | null" },
+        { name: "e", type: "number | null" },
       ]);
       expect(
         analyzed(
           'SELECT "customerID" FROM "Order" GROUP BY "customerID" HAVING sum("total") > :x AND sum("amount") + 1 > :y',
         ).params,
       ).toEqual([
-        { name: "x", type: "string" },
-        { name: "y", type: "number" },
+        { name: "x", type: "string | number | null" },
+        { name: "y", type: "number | null" },
       ]);
+    });
+
+    test("accepts NULL for a placeholder unless TailorDB requires a value there", () => {
+      expect(
+        analyzed(
+          'SELECT o."id" FROM "Customer" c LEFT JOIN "Order" o ON o."customerID" = c."id" WHERE o."weight" = :w AND o."amount" = :a AND "total" > :t AND "total" + :p * 2 > 0 AND :flag',
+        ).params,
+      ).toEqual([
+        { name: "w", type: "number | null" },
+        { name: "a", type: "number" },
+        { name: "t", type: "string | number" },
+        { name: "p", type: "number | null" },
+        { name: "flag", type: "boolean | null" },
+      ]);
+    });
+
+    test("merges a placeholder used where NULL is and is not accepted", () => {
+      expect(
+        analyzed('SELECT "id" FROM "Order" WHERE "weight" = :x OR "amount" = :x').params,
+      ).toEqual([{ name: "x", type: "number" }]);
     });
 
     test("binds a placeholder used twice once per occurrence", () => {
@@ -434,7 +508,7 @@ describe("analyzeSql", () => {
         { name: "customerID", type: "string" },
         { name: "status", type: '"PENDING" | "PAID" | "CANCELLED"' },
         { name: "amount", type: "number" },
-        { name: "total", type: "string" },
+        { name: "total", type: "string | number" },
         { name: "paid", type: "boolean" },
         { name: "orderDate", type: "Temporal.PlainDate | string" },
         { name: "paidAt", type: "Temporal.Instant | string | null" },
@@ -527,6 +601,10 @@ describe("analyzeSql", () => {
       { source: 'SELECT count(*) FROM "Order"', cardinality: "one" },
       { source: 'SELECT count(*) FROM "Order" HAVING count(*) > 1', cardinality: "maybeOne" },
       { source: 'SELECT count(*) FROM "Order" OFFSET 1', cardinality: "maybeOne" },
+      { source: 'SELECT count(*) FROM "Order" LIMIT 0', cardinality: "maybeOne" },
+      { source: 'SELECT count(*) FROM "Order" LIMIT :n', cardinality: "maybeOne" },
+      { source: 'SELECT count(*) FROM "Order" LIMIT 1', cardinality: "one" },
+      { source: 'SELECT "id" FROM "Product" WHERE "code" = -1', cardinality: "maybeOne" },
       {
         source: 'SELECT "status", count(*) FROM "Order" GROUP BY "status"',
         cardinality: "many",
@@ -572,6 +650,52 @@ describe("analyzeSql", () => {
 
     test("resolves the namespace from the tables", () => {
       expect(analyzed('SELECT "name" FROM "Event"').namespace).toBe("other");
+    });
+
+    test("orders by a result column before an input column", () => {
+      expect(
+        analyzed(
+          'SELECT a."amount" AS "amount" FROM "Order" a JOIN "Order" b ON a."id" = b."id" ORDER BY "amount"',
+        ).columns,
+      ).toEqual([{ name: "amount", type: "number" }]);
+    });
+
+    test("names a negated literal ?column?", () => {
+      expect(analyzed('SELECT -(1) FROM "Order"').columns).toEqual([
+        { name: "?column?", type: "number" },
+      ]);
+    });
+
+    test("reports a table defined in two namespaces", () => {
+      const result = analyzeSql('SELECT "name" FROM "Event"', {
+        namespaces: new Map([
+          ["main", namespace(event)],
+          ["other", namespace(event)],
+        ]),
+        temporal: false,
+      });
+      expect(result.diagnostics).toEqual([
+        expect.objectContaining({
+          message: 'Table "Event" is defined in more than one namespace: main, other',
+        }),
+      ]);
+    });
+  });
+
+  describe("accepted forms", () => {
+    test.each([
+      'SELECT "id" FROM "Order" WHERE "status" != \'PAID\' AND NOT "paid"',
+      'SELECT "id" FROM "Order" WHERE 10 < "amount" AND :min < "amount"',
+      'SELECT "id" FROM "Order" WHERE "amount" IN (:a + 1, 2) AND "amount" BETWEEN :x - 1 AND "amount" * 2',
+      'SELECT "id" FROM "Order" WHERE "amount" + \'1\' > 0',
+      'SELECT "id" FROM "Order" WHERE "status" LIKE \'PA%\' AND "status" ~ \'^P[A-Z]+$\'',
+      'SELECT "id" FROM "Order" WHERE "orderDate" = \'2026-1-5\' AND "customerID" = \'{aaaaaaaa-0000-4000-8000-000000000001}\' AND "paid" = \'TRUE\' AND "deliveryTime" = \'9:05\' AND "total" > 1e3',
+      'SELECT "status", count("tags") AS n FROM "Order" GROUP BY "status" HAVING count("tags") > 0',
+      'SELECT "id" FROM "Order" WHERE "id" = :id FOR UPDATE SKIP LOCKED',
+      'SELECT "id" FROM "Order" LIMIT \'10\'',
+      'UPDATE "Order" SET "tags" = ARRAY[\'a\', \'b\'], "status" = \'PAID\', "shipping" = \'{"city": "Osaka"}\' WHERE "id" = :id',
+    ])("%s", (source) => {
+      expect(analyzed(source).namespace).toBe("main");
     });
   });
 
@@ -644,12 +768,12 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "tags" = :tags',
-        message: 'Comparing the array field "tags" is not supported by TailorDB SQL',
+        message: 'The array field "tags" can only be selected or returned in TailorDB SQL',
         at: '"tags"',
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "shipping" = :s',
-        message: 'Comparing the nested field "shipping" is not supported by TailorDB SQL',
+        message: 'The nested field "shipping" can only be selected or returned in TailorDB SQL',
         at: '"shipping"',
       },
       {
@@ -672,11 +796,6 @@ describe("analyzeSql", () => {
         source: "SELECT 'a' + 1 AS x FROM \"Order\"",
         message: "Arithmetic needs an Integer, Float or Decimal field, and 'a' is string",
         at: "'a'",
-      },
-      {
-        source: 'SELECT -(1) FROM "Order"',
-        message: "Name this column with AS",
-        at: "-(1)",
       },
       {
         source: 'SELECT "amount" / 0 AS a FROM "Order"',
@@ -705,8 +824,8 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT -2147483648 AS x FROM "Order"',
-        message: "TailorDB SQL takes integers in the 32-bit range, and -2147483648 is not",
-        at: "-2147483648",
+        message: "TailorDB SQL takes integers in the 32-bit range, and 2147483648 is not",
+        at: "2147483648",
       },
       {
         source:
@@ -750,6 +869,180 @@ describe("analyzeSql", () => {
         source: 'UPDATE "Customer" SET "name" = "name" + :suffix',
         message: 'Arithmetic needs an Integer, Float or Decimal field, and "name" is string',
         at: '"name" + :suffix',
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "orderDate" = "paidAt"',
+        message: 'Cannot compare "orderDate" (date) with "paidAt" (datetime)',
+        at: '"paidAt"',
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "amount" = \'abc\'',
+        message: "'abc' for \"amount\" is not a valid Integer value",
+        at: "'abc'",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "customerID" = \'x\'',
+        message: "'x' for \"customerID\" is not a valid UUID value",
+        at: "'x'",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "orderDate" = \'2026-13-01\'',
+        message: "'2026-13-01' for \"orderDate\" is not a valid Date value",
+        at: "'2026-13-01'",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE :a + :b > 0',
+        message: "Arithmetic needs a column or a number on one side to know its type",
+        at: ":a",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "amount" > -:p',
+        message: "A sign needs a column or a number to know its type",
+        at: "-:p",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "amount"',
+        message: 'Expected a condition, but "amount" is integer',
+        at: '"amount"',
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "amount" LIKE \'1%\'',
+        message: 'LIKE needs a String or Enum value on its left, and "amount" is integer',
+        at: '"amount"',
+      },
+      {
+        source: 'SELECT "id" FROM "Customer" WHERE "name" ~ \'^(a+)+$\'',
+        message: "The pattern nests repetition, which TailorDB rejects as too complex",
+        at: "'^(a+)+$'",
+      },
+      {
+        source: 'SELECT "id" FROM "Customer" WHERE "name" ~ \'(?=a)\'',
+        message: "The pattern uses lookaround",
+        at: "'(?=a)'",
+      },
+      {
+        source: 'SELECT "id" FROM "Customer" WHERE "name" ~* \'a{300}\'',
+        message: "The pattern repeats more than 255 times, which TailorDB rejects as too complex",
+        at: "'a{300}'",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "tags" IS NULL',
+        message: 'The array field "tags" can only be selected or returned in TailorDB SQL',
+        at: '"tags"',
+      },
+      {
+        source: 'SELECT "tags" FROM "Order" ORDER BY "tags"',
+        message: 'The array field "tags" can only be selected or returned in TailorDB SQL',
+        at: '"tags"',
+      },
+      {
+        source: 'SELECT count(*) AS n FROM "Order" GROUP BY "shipping"',
+        message: 'The nested field "shipping" can only be selected or returned in TailorDB SQL',
+        at: '"shipping"',
+      },
+      {
+        source: 'SELECT "status", count(*) FROM "Order"',
+        message: 'Column "status" must appear in GROUP BY or be used in an aggregate',
+        at: '"status"',
+      },
+      {
+        source: 'SELECT * FROM "Event" GROUP BY "name"',
+        message: 'Column "id" must appear in GROUP BY or be used in an aggregate',
+        at: "*",
+      },
+      {
+        source: 'SELECT "name" FROM "Event" HAVING count(*) > 1',
+        message: 'Column "name" must appear in GROUP BY or be used in an aggregate',
+        at: '"name"',
+      },
+      {
+        source: 'SELECT count(*) AS n FROM "Order" GROUP BY "status" ORDER BY "amount"',
+        message: 'Column "amount" must appear in GROUP BY or be used in an aggregate',
+        at: '"amount"',
+      },
+      {
+        source:
+          'SELECT "name", count(*) AS n FROM "Product" GROUP BY "name" ORDER BY vector_similarity("description", :q)',
+        message: "vector_similarity cannot be used with GROUP BY or aggregates",
+        at: 'vector_similarity("description", :q)',
+      },
+      {
+        source: 'SELECT "id" FROM "Order" LIMIT 9999999999',
+        message: '9999999999 is not a valid Integer value for "LIMIT"',
+        at: "9999999999",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" OFFSET -1',
+        message: "LIMIT and OFFSET take a number that is not negative",
+        at: "-1",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" LIMIT NULL',
+        message: "LIMIT and OFFSET take a number, not NULL",
+        at: "NULL",
+      },
+      {
+        source: 'SELECT count(*) FROM "Order" FOR UPDATE',
+        message: "FOR UPDATE and FOR SHARE cannot be used with aggregates",
+        at: "FOR UPDATE",
+      },
+      {
+        source:
+          'SELECT o."id" FROM "Order" o LEFT JOIN "Customer" c ON c."id" = o."customerID" FOR SHARE',
+        message: "FOR UPDATE and FOR SHARE cannot be used with outer joins",
+        at: "FOR SHARE",
+      },
+      {
+        source:
+          'SELECT a."id" FROM "Order" a JOIN "Order" b ON b."id" = c."id" JOIN "Order" c ON c."id" = a."id"',
+        message: '"c" is joined after this ON, which can only use the tables joined so far',
+        at: "c",
+      },
+      {
+        source: 'INSERT INTO "Event" ("name") VALUES (NULL)',
+        message: '"name" is required, so it cannot be NULL',
+        at: "NULL",
+      },
+      {
+        source: 'UPDATE "Order" SET "amount" = "amount" * 1.5',
+        message: '1.5 is not a valid Integer value for "amount"',
+        at: "1.5",
+      },
+      {
+        source: 'UPDATE "Order" SET "amount" = 2147483648',
+        message: '2147483648 is not a valid Integer value for "amount"',
+        at: "2147483648",
+      },
+      {
+        source: 'UPDATE "Order" SET "tags" = ARRAY[\'a\', NULL]',
+        message: "Array elements cannot be NULL",
+        at: "NULL",
+      },
+      {
+        source: 'UPDATE "Order" SET "amount" = ARRAY[1]',
+        message: '"amount" is not an array field',
+        at: "ARRAY[1]",
+      },
+      {
+        source: 'UPDATE "Order" SET "shipping" = \'{"town": "Osaka"}\'',
+        message: '\'{"town": "Osaka"}\' for "shipping" has the unknown key "town"',
+        at: '\'{"town": "Osaka"}\'',
+      },
+      {
+        source: 'UPDATE "Event" SET "id" = :x',
+        message: '"id" cannot be updated',
+        at: '"id"',
+      },
+      {
+        source: 'UPDATE "Order" SET "weight" = "amount"',
+        message: 'Cannot set "weight" (float) from "amount" (integer)',
+        at: '"amount"',
+      },
+      {
+        source:
+          'INSERT INTO "Customer" ("name", "email", "tier") VALUES (:n, :e, :t) ON CONFLICT ("email") DO UPDATE SET "name" = EXCLUDED."tier"',
+        message: 'Cannot set "name" (string) from EXCLUDED."tier" (enum)',
+        at: 'EXCLUDED."tier"',
       },
       {
         source: 'SELECT "status", count(*) AS n FROM "Order" GROUP BY "status" HAVING n > :min',
