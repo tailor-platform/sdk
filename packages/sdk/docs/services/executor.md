@@ -511,12 +511,49 @@ interface WebhookContext<T = unknown> {
 
 **Usage Example:**
 
+The webhook URL is public, so verify that a request comes from the sender before acting on its payload. Most providers sign the request body; compute the signature over `rawBody`, since the parsed `body` does not preserve the exact bytes that were signed. The function runtime provides the Web Crypto API (`crypto.subtle`) for this. The example below verifies the `Stripe-Signature` header with the endpoint secret stored in a [Secret Manager](secret.md#runtime-access-with-secretmanager) vault:
+
 ```typescript
 import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+import { secretmanager } from "@tailor-platform/sdk/runtime";
 
-interface StripeWebhook {
+type StripeWebhook = {
   type: string;
   data: { object: { id: string; amount: number } };
+};
+
+const TOLERANCE_SECONDS = 300;
+
+function hexToBytes(hex: string) {
+  if (!/^[0-9a-f]{64}$/i.test(hex)) return undefined;
+  return Uint8Array.from(hex.match(/../g)!, (byte) => parseInt(byte, 16));
+}
+
+async function verifyStripeSignature(rawBody: string, header: string | undefined, secret: string) {
+  if (!header) return false;
+  const pairs = header.split(",").map((part) => part.split("="));
+  const timestamp = pairs.find(([key]) => key === "t")?.[1];
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!timestamp || !Number.isFinite(age) || age > TOLERANCE_SECONDS) {
+    return false;
+  }
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const signedPayload = encoder.encode(`${timestamp}.${rawBody}`);
+  for (const [scheme, value] of pairs) {
+    const signature = scheme === "v1" ? hexToBytes(value) : undefined;
+    if (signature && (await crypto.subtle.verify("HMAC", key, signature, signedPayload))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export default createExecutor({
@@ -527,10 +564,13 @@ export default createExecutor({
   }>(),
   operation: {
     kind: "function",
-    body: async ({ body, headers }) => {
-      const signature = headers["stripe-signature"];
+    body: async ({ body, headers, rawBody }) => {
+      const secret = await secretmanager.getSecret("stripe", "webhook-secret");
+      if (!secret || !(await verifyStripeSignature(rawBody, headers["stripe-signature"], secret))) {
+        console.warn("Rejected webhook with an invalid Stripe signature");
+        return;
+      }
       console.log(`Received ${body.type} event`);
-      // Process webhook...
     },
   },
 });
