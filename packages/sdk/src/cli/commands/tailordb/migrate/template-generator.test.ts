@@ -65,6 +65,37 @@ function getTypeScriptDiagnostics(
     }));
 }
 
+function replaceTodoCalls(source: string, replacement: string): string {
+  const ast = ts.createSourceFile("migrate.ts", source, ts.ScriptTarget.Latest, true);
+  const calls: ts.CallExpression[] = [];
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "TODO"
+    ) {
+      calls.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return calls
+    .reduceRight(
+      (edited, call) => edited.slice(0, call.getStart(ast)) + replacement + edited.slice(call.end),
+      source,
+    )
+    .replace(
+      'import { TODO, type MigrationSteps, type Transaction } from "./db";',
+      'import type { MigrationSteps, Transaction } from "./db";',
+    );
+}
+
+async function importTypeScript(source: string) {
+  return import(
+    `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString("base64")}`
+  );
+}
+
 describe("template-generator", () => {
   let tempDir: string;
 
@@ -544,6 +575,34 @@ describe("template-generator", () => {
 
       expect(order(script)).toEqual(["copyUserToPerson", "updateOrderOwnerId"]);
       expect(script).toContain('updateOrderOwnerId: { dependsOn: ["copyUserToPerson"]');
+    });
+
+    test("orders the check of an added relation after the change to the key it points at", () => {
+      const script = generateMigrationScript(
+        stepsDiff(
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "code",
+            before: { type: "string", required: true },
+            after: { type: "string", required: true, unique: true },
+          },
+          {
+            kind: "field_modified",
+            tableName: "Order",
+            fieldName: "ownerCode",
+            before: { type: "string", required: false },
+            after: {
+              type: "string",
+              required: false,
+              foreignKeyType: "User",
+              foreignKeyField: "code",
+            },
+          },
+        ),
+      );
+
+      expect(script).toContain('updateOrderOwnerCode: { dependsOn: ["updateUserCode"]');
     });
 
     test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
@@ -1998,6 +2057,147 @@ describe("template-generator", () => {
       expect(scriptContent.match(/\{\n {4}const orphanedRecords =/g) ?? []).toHaveLength(2);
     });
 
+    describe("references that point at no record", () => {
+      const first = "00000000-0000-0000-0000-000000000001";
+      const second = "00000000-0000-0000-0000-000000000002";
+      const third = "00000000-0000-0000-0000-000000000003";
+      const missing = "00000000-0000-0000-0000-000000000009";
+      const reference = (table: string, field = "id") =>
+        ({ foreignKey: true, foreignKeyType: table, foreignKeyField: field }) as const;
+      const user = {
+        name: "User",
+        pluralForm: "Users",
+        fields: { code: { type: "string", required: true, unique: true } },
+      } as const;
+      const order = (ownerId: SnapshotFieldConfig) => ({
+        name: "Order",
+        pluralForm: "Orders",
+        fields: { ownerId },
+      });
+      const uuid = { type: "uuid", required: false } as const;
+      const string = { type: "string", required: false } as const;
+
+      const generate = async (
+        previous: SchemaSnapshot["tables"],
+        current: SchemaSnapshot["tables"],
+      ) => {
+        const diff = compareSnapshots(
+          normalizeSchemaSnapshot(createTestSnapshot(previous)),
+          normalizeSchemaSnapshot(createTestSnapshot(current)),
+        );
+        return generateDiffFiles(diff, tempDir, 1, createTestSnapshot(previous));
+      };
+
+      test.each<{
+        change: string;
+        previous: SchemaSnapshot["tables"];
+        current: SchemaSnapshot["tables"];
+        fixtures: string;
+        expected: (string | null)[];
+      }>([
+        {
+          change: "an added relation",
+          previous: { User: user, Order: order(uuid) },
+          current: { User: user, Order: order({ ...uuid, ...reference("User") }) },
+          fixtures: `INSERT INTO "User" (id, code) VALUES ('${first}', 'a');
+            INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', '${first}'), ('${second}', '${missing}'), ('${third}', NULL);`,
+          expected: [first, null, null],
+        },
+        {
+          change: "an added relation to a key other than id",
+          previous: { User: user, Order: order(string) },
+          current: { User: user, Order: order({ ...string, ...reference("User", "code") }) },
+          fixtures: `INSERT INTO "User" (id, code) VALUES ('${first}', 'a');
+            INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', 'a'), ('${second}', 'z'), ('${third}', NULL);`,
+          expected: ["a", null, null],
+        },
+        {
+          change: "an added relation to its own table",
+          previous: { Order: order(uuid) },
+          current: { Order: order({ ...uuid, ...reference("Order") }) },
+          fixtures: `INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', NULL), ('${second}', '${first}'), ('${third}', '${missing}');`,
+          expected: [null, first, null],
+        },
+        {
+          change: "a relation retargeted to its own table",
+          previous: { User: user, Order: order({ ...uuid, ...reference("User") }) },
+          current: { User: user, Order: order({ ...uuid, ...reference("Order") }) },
+          fixtures: `INSERT INTO "User" (id, code) VALUES ('${missing}', 'a');
+            INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', NULL), ('${second}', '${first}'), ('${third}', '${missing}');`,
+          expected: [null, first, null],
+        },
+      ])(
+        "clears the values that point at no record after $change",
+        async ({ previous, current, fixtures, expected }) => {
+          const result = await generate(previous, current);
+          const source = await fs.readFile(result.migrateFilePath!, "utf8");
+          expect(countUnresolvedTodos(source, "migrate.ts")).toBe(1);
+          const edited = replaceTodoCalls(source, "null");
+          await fs.writeFile(result.migrateFilePath!, edited);
+          const { steps } = await importTypeScript(edited);
+          const { pgliteSchema } = await importTypeScript(
+            await fs.readFile(result.pgliteSchemaFilePath!, "utf8"),
+          );
+          const pglite = new PGlite();
+          const db = createKyselyPGlite(pglite);
+          try {
+            await pglite.exec(pgliteSchema.tailordb);
+            await pglite.exec(fixtures);
+            await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+            const { rows } = await pglite.query<{ ownerId: string | null }>(
+              'SELECT "ownerId" FROM "Order" ORDER BY id',
+            );
+            expect(rows.map((row) => row.ownerId)).toEqual(expected);
+          } finally {
+            await db.destroy();
+          }
+          expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+        },
+        30_000,
+      );
+
+      test("leaves the values of an array field to a TODO call", async () => {
+        const uuids = { ...uuid, array: true } as const;
+        const result = await generate(
+          { User: user, Order: order(uuids) },
+          { User: user, Order: order({ ...uuids, ...reference("User") }) },
+        );
+        const source = await fs.readFile(result.migrateFilePath!, "utf8");
+
+        expect(countUnresolvedTodos(source, "migrate.ts")).toBe(1);
+        expect(source).toContain(
+          'void TODO("resolve the Order.ownerId elements that point at no User record");',
+        );
+        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+      }, 30_000);
+
+      test("resolves the values before the duplicates of a one-to-one relation", async () => {
+        const result = await generate(
+          { User: user, Order: order(uuid) },
+          { User: user, Order: order({ ...uuid, unique: true, ...reference("User") }) },
+        );
+        const source = await fs.readFile(result.migrateFilePath!, "utf8");
+
+        expect(source.indexOf("const orphanedRecords =")).toBeGreaterThan(-1);
+        expect(source.indexOf("const orphanedRecords =")).toBeLessThan(
+          source.indexOf("const duplicates ="),
+        );
+      });
+
+      test("resolves the values before the null ones of a required relation are filled", async () => {
+        const result = await generate(
+          { User: user, Order: order(uuid) },
+          { User: user, Order: order({ ...uuid, required: true, ...reference("User") }) },
+        );
+        const source = await fs.readFile(result.migrateFilePath!, "utf8");
+
+        expect(source.indexOf("const orphanedRecords =")).toBeGreaterThan(-1);
+        expect(source.indexOf("const orphanedRecords =")).toBeLessThan(
+          source.indexOf('.where("ownerId", "is", null)'),
+        );
+      });
+    });
+
     test("should warn that decreasing decimal scale can round values", async () => {
       const snapshotWithScale4 = createTestSnapshot({
         Item: {
@@ -2236,32 +2436,11 @@ describe("template-generator", () => {
         const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
         const source = await fs.readFile(result.migrateFilePath!, "utf8");
         expect(countUnresolvedTodos(source, "migrate.ts")).toBe(1);
-        const ast = ts.createSourceFile("migrate.ts", source, ts.ScriptTarget.Latest, true);
-        let edited = source;
-        function replaceTodo(node: ts.Node) {
-          if (
-            ts.isCallExpression(node) &&
-            ts.isIdentifier(node.expression) &&
-            node.expression.text === "TODO"
-          ) {
-            edited =
-              source.slice(0, node.getStart(ast)) +
-              JSON.stringify("ACTIVE") +
-              source.slice(node.end);
-          }
-          ts.forEachChild(node, replaceTodo);
-        }
-        replaceTodo(ast);
-        edited = edited.replace(
-          'import { TODO, type MigrationSteps, type Transaction } from "./db";',
-          'import type { MigrationSteps, Transaction } from "./db";',
-        );
+        const edited = replaceTodoCalls(source, JSON.stringify("ACTIVE"));
         await fs.writeFile(result.migrateFilePath!, edited);
-        const { steps } = await import(
-          `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(edited)).toString("base64")}`
-        );
-        const { pgliteSchema } = await import(
-          `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(await fs.readFile(result.pgliteSchemaFilePath!, "utf8"))).toString("base64")}`
+        const { steps } = await importTypeScript(edited);
+        const { pgliteSchema } = await importTypeScript(
+          await fs.readFile(result.pgliteSchemaFilePath!, "utf8"),
         );
         const pglite = new PGlite();
         const db = createKyselyPGlite<{ Task: { id: string; status: string[] | null } }>(pglite);
