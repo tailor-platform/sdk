@@ -140,7 +140,7 @@ function getBaseType(
     return getNestedType(fieldConfig, temporal);
   }
 
-  const type = mapFieldTypeToColumnType(fieldType, temporal && !(nested && fieldType === "time"));
+  const type = mapFieldTypeToColumnType(fieldType, temporal, nested);
   switch (type) {
     case "Timestamp":
       usedUtilityTypes.Timestamp = true;

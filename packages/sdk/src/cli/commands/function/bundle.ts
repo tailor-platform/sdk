@@ -33,8 +33,10 @@ import { createSdkBuilderPurePlugin } from "#/cli/shared/sdk-builder-pure-plugin
 import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
+import { createSqlBundlePlugin, sqlErrorOf } from "#/cli/sql/bundle-plugin";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
+import type { SqlContextLoader } from "#/cli/sql/definitions";
 import type { LogLevelInput, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
@@ -78,6 +80,8 @@ interface BundleForRunOptions {
   defaultPermission?: Resolver["permission"];
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault;
+  /** TailorDB definitions that imported `.sql` files are checked against */
+  sql?: SqlContextLoader;
 }
 
 interface BundleForRunResult {
@@ -126,45 +130,50 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
   const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   const bundleLog = createBundleLog({ tsconfig });
-  const buildResult = await rolldown.build({
-    plugins: [
-      createGeneratedEntryResolverPlugin(entryPath, baseDir),
-      createTsconfigPathsPlugin(),
-      createPlatformBundleDefinePlugin(
-        detected.type === "resolver"
-          ? resolverDateRepresentations(detected.fields, dateDefault)
-          : { date: true, temporal: true },
-        dateDefault,
-      ),
-      createSdkBuilderPurePlugin(),
-    ],
-    input: entryPath,
-    write: false,
-    output: {
-      format: "esm",
-      sourcemap: true,
-      minify: inlineSourcemap
-        ? {
-            mangle: {
-              keepNames: true,
-            },
-          }
-        : true,
-      comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
-      codeSplitting: false,
-      // Emit sourcemap `sources` relative to cwd so stack traces resolve
-      // back to paths a user can open (e.g. `resolvers/add.ts`), not the
-      // rolldown-default virtual output dir which produces spurious `..`
-      // segments.
-      dir: process.cwd(),
-    },
-    tsconfig,
-    treeshake: composeFunctionTreeshakeOptions([
-      createLogLevelTreeshakeOptions(bundleLogLevel),
-      createUserTreeshakeOptions(options.treeshake),
-    ]),
-    ...bundleLog.options,
-  } as rolldown.BuildOptions);
+  const buildResult = await rolldown
+    .build({
+      plugins: [
+        createGeneratedEntryResolverPlugin(entryPath, baseDir),
+        createTsconfigPathsPlugin(),
+        createPlatformBundleDefinePlugin(
+          detected.type === "resolver"
+            ? resolverDateRepresentations(detected.fields, dateDefault)
+            : { date: true, temporal: true },
+          dateDefault,
+        ),
+        createSdkBuilderPurePlugin(),
+        createSqlBundlePlugin(options.sql),
+      ],
+      input: entryPath,
+      write: false,
+      output: {
+        format: "esm",
+        sourcemap: true,
+        minify: inlineSourcemap
+          ? {
+              mangle: {
+                keepNames: true,
+              },
+            }
+          : true,
+        comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
+        codeSplitting: false,
+        // Emit sourcemap `sources` relative to cwd so stack traces resolve
+        // back to paths a user can open (e.g. `resolvers/add.ts`), not the
+        // rolldown-default virtual output dir which produces spurious `..`
+        // segments.
+        dir: process.cwd(),
+      },
+      tsconfig,
+      treeshake: composeFunctionTreeshakeOptions([
+        createLogLevelTreeshakeOptions(bundleLogLevel),
+        createUserTreeshakeOptions(options.treeshake),
+      ]),
+      ...bundleLog.options,
+    } as rolldown.BuildOptions)
+    .catch((error: unknown) => {
+      throw sqlErrorOf(error) ?? error;
+    });
   bundleLog.assertAllResolved();
 
   const bundledCode = chunkCodeWithSourcemap({

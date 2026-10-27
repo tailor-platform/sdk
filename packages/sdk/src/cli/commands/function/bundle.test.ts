@@ -5,7 +5,11 @@ import { resolveTSConfig } from "pkg-types";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { createSqlContext } from "#/cli/sql/definitions";
+import { db } from "#/configure/services/tailordb/schema";
+import { parseTypes } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
+import { toSchemaOutput } from "#/utils/test/internal";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
 import type * as pkgTypes from "pkg-types";
@@ -517,6 +521,69 @@ export default {
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("https://example.com");
       await expectMainExport("verify-workflow.mjs", result.bundledCode);
+    });
+  });
+
+  describe(".sql imports", () => {
+    function sqlContext() {
+      const order = db.table("Order", { amount: db.int() });
+      return createSqlContext(
+        {
+          namespaces: new Map([
+            ["main", Object.values(parseTypes({ Order: toSchemaOutput(order) }, "main", {}))],
+          ]),
+          temporal: false,
+        },
+        path.join(testDir, "sql-definitions.json"),
+      );
+    }
+
+    const source = `
+import query from "./query.sql";
+export default function() {
+  return query.sql;
+}
+`;
+
+    test("bundles a query checked against the TailorDB definitions", async () => {
+      fs.writeFileSync(
+        path.join(testDir, "query.sql"),
+        'SELECT "amount" FROM "Order" WHERE "amount" > :min',
+      );
+      const result = await bundle(
+        "sql.ts",
+        source,
+        { type: "plain", name: "sql" },
+        { sql: sqlContext() },
+      );
+
+      expect(result.bundledCode).toContain('SELECT "amount" FROM "Order" WHERE "amount" > $1');
+      await expectMainExport("verify-sql.mjs", result.bundledCode);
+    });
+
+    test("fails with the problems of the .sql file", async () => {
+      fs.writeFileSync(path.join(testDir, "query.sql"), 'SELECT "nope" FROM "Order"');
+
+      await expect(
+        bundle(
+          "sql-invalid.ts",
+          source,
+          { type: "plain", name: "sql-invalid" },
+          { sql: sqlContext() },
+        ),
+      ).rejects.toMatchObject({ code: "SQL_INVALID" });
+    });
+
+    test("loads the TailorDB definitions only for a function that imports a .sql file", async () => {
+      const sql = vi.fn(sqlContext());
+      await bundle(
+        "no-sql.ts",
+        "export default function() { return 1; }\n",
+        { type: "plain", name: "no-sql" },
+        { sql },
+      );
+
+      expect(sql).not.toHaveBeenCalled();
     });
   });
 });

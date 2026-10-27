@@ -28,6 +28,8 @@ import {
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
+import { createSqlBundlePlugin, sqlErrorOf } from "#/cli/sql/bundle-plugin";
+import type { SqlContextLoader } from "#/cli/sql/definitions";
 import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
@@ -55,6 +57,8 @@ export interface FunctionBundleSettings {
   sdkBuilderAnnotationCache?: SdkBuilderAnnotationCache;
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault;
+  /** TailorDB definitions that imported `.sql` files are checked against */
+  sql?: SqlContextLoader;
 }
 
 interface RuntimeGlobalsCheck {
@@ -118,6 +122,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     tsconfigCache,
     sdkBuilderAnnotationCache,
     dateDefault = "legacy",
+    sql,
   } = options;
 
   const absoluteSourcePath = path.resolve(sourceFile);
@@ -163,34 +168,39 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
         createPlatformBundleDefinePlugin(dateRepresentations, dateDefault),
         createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
         ...cachePlugins,
+        createSqlBundlePlugin(sql, trackDependency),
       );
 
       const bundleLog = createBundleLog({ tsconfig });
-      const result = await rolldown.build({
-        input: virtualEntry.input,
-        write: false,
-        output: {
-          format: "esm",
-          sourcemap: true,
-          minify: inlineSourcemap
-            ? {
-                mangle: {
-                  keepNames: true,
-                },
-              }
-            : true,
-          comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
-          codeSplitting: false,
-        },
-        tsconfig,
-        plugins,
-        ...(define && { transform: { define } }),
-        treeshake: composeFunctionTreeshakeOptions([
-          createLogLevelTreeshakeOptions(bundleLogLevel),
-          createUserTreeshakeOptions(bundleTreeshake),
-        ]),
-        ...bundleLog.options,
-      } as rolldown.BuildOptions);
+      const result = await rolldown
+        .build({
+          input: virtualEntry.input,
+          write: false,
+          output: {
+            format: "esm",
+            sourcemap: true,
+            minify: inlineSourcemap
+              ? {
+                  mangle: {
+                    keepNames: true,
+                  },
+                }
+              : true,
+            comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
+            codeSplitting: false,
+          },
+          tsconfig,
+          plugins,
+          ...(define && { transform: { define } }),
+          treeshake: composeFunctionTreeshakeOptions([
+            createLogLevelTreeshakeOptions(bundleLogLevel),
+            createUserTreeshakeOptions(bundleTreeshake),
+          ]),
+          ...bundleLog.options,
+        } as rolldown.BuildOptions)
+        .catch((error: unknown) => {
+          throw sqlErrorOf(error) ?? error;
+        });
       bundleLog.assertAllResolved();
 
       const [chunk] = result.output;

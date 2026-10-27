@@ -29,6 +29,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { executeScript } from "#/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
+import { sqlContextLoaderFor } from "#/cli/sql/load";
 import { assertDefined } from "#/utils/assert";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
@@ -112,7 +113,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
     }
 
     // 2. Load config (required)
-    const { config } = await loadConfig(args.config);
+    const { config, plugins } = await loadConfig(args.config);
 
     // 3. Resolve auth, workspace, and machine user info (needed before bundling)
     const authNamespace = resolveAuthNamespace(config.auth);
@@ -213,6 +214,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
         logLevel: buildOptions.logLevel,
         treeshake: buildOptions.treeshake,
         dateDefault: effectiveDateDefault(config),
+        sql: sqlContextLoaderFor(config, plugins),
         machineUser,
         workspaceId,
       }));
