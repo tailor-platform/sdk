@@ -33,7 +33,7 @@ import { createSdkBuilderPurePlugin } from "#/cli/shared/sdk-builder-pure-plugin
 import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
-import { createSqlBundlePlugin, sqlErrorOf } from "#/cli/sql/bundle-plugin";
+import { createSqlBundlePlugin, rethrowSqlError } from "#/cli/sql/bundle-plugin";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { SqlContextLoader } from "#/cli/sql/definitions";
@@ -171,9 +171,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
       ]),
       ...bundleLog.options,
     } as rolldown.BuildOptions)
-    .catch((error: unknown) => {
-      throw sqlErrorOf(error) ?? error;
-    });
+    .catch(rethrowSqlError);
   bundleLog.assertAllResolved();
 
   const bundledCode = chunkCodeWithSourcemap({

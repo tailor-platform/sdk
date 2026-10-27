@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { serializeSqlDefinitions, type SqlDefinitions } from "#/utils/sql/analyze";
-import type { TailorDBService } from "#/cli/services/tailordb/service";
+import type { TailorDBNamespaceData } from "#/plugin/types";
 
 /** What bundling a `.sql` import needs. */
 export interface SqlBundleContext {
@@ -12,22 +12,22 @@ export interface SqlBundleContext {
   dependencies: readonly string[];
 }
 
-/** Provides the context on the first `.sql` import, so functions without one never load it. */
+/** Provides the context when a bundle imports a `.sql` file. */
 export type SqlContextLoader = () => Promise<SqlBundleContext>;
 
 /**
- * Collect the definitions `.sql` files are checked against from loaded TailorDB services.
- * @param services - TailorDB services whose types are loaded
+ * Collect the definitions `.sql` files are checked against from loaded TailorDB namespaces.
+ * @param namespaces - Each namespace's loaded tables
  * @param temporal - Whether date/datetime/time values come back as Temporal objects
  * @returns The definitions
  */
 export function sqlDefinitionsOf(
-  services: readonly Pick<TailorDBService, "namespace" | "types">[],
+  namespaces: readonly Pick<TailorDBNamespaceData, "namespace" | "tables">[],
   temporal: boolean,
 ): SqlDefinitions {
   return {
     namespaces: new Map(
-      services.map((service) => [service.namespace, Object.values(service.types)]),
+      namespaces.map(({ namespace, tables }) => [namespace, Object.values(tables)]),
     ),
     temporal,
   };

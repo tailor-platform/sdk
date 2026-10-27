@@ -420,6 +420,11 @@ describe("analyzeSql", () => {
         message: 'Arithmetic needs an Integer, Float or Decimal field, and "name" is string',
         at: '"name" + :suffix',
       },
+      {
+        source: 'SELECT "status", count(*) AS n FROM "Order" GROUP BY "status" HAVING n > :min',
+        message: 'Column "n" does not exist in "Order"',
+        at: "n",
+      },
     ])("$message", ({ source, message, at }) => {
       expect(rejected(source)).toContainEqual({ message, at });
     });

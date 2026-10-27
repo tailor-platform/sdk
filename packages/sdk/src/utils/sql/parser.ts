@@ -124,12 +124,12 @@ interface SqlSelect {
   span: SqlSpan;
 }
 
-interface SqlDefault {
+export interface SqlDefault {
   kind: "default";
   span: SqlSpan;
 }
 
-interface SqlExcluded {
+export interface SqlExcluded {
   kind: "excluded";
   column: SqlIdentifier;
   span: SqlSpan;

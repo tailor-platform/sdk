@@ -32,19 +32,22 @@ function sqlInvalidError(file: string, source: string, diagnostics: SqlDiagnosti
 }
 
 /**
- * Find the error a `.sql` import raised inside the error rolldown wraps plugin failures in.
+ * Rethrow a rolldown build failure, unwrapping the error a `.sql` import raised so its code and
+ * context reach the user. rolldown replaces a plugin error's `code` with `PLUGIN_ERROR` and keeps
+ * the original as `pluginCode`.
  * @param error - Error a rolldown build rejected with
- * @returns The `.sql` import's error, or undefined when the build failed for another reason
+ * @returns Never; always throws
  */
-export function sqlErrorOf(error: unknown): CLIError | undefined {
+export function rethrowSqlError(error: unknown): never {
   const errors = (error as { errors?: unknown } | undefined)?.errors;
-  if (!Array.isArray(errors) || errors.length !== 1) return undefined;
-  const [inner] = errors as unknown[];
-  if (!isCLIError(inner)) return undefined;
-  // rolldown replaces a plugin error's `code` with `PLUGIN_ERROR` and keeps the original as `pluginCode`.
-  const { plugin, pluginCode } = inner as { plugin?: unknown; pluginCode?: unknown };
-  if (plugin !== PLUGIN_NAME || typeof pluginCode !== "string") return undefined;
-  return Object.assign(inner, { code: pluginCode });
+  const [inner] = Array.isArray(errors) && errors.length === 1 ? (errors as unknown[]) : [];
+  if (isCLIError(inner)) {
+    const { plugin, pluginCode } = inner as { plugin?: unknown; pluginCode?: unknown };
+    if (plugin === PLUGIN_NAME && typeof pluginCode === "string") {
+      throw Object.assign(inner, { code: pluginCode });
+    }
+  }
+  throw error;
 }
 
 /**

@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
+import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { errorSummary } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { analyzeSql, serializeSqlDefinitions, type SqlDefinitions } from "#/utils/sql/analyze";
@@ -41,17 +43,10 @@ const PROJECT_DIAGNOSTIC_CODE = 2;
 const OPTION_DIAGNOSTIC_CODE = 3;
 const ATOM_SPAN = 1;
 const DEFINITION_FEATURES = (1 << 3) | (1 << 4);
-const CONFIG_FILE = "tailor.config.ts";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function tableSourceFiles(project: Awaited<ReturnType<typeof loadSqlDefinitions>>): string[] {
-  return project.services.flatMap((service) =>
-    Object.values(service.typeSourceInfo).map(
-      (source) => source.filePath ?? source.originalFilePath,
-    ),
+  return project.namespaces.flatMap(({ sourceInfo }) =>
+    [...sourceInfo.values()].map((source) => source.filePath ?? source.originalFilePath),
   );
 }
 
@@ -60,11 +55,11 @@ async function loadProject(
   previousWatchedFiles: string[] | undefined,
 ): Promise<Omit<Project, "identity"> & { configPath?: string }> {
   const searchFrom = path.dirname(tsconfigPath);
-  const configPath = findUpSync(CONFIG_FILE, { cwd: searchFrom });
+  const configPath = findUpSync(DEFAULT_CONFIG_PATH, { cwd: searchFrom });
   if (!configPath) {
     return {
-      error: `No ${CONFIG_FILE} found in ${searchFrom} or its parent directories`,
-      watchedFiles: [path.join(searchFrom, CONFIG_FILE)],
+      error: `No ${DEFAULT_CONFIG_PATH} found in ${searchFrom} or its parent directories`,
+      watchedFiles: [path.join(searchFrom, DEFAULT_CONFIG_PATH)],
     };
   }
   const cwd = process.cwd();
@@ -80,7 +75,7 @@ async function loadProject(
   } catch (error) {
     return {
       configPath,
-      error: errorMessage(error),
+      error: errorSummary(error),
       watchedFiles: previousWatchedFiles ?? [configPath],
     };
   } finally {
@@ -132,7 +127,7 @@ export function createSqlMapperHandlers(): Record<string, JsonRpcHandler> {
         watchedFiles: loaded.watchedFiles,
         optionDiagnostics: Object.keys(options ?? {}).map((key) => ({
           path: [key],
-          messageText: `@tailor-platform/sdk's content mapper takes no options; it reads ${CONFIG_FILE}`,
+          messageText: `@tailor-platform/sdk's content mapper takes no options; it reads ${DEFAULT_CONFIG_PATH}`,
           code: OPTION_DIAGNOSTIC_CODE,
         })),
       };

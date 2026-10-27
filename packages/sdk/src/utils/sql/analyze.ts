@@ -4,7 +4,9 @@ import {
   type SqlAggregate,
   type SqlColumnRef,
   type SqlCondition,
+  type SqlDefault,
   type SqlDiagnostic,
+  type SqlExcluded,
   type SqlIdentifier,
   type SqlLiteral,
   type SqlOperand,
@@ -80,9 +82,18 @@ export interface SqlAnalysisResult {
 
 const ID_FIELD: SqlFieldConfig = { type: "uuid", required: true, unique: true };
 const COMPARABLE_TYPES = ["integer", "float", "string", "enum", "date", "time", "datetime"];
-const COMPARABLE_LABEL = "an Integer, Float, String, Enum, Date, Time or DateTime field";
 const NUMERIC_TYPES = ["integer", "float"];
 const ARITHMETIC_TYPES = ["integer", "float", "decimal"];
+const TYPE_LABELS: Readonly<Record<string, string>> = {
+  integer: "Integer",
+  float: "Float",
+  decimal: "Decimal",
+  string: "String",
+  enum: "Enum",
+  date: "Date",
+  time: "Time",
+  datetime: "DateTime",
+};
 const PATTERN_OPERATORS = new Set([
   "LIKE",
   "NOT LIKE",
@@ -110,6 +121,12 @@ interface Source {
   nullable: boolean;
 }
 
+/** The column a value is compared with or written to. */
+interface Target {
+  config: SqlFieldConfig;
+  name: string;
+}
+
 function quoteName(name: string): string {
   return `"${name}"`;
 }
@@ -125,6 +142,17 @@ export function propertyKey(name: string): string {
 
 function nullable(type: string): string {
   return `${type} | null`;
+}
+
+function fieldOfTypes(types: readonly string[]): string {
+  const labels = types.map((type) => TYPE_LABELS[type] ?? type);
+  const last = labels.pop();
+  const list = labels.length > 0 ? `${labels.join(", ")} or ${last}` : `${last}`;
+  return `${/^[AEIOU]/.test(list) ? "an" : "a"} ${list} field`;
+}
+
+function typeOf(config: SqlFieldConfig): string {
+  return `${config.type}${config.array ? "[]" : ""}`;
 }
 
 class Analyzer {
@@ -175,13 +203,14 @@ class Analyzer {
   }
 
   params(names: string[]): SqlTypedName[] {
-    return [...new Set(names)].map((name) => ({
-      name,
-      type: this.#params.get(name)?.type ?? "unknown",
-    }));
+    return [...new Set(names)].map((name) => {
+      const type = this.#params.get(name)?.type;
+      if (type === undefined) throw new Error(`No type was inferred for placeholder :${name}`);
+      return { name, type };
+    });
   }
 
-  param(param: SqlParam, type: string): void {
+  typeParam(param: SqlParam, type: string): void {
     const existing = this.#params.get(param.name);
     if (!existing) {
       this.#params.set(param.name, { type });
@@ -229,6 +258,28 @@ class Analyzer {
     scope.push({ table, name: ref.alias?.name ?? ref.table.name, nullable: false });
   }
 
+  #missingSource(scope: Source[], identifier: SqlIdentifier): void {
+    if (scope.length > 0) {
+      this.report(
+        `Table or alias ${quoteName(identifier.name)} is not in the query`,
+        identifier.span,
+      );
+    }
+  }
+
+  #missingColumn(column: SqlIdentifier, tables: readonly Table[]): void {
+    const [only] = tables;
+    const where =
+      only && tables.length === 1 ? quoteName(only.definition.name) : "any table of the query";
+    this.report(`Column ${quoteName(column.name)} does not exist in ${where}`, column.span);
+  }
+
+  fieldOf(table: Table, column: SqlIdentifier): SqlFieldConfig | undefined {
+    const config = table.fields.get(column.name);
+    if (!config) this.#missingColumn(column, [table]);
+    return config;
+  }
+
   column(
     scope: Source[],
     ref: SqlColumnRef,
@@ -238,9 +289,7 @@ class Analyzer {
       const table = ref.table;
       const source = scope.find((candidate) => candidate.name === table.name);
       if (!source) {
-        if (scope.length > 0) {
-          this.report(`Table or alias "${table.name}" is not in the query`, table.span);
-        }
+        this.#missingSource(scope, table);
         return undefined;
       }
       return this.#field(source, ref.column);
@@ -257,29 +306,17 @@ class Analyzer {
     }
     if (outputNames?.has(ref.column.name)) return undefined;
     if (scope.length > 0) {
-      const [only] = scope;
-      const where =
-        only && scope.length === 1
-          ? quoteName(only.table.definition.name)
-          : "any table of the query";
-      this.report(
-        `Column ${quoteName(ref.column.name)} does not exist in ${where}`,
-        ref.column.span,
+      this.#missingColumn(
+        ref.column,
+        scope.map((source) => source.table),
       );
     }
     return undefined;
   }
 
   #field(source: Source, column: SqlIdentifier) {
-    const config = source.table.fields.get(column.name);
-    if (!config) {
-      this.report(
-        `Column ${quoteName(column.name)} does not exist in ${quoteName(source.table.definition.name)}`,
-        column.span,
-      );
-      return undefined;
-    }
-    return { config, nullable: source.nullable || config.required !== true, source };
+    const config = this.fieldOf(source.table, column);
+    return config && { config, nullable: source.nullable || config.required !== true, source };
   }
 
   // The aggregate's result type, or undefined when its argument cannot be aggregated.
@@ -293,62 +330,56 @@ class Analyzer {
     }
     const arg = aggregate.arg ? this.column(scope, aggregate.arg) : undefined;
     if (!arg) return undefined;
-    const fieldType = `${arg.config.type}${arg.config.array ? "[]" : ""}`;
     const name = aggregate.fn.toUpperCase();
-    if (aggregate.fn === "sum" || aggregate.fn === "avg") {
-      if (arg.config.array || !NUMERIC_TYPES.includes(arg.config.type)) {
-        this.report(`${name} takes an Integer or Float field, not ${fieldType}`, aggregate.span);
-        return undefined;
-      }
-      return { select: nullable("number"), write: "number" };
-    }
-    if (arg.config.array || !COMPARABLE_TYPES.includes(arg.config.type)) {
-      this.report(`${name} takes ${COMPARABLE_LABEL}, not ${fieldType}`, aggregate.span);
+    const allowed =
+      aggregate.fn === "sum" || aggregate.fn === "avg" ? NUMERIC_TYPES : COMPARABLE_TYPES;
+    if (arg.config.array || !allowed.includes(arg.config.type)) {
+      this.report(
+        `${name} takes ${fieldOfTypes(allowed)}, not ${typeOf(arg.config)}`,
+        aggregate.span,
+      );
       return undefined;
     }
+    if (allowed === NUMERIC_TYPES) return { select: nullable("number"), write: "number" };
     return {
       select: nullable(this.type(arg.config, "select")),
       write: this.type(arg.config, "write"),
     };
   }
 
-  literal(config: SqlFieldConfig, columnName: string, literal: SqlLiteral): void {
-    if (config.type !== "enum" || literal.type !== "string") return;
-    const values = (config.allowedValues ?? []).map((v) => v.value);
+  checkLiteral(target: Target, literal: SqlLiteral): void {
+    if (target.config.type !== "enum" || literal.type !== "string") return;
+    const values = (target.config.allowedValues ?? []).map((v) => v.value);
     if (!values.includes(literal.value)) {
       this.report(
-        `'${literal.value}' is not a value of ${quoteName(columnName)}: ${values.join(", ")}`,
+        `'${literal.value}' is not a value of ${quoteName(target.name)}: ${values.join(", ")}`,
         literal.span,
       );
     }
   }
 
-  value(
+  checkValue(
     scope: Source[],
     value: SqlValue,
     paramType: string | undefined,
-    target?: { config: SqlFieldConfig; name: string },
+    target?: Target,
   ): void {
     if (value.kind === "param") {
-      if (paramType !== undefined) this.param(value, paramType);
+      if (paramType !== undefined) this.typeParam(value, paramType);
     } else if (value.kind === "literal") {
-      if (target) this.literal(target.config, target.name, value);
+      if (target) this.checkLiteral(target, value);
     } else {
       this.column(scope, value);
     }
   }
 
-  condition(
-    scope: Source[],
-    condition: SqlCondition | undefined,
-    outputNames?: ReadonlySet<string>,
-  ): void {
+  condition(scope: Source[], condition: SqlCondition | undefined): void {
     if (!condition) return;
     switch (condition.kind) {
       case "and":
       case "or":
-        this.condition(scope, condition.left, outputNames);
-        this.condition(scope, condition.right, outputNames);
+        this.condition(scope, condition.left);
+        this.condition(scope, condition.right);
         return;
       case "isNull":
         this.#operand(scope, condition.left, false);
@@ -356,18 +387,19 @@ class Analyzer {
       case "compare": {
         const left = this.#operand(scope, condition.left, true);
         const paramType = PATTERN_OPERATORS.has(condition.op) ? "string" : left?.paramType;
-        this.value(scope, condition.right, paramType, left?.target);
+        this.checkValue(scope, condition.right, paramType, left?.target);
         return;
       }
       case "in": {
         const left = this.#operand(scope, condition.left, true);
-        for (const item of condition.items) this.value(scope, item, left?.paramType, left?.target);
+        for (const item of condition.items)
+          this.checkValue(scope, item, left?.paramType, left?.target);
         return;
       }
       case "between": {
         const left = this.#operand(scope, condition.left, true);
-        this.value(scope, condition.low, left?.paramType, left?.target);
-        this.value(scope, condition.high, left?.paramType, left?.target);
+        this.checkValue(scope, condition.low, left?.paramType, left?.target);
+        this.checkValue(scope, condition.high, left?.paramType, left?.target);
         return;
       }
     }
@@ -377,7 +409,7 @@ class Analyzer {
     scope: Source[],
     operand: SqlOperand,
     compared: boolean,
-  ): { paramType: string; target?: { config: SqlFieldConfig; name: string } } | undefined {
+  ): { paramType: string; target?: Target } | undefined {
     if (operand.kind === "aggregate") {
       const type = this.aggregate(scope, operand);
       return type && { paramType: type.write };
@@ -419,9 +451,7 @@ class Analyzer {
         const tableName = expr.table?.name;
         const sources =
           tableName === undefined ? scope : scope.filter((source) => source.name === tableName);
-        if (expr.table && sources.length === 0 && scope.length > 0) {
-          this.report(`Table or alias "${expr.table.name}" is not in the query`, expr.table.span);
-        }
+        if (expr.table && sources.length === 0) this.#missingSource(scope, expr.table);
         for (const source of sources) {
           for (const [name, config] of source.table.fields) {
             const type = this.type(config, "select");
@@ -444,7 +474,7 @@ class Analyzer {
   }
 
   // Whether the AND-ed equalities of `where` pin a unique key of the only table.
-  keyed(scope: Source[], where: SqlCondition | undefined): boolean {
+  pinsUniqueKey(scope: Source[], where: SqlCondition | undefined): boolean {
     if (scope.length !== 1 || !where) return false;
     const [{ table, name }] = scope as [Source];
     const pinned = new Set<string>();
@@ -474,43 +504,16 @@ class Analyzer {
     return keys.some((key) => key.every((field) => pinned.has(field)));
   }
 
-  written(
-    scope: Source[],
-    column: SqlIdentifier,
-    value: SqlValue | { kind: "default" } | { kind: "excluded"; column: SqlIdentifier },
-    table: Table,
-  ): void {
-    const config = table.fields.get(column.name);
+  // Check a value written to `target`, a column of the only table in `scope`.
+  checkWritten(scope: Source[], target: Target, value: SqlValue | SqlDefault | SqlExcluded): void {
+    const [source] = scope;
     if (value.kind === "default") return;
     if (value.kind === "excluded") {
-      if (!table.fields.has(value.column.name)) {
-        this.report(
-          `Column ${quoteName(value.column.name)} does not exist in ${quoteName(table.definition.name)}`,
-          value.column.span,
-        );
-      }
+      if (source) this.fieldOf(source.table, value.column);
       return;
     }
-    if (!config) {
-      if (value.kind === "column") this.column(scope, value);
-      return;
-    }
-    const type = this.type(config, "write");
-    this.value(scope, value, config.required === true ? type : nullable(type), {
-      config,
-      name: column.name,
-    });
-  }
-
-  writable(table: Table, column: SqlIdentifier): SqlFieldConfig | undefined {
-    const config = table.fields.get(column.name);
-    if (!config) {
-      this.report(
-        `Column ${quoteName(column.name)} does not exist in ${quoteName(table.definition.name)}`,
-        column.span,
-      );
-    }
-    return config;
+    const type = this.type(target.config, "write");
+    this.checkValue(scope, value, target.config.required === true ? type : nullable(type), target);
   }
 
   statement(statement: SqlStatement): { columns: SqlTypedName[]; cardinality: SqlCardinality } {
@@ -533,7 +536,7 @@ class Analyzer {
         const outputNames = new Set(columns.map((column) => column.name));
         this.condition(scope, statement.where);
         for (const column of statement.groupBy) this.column(scope, column);
-        this.condition(scope, statement.having, outputNames);
+        this.condition(scope, statement.having);
         for (const item of statement.orderBy) {
           if (item.by.kind === "column") {
             this.column(scope, item.by, outputNames);
@@ -546,17 +549,17 @@ class Analyzer {
               item.by.column.span,
             );
           }
-          if (item.by.value.kind === "param") this.param(item.by.value, "string");
+          if (item.by.value.kind === "param") this.typeParam(item.by.value, "string");
         }
         for (const count of [statement.limit, statement.offset]) {
-          if (count?.kind === "param") this.param(count, "number");
+          if (count?.kind === "param") this.typeParam(count, "number");
         }
         const aggregated = statement.items.some((item) => item.expr.kind === "aggregate");
         let cardinality: SqlCardinality = "many";
         if (aggregated && statement.groupBy.length === 0) {
           cardinality = statement.having || statement.offset ? "maybeOne" : "one";
         } else if (
-          this.keyed(scope, statement.where) ||
+          this.pinsUniqueKey(scope, statement.where) ||
           (statement.limit?.kind === "literal" && Number(statement.limit.value) <= 1)
         ) {
           cardinality = "maybeOne";
@@ -573,7 +576,7 @@ class Analyzer {
             this.report(`Column ${quoteName(column.name)} is listed more than once`, column.span);
           }
           listed.add(column.name);
-          this.writable(table, column);
+          this.fieldOf(table, column);
         }
         if (statement.rows !== "default") {
           for (const row of statement.rows) {
@@ -588,13 +591,14 @@ class Analyzer {
             }
             row.values.forEach((value, index) => {
               const column = statement.columns[index];
-              if (column) this.written(scope, column, value, table);
+              const config = column && table.fields.get(column.name);
+              if (column && config) this.checkWritten(scope, { config, name: column.name }, value);
             });
           }
         }
         const conflict = statement.onConflict;
         if (conflict) {
-          const config = this.writable(table, conflict.column);
+          const config = this.fieldOf(table, conflict.column);
           if (config && !config.unique) {
             this.report(
               `ON CONFLICT takes "id" or a unique field, and ${quoteName(conflict.column.name)} is not unique`,
@@ -603,8 +607,9 @@ class Analyzer {
           }
           if (conflict.action.kind === "update") {
             for (const set of conflict.action.sets) {
-              if (this.writable(table, set.column))
-                this.written(scope, set.column, set.value, table);
+              const target = this.fieldOf(table, set.column);
+              if (target)
+                this.checkWritten(scope, { config: target, name: set.column.name }, set.value);
             }
             this.condition(scope, conflict.action.where);
           }
@@ -624,28 +629,31 @@ class Analyzer {
         const scope: Source[] = [{ table, name: table.definition.name, nullable: false }];
         if (statement.kind === "update") {
           for (const set of statement.sets) {
-            const config = this.writable(table, set.column);
+            const config = this.fieldOf(table, set.column);
             if (!config) continue;
             if (set.value.kind !== "arithmetic") {
-              this.written(scope, set.column, set.value, table);
+              this.checkWritten(scope, { config, name: set.column.name }, set.value);
               continue;
             }
             if (config.array || !ARITHMETIC_TYPES.includes(config.type)) {
               this.report(
-                `Arithmetic needs an Integer, Float or Decimal field, and ${quoteName(set.column.name)} is ${config.type}${config.array ? "[]" : ""}`,
+                `Arithmetic needs ${fieldOfTypes(ARITHMETIC_TYPES)}, and ${quoteName(set.column.name)} is ${typeOf(config)}`,
                 set.value.span,
               );
               continue;
             }
             const operandType = this.type(config, "write");
-            this.value(scope, set.value.left, operandType);
-            this.value(scope, set.value.right, operandType);
+            this.checkValue(scope, set.value.left, operandType);
+            this.checkValue(scope, set.value.right, operandType);
           }
         }
         this.condition(scope, statement.where);
         if (!statement.returning) return { columns: [], cardinality: "none" };
         const columns = this.columns(scope, statement.returning);
-        return { columns, cardinality: this.keyed(scope, statement.where) ? "maybeOne" : "many" };
+        return {
+          columns,
+          cardinality: this.pinsUniqueKey(scope, statement.where) ? "maybeOne" : "many",
+        };
       }
     }
   }

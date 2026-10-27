@@ -46,7 +46,6 @@ import {
   sqlFingerprintFile,
   type SqlContextLoader,
 } from "#/cli/sql/definitions";
-import { sqlTemporal } from "#/cli/sql/temporal";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -64,6 +63,7 @@ import { SecretsSchema } from "#/parser/service/secrets/index";
 import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
 import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
@@ -784,7 +784,10 @@ export async function loadApplication(
     tailorDBServices: tailordbResult.tailorDBServices,
   });
   const sql = createSqlContext(
-    sqlDefinitionsOf(tailordbResult.tailorDBServices, sqlTemporal(pluginManager)),
+    sqlDefinitionsOf(
+      tailordbResult.tailorDBServices.map(({ namespace, types }) => ({ namespace, tables: types })),
+      pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false,
+    ),
     sqlFingerprintFile(config.path),
   );
   const pluginResolverServices = definePluginResolverServices(config, pluginManager);

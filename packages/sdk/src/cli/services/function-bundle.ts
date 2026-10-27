@@ -28,7 +28,7 @@ import {
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
-import { createSqlBundlePlugin, sqlErrorOf } from "#/cli/sql/bundle-plugin";
+import { createSqlBundlePlugin, rethrowSqlError } from "#/cli/sql/bundle-plugin";
 import type { SqlContextLoader } from "#/cli/sql/definitions";
 import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
@@ -198,9 +198,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
           ]),
           ...bundleLog.options,
         } as rolldown.BuildOptions)
-        .catch((error: unknown) => {
-          throw sqlErrorOf(error) ?? error;
-        });
+        .catch(rethrowSqlError);
       bundleLog.assertAllResolved();
 
       const [chunk] = result.output;

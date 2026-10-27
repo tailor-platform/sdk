@@ -51,13 +51,23 @@ describe("createSqlQuery", () => {
   });
 
   test.each([
-    { cardinality: "one" as const, rows: [] },
-    { cardinality: "one" as const, rows: [{ id: "a" }, { id: "b" }] },
-    { cardinality: "maybeOne" as const, rows: [{ id: "a" }, { id: "b" }] },
-  ])("rejects $rows.length rows for $cardinality", async ({ cardinality, rows }) => {
-    await expect(query(cardinality).run(client(rows).client)).rejects.toThrow(
-      `The query in namespace "main" returned ${rows.length} rows; its type allows ${cardinality === "one" ? "exactly one" : "at most one"}`,
-    );
+    {
+      cardinality: "one" as const,
+      rows: [],
+      message: 'The query in namespace "main" returned 0 rows; its type allows exactly one',
+    },
+    {
+      cardinality: "one" as const,
+      rows: [{ id: "a" }, { id: "b" }],
+      message: 'The query in namespace "main" returned 2 rows; its type allows exactly one',
+    },
+    {
+      cardinality: "maybeOne" as const,
+      rows: [{ id: "a" }, { id: "b" }],
+      message: 'The query in namespace "main" returned 2 rows; its type allows at most one',
+    },
+  ])("rejects $rows.length rows for $cardinality", async ({ cardinality, rows, message }) => {
+    await expect(query(cardinality).run(client(rows).client)).rejects.toThrow(message);
   });
 
   test("exposes the namespace and the statement it sends", () => {

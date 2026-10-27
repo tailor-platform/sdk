@@ -51,7 +51,10 @@ export interface SqlQuery<Params, Row, Cardinality extends SqlCardinality> {
   ): Promise<SqlResult<Row, Cardinality>>;
 }
 
-/** The analyzed statement a `.sql` import is built from. */
+/**
+ * The analyzed statement a `.sql` import is built from.
+ * @internal
+ */
 export interface SqlQueryDefinition {
   namespace: string;
   sql: string;
@@ -61,10 +64,10 @@ export interface SqlQueryDefinition {
 }
 
 /**
- * Create the query a `.sql` import resolves to. The SDK calls this in the code
- * it generates for each imported `.sql` file.
+ * Create the query a `.sql` import resolves to.
  * @param definition - The analyzed statement
  * @returns The runnable query
+ * @internal
  */
 export function createSqlQuery<Params, Row, Cardinality extends SqlCardinality>(
   definition: SqlQueryDefinition,

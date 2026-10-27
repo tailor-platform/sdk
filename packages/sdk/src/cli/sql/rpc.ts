@@ -1,3 +1,4 @@
+import { errorSummary } from "#/cli/shared/errors";
 import type { Readable } from "node:stream";
 
 /** Handles one JSON-RPC method; the resolved value is the result. */
@@ -57,8 +58,6 @@ async function dispatch(
   try {
     return { result: (await handler(message.params)) ?? {} };
   } catch (error) {
-    return {
-      error: { code: -32603, message: error instanceof Error ? error.message : String(error) },
-    };
+    return { error: { code: -32603, message: errorSummary(error) } };
   }
 }

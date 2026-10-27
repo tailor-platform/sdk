@@ -1,11 +1,10 @@
-import { defineApplication } from "#/cli/services/application";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
-import { PluginManager } from "#/plugin/manager";
+import { loadConfigNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { sqlDefinitionsOf, type SqlBundleContext, type SqlContextLoader } from "./definitions";
-import { sqlTemporal } from "./temporal";
-import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
-import type { Plugin } from "#/plugin/types";
+import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 import type { SqlDefinitions } from "#/utils/sql/analyze";
 
 /**
@@ -13,23 +12,16 @@ import type { SqlDefinitions } from "#/utils/sql/analyze";
  * writing generated files.
  * @param config - Loaded config
  * @param plugins - Plugins exported by the config
- * @returns The loaded services and the definitions `.sql` files are checked against
+ * @returns The loaded namespaces and the definitions `.sql` files are checked against
  */
 export async function loadSqlDefinitions(
   config: LoadedConfig,
-  plugins: readonly Plugin[],
-): Promise<{ services: readonly TailorDBService[]; definitions: SqlDefinitions }> {
-  const pluginManager = plugins.length > 0 ? new PluginManager([...plugins]) : undefined;
-  const { tailorDBServices } = defineApplication({ config, pluginManager });
-  for (const service of tailorDBServices) {
-    await service.loadTypes();
-    await service.processNamespacePlugins();
-  }
-  assertUniqueLocalTailorDBTypeNames({ tailorDBServices });
-  return {
-    services: tailorDBServices,
-    definitions: sqlDefinitionsOf(tailorDBServices, sqlTemporal(pluginManager)),
-  };
+  plugins: Plugin[],
+): Promise<{ namespaces: TailorDBNamespaceData[]; definitions: SqlDefinitions }> {
+  const { application, namespaces } = await loadConfigNamespaces(config, plugins);
+  assertUniqueLocalTailorDBTypeNames({ tailorDBServices: application.tailorDBServices });
+  const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
+  return { namespaces, definitions: sqlDefinitionsOf(namespaces, temporal) };
 }
 
 /**
@@ -38,10 +30,7 @@ export async function loadSqlDefinitions(
  * @param plugins - Plugins exported by the config
  * @returns The loader
  */
-export function sqlContextLoaderFor(
-  config: LoadedConfig,
-  plugins: readonly Plugin[],
-): SqlContextLoader {
+export function sqlContextLoaderFor(config: LoadedConfig, plugins: Plugin[]): SqlContextLoader {
   let pending: Promise<SqlBundleContext> | undefined;
   return () =>
     (pending ??= loadSqlDefinitions(config, plugins).then(({ definitions }) => ({
