@@ -40,15 +40,16 @@ expected compatibility with the user before choosing `major`.
 
 A feature is beta when the user docs under `packages/sdk/docs/` mark it so: a callout that calls it
 beta, a `(Beta)` heading on its page or section, or `(beta)` in its CLI command description. An API
-whose usage is explained on a beta page or section is beta, even when other pages mention or link
-to it.
+whose usage is explained on a beta page or section is beta, even when other pages or sections
+mention or link to it.
 
 A breaking change to a beta feature is `minor`, and its description starts with
-`**Breaking change (beta)**:` followed by what users now see and how to migrate.
+`**Breaking change (beta)**:` followed by the user impact and migration steps.
 
 ### `minor` — New capabilities
 
 SDK users can do something new that they couldn't before. Their existing code continues to work without changes.
+[Breaking changes to beta features](#breaking-changes-to-beta-features) are also `minor`.
 
 - New CLI command (e.g., `function logs`, `executor list`, `completion`)
 - New field type (e.g., `t.decimal()`, `db.decimal()`)
