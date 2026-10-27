@@ -8,6 +8,7 @@ import {
   type SqlDiagnostic,
   type SqlExcluded,
   type SqlIdentifier,
+  type SqlJoin,
   type SqlLiteral,
   type SqlOperand,
   type SqlParam,
@@ -121,6 +122,13 @@ interface Source {
   nullable: boolean;
 }
 
+/** A joined table, with its join's kind and condition. */
+interface JoinedSource {
+  type: SqlJoin["type"];
+  on?: SqlCondition;
+  source: Source;
+}
+
 /** The column a value is compared with or written to. */
 interface Target {
   config: SqlFieldConfig;
@@ -162,6 +170,8 @@ class Analyzer {
   readonly #params = new Map<string, { type: string }>();
   // The columns of each source a WHERE test proves not null.
   readonly #notNull = new Map<Source, Set<string>>();
+  // Whether the SELECT groups its rows, so that every group an aggregate reads has a row.
+  #grouped = false;
   #namespace: { name: string; table: string } | undefined;
 
   constructor(private readonly definitions: SqlDefinitions) {
@@ -347,18 +357,35 @@ class Analyzer {
     return [...this.#conjuncts(condition.left), ...this.#conjuncts(condition.right)];
   }
 
-  // Record what the AND-ed IS NOT NULL tests of `where` prove, except for the columns an UPDATE sets.
+  // The columns a condition holds for only when they have a value.
+  #requiredColumns(condition: SqlCondition): SqlColumnRef[] {
+    switch (condition.kind) {
+      case "isNull":
+        return condition.not && condition.left.kind === "column" ? [condition.left] : [];
+      case "compare":
+        return [condition.left, condition.right].filter(
+          (operand): operand is SqlColumnRef => operand.kind === "column",
+        );
+      case "in":
+      case "between":
+        return condition.left.kind === "column" ? [condition.left] : [];
+      case "and":
+      case "or":
+        return [];
+    }
+  }
+
+  // Record the columns the AND-ed conditions of `where` need a value in, except for the columns an UPDATE sets.
   narrow(scope: Source[], where: SqlCondition | undefined, assigned?: ReadonlySet<string>): void {
-    for (const condition of this.#conjuncts(where)) {
-      if (condition.kind !== "isNull" || !condition.not || condition.left.kind !== "column")
-        continue;
-      const { found } = this.#lookup(scope, condition.left);
+    for (const ref of this.#conjuncts(where).flatMap((condition) =>
+      this.#requiredColumns(condition),
+    )) {
+      const { found } = this.#lookup(scope, ref);
       if (!found) continue;
       found.source.nullable = false;
-      const column = condition.left.column.name;
-      if (assigned?.has(column)) continue;
+      if (assigned?.has(ref.column.name)) continue;
       const columns = this.#notNull.get(found.source) ?? new Set<string>();
-      this.#notNull.set(found.source, columns.add(column));
+      this.#notNull.set(found.source, columns.add(ref.column.name));
     }
   }
 
@@ -383,9 +410,10 @@ class Analyzer {
       );
       return undefined;
     }
-    if (allowed === NUMERIC_TYPES) return { select: nullable("number"), write: "number" };
+    const result = (type: string) => (this.#grouped && !arg.nullable ? type : nullable(type));
+    if (allowed === NUMERIC_TYPES) return { select: result("number"), write: "number" };
     return {
-      select: nullable(this.type(arg.config, "select")),
+      select: result(this.type(arg.config, "select")),
       write: this.type(arg.config, "write"),
     };
   }
@@ -516,23 +544,8 @@ class Analyzer {
     return columns;
   }
 
-  // Whether the AND-ed equalities of `where` pin a unique key of the only table.
-  pinsUniqueKey(scope: Source[], where: SqlCondition | undefined): boolean {
-    if (scope.length !== 1 || !where) return false;
-    const [{ table, name }] = scope as [Source];
-    const pinned = new Set<string>();
-    for (const condition of this.#conjuncts(where)) {
-      if (
-        condition.kind === "compare" &&
-        condition.op === "=" &&
-        condition.left.kind === "column" &&
-        (!condition.left.table || condition.left.table.name === name) &&
-        condition.right.kind !== "column"
-      ) {
-        pinned.add(condition.left.column.name);
-      }
-    }
-    const keys: string[][] = [
+  #uniqueKeys(table: Table): string[][] {
+    return [
       ...[...table.fields]
         .filter(([, config]) => config.unique && !config.array)
         .map(([field]) => [field]),
@@ -540,7 +553,64 @@ class Analyzer {
         .filter((index) => index.unique)
         .map((index) => index.fields),
     ];
-    return keys.some((key) => key.every((field) => pinned.has(field)));
+  }
+
+  // Whether every source is pinned to at most one row: by a unique key whose columns AND-ed
+  // equalities match to values, or to columns of sources already pinned.
+  atMostOneRow(
+    scope: Source[],
+    where: SqlCondition | undefined,
+    joins: readonly JoinedSource[],
+  ): boolean {
+    // The ON of an outer join cannot pin its preserved side; a LEFT JOIN's can pin the joined
+    // table, and every side once WHERE proves the joined table has a row.
+    const equalitiesOf = (condition: SqlCondition | undefined, only: Source | undefined) =>
+      this.#conjuncts(condition).flatMap((conjunct) =>
+        conjunct.kind === "compare" && conjunct.op === "=" ? [{ condition: conjunct, only }] : [],
+      );
+    const equalities = [
+      ...equalitiesOf(where, undefined),
+      ...joins
+        .filter((join) => join.type !== "right" && join.type !== "full")
+        .flatMap((join) =>
+          equalitiesOf(
+            join.on,
+            join.type === "left" && join.source.nullable ? join.source : undefined,
+          ),
+        ),
+    ];
+    const sourceOf = (operand: SqlOperand) =>
+      operand.kind === "column" ? this.#lookup(scope, operand).found?.source : undefined;
+    const pinned = new Set<Source>();
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const source of scope) {
+        if (pinned.has(source)) continue;
+        const columns = new Set<string>();
+        for (const { condition, only } of equalities) {
+          if (only && only !== source) continue;
+          for (const [side, other] of [
+            [condition.left, condition.right],
+            [condition.right, condition.left],
+          ] as const) {
+            if (side.kind !== "column" || sourceOf(side) !== source) continue;
+            const otherSource = sourceOf(other);
+            const fixed =
+              other.kind === "param" ||
+              other.kind === "literal" ||
+              (otherSource && pinned.has(otherSource));
+            if (fixed) columns.add(side.column.name);
+          }
+        }
+        if (
+          this.#uniqueKeys(source.table).some((key) => key.every((field) => columns.has(field)))
+        ) {
+          pinned.add(source);
+          changed = true;
+        }
+      }
+    }
+    return scope.length > 0 && pinned.size === scope.length;
   }
 
   // Check a value written to `target`, a column of the only table in `scope`.
@@ -559,17 +629,20 @@ class Analyzer {
     switch (statement.kind) {
       case "select": {
         const scope: Source[] = [];
+        const joined: JoinedSource[] = [];
         this.bind(scope, statement.from);
         for (const join of statement.joins) {
           this.bind(scope, join.table);
-          const joined = scope.at(-1);
-          if (joined && joined.name === (join.table.alias?.name ?? join.table.table.name)) {
-            if (join.type === "left" || join.type === "full") joined.nullable = true;
+          const source = scope.at(-1);
+          if (source && source.name === (join.table.alias?.name ?? join.table.table.name)) {
+            if (join.type === "left" || join.type === "full") source.nullable = true;
             if (join.type === "right" || join.type === "full") {
-              for (const source of scope.slice(0, -1)) source.nullable = true;
+              for (const preceding of scope.slice(0, -1)) preceding.nullable = true;
             }
+            joined.push({ type: join.type, on: join.on, source });
           }
         }
+        this.#grouped = statement.groupBy.length > 0;
         for (const join of statement.joins) this.condition(scope, join.on);
         this.narrow(scope, statement.where);
         const columns = this.columns(scope, statement.items);
@@ -599,7 +672,7 @@ class Analyzer {
         if (aggregated && statement.groupBy.length === 0) {
           cardinality = statement.having || statement.offset ? "maybeOne" : "one";
         } else if (
-          this.pinsUniqueKey(scope, statement.where) ||
+          this.atMostOneRow(scope, statement.where, joined) ||
           (statement.limit?.kind === "literal" && Number(statement.limit.value) <= 1)
         ) {
           cardinality = "maybeOne";
@@ -697,7 +770,7 @@ class Analyzer {
         const columns = this.columns(scope, statement.returning);
         return {
           columns,
-          cardinality: this.pinsUniqueKey(scope, statement.where) ? "maybeOne" : "many",
+          cardinality: this.atMostOneRow(scope, statement.where, []) ? "maybeOne" : "many",
         };
       }
     }

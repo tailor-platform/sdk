@@ -90,7 +90,7 @@ export interface SqlTableRef {
   span: SqlSpan;
 }
 
-interface SqlJoin {
+export interface SqlJoin {
   type: "inner" | "left" | "right" | "full" | "cross";
   table: SqlTableRef;
   on?: SqlCondition;

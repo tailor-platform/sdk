@@ -150,7 +150,49 @@ describe("analyzeSql", () => {
     });
   });
 
-  describe("IS NOT NULL", () => {
+  describe("null narrowing", () => {
+    test("drops null from a column a WHERE comparison needs a value for", () => {
+      const analysis = analyzed(
+        'SELECT "weight", "priority", "paidAt", "tags", "deliveryTime" FROM "Order" WHERE "weight" > :w AND "priority" IN (:a, :b) AND "paidAt" NOT BETWEEN :from AND :to AND "deliveryTime" LIKE :t',
+      );
+
+      expect(analysis.columns).toEqual([
+        { name: "weight", type: "number" },
+        { name: "priority", type: '"LOW" | "HIGH"' },
+        { name: "paidAt", type: "Date" },
+        { name: "tags", type: "string[] | null" },
+        { name: "deliveryTime", type: "string" },
+      ]);
+    });
+
+    test("keeps null when the comparison sits in an OR", () => {
+      expect(
+        analyzed('SELECT "weight" FROM "Order" WHERE "weight" > :w OR "amount" > 1').columns,
+      ).toEqual([{ name: "weight", type: "number | null" }]);
+    });
+
+    test("drops null from both columns a WHERE equality compares", () => {
+      expect(
+        analyzed(
+          'SELECT c."note", o."weight" FROM "Customer" c JOIN "Order" o ON o."customerID" = c."id" WHERE c."note" = o."status"',
+        ).columns,
+      ).toEqual([
+        { name: "note", type: "string" },
+        { name: "weight", type: "number | null" },
+      ]);
+    });
+
+    test("proves the row of an outer-joined table a WHERE comparison reads", () => {
+      expect(
+        analyzed(
+          'SELECT o."amount", o."weight" FROM "Customer" c LEFT JOIN "Order" o ON o."customerID" = c."id" WHERE o."amount" > :n',
+        ).columns,
+      ).toEqual([
+        { name: "amount", type: "number" },
+        { name: "weight", type: "number | null" },
+      ]);
+    });
+
     test("drops null only for IS NOT NULL tests AND-ed into WHERE", () => {
       const analysis = analyzed(
         'SELECT "paidAt", "weight", "priority" FROM "Order" WHERE "paidAt" IS NOT NULL AND ("weight" IS NOT NULL OR "amount" > 1) AND "priority" IS NULL',
@@ -193,6 +235,35 @@ describe("analyzeSql", () => {
       expect(
         analyzed('DELETE FROM "Order" WHERE "paidAt" IS NOT NULL RETURNING "paidAt"').columns,
       ).toEqual([{ name: "paidAt", type: "Date" }]);
+    });
+  });
+
+  describe("GROUP BY aggregates", () => {
+    test("drops null from an aggregate of a required column, as every group has a row", () => {
+      expect(
+        analyzed(
+          'SELECT "status", sum("amount") AS s, avg("amount") AS a, max("orderDate") AS d, min("weight") AS w FROM "Order" GROUP BY "status"',
+        ).columns,
+      ).toEqual([
+        { name: "status", type: '"PENDING" | "PAID" | "CANCELLED"' },
+        { name: "s", type: "number" },
+        { name: "a", type: "number" },
+        { name: "d", type: "Date" },
+        { name: "w", type: "number | null" },
+      ]);
+    });
+
+    test("keeps null for an outer-joined column and drops it for a column WHERE proves", () => {
+      expect(
+        analyzed(
+          'SELECT c."id", sum(o."amount") AS s FROM "Customer" c LEFT JOIN "Order" o ON o."customerID" = c."id" GROUP BY c."id"',
+        ).columns,
+      ).toContainEqual({ name: "s", type: "number | null" });
+      expect(
+        analyzed(
+          'SELECT "status", min("weight") AS w FROM "Order" WHERE "weight" IS NOT NULL GROUP BY "status"',
+        ).columns,
+      ).toContainEqual({ name: "w", type: "number" });
     });
   });
 
@@ -309,6 +380,36 @@ describe("analyzeSql", () => {
       {
         source:
           'SELECT o."id" FROM "Order" o JOIN "Customer" c ON o."customerID" = c."id" WHERE o."id" = :id',
+        cardinality: "maybeOne",
+      },
+      {
+        source:
+          'SELECT o."id" FROM "Order" o LEFT JOIN "Customer" c ON c."id" = o."customerID" WHERE o."id" = :id',
+        cardinality: "maybeOne",
+      },
+      {
+        source:
+          'SELECT c."id" FROM "Customer" c JOIN "Order" o ON o."customerID" = c."id" WHERE c."id" = :id',
+        cardinality: "many",
+      },
+      {
+        source:
+          'SELECT c."id" FROM "Customer" c JOIN "Order" o ON o."customerID" = c."id" WHERE c."email" = :e AND o."orderDate" = :d',
+        cardinality: "maybeOne",
+      },
+      {
+        source:
+          'SELECT c."id" FROM "Customer" c LEFT JOIN "Order" o ON c."id" = o."customerID" WHERE o."id" = :id',
+        cardinality: "maybeOne",
+      },
+      {
+        source:
+          'SELECT c."id" FROM "Customer" c LEFT JOIN "Order" o ON c."id" = o."customerID" AND o."id" = :id',
+        cardinality: "many",
+      },
+      {
+        source:
+          'SELECT o."id" FROM "Order" o FULL JOIN "Customer" c ON c."id" = o."customerID" WHERE o."id" = :id',
         cardinality: "many",
       },
       { source: 'SELECT "id" FROM "Order" LIMIT 1', cardinality: "maybeOne" },

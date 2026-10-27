@@ -84,13 +84,15 @@ Call `.run()` with a `tailordb.Client` for the query's namespace, `query.namespa
 
 | The query                                                                                                           | `.run()` resolves to |
 | ------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Matches `id`, a unique field, or a unique index of a single table, or has `LIMIT 1`                                 | The row, or `null`   |
+| Matches `id`, a unique field, or a unique index of every table it reads, or has `LIMIT 1`                           | The row, or `null`   |
 | Inserts one row with `RETURNING` and `ON CONFLICT ... DO NOTHING`, or `DO UPDATE ... WHERE`                         | The row, or `null`   |
 | Aggregates without `GROUP BY`, `HAVING`, or `OFFSET`, or inserts one row with `RETURNING` and no such `ON CONFLICT` | The row              |
 | Inserts, updates, or deletes without `RETURNING`                                                                    | Nothing              |
 | Anything else                                                                                                       | An array of rows     |
 
-A column is nullable when its field is optional or its table is outer-joined. A column that the statement's `WHERE` tests with `IS NOT NULL`, outside any `OR`, is typed without `null`, except a column the `UPDATE` sets. The test also proves that the column's table has a row, so the required columns of an outer-joined table lose `null` too.
+A query matches a table's key when `WHERE` compares each column of the key with `=` to a value, or to a column of a table the query already matches, outside any `OR`. A join counts too: joining a table on its `id` to a matched table's column, as when you join an order's customer, matches the customer. The `ON` of a `LEFT JOIN` matches only the joined table, and that of a `RIGHT JOIN` or `FULL JOIN` matches no table.
+
+A column is nullable when its field is optional or its table is outer-joined. A column that the statement's `WHERE` needs a value in is typed without `null`, except a column the `UPDATE` sets: one it compares, or tests with `IS NOT NULL`, `IN`, `BETWEEN`, or `LIKE`, outside any `OR`. That also proves the column's table has a row, so the required columns of an outer-joined table lose `null` too. With `GROUP BY`, `SUM`, `AVG`, `MIN`, and `MAX` of a column that is not nullable are not nullable either, as every group has a row.
 
 Date and datetime columns are typed as `Date` and time columns as `string`, or as `Temporal` values when `kyselyTypePlugin` is configured with `temporal: true`; time fields inside nested objects stay strings. Create the client with the same setting, `new tailordb.Client({ namespace, temporal: true })`, so the values it returns match the types.
 
