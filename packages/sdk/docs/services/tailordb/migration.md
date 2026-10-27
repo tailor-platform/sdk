@@ -277,10 +277,10 @@ export default defineConfig({
 });
 ```
 
-| Option                  | Type   | Description                                                                                               |
-| ----------------------- | ------ | --------------------------------------------------------------------------------------------------------- |
-| `migration.directory`   | string | Directory path for migration files. Required when migrations are enabled for the namespace.               |
-| `migration.machineUser` | string | Machine user used to run migration scripts. Optional; defaults to the first entry in `auth.machineUsers`. |
+| Option                  | Type   | Description                                                                                                                         |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `migration.directory`   | string | Directory path for migration files. Required when migrations are enabled for the namespace. Each namespace needs its own directory. |
+| `migration.machineUser` | string | Machine user used to run migration scripts. Optional; defaults to the first entry in `auth.machineUsers`.                           |
 
 ## Generated Files
 
@@ -1160,6 +1160,12 @@ A migration script is a function — branching on environment (e.g., to skip a b
 For genuinely different schemas across environments, prefer separate workspaces with the same migration history rather than divergent `migrations/` directories.
 
 ## Troubleshooting
+
+### `MIGRATION_DIRECTORY_CONFLICT` error
+
+**Cause:** Two or more TailorDB namespaces set `migration.directory` to the same directory (after resolving it against the config file's directory). For example, `tailordb` and `analyticsdb` both set `"./migrations"`. Both namespaces would read and write the same `0000/schema.json`, so `migration generate` could not tell them apart and `migration generate --init` would rebuild the history of both. Every `tailor tailordb migration` command and `tailor deploy` fail with this error before touching any migration files. The error lists every shared directory with the namespaces that use it.
+
+**Resolution:** Give each namespace its own directory in `tailor.config.ts`, for example `"./migrations/tailordb"` and `"./migrations/analyticsdb"`.
 
 ### Remote schema drift detected
 

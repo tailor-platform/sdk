@@ -310,6 +310,32 @@ describe("planTailorDB (service level)", () => {
     expect(result.context.migrationTestBaselines).toBeUndefined();
   });
 
+  describe("namespaces sharing a migration directory", () => {
+    const sharedDirectoryConfig = {
+      path: "/test/tailor.config.ts",
+      db: {
+        tailordb: { migration: { directory: "./migrations" } },
+        analyticsdb: { migration: { directory: "./migrations" } },
+      },
+    } as unknown as LoadedConfig;
+    const plan = (forRemoval: boolean) =>
+      planTailorDB({
+        client: createMockClient([]),
+        workspaceId,
+        application: createMockApplication([createMockTailorDBService("tailordb")]),
+        forRemoval,
+        config: sharedDirectoryConfig,
+      });
+
+    test("rejects the shared directory while planning a deploy", async () => {
+      await expect(plan(false)).rejects.toMatchObject({ code: "MIGRATION_DIRECTORY_CONFLICT" });
+    });
+
+    test("does not read migration settings when planning a removal", async () => {
+      await expect(plan(true)).resolves.toBeDefined();
+    });
+  });
+
   describe("steps to skip", () => {
     const plan = (migrationSkipSteps: ReadonlyMap<string, readonly string[]>) =>
       planTailorDB({

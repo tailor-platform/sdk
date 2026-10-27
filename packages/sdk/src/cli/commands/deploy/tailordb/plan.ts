@@ -131,7 +131,9 @@ export async function planTailorDB(context: PlanContext) {
       }
     }
   }
-  const migrationConfig = getNamespacesWithMigrations(config, path.dirname(config.path));
+  const migrationConfig = forRemoval
+    ? []
+    : getNamespacesWithMigrations(config, path.dirname(config.path));
   const detected =
     forRemoval || migrationTestBaselines
       ? undefined
@@ -156,8 +158,8 @@ export async function planTailorDB(context: PlanContext) {
     });
   }
   const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = detected ?? {
-    namespacesWithMigrations: forRemoval ? [] : migrationConfig,
-    migrationFileState: forRemoval ? {} : captureMigrationFileState(migrationConfig),
+    namespacesWithMigrations: migrationConfig,
+    migrationFileState: captureMigrationFileState(migrationConfig),
     checkpointRepairs: [],
   };
 
