@@ -73,17 +73,19 @@ In VS Code, use the TypeScript 7 extension with your project's TypeScript, and t
 
 A `.sql` file holds one `SELECT`, `INSERT`, `UPDATE`, or `DELETE` statement in the SQL that TailorDB supports (see [Supported SQL queries](https://docs.tailor.tech/guides/function/accessing-tailordb#supported-sql-queries)). TailorDB also runs the following, which that reference does not list or lists as unsupported:
 
-- Arithmetic with `+`, `-`, `*`, `/`, parentheses, and a leading `-` on Integer, Float, and Decimal columns and on numbers, in the select list, in conditions, and inside `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`. Parameters can appear in arithmetic in conditions, and aggregates in arithmetic in `HAVING`.
+- Arithmetic with `+`, `-`, `*`, `/`, parentheses, and a leading `-` on Integer, Float, and Decimal columns and on numbers: in the select list, on either side of a comparison, on the left of `IN`, `BETWEEN`, and `IS NULL`, and inside `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`. Parameters can appear in arithmetic in conditions, and aggregates in arithmetic in `HAVING`.
 - Numbers, strings, `true`, and `false` in the select list.
 - Self-joins, which join a table to itself under different aliases. Read permissions apply to each alias.
 - `SUM`, `AVG`, `MIN`, and `MAX` of Decimal fields.
 
-Anything else is an error at its place in the file: for example a cast (`::`), a function other than `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`, a subquery, `NULLS FIRST`, arithmetic in `ORDER BY` (order by the name you give it with `AS` instead), anything but columns and `*` in `RETURNING`, or `WHERE` after `ON CONFLICT ... DO UPDATE`, which the reference lists but TailorDB rejects. So are an integer outside the 32-bit range and a division by a literal zero, which fail when the query runs.
+Anything else is an error at its place in the file: for example a cast (`::`), a function other than `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`, a subquery, `NULLS FIRST`, arithmetic in `ORDER BY` (order by the name you give it with `AS` instead), anything but columns and `*` in `RETURNING`, or `WHERE` after `ON CONFLICT ... DO UPDATE`, which the reference lists but TailorDB rejects. So are an integer outside the 32-bit range in the select list or a condition, and a division by a literal zero, which fail when the query runs.
+
+When you write a query:
 
 - Name each parameter with a colon, as in `:status`. A parameter takes the type of the column or arithmetic it is compared with or written to, and a name can appear more than once. A parameter in arithmetic takes the type of that arithmetic.
 - Table and column names are case-sensitive, as in TailorDB, whether or not you quote them.
 - The tables of one query must belong to one TailorDB namespace. Tables of [external namespaces](../../configuration.md#external-resources) are not available.
-- Columns of the result must have distinct names. Give same-named columns of joined tables different names with `AS`. Without `AS`, TailorDB names arithmetic `expression` and a literal `?column?`, so name them when the result has more than one.
+- Columns of the result must have distinct names. Give same-named columns of joined tables different names with `AS`. Without `AS`, TailorDB names arithmetic `expression`, a literal `?column?`, and a negated column after the column, so name them when they would share a name.
 
 ## Running Queries
 
@@ -101,7 +103,7 @@ A query matches a table's key when `WHERE` compares each column of the key with 
 
 A column is nullable when its field is optional or its table is outer-joined, and arithmetic is nullable when one of its columns is. A column that the statement's `WHERE` compares, or tests with `IS NOT NULL`, `IN`, `BETWEEN`, or `LIKE`, outside any `OR`, is typed without `null`, also when the column is part of arithmetic there, except a column the `UPDATE` sets. That also proves the column's table has a row, so the required columns of an outer-joined table lose `null` too. With `GROUP BY`, `SUM`, `AVG`, `MIN`, and `MAX` of a column or arithmetic that is not nullable are not nullable either, as every group has a row.
 
-Arithmetic is typed as `number`, except that arithmetic with a Decimal column and no Float column or fractional number is a string, as TailorDB returns decimals as strings; `/` on integers drops the remainder. `SUM`, `AVG`, `MIN`, and `MAX` of Decimal values are strings too.
+Arithmetic is typed as `number`, except that arithmetic with a Decimal column and no Float column or number with a decimal point is a string, as TailorDB returns decimals as strings; `/` on integers drops the remainder. `SUM`, `AVG`, `MIN`, and `MAX` of Decimal values are strings too.
 
 Date and datetime columns are typed as `Date` and time columns as `string`, or as `Temporal` values when `kyselyTypePlugin` is configured with `temporal: true`; time fields inside nested objects stay strings. Create the client with the same setting, `new tailordb.Client({ namespace, temporal: true })`, so the values it returns match the types.
 

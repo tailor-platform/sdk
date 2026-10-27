@@ -310,19 +310,31 @@ interface ExpressionRules {
   aggregates?: string;
 }
 
-const AGGREGATE_ARITHMETIC = "Arithmetic on an aggregate is only supported in HAVING";
+/** The rules for the expressions of a condition, and what its two sides may start with. */
+interface ConditionRules extends ExpressionRules {
+  left: string;
+  right: string;
+}
+
+const STANDALONE_AGGREGATE =
+  "An aggregate in the select list must stand alone; arithmetic on aggregates is only supported in HAVING";
 const SELECT_LIST: ExpressionRules = {
   params: "Placeholders are not supported in the select list",
-  aggregates: AGGREGATE_ARITHMETIC,
+  aggregates: STANDALONE_AGGREGATE,
 };
 const AGGREGATE_ARGUMENT: ExpressionRules = {
   params: "Placeholders are not supported in an aggregate",
   aggregates: "Aggregates cannot be nested",
 };
-const ROW_CONDITION: ExpressionRules = {
+const ROW_CONDITION: ConditionRules = {
   aggregates: "Aggregates are only allowed in HAVING and the select list",
+  left: "a column",
+  right: "a column, a literal or a placeholder",
 };
-const GROUP_CONDITION: ExpressionRules = {};
+const GROUP_CONDITION: ConditionRules = {
+  left: "a column or an aggregate",
+  right: "a column, an aggregate, a literal or a placeholder",
+};
 
 const RESERVED = new Set([
   "ALL",
@@ -437,6 +449,14 @@ function tokenize(source: string): Token[] {
       for (; i < source.length && /[0-9]/.test(source.charAt(i)); i++);
       if (source[i] === "." && /[0-9]/.test(source.charAt(i + 1))) {
         for (i++; i < source.length && /[0-9]/.test(source.charAt(i)); i++);
+      }
+      if (IDENT_PART.test(source.charAt(i))) {
+        for (; i < source.length && IDENT_PART.test(source.charAt(i)); i++);
+        throw new SqlSyntaxError(
+          `${source.slice(start, i)} is not a number TailorDB SQL reads; write numbers in decimal digits`,
+          start,
+          i,
+        );
       }
       tokens.push({ kind: "number", text: source.slice(start, i), start, end: i });
     } else if (IDENT_START.test(c)) {
@@ -662,9 +682,9 @@ class Parser {
       expr = { kind: "star", table, span: this.#span(start) };
     } else if (this.#isAggregateStart()) {
       expr = this.#aggregate();
-      if (this.#isArithmeticOperator()) this.#fail(AGGREGATE_ARITHMETIC);
+      if (this.#isArithmeticOperator()) this.#fail(STANDALONE_AGGREGATE);
     } else {
-      expr = this.#expression(SELECT_LIST);
+      expr = this.#expression(SELECT_LIST, "a column, an aggregate or a literal");
       if (expr.kind === "literal" && expr.type === "null") {
         this.#failAt("NULL is not supported in the select list", expr.span);
       }
@@ -711,7 +731,13 @@ class Parser {
     if (fn === "count" && !distinct && this.#acceptOp("*")) {
       arg = undefined;
     } else {
-      arg = this.#expression(AGGREGATE_ARGUMENT);
+      arg = this.#expression(AGGREGATE_ARGUMENT, "a column");
+      if (arg.kind === "literal" && arg.type === "null") {
+        this.#failAt("NULL is not supported in an aggregate", arg.span);
+      }
+      if (arg.kind === "literal" && fn !== "count") {
+        this.#failAt(`${fn.toUpperCase()} takes a column or arithmetic, not a literal`, arg.span);
+      }
     }
     this.#expectOp(")");
     return { kind: "aggregate", fn, distinct, arg, span: this.#span(nameToken.start) };
@@ -815,7 +841,7 @@ class Parser {
     this.#unexpected(`an integer or a placeholder after ${clause}`);
   }
 
-  #condition(rules: ExpressionRules): SqlCondition {
+  #condition(rules: ConditionRules): SqlCondition {
     let left = this.#conjunction(rules);
     while (this.#isKeyword("OR")) {
       this.#advance();
@@ -825,7 +851,7 @@ class Parser {
     return left;
   }
 
-  #conjunction(rules: ExpressionRules): SqlCondition {
+  #conjunction(rules: ConditionRules): SqlCondition {
     let left = this.#predicate(rules);
     while (this.#isKeyword("AND")) {
       this.#advance();
@@ -835,7 +861,7 @@ class Parser {
     return left;
   }
 
-  #predicate(rules: ExpressionRules): SqlCondition {
+  #predicate(rules: ConditionRules): SqlCondition {
     const start = this.#token.start;
     if (this.#isOp("(")) {
       if (this.#isKeyword("SELECT", this.#peek())) this.#subquery(this.#peek());
@@ -851,7 +877,7 @@ class Parser {
         "NOT before a condition is not supported by TailorDB SQL; use NOT IN, NOT BETWEEN, NOT LIKE, NOT ILIKE or IS NOT NULL",
       );
     }
-    const left = this.#expression(rules);
+    const left = this.#expression(rules, rules.left);
     if (left.kind === "param" || left.kind === "literal") {
       this.#failAt(
         "The left side of a condition must be a column, an aggregate or arithmetic",
@@ -905,7 +931,9 @@ class Parser {
       this.#unsupportedFunction();
     }
     const op = opToken.text;
-    const right = PATTERN_OPERATORS.has(op) ? this.#pattern(op, left) : this.#expression(rules);
+    const right = PATTERN_OPERATORS.has(op)
+      ? this.#pattern(op, left)
+      : this.#expression(rules, rules.right);
     return { kind: "compare", op, left, right, span: this.#span(start) };
   }
 
@@ -934,9 +962,10 @@ class Parser {
     return this.#value();
   }
 
-  #expression(rules: ExpressionRules): SqlExpression {
+  // An expression; `expected` names what it may start with when it starts with nothing valid.
+  #expression(rules: ExpressionRules, expected: string): SqlExpression {
     return this.#arithmetic(["+", "-"], () =>
-      this.#arithmetic(["*", "/"], () => this.#factor(rules)),
+      this.#arithmetic(["*", "/"], () => this.#factor(rules, expected)),
     );
   }
 
@@ -965,16 +994,16 @@ class Parser {
     return operand;
   }
 
-  #factor(rules: ExpressionRules): SqlExpression {
+  #factor(rules: ExpressionRules, expected: string): SqlExpression {
     const token = this.#token;
     if (this.#isOp("-") && this.#peek().kind !== "number") {
       this.#advance();
-      const operand = this.#numeric(this.#factor(rules));
+      const operand = this.#numeric(this.#factor(rules, expected));
       return { kind: "negation", operand, span: this.#span(token.start) };
     }
     if (this.#isOp("(") && !this.#isKeyword("SELECT", this.#peek())) {
       this.#advance();
-      const inner = this.#expression(rules);
+      const inner = this.#expression(rules, expected);
       this.#expectOp(")");
       return inner;
     }
@@ -983,7 +1012,20 @@ class Parser {
       return this.#aggregate();
     }
     if (token.kind === "param" && rules.params) this.#fail(rules.params);
-    return this.#value();
+    return this.#startsValue() ? this.#value() : this.#columnRef(expected);
+  }
+
+  // Whether the current token starts a placeholder, a literal, or a subquery.
+  #startsValue(): boolean {
+    const token = this.#token;
+    return (
+      token.kind === "param" ||
+      token.kind === "string" ||
+      token.kind === "number" ||
+      (this.#isOp("-") && this.#peek().kind === "number") ||
+      (this.#isOp("(") && this.#isKeyword("SELECT", this.#peek())) ||
+      ["TRUE", "FALSE", "NULL"].some((keyword) => this.#isKeyword(keyword))
+    );
   }
 
   #value(): SqlValue {
@@ -1126,7 +1168,7 @@ class Parser {
       this.#expectOp("=");
       const left = this.#value();
       const opToken = this.#token;
-      if (opToken.kind === "op" && ["+", "-", "*", "/"].includes(opToken.text)) {
+      if (opToken.kind === "op" && this.#isArithmeticOperator()) {
         this.#advance();
         const right = this.#value();
         sets.push({

@@ -252,6 +252,17 @@ describe("analyzeSql", () => {
       ]);
     });
 
+    test.each([
+      '"weight" + 1 IS NOT NULL',
+      '"weight" * 2 IN (1, 2)',
+      '"weight" - 1 BETWEEN 0 AND 1',
+      '"amount" > -"weight" / 2',
+    ])("drops null from a column of arithmetic in WHERE %s", (condition) => {
+      expect(analyzed(`SELECT "weight" FROM "Order" WHERE ${condition}`).columns).toEqual([
+        { name: "weight", type: "number" },
+      ]);
+    });
+
     test("proves the row of an outer-joined table a WHERE comparison reads", () => {
       expect(
         analyzed(
@@ -668,9 +679,19 @@ describe("analyzeSql", () => {
         at: "-(1)",
       },
       {
-        source: 'SELECT "amount" / 0 AS a, "weight" / 0.0 AS b FROM "Order"',
+        source: 'SELECT "amount" / 0 AS a FROM "Order"',
+        message: "Dividing by zero fails in TailorDB SQL",
+        at: "0",
+      },
+      {
+        source: 'SELECT "id" FROM "Order" WHERE "weight" / 0.0 > 1',
         message: "Dividing by zero fails in TailorDB SQL",
         at: "0.0",
+      },
+      {
+        source: 'UPDATE "Order" SET "amount" = "amount" / 0 WHERE "id" = :id',
+        message: "Dividing by zero fails in TailorDB SQL",
+        at: "0",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount" > 2147483648',
@@ -678,7 +699,12 @@ describe("analyzeSql", () => {
         at: "2147483648",
       },
       {
-        source: 'SELECT -2147483648 AS x FROM "Order" WHERE "amount" IN (1, 2147483648)',
+        source: 'SELECT "id" FROM "Order" WHERE "amount" IN (1, 2147483648)',
+        message: "TailorDB SQL takes integers in the 32-bit range, and 2147483648 is not",
+        at: "2147483648",
+      },
+      {
+        source: 'SELECT -2147483648 AS x FROM "Order"',
         message: "TailorDB SQL takes integers in the 32-bit range, and -2147483648 is not",
         at: "-2147483648",
       },
@@ -730,8 +756,8 @@ describe("analyzeSql", () => {
         message: 'Column "n" does not exist in "Order"',
         at: "n",
       },
-    ])("$message", ({ source, message, at }) => {
-      expect(rejected(source)).toContainEqual({ message, at });
+    ])("$source", ({ source, message, at }) => {
+      expect(rejected(source)).toEqual([{ message, at }]);
     });
 
     test("reports parse errors at their place", () => {

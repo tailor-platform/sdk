@@ -500,13 +500,9 @@ class Analyzer {
     // Whether the operand can take part in arithmetic.
     const visit = (operand: SqlExpression): boolean => {
       if (operand.kind === "arithmetic") {
-        const valid = [visit(operand.left), visit(operand.right)].every(Boolean);
-        const divisor = operand.right;
-        if (operand.op === "/" && divisor.kind === "literal" && Number(divisor.value) === 0) {
-          this.report("Dividing by zero fails in TailorDB SQL", divisor.span);
-          return false;
-        }
-        return valid;
+        return [visit(operand.left), visit(operand.right), this.#checkDivisor(operand)].every(
+          Boolean,
+        );
       }
       if (operand.kind === "negation") return visit(operand.operand);
       if (operand.kind === "param") {
@@ -525,6 +521,17 @@ class Analyzer {
     const type = ARITHMETIC_RESULT_TYPES.find((candidate) => types.has(candidate)) ?? "integer";
     for (const param of params) this.typeParam(param, this.type({ type }, "write"));
     return valid ? { config: { type }, nullable } : undefined;
+  }
+
+  // Whether the arithmetic does not divide by a literal zero, which fails in TailorDB.
+  #checkDivisor(arithmetic: SqlArithmetic): boolean {
+    const divisor = arithmetic.right;
+    if (arithmetic.op !== "/" || divisor.kind !== "literal" || divisor.type !== "number") {
+      return true;
+    }
+    if (Number(divisor.value) !== 0) return true;
+    this.report("Dividing by zero fails in TailorDB SQL", divisor.span);
+    return false;
   }
 
   #checkInteger(literal: SqlLiteral): void {
@@ -895,7 +902,10 @@ class Analyzer {
               this.checkWritten(scope, { config, name: set.column.name }, set.value);
               continue;
             }
-            if (!this.arithmeticOperand(config, quoteName(set.column.name), set.value.span)) {
+            if (
+              !this.arithmeticOperand(config, quoteName(set.column.name), set.value.span) ||
+              !this.#checkDivisor(set.value)
+            ) {
               continue;
             }
             const operandType = this.type(config, "write");
