@@ -535,13 +535,22 @@ export default createExecutor({
       const secret = await secretmanager.getSecret("api-keys", "stripe-webhook-secret");
       if (!secret) throw new Error("Stripe webhook secret is not configured");
 
-      // Header format: "t=<unix timestamp>,v1=<hex HMAC-SHA256 of `${t}.${raw body}`>"
-      const parts = Object.fromEntries(
-        headers["stripe-signature"].split(",").map((part) => part.split("=") as [string, string]),
-      );
+      // Header format: "t=<unix timestamp>,v1=<hex HMAC-SHA256 of `${t}.${raw body}`>[,v1=...]"
+      // v1 appears more than once while a signing secret is being rolled
+      const entries = headers["stripe-signature"]
+        .split(",")
+        .map((part) => part.split("=") as [string, string]);
+      const timestamp = entries.find(([name]) => name === "t")?.[1] ?? "";
+      const signatures = entries.filter(([name]) => name === "v1").map(([, value]) => value);
+
+      // Reject replayed requests (Stripe's libraries default to a 5 minute tolerance)
+      if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) {
+        throw new Error("Stripe signature timestamp is outside the tolerance");
+      }
+
       // rawBody is base64-encoded; decode it to the original request bytes
       const raw = Uint8Array.from(atob(rawBody), (char) => char.charCodeAt(0));
-      const prefix = new TextEncoder().encode(`${parts.t}.`);
+      const prefix = new TextEncoder().encode(`${timestamp}.`);
       const signedPayload = new Uint8Array(prefix.length + raw.length);
       signedPayload.set(prefix);
       signedPayload.set(raw, prefix.length);
@@ -553,13 +562,12 @@ export default createExecutor({
         false,
         ["verify"],
       );
-      const valid = await crypto.subtle.verify(
-        "HMAC",
-        key,
-        hexToBytes(parts.v1 ?? ""),
-        signedPayload,
+      const results = await Promise.all(
+        signatures.map((signature) =>
+          crypto.subtle.verify("HMAC", key, hexToBytes(signature), signedPayload),
+        ),
       );
-      if (!valid) throw new Error("Invalid Stripe signature");
+      if (!results.includes(true)) throw new Error("Invalid Stripe signature");
 
       console.log(`Received ${body.type} event`);
       // Process webhook...
@@ -568,7 +576,7 @@ export default createExecutor({
 });
 ```
 
-The webhook URL is public, so verify the signature over `rawBody` (the unparsed request body, delivered base64-encoded) before trusting `body`. Also compare `parts.t` with the current time to reject replayed requests.
+The webhook URL is public, so verify the signature over `rawBody` (the unparsed request body, delivered base64-encoded) before trusting `body`. Checking the timestamp `t` against the current time, as above, rejects replayed requests.
 
 **With custom response:**
 
