@@ -1158,7 +1158,7 @@ For genuinely different schemas across environments, prefer separate workspaces 
 
 ### `MIGRATION_DIRECTORY_CONFLICT` error
 
-**Cause:** Two or more TailorDB namespaces set `migration.directory` to the same directory (after resolving it against the config file's directory). For example, `tailordb` and `analyticsdb` both set `"./migrations"`. Both namespaces would read and write the same `0000/schema.json`, so `migration generate` could not tell them apart and `migration generate --init` would rebuild the history of both. Every `tailor tailordb migration` command and `tailor deploy` fail with this error before touching any migration files. The error lists the namespaces that share the directory.
+**Cause:** Two or more TailorDB namespaces set `migration.directory` to the same directory (after resolving it against the config file's directory). For example, `tailordb` and `analyticsdb` both set `"./migrations"`. Both namespaces would read and write the same `0000/schema.json`, so `migration generate` could not tell them apart and `migration generate --init` would rebuild the history of both. Every `tailor tailordb migration` command and `tailor deploy` fail with this error before touching any migration files. The error lists every shared directory with the namespaces that use it.
 
 **Resolution:** Give each namespace its own directory in `tailor.config.ts`, for example `"./migrations/tailordb"` and `"./migrations/analyticsdb"`.
 

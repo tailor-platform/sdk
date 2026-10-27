@@ -11,6 +11,7 @@ import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { statusCommand } from "./status";
+import { migrationDbConfig } from "./test-helpers/migration-config";
 import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
@@ -401,10 +402,7 @@ describe("tailordb migration status --json", () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
-        db: {
-          tailordb: { migration: { directory: state.migrationsDir } },
-          analyticsdb: { migration: { directory: `${state.migrationsDir}-analyticsdb` } },
-        },
+        db: migrationDbConfig(["tailordb", "analyticsdb"], state.migrationsDir),
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
     state.getMetadata.mockImplementation(({ trn }: { trn: string }) =>

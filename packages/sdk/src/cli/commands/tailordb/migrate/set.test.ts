@@ -10,6 +10,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { setCommand } from "./set";
+import { migrationDbConfig } from "./test-helpers/migration-config";
 import { snapshotType, writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
@@ -41,15 +42,10 @@ vi.mock("#/cli/shared/prompt", () => ({
 }));
 
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
-  const db: Record<string, unknown> = {};
-  for (const [index, namespace] of namespaces.entries()) {
-    const directory = index === 0 ? state.migrationsDir : `${state.migrationsDir}-${namespace}`;
-    db[namespace] = { migration: { directory } };
-  }
   vi.mocked(loadConfig).mockResolvedValue({
     config: {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
-      db,
+      db: migrationDbConfig(namespaces, state.migrationsDir),
     },
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
 }

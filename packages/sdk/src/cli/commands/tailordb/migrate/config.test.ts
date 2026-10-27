@@ -37,8 +37,39 @@ describe("getNamespacesWithMigrations", () => {
       expect.objectContaining({
         code: "MIGRATION_DIRECTORY_CONFLICT",
         context: {
-          directory: "/work/app/migrations",
-          namespaces: ["tailordb", "analyticsdb"],
+          conflicts: [
+            { directory: "/work/app/migrations", namespaces: ["tailordb", "analyticsdb"] },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("reports every namespace on a shared directory and every shared directory at once", () => {
+    const run = () =>
+      getNamespacesWithMigrations(
+        configWith({
+          tailordb: { migration: { directory: "./migrations" } },
+          analyticsdb: { migration: { directory: "./migrations" } },
+          billingdb: { migration: { directory: "./migrations" } },
+          crmdb: { migration: { directory: "./crm" } },
+          erpdb: { migration: { directory: "./crm" } },
+          plain: { migration: { directory: "./plain" } },
+        }),
+        "/work/app",
+      );
+
+    expect(run).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_DIRECTORY_CONFLICT",
+        context: {
+          conflicts: [
+            {
+              directory: "/work/app/migrations",
+              namespaces: ["tailordb", "analyticsdb", "billingdb"],
+            },
+            { directory: "/work/app/crm", namespaces: ["crmdb", "erpdb"] },
+          ],
         },
       }),
     );
