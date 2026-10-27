@@ -505,7 +505,7 @@ interface WebhookContext<T = unknown> {
   body: T; // Parsed request body
   headers: Record<string, string>; // Request headers
   method: "POST" | "GET" | "PUT" | "DELETE"; // HTTP method
-  rawBody: string; // Raw request body as string
+  rawBody: string; // Raw request body, base64-encoded
 }
 ```
 
@@ -513,11 +513,15 @@ interface WebhookContext<T = unknown> {
 
 ```typescript
 import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+import { secretmanager } from "@tailor-platform/sdk/runtime";
 
 interface StripeWebhook {
   type: string;
   data: { object: { id: string; amount: number } };
 }
+
+const hexToBytes = (hex: string) =>
+  new Uint8Array(hex.match(/../g)?.map((byte) => parseInt(byte, 16)) ?? []);
 
 export default createExecutor({
   name: "stripe-webhook",
@@ -527,14 +531,44 @@ export default createExecutor({
   }>(),
   operation: {
     kind: "function",
-    body: async ({ body, headers }) => {
-      const signature = headers["stripe-signature"];
+    body: async ({ body, headers, rawBody }) => {
+      const secret = await secretmanager.getSecret("api-keys", "stripe-webhook-secret");
+      if (!secret) throw new Error("Stripe webhook secret is not configured");
+
+      // Header format: "t=<unix timestamp>,v1=<hex HMAC-SHA256 of `${t}.${raw body}`>"
+      const parts = Object.fromEntries(
+        headers["stripe-signature"].split(",").map((part) => part.split("=") as [string, string]),
+      );
+      // rawBody is base64-encoded; decode it to the original request bytes
+      const raw = Uint8Array.from(atob(rawBody), (char) => char.charCodeAt(0));
+      const prefix = new TextEncoder().encode(`${parts.t}.`);
+      const signedPayload = new Uint8Array(prefix.length + raw.length);
+      signedPayload.set(prefix);
+      signedPayload.set(raw, prefix.length);
+
+      const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["verify"],
+      );
+      const valid = await crypto.subtle.verify(
+        "HMAC",
+        key,
+        hexToBytes(parts.v1 ?? ""),
+        signedPayload,
+      );
+      if (!valid) throw new Error("Invalid Stripe signature");
+
       console.log(`Received ${body.type} event`);
       // Process webhook...
     },
   },
 });
 ```
+
+The webhook URL is public, so verify the signature over `rawBody` (the unparsed request body, delivered base64-encoded) before trusting `body`. Also compare `parts.t` with the current time to reject replayed requests.
 
 **With custom response:**
 
