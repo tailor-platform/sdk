@@ -203,6 +203,17 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       .map((f) => f.number)
       .filter((n, i, arr) => arr.indexOf(n) === i) // deduplicate
       .toSorted((a, b) => a - b);
+    const latestLocalMigration = availableNumbers.at(-1) ?? 0;
+    if (currentMigration > latestLocalMigration) {
+      rows.push({
+        status: "error",
+        namespace,
+        error:
+          `Remote migration checkpoint ${formatMigrationNumber(currentMigration)} is ahead of ` +
+          `the latest local migration ${formatMigrationNumber(latestLocalMigration)}.`,
+      });
+      continue;
+    }
     const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
 
     const pendingMigrations = pendingNumbers.map((num) => ({
@@ -294,7 +305,7 @@ export const statusCommand = defineAppCommand({
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   notes:
-    "Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. Invalid or incompatible files, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
+    "Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. Invalid or incompatible files, history mismatches, a remote checkpoint ahead of the latest local migration, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
