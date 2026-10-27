@@ -515,10 +515,10 @@ interface WebhookContext<T = unknown> {
 import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
 import { secretmanager } from "@tailor-platform/sdk/runtime";
 
-interface StripeWebhook {
+type StripeWebhook = {
   type: string;
   data: { object: { id: string; amount: number } };
-}
+};
 
 export default createExecutor({
   name: "stripe-webhook",
