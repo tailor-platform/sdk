@@ -20,27 +20,28 @@ import type {
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
-function assertNoUniqueOrIndexInsideObjectArray(
+function assertNoUnsupportedUniqueOrIndex(
   fieldConfig: OperatorFieldConfig,
   path: readonly string[],
   tableName: string,
   insideArray = false,
 ): void {
-  const underArray = insideArray || fieldConfig.array === true;
-  for (const [memberName, member] of Object.entries(fieldConfig.fields ?? {})) {
-    const memberPath = [...path, memberName];
-    for (const modifier of ["unique", "index"] as const) {
-      if (!member[modifier]) continue;
-      const reason = member.array
-        ? `${modifier} cannot be set on array fields`
-        : underArray
+  for (const modifier of ["unique", "index"] as const) {
+    if (!fieldConfig[modifier]) continue;
+    const reason = fieldConfig.array
+      ? `${modifier} cannot be set on array fields`
+      : fieldConfig.type === "nested"
+        ? `${modifier} cannot be set on nested type fields`
+        : insideArray
           ? `${modifier} cannot be set on a field inside an array of objects`
           : undefined;
-      if (reason) {
-        throw new Error(`Field "${memberPath.join(".")}" on table "${tableName}": ${reason}`);
-      }
+    if (reason) {
+      throw new Error(`Field "${path.join(".")}" on table "${tableName}": ${reason}`);
     }
-    assertNoUniqueOrIndexInsideObjectArray(member, memberPath, tableName, underArray);
+  }
+  const underArray = insideArray || fieldConfig.array === true;
+  for (const [memberName, member] of Object.entries(fieldConfig.fields ?? {})) {
+    assertNoUnsupportedUniqueOrIndex(member, [...path, memberName], tableName, underArray);
   }
 }
 
@@ -133,19 +134,7 @@ function parseTailorDBType(
 
     fieldConfig = applyNestedRelationMetadata(fieldConfig, context);
 
-    // Validate that index/unique are not set on array fields
-    if (fieldConfig.array && fieldConfig.index) {
-      throw new Error(
-        `Field "${fieldName}" on table "${type.name}": index cannot be set on array fields`,
-      );
-    }
-    if (fieldConfig.array && fieldConfig.unique) {
-      throw new Error(
-        `Field "${fieldName}" on table "${type.name}": unique cannot be set on array fields`,
-      );
-    }
-
-    assertNoUniqueOrIndexInsideObjectArray(fieldConfig, [fieldName], type.name);
+    assertNoUnsupportedUniqueOrIndex(fieldConfig, [fieldName], type.name);
 
     const parsedField: ParsedField = { name: fieldName, config: fieldConfig };
 
