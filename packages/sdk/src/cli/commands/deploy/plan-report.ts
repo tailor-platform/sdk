@@ -98,6 +98,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
   const workflowResourceEntries = formatWorkflowChangeEntries(
     results.workflow.changeSet,
     results.functionRegistry.workflowJobChanges,
+    results.workflow.jobFunctionDeletes,
   );
   const workflowExecutionPolicyEntries = formatChangeSetEntries(
     results.workflowExecutionPolicy.changeSet,

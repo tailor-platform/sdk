@@ -3,6 +3,7 @@ import { applyAIGateway, planAIGateway } from "#/cli/commands/deploy/aigateway";
 import { findAppIdLock, resolveLockedAppIds } from "#/cli/commands/deploy/app-id-lock";
 import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
+import { createChangeSet, type HasName } from "#/cli/commands/deploy/change-set";
 import { warnMissingAppId } from "#/cli/commands/deploy/config-id-injector";
 import { applyExecutor, planExecutor } from "#/cli/commands/deploy/executor";
 import {
@@ -131,52 +132,45 @@ async function execRemove(
     (plan) => "resourceOwners" in plan && plan.resourceOwners.has(application.name),
   );
 
-  // Print planned deletions (same order as apply dry-run)
-  const removeLines = [
-    ...plans.functionRegistry.changeSet.lines(),
-    ...plans.staticWebsite.changeSet.lines(),
-    ...plans.aiGateway.changeSet.lines(),
-    ...plans.app.lines(),
-    ...plans.tailorDB.changeSet.service.lines(),
-    ...plans.tailorDB.changeSet.type.lines(),
-    ...plans.tailorDB.changeSet.gqlPermission.lines(),
-    ...plans.pipeline.changeSet.service.lines(),
-    ...plans.pipeline.changeSet.resolver.lines(),
-    ...plans.executor.changeSet.lines(),
-    ...plans.workflow.changeSet.lines(),
-    ...plans.workflowExecutionPolicy.changeSet.lines(),
-    ...plans.idp.changeSet.service.lines(),
-    ...plans.idp.changeSet.client.lines(),
-    ...plans.auth.changeSet.service.lines(),
-    ...plans.auth.changeSet.idpConfig.lines(),
-    ...plans.auth.changeSet.userProfileConfig.lines(),
-    ...plans.auth.changeSet.tenantConfig.lines(),
-    ...plans.auth.changeSet.machineUser.lines(),
-    ...plans.auth.changeSet.oauth2Client.lines(),
-    ...plans.auth.changeSet.authHook.lines(),
-    ...plans.auth.changeSet.scim.lines(),
-    ...plans.auth.changeSet.scimResource.lines(),
-    ...plans.auth.changeSet.connection.lines(),
-    ...plans.secretManager.vaultChangeSet.lines(),
-    ...plans.secretManager.secretChangeSet.lines(),
+  const workflowJobFunctions = createChangeSet<HasName, HasName, HasName>("Workflow job functions");
+  workflowJobFunctions.deletes.push(
+    ...plans.workflow.jobFunctionDeletes.map((del) => ({ name: del.jobFunctionName })),
+  );
+
+  // Planned deletions in the same order as apply dry-run
+  const deletions = [
+    plans.functionRegistry.changeSet,
+    plans.staticWebsite.changeSet,
+    plans.aiGateway.changeSet,
+    plans.app,
+    plans.tailorDB.changeSet.service,
+    plans.tailorDB.changeSet.type,
+    plans.tailorDB.changeSet.gqlPermission,
+    plans.pipeline.changeSet.service,
+    plans.pipeline.changeSet.resolver,
+    plans.executor.changeSet,
+    plans.workflow.changeSet,
+    workflowJobFunctions,
+    plans.workflowExecutionPolicy.changeSet,
+    plans.idp.changeSet.service,
+    plans.idp.changeSet.client,
+    plans.auth.changeSet.service,
+    plans.auth.changeSet.idpConfig,
+    plans.auth.changeSet.userProfileConfig,
+    plans.auth.changeSet.tenantConfig,
+    plans.auth.changeSet.machineUser,
+    plans.auth.changeSet.oauth2Client,
+    plans.auth.changeSet.authHook,
+    plans.auth.changeSet.scim,
+    plans.auth.changeSet.scimResource,
+    plans.auth.changeSet.connection,
+    plans.secretManager.vaultChangeSet,
+    plans.secretManager.secretChangeSet,
   ];
+  const removeLines = deletions.flatMap((changeSet) => changeSet.lines());
   if (removeLines.length > 0) logger.log(removeLines.join("\n"));
 
-  if (
-    plans.tailorDB.changeSet.service.deletes.length === 0 &&
-    plans.staticWebsite.changeSet.deletes.length === 0 &&
-    plans.aiGateway.changeSet.deletes.length === 0 &&
-    plans.idp.changeSet.service.deletes.length === 0 &&
-    plans.auth.changeSet.service.deletes.length === 0 &&
-    plans.pipeline.changeSet.service.deletes.length === 0 &&
-    plans.app.deletes.length === 0 &&
-    plans.executor.changeSet.deletes.length === 0 &&
-    plans.workflow.changeSet.deletes.length === 0 &&
-    plans.workflowExecutionPolicy.changeSet.deletes.length === 0 &&
-    plans.functionRegistry.changeSet.deletes.length === 0 &&
-    plans.secretManager.vaultChangeSet.deletes.length === 0 &&
-    plans.secretManager.secretChangeSet.deletes.length === 0
-  ) {
+  if (deletions.every((changeSet) => changeSet.deletes.length === 0)) {
     return { removed: false, leftBehind };
   }
 

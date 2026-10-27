@@ -8,6 +8,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { createChangeSet, type HasName } from "./deploy/change-set";
 import { removeCommand } from "./remove";
 
 const mocks = vi.hoisted(() => {
@@ -80,7 +81,11 @@ const mocks = vi.hoisted(() => {
       ...ownership(),
     })),
     applyTailorDB: vi.fn(),
-    planWorkflow: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
+    planWorkflow: vi.fn(async () => ({
+      changeSet: changeSet(),
+      jobFunctionDeletes: [],
+      ...ownership(),
+    })),
     applyWorkflow: vi.fn(),
   };
 });
@@ -245,6 +250,55 @@ describe("remove command", () => {
       application: "my-app",
       complete: true,
     });
+  });
+
+  test("deletes auth connections when they are the only remaining resources", async () => {
+    const client = {
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+    };
+    vi.mocked(initOperatorClient).mockResolvedValue(client as never);
+    const connection = createChangeSet<HasName, HasName, HasName>("Auth connections");
+    connection.deletes.push({ name: "github" });
+    const defaultAuth = await mocks.planAuth();
+    const auth = { ...defaultAuth, changeSet: { ...defaultAuth.changeSet, connection } };
+    mocks.planAuth.mockResolvedValueOnce(auth as never);
+    using _json = jsonMode();
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining("Auth connections:\n  - github"),
+    );
+    expect(mocks.applyAuth).toHaveBeenCalledWith(client, auth, "delete-resources");
+    expect(logger.out).toHaveBeenCalledWith(expect.objectContaining({ changed: true }));
+  });
+
+  test("deletes workflow job functions left behind by already removed workflows", async () => {
+    const client = {
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+    };
+    vi.mocked(initOperatorClient).mockResolvedValue(client as never);
+    const workflow = {
+      changeSet: mocks.changeSet(),
+      jobFunctionDeletes: [{ workspaceId: "workspace-id", jobFunctionName: "process-order" }],
+      ...mocks.ownership(),
+    };
+    mocks.planWorkflow.mockResolvedValueOnce(workflow as never);
+    using _json = jsonMode();
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining("Workflow job functions:\n  - process-order"),
+    );
+    expect(mocks.applyWorkflow).toHaveBeenCalledWith(client, workflow, "delete");
+    expect(logger.out).toHaveBeenCalledWith(expect.objectContaining({ changed: true }));
   });
 
   test("removes by the app id recorded in the governing lock", async () => {

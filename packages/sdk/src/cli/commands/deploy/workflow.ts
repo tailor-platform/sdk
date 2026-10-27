@@ -5,7 +5,7 @@ import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
-import { createChangeSet, type ChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import {
@@ -783,6 +783,7 @@ type WorkflowDisplayEntry = GroupedDisplayEntry;
  * Format workflow changes for grouped dry-run display.
  * @param changeSet - Workflow changes
  * @param workflowJobFunctionChanges - Related function registry changes for workflow jobs
+ * @param jobFunctionDeletes - Planned workflow job function deletes
  * @returns Display entries for workflow output
  */
 export function formatWorkflowChangeEntries(
@@ -790,17 +791,45 @@ export function formatWorkflowChangeEntries(
     ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
     "creates" | "updates" | "deletes" | "replaces"
   >,
-  workflowJobFunctionChanges?: RelatedFunctionRegistryChanges,
+  workflowJobFunctionChanges: RelatedFunctionRegistryChanges,
+  jobFunctionDeletes: ReadonlyArray<DeleteWorkflowJobFunction>,
 ): WorkflowDisplayEntry[] {
-  return formatChangeEntriesWithFunctionRegistry(
-    "workflow",
-    changeSet,
-    workflowJobFunctionChanges,
-    (item) =>
-      "usedJobNames" in item
-        ? item.usedJobNames.map((jobName) => workflowJobFunctionName(jobName))
-        : [],
+  const jobFunctionRegistryNames = new Set(
+    jobFunctionDeletes.map((del) => workflowJobFunctionName(del.jobFunctionName)),
   );
+  const isJobFunctionRegistryDelete = (item: HasName) => jobFunctionRegistryNames.has(item.name);
+  return [
+    ...formatChangeEntriesWithFunctionRegistry(
+      "workflow",
+      changeSet,
+      {
+        ...workflowJobFunctionChanges,
+        deletes: workflowJobFunctionChanges.deletes.filter(
+          (item) => !isJobFunctionRegistryDelete(item),
+        ),
+      },
+      (item) =>
+        "usedJobNames" in item
+          ? item.usedJobNames.map((jobName) => workflowJobFunctionName(jobName))
+          : [],
+    ),
+    ...formatChangeEntriesWithFunctionRegistry(
+      "jobFunction",
+      {
+        creates: [],
+        updates: [],
+        deletes: jobFunctionDeletes.map((del) => ({ name: del.jobFunctionName })),
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [],
+        deletes: workflowJobFunctionChanges.deletes.filter(isJobFunctionRegistryDelete),
+        replaces: [],
+      },
+      (item) => [workflowJobFunctionName(item.name)],
+    ),
+  ];
 }
 
 type ExistingWorkflowResource = {

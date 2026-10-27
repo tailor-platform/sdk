@@ -1349,6 +1349,7 @@ describe("formatWorkflowChangeEntries", () => {
         deletes: [],
         replaces: [],
       },
+      [],
     );
 
     expect(entries).toEqual([
@@ -1402,6 +1403,7 @@ describe("formatWorkflowChangeEntries", () => {
           deletes: [],
           replaces: [],
         },
+        [],
       );
 
       const workflowEntry = entries.find((entry) => entry.labels.includes("workflow"));
@@ -1423,6 +1425,7 @@ describe("formatWorkflowChangeEntries", () => {
         deletes: [],
         replaces: [],
       },
+      [],
     );
 
     expect(entries).toEqual([
@@ -1435,7 +1438,7 @@ describe("formatWorkflowChangeEntries", () => {
     ]);
   });
 
-  test("groups workflow deletes with related function registry deletes", () => {
+  test("groups workflow deletes with related function registry deletes that no job function delete takes", () => {
     const entries = formatWorkflowChangeEntries(
       {
         creates: [],
@@ -1457,6 +1460,7 @@ describe("formatWorkflowChangeEntries", () => {
         deletes: [{ name: "workflow--process-order" }, { name: "workflow--send-notification" }],
         replaces: [],
       },
+      [],
     );
 
     expect(entries).toEqual([
@@ -1491,6 +1495,7 @@ describe("formatWorkflowChangeEntries", () => {
         deletes: [{ name: "workflow--send-notification" }],
         replaces: [],
       },
+      [],
     );
 
     expect(entries).toEqual([
@@ -1505,6 +1510,64 @@ describe("formatWorkflowChangeEntries", () => {
         symbol: symbols.delete,
         name: "send-notification",
         labels: ["function"],
+      },
+    ]);
+  });
+
+  test("lists job function deletes with their function registry deletes", () => {
+    const entries = formatWorkflowChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "order-processing",
+            workspaceId: "ws",
+            workflowId: "workflow-1",
+            usedJobNames: ["process-order"],
+            deletableJobNames: ["process-order"],
+          },
+        ],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "workflow--process-order" }],
+        replaces: [],
+      },
+      [{ workspaceId: "ws", jobFunctionName: "process-order" }],
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: symbols.delete,
+        name: "order-processing",
+        labels: ["workflow"],
+      },
+      {
+        action: "delete",
+        symbol: symbols.delete,
+        name: "process-order",
+        labels: ["jobFunction", "function"],
+      },
+    ]);
+  });
+
+  test("lists a job function delete that has no function registry delete", () => {
+    const entries = formatWorkflowChangeEntries(
+      { creates: [], updates: [], deletes: [], replaces: [] },
+      { creates: [], updates: [], deletes: [], replaces: [] },
+      [{ workspaceId: "ws", jobFunctionName: "orphaned-job" }],
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: symbols.delete,
+        name: "orphaned-job",
+        labels: ["jobFunction"],
       },
     ]);
   });

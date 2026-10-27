@@ -1070,6 +1070,43 @@ describe("printPlanResults", () => {
     expect(summary).toMatchObject({ create: 0, update: 1, delete: 0, replace: 1 });
   });
 
+  test("lists workflow job function deletes in the Workflow section of human output", () => {
+    const results = emptyResults();
+    results.workflow.jobFunctionDeletes.push({
+      workspaceId: "ws",
+      jobFunctionName: "orphaned-job",
+    });
+
+    const summary = printPlanResults(results, { dryRun: true });
+
+    const lines = String(outSpy.mock.calls[0]?.[0]).split("\n");
+    const workflowSection = lines.slice(lines.findIndex((line) => line.includes("Workflow:")));
+    expect(workflowSection).toContain(`  ${symbols.delete} orphaned-job (jobFunction)`);
+    expect(summary).toMatchObject({ create: 0, update: 0, delete: 1, replace: 0 });
+  });
+
+  test("includes workflow job function deletes in JSON dry-run changes", () => {
+    using _json = jsonMode();
+    const results = emptyResults();
+    results.workflow.jobFunctionDeletes.push({
+      workspaceId: "ws",
+      jobFunctionName: "orphaned-job",
+    });
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { delete: number };
+      changes: Array<{ action: string; name: string; labels: string[] }>;
+    };
+    expect(payload.summary.delete).toBe(1);
+    expect(payload.changes).toContainEqual({
+      action: "delete",
+      name: "orphaned-job",
+      labels: ["jobFunction"],
+    });
+  });
+
   test("reports unmanaged resources and owner conflicts of every plan kind", () => {
     const results = emptyResults();
     const kinds = Object.keys(results) as Array<keyof PlanResults>;
