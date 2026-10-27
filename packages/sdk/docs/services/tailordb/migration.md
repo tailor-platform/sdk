@@ -1108,6 +1108,8 @@ describe("0005 add required email", () => {
 });
 ```
 
+Queries on `db` wait while the transaction is open, so check the results after `transaction().execute()` returns, or query through `trx` inside it — a query on `db` from inside the transaction waits on itself and never finishes.
+
 Pass nested field values as JavaScript objects or arrays of objects, without `JSON.stringify`.
 
 When the migration was generated with `kyselyTypePlugin({ temporal: true })`, its `db.ts` types date and datetime fields as `Temporal.PlainDate` and `Temporal.Instant`, and top-level time fields as `Temporal.PlainTime`; nested time fields remain strings. Deploy runs the script with those values. Create the instance with `createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true })` so PGlite reads top-level temporal columns back the same way; the scaffold adds the option for such migrations. Run the test in the [`tailor-runtime` Vitest environment](../../testing.md#temporal), which provides `Temporal`. A migration generated before `temporal` was enabled still runs with `Date` values on deploy, so its test leaves the option out. As in the Kysely mock scaffold, the test calls `applyDateRepresentation` with the migration's recorded `defaultDateRepresentation` (or `"string"`) so `t` date fields parse the way they do on deploy; a migration recorded under `"temporal"` likewise needs the `tailor-runtime` environment for `Temporal`.

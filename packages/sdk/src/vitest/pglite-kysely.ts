@@ -12,7 +12,7 @@ import {
   type Dialect,
   type Driver,
   Kysely,
-  PostgresAdapter,
+  PGliteAdapter,
   PostgresIntrospector,
   PostgresQueryCompiler,
   type QueryResult,
@@ -168,6 +168,11 @@ export interface CreateKyselyPGliteOptions {
  * PGlite runs full PostgreSQL while TailorDB supports a subset of it, so a
  * statement passing here can still be rejected by the platform; keep a
  * statement-level test (see `createKyselyMock`) alongside.
+ *
+ * While a transaction is open, other queries on the returned Kysely instance
+ * wait for it to finish. Inside the transaction, run every query on the
+ * transaction (`trx`): a query on the returned instance there waits on itself
+ * and never finishes.
  * @param client - A `PGlite` instance from `@electric-sql/pglite`
  * @param options - Adapter options
  * @returns A Kysely instance that executes queries on the client and closes it on `destroy()`
@@ -190,7 +195,7 @@ export function createKyselyPGlite<DB = Record<string, never>>(
 ): Kysely<DB> {
   const temporal = options.temporal ?? false;
   const dialect: Dialect = {
-    createAdapter: () => new PostgresAdapter(),
+    createAdapter: () => new PGliteAdapter(),
     createDriver: () => new PGliteDriver(client, temporal),
     createIntrospector: (db) => new PostgresIntrospector(db),
     createQueryCompiler: () => new PostgresQueryCompiler(),
