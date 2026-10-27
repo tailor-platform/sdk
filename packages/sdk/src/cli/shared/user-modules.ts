@@ -26,7 +26,8 @@ export function currentImportNonce(): string | undefined {
 /**
  * Import a user module (config, workflow, resolver, executor, ...) with the
  * current run's cache-busting nonce applied. Outside a run this is a plain
- * import. Source that does not parse rejects with a `SYNTAX_INVALID` error.
+ * import. A `.ts` or `.mts` file that does not parse rejects with a
+ * `SYNTAX_INVALID` error.
  * @param filePath - Absolute path of the user module
  * @returns The imported module namespace
  */
