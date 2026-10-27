@@ -13,12 +13,15 @@ automatically wire the resource into every consumer — check each of these:
 - `cli/commands/remove.ts` — its `plans` object is `satisfies PlanResults`, so a missing key
   fails to compile, but the `delete` apply calls and the `deletions` list it prints and
   decides from still need a manual update.
-- `cli/commands/deploy/plan-report.ts` — `buildPlanReport` lists each change set by hand.
-- `cli/commands/deploy/validate-plan.ts` — `ValidatePlanInput` is a `PlannedDeployment`
-  alias, but `validatePlan` still needs `creates`/`updates` calls added for the
-  new resource's proto schema.
-- `cli/commands/deploy/managed-resources.ts`'s `DEPLOY_MANAGED_RESOURCE_DEFINITIONS` —
-  drives dry-run display and owner-conflict detection; add an entry per resource label.
+- `cli/commands/deploy/plan-report.ts` — `buildPlanReport` and `summarizePlanResults` list
+  each change set by hand.
+- `cli/commands/deploy/validate-plan.ts` — `ValidatePlanInput` is a `PlanResults` alias,
+  but `validatePlan` still needs `creates`/`updates` calls added for the new resource's
+  proto schema.
+- `cli/commands/deploy/managed-resources.ts`'s `managedResourceGroups` — add the new change
+  set, so `deploy` drops a delete that another config in the same run still claims. Add a
+  resource with a workspace-global name through `DEPLOY_MANAGED_RESOURCE_DEFINITIONS`
+  instead, which also rejects that name in two configs.
 - `cli/commands/deploy/managed-resource-type.ts`'s `ManagedResourceType` — add the new
   resource's id before using it as a `resourceType`. `deploy --dry-run --json` reports these
   ids, so never rename an existing one. Keep the module import-free: planners and

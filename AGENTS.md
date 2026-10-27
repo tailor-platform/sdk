@@ -21,7 +21,7 @@ When editing files matching these globs, read and follow the linked rule documen
 - `.changeset/**`: [Changeset Rules](.agents/rules/changeset.md)
 - `packages/sdk/src/cli/**/*.ts`, `packages/sdk-plugin-*/src/**/*.ts`: [CLI Logging Guidelines](.agents/rules/cli-logging.md)
 - `**`: [Code Comments](.agents/rules/code-comments.md)
-- `packages/sdk/src/cli/commands/deploy/apply-phases.ts`, `packages/sdk/src/cli/commands/deploy/managed-resource-type.ts`: [Adding a Deploy-Managed Resource Type](.agents/rules/deploy-managed-resources.md)
+- `packages/sdk/src/cli/commands/deploy/apply-phases.ts`, `packages/sdk/src/cli/commands/deploy/managed-resource-type.ts`, `packages/sdk/src/cli/commands/deploy/test-helpers/plan-results.ts`, `packages/sdk/src/cli/commands/remove.ts`, `packages/sdk/src/cli/commands/remove.test.ts`, `packages/sdk/src/cli/commands/deploy/deploy.test.ts`, `packages/sdk/src/cli/commands/deploy/plan-report.ts`, `packages/sdk/src/cli/commands/deploy/validate-plan.ts`, `packages/sdk/src/cli/commands/deploy/managed-resources.ts`: [Adding a Deploy-Managed Resource Type](.agents/rules/deploy-managed-resources.md)
 - `packages/sdk/src/**/*.ts`, `packages/sdk-codemod/src/registry.ts`: [Deprecating a Public API](.agents/rules/deprecation.md)
 - `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
 - `packages/sdk/e2e/**`: [SDK E2E Tests](.agents/rules/e2e-tests.md)

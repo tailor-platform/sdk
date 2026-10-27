@@ -19,7 +19,14 @@
       "name": "deploy-managed-resources",
       "paths": [
         "packages/sdk/src/cli/commands/deploy/apply-phases.ts",
-        "packages/sdk/src/cli/commands/deploy/managed-resource-type.ts"
+        "packages/sdk/src/cli/commands/deploy/managed-resource-type.ts",
+        "packages/sdk/src/cli/commands/deploy/test-helpers/plan-results.ts",
+        "packages/sdk/src/cli/commands/remove.ts",
+        "packages/sdk/src/cli/commands/remove.test.ts",
+        "packages/sdk/src/cli/commands/deploy/deploy.test.ts",
+        "packages/sdk/src/cli/commands/deploy/plan-report.ts",
+        "packages/sdk/src/cli/commands/deploy/validate-plan.ts",
+        "packages/sdk/src/cli/commands/deploy/managed-resources.ts"
       ],
       "file": ".agents/rules/deploy-managed-resources.md"
     },
