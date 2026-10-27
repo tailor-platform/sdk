@@ -117,8 +117,13 @@ export interface DeployOptions {
   configPath?: string;
   dryRun?: boolean;
   yes?: boolean;
+  /** **Beta:** This API may change in future releases. */
   noSchemaCheck?: boolean;
-  /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
+  /**
+   * Steps of an in-progress multi-step migration to skip, keyed by namespace.
+   *
+   * **Beta:** This API may change in future releases.
+   */
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   noValidate?: boolean;
   noCache?: boolean;

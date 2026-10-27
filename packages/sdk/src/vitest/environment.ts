@@ -29,6 +29,7 @@ const ALLOWED_GLOBALS = new Set([
   "VITEST_POOL_ID",
 ]);
 
+/** **Beta:** This API may change in future releases. */
 export default {
   name: "tailor-runtime",
   viteEnvironment: "ssr",

@@ -26,6 +26,8 @@ const MIGRATION_LABEL_PREFIX = "m";
 
 /**
  * Label key for storing migration state in TailorDB Service metadata
+ *
+ * **Beta:** This API may change in future releases.
  */
 export const MIGRATION_LABEL_KEY = "sdk-migration";
 

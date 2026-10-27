@@ -128,7 +128,8 @@ function replaceStart<Start extends ProcedureFn>(definition: {
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
-
+ *
+ * **Beta:** This API may change in future releases.
  * @returns Disposable workflow mock control object
  * @example
  * ```typescript

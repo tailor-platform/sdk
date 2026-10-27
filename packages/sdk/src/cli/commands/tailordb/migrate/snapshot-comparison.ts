@@ -966,6 +966,8 @@ export interface CompareSnapshotsOptions {
 
 /**
  * Compare two normalized snapshots and generate a diff
+ *
+ * **Beta:** This API may change in future releases.
  * @param {NormalizedSchemaSnapshot} previous - Previous normalized snapshot
  * @param {NormalizedSchemaSnapshot} current - Current normalized snapshot
  * @param {CompareSnapshotsOptions} [options] - Comparison options
@@ -1145,6 +1147,8 @@ export function compareSnapshots(
  * `createSnapshotType`. As a safety net, both sides are re-run through idempotent
  * normalization here, so a caller that forgets will still get correct
  * comparisons (no silent false drift).
+ *
+ * **Beta:** This API may change in future releases.
  * @param {SchemaSnapshot} snapshot - Schema snapshot to compare against
  * @param {Record<string, TailorDBSnapshotType>} localTypes - Local snapshot-shaped tables
  * @param {string} namespace - Namespace for comparison

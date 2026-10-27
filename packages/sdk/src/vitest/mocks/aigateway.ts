@@ -6,7 +6,11 @@ interface AigatewayCall {
   name: AIGatewayName;
 }
 
-/** Initial fixtures for an AI Gateway mock. */
+/**
+ * Initial fixtures for an AI Gateway mock.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface MockAigatewayOptions {
   /** AI Gateway URLs available when the mock is acquired. */
   urls?: Partial<Record<AIGatewayName, string>>;
@@ -18,6 +22,8 @@ export interface MockAigatewayOptions {
 
 /**
  * Acquire a disposable mock for `tailor.aigateway`. Restored on dispose.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Initial AI Gateway URL fixtures
  * @returns Disposable AI Gateway mock control object
  * @example

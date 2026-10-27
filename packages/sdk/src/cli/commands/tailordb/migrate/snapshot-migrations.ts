@@ -258,6 +258,8 @@ export function applyDiffToSnapshot(
 /**
  * Reconstruct the latest schema snapshot from all migration files
  * Returns null if no migrations exist
+ *
+ * **Beta:** This API may change in future releases.
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} [maxVersion] - Optional maximum migration version to apply
  * @returns {NormalizedSchemaSnapshot | null} Reconstructed normalized snapshot or null if no migrations exist

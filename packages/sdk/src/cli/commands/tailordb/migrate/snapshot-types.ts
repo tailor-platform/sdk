@@ -67,6 +67,8 @@ export type SnapshotFieldBooleanProp = (typeof SNAPSHOT_FIELD_BOOLEAN_PROPS)[num
 
 /**
  * Field configuration in schema snapshot
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface SnapshotFieldConfig {
   type: string;
@@ -218,6 +220,8 @@ export type SnapshotGqlPermission = readonly SnapshotGqlPermissionPolicy[];
  * `pluralForm` is always materialized — either set by the SDK user, derived
  * via inflection at snapshot construction, or backfilled when loading legacy
  * snapshots in `loadSnapshot`.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface TailorDBSnapshotType {
   name: string;
@@ -261,6 +265,8 @@ export interface RebaselineMarker {
  * Schema snapshot - full schema state at a point in time.
  * Stored as XXXX/schema.json. Defined here (leaf module) so that
  * snapshot-schema.ts can reference it without importing snapshot.ts.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface SchemaSnapshot {
   /** Format version for future compatibility */
@@ -275,6 +281,8 @@ declare const normalizedSchemaSnapshotBrand: unique symbol;
 
 /**
  * Schema snapshot normalized to a canonical form for consistent comparison.
+ *
+ * **Beta:** This API may change in future releases.
  *
  * Returned by snapshot creation and loading functions so drift detection stays
  * stable when local definitions omit defaults that the platform materializes.

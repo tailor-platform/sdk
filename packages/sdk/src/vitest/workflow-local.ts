@@ -52,6 +52,7 @@ class PendingStart {
   ) {}
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface RunWorkflowLocallyOptions {
   /** Env passed to workflow job bodies during this local run. */
   env?: TailorEnv;
@@ -59,6 +60,8 @@ export interface RunWorkflowLocallyOptions {
 
 /**
  * Run a workflow's main job and dependent job starts locally with real job bodies.
+ *
+ * **Beta:** This API may change in future releases.
  *
  * Use this for local full-chain workflow tests. Regular `.start()` calls
  * delegate to the platform workflow runtime and should be mocked with
@@ -71,6 +74,8 @@ export function runWorkflowLocally<W extends Workflow<WorkflowJob<string, undefi
 ): Promise<WorkflowOutput<W>>;
 /**
  * Run a no-input workflow locally with optional runner settings.
+ *
+ * **Beta:** This API may change in future releases.
  * @param workflow - Workflow definition to run
  * @param args - Must be `undefined` for no-input workflows
  * @param options - Local runner options
@@ -83,6 +88,8 @@ export function runWorkflowLocally<W extends Workflow<WorkflowJob<string, undefi
 ): Promise<WorkflowOutput<W>>;
 /**
  * Run a workflow locally with real job bodies.
+ *
+ * **Beta:** This API may change in future releases.
  * @param workflow - Workflow definition to run
  * @param args - Arguments passed to the workflow's main job
  * @param options - Local runner options

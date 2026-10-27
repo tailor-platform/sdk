@@ -2,7 +2,7 @@
 description: "Generate, test, and apply TailorDB schema migrations with optional data migration scripts, and recover from failed migrations."
 ---
 
-# TailorDB Migrations
+# TailorDB Migrations (Beta)
 
 > **Beta:** The `tailordb migration` command and the migration runtime are beta features. They may introduce breaking changes in future releases. The CLI emits a beta warning on every invocation.
 
@@ -1045,7 +1045,7 @@ describe("0005 add required email", () => {
 });
 ```
 
-Stage the rows each query returns with `mock.enqueueResult(...)` or `mock.setQueryResolver(...)` when the script reads before writing; call `main(trx, { env: { ... } })` when the script takes a `MigrationContext`. See [Kysely-layer mock](../../testing.md#kysely-layer-mock-createkyselymock) for the full mock API.
+Stage the rows each query returns with `mock.enqueueResult(...)` or `mock.setQueryResolver(...)` when the script reads before writing; call `main(trx, { env: { ... } })` when the script takes a `MigrationContext`. See [Kysely-layer mock](../../testing.md#kysely-layer-mock-createkyselymock-beta) for the full mock API.
 
 These tests need no platform connection and no `tailor-runtime` environment — they run in a plain Vitest setup. Vitest's default `include` pattern already picks up `migrations/**/migrate.test.ts`; if your config narrows `include`, add the migrations directory. The test file is ignored by `tailor deploy` and never ships to the platform.
 

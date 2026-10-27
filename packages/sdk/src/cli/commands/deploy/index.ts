@@ -42,11 +42,11 @@ export const deployCommand = defineAppCommand({
       description: "Run the command without making any changes",
     }),
     "no-schema-check": arg(z.boolean().optional(), {
-      description: "Skip schema diff check against migration snapshots",
+      description: "Skip schema diff check against migration snapshots (beta)",
     }),
     "migration-skip-steps": arg(z.string().optional(), {
       description:
-        "Skip steps of a partially applied multi-step migration that already succeeded (comma-separated namespace/step entries)",
+        "Skip steps of a partially applied multi-step migration that already succeeded, as comma-separated namespace/step entries (beta)",
     }),
     "no-validate": arg(z.boolean().optional(), {
       description: "Skip client-side validation against platform resource constraints",

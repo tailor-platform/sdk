@@ -26,7 +26,7 @@ import { validateCommand } from "./validate";
 
 export const migrationCommand = defineCommand({
   name: "migration",
-  description: "Manage TailorDB schema migrations.",
+  description: "Manage TailorDB schema migrations (beta).",
   subCommands: {
     generate: generateCommand,
     rebaseline: rebaselineCommand,

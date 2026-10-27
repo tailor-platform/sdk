@@ -4,13 +4,21 @@ import { tailordbRoot, withDispose } from "./shared";
 
 type QueryResolver = (query: string, params: unknown[]) => unknown[] | undefined;
 
-/** Controls how unmatched TailorDB queries are handled. */
+/**
+ * Controls how unmatched TailorDB queries are handled.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface MockTailordbOptions {
   /** Return an empty result or throw when no configured query behavior matches. */
   onUnhandled?: "fallback" | "error";
 }
 
-/** Matches a TailorDB query by SQL text and optionally by parameters. */
+/**
+ * Matches a TailorDB query by SQL text and optionally by parameters.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface QueryMatch {
   /** Exact SQL text or regular expression to match. */
   sql: string | RegExp;
@@ -18,14 +26,22 @@ export interface QueryMatch {
   params?: readonly unknown[] | ((params: unknown[]) => boolean);
 }
 
-/** Selects TailorDB queries that receive a configured response. */
+/**
+ * Selects TailorDB queries that receive a configured response.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export type QueryMatcher =
   | string
   | RegExp
   | QueryMatch
   | ((query: string, params: unknown[]) => boolean);
 
-/** Configures persistent and one-time responses for matched queries. */
+/**
+ * Configures persistent and one-time responses for matched queries.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface QueryBehavior<Row> {
   /** Return these rows for every matching query after one-time responses are consumed. */
   returnsRows(rows: Row[]): QueryBehavior<Row>;
@@ -86,6 +102,8 @@ class MockQueryResult {
  * `tailordb.Client` whose `queryObject` is a shared `vi.fn()` (so query
  * responses can be staged before the client is constructed). Restored on
  * dispose.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Query fallback behavior
  * @returns Disposable TailorDB mock control object
  * @example

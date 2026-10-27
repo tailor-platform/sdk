@@ -241,6 +241,8 @@ function convertActionPermission(
 
 /**
  * Create a schema snapshot from local table definitions
+ *
+ * **Beta:** This API may change in future releases.
  * @param {Record<string, TailorDBType>} types - Local table definitions
  * @param {string} namespace - Namespace for the snapshot
  * @returns {NormalizedSchemaSnapshot} Normalized schema snapshot

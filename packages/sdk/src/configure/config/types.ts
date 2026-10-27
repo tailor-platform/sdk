@@ -311,6 +311,8 @@ export interface AppConfig<
    * every table in those namespaces are disabled and record events are not
    * published; `read` keeps its setting.
    *
+   * **Beta:** This API may change in future releases.
+   *
    * - `false`: no maintenance mode. While migrations run, the SDK does
    *   not guarantee what concurrent requests observe: tables can be in an
    *   intermediate schema, and record writes made by migration scripts publish

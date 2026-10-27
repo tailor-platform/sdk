@@ -252,6 +252,8 @@ function getCacheKey(baseKey: string, pluginConfig: unknown): string {
  * For table-attached plugins, calls onTableLoaded() with the source table.
  * For namespace plugins, calls onNamespaceLoaded() with auto-resolved namespace.
  * Results are cached per config path, plugin, namespace, and pluginConfig to avoid redundant processing.
+ *
+ * **Beta:** This API may change in future releases.
  * @param configPath - Path to tailor.config.ts (absolute or relative to cwd)
  * @param pluginId - The plugin's unique identifier
  * @param sourceTable - The source TailorDB table (null for namespace plugins)
@@ -420,6 +422,8 @@ const extendedTableCache = new Map<string, WeakMap<TailorAnyDBType, Promise<Tail
  * The table exported from the source file is not changed; the returned table is a new object.
  * Returns the source table itself when no plugin is attached to it, or when the config is
  * not available (e.g. in a bundled executor on the platform server).
+ *
+ * **Beta:** This API may change in future releases.
  * @template T - The source table's own type, which the returned table keeps
  * @param configPath - Path to tailor.config.ts (absolute or relative to cwd)
  * @param sourceTable - The TailorDB table as exported from its source file
