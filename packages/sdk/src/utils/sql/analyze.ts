@@ -160,8 +160,7 @@ class Analyzer {
   usesTemporal = false;
   readonly #tables = new Map<string, Table>();
   readonly #params = new Map<string, { type: string }>();
-  // Sources whose row a WHERE test proves present, and their columns it proves not null.
-  readonly #present = new Set<Source>();
+  // The columns of each source a WHERE test proves not null.
   readonly #notNull = new Map<Source, Set<string>>();
   #namespace: { name: string; table: string } | undefined;
 
@@ -258,7 +257,12 @@ class Analyzer {
       );
       return;
     }
-    scope.push({ table, name: ref.alias?.name ?? ref.table.name, nullable: false });
+    const name = ref.alias ?? ref.table;
+    if (scope.some((source) => source.name === name.name)) {
+      this.report(`Table or alias ${quoteName(name.name)} is used more than once`, name.span);
+      return;
+    }
+    scope.push({ table, name: name.name, nullable: false });
   }
 
   #missingSource(scope: Source[], identifier: SqlIdentifier): void {
@@ -288,22 +292,20 @@ class Analyzer {
     ref: SqlColumnRef,
     outputNames?: ReadonlySet<string>,
   ): { config: SqlFieldConfig; nullable: boolean; source: Source } | undefined {
-    const found = this.#find(scope, ref);
+    const { candidates, found } = this.#lookup(scope, ref);
     if (found) {
       const { source, config } = found;
       return { source, config, nullable: this.#nullable(source, ref.column.name, config) };
     }
+    const [candidate] = candidates;
     if (ref.table) {
-      const table = ref.table;
-      const source = scope.find((candidate) => candidate.name === table.name);
-      if (source) this.#missingColumn(ref.column, [source.table]);
-      else this.#missingSource(scope, table);
+      if (candidate) this.#missingColumn(ref.column, [candidate.table]);
+      else this.#missingSource(scope, ref.table);
       return undefined;
     }
-    const owners = scope.filter((source) => source.table.fields.has(ref.column.name));
-    if (owners.length > 1) {
+    if (candidates.length > 1) {
       this.report(
-        `Column ${quoteName(ref.column.name)} is ambiguous: it exists in ${owners.map((owner) => quoteName(owner.table.definition.name)).join(" and ")}`,
+        `Column ${quoteName(ref.column.name)} is ambiguous: it exists in ${candidates.map((owner) => quoteName(owner.table.definition.name)).join(" and ")}`,
         ref.column.span,
       );
       return undefined;
@@ -318,25 +320,25 @@ class Analyzer {
     return undefined;
   }
 
-  // The source and field a column reference names, when exactly one does.
-  #find(
+  // The sources a column reference may name, and the field when exactly one source holds it.
+  #lookup(
     scope: Source[],
     ref: SqlColumnRef,
-  ): { source: Source; config: SqlFieldConfig } | undefined {
+  ): { candidates: Source[]; found?: { source: Source; config: SqlFieldConfig } } {
     const tableName = ref.table?.name;
-    const sources = scope.filter((source) =>
+    const candidates = scope.filter((source) =>
       tableName === undefined
         ? source.table.fields.has(ref.column.name)
         : source.name === tableName,
     );
-    const [source] = sources;
-    const config = sources.length === 1 ? source?.table.fields.get(ref.column.name) : undefined;
-    return source && config ? { source, config } : undefined;
+    const [source] = candidates;
+    const config = candidates.length === 1 ? source?.table.fields.get(ref.column.name) : undefined;
+    return { candidates, found: source && config ? { source, config } : undefined };
   }
 
   #nullable(source: Source, column: string, config: SqlFieldConfig): boolean {
     if (this.#notNull.get(source)?.has(column)) return false;
-    return (source.nullable && !this.#present.has(source)) || config.required !== true;
+    return source.nullable || config.required !== true;
   }
 
   #conjuncts(condition: SqlCondition | undefined): SqlCondition[] {
@@ -350,9 +352,9 @@ class Analyzer {
     for (const condition of this.#conjuncts(where)) {
       if (condition.kind !== "isNull" || !condition.not || condition.left.kind !== "column")
         continue;
-      const found = this.#find(scope, condition.left);
+      const { found } = this.#lookup(scope, condition.left);
       if (!found) continue;
-      this.#present.add(found.source);
+      found.source.nullable = false;
       const column = condition.left.column.name;
       if (assigned?.has(column)) continue;
       const columns = this.#notNull.get(found.source) ?? new Set<string>();

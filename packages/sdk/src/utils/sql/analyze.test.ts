@@ -151,7 +151,7 @@ describe("analyzeSql", () => {
   });
 
   describe("IS NOT NULL", () => {
-    test("drops null from a column the WHERE clause tests with IS NOT NULL", () => {
+    test("drops null only for IS NOT NULL tests AND-ed into WHERE", () => {
       const analysis = analyzed(
         'SELECT "paidAt", "weight", "priority" FROM "Order" WHERE "paidAt" IS NOT NULL AND ("weight" IS NOT NULL OR "amount" > 1) AND "priority" IS NULL',
       );
@@ -380,6 +380,11 @@ describe("analyzeSql", () => {
         source: 'SELECT "name" FROM "Customer" c JOIN "Product" p ON c."id" = p."id"',
         message: 'Column "name" is ambiguous: it exists in "Customer" and "Product"',
         at: '"name"',
+      },
+      {
+        source: 'SELECT x."name" FROM "Customer" x JOIN "Order" x ON x."id" = x."id"',
+        message: 'Table or alias "x" is used more than once',
+        at: "x",
       },
       {
         source: 'SELECT x."id" FROM "Order" o',
