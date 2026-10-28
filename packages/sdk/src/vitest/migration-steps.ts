@@ -6,7 +6,11 @@
 import { assertDefined } from "#/utils/assert";
 import { orderMigrationSteps } from "#/utils/migration-steps";
 
-/** A step as declared in a migration script's `steps`. */
+/**
+ * A step as declared in a migration script's `steps`.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface RunnableMigrationStep<Trx, Context> {
   /** Steps that must complete before this one starts. */
   readonly dependsOn?: readonly string[];
@@ -14,6 +18,7 @@ export interface RunnableMigrationStep<Trx, Context> {
   run: (trx: Trx, context: Context) => Promise<unknown>;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface RunMigrationStepsOptions<Trx, Context extends { env: unknown }> {
   /**
    * Run one step inside a transaction, e.g.
@@ -25,7 +30,11 @@ export interface RunMigrationStepsOptions<Trx, Context extends { env: unknown }>
   env?: Context["env"];
 }
 
-/** Thrown by {@link runMigrationSteps} when a step fails. */
+/**
+ * Thrown by {@link runMigrationSteps} when a step fails.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export class MigrationStepError extends Error {
   /** The step that failed. */
   readonly step: string;
@@ -47,6 +56,8 @@ export class MigrationStepError extends Error {
  * Run a migration script's `steps` in the order `tailor deploy` runs them,
  * committing each step separately, so a test can observe what a failure in a
  * later step leaves behind.
+ *
+ * **Beta:** This API may change in future releases.
  * @param steps - The script's exported `steps`
  * @param options - Transaction runner and env
  * @returns Names of the steps that ran, in execution order

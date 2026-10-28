@@ -10,7 +10,11 @@ interface AuthConnectionCall {
   connectionName: ConnectionName;
 }
 
-/** Initial fixtures and fallback behavior for an AuthConnection mock. */
+/**
+ * Initial fixtures and fallback behavior for an AuthConnection mock.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface MockAuthconnectionOptions {
   /** Tokens available when the mock is acquired. */
   tokens?: Partial<Record<ConnectionName, AuthConnectionTokenResult>>;
@@ -24,6 +28,8 @@ export interface MockAuthconnectionOptions {
 
 /**
  * Acquire a disposable mock for `tailor.authconnection`. Restored on dispose.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Initial token fixtures and fallback behavior
  * @returns Disposable AuthConnection mock control object
  * @example

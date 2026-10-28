@@ -711,6 +711,7 @@ export interface TailorDBType<
       : never;
   };
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
+  /** **Beta:** This API may change in future releases. */
   plugin<const Config extends Record<string, unknown>>(
     config: Config & PluginConfigGuard<Fields, Config, FileKeys>,
   ): TailorDBType<PluginExtendedFields<Fields, Config>, User, Defined, FileKeys>;

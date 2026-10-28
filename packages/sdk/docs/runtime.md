@@ -133,7 +133,7 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `aigateway` — AI Gateway URL resolution (`get`)
 - `logger` — structured logging with severity and attributes; the message is written to standard output, the full entry with its attributes is exported over OpenTelemetry where the attributes are queryable (`debug`, `info`, `warn`, `error`, `setAttributes`)
 
-## Testing
+## Testing (Beta)
 
 `@tailor-platform/sdk/vitest` ships mock controllers for every runtime namespace. Pair them with the `tailor-runtime` Vitest environment so your unit tests run against the same wrappers your production code does. Each controller is a factory — acquire it with a `using` declaration and its state is reset automatically when the test scope exits (no `beforeEach(() => mock.reset())` needed). Requires TypeScript ≥ 5.2 and a runtime with `Symbol.dispose` (Node ≥ 20.4; the SDK targets Node ≥ 22).
 

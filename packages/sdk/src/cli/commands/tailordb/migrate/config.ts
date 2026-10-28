@@ -13,6 +13,8 @@ import type { AppConfig } from "#/configure/config/types";
 
 /**
  * Namespace with migrations configuration
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface NamespaceWithMigrations {
   namespace: string;
@@ -36,6 +38,8 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
 
 /**
  * Get namespaces that have migrations configured
+ *
+ * **Beta:** This API may change in future releases.
  * @param {AppConfig} config - Application configuration
  * @param {string} configDir - Configuration directory path
  * @returns {NamespaceWithMigrations[]} Array of namespaces with migrations configured

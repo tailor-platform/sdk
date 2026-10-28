@@ -219,7 +219,7 @@ Workspace ID resolution follows this priority order:
 2. `TAILOR_PLATFORM_WORKSPACE_ID` environment variable
 3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 
-## CLI Plugins
+## CLI Plugins (Beta)
 
 > [!WARNING]
 > CLI plugins are a **beta** feature. The dispatch behavior and the set of injected environment

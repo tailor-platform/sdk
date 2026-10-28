@@ -9,7 +9,11 @@ interface SecretCall {
   names?: readonly string[];
 }
 
-/** Initial fixtures for a Secret Manager mock. */
+/**
+ * Initial fixtures for a Secret Manager mock.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface MockSecretmanagerOptions {
   /** Secrets to merge over fixtures inherited from the currently installed mock. */
   secrets?: Record<string, Record<string, string>>;
@@ -29,6 +33,8 @@ const SECRET_STORE = Symbol("tailorSecretStore");
  * inherited (cloned) from the currently-installed mock on acquisition and
  * restored on dispose, so secrets seeded outside the test survive across
  * `using` scopes while per-test `setSecrets()` overrides stay isolated.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Initial Secret Manager fixtures
  * @returns Disposable SecretManager mock control object
  * @example

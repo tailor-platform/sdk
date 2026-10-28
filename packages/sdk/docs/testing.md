@@ -18,14 +18,14 @@ Unit-test entrypoints exposed by the SDK:
 - `resolver.body({ input, caller, invoker, env })` — invoke a resolver
 - `workflowJob.body(input, { env, invoker })` — invoke a workflow job body directly
 - `workflowJob.start(input)` — chain a workflow job through the workflow runtime
-- `runWorkflowLocally(workflow, args)` — run a workflow chain locally with real job bodies
+- `runWorkflowLocally(workflow, args)` (Beta) — run a workflow chain locally with real job bodies
 - `executor.operation.body({ ...args, invoker })` — invoke a function-kind executor
 
 For anonymous direct calls:
 
 - Pass `null` for anonymous `caller` / `invoker` context in direct unit tests.
 
-Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
+Platform API mocks under `@tailor-platform/sdk/vitest` (Beta), for use with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below:
 
 - `mockTailordb` — TailorDB query stubs and call recording
 - `mockTailordbWithPGlite` — TailorDB backed by a real in-memory Postgres (PGlite)
@@ -227,7 +227,7 @@ To hand-write DDL instead — for a table not in the schema, or to add a constra
 - Seed through `getDB` itself. When a column type rejects a value that only the test must stage, use `createKyselyPGlite<Unmigrated<...>>(pglite)` instead — see [Testing Migrations Locally](./services/tailordb/migration.md#testing-migrations-locally). This only affects test setup; it cannot supply a `.serial()` value for an insert issued by the code under test.
 - With `kyselyTypePlugin({ temporal: true })`, the generated `getDB` reads top-level date, datetime, and time columns back from PGlite as `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime`, as it does on the platform. Values inside nested objects stay strings in PGlite (see above); on the platform, nested date/datetime fields are Temporal values while nested time fields remain strings.
 - Transactions on a shared instance are serialized: while one is open, queries from other `getDB` instances wait. Do not use `test.concurrent` with a shared instance, and do not query the same instance through a second `getDB` from inside a transaction — that waits on itself.
-- PGlite runs full PostgreSQL while TailorDB supports a subset of it, and TailorDB hooks, validations, and permissions do not run here — a test passing on PGlite can still behave differently on the platform. Keep [`mockTailordb`](#tailordb-mock) or [`createKyselyMock`](#kysely-layer-mock-createkyselymock) tests for query shape and error paths, and E2E tests for platform behavior.
+- PGlite runs full PostgreSQL while TailorDB supports a subset of it, and TailorDB hooks, validations, and permissions do not run here — a test passing on PGlite can still behave differently on the platform. Keep [`mockTailordb`](#tailordb-mock) or [`createKyselyMock`](#kysely-layer-mock-createkyselymock-beta) tests for query shape and error paths, and E2E tests for platform behavior.
 
 ### Workflow Mock
 
@@ -642,7 +642,7 @@ describe("decrementUserAge", () => {
 
 **Use when:** multi-step business logic. The tests survive query rewrites because they assert high-level intent, not SQL shape.
 
-#### Kysely-layer mock (`createKyselyMock`)
+#### Kysely-layer mock (`createKyselyMock`) (Beta)
 
 `createKyselyMock` returns a real Kysely instance whose execution is mocked. Stage the rows each query returns, run your code, then assert what it did — each query's SQL and parameters, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned. Queries stay fully typed and compile to the same SQL as production.
 
@@ -697,7 +697,7 @@ Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want t
 
 TailorDB migration scripts (`migrate.ts`) are unit-tested the same way: the generated `db.ts` exports the `Database` interface to type the mock, and `tailor tailordb migration script <N> --with-test` scaffolds a ready-to-fill test. To execute a migration script against real rows in an in-memory Postgres, use `createKyselyPGlite` with `@electric-sql/pglite` and the generated `db.pglite.ts` schema. See [Testing Migrations Locally](./services/tailordb/migration.md#testing-migrations-locally).
 
-#### Resolvers that resume a workflow
+#### Resolvers that resume a workflow (Beta)
 
 Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().waitPoint(definition)` to invoke the callback with the payload that originally suspended the job:
 
@@ -731,7 +731,7 @@ describe("resolveApproval resolver", () => {
 
 `setResolvePayload` is typed from the wait-point definition. The lower-level `setResolveHandler` and `resolveCalls` APIs remain available when a test must control several wait points together.
 
-#### Resolvers that resume failed workflows
+#### Resolvers that resume failed workflows (Beta)
 
 Resolvers or executors that call `workflow.resumeWorkflowExecution(executionId)` delegate to `tailor.workflow.resumeWorkflowExecution` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().setResumeHandler` to control the returned execution ID and inspect `resumeWorkflowExecution.mock.calls`:
 
@@ -838,7 +838,7 @@ describe("validateOrder", () => {
 });
 ```
 
-#### Jobs that start other jobs
+#### Jobs that start other jobs (Beta)
 
 Use `mockWorkflow().job(definition)` to replace dependent jobs with deterministic results:
 
@@ -878,7 +878,7 @@ describe("fulfillOrder", () => {
 
 **Use when:** you want to isolate the orchestrating job from its dependencies.
 
-#### Jobs that wait on approval
+#### Jobs that wait on approval (Beta)
 
 `.wait()` calls delegate to `tailor.workflow.wait`. With the `tailor-runtime` environment active, use `mockWorkflow().waitPoint(definition)` to drive each branch with a typed mock:
 
@@ -921,7 +921,7 @@ describe("processWithApproval", () => {
 
 The lower-level `setWaitHandler` and `waitCalls` APIs remain available when one handler must cover several wait points.
 
-#### Running a full workflow locally
+#### Running a full workflow locally (Beta)
 
 To exercise the full chain with real job bodies, call `runWorkflowLocally(workflow, args)`. Dependent jobs run their real `.body()` functions, and start args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
 

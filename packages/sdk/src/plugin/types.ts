@@ -28,6 +28,8 @@ interface GeneratedFile {
 
 /**
  * Result returned by generation-time hooks.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface GeneratorResult {
   files: GeneratedFile[];
@@ -51,6 +53,8 @@ export interface GeneratorAuthInput {
 
 /**
  * Namespace-level TailorDB data available to generation-time hooks.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface TailorDBNamespaceData {
   /** Namespace name */
@@ -65,6 +69,8 @@ export interface TailorDBNamespaceData {
 
 /**
  * Namespace-level resolver data available to generation-time hooks.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface ResolverNamespaceData {
   /** Namespace name */
@@ -75,6 +81,8 @@ export interface ResolverNamespaceData {
 
 /**
  * Context passed to plugin's onTailorDBReady hook.
+ *
+ * **Beta:** This API may change in future releases.
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface TailorDBReadyContext<PluginConfig = unknown> {
@@ -92,6 +100,8 @@ export interface TailorDBReadyContext<PluginConfig = unknown> {
 
 /**
  * Context passed to plugin's onResolverReady hook.
+ *
+ * **Beta:** This API may change in future releases.
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ResolverReadyContext<PluginConfig = unknown> {
@@ -111,6 +121,8 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
 
 /**
  * Context passed to plugin's onExecutorReady hook.
+ *
+ * **Beta:** This API may change in future releases.
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ExecutorReadyContext<PluginConfig = unknown> {
@@ -138,6 +150,8 @@ export type TableConfigRequired<PluginConfig = unknown> =
 /**
  * Interface for plugin configuration mapping.
  * Extend this interface via declaration merging to add typed plugin configs.
+ *
+ * **Beta:** This API may change in future releases.
  */
 // oxlint-disable-next-line no-unused-vars, no-empty-object-type
 export interface PluginConfigs<Fields extends string = string> {
@@ -151,6 +165,8 @@ export interface PluginConfigs<Fields extends string = string> {
  * by the same `id` used in {@link PluginConfigs}. The value must be a
  * `Record<string, TailorAnyDBField>` of the fields to add — it is merged
  * into the table's existing fields, not a replacement for them.
+ *
+ * **Beta:** This API may change in future releases.
  */
 // oxlint-disable-next-line no-unused-vars, no-empty-object-type
 export interface PluginFieldExtensions<Fields extends string = string, Config = unknown> {
@@ -161,12 +177,16 @@ export interface PluginFieldExtensions<Fields extends string = string, Config = 
  * Registry mapping a plugin's `id` literal to its plugin-level config type.
  * Extend via declaration merging, keyed by the `id` string, from the
  * owning plugin's own module.
+ *
+ * **Beta:** This API may change in future releases.
  */
 // oxlint-disable-next-line no-empty-object-type
 export interface PluginConfigRegistry {}
 
 /**
  * Context passed to plugin's process method
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface PluginTableProcessContext<TableConfig = unknown, PluginConfig = unknown> {
   table: TailorAnyDBType;
@@ -177,6 +197,8 @@ export interface PluginTableProcessContext<TableConfig = unknown, PluginConfig =
 
 /**
  * Context passed to plugin's onNamespaceLoaded hook.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
@@ -185,16 +207,20 @@ export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
 
 /**
  * Interface representing a TailorDB table for plugin output.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface TailorDBTableForPlugin {
   readonly name: string;
   readonly fields: Record<string, unknown>;
 }
 
+/** **Beta:** This API may change in future releases. */
 export type PluginGeneratedTable = TailorDBTableForPlugin;
 
 type PluginGeneratedTables = Record<string, PluginGeneratedTable>;
 
+/** **Beta:** This API may change in future releases. */
 export interface PluginGeneratedResolver {
   name: string;
   operation: "query" | "mutation";
@@ -265,11 +291,13 @@ export type PluginOperationConfig =
 
 type PluginExecutorContextValue = TailorAnyDBType | string | number | boolean | null | undefined;
 
+/** **Beta:** This API may change in future releases. */
 export interface PluginExecutorContextBase {
   sourceTable: TailorAnyDBType | null;
   namespace: string;
 }
 
+/** **Beta:** This API may change in future releases. */
 export type PluginExecutorContext = PluginExecutorContextBase & {
   [key: string]: PluginExecutorContextValue;
 };
@@ -278,6 +306,7 @@ interface PluginExecutorModule {
   default: unknown;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface PluginGeneratedExecutorWithFile<Ctx = PluginExecutorContext> {
   name: string;
   resolve: () => Promise<PluginExecutorModule>;
@@ -291,6 +320,7 @@ export interface PluginGeneratedExecutorLegacy {
   operation: PluginOperationConfig;
 }
 
+/** **Beta:** This API may change in future releases. */
 export type PluginGeneratedExecutor =
   | PluginGeneratedExecutorWithFile
   | PluginGeneratedExecutorLegacy;
@@ -299,22 +329,27 @@ interface PluginExtends<FieldExtension extends Record<string, TailorAnyDBField>>
   fields?: FieldExtension;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface PluginOutput {
   tables?: PluginGeneratedTables;
   resolvers?: PluginGeneratedResolver[];
   executors?: PluginGeneratedExecutor[];
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface TablePluginOutput<
   FieldExtension extends Record<string, TailorAnyDBField> = Record<string, TailorAnyDBField>,
 > extends PluginOutput {
   extends?: PluginExtends<FieldExtension>;
 }
 
+/** **Beta:** This API may change in future releases. */
 export type NamespacePluginOutput = PluginOutput;
 
 /**
  * Plugin interface that all plugins must implement.
+ *
+ * **Beta:** This API may change in future releases.
  * @template TableConfig - Type for per-table configuration passed via .plugin() method
  * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
  * @template FieldExtension - Type of the fields injected into the attached table via `extends.fields`. Should match the corresponding {@link PluginFieldExtensions} entry.
@@ -356,27 +391,35 @@ export interface Plugin<
   ): void | DeployedHookResult | Promise<void | DeployedHookResult>;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface PublishStaticWebsiteResult {
   url: string;
   skippedFiles: string[];
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface DeployedStaticWebsite {
   name: string;
   url: string;
 }
 
-/** A static website declared in the config that registers the plugin, which the plugin can publish to. */
+/**
+ * A static website declared in the config that registers the plugin, which the plugin can publish to.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface PublishableStaticWebsite extends DeployedStaticWebsite {
   /** Uploads the directory at the absolute path `dir` and publishes it to this website. */
   publish(dir: string): Promise<PublishStaticWebsiteResult>;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface DeployedOAuth2Client {
   name: string;
   clientId: string;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface DeployedApplication<
   StaticWebsite extends DeployedStaticWebsite = DeployedStaticWebsite,
 > {
@@ -393,12 +436,14 @@ export interface DeployedApplication<
   auth?: { namespace: string; oauth2Clients: DeployedOAuth2Client[] };
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface PluginLogger {
   info(message: string): void;
   warn(message: string): void;
   success(message: string): void;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface PluginExecOptions {
   /** Directory to run the command in. */
   workingDir: string;
@@ -411,6 +456,7 @@ export interface PluginExecOptions {
   output?: "stream" | "capture" | "ignore";
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface PluginExecResult {
   /** Captured stdout. Empty unless `output` is `"capture"`. */
   stdout: string;
@@ -418,7 +464,11 @@ export interface PluginExecResult {
   stderr: string;
 }
 
-/** Values available after all applications in this deploy run have been applied. */
+/**
+ * Values available after all applications in this deploy run have been applied.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
   /** Application whose config registers this plugin. Only its static websites can be published. */
@@ -450,6 +500,8 @@ type OutputObject = object & {
 /**
  * A value a plugin hook can return in `outputs`. Interface-typed objects are accepted;
  * a `Date` or class instance nested inside one is rejected when the deploy runs.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export type PluginOutputValue =
   | string
@@ -460,6 +512,7 @@ export type PluginOutputValue =
   | { [key: string]: PluginOutputValue }
   | OutputObject;
 
+/** **Beta:** This API may change in future releases. */
 export interface DeployedHookResult {
   /** Values included in deploy's JSON result. Interface-typed values are accepted, but a `Date` or class instance nested inside one fails the deploy instead of the type check. */
   outputs?: Record<string, PluginOutputValue>;

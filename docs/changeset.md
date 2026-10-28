@@ -38,10 +38,21 @@ expected compatibility with the user before choosing `major`.
 
 #### Breaking changes to beta features
 
-A feature is beta when the user docs under `packages/sdk/docs/` mark it so: a callout that calls it
-beta, a `(Beta)` heading on its page or section, or `(beta)` in its CLI command description. An API
-whose usage is explained on a beta page or section is beta, even when other pages or sections
-mention or link to it.
+A feature is beta only when it carries the beta mark itself:
+
+- An exported symbol, or a property or method of one: `**Beta:**` in its JSDoc. The members of a
+  marked symbol share its mark.
+- A CLI command or option: `(beta)` in its description. A command's subcommands and options share
+  its mark.
+- Behavior with no symbol or command of its own is beta only when listed here: how the CLI dispatches
+  `tailor <name>` to a `tailor-<name>` plugin executable and the environment variables it passes, and
+  how `tailor deploy` applies pending TailorDB migrations (schema verification, migration phases,
+  checkpoints, and scripts), including the `migrate.ts` contract.
+
+Where the docs explain or mention an API does not change this. The docs under `packages/sdk/docs/`
+repeat the mark as `(Beta)` for readers, so when marking an API, add it to the headings and list items
+dedicated to that API too. When a change to a beta API also changes a non-beta one, such as a beta type
+that also shapes non-beta command output, the non-beta one decides the level.
 
 A breaking change to a beta feature is `minor`, and its description starts with
 `**Breaking change (beta)**:` followed by the user impact and migration steps.

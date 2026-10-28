@@ -91,6 +91,7 @@ import {
 } from "./template-generator";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
+/** **Beta:** This API may change in future releases. */
 export interface GenerateOptions {
   configPath?: string;
   name?: string;
@@ -255,6 +256,8 @@ function generatedMigration(namespace: string, files: WrittenMigrationFiles): Ge
 
 /**
  * Generate migration files for TailorDB schema changes
+ *
+ * **Beta:** This API may change in future releases.
  * @param {GenerateOptions} options - Generation options
  * @returns {Promise<void>} Promise that resolves when generation is complete
  */

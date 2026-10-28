@@ -1110,7 +1110,11 @@ export type TailorDBServiceConfigInput = {
   files: string[];
   /** Glob patterns to exclude from table discovery */
   ignores?: string[] | undefined;
-  /** Migration configuration */
+  /**
+   * Migration configuration
+   *
+   * **Beta:** This API may change in future releases.
+   */
   migration?:
     | {
         /** Directory containing migration files */
@@ -1140,7 +1144,11 @@ export type TailorDBServiceConfig = {
   files: string[];
   /** Glob patterns to exclude from table discovery */
   ignores?: string[] | undefined;
-  /** Migration configuration */
+  /**
+   * Migration configuration
+   *
+   * **Beta:** This API may change in future releases.
+   */
   migration?:
     | {
         /** Directory containing migration files */

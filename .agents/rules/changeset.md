@@ -12,9 +12,10 @@ Ask: **Does this change affect SDK users?**
 - `patch`: Invisible to users (bug fix, refactoring, perf, docs, tests, CI)
 
 Beta features: a breaking change is `minor` and its description starts with
-`**Breaking change (beta)**:`. See
+`**Breaking change (beta)**:`. Beta is marked on the API itself (`**Beta:**` in its JSDoc, `(beta)` in
+its CLI description), not by where the docs explain it; see
 [Breaking changes to beta features](../../docs/changeset.md#breaking-changes-to-beta-features) for
-what counts as beta.
+the full rule, including the few behaviors listed as beta without a mark.
 
 Common mistake: new CLI commands, new config options, and new field types are **minor**, not patch.
 Do not classify every CLI default change as major. A change that follows a breaking change in an

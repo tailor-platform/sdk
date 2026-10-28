@@ -307,6 +307,8 @@ export type IndexDiffChange = IndexAddedChange | IndexRemovedChange | IndexModif
 /**
  * Migration diff - changes between two schema versions
  * Stored as XXXX/diff.json (e.g., 0001/diff.json)
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface MigrationDiff {
   /** Format version for future compatibility */
@@ -352,6 +354,8 @@ export interface ScriptSkippedInfo {
 
 /**
  * Breaking change information in migration diff
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface BreakingChangeInfo {
   tableName: string;
@@ -380,6 +384,8 @@ export interface WarningChangeInfo {
 
 /**
  * Check if a migration diff has any changes
+ *
+ * **Beta:** This API may change in future releases.
  * @param {MigrationDiff} diff - Migration diff to check
  * @returns {boolean} True if diff has changes
  */
@@ -389,6 +395,8 @@ export function hasChanges(diff: MigrationDiff): boolean {
 
 /**
  * Format a migration diff for display
+ *
+ * **Beta:** This API may change in future releases.
  * @param {MigrationDiff} diff - Migration diff to format
  * @returns {string} Formatted diff string
  */
@@ -647,6 +655,8 @@ const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
 
 /**
  * Format a summary of the migration diff
+ *
+ * **Beta:** This API may change in future releases.
  * @param {MigrationDiff} diff - Migration diff to summarize
  * @returns {string} Formatted summary string
  */
