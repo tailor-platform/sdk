@@ -71,6 +71,7 @@ describe("bundleForRun", () => {
     fs.writeFileSync(tempFile, bundledCode);
     const mod = await import(pathToFileURL(tempFile).href);
     expect(typeof mod.main).toBe("function");
+    return mod as { main: (input: unknown) => Promise<unknown> };
   }
 
   describe("plain function", () => {
@@ -518,5 +519,36 @@ export default {
       expect(result.bundledCode).toContain("https://example.com");
       await expectMainExport("verify-workflow.mjs", result.bundledCode);
     });
+
+    test.each(["main", "input", "env", "invoker", "fallbackInvoker", "tailor"])(
+      "runs a workflow job exported as %s",
+      async (exportName) => {
+        const detected: DetectedFunction = { type: "workflow-job", name: "my-job", exportName };
+        const result = await bundle(
+          "workflow-export-name.ts",
+          `
+export const ${exportName} = {
+  name: "my-job",
+  body: (input: any, ctx: any) => ({ input, env: ctx.env, invokerId: ctx.invoker.id }),
+};
+`,
+          detected,
+          { env: { APP_URL: "https://example.com" } },
+        );
+        vi.stubGlobal("tailor", { context: { getInvoker: () => null } });
+
+        try {
+          const mod = await expectMainExport("verify-workflow-export-name.mjs", result.bundledCode);
+
+          await expect(mod.main({ a: 1 })).resolves.toEqual({
+            input: { a: 1 },
+            env: { APP_URL: "https://example.com" },
+            invokerId: defaultMachineUser.id,
+          });
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      },
+    );
   });
 });
