@@ -760,6 +760,62 @@ describe("parseTypes", () => {
     );
   });
 
+  describe("validateRelationKey", () => {
+    const user = db.table("User", { email: db.string().unique() });
+
+    test.each([
+      ["a uuid field to id", db.uuid().relation({ type: "n-1", toward: { table: user } })],
+      [
+        "a uuid array field to id",
+        db.uuid({ array: true }).relation({ type: "keyOnly", toward: { table: user } }),
+      ],
+      [
+        "a string field to a string key",
+        db.string().relation({ type: "1-1", toward: { table: user, key: "email", as: "user" } }),
+      ],
+    ])("accepts a relation from %s", (_, userID) => {
+      const post = db.table("Post", { userID });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).not.toThrow();
+    });
+
+    test.each([
+      [
+        "a string field to id",
+        db.string().relation({ type: "n-1", toward: { table: user } }),
+        /"userID" on table "Post" is of type "string", but the field it references, "User\.id", is of type "uuid"/,
+      ],
+      [
+        "a string array field to id",
+        db.string({ array: true }).relation({ type: "keyOnly", toward: { table: user } }),
+        /"userID" on table "Post" is of type "string", but the field it references, "User\.id", is of type "uuid"/,
+      ],
+      [
+        "an integer field to a string key",
+        db.int().relation({ type: "keyOnly", toward: { table: user, key: "email" } }),
+        /"userID" on table "Post" is of type "integer", but the field it references, "User\.email", is of type "string"/,
+      ],
+    ])("rejects a relation from %s", (_, userID, error) => {
+      const post = db.table("Post", { userID });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(error);
+    });
+
+    test.each(["missing", "toString"])("rejects a key %s that the table does not have", (key) => {
+      const node = db.table("Node", {
+        parentID: db.uuid().relation({ type: "keyOnly", toward: { table: "self", key } }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Node: node }), "test-namespace")).toThrow(
+        `Field "parentID" on table "Node" references unknown field "${key}" on table "Node".`,
+      );
+    });
+  });
+
   describe("processRelation", () => {
     test("should compute derived metadata for relations", () => {
       const user = db.table("User", {
@@ -1001,6 +1057,20 @@ describe("parseTypes", () => {
 
       expect(() => parseTypes(toSchemaOutputs({ Order: order }), "test-namespace")).toThrow(
         /info\.ownerID.*unknown table "Missing"/,
+      );
+    });
+
+    test("rejects a relation whose type differs from the field it references, naming the nested field", () => {
+      const order = db.table("Order", {
+        info: db.object({
+          ownerID: db.string().relation({ type: "keyOnly", toward: { table: user } }),
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Order: order }), "test-namespace"),
+      ).toThrow(
+        /"info\.ownerID" on table "Order" is of type "string".*"User\.id", is of type "uuid"/,
       );
     });
   });

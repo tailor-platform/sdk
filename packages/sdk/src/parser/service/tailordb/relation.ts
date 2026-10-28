@@ -1,5 +1,6 @@
 import type { RawRelationConfig } from "#/configure/services/tailordb/types";
 import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
+import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
 import type { UnionToTuple } from "type-fest";
 
 const relationTypes = {
@@ -17,7 +18,7 @@ export const relationTypesKeys = Object.keys(relationTypes) as UnionToTuple<
 export interface RelationProcessingContext {
   tableName: string;
   fieldName: string;
-  allTableNames: Set<string>;
+  rawTypes: Readonly<Record<string, TailorDBTypeRaw>>;
 }
 
 export interface ProcessedRelationMetadata {
@@ -44,10 +45,12 @@ function fieldRef(context: RelationProcessingContext): string {
 /**
  * Validate relation configuration.
  * @param rawRelation - Raw relation configuration from TailorDB table definition
- * @param context - Context information for the relation (table name, field name, all type names)
+ * @param fieldType - Type of the field that declares the relation
+ * @param context - Context information for the relation (table name, field name, all raw tables)
  */
 export function validateRelationConfig(
   rawRelation: RawRelationConfig,
+  fieldType: string,
   context: RelationProcessingContext,
 ): void {
   // raw user config may omit the field
@@ -65,9 +68,27 @@ export function validateRelationConfig(
     );
   }
 
-  // Validate target table exists (for non-self relations)
-  if (rawRelation.toward.table !== "self" && !context.allTableNames.has(rawRelation.toward.table)) {
-    throw new Error(`${fieldRef(context)} references unknown table "${rawRelation.toward.table}".`);
+  const targetTable =
+    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
+  const target = Object.hasOwn(context.rawTypes, targetTable)
+    ? context.rawTypes[targetTable]
+    : undefined;
+  if (!target) {
+    throw new Error(`${fieldRef(context)} references unknown table "${targetTable}".`);
+  }
+
+  const key = rawRelation.toward.key ?? "id";
+  const keyField = Object.hasOwn(target.fields, key) ? target.fields[key] : undefined;
+  if (!keyField) {
+    throw new Error(
+      `${fieldRef(context)} references unknown field "${key}" on table "${targetTable}".`,
+    );
+  }
+  if (keyField.type !== fieldType) {
+    throw new Error(
+      `${fieldRef(context)} is of type "${fieldType}", but the field it references, "${targetTable}.${key}", is of type "${keyField.type}". ` +
+        `A relation needs both fields to have the same type.`,
+    );
   }
 }
 
@@ -178,7 +199,7 @@ export function applyNestedRelationMetadata(
     Object.entries(fieldConfig.fields).map(([name, inner]) => {
       if (!inner.rawRelation) return [name, inner];
       const innerContext = { ...context, fieldName: `${context.fieldName}.${name}` };
-      validateRelationConfig(inner.rawRelation, innerContext);
+      validateRelationConfig(inner.rawRelation, inner.type, innerContext);
       const { foreignKey, foreignKeyType, foreignKeyField } = processRelationMetadata(
         inner.rawRelation,
         innerContext,

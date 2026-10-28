@@ -675,6 +675,18 @@ describe("foreign keys", { timeout: 30_000 }, () => {
     ).toThrow(/"Parent"."code", which must be unique and of the same type/);
   });
 
+  test("a reference to id from a field that is not a uuid is rejected", () => {
+    expect(() =>
+      generateSchemaDDL([
+        { name: "Parent", fields: { id: { type: "uuid" } } },
+        {
+          name: "Child",
+          fields: { id: { type: "uuid" }, parentRef: ref("Parent", { type: "string" }) },
+        },
+      ]),
+    ).toThrow(/"Parent"."id", which must be unique and of the same type/);
+  });
+
   test("a reference to a table outside the schema is rejected", () => {
     expect(() =>
       generateSchemaDDL([
@@ -773,6 +785,14 @@ describe("dropUnresolvableReferences", () => {
     expect(child!.fields.ghost).toEqual({ type: "uuid" });
     expect(child!.fields.info!.fields!.owner).toMatchObject({ foreignKey: true });
     expect(child!.fields.info!.fields!.ghost).toEqual({ type: "uuid" });
+  });
+
+  test("drops a reference to id from a field that is not a uuid", () => {
+    const [, child] = dropUnresolvableReferences([
+      parent,
+      { name: "Child", fields: { id: { type: "uuid" }, owner: toParent({ type: "string" }) } },
+    ]);
+    expect(child!.fields.owner).toEqual({ type: "string" });
   });
 });
 
@@ -923,49 +943,6 @@ describe("reference triggers see the rows actually written", { timeout: 30_000 }
     await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [id, `{${id}}`]);
     const { rows } = await db.query(`SELECT 1 FROM "Node"`);
     expect(rows).toHaveLength(1);
-  });
-});
-
-describe("a string field related to id", { timeout: 30_000 }, () => {
-  const tables: DDLTableConfig[] = [
-    { name: "Parent", fields: { id: { type: "uuid" } } },
-    {
-      name: "Child",
-      fields: {
-        id: { type: "uuid" },
-        parentRef: {
-          type: "string",
-          foreignKey: true,
-          foreignKeyType: "Parent",
-          foreignKeyField: "id",
-        },
-      },
-    },
-  ];
-
-  test("is accepted by the generator, as the platform accepts it", () => {
-    expect(() => generateSchemaDDL(tables)).not.toThrow();
-  });
-
-  test("rejects an id with no parent, including a value that is not a uuid", async () => {
-    const db = newPglite();
-    await db.exec(generateSchemaDDL(tables));
-    for (const value of [crypto.randomUUID(), "abc"]) {
-      await expect(
-        db.query(`INSERT INTO "Child" ("parentRef") VALUES ($1)`, [value]),
-      ).rejects.toThrow(/not found in "Parent"."id"/);
-    }
-  });
-
-  test("accepts an existing id and null", async () => {
-    const db = newPglite();
-    await db.exec(generateSchemaDDL(tables));
-    const { rows } = await db.query<{ id: string }>(
-      `INSERT INTO "Parent" DEFAULT VALUES RETURNING id`,
-    );
-    await db.query(`INSERT INTO "Child" ("parentRef") VALUES ($1), (NULL)`, [rows[0]!.id]);
-    const { rows: written } = await db.query(`SELECT 1 FROM "Child"`);
-    expect(written).toHaveLength(2);
   });
 });
 
@@ -1225,67 +1202,3 @@ describe("deleting a parent that an array or nested value points at", { timeout:
     });
   });
 });
-
-describe(
-  "deleting a parent that a string field related to id points at",
-  { timeout: 30_000 },
-  () => {
-    const parent: DDLTableConfig = { name: "Parent", fields: { id: { type: "uuid" } } };
-    const related = (extra: Partial<DDLFieldConfig> = {}): DDLFieldConfig => ({
-      type: "string",
-      foreignKey: true,
-      foreignKeyType: "Parent",
-      foreignKeyField: "id",
-      ...extra,
-    });
-    const child: DDLTableConfig = {
-      name: "Child",
-      fields: { id: { type: "uuid" }, ref: related(), refs: related({ array: true }) },
-    };
-    const stillReferenced = /still referenced from table `Child`/;
-
-    async function setup(): Promise<{ db: PGlite; id: string }> {
-      const db = newPglite();
-      await db.exec(generateSchemaDDL([parent, child]));
-      const { rows } = await db.query<{ id: string }>(
-        `INSERT INTO "Parent" DEFAULT VALUES RETURNING id`,
-      );
-      return { db, id: rows[0]!.id };
-    }
-
-    test.each([
-      ["a string column", `INSERT INTO "Child" (ref) VALUES ($1)`, (id: string) => id],
-      [
-        "an element of a string array",
-        `INSERT INTO "Child" (refs) VALUES ($1)`,
-        (id: string) => `{${id}}`,
-      ],
-    ])("refuses to delete a parent that %s points at", async (_, insert, value) => {
-      const { db, id } = await setup();
-      await db.query(insert, [value(id)]);
-
-      await expect(db.query(`DELETE FROM "Parent" WHERE id = $1`, [id])).rejects.toThrow(
-        stillReferenced,
-      );
-    });
-
-    test("refuses to change the id that a string column points at", async () => {
-      const { db, id } = await setup();
-      await db.query(`INSERT INTO "Child" (ref) VALUES ($1)`, [id]);
-
-      await expect(
-        db.query(`UPDATE "Parent" SET id = $2 WHERE id = $1`, [id, crypto.randomUUID()]),
-      ).rejects.toThrow(stillReferenced);
-    });
-
-    test("a value that is not an id does not stop a parent from being deleted", async () => {
-      const { db, id } = await setup();
-      await db.query(`INSERT INTO "Child" (ref) VALUES (NULL)`);
-
-      await db.query(`DELETE FROM "Parent" WHERE id = $1`, [id]);
-
-      const { rows } = await db.query(`SELECT 1 FROM "Parent"`);
-      expect(rows).toHaveLength(0);
-    });
-  },
-);
