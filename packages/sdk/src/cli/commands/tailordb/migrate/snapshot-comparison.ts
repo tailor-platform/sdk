@@ -62,6 +62,16 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
 }
 
 /**
+ * Whether a field that had no foreign key gains one.
+ * @param {SnapshotFieldConfig} before - Field configuration before the change
+ * @param {SnapshotFieldConfig} after - Field configuration after the change
+ * @returns {boolean} True if the change adds a foreign key
+ */
+export function addsForeignKey(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
+  return !before.foreignKeyType && Boolean(after.foreignKeyType);
+}
+
+/**
  * Collect breaking changes for a field change
  * @param {string} tableName - Name of the table containing the field
  * @param {string} fieldName - Name of the field being changed
@@ -135,6 +145,15 @@ function getBreakingFieldChanges(
       fieldName,
       reason: `Foreign key target type changed from ${oldField.foreignKeyType} to ${newField.foreignKeyType}`,
       ...(nestedMember && { unsupported: true, showThreeStepHint: true }),
+    });
+  }
+
+  // Foreign key added to a top-level field - breaking (existing values may point at missing records)
+  if (!nestedMember && oldField && newField && addsForeignKey(oldField, newField)) {
+    breakingChanges.push({
+      tableName,
+      fieldName,
+      reason: `Foreign key to ${newField.foreignKeyType} added to field`,
     });
   }
 

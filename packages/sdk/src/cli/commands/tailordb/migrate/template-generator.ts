@@ -23,13 +23,14 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import { collectBreakingNestedMemberChanges } from "./snapshot-comparison";
+import { addsForeignKey, collectBreakingNestedMemberChanges } from "./snapshot-comparison";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
   DiffChange,
   FieldModifiedChange,
   FieldRenamedChange,
+  FieldTypeModifiedChange,
   TableRenamedChange,
 } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
@@ -449,7 +450,7 @@ function describeChange(change: DiffChange): { preferredName: string; touches: F
         touches: [
           { table: change.tableName, field: change.fieldName },
           ...(target && target !== change.before.foreignKeyType
-            ? [{ table: target, field: "id" }]
+            ? [{ table: target, field: change.after.foreignKeyField ?? "id" }]
             : []),
         ],
       };
@@ -948,6 +949,24 @@ function generateChangeScripts(
     scripts.push(generateNestedMemberRenameCopyScript(change));
   }
 
+  // Foreign key relationship changed. A retarget that follows a confirmed
+  // type rename needs no fixup: record ids are preserved by the rename copy.
+  if (isBreakingForeignKeyRetarget(before, after, typeRenameTargets)) {
+    scripts.push(
+      generateUnmatchedReferenceScript(
+        change,
+        `Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}`,
+      ),
+    );
+  } else if (addsForeignKey(before, after)) {
+    scripts.push(
+      generateUnmatchedReferenceScript(
+        change,
+        `Check existing ${change.fieldName} values against the new foreign key to ${after.foreignKeyType}`,
+      ),
+    );
+  }
+
   // Optional to required
   if (!before.required && after.required) {
     scripts.push(`  // Set ${change.fieldName} for ${change.tableName} records where it is null
@@ -1031,30 +1050,41 @@ ${removedValues.map((value) => `            case ${JSON.stringify(value)}:`).joi
     }
   }
 
-  // Foreign key relationship changed. A retarget that follows a confirmed
-  // type rename needs no fixup: record ids are preserved by the rename copy.
-  if (isBreakingForeignKeyRetarget(before, after, typeRenameTargets)) {
-    scripts.push(`  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
-  // Find records that don't have a valid reference in the new target table
+  return scripts;
+}
+
+function generateUnmatchedReferenceScript(
+  change: FieldModifiedChange | FieldTypeModifiedChange,
+  heading: string,
+): string {
+  const { tableName, fieldName, after } = change;
+  const target = after.foreignKeyType;
+  if (after.array) {
+    const message = `resolve the ${tableName}.${fieldName} elements that point at no ${target} record`;
+    return `  // ${heading}
+  void TODO(${JSON.stringify(message)});`;
+  }
+  // Aliased so that a relation to its own table can join it a second time.
+  const alias = `${tableName}Target`;
+  const key = after.foreignKeyField ?? "id";
+  return `  // ${heading}
+  // Find records that don't have a valid reference in ${target}
   {
     const orphanedRecords = await trx
-      .selectFrom("${change.tableName}")
-      .leftJoin("${after.foreignKeyType}", "${change.tableName}.${change.fieldName}", "${after.foreignKeyType}.id")
-      .select(["${change.tableName}.id", "${change.tableName}.${change.fieldName}"])
-      .where("${after.foreignKeyType}.id", "is", null)
-      .where("${change.tableName}.${change.fieldName}", "is not", null)
+      .selectFrom("${tableName}")
+      .leftJoin("${target} as ${alias}", "${tableName}.${fieldName}", "${alias}.${key}")
+      .select(["${tableName}.id", "${tableName}.${fieldName}"])
+      .where("${alias}.${key}", "is", null)
+      .where("${tableName}.${fieldName}", "is not", null)
       .execute();
     for (const record of orphanedRecords) {
       await trx
-        .updateTable("${change.tableName}")
-        .set({ ${change.fieldName}: TODO("set the ${after.foreignKeyType} reference for ${change.tableName}.${change.fieldName}") })
+        .updateTable("${tableName}")
+        .set({ ${fieldName}: TODO("set the ${target} reference for ${tableName}.${fieldName}") })
         .where("id", "=", record.id)
         .execute();
     }
-  }`);
-  }
-
-  return scripts;
+  }`;
 }
 
 function renameCopyCanCollapseValues(change: FieldRenamedChange): boolean {

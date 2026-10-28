@@ -596,7 +596,7 @@ describe("buildPreMigrationTables relations", () => {
     expect(members.editor).toMatchObject({ foreignKey: true, foreignKeyType: "User" });
   });
 
-  test("a relation the migration adds to an existing field keeps its reference, since there is no old target to repair", () => {
+  test("a relation the migration adds to an existing field loses its reference, since its stored values were never checked", () => {
     const tables = buildPreMigrationTables(
       snapshot(user, post({ ownerID: owner() })),
       diff([
@@ -609,10 +609,9 @@ describe("buildPreMigrationTables relations", () => {
         },
       ]),
     );
-    expect(tableNamed(tables, "Post").fields.ownerID).toMatchObject({
-      foreignKey: true,
-      foreignKeyType: "User",
-    });
+    const ownerID = tableNamed(tables, "Post").fields.ownerID;
+    expect(ownerID).toMatchObject({ type: "uuid", required: true });
+    expect(ownerID).not.toHaveProperty("foreignKey");
   });
 
   test("a relation the migration adds to a member of a nested field keeps its reference", () => {
