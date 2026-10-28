@@ -133,6 +133,8 @@ defineIdp("my-idp", {
 });
 ```
 
+Client names must be 3 to 63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit.
+
 ### userAuthPolicy
 
 User authentication policy. Controls password requirements, the identifier used for login, allowed email domains, and social login providers. Every field is optional. The boolean options default to disabled, and the password length fields default to a minimum of 6 and a maximum of 4096.

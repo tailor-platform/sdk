@@ -1,6 +1,5 @@
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateIdPClientRequestSchema,
   type CreateIdPServiceRequestSchema,
@@ -29,6 +28,7 @@ import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
+import { IdPClientNameSchema } from "#/parser/service/idp/index";
 import {
   findLoggedInOnlyPermitRules,
   findOmittedPermitRules,
@@ -181,25 +181,11 @@ export async function applyIdP(
           });
         });
         if (vault) return;
-        const idpClient = await client
-          .getIdPClient({
-            workspaceId: update.workspaceId,
-            namespaceName: update.namespaceName,
-            name: update.name,
-          })
-          .then((res) => res.client)
-          .catch((error: unknown) => {
-            if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-              return null;
-            }
-            throw error;
-          });
-        if (idpClient === null) {
-          logger.warn(
-            `IdP client "${update.name}" in "${update.namespaceName}" has no secret vault, and the platform rejects its name when reading the client, so the vault was not restored.`,
-          );
-          return;
-        }
+        const { client: idpClient } = await client.getIdPClient({
+          workspaceId: update.workspaceId,
+          namespaceName: update.namespaceName,
+          name: update.name,
+        });
         if (idpClient?.clientSecret) logger.registerSecret(idpClient.clientSecret);
         await client.createSecretManagerVault({
           workspaceId: update.workspaceId,
@@ -218,7 +204,7 @@ export async function applyIdP(
     // Clients
     await Promise.all(
       changeSet.client.deletes.map(async (del) => {
-        await client.deleteIdPClient(del.request);
+        if (!del.vaultOnly) await client.deleteIdPClient(del.request);
 
         // Delete the secret manager vault and secret
         const vaultName = idpClientVaultName(
@@ -646,6 +632,7 @@ type UpdateClient = {
 type DeleteClient = {
   name: string;
   request: MessageInitShape<typeof DeleteIdPClientRequestSchema>;
+  vaultOnly?: boolean;
 };
 
 async function planClients(
@@ -668,6 +655,8 @@ async function planClients(
       return [clients, nextPageToken];
     });
   };
+
+  const isDeletableName = (name: string) => IdPClientNameSchema.safeParse(name).success;
 
   const clientsByIdp = await Promise.all(idps.map((idp) => fetchClients(idp.name)));
   for (const [i, idp] of idps.entries()) {
@@ -710,6 +699,12 @@ async function planClients(
       }
     }
     existingNames.forEach((name) => {
+      if (!isDeletableName(name)) {
+        logger.warn(
+          `IdP client "${name}" in "${namespaceName}" will not be deleted, because the platform cannot delete a client with this name. The client and its secret vault stay in the workspace.`,
+        );
+        return;
+      }
       changeSet.deletes.push({
         name,
         request: {
@@ -737,6 +732,7 @@ async function planClients(
           namespaceName,
           name: client.name,
         },
+        ...(!isDeletableName(client.name) && { vaultOnly: true }),
       });
     });
   }

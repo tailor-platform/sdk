@@ -101,6 +101,23 @@ describe("applyIdP phase separation", () => {
     });
   });
 
+  test("delete-resources phase deletes only the vault of a vault-only client delete", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+    planResult.changeSet.client.deletes[0] = {
+      ...planResult.changeSet.client.deletes[0]!,
+      vaultOnly: true,
+    };
+
+    await applyIdP(client, planResult, "delete-resources");
+
+    expect(client.deleteIdPClient).not.toHaveBeenCalled();
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      secretmanagerVaultName: "idp-test-idp-test-client",
+    });
+  });
+
   test("delete-resources phase propagates other errors from deleting a client vault", async () => {
     const client = createMockClientWithSpies();
     vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
@@ -326,21 +343,7 @@ describe("applyIdP client updates forced by the SDK version", () => {
     expect(registerSecretSpy).toHaveBeenCalledWith("secret-from-get");
   });
 
-  test("warns and skips the vault when getIdPClient rejects the client name", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const client = createClient({ vaultExists: false });
-    vi.mocked(client.getIdPClient).mockRejectedValue(
-      new ConnectError("name: does not match regex pattern", Code.InvalidArgument),
-    );
-
-    await expect(applyIdP(client, createPlanResult(), "create-update")).resolves.toBeUndefined();
-
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("test-client"));
-    expect(client.createSecretManagerVault).not.toHaveBeenCalled();
-    expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
-  });
-
-  test("still fails the deploy when getIdPClient raises another error", async () => {
+  test("fails the deploy when getIdPClient fails", async () => {
     const client = createClient({ vaultExists: false });
     vi.mocked(client.getIdPClient).mockRejectedValue(new ConnectError("boom", Code.Internal));
 
