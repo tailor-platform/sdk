@@ -2315,6 +2315,30 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     expect(Object.hasOwn(result.migrationFileState, "__proto__")).toBe(true);
     expect(Object.hasOwn(result.migrationHistoryIds, "__proto__")).toBe(true);
+    expect(result.checkpoints.get("__proto__")).toEqual({ number: 0, historyId: null });
+  });
+
+  test("reads a namespace without a checkpoint label as having none", async () => {
+    const { client } = createMigrationClient({});
+
+    const result = await runValidation(client, makePlanResult(true));
+
+    expect(result.checkpoints).toEqual(
+      new Map([["test-tailordb", { number: null, historyId: null }]]),
+    );
+  });
+
+  test("keeps a migration history label it cannot read apart from a missing one (--no-schema-check)", async () => {
+    const { client } = createMigrationClient({
+      "sdk-migration": "m0000",
+      "sdk-migration-history": "Not a history ID",
+    });
+
+    const result = await runValidation(client, makePlanResult(true));
+
+    expect(result.checkpoints).toEqual(
+      new Map([["test-tailordb", { number: 0, historyId: null, historyIdInvalid: true }]]),
+    );
   });
 
   test("forces migration label to working_tree_max when label is ahead of working tree (--no-schema-check)", async () => {
@@ -3036,6 +3060,9 @@ describe("applyTailorDB migration label reconciliation", () => {
         toHistoryId: "hcurrent",
       },
     ]);
+    expect(result.checkpoints).toEqual(
+      new Map([["test-tailordb", { number: 0, historyId: "hcurrent" }]]),
+    );
     expect(stderr.output).toContain("will be reset to 0000");
     expect(client.listTailorDBTypes).toHaveBeenCalledOnce();
     expect(client.setMetadata).not.toHaveBeenCalled();

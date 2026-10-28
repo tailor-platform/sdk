@@ -94,6 +94,40 @@ export async function fetchRemoteMigrationState(
   };
 }
 
+/** Checkpoint and history ID a deploy expects a namespace to have. */
+export type ExpectedMigrationCheckpoint = {
+  number: number | null;
+  historyId: string | null;
+  /** Set when the deploy read a history label it could not parse. */
+  historyIdInvalid?: boolean;
+};
+
+/**
+ * Whether the namespace still has the checkpoint and history ID a deploy expects.
+ * @param remoteState - Remote migration state of the namespace
+ * @param expectedCheckpoint - Checkpoint the deploy expects
+ * @returns False when either changed, or the history label cannot be read when the deploy read one it could
+ */
+export function isCheckpointStillOwned(
+  remoteState: RemoteMigrationState,
+  expectedCheckpoint: ExpectedMigrationCheckpoint,
+): boolean {
+  return (
+    remoteState.number === expectedCheckpoint.number &&
+    remoteState.historyIdInvalid === (expectedCheckpoint.historyIdInvalid ?? false) &&
+    remoteState.historyId === expectedCheckpoint.historyId
+  );
+}
+
+/**
+ * Format a checkpoint for a message, including a namespace without one.
+ * @param number - Checkpoint, if any
+ * @returns The formatted number, or `<unset>`
+ */
+export function describeMigrationCheckpoint(number: number | null | undefined): string {
+  return number == null ? "<unset>" : formatMigrationNumber(number);
+}
+
 /**
  * Whether the in-progress record names a migration the checkpoint already
  * covers, so it no longer describes the namespace.

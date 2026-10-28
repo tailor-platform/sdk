@@ -4,7 +4,12 @@ import {
   type NamespaceWithMigrations,
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
-import { fetchRemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
+import {
+  describeMigrationCheckpoint,
+  fetchRemoteMigrationState,
+  isCheckpointStillOwned,
+  type ExpectedMigrationCheckpoint,
+} from "#/cli/commands/tailordb/migrate/remote-state";
 import { usesStepRunner } from "#/cli/commands/tailordb/migrate/script-form";
 import {
   reconstructSnapshotFromMigrations,
@@ -20,6 +25,7 @@ import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-di
 import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
+import { assertDefined } from "#/utils/assert";
 import { resourceTrn, writeMetadataLabels } from "../label";
 import {
   clearMaintenanceModeRecord,
@@ -28,6 +34,7 @@ import {
   isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
   isMigrationRunEnded,
+  isMigrationStartRefused,
   isRollbackSkippedWithRecord,
   removeRunResources,
   rolledBackError,
@@ -211,6 +218,7 @@ async function validateTailorDBMigrationState(
       namespacesWithMigrations: [],
       migrationFileState: currentMigrationFileState,
       migrationHistoryIds: {},
+      checkpoints: new Map(),
       inProgressMigrations: {},
       staleInProgress: [],
       maintenanceModeCheckpoints: {},
@@ -489,23 +497,6 @@ async function clearRecordAfterRelease(
   }
 }
 
-function describeMigrationCheckpoint(number: number | null | undefined): string {
-  return number == null ? "<unset>" : formatMigrationNumber(number);
-}
-
-type ExpectedMigrationCheckpoint = { number: number | null; historyId: string | null };
-
-function isCheckpointStillOwned(
-  remoteState: Awaited<ReturnType<typeof fetchRemoteMigrationState>>,
-  expectedCheckpoint: ExpectedMigrationCheckpoint,
-): boolean {
-  return (
-    remoteState.number === expectedCheckpoint.number &&
-    !remoteState.historyIdInvalid &&
-    remoteState.historyId === expectedCheckpoint.historyId
-  );
-}
-
 /**
  * Find the namespaces whose migration checkpoint no longer matches the one
  * this deploy expects, so their table settings are not restored over a
@@ -741,7 +732,7 @@ interface MigrationFlow extends Omit<MigrationApplyInput, "holdMaintenanceMode">
 interface RestorationState {
   snapshots: Map<string, SchemaSnapshot>;
   settings: MigrationRestrictionState;
-  /** Checkpoint a namespace must still be at for its tables to be restored. */
+  /** Checkpoint a namespace must still be at for its next migration to start and its tables to be restored. */
   checkpoints: Map<string, ExpectedMigrationCheckpoint>;
   skipped: Set<string>;
 }
@@ -826,12 +817,12 @@ async function applyWithMigrations(
     snapshots: new Map(flow.preMigrationSnapshots),
     settings: new Map(restrictionState),
     checkpoints: new Map(
-      [...pending.firstByNamespace].map(([namespaceName, firstMigration]) => [
+      [...pending.firstByNamespace.keys()].map((namespaceName) => [
         namespaceName,
-        {
-          number: firstMigration.number > 0 ? firstMigration.number - 1 : null,
-          historyId: validation.migrationHistoryIds[namespaceName] ?? null,
-        },
+        assertDefined(
+          validation.checkpoints.get(namespaceName),
+          "validation read the checkpoint of every namespace with pending migrations",
+        ),
       ]),
     ),
     skipped: new Set(),
@@ -1143,6 +1134,7 @@ async function runPreMigrationPhase(
         executeMigrations(
           migrationCtx,
           [migration],
+          restoration.checkpoints,
           flow.validation.inProgressMigrations,
           flow.timeline,
         ),
@@ -1285,7 +1277,7 @@ async function rollbackMigration(
   if (rollsBackOnFailure || clearsRecord) {
     await removeRunResources(client, workspaceId, migration.namespace, migration.number);
   }
-  if (!rollsBackOnFailure) return error;
+  if (!rollsBackOnFailure || isMigrationStartRefused(error)) return error;
   if (inProgress) settleRolledBackRestorationSettings(flow, migration, restoration);
   return rolledBackError(migration, error);
 }
