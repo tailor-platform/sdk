@@ -562,12 +562,23 @@ export async function resolveDeployWorkspace(
     userDefaults: location.defaults,
   };
 
+  // An explicit creation request needs its organization before the reuse checks below
+  // compare existing workspaces against it, so interactive runs ask for it here.
+  if (
+    options.createWorkspace &&
+    options.organizationId === undefined &&
+    !options.dryRun &&
+    canPrompt()
+  ) {
+    options = { ...options, organizationId: await promptOrganization(client) };
+  }
+
   let requestedCreateOptions;
   if (
     options.createWorkspace &&
     options.workspaceName !== undefined &&
     options.workspaceRegion !== undefined &&
-    // Without an organization, interactive deploy asks for one before validating.
+    // An interactive dry run without an organization asks for one when it gets to creation.
     (options.organizationId !== undefined || !canPrompt())
   ) {
     try {

@@ -913,6 +913,25 @@ describe("resolveDeployWorkspace", () => {
     );
   });
 
+  test("asks for the organization before reusing a workspace on an interactive creation retry", async () => {
+    const existing = { ...workspace("adadadad-adad-4dad-8dad-adadadadadad"), folderId: undefined };
+    mocks.canPrompt.mockReturnValue(true);
+    mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
+    client.listUserOrganizations.mockResolvedValue({
+      userOrganizations: [{ organizationId: existing.organizationId, organizationName: "Acme" }],
+    });
+    mocks.select.mockResolvedValue(existing.organizationId);
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: existing.name,
+        workspaceRegion: existing.region,
+      }),
+    ).resolves.toEqual({ client, workspaceId: existing.id });
+    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+  });
+
   test("stops interactive creation when the user belongs to no organization", async () => {
     mocks.canPrompt.mockReturnValue(true);
     client.listUserOrganizations.mockResolvedValue({ userOrganizations: [] });
