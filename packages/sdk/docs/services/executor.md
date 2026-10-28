@@ -505,7 +505,7 @@ interface WebhookContext<T = unknown> {
   body: T; // Parsed request body
   headers: Record<string, string>; // Request headers
   method: "POST" | "GET" | "PUT" | "DELETE"; // HTTP method
-  rawBody: string; // Raw request body as string
+  rawBody: string; // Raw request body, base64-encoded
 }
 ```
 
@@ -513,11 +513,12 @@ interface WebhookContext<T = unknown> {
 
 ```typescript
 import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+import { secretmanager } from "@tailor-platform/sdk/runtime";
 
-interface StripeWebhook {
+type StripeWebhook = {
   type: string;
   data: { object: { id: string; amount: number } };
-}
+};
 
 export default createExecutor({
   name: "stripe-webhook",
@@ -527,14 +528,20 @@ export default createExecutor({
   }>(),
   operation: {
     kind: "function",
-    body: async ({ body, headers }) => {
-      const signature = headers["stripe-signature"];
+    body: async ({ body, headers, rawBody }) => {
+      const secret = await secretmanager.getSecret("api-keys", "stripe-webhook-secret");
+      // Implement verifyStripeSignature following https://docs.stripe.com/webhooks?verify=verify-manually#verify-manually
+      if (!(await verifyStripeSignature(headers["stripe-signature"], rawBody, secret))) {
+        throw new Error("Invalid Stripe signature");
+      }
       console.log(`Received ${body.type} event`);
       // Process webhook...
     },
   },
 });
 ```
+
+The webhook URL is public, so verify the signature over the unparsed request body before trusting `body`. `rawBody` is delivered base64-encoded; decode it to the original bytes before computing the signature.
 
 **With custom response:**
 
