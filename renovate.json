@@ -123,9 +123,9 @@
       "groupName": "vitest"
     },
     {
-      "description": "Group rolldown bundler ecosystem (tsdown depends on rolldown)",
+      "description": "Group rolldown bundler ecosystem (tsdown depends on rolldown and rolldown-plugin-dts)",
       "matchManagers": ["npm"],
-      "matchPackageNames": ["rolldown", "tsdown"],
+      "matchPackageNames": ["rolldown", "rolldown-plugin-dts", "tsdown"],
       "groupName": "rolldown"
     }
   ]
