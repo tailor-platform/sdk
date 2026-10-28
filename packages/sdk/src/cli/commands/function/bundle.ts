@@ -274,14 +274,14 @@ function generateEntry(options: GenerateEntryOptions): string {
       const exportName = assertDefined(detected.exportName, "workflow job export name missing");
       const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
       return ml /* js */ `
-        import { ${exportName} } from "${absoluteSourcePath}";
+        import { ${JSON.stringify(exportName)} as _internalJob } from "${absoluteSourcePath}";
 
         const env = ${JSON.stringify(env)};
         const fallbackInvoker = ${principalExpr};
 
         export async function main(input) {
           const invoker = ${INVOKER_EXPR} ?? fallbackInvoker;
-          return await ${exportName}.body(input, { env, invoker });
+          return await _internalJob.body(input, { env, invoker });
         }
       `;
     }

@@ -82,6 +82,59 @@ export const mainJob = createWorkflowJob({
     }
   });
 
+  test.each(["main", "input", "env", "invoker", "tailor"])(
+    "runs a job exported as %s",
+    async (exportName) => {
+      const tmpDir = makeTempDir("job-export-name-test-");
+      const sourceFile = path.join(tmpDir, "workflow.ts");
+      fs.writeFileSync(
+        sourceFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const ${exportName} = createWorkflowJob({
+  name: "main-job",
+  body: async (input, { env, invoker }) => ({ input, env, invokerId: invoker?.id }),
+});
+`,
+      );
+      vi.stubGlobal("tailor", {
+        context: {
+          getInvoker: () => ({
+            id: "invoker-id",
+            type: "machine_user",
+            workspaceId: "workspace-id",
+            attributeMap: {},
+            attributes: [],
+          }),
+        },
+      });
+
+      try {
+        const result = await bundleWorkflowJobs({
+          allJobs: [{ name: "main-job", exportName, sourceFile }],
+          mainJobNames: ["main-job"],
+          startContext: { modules: new Map() },
+          env: { APP_URL: "https://example.com" },
+          baseDir: tmpDir,
+          inlineSourcemap: true,
+        });
+        const code = assertDefined(result.bundledCode.get("main-job"), "job missing");
+        const moduleUrl = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
+        const module = (await import(moduleUrl)) as { main: (input: unknown) => Promise<unknown> };
+
+        await expect(module.main({ a: 1 })).resolves.toEqual({
+          input: { a: 1 },
+          env: { APP_URL: "https://example.com" },
+          invokerId: "invoker-id",
+        });
+      } finally {
+        vi.unstubAllGlobals();
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+  );
+
   test("reuses a prior call's usedJobNames/mainJobDeps instead of re-detecting reachability", async () => {
     const tmpDir = makeTempDir("reuse-used-jobs-test-");
     const sourceFile = path.join(tmpDir, "workflow.ts");
