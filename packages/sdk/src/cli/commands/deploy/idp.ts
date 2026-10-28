@@ -27,8 +27,8 @@ import {
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
+import { resourceNameSchema } from "#/parser/service/common";
 import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
-import { IdPClientNameSchema } from "#/parser/service/idp/index";
 import {
   findLoggedInOnlyPermitRules,
   findOmittedPermitRules,
@@ -656,7 +656,7 @@ async function planClients(
     });
   };
 
-  const isDeletableName = (name: string) => IdPClientNameSchema.safeParse(name).success;
+  const isDeletableName = (name: string) => resourceNameSchema.safeParse(name).success;
 
   const clientsByIdp = await Promise.all(idps.map((idp) => fetchClients(idp.name)));
   for (const [i, idp] of idps.entries()) {
