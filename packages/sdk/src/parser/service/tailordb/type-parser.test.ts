@@ -760,7 +760,7 @@ describe("parseTypes", () => {
     );
   });
 
-  describe("validateRelationKey", () => {
+  describe("relation key validation", () => {
     const user = db.table("User", { email: db.string().unique() });
 
     test.each([
@@ -812,6 +812,17 @@ describe("parseTypes", () => {
 
       expect(() => parseTypes(toSchemaOutputs({ Node: node }), "test-namespace")).toThrow(
         `Field "parentID" on table "Node" references unknown field "${key}" on table "Node".`,
+      );
+    });
+
+    test("rejects a relation to a missing table named after an Object prototype property", () => {
+      const missing = db.table("toString", { name: db.string() });
+      const post = db.table("Post", {
+        ownerID: db.uuid().relation({ type: "keyOnly", toward: { table: missing } }),
+      });
+
+      expect(() => parseTypes({ ...toSchemaOutputs({ Post: post }) }, "test-namespace")).toThrow(
+        'Field "ownerID" on table "Post" references unknown table "toString".',
       );
     });
   });

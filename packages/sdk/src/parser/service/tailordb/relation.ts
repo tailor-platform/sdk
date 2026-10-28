@@ -1,6 +1,6 @@
 import type { RawRelationConfig } from "#/configure/services/tailordb/types";
 import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
-import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type { UnionToTuple } from "type-fest";
 
 const relationTypes = {
@@ -18,7 +18,7 @@ export const relationTypesKeys = Object.keys(relationTypes) as UnionToTuple<
 export interface RelationProcessingContext {
   tableName: string;
   fieldName: string;
-  rawTypes: Readonly<Record<string, TailorDBTypeRaw>>;
+  rawTypes: Readonly<Record<string, TailorDBTypeSchemaOutput>>;
 }
 
 export interface ProcessedRelationMetadata {
@@ -40,6 +40,21 @@ export interface RelationInfo {
 
 function fieldRef(context: RelationProcessingContext): string {
   return `Field "${context.fieldName}" on table "${context.tableName}"`;
+}
+
+interface RelationTarget {
+  table: string;
+  key: string;
+}
+
+function relationTarget(
+  rawRelation: RawRelationConfig,
+  context: RelationProcessingContext,
+): RelationTarget {
+  return {
+    table: rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table,
+    key: rawRelation.toward.key ?? "id",
+  };
 }
 
 /**
@@ -68,8 +83,7 @@ export function validateRelationConfig(
     );
   }
 
-  const targetTable =
-    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
+  const { table: targetTable, key } = relationTarget(rawRelation, context);
   const target = Object.hasOwn(context.rawTypes, targetTable)
     ? context.rawTypes[targetTable]
     : undefined;
@@ -77,7 +91,6 @@ export function validateRelationConfig(
     throw new Error(`${fieldRef(context)} references unknown table "${targetTable}".`);
   }
 
-  const key = rawRelation.toward.key ?? "id";
   const keyField = Object.hasOwn(target.fields, key) ? target.fields[key] : undefined;
   if (!keyField) {
     throw new Error(
@@ -105,11 +118,7 @@ export function processRelationMetadata(
   isArrayField: boolean = false,
 ): ProcessedRelationMetadata {
   const isUnique = relationTypes[rawRelation.type] === "1-1";
-  const key = rawRelation.toward.key ?? "id";
-
-  // Resolve target table name (handle "self" reference)
-  const targetTypeName =
-    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
+  const { table: targetTypeName, key } = relationTarget(rawRelation, context);
 
   // Index and unique are not supported on array fields
   const shouldSetIndex = !isArrayField;
@@ -142,11 +151,7 @@ export function buildRelationInfo(
   }
 
   const isUnique = relationTypes[rawRelation.type] === "1-1";
-  const key = rawRelation.toward.key ?? "id";
-
-  // Resolve target table name (handle "self" reference)
-  const targetTypeName =
-    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
+  const { table: targetTypeName, key } = relationTarget(rawRelation, context);
 
   let forwardName = rawRelation.toward.as;
   if (!forwardName) {
