@@ -604,6 +604,8 @@ describe("resolveDeployWorkspace", () => {
           "<name>",
           "--workspace-region",
           "<region>",
+          "--organization-id",
+          "<organization-id>",
         ],
       });
       expect(error.context).toEqual({ availableRegions: ["us-west", "asia-northeast"] });
@@ -930,6 +932,27 @@ describe("resolveDeployWorkspace", () => {
       }),
     ).resolves.toEqual({ client, workspaceId: existing.id });
     expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+  });
+
+  test("rejects an interactive dry-run creation without an organization like a non-interactive one", async () => {
+    mocks.canPrompt.mockReturnValue(true);
+
+    await expect(
+      resolveDeployWorkspace({
+        dryRun: true,
+        createWorkspace: true,
+        workspaceName: "example-workspace",
+        workspaceRegion: "us-west",
+      }),
+    ).rejects.toMatchObject({
+      name: "CLIError",
+      code: "WORKSPACE_CREATE_OPTIONS_INVALID",
+      next: {
+        command: "tailor",
+        args: expect.arrayContaining(["--organization-id", "<organization-id>"]),
+      },
+    });
+    expect(client.listUserOrganizations).not.toHaveBeenCalled();
   });
 
   test("stops interactive creation when the user belongs to no organization", async () => {

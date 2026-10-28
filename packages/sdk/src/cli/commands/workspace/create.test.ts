@@ -725,6 +725,8 @@ describe("workspace create with user defaults", () => {
         success: false,
         error: { code: "WORKSPACE_ORGANIZATION_REQUIRED" },
       });
+      const error = result.success ? undefined : result.error;
+      expect(isCLIError(error) && error.suggestion).not.toContain("tailor user update");
       expect(client.createWorkspace).not.toHaveBeenCalled();
     },
   );

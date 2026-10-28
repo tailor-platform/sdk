@@ -18,6 +18,7 @@ import {
   loadPlatformClientConfig,
   loadUserWorkspaceDefaults,
   platformConfigFromProfile,
+  readEnvironmentToken,
   readPlatformConfig,
   resolveConfigUser,
   writePlatformConfig,
@@ -251,8 +252,10 @@ export function validateCreateWorkspaceOptions(
     throw CLIError({
       code: "WORKSPACE_ORGANIZATION_REQUIRED",
       message: "A workspace must be created in an organization.",
-      suggestion:
-        "Pass --organization-id (or set TAILOR_PLATFORM_ORGANIZATION_ID), or set a default organization with `tailor user update --default-organization-id`.",
+      // User defaults are not read while an environment token is set, so only point at them otherwise.
+      suggestion: readEnvironmentToken()
+        ? "Pass --organization-id or set TAILOR_PLATFORM_ORGANIZATION_ID."
+        : "Pass --organization-id (or set TAILOR_PLATFORM_ORGANIZATION_ID), or set a default organization with `tailor user update --default-organization-id`.",
     });
   }
   return validated;
