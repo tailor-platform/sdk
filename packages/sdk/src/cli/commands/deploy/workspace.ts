@@ -289,18 +289,45 @@ function invalidCreateOptionsError(
   });
 }
 
+/**
+ * Ask which organization a new workspace belongs to.
+ * @param client - Authenticated Operator client
+ * @returns Selected organization ID
+ */
+async function promptOrganization(client: OperatorClient): Promise<string> {
+  const { userOrganizations } = await client.listUserOrganizations({});
+  if (userOrganizations.length === 0) {
+    throw CLIError({
+      code: "WORKSPACE_ORGANIZATION_REQUIRED",
+      message: "A workspace must be created in an organization, and this user belongs to none.",
+      suggestion: "Ask an organization admin to add this user, then rerun deploy.",
+    });
+  }
+  return prompt.select({
+    message: "Organization",
+    choices: userOrganizations.map(({ organizationId, organizationName }) => ({
+      name: `${organizationName} (${organizationId})`,
+      value: organizationId,
+    })),
+  });
+}
+
 async function createWorkspace(
   client: OperatorClient,
   platformUrl: string,
-  options: DeployWorkspaceOptions,
+  requestedOptions: DeployWorkspaceOptions,
   availableRegions: readonly string[],
   validatedOptions?: ValidatedCreateWorkspaceOptions,
 ): Promise<ResolvedDeployWorkspace> {
+  let options = requestedOptions;
   let name = options.workspaceName;
   let region = options.workspaceRegion;
   const interactive = canPrompt();
 
   if (interactive) {
+    if (options.organizationId === undefined) {
+      options = { ...options, organizationId: await promptOrganization(client) };
+    }
     name ??= await prompt.text({
       message: "Workspace name",
       default: suggestedWorkspaceName(),
@@ -539,7 +566,9 @@ export async function resolveDeployWorkspace(
   if (
     options.createWorkspace &&
     options.workspaceName !== undefined &&
-    options.workspaceRegion !== undefined
+    options.workspaceRegion !== undefined &&
+    // Without an organization, interactive deploy asks for one before validating.
+    (options.organizationId !== undefined || !canPrompt())
   ) {
     try {
       requestedCreateOptions = validateCreateWorkspaceOptions({

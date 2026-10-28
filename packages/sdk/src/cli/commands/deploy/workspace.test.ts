@@ -77,6 +77,7 @@ vi.mock("./workspace-context", () => ({
 const client = {
   getWorkspace: vi.fn(),
   listAvailableWorkspaceRegions: vi.fn(),
+  listUserOrganizations: vi.fn(),
 };
 
 const workspace = (id: string, name = "example-workspace", region = "us-west"): WorkspaceInfo => ({
@@ -883,6 +884,42 @@ describe("resolveDeployWorkspace", () => {
         command: "tailor",
         args: ["deploy", "--workspace-id", "<workspace-id>"],
       },
+    });
+    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+  });
+
+  test("asks for an organization during interactive creation when none is resolved", async () => {
+    const organizationId = "abababab-abab-4bab-8bab-abababababab";
+    const created = workspace("acacacac-acac-4cac-8cac-acacacacacac", "new-workspace");
+    mocks.canPrompt.mockReturnValue(true);
+    client.listUserOrganizations.mockResolvedValue({
+      userOrganizations: [{ organizationId, organizationName: "Acme" }],
+    });
+    mocks.select.mockImplementation(async ({ message }: { message: string }) =>
+      message === "Organization" ? organizationId : "us-west",
+    );
+    mocks.text.mockResolvedValue("new-workspace");
+    mocks.confirm.mockResolvedValue(true);
+    mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
+
+    await expect(resolveDeployWorkspace()).resolves.toEqual({ client, workspaceId: created.id });
+    expect(mocks.select).toHaveBeenCalledWith({
+      message: "Organization",
+      choices: [{ name: `Acme (${organizationId})`, value: organizationId }],
+    });
+    expect(mocks.createValidatedWorkspaceWithClient).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ organizationId }),
+    );
+  });
+
+  test("stops interactive creation when the user belongs to no organization", async () => {
+    mocks.canPrompt.mockReturnValue(true);
+    client.listUserOrganizations.mockResolvedValue({ userOrganizations: [] });
+
+    await expect(resolveDeployWorkspace()).rejects.toMatchObject({
+      name: "CLIError",
+      code: "WORKSPACE_ORGANIZATION_REQUIRED",
     });
     expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
   });
