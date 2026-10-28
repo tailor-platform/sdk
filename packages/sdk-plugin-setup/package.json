@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.5",
     "confbox": "0.3.1",
     "oxlint": "1.89.0",
     "oxlint-tsgolint": "7.0.2005",

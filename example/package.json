@@ -37,7 +37,7 @@
     "@electric-sql/pglite": "0.5.11",
     "@tailor-platform/sdk-plugin-seed": "workspace:^",
     "@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.5",
     "eslint-plugin-zod": "5.2.2",
     "graphql": "17.0.2",
     "graphql-request": "7.4.0",
