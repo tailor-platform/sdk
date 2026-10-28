@@ -69,6 +69,23 @@ jobs:
         shell: bash
         run: bash ./.github/scripts/resolve-pending-release-versions.sh
 
+      - name: Notify Slack on publish
+        if: steps.changesets.outputs.published == 'true'
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SDK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASES_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs['published-packages'] }}
+        shell: bash
+        run: |
+          jq -n \
+            --arg run "$RUN_URL" \
+            --arg releases "$RELEASES_URL" \
+            --argjson pkgs "$PUBLISHED_PACKAGES" \
+            '{text: (":rocket: Release <\($run)|succeeded>\n" + ($pkgs | map("• <\($releases)/\(.name)@\(.version)|\(.name)@\(.version)>") | join("\n")))}' \
+            | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"
+
       - name: Notify Slack on failure
         if: failure()
         env:
