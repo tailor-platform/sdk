@@ -57,6 +57,8 @@ interface WorkspaceContextTarget {
 
 type DeployWorkspaceOptions = ResolveDeployWorkspaceOptions & {
   userDefaults?: UserWorkspaceDefaults;
+  /** Set once the user defaults have been applied to the organization and folder. */
+  locationResolved?: boolean;
 };
 
 export interface ResolvedDeployWorkspace {
@@ -86,8 +88,15 @@ function workspaceCommandArgs(options: ResolveDeployWorkspaceOptions): readonly 
   return options.workspaceCommandArgs ?? [];
 }
 
+// Every workspace needs an organization, so once the user defaults have been applied a
+// suggested creation command names one, as a placeholder when none was resolved.
+function organizationArgs(options: DeployWorkspaceOptions): readonly string[] {
+  if (options.organizationId !== undefined) return ["--organization-id", options.organizationId];
+  return options.locationResolved ? ["--organization-id", "<organization-id>"] : [];
+}
+
 function createDeployArgs(
-  options: ResolveDeployWorkspaceOptions,
+  options: DeployWorkspaceOptions,
   name: string,
   region: string,
 ): readonly string[] {
@@ -98,7 +107,7 @@ function createDeployArgs(
     name,
     "--workspace-region",
     region,
-    ...(options.organizationId ? ["--organization-id", options.organizationId] : []),
+    ...organizationArgs(options),
     ...(options.folderId ? ["--folder-id", options.folderId] : []),
   ];
 }
@@ -267,7 +276,7 @@ async function chooseWorkspace(
     ],
   });
   if (workspaceId === createNewWorkspaceSelection) {
-    return createWorkspaceForDeploy(client, platformUrl, options);
+    return createWorkspaceForDeploy(client, platformUrl, options, true);
   }
   const workspace = workspaces.find(({ id }) => id === workspaceId);
   if (!workspace) throw internalError("Selected workspace was not found");
@@ -275,7 +284,7 @@ async function chooseWorkspace(
 }
 
 function invalidCreateOptionsError(
-  options: ResolveDeployWorkspaceOptions,
+  options: DeployWorkspaceOptions,
   name: string,
   region: string,
   details: string,
@@ -289,16 +298,58 @@ function invalidCreateOptionsError(
   });
 }
 
+/**
+ * Ask which organization a new workspace belongs to.
+ * @param client - Authenticated Operator client
+ * @returns Selected organization ID
+ */
+async function promptOrganization(client: OperatorClient): Promise<string> {
+  const { userOrganizations } = await client.listUserOrganizations({});
+  if (userOrganizations.length === 0) {
+    throw CLIError({
+      code: "WORKSPACE_ORGANIZATION_REQUIRED",
+      message: "A workspace must be created in an organization, and this user belongs to none.",
+      suggestion: "Ask an organization admin to add this user, then rerun deploy.",
+    });
+  }
+  return prompt.select({
+    message: "Organization",
+    choices: userOrganizations.map(({ organizationId, organizationName }) => ({
+      name: `${organizationName} (${organizationId})`,
+      value: organizationId,
+    })),
+  });
+}
+
+/**
+ * Resolve the organization a new workspace belongs to: the given one, or the one the user
+ * picks in an interactive run that can create a workspace. Otherwise it stays unresolved,
+ * and validation rejects the creation with WORKSPACE_CREATE_OPTIONS_INVALID.
+ * @param client - Authenticated Operator client
+ * @param options - Deploy workspace options
+ * @param interactive - Whether the run can prompt
+ * @returns Options with the organization resolved where possible
+ */
+async function resolveCreationOrganization(
+  client: OperatorClient,
+  options: DeployWorkspaceOptions,
+  interactive: boolean,
+): Promise<DeployWorkspaceOptions> {
+  if (options.organizationId !== undefined || !interactive || options.dryRun) return options;
+  return { ...options, organizationId: await promptOrganization(client) };
+}
+
 async function createWorkspace(
   client: OperatorClient,
   platformUrl: string,
-  options: DeployWorkspaceOptions,
+  requestedOptions: DeployWorkspaceOptions,
+  interactive: boolean,
   availableRegions: readonly string[],
   validatedOptions?: ValidatedCreateWorkspaceOptions,
 ): Promise<ResolvedDeployWorkspace> {
+  const options = await resolveCreationOrganization(client, requestedOptions, interactive);
   let name = options.workspaceName;
   let region = options.workspaceRegion;
-  const interactive = canPrompt();
 
   if (interactive) {
     name ??= await prompt.text({
@@ -428,6 +479,7 @@ async function createWorkspaceForDeploy(
   client: OperatorClient,
   platformUrl: string,
   options: DeployWorkspaceOptions,
+  interactive: boolean,
   requestedRegions?: readonly string[],
   validatedOptions?: ValidatedCreateWorkspaceOptions,
 ): Promise<ResolvedDeployWorkspace> {
@@ -441,7 +493,7 @@ async function createWorkspaceForDeploy(
       context: { availableRegions: regions },
     });
   }
-  return createWorkspace(client, platformUrl, options, regions, validatedOptions);
+  return createWorkspace(client, platformUrl, options, interactive, regions, validatedOptions);
 }
 
 /**
@@ -533,7 +585,15 @@ export async function resolveDeployWorkspace(
     organizationId: location.organizationId,
     folderId: location.folderId,
     userDefaults: location.defaults,
+    locationResolved: true,
   };
+
+  const interactive = canPrompt();
+  // An explicit creation request needs its organization before the reuse checks below
+  // compare existing workspaces against it.
+  if (options.createWorkspace) {
+    options = await resolveCreationOrganization(client, options, interactive);
+  }
 
   let requestedCreateOptions;
   if (
@@ -562,7 +622,6 @@ export async function resolveDeployWorkspace(
     loadProjectContexts(platformUrl, options.contextTargets),
     listWorkspacesWithClient(client),
   ]);
-  const interactive = canPrompt();
 
   const contextWorkspaceIds = new Set(contexts.map(({ workspaceId }) => workspaceId));
   const linkedWorkspace =
@@ -608,6 +667,7 @@ export async function resolveDeployWorkspace(
         client,
         platformUrl,
         options,
+        interactive,
         regions,
         requestedCreateOptions,
       );
@@ -691,7 +751,7 @@ export async function resolveDeployWorkspace(
           options.workspaceName ?? "<name>",
           "--region",
           options.workspaceRegion ?? "<region>",
-          ...(options.organizationId ? ["--organization-id", options.organizationId] : []),
+          ...organizationArgs(options),
           ...(options.folderId ? ["--folder-id", options.folderId] : []),
         ]),
         context: {

@@ -77,6 +77,7 @@ vi.mock("./workspace-context", () => ({
 const client = {
   getWorkspace: vi.fn(),
   listAvailableWorkspaceRegions: vi.fn(),
+  listUserOrganizations: vi.fn(),
 };
 
 const workspace = (id: string, name = "example-workspace", region = "us-west"): WorkspaceInfo => ({
@@ -483,6 +484,7 @@ describe("resolveDeployWorkspace", () => {
 
     await expect(
       resolveDeployWorkspace({
+        organizationId: "33333333-3333-4333-8333-333333333333",
         createWorkspace: true,
         workspaceName: created.name,
         workspaceRegion: created.region,
@@ -559,6 +561,7 @@ describe("resolveDeployWorkspace", () => {
 
     await expect(
       resolveDeployWorkspace({
+        organizationId: "33333333-3333-4333-8333-333333333333",
         createWorkspace: true,
         workspaceName: "new-workspace",
         workspaceRegion: "us-west",
@@ -601,6 +604,8 @@ describe("resolveDeployWorkspace", () => {
           "<name>",
           "--workspace-region",
           "<region>",
+          "--organization-id",
+          "<organization-id>",
         ],
       });
       expect(error.context).toEqual({ availableRegions: ["us-west", "asia-northeast"] });
@@ -791,6 +796,7 @@ describe("resolveDeployWorkspace", () => {
 
     await expect(
       resolveDeployWorkspace({
+        organizationId: "33333333-3333-4333-8333-333333333333",
         createWorkspace: true,
         workspaceName: created.name,
         workspaceRegion: created.region,
@@ -849,7 +855,9 @@ describe("resolveDeployWorkspace", () => {
     mocks.confirm.mockResolvedValue(true);
     mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
 
-    await expect(resolveDeployWorkspace()).resolves.toEqual({
+    await expect(
+      resolveDeployWorkspace({ organizationId: "33333333-3333-4333-8333-333333333333" }),
+    ).resolves.toEqual({
       client,
       workspaceId: created.id,
     });
@@ -882,6 +890,82 @@ describe("resolveDeployWorkspace", () => {
     expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
   });
 
+  test("asks for an organization during interactive creation when none is resolved", async () => {
+    const organizationId = "abababab-abab-4bab-8bab-abababababab";
+    const created = workspace("acacacac-acac-4cac-8cac-acacacacacac", "new-workspace");
+    mocks.canPrompt.mockReturnValue(true);
+    client.listUserOrganizations.mockResolvedValue({
+      userOrganizations: [{ organizationId, organizationName: "Acme" }],
+    });
+    mocks.select.mockImplementation(async ({ message }: { message: string }) =>
+      message === "Organization" ? organizationId : "us-west",
+    );
+    mocks.text.mockResolvedValue("new-workspace");
+    mocks.confirm.mockResolvedValue(true);
+    mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
+
+    await expect(resolveDeployWorkspace()).resolves.toEqual({ client, workspaceId: created.id });
+    expect(mocks.select).toHaveBeenCalledWith({
+      message: "Organization",
+      choices: [{ name: `Acme (${organizationId})`, value: organizationId }],
+    });
+    expect(mocks.createValidatedWorkspaceWithClient).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ organizationId }),
+    );
+  });
+
+  test("asks for the organization before reusing a workspace on an interactive creation retry", async () => {
+    const existing = { ...workspace("adadadad-adad-4dad-8dad-adadadadadad"), folderId: undefined };
+    mocks.canPrompt.mockReturnValue(true);
+    mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
+    client.listUserOrganizations.mockResolvedValue({
+      userOrganizations: [{ organizationId: existing.organizationId, organizationName: "Acme" }],
+    });
+    mocks.select.mockResolvedValue(existing.organizationId);
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: existing.name,
+        workspaceRegion: existing.region,
+      }),
+    ).resolves.toEqual({ client, workspaceId: existing.id });
+    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+  });
+
+  test("rejects an interactive dry-run creation without an organization like a non-interactive one", async () => {
+    mocks.canPrompt.mockReturnValue(true);
+
+    await expect(
+      resolveDeployWorkspace({
+        dryRun: true,
+        createWorkspace: true,
+        workspaceName: "example-workspace",
+        workspaceRegion: "us-west",
+      }),
+    ).rejects.toMatchObject({
+      name: "CLIError",
+      code: "WORKSPACE_CREATE_OPTIONS_INVALID",
+      next: {
+        command: "tailor",
+        args: expect.arrayContaining(["--organization-id", "<organization-id>"]),
+      },
+    });
+    expect(client.listUserOrganizations).not.toHaveBeenCalled();
+  });
+
+  test("stops interactive creation when the user belongs to no organization", async () => {
+    mocks.canPrompt.mockReturnValue(true);
+    client.listUserOrganizations.mockResolvedValue({ userOrganizations: [] });
+
+    await expect(resolveDeployWorkspace()).rejects.toMatchObject({
+      name: "CLIError",
+      code: "WORKSPACE_ORGANIZATION_REQUIRED",
+    });
+    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+  });
+
   test("guides interactive workspace creation", async () => {
     const created = workspace("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "new-workspace");
     mocks.canPrompt.mockReturnValue(true);
@@ -890,7 +974,9 @@ describe("resolveDeployWorkspace", () => {
     mocks.confirm.mockResolvedValue(true);
     mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
 
-    await expect(resolveDeployWorkspace()).resolves.toEqual({
+    await expect(
+      resolveDeployWorkspace({ organizationId: "33333333-3333-4333-8333-333333333333" }),
+    ).resolves.toEqual({
       client,
       workspaceId: created.id,
     });
@@ -907,7 +993,8 @@ describe("resolveDeployWorkspace", () => {
       ],
     });
     expect(mocks.confirm).toHaveBeenCalledWith({
-      message: 'Create workspace "new-workspace" in asia-northeast?',
+      message:
+        'Create workspace "new-workspace" in asia-northeast (organization: 33333333-3333-4333-8333-333333333333)?',
       default: true,
     });
     expect(mocks.info).toHaveBeenCalledWith(
@@ -964,6 +1051,7 @@ describe("resolveDeployWorkspace", () => {
 
     await expect(
       resolveDeployWorkspace({
+        organizationId: "33333333-3333-4333-8333-333333333333",
         dryRun: true,
         createWorkspace: true,
         workspaceName: "example-workspace",
@@ -1093,17 +1181,19 @@ describe("resolveDeployWorkspace", () => {
     });
   });
 
-  test("does not reuse an organization workspace for a personal creation request", async () => {
-    const existing = workspace("57575757-5757-4757-8757-575757575757");
-    mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
-
+  test("rejects a creation request without an organization before the create RPC", async () => {
     await expect(
       resolveDeployWorkspace({
         createWorkspace: true,
-        workspaceName: existing.name,
-        workspaceRegion: existing.region,
+        workspaceName: "example-workspace",
+        workspaceRegion: "us-west",
       }),
-    ).rejects.toMatchObject({ name: "CLIError", code: "WORKSPACE_CREATE_CONFLICT" });
+    ).rejects.toMatchObject({
+      name: "CLIError",
+      code: "WORKSPACE_CREATE_OPTIONS_INVALID",
+      details: "A workspace must be created in an organization.",
+    });
+    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
   });
 
   test("continues with the created workspace when project context cannot be saved", async () => {
@@ -1113,6 +1203,7 @@ describe("resolveDeployWorkspace", () => {
 
     await expect(
       resolveDeployWorkspace({
+        organizationId: "33333333-3333-4333-8333-333333333333",
         createWorkspace: true,
         workspaceName: created.name,
         workspaceRegion: created.region,
@@ -1172,6 +1263,7 @@ describe("resolveDeployWorkspace", () => {
 
     await expect(
       resolveDeployWorkspace({
+        organizationId: "33333333-3333-4333-8333-333333333333",
         createWorkspace: true,
         workspaceName: "example-workspace",
         workspaceRegion: "us-west",
@@ -1194,6 +1286,7 @@ describe("resolveDeployWorkspace", () => {
 
     await expect(
       resolveDeployWorkspace({
+        organizationId: "33333333-3333-4333-8333-333333333333",
         createWorkspace: true,
         workspaceName: "example-workspace",
         workspaceRegion: "us-west",
@@ -1206,6 +1299,7 @@ describe("resolveDeployWorkspace", () => {
 
     await expect(
       resolveDeployWorkspace({
+        organizationId: "33333333-3333-4333-8333-333333333333",
         createWorkspace: true,
         workspaceName: "example-workspace",
         workspaceRegion: "us-west",

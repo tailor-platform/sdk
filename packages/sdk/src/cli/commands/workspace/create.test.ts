@@ -98,6 +98,7 @@ describe("workspace create", () => {
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", validUUID);
     seedConfig();
     stubClient();
     await runTest();
@@ -122,6 +123,27 @@ describe("workspace create", () => {
       "read",
     );
     expect(config.profiles.bootstrap?.readonly).toBe(true);
+  });
+
+  test("requires an organization when neither an option nor a user default gives one", async () => {
+    using _logger = silenceLogger("out", "success", "warn", "error");
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", undefined);
+    const client = stubClient();
+
+    const result = await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west"]);
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "WORKSPACE_ORGANIZATION_REQUIRED" },
+    });
+    expect(client.createWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("requires an organization for programmatic createWorkspace() before contacting the Platform", async () => {
+    await expect(createWorkspace({ name: "test-ws", region: "us-west" })).rejects.toMatchObject({
+      code: "WORKSPACE_ORGANIZATION_REQUIRED",
+    });
+    expect(initOperatorClient).not.toHaveBeenCalled();
   });
 
   test("validates programmatic options before initializing a client", async () => {
@@ -324,6 +346,7 @@ describe("workspace create --ttl", () => {
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", validUUID);
     seedConfig();
     await runTest();
     vi.unstubAllEnvs();
@@ -696,11 +719,15 @@ describe("workspace create with user defaults", () => {
       vi.stubEnv(name, "mock-token");
       const client = stubClient();
 
-      await runCreateWithDefaults();
+      const result = await runCreateWithDefaults();
 
-      expect(client.createWorkspace).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId: undefined, folderId: undefined }),
-      );
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: "WORKSPACE_ORGANIZATION_REQUIRED" },
+      });
+      const error = result.success ? undefined : result.error;
+      expect(isCLIError(error) && error.suggestion).not.toContain("tailor user update");
+      expect(client.createWorkspace).not.toHaveBeenCalled();
     },
   );
 
@@ -736,10 +763,11 @@ describe("workspace create with user defaults", () => {
 
     const result = await runCreateWithDefaults();
 
-    expect(result.success).toBe(true);
-    expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: undefined, folderId: undefined }),
-    );
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "WORKSPACE_ORGANIZATION_REQUIRED" },
+    });
+    expect(client.createWorkspace).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -840,11 +868,10 @@ describe("workspace create with user defaults", () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", "env-token");
     const client = stubClient();
 
-    await createWorkspace({ name: "test-ws", region: "us-west" });
-
-    expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: undefined, folderId: undefined }),
-    );
+    await expect(createWorkspace({ name: "test-ws", region: "us-west" })).rejects.toMatchObject({
+      code: "WORKSPACE_ORGANIZATION_REQUIRED",
+    });
+    expect(client.createWorkspace).not.toHaveBeenCalled();
   });
 
   test("rejects a programmatic folder without an organization before contacting the Platform", async () => {
