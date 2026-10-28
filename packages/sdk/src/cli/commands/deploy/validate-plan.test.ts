@@ -5,165 +5,8 @@ import {
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
-import { createChangeSet } from "./change-set";
+import { emptyPlanResults } from "./test-helpers/plan-results";
 import { validatePlan, type ValidatePlanInput } from "./validate-plan";
-
-function emptyInput(): ValidatePlanInput {
-  return {
-    functionRegistry: {
-      changeSet: createChangeSet("Function registry"),
-      workflowJobChanges: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
-      resolverFunctionChanges: {
-        creates: [],
-        updates: [],
-        deletes: [],
-        replaces: [],
-        unchanged: [],
-      },
-      executorFunctionChanges: {
-        creates: [],
-        updates: [],
-        deletes: [],
-        replaces: [],
-        unchanged: [],
-      },
-      authHookFunctionChanges: {
-        creates: [],
-        updates: [],
-        deletes: [],
-        replaces: [],
-        unchanged: [],
-      },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-      existingMap: {},
-    },
-    tailorDB: {
-      changeSet: {
-        service: createChangeSet("TailorDB services"),
-        type: createChangeSet("TailorDB tables"),
-        gqlPermission: createChangeSet("TailorDB gqlPermissions"),
-      },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-      context: {
-        workspaceId: "00000000-0000-0000-0000-000000000001",
-        application: {} as ValidatePlanInput["tailorDB"]["context"]["application"],
-        tailorDBInputs: [],
-        executorUsedTables: new Set(),
-        config: {} as ValidatePlanInput["tailorDB"]["context"]["config"],
-        noSchemaCheck: false,
-        namespacesWithMigrations: [],
-        migrationFileState: {},
-        checkpointRepairs: [],
-      },
-    },
-    staticWebsite: {
-      changeSet: createChangeSet("StaticWebsites"),
-      customDomainChangeSet: createChangeSet("CustomDomains"),
-      customDomainTransferChangeSet: createChangeSet("CustomDomainTransfers"),
-      customDomainNotes: [],
-      customDomainLiveOffers: new Map(),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-    },
-    aiGateway: {
-      changeSet: createChangeSet("AIGateways"),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-    },
-    idp: {
-      changeSet: {
-        service: createChangeSet("IdP services"),
-        client: createChangeSet("IdP clients"),
-      },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-    },
-    auth: {
-      connectionStateScope: {
-        workspaceId: "workspace-id",
-        applicationId: "application-id",
-        applicationName: "my-app",
-      },
-      changeSet: {
-        service: createChangeSet("Auth services"),
-        idpConfig: createChangeSet("Auth idpConfigs"),
-        userProfileConfig: createChangeSet("Auth userProfileConfigs"),
-        tenantConfig: createChangeSet("Auth tenantConfigs"),
-        machineUser: createChangeSet("Auth machineUsers"),
-        oauth2Client: createChangeSet("Auth oauth2Clients"),
-        authHook: createChangeSet("Auth hooks"),
-        scim: createChangeSet("Auth scim"),
-        scimResource: createChangeSet("Auth scimResources"),
-        connection: createChangeSet("Auth connections"),
-      },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-    },
-    pipeline: {
-      changeSet: {
-        service: createChangeSet("Pipeline services"),
-        resolver: createChangeSet("Pipeline resolvers"),
-      },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-      existingServices: {},
-      existingResolvers: new Map(),
-    },
-    app: Object.assign(createChangeSet("Applications"), {
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
-    }) as unknown as ValidatePlanInput["app"],
-    executor: {
-      changeSet: createChangeSet("Executors"),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-      existingExecutors: {},
-    },
-    workflow: {
-      changeSet: createChangeSet("Workflows"),
-      unchangedWorkflowJobNames: new Set(),
-      jobFunctionDeletes: [],
-      jobFunctionPublishEvents: new Map<string, boolean>(),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-      appName: "my-app",
-      appId: undefined,
-      existingJobFunctions: new Map(),
-      existingWorkflows: {},
-    },
-    workflowExecutionPolicy: {
-      changeSet: createChangeSet("Workflow execution policies"),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-    },
-    secretManager: {
-      stateScope: {
-        workspaceId: "workspace-id",
-        applicationId: "application-id",
-        applicationName: "my-app",
-      },
-      vaultChangeSet: createChangeSet("Vaults"),
-      secretChangeSet: createChangeSet("Secrets"),
-      skippedSecrets: [],
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(),
-    },
-  } satisfies ValidatePlanInput;
-}
 
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const METADATA = { trn: "", labels: {} };
@@ -577,20 +420,20 @@ const invalidCases: Case<RegExp>[] = [
 
 describe("validatePlan", () => {
   test.each(validCases)("$name", async ({ mutate }) => {
-    const input = emptyInput();
+    const input = emptyPlanResults();
     mutate(input);
     await expect(validatePlan(input)).resolves.toBeUndefined();
   });
 
   test.each(invalidCases)("$name", async ({ mutate, expected }) => {
-    const input = emptyInput();
+    const input = emptyPlanResults();
     mutate(input);
     await expect(validatePlan(input)).rejects.toThrow(expected);
   });
 
   test("evaluates message-level CEL rules instead of warning that they could not run", async () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const input = emptyInput();
+    const input = emptyPlanResults();
     input.auth.changeSet.oauth2Client.creates.push({
       name: "default",
       request: {
