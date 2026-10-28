@@ -136,7 +136,7 @@ type PreparedWorkspaceCreation = {
 async function prepareWorkspaceCreation(
   options: CreateWorkspaceOptions,
 ): Promise<PreparedWorkspaceCreation> {
-  const provided = validateCreateWorkspaceOptions(options);
+  const provided = parseCreateWorkspaceOptions(options);
   const { organizationId, folderId, defaults } = await resolveWorkspaceCreationLocation(provided);
   const validated = validateCreateWorkspaceOptions({ ...provided, organizationId, folderId });
   const accessToken = await loadAccessToken({ profile: validated.profile });
@@ -221,12 +221,7 @@ async function recordTtl(
   }
 }
 
-/**
- * Validate workspace creation options without making API calls.
- * @param options - Workspace creation options
- * @returns Validated workspace creation options
- */
-export function validateCreateWorkspaceOptions(
+function parseCreateWorkspaceOptions(
   options: CreateWorkspaceOptions,
 ): ValidatedCreateWorkspaceOptions {
   const validated = parseOptions(createWorkspaceOptionsSchema, options);
@@ -235,6 +230,27 @@ export function validateCreateWorkspaceOptions(
       code: "WORKSPACE_FOLDER_WITHOUT_ORGANIZATION",
       message: "A folder ID requires an organization ID.",
       suggestion: "Give the organization that owns the folder as well.",
+    });
+  }
+  return validated;
+}
+
+/**
+ * Validate workspace creation options without making API calls. Call it once the
+ * user defaults have been applied, since every workspace needs an organization.
+ * @param options - Workspace creation options
+ * @returns Validated workspace creation options
+ */
+export function validateCreateWorkspaceOptions(
+  options: CreateWorkspaceOptions,
+): ValidatedCreateWorkspaceOptions {
+  const validated = parseCreateWorkspaceOptions(options);
+  if (validated.organizationId === undefined) {
+    throw CLIError({
+      code: "WORKSPACE_ORGANIZATION_REQUIRED",
+      message: "A workspace must be created in an organization.",
+      suggestion:
+        "Pass --organization-id (or set TAILOR_PLATFORM_ORGANIZATION_ID), or set a default organization with `tailor user update --default-organization-id`.",
     });
   }
   return validated;
@@ -303,7 +319,7 @@ export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
   notes: ml`
-    Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with \`user update\`, unless TAILOR_PLATFORM_TOKEN is set. Giving either option replaces both defaults, and --folder-id requires --organization-id.
+    Every workspace belongs to an organization. Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with \`user update\`, unless TAILOR_PLATFORM_TOKEN is set. When none of these gives an organization, the command fails. Giving either option replaces both defaults, and --folder-id requires --organization-id.
 
     TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID are also read from --env-file. Command-line options take precedence over the corresponding environment variables. Empty values in the env file are treated as not given.
   `,

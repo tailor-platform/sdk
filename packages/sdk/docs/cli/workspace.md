@@ -121,7 +121,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with `user update`, unless TAILOR_PLATFORM_TOKEN is set. Giving either option replaces both defaults, and --folder-id requires --organization-id.
+Every workspace belongs to an organization. Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with `user update`, unless TAILOR_PLATFORM_TOKEN is set. When none of these gives an organization, the command fails. Giving either option replaces both defaults, and --folder-id requires --organization-id.
 
 TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID are also read from --env-file. Command-line options take precedence over the corresponding environment variables. Empty values in the env file are treated as not given.
 
