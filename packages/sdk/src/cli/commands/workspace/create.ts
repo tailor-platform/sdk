@@ -115,8 +115,10 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
 }
 
 /**
- * Create a new workspace with the given options. When neither location ID is provided,
- * use the selected user's defaults unless an environment token is set.
+ * Create a new workspace with the given options. Every workspace belongs to an organization.
+ * When neither location ID is provided, use the selected user's defaults unless an environment
+ * token is set. Throws `WORKSPACE_ORGANIZATION_REQUIRED` before contacting the Platform when no
+ * organization is resolved.
  * @param options - Workspace creation options
  * @returns Created workspace info
  */
