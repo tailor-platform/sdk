@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.4.1
+
+### Patch Changes
+
+- [#2822](https://github.com/tailor-platform/sdk/pull/2822) [`b433a27`](https://github.com/tailor-platform/sdk/commit/b433a27e06c7aa1e2bc998b8f703aab6c9d8a7ff) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.6.3
+- Updated dependencies [[`e3e3bac`](https://github.com/tailor-platform/sdk/commit/e3e3bac2e1fdc9b695db38d90e25abe7d40923ce), [`6cbf20b`](https://github.com/tailor-platform/sdk/commit/6cbf20b798a5303a21fd99c6b7726bb342ad8d4b), [`2d6217b`](https://github.com/tailor-platform/sdk/commit/2d6217b690bb25c1a825f1c40f8d437bb64d5140), [`e229992`](https://github.com/tailor-platform/sdk/commit/e229992b0861fe17f306d2e2405104a9cb2c371c), [`eab9a23`](https://github.com/tailor-platform/sdk/commit/eab9a23368da6b084f0ebc73dd90d38fb3665ca7), [`beacc64`](https://github.com/tailor-platform/sdk/commit/beacc643ec0a429736448f9074667106eb09ba1a), [`0d4cd79`](https://github.com/tailor-platform/sdk/commit/0d4cd79db4a02b162bf384881668abec264da539), [`b433a27`](https://github.com/tailor-platform/sdk/commit/b433a27e06c7aa1e2bc998b8f703aab6c9d8a7ff), [`8712ec6`](https://github.com/tailor-platform/sdk/commit/8712ec645517d29c129b3da72e32bf0d71319b2c), [`5bf7e69`](https://github.com/tailor-platform/sdk/commit/5bf7e69611437fcf486b9964a7fc30d606cfa62a), [`2a0e726`](https://github.com/tailor-platform/sdk/commit/2a0e726f3646394e36546eef9e56cfba8d043a09), [`8d3d70c`](https://github.com/tailor-platform/sdk/commit/8d3d70c78c22ea6cc4a98891bfddab880c83d830), [`95ba73c`](https://github.com/tailor-platform/sdk/commit/95ba73cf72500d0e41252112164f212fa189fad7), [`2c6242a`](https://github.com/tailor-platform/sdk/commit/2c6242a73f47cfb4a782449938b2323487aa0046), [`55e9a94`](https://github.com/tailor-platform/sdk/commit/55e9a94a593406e7790f73b73c3714ba96eda8f7)]:
+  - @tailor-platform/sdk@2.36.0
+
 ## 0.4.0
 
 ### Minor Changes
