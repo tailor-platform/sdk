@@ -19,12 +19,14 @@ const jsPlugins = [
 ];
 
 const GRAPHQL_DIR = "node_modules/graphql/";
-const WORKSPACE_DIR = /^(?:.*\/)?packages\//;
+const VENDOR_GRAPHQL_DIR = "vendor/graphql";
+const UP_TO_PACKAGES_DIR = /^(?:.*\/)?packages\//;
 
 function stableChunkName(name: string): string {
   const graphqlAt = name.indexOf(GRAPHQL_DIR);
-  if (graphqlAt !== -1) return `vendor/graphql/${name.slice(graphqlAt + GRAPHQL_DIR.length)}`;
-  return name.replace(WORKSPACE_DIR, "");
+  if (graphqlAt !== -1)
+    return `${VENDOR_GRAPHQL_DIR}/${name.slice(graphqlAt + GRAPHQL_DIR.length)}`;
+  return name.replace(UP_TO_PACKAGES_DIR, "");
 }
 
 function renameChunk(template: OutputOptions["entryFileNames"]) {
@@ -86,18 +88,19 @@ export default defineConfig([
       chunkFileNames: renameChunk(options.chunkFileNames),
     }),
     onSuccess: (config) => {
-      const vendorDir = path.join(config.outDir, "vendor/graphql");
+      const vendorDir = path.join(config.outDir, VENDOR_GRAPHQL_DIR);
       mkdirSync(vendorDir, { recursive: true });
-      copyToOutDir(config.outDir, "node_modules/graphql/LICENSE", "vendor/graphql/LICENSE");
+      copyToOutDir(config.outDir, `${GRAPHQL_DIR}LICENSE`, `${VENDOR_GRAPHQL_DIR}/LICENSE`);
       for (const file of readdirSync(vendorDir, { recursive: true, encoding: "utf8" })) {
         if (!file.endsWith(".d.mts")) continue;
         const target = path.join(vendorDir, file);
         writeFileSync(
           target,
-          readFileSync(target, "utf8").replace(
-            /^\/\/#region .*node_modules\/graphql\//gm,
-            "//#region graphql/",
-          ),
+          readFileSync(target, "utf8").replace(/^\/\/#region (.*)$/gm, (line, region: string) => {
+            const graphqlAt = region.indexOf(GRAPHQL_DIR);
+            if (graphqlAt === -1) return line;
+            return `//#region graphql/${region.slice(graphqlAt + GRAPHQL_DIR.length)}`;
+          }),
         );
       }
     },

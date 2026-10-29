@@ -7,7 +7,7 @@ import type {
   WebhookOperation as ParserWebhookOperation,
   WorkflowOperation as ParserWorkflowOperation,
 } from "#/types/executor.generated";
-import type { Client } from "@urql/core";
+import type { DocumentNode } from "graphql";
 
 /** Function-based executor operation. The body receives the trigger args and the `invoker`. */
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "invoker"> & {
@@ -15,12 +15,11 @@ export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "in
   invoker?: MachineUserName;
 };
 
-type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
-
 /** GraphQL-based executor operation. Executes a GraphQL query or mutation. */
 export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables" | "invoker"> & {
-  query: UrqlOperationArgs[0];
-  variables?: (args: Args) => UrqlOperationArgs[1];
+  query: string | DocumentNode;
+  // oxlint-disable-next-line no-explicit-any
+  variables?: (args: Args) => { [prop: string]: any } | void | undefined;
   invoker?: MachineUserName;
 };
 

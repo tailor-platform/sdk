@@ -95,7 +95,7 @@ interface Violation {
 const violations: Violation[] = [];
 
 for (const [entry, target] of Object.entries(pkg.exports)) {
-  if (ZOD_ALLOWED_ENTRIES.has(entry)) {
+  if (ZOD_ALLOWED_ENTRIES.has(entry) || entry.includes("*")) {
     continue;
   }
   if (typeof target !== "object" || target === null) {

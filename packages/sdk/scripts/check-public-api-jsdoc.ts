@@ -30,6 +30,7 @@ function entryPoints(): string[] {
   const points: string[] = [];
   for (const [key, value] of Object.entries(pkg.exports)) {
     if (
+      key.includes("*") ||
       typeof value !== "object" ||
       value === null ||
       !("types" in value) ||
