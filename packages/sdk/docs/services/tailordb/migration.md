@@ -757,7 +757,7 @@ Maintenance mode restricts GraphQL writes and record events only. Resolvers, exe
 
 **When a deploy stops early:**
 
-- If a migration fails, the tables leave maintenance mode before the error is reported: they return to the settings of the last checkpoint that completed. A migration that did not reach its checkpoint returns existing tables to their previous settings and keeps the tables it created in maintenance mode until a later deploy applies it. The settings are not restored if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion also stays in maintenance mode for manual recovery.
+- If a migration fails, the tables leave maintenance mode before the error is reported: they return to the settings of the last checkpoint that completed. A migration that did not reach its checkpoint returns existing tables to their previous settings and drops the tables it created (see [Failure Recovery](#failure-recovery)). A created table that the rollback cannot drop stays in maintenance mode, and the deploy names it for manual repair. The settings are not restored if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion also stays in maintenance mode for manual recovery.
 - A [multi-step migration](#splitting-a-migration-into-steps) left in progress keeps its tables in maintenance mode until a deploy completes it.
 - A migration whose script run a deploy could not confirm keeps its tables in maintenance mode until you settle it with `tailor tailordb migration resolve` (see [Failure Recovery](#failure-recovery)).
 - With `"deploy"`, if a later part of the deploy fails, the tables leave maintenance mode before the error is reported. When the deploy ends maintenance mode, it leaves the tables of a namespace unchanged if that namespace's checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified, and reports it.
@@ -1207,7 +1207,7 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 **Resolution:**
 
 1. Read the error message — it includes the file path and the offending field.
-2. Restore the file from version control (`git checkout -- <path>`), or regenerate migration files with `migration generate` / `migration script`.
+2. Restore the file from version control (`git checkout -- <path>`); `migration generate` reads every migration file and stops with the same error until then. If the broken file belongs to the latest migration and no environment has deployed it, you can instead recreate that migration: copy out the files you edited in its directory (such as `migrate.ts` and its tests), delete the directory, run `migration generate` with the options that created it (such as `--data-only`, `--rename`, `--drop`, or `--expand-contract`), copy your edits back, and record any `--no-script` reason again with `migration script`.
 3. Do not hand-edit `schema.json` or `diff.json`; they are managed by the CLI.
 
 ### "Unsupported migration file format version" error
