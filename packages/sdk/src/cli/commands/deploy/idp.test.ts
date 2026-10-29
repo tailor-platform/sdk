@@ -343,11 +343,18 @@ describe("applyIdP client updates forced by the SDK version", () => {
     expect(registerSecretSpy).toHaveBeenCalledWith("secret-from-get");
   });
 
-  test("fails the deploy when getIdPClient fails", async () => {
+  test.each([
+    { name: "Internal", code: Code.Internal, message: "boom" },
+    {
+      name: "InvalidArgument",
+      code: Code.InvalidArgument,
+      message: "name: does not match regex pattern",
+    },
+  ])("fails the deploy when getIdPClient fails with $name", async ({ code, message }) => {
     const client = createClient({ vaultExists: false });
-    vi.mocked(client.getIdPClient).mockRejectedValue(new ConnectError("boom", Code.Internal));
+    vi.mocked(client.getIdPClient).mockRejectedValue(new ConnectError(message, code));
 
-    await expect(applyIdP(client, createPlanResult(), "create-update")).rejects.toThrow("boom");
+    await expect(applyIdP(client, createPlanResult(), "create-update")).rejects.toThrow(message);
   });
 
   test("does not call getIdPClient or create anything when the vault already exists", async () => {
