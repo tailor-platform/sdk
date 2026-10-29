@@ -101,6 +101,23 @@ describe("applyIdP phase separation", () => {
     });
   });
 
+  test("delete-resources phase deletes only the vault of a vault-only client delete", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+    planResult.changeSet.client.deletes[0] = {
+      ...planResult.changeSet.client.deletes[0]!,
+      vaultOnly: true,
+    };
+
+    await applyIdP(client, planResult, "delete-resources");
+
+    expect(client.deleteIdPClient).not.toHaveBeenCalled();
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      secretmanagerVaultName: "idp-test-idp-test-client",
+    });
+  });
+
   test("delete-resources phase propagates other errors from deleting a client vault", async () => {
     const client = createMockClientWithSpies();
     vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
@@ -326,25 +343,18 @@ describe("applyIdP client updates forced by the SDK version", () => {
     expect(registerSecretSpy).toHaveBeenCalledWith("secret-from-get");
   });
 
-  test("warns and skips the vault when getIdPClient rejects the client name", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+  test.each([
+    { name: "Internal", code: Code.Internal, message: "boom" },
+    {
+      name: "InvalidArgument",
+      code: Code.InvalidArgument,
+      message: "name: does not match regex pattern",
+    },
+  ])("fails the deploy when getIdPClient fails with $name", async ({ code, message }) => {
     const client = createClient({ vaultExists: false });
-    vi.mocked(client.getIdPClient).mockRejectedValue(
-      new ConnectError("name: does not match regex pattern", Code.InvalidArgument),
-    );
+    vi.mocked(client.getIdPClient).mockRejectedValue(new ConnectError(message, code));
 
-    await expect(applyIdP(client, createPlanResult(), "create-update")).resolves.toBeUndefined();
-
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("test-client"));
-    expect(client.createSecretManagerVault).not.toHaveBeenCalled();
-    expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
-  });
-
-  test("still fails the deploy when getIdPClient raises another error", async () => {
-    const client = createClient({ vaultExists: false });
-    vi.mocked(client.getIdPClient).mockRejectedValue(new ConnectError("boom", Code.Internal));
-
-    await expect(applyIdP(client, createPlanResult(), "create-update")).rejects.toThrow("boom");
+    await expect(applyIdP(client, createPlanResult(), "create-update")).rejects.toThrow(message);
   });
 
   test("does not call getIdPClient or create anything when the vault already exists", async () => {

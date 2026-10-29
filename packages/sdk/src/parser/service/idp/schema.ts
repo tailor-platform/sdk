@@ -336,6 +336,13 @@ export const IdPPermissionSchema = z
 
   .describe("Per-operation permission policies for IdP users");
 
+export const IdPClientNameSchema = z
+  .string()
+  .regex(
+    /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
+    "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit",
+  );
+
 export const IdPSchema = z
   .strictObject({
     name: z.string().describe("IdP service name"),
@@ -343,7 +350,7 @@ export const IdPSchema = z
       .union([z.literal("insecure"), z.literal("loggedIn"), z.strictObject({ cel: z.string() })])
       .optional()
       .describe("Authorization mode for IdP API access"),
-    clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),
+    clients: z.array(IdPClientNameSchema).describe("OAuth2 client names that can use this IdP"),
     lang: IdPLangSchema.optional().describe("UI language for IdP pages"),
     userAuthPolicy: IdPUserAuthPolicySchema.transform((input) =>
       // transform input may be undefined before schema parse

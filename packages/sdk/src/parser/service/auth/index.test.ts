@@ -317,6 +317,32 @@ describe("AuthConfigSchema publishSessionEvents validation", () => {
   });
 });
 
+describe("AuthConfigSchema built-in IdP client name validation", () => {
+  const configWithClient = (clientName: string) => ({
+    name: "my-auth",
+    idProvider: {
+      name: "my-provider",
+      kind: "BuiltInIdP",
+      namespace: "my-idp",
+      clientName,
+    },
+  });
+
+  test("accepts a valid client name", () => {
+    const result = AuthConfigSchema.parse(configWithClient("default-client"));
+    expect(result.idProvider).toMatchObject({ clientName: "default-client" });
+  });
+
+  test.each([
+    ["a two-character name", "c1"],
+    ["an uppercase name", "Client"],
+  ])("rejects %s", (_label, clientName) => {
+    expect(() => AuthConfigSchema.parse(configWithClient(clientName))).toThrow(
+      "3-63 lowercase letters, digits, or hyphens",
+    );
+  });
+});
+
 describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => {
   test("rejects configs that include both userProfile and machineUserAttributes", () => {
     const config = {

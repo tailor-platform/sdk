@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AuthConnectionConfigSchema } from "#/parser/service/auth-connection/index";
 import { TailorFieldSchema } from "#/parser/service/field/schema";
+import { IdPClientNameSchema } from "#/parser/service/idp/index";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { ValueOperand } from "#/configure/services/auth/types";
@@ -69,7 +70,7 @@ export const BuiltinIdPSchema = z.strictObject({
   name: z.string().describe("Identity provider name"),
   kind: z.literal("BuiltInIdP"),
   namespace: z.string().describe("IdP namespace"),
-  clientName: z.string().describe("OAuth2 client name in the IdP"),
+  clientName: IdPClientNameSchema.describe("OAuth2 client name in the IdP"),
 });
 
 export const IdProviderSchema = z.discriminatedUnion("kind", [

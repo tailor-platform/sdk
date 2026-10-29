@@ -1333,11 +1333,14 @@ export type IdPPermission = {
 };
 export type IdPPermissionInput = IdPPermission;
 
+export type IdPClientName = string;
+export type IdPClientNameInput = IdPClientName;
+
 export type IdPInput = {
   /** IdP service name */
   name: string;
   /** OAuth2 client names that can use this IdP */
-  clients: string[];
+  clients: IdPClientName[];
   /** Authorization mode for IdP API access */
   authorization?:
     | "insecure"
@@ -1417,7 +1420,7 @@ export type IdP = {
   /** IdP service name */
   name: string;
   /** OAuth2 client names that can use this IdP */
-  clients: string[];
+  clients: IdPClientName[];
   /** Authorization mode for IdP API access */
   authorization?:
     | "insecure"

@@ -668,6 +668,32 @@ describe("IdPSchema validation", () => {
     const result = IdPSchema.parse(config);
     expect(result.gqlOperations).toBeUndefined();
   });
+
+  test.each([
+    ["the shortest name", "abc"],
+    ["a name with a hyphen", "client-1"],
+    ["a name starting and ending with digits", "0a0"],
+    ["a 63-character name", "a".repeat(63)],
+  ])("accepts %s as a client name", (_label, clientName) => {
+    const config = { name: "test-idp", clients: [clientName] };
+
+    expect(IdPSchema.parse(config).clients).toEqual([clientName]);
+  });
+
+  test.each([
+    ["an empty name", ""],
+    ["a one-character name", "x"],
+    ["a two-character name", "c1"],
+    ["a name starting with a hyphen", "-ab"],
+    ["a name ending with a hyphen", "ab-"],
+    ["an uppercase name", "Client"],
+    ["a name with an underscore", "my_client"],
+    ["a 64-character name", "a".repeat(64)],
+  ])("rejects %s as a client name", (_label, clientName) => {
+    const config = { name: "test-idp", clients: ["client-1", clientName] };
+
+    expect(() => IdPSchema.parse(config)).toThrow("3-63 lowercase letters, digits, or hyphens");
+  });
 });
 
 describe("IdPGqlOperationsSchema validation", () => {

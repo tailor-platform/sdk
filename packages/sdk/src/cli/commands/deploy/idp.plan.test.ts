@@ -450,6 +450,61 @@ describe("planIdP", () => {
   });
 });
 
+describe("planIdP and a client name the platform cannot delete", () => {
+  test("warns instead of deleting a removed client with that name", async () => {
+    using _logger = silenceLogger("warn");
+    const client = createMockClient({
+      services: [createMatchingRemoteService()],
+      clients: {
+        "idp-a": [
+          ...defaultIdpClientSecret["idp-a"],
+          { name: "c1", clientSecret: "c1-secret" },
+          { name: "old-client", clientSecret: "old-secret" },
+        ],
+      },
+    });
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.client.deletes.map((del) => del.name)).toEqual(["old-client"]);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('IdP client "c1" in "idp-a"'));
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "The client and its secret vault stay in the workspace. Both are deleted when that IdP is removed.",
+      ),
+    );
+  });
+
+  test("deletes only the vault of such a client of a removed service", async () => {
+    using _logger = silenceLogger("warn");
+    const client = createMockClient({
+      services: [
+        createMatchingRemoteService(),
+        { name: "idp-removed", lang: IdPLang.JA, publishEvents: true, label: appName },
+      ],
+      clients: {
+        ...defaultIdpClientSecret,
+        "idp-removed": [
+          { name: "-ab", clientSecret: "ab-secret" },
+          { name: "old-client", clientSecret: "old-secret" },
+        ],
+      },
+    });
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.client.deletes).toEqual([
+      expect.objectContaining({ name: "-ab", vaultOnly: true }),
+      {
+        name: "old-client",
+        request: { workspaceId, namespaceName: "idp-removed", name: "old-client" },
+      },
+    ]);
+    expect(result.changeSet.service.deletes.map((del) => del.name)).toEqual(["idp-removed"]);
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining("IdP client"));
+  });
+});
+
 describe("planIdP / gqlOperations MFA mapping", () => {
   test.each`
     label                                       | gqlOperations                                           | expected
