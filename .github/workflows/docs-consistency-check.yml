@@ -5,6 +5,7 @@ on:
     types: [ready_for_review, labeled]
     paths:
       - "packages/sdk/src/**"
+      - "packages/sdk-plugin-*/src/**"
       - "packages/sdk/docs/**"
       - "example/**"
       - "AGENTS.md"
