@@ -17,6 +17,7 @@ import {
   snapshotType,
   writeDiff,
   writeInitialSchema,
+  writeRebaselineMarker,
 } from "./test-helpers/schema-fixtures";
 import type { CLIError } from "#/cli/shared/errors";
 
@@ -247,19 +248,7 @@ describe("tailordb migration rebaseline", () => {
   });
 
   test("records the previous generation when re-baselining an existing rebaseline history", async () => {
-    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-    fs.writeFileSync(
-      schemaPath,
-      JSON.stringify({
-        ...schema,
-        rebaseline: {
-          historyId: "hprevious",
-          replacedHistoryId: null,
-          replacedLatestMigration: 7,
-        },
-      }),
-    );
+    writeRebaselineMarker(state.migrationsDir, "hprevious", { replacedLatestMigration: 7 });
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
@@ -273,6 +262,7 @@ describe("tailordb migration rebaseline", () => {
     const result = await runCommand(rebaselineCommand, ["--yes"]);
 
     expect(result.success).toBe(true);
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
     const baseline = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
       rebaseline: {
         historyId: string;
@@ -387,19 +377,7 @@ describe("tailordb migration rebaseline", () => {
   });
 
   test("rejects a connected workspace from a different migration history", async () => {
-    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-    fs.writeFileSync(
-      schemaPath,
-      JSON.stringify({
-        ...schema,
-        rebaseline: {
-          historyId: "hcurrent",
-          replacedHistoryId: null,
-          replacedLatestMigration: 7,
-        },
-      }),
-    );
+    writeRebaselineMarker(state.migrationsDir, "hcurrent");
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hother" },
@@ -415,19 +393,7 @@ describe("tailordb migration rebaseline", () => {
   });
 
   test("rejects a connected workspace history change while waiting for confirmation", async () => {
-    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-    fs.writeFileSync(
-      schemaPath,
-      JSON.stringify({
-        ...schema,
-        rebaseline: {
-          historyId: "hcurrent",
-          replacedHistoryId: null,
-          replacedLatestMigration: 7,
-        },
-      }),
-    );
+    writeRebaselineMarker(state.migrationsDir, "hcurrent");
     state.getMetadata
       .mockResolvedValueOnce({
         metadata: {

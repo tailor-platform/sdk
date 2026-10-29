@@ -14,6 +14,7 @@ import {
   snapshotType,
   writeDiff,
   writeInitialSchema,
+  writeRebaselineMarker,
 } from "./test-helpers/schema-fixtures";
 import { validateCommand } from "./validate";
 import type { CLIError } from "#/cli/shared/errors";
@@ -96,38 +97,6 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
     },
     plugins: [],
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
-}
-
-function markHistoryAsRebaselined(): void {
-  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-  fs.writeFileSync(
-    schemaPath,
-    JSON.stringify({
-      ...schema,
-      rebaseline: {
-        historyId: "htailordb",
-        replacedHistoryId: null,
-        replacedLatestMigration: 5,
-      },
-    }),
-  );
-}
-
-function markHistoryAsRebaselinedFrom(replacedHistoryId: string): void {
-  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-  fs.writeFileSync(
-    schemaPath,
-    JSON.stringify({
-      ...schema,
-      rebaseline: {
-        historyId: "htailordb",
-        replacedHistoryId,
-        replacedLatestMigration: 5,
-      },
-    }),
-  );
 }
 
 function writeMigrationFile(number: number, fileName: string, content: string): void {
@@ -301,7 +270,7 @@ describe("tailordb migration validate", () => {
   test("reports a repairable remote migration checkpoint as valid", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
@@ -330,7 +299,7 @@ describe("tailordb migration validate", () => {
 
   test("explains that deploy will repair a checkpoint whose schema matches the baseline", async () => {
     using stderr = captureStderr();
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
@@ -349,7 +318,10 @@ describe("tailordb migration validate", () => {
   test("reports a checkpoint that fell behind before a rebaseline", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    markHistoryAsRebaselinedFrom("hprevious");
+    writeRebaselineMarker(state.migrationsDir, "htailordb", {
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },
@@ -376,7 +348,10 @@ describe("tailordb migration validate", () => {
   test("does not report rebaseline-pending when the checkpoint is already past the replaced migration", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    markHistoryAsRebaselinedFrom("hprevious");
+    writeRebaselineMarker(state.migrationsDir, "htailordb", {
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
@@ -402,7 +377,10 @@ describe("tailordb migration validate", () => {
     async (json) => {
       using _json = json ? jsonMode() : undefined;
       using stderr = captureStderr();
-      markHistoryAsRebaselinedFrom("hprevious");
+      writeRebaselineMarker(state.migrationsDir, "htailordb", {
+        replacedHistoryId: "hprevious",
+        replacedLatestMigration: 5,
+      });
       state.getMetadata.mockResolvedValue({
         metadata: {
           labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
@@ -444,7 +422,10 @@ describe("tailordb migration validate", () => {
 
   test("explains the rebaseline-pending recovery procedure for a checkpoint that fell behind", async () => {
     using stderr = captureStderr();
-    markHistoryAsRebaselinedFrom("hprevious");
+    writeRebaselineMarker(state.migrationsDir, "htailordb", {
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },

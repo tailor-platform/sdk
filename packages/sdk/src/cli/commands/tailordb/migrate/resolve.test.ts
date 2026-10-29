@@ -16,6 +16,7 @@ import {
   snapshotType,
   writeDiff,
   writeInitialSchema,
+  writeRebaselineMarker,
 } from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
@@ -97,17 +98,6 @@ function remoteLabels(labels: Record<string, string>): void {
 }
 
 const LOCAL_HISTORY_ID = "h0123456789abcdef0123456789abcdef";
-
-function rebaselineLocalHistory(migrationsDir: string): void {
-  const file = path.join(migrationsDir, "0000", "schema.json");
-  const snapshot = JSON.parse(fs.readFileSync(file, "utf8"));
-  snapshot.rebaseline = {
-    historyId: LOCAL_HISTORY_ID,
-    replacedHistoryId: null,
-    replacedLatestMigration: 0,
-  };
-  fs.writeFileSync(file, JSON.stringify(snapshot));
-}
 
 describe("tailordb migration resolve", () => {
   aroundEach(async (runTest) => {
@@ -443,7 +433,7 @@ describe("tailordb migration resolve", () => {
   test.each(["--rollback", "--complete"])(
     "%s works when the workspace has neither a checkpoint nor a history ID yet",
     async (flag) => {
-      rebaselineLocalHistory(state.migrationsDir);
+      writeRebaselineMarker(state.migrationsDir, LOCAL_HISTORY_ID);
       remoteLabels({ "sdk-migration-in-progress": "m0001" });
 
       const result = await runCommand(resolveCommand, [flag, "--yes"]);
@@ -458,7 +448,7 @@ describe("tailordb migration resolve", () => {
   );
 
   test("refuses a rebaselined checkout when the workspace has a checkpoint but no history ID", async () => {
-    rebaselineLocalHistory(state.migrationsDir);
+    writeRebaselineMarker(state.migrationsDir, LOCAL_HISTORY_ID);
     remoteLabels({ "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" });
 
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
