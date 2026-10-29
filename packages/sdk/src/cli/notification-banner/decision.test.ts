@@ -10,6 +10,8 @@ describe("commandNameFromArgv", () => {
     expect(commandNameFromArgv(["--profile", "x", "auth", "status"])).toBe("auth");
     expect(commandNameFromArgv(["-p", "x", "-w", "ws", "workspace", "list"])).toBe("workspace");
     expect(commandNameFromArgv(["--profile=x", "--verbose", "deploy"])).toBe("deploy");
+    expect(commandNameFromArgv(["-e", ".env", "login"])).toBe("login");
+    expect(commandNameFromArgv(["--env-file-if-exists", ".env", "login"])).toBe("login");
   });
 
   test("stops at the -- separator", () => {

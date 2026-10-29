@@ -27,15 +27,16 @@ const EXCLUDED_COMMANDS: ReadonlySet<string> = new Set([
   "open",
 ]);
 
-// Global flags that take a value in the next token when written without `=`.
+// Global flags (shared/args.ts createCommonArgs and workspaceArgs) that take a value in the
+// next token when written without `=`.
 const VALUE_FLAGS = new Set([
   "--profile",
   "-p",
   "--workspace-id",
   "-w",
   "--env-file",
-  "--config",
-  "-c",
+  "-e",
+  "--env-file-if-exists",
 ]);
 
 const HELP_FLAGS = new Set(["--help", "-h", "--help-json", "--version", "-v"]);
