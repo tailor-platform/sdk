@@ -271,7 +271,7 @@ jobs:
         run: |
           set -euo pipefail
           allowed='^(\.changeset/renovate-[0-9]+\.md|aqua-checksums\.json)$'
-          denied='^(\.github|\.claude|\.agents|\.husky|\.changeset)/|^(lefthook(-local)?\.yml|renovate\.json|aqua\.yaml|pnpm-lock\.yaml|\.gitattributes|\.gitignore|\.gitmodules)$|(^|/)(package\.json|\.npmrc|pnpm-workspace\.yaml)$'
+          denied='^(\.github|\.claude|\.agents|\.husky|\.changeset|\.vscode|\.devcontainer)/|^(lefthook(-local)?\.yml|renovate\.json|aqua\.yaml|pnpm-lock\.yaml|\.gitattributes|\.gitignore|\.gitmodules|\.mcp\.json|\.nvmrc|\.node-version|\.tool-versions|CLAUDE\.md|AGENTS\.md|\.pnpmfile\..*|\.oxfmtrc.*|\.oxlintrc.*)$|(^|/)(package\.json|\.npmrc|pnpm-workspace\.yaml|\.pnpmfile\.[cm]?js|CLAUDE\.md|AGENTS\.md|tsconfig[^/]*\.json)$'
           git apply --index "$RUNNER_TEMP/patch/regenerated.patch"
           git diff --cached --raw -z --no-renames > "$RUNNER_TEMP/changes.raw"
           bad=0
