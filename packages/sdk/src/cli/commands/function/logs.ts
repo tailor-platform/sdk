@@ -6,6 +6,7 @@ import {
   type FunctionExecution,
   type FunctionExecution_Status,
   FunctionExecution_Type,
+  type FunctionExecutionSummary,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
@@ -86,10 +87,12 @@ function functionErrorKindToString(kind: FunctionErrorKind): string {
 
 /**
  * Transform FunctionExecution to FunctionExecutionListInfo for list display.
- * @param execution - FunctionExecution from proto
+ * @param execution - FunctionExecution (detail) or FunctionExecutionSummary (list) from proto
  * @returns Function execution list info
  */
-function toFunctionExecutionListInfo(execution: FunctionExecution): FunctionExecutionListInfo {
+function toFunctionExecutionListInfo(
+  execution: FunctionExecution | FunctionExecutionSummary,
+): FunctionExecutionListInfo {
   return {
     id: execution.id,
     scriptName: execution.scriptName,

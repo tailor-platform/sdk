@@ -23,6 +23,7 @@ import type { AcceptCustomDomainTransferRequestSchema, AcceptCustomDomainTransfe
 import type { CancelWorkflowExecutionRequestSchema, CancelWorkflowExecutionResponseSchema, CreateWorkflowJobFunctionExecutionPolicyRequestSchema, CreateWorkflowJobFunctionExecutionPolicyResponseSchema, CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowJobFunctionExecutionPolicyRequestSchema, DeleteWorkflowJobFunctionExecutionPolicyResponseSchema, DeleteWorkflowJobFunctionRequestSchema, DeleteWorkflowJobFunctionResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionExecutionPolicyByKeyRequestSchema, GetWorkflowJobFunctionExecutionPolicyByKeyResponseSchema, GetWorkflowJobFunctionExecutionPolicyRequestSchema, GetWorkflowJobFunctionExecutionPolicyResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionExecutionPoliciesRequestSchema, ListWorkflowJobFunctionExecutionPoliciesResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, ResumeWorkflowExecutionRequestSchema, ResumeWorkflowExecutionResponseSchema, StartWorkflowRequestSchema, StartWorkflowResponseSchema, TestResumeWorkflowRequestSchema, TestResumeWorkflowResponseSchema, TestStartWorkflowRequestSchema, TestStartWorkflowResponseSchema, UpdateWorkflowJobFunctionExecutionPolicyRequestSchema, UpdateWorkflowJobFunctionExecutionPolicyResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
 import type { BulkSetMetadataRequestSchema, BulkSetMetadataResponseSchema, GetMetadataRequestSchema, GetMetadataResponseSchema, ListMetadataRequestSchema, ListMetadataResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
 import type { CreateOTLPExporterRequestSchema, CreateOTLPExporterResponseSchema, CreateResourceAttributesConfigRequestSchema, CreateResourceAttributesConfigResponseSchema, DeleteOTLPExporterRequestSchema, DeleteOTLPExporterResponseSchema, DeleteResourceAttributesConfigRequestSchema, DeleteResourceAttributesConfigResponseSchema, GetOTLPExporterRequestSchema, GetOTLPExporterResponseSchema, GetResourceAttributesConfigRequestSchema, GetResourceAttributesConfigResponseSchema, ListOTLPExportersRequestSchema, ListOTLPExportersResponseSchema, TestOTLPExporterRequestSchema, TestOTLPExporterResponseSchema, UpdateOTLPExporterRequestSchema, UpdateOTLPExporterResponseSchema, UpdateResourceAttributesConfigRequestSchema, UpdateResourceAttributesConfigResponseSchema } from "./telemetryrouter_pb";
+import type { CountMyUnreadNotificationsRequestSchema, CountMyUnreadNotificationsResponseSchema, DismissMyNotificationRequestSchema, DismissMyNotificationResponseSchema, GetMyNotificationRequestSchema, GetMyNotificationResponseSchema, ListMyNotificationsRequestSchema, ListMyNotificationsResponseSchema, MarkMyNotificationsReadRequestSchema, MarkMyNotificationsReadResponseSchema } from "./notification_pb";
 
 /**
  * Describes the file tailor/v1/service.proto.
@@ -3987,6 +3988,83 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof DeleteResourceAttributesConfigRequestSchema;
     output: typeof DeleteResourceAttributesConfigResponseSchema;
+  },
+  /**
+   * ListMyNotifications lists the caller's inbox: SENT, unexpired, not dismissed,
+   * ordered by arrival. Works with a PAT of either scope.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListMyNotifications
+   */
+  listMyNotifications: {
+    methodKind: "unary";
+    input: typeof ListMyNotificationsRequestSchema;
+    output: typeof ListMyNotificationsResponseSchema;
+  },
+  /**
+   * GetMyNotification returns one inbox entry. Visibility is the same as the
+   * listing, so a revoked, expired, or dismissed notification is NotFound.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: notification is not addressed to the caller or is no longer visible
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetMyNotification
+   */
+  getMyNotification: {
+    methodKind: "unary";
+    input: typeof GetMyNotificationRequestSchema;
+    output: typeof GetMyNotificationResponseSchema;
+  },
+  /**
+   * CountMyUnreadNotifications returns the caller's unread count for the badge.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   *
+   * @generated from rpc tailor.v1.OperatorService.CountMyUnreadNotifications
+   */
+  countMyUnreadNotifications: {
+    methodKind: "unary";
+    input: typeof CountMyUnreadNotificationsRequestSchema;
+    output: typeof CountMyUnreadNotificationsResponseSchema;
+  },
+  /**
+   * MarkMyNotificationsRead marks notifications read. Idempotent; IDs that are
+   * not visible to the caller are ignored. Requires a token with WRITE scope.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: token has READ scope only
+   *
+   * @generated from rpc tailor.v1.OperatorService.MarkMyNotificationsRead
+   */
+  markMyNotificationsRead: {
+    methodKind: "unary";
+    input: typeof MarkMyNotificationsReadRequestSchema;
+    output: typeof MarkMyNotificationsReadResponseSchema;
+  },
+  /**
+   * DismissMyNotification removes a notification from the caller's inbox.
+   * Idempotent. Requires a token with WRITE scope.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: token has READ scope only
+   * - NotFound: notification is not addressed to the caller or is no longer visible
+   *
+   * @generated from rpc tailor.v1.OperatorService.DismissMyNotification
+   */
+  dismissMyNotification: {
+    methodKind: "unary";
+    input: typeof DismissMyNotificationRequestSchema;
+    output: typeof DismissMyNotificationResponseSchema;
   },
 }>;
 
