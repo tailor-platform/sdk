@@ -531,6 +531,17 @@ Commands for managing crash reports.
 | [crashreport list](./cli/crashreport.md#crashreport-list) | List local crash report files.                 |
 | [crashreport send](./cli/crashreport.md#crashreport-send) | Submit a crash report to help improve the SDK. |
 
+### [Notification Commands](./cli/notification.md)
+
+Commands for reading platform notifications.
+
+| Command                                                            | Description                                  |
+| ------------------------------------------------------------------ | -------------------------------------------- |
+| [notification](./cli/notification.md#notification)                 | Read the platform notifications sent to you. |
+| [notification dismiss](./cli/notification.md#notification-dismiss) | Remove a notification from your inbox.       |
+| [notification list](./cli/notification.md#notification-list)       | List the notifications in your inbox.        |
+| [notification read](./cli/notification.md#notification-read)       | Show a notification and mark it as read.     |
+
 ### [Upgrade Commands](./cli/upgrade.md)
 
 Commands for upgrading SDK versions with automated code migration.

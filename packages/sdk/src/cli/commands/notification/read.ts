@@ -1,31 +1,15 @@
-import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { CLIError } from "#/cli/shared/errors";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger, styles } from "#/cli/shared/logger";
 import { createNotificationClient } from "./client";
+import { notificationNotFound, rethrowNotificationError } from "./errors";
 import { transformNotificationDetail, type NotificationDetailInfo } from "./transform";
 
 /** MarkMyNotificationsRead accepts at most this many ids per call. */
 const MARK_READ_BATCH = 100;
-
-/**
- * Throw the CLI's not-found error for a notification the platform refused to return.
- * @param id - Notification id the user asked for
- * @param cause - Error from the platform
- * @returns Never; always throws
- */
-function notificationNotFound(id: string, cause?: unknown): never {
-  throw CLIError({
-    code: "NOTIFICATION_NOT_FOUND",
-    message: `Notification "${id}" not found.`,
-    details: "It is not addressed to you, or it has expired, been revoked, or been dismissed.",
-    cause,
-  });
-}
 
 function formatDetail(detail: NotificationDetailInfo): string {
   const lines = [
@@ -72,10 +56,7 @@ export const readCommand = defineAppCommand({
         if (!notification) notificationNotFound(id);
         details.push(transformNotificationDetail(notification));
       } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          notificationNotFound(id, error);
-        }
-        throw error;
+        rethrowNotificationError(id, error);
       }
     }
 
