@@ -30,6 +30,8 @@ import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import {
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
+  matchesLocalMigrationHistory,
+  migrationHistoryMismatchError,
   type MigrationResolution,
   type RemoteMigrationState,
 } from "./remote-state";
@@ -200,11 +202,12 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
 
   const localHistoryId =
     reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
-  const firstRun = state.number === null && state.historyId === null && !state.historyIdInvalid;
-  if (!firstRun && (state.historyIdInvalid || state.historyId !== localHistoryId)) {
-    throw CLIError({
+  if (!matchesLocalMigrationHistory(state, localHistoryId)) {
+    throw migrationHistoryMismatchError({
+      state,
+      localHistoryId,
+      namespace,
       code: "MIGRATION_RESOLVE_HISTORY_MISMATCH",
-      message: `The migration history of namespace "${namespace}" on the workspace does not match the local migration history.`,
       suggestion:
         "Run the command from a checkout of the migration history that was deployed to the workspace.",
     });

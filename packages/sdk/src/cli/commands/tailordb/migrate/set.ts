@@ -15,7 +15,12 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { parseMigrationNumberArg } from "./migration-number";
-import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
+import {
+  assertLocalMigrationHistory,
+  assertNoMigrationInProgress,
+  describeMigrationHistoryId,
+  fetchRemoteMigrationState,
+} from "./remote-state";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
@@ -28,6 +33,7 @@ interface SetOptions {
   number: string;
   namespace?: string;
   yes?: boolean;
+  force: boolean;
   workspaceId?: string;
   profile?: string;
 }
@@ -78,11 +84,16 @@ async function set(options: SetOptions): Promise<CheckpointUpdate> {
   const currentState = await fetchRemoteMigrationState(client, trn);
   const completesInProgress = currentState.inProgress?.number === migrationNumber;
   if (!completesInProgress) assertNoMigrationInProgress(currentState, targetNamespace);
+  const historyOverwrite = assertLocalMigrationHistory({
+    state: currentState,
+    localHistoryId: historyId ?? null,
+    namespace: targetNamespace,
+    code: "MIGRATION_SET_HISTORY_MISMATCH",
+    force: options.force,
+  });
   const current = currentState.number;
   const currentMigration = current ?? 0;
-  const currentHistoryId = currentState.historyIdInvalid
-    ? "<invalid>"
-    : (currentState.historyId ?? "<unset>");
+  const currentHistoryId = describeMigrationHistoryId(currentState);
   const newHistoryId = historyId ?? "<unset>";
 
   // 7. Display warning and confirmation
@@ -96,6 +107,11 @@ async function set(options: SetOptions): Promise<CheckpointUpdate> {
   logger.log(`Current migration history ID: ${styles.bold(currentHistoryId)}`);
   logger.log(`New migration history ID: ${styles.bold(newHistoryId)}`);
   logger.newline();
+
+  if (historyOverwrite) {
+    logger.warn(historyOverwrite);
+    logger.newline();
+  }
 
   if (completesInProgress) {
     logger.warn(
@@ -162,6 +178,8 @@ export const setCommand = defineAppCommand({
   description: "Set migration checkpoint to a specific number.",
   notes: `The migration number must be a 4-digit value (e.g. \`0001\`) or a bare integer (e.g. \`1\`) within 0–9999, and must exist in the local migration history; \`0\` is always accepted as the baseline, provided the local history passes validation. A gapped history is rejected.
 
+The command refuses to run when the namespace records a migration history ID other than the local one, or one that cannot be read, unless the namespace has neither a checkpoint nor a history ID yet. \`--force\` replaces that history ID with the local one, or removes it when the local history has none, and still asks for confirmation unless \`--yes\` is given.
+
 Metadata lookup failures (authentication, permission, or network errors) are reported as errors; only a not-yet-deployed namespace is treated as having no checkpoint.`,
   args: z.strictObject({
     ...deploymentArgs,
@@ -174,6 +192,10 @@ Metadata lookup failures (authentication, permission, or network errors) are rep
       alias: "n",
       description: "Target TailorDB namespace (required if multiple namespaces exist)",
     }),
+    force: arg(z.boolean().default(false), {
+      description:
+        "Proceed even when the namespace records a migration history ID other than the local one",
+    }),
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
@@ -182,6 +204,7 @@ Metadata lookup failures (authentication, permission, or network errors) are rep
       number: args.number,
       namespace: args.namespace,
       yes: args.yes,
+      force: args.force,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

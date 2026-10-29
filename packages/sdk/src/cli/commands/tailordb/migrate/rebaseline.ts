@@ -215,6 +215,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
       "migration",
       "set",
       "0",
+      "--force",
       "--namespace",
       target.namespace,
       ...remoteContextArgs,

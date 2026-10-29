@@ -7,11 +7,16 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
-import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { setCommand } from "./set";
 import { migrationDbConfig } from "./test-helpers/migration-config";
-import { snapshotType, writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import {
+  snapshotType,
+  writeDiff,
+  writeInitialSchema,
+  writeRebaselineMarker,
+} from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
@@ -117,19 +122,8 @@ describe("tailordb migration set", () => {
   });
 
   test("sets the current migration history ID from a re-baselined snapshot", async () => {
-    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-    fs.writeFileSync(
-      schemaPath,
-      JSON.stringify({
-        ...schema,
-        rebaseline: {
-          historyId: "hcurrent",
-          replacedHistoryId: null,
-          replacedLatestMigration: 2,
-        },
-      }),
-    );
+    writeRebaselineMarker(state.migrationsDir, "hcurrent");
+    state.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-name": "my-app" } } });
 
     const result = await runCommand(setCommand, ["1", "--yes"]);
 
@@ -145,20 +139,24 @@ describe("tailordb migration set", () => {
     );
   });
 
-  test("shows the migration history ID change before updating metadata", async () => {
-    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-    fs.writeFileSync(
-      schemaPath,
-      JSON.stringify({
-        ...schema,
-        rebaseline: {
-          historyId: "hcurrent",
-          replacedHistoryId: "hprevious",
-          replacedLatestMigration: 2,
-        },
+  test("keeps a migration history ID that matches the local one", async () => {
+    writeRebaselineMarker(state.migrationsDir, "hcurrent");
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0002", "sdk-migration-history": "hcurrent" } },
+    });
+
+    const result = await runCommand(setCommand, ["1"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0001", "sdk-migration-history": "hcurrent" },
       }),
     );
+  });
+
+  test("shows the migration history ID change before updating metadata", async () => {
+    writeRebaselineMarker(state.migrationsDir, "hcurrent", "hprevious");
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
@@ -167,17 +165,47 @@ describe("tailordb migration set", () => {
         },
       },
     });
-    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using stderr = captureStderr();
 
-    const result = await runCommand(setCommand, ["1", "--yes"]);
+    const result = await runCommand(setCommand, ["1", "--yes", "--force"]);
 
     expect(result.success).toBe(true);
-    const output = stderr.mock.calls.map((call) => String(call[0])).join("");
-    expect(output).toContain("Current migration history ID: hprevious");
-    expect(output).toContain("New migration history ID: hcurrent");
+    expect(stderr.output).toContain("Current migration history ID: hprevious");
+    expect(stderr.output).toContain("New migration history ID: hcurrent");
   });
 
-  test("removes a stale remote history ID for a markerless local history", async () => {
+  test.each([
+    {
+      name: "another migration history",
+      history: "hother",
+      shown: "hother",
+      context: { remoteHistoryId: "hother", remoteHistoryIdInvalid: false },
+    },
+    {
+      name: "a migration history label that cannot be read",
+      history: "INVALID",
+      shown: "<invalid>",
+      context: { remoteHistoryId: null, remoteHistoryIdInvalid: true },
+    },
+  ])("refuses before prompting when the workspace records $name", async (row) => {
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0002", "sdk-migration-history": row.history } },
+    });
+
+    const result = await runCommand(setCommand, ["1"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_SET_HISTORY_MISMATCH",
+      details: expect.stringContaining(`${row.shown}; the local migration history has <unset>`),
+      suggestion: expect.stringContaining("--force"),
+      context: { namespace: "tailordb", localHistoryId: null, ...row.context },
+    });
+    expect(prompt.confirm).not.toHaveBeenCalled();
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("overwrites another migration history after confirmation with --force, naming both IDs", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
@@ -187,10 +215,15 @@ describe("tailordb migration set", () => {
         },
       },
     });
+    using stderr = captureStderr();
 
-    const result = await runCommand(setCommand, ["1", "--yes"]);
+    const result = await runCommand(setCommand, ["1", "--force"]);
 
     expect(result.success).toBe(true);
+    expect(stderr.output).toContain(
+      "Overwriting the migration history ID hstale with <unset> (--force).",
+    );
+    expect(prompt.confirm).toHaveBeenCalledTimes(1);
     expect(state.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },

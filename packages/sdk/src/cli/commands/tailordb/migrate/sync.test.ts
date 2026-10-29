@@ -7,7 +7,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
-import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { syncCommand } from "./sync";
 import { migrationDbConfig } from "./test-helpers/migration-config";
@@ -16,6 +16,7 @@ import {
   snapshotType,
   writeDiff,
   writeInitialSchema,
+  writeRebaselineMarker,
 } from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
@@ -147,6 +148,7 @@ describe("tailordb migration sync", () => {
     await runTest();
 
     vi.restoreAllMocks();
+    vi.mocked(prompt.confirm).mockReset();
     state.listTailorDBTypes.mockReset();
     state.createTailorDBType.mockReset();
     state.updateTailorDBType.mockReset();
@@ -202,6 +204,27 @@ describe("tailordb migration sync", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/partially applied/);
     expect(state.createTailorDBType).not.toHaveBeenCalled();
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("refuses before reading tables or prompting when the workspace records another migration history", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0002", "sdk-migration-history": "hother" } },
+    });
+
+    const result = await runCommand(syncCommand, ["1"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_SYNC_HISTORY_MISMATCH",
+      suggestion: expect.stringContaining("--force"),
+    });
+    expect(prompt.confirm).not.toHaveBeenCalled();
+    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(state.createTailorDBType).not.toHaveBeenCalled();
+    expect(state.updateTailorDBType).not.toHaveBeenCalled();
+    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
@@ -263,19 +286,8 @@ describe("tailordb migration sync", () => {
   });
 
   test("sets the current migration history ID from a re-baselined snapshot", async () => {
-    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-    fs.writeFileSync(
-      schemaPath,
-      JSON.stringify({
-        ...schema,
-        rebaseline: {
-          historyId: "hcurrent",
-          replacedHistoryId: null,
-          replacedLatestMigration: 2,
-        },
-      }),
-    );
+    writeRebaselineMarker(state.migrationsDir, "hcurrent");
+    state.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-name": "my-app" } } });
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
@@ -291,7 +303,26 @@ describe("tailordb migration sync", () => {
     );
   });
 
-  test("removes a stale remote history ID for a markerless local history", async () => {
+  test("keeps a migration history ID that matches the local one", async () => {
+    writeRebaselineMarker(state.migrationsDir, "hcurrent");
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0002", "sdk-migration-history": "hcurrent" } },
+    });
+
+    const result = await runCommand(syncCommand, ["1"]);
+
+    expect(result.success).toBe(true);
+    expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0001", "sdk-migration-history": "hcurrent" },
+      }),
+    );
+  });
+
+  test("overwrites another migration history after confirmation with --force, naming both IDs", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
@@ -301,10 +332,16 @@ describe("tailordb migration sync", () => {
         },
       },
     });
+    using stderr = captureStderr();
 
-    const result = await runCommand(syncCommand, ["1", "--yes"]);
+    const result = await runCommand(syncCommand, ["1", "--force"]);
 
     expect(result.success).toBe(true);
+    expect(stderr.output).toContain(
+      "Overwriting the migration history ID hstale with <unset> (--force).",
+    );
+    expect(prompt.confirm).toHaveBeenCalledTimes(1);
+    expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
     expect(state.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
