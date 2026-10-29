@@ -1,3 +1,4 @@
+import { print, type DocumentNode } from "@0no-co/graphql.web";
 import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
@@ -130,6 +131,10 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
   WorkflowJobExecutionTriggerSchema,
 ]);
 
+function isDocumentNode(val: unknown): val is DocumentNode {
+  return typeof val === "object" && val !== null && "kind" in val && val.kind === "Document";
+}
+
 export const FunctionOperationSchema = z.strictObject({
   kind: z.enum(["function", "jobFunction"]),
   body: functionSchema.describe("Function implementation"),
@@ -139,7 +144,10 @@ export const FunctionOperationSchema = z.strictObject({
 export const GqlOperationSchema = z.strictObject({
   kind: z.literal("graphql"),
   appName: z.string().optional().describe("Target application name for the GraphQL query"),
-  query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
+  query: z.preprocess(
+    (val) => (isDocumentNode(val) ? print(val) : String(val)),
+    z.string().describe("GraphQL query string"),
+  ),
   variables: functionSchema.optional().describe("Function to compute GraphQL variables"),
   invoker: AuthInvokerSchema.optional().describe("Invoker for the GraphQL execution"),
 });
