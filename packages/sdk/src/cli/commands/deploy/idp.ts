@@ -701,7 +701,7 @@ async function planClients(
     existingNames.forEach((name) => {
       if (!isDeletableName(name)) {
         logger.warn(
-          `IdP client "${name}" in "${namespaceName}" will not be deleted, because the platform cannot delete a client with this name. The client and its secret vault stay in the workspace.`,
+          `IdP client "${name}" in "${namespaceName}" will not be deleted, because the platform cannot delete a client with this name. The client and its secret vault stay in the workspace. Both are deleted when that IdP is removed.`,
         );
         return;
       }

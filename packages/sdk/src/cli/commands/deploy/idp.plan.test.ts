@@ -468,6 +468,11 @@ describe("planIdP and a client name the platform cannot delete", () => {
 
     expect(result.changeSet.client.deletes.map((del) => del.name)).toEqual(["old-client"]);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('IdP client "c1" in "idp-a"'));
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "The client and its secret vault stay in the workspace. Both are deleted when that IdP is removed.",
+      ),
+    );
   });
 
   test("deletes only the vault of such a client of a removed service", async () => {
