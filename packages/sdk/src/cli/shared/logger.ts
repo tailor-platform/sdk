@@ -376,6 +376,19 @@ export function sanitizeTerminalText(text: string): string {
 }
 
 /**
+ * Makes multi-line text that came from a remote source safe to print on a terminal: strips ANSI
+ * escape and OSC sequences and every control character except tab and newline, and normalizes
+ * CRLF to LF. Line structure and indentation are kept, so Markdown bodies stay readable.
+ * @param text - Text received from a remote source
+ * @returns The text with no terminal escapes or control characters, newlines kept
+ */
+export function sanitizeTerminalBlock(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(/\r\n?/g, "\n")
+    .replace(TERMINAL_CONTROL_CHARACTERS, "");
+}
+
+/**
  * Reset the registered-secret redaction state. Used for testing.
  *
  * `_secrets` is process-lifetime, module-level state with no production unregister API
