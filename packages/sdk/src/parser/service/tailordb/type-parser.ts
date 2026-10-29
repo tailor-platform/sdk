@@ -61,16 +61,9 @@ export function parseTypes(
   dateDefault: EffectiveDateDefault = "legacy",
 ): Record<string, TailorDBType> {
   const types = createRecord<TailorDBType>();
-  const allTableNames = new Set(Object.keys(rawTypes));
 
   for (const [tableName, type] of Object.entries(rawTypes)) {
-    types[tableName] = parseTailorDBType(
-      type,
-      allTableNames,
-      rawTypes,
-      typeSourceInfo,
-      dateDefault,
-    );
+    types[tableName] = parseTailorDBType(type, rawTypes, typeSourceInfo, dateDefault);
   }
 
   buildBackwardRelationships(types, namespace, typeSourceInfo);
@@ -82,7 +75,6 @@ export function parseTypes(
 /**
  * Parse a TailorDBTypeSchemaOutput into a TailorDBType.
  * @param type - TailorDB table to parse
- * @param allTableNames - Set of all TailorDB table names
  * @param rawTypes - All raw TailorDB tables keyed by name
  * @param typeSourceInfo - Optional table source information
  * @param dateDefault - Representation of `t` date fields the precompiled hook expressions were compiled under
@@ -90,7 +82,6 @@ export function parseTypes(
  */
 function parseTailorDBType(
   type: TailorDBTypeSchemaOutput,
-  allTableNames: Set<string>,
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
   typeSourceInfo: TypeSourceInfo | undefined,
   dateDefault: EffectiveDateDefault,
@@ -107,7 +98,7 @@ function parseTailorDBType(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    const context = { tableName: type.name, fieldName, allTableNames };
+    const context = { tableName: type.name, fieldName, rawTypes };
     let fieldConfig = parseFieldConfig(fieldDef, {
       tableName: type.name,
       fieldPath: [fieldName],
@@ -117,7 +108,7 @@ function parseTailorDBType(
 
     // Process relation if rawRelation is present
     if (rawRelation) {
-      validateRelationConfig(rawRelation, context);
+      validateRelationConfig(rawRelation, fieldConfig.type, context);
 
       // Validate that n-1/manyToOne relations cannot have explicit unique
       const isNToOne = ["n-1", "manyToOne", "N-1"].includes(rawRelation.type);

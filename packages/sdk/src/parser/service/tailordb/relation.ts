@@ -1,5 +1,6 @@
 import type { RawRelationConfig } from "#/configure/services/tailordb/types";
 import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type { UnionToTuple } from "type-fest";
 
 const relationTypes = {
@@ -17,7 +18,7 @@ export const relationTypesKeys = Object.keys(relationTypes) as UnionToTuple<
 export interface RelationProcessingContext {
   tableName: string;
   fieldName: string;
-  allTableNames: Set<string>;
+  rawTypes: Readonly<Record<string, TailorDBTypeSchemaOutput>>;
 }
 
 export interface ProcessedRelationMetadata {
@@ -41,13 +42,30 @@ function fieldRef(context: RelationProcessingContext): string {
   return `Field "${context.fieldName}" on table "${context.tableName}"`;
 }
 
+interface RelationTarget {
+  table: string;
+  key: string;
+}
+
+function relationTarget(
+  rawRelation: RawRelationConfig,
+  context: RelationProcessingContext,
+): RelationTarget {
+  return {
+    table: rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table,
+    key: rawRelation.toward.key ?? "id",
+  };
+}
+
 /**
  * Validate relation configuration.
  * @param rawRelation - Raw relation configuration from TailorDB table definition
- * @param context - Context information for the relation (table name, field name, all type names)
+ * @param fieldType - Type of the field that declares the relation
+ * @param context - Context information for the relation (table name, field name, all raw tables)
  */
 export function validateRelationConfig(
   rawRelation: RawRelationConfig,
+  fieldType: string,
   context: RelationProcessingContext,
 ): void {
   // raw user config may omit the field
@@ -65,9 +83,37 @@ export function validateRelationConfig(
     );
   }
 
-  // Validate target table exists (for non-self relations)
-  if (rawRelation.toward.table !== "self" && !context.allTableNames.has(rawRelation.toward.table)) {
-    throw new Error(`${fieldRef(context)} references unknown table "${rawRelation.toward.table}".`);
+  const { table: targetTable, key } = relationTarget(rawRelation, context);
+  const target = Object.hasOwn(context.rawTypes, targetTable)
+    ? context.rawTypes[targetTable]
+    : undefined;
+  if (!target) {
+    throw new Error(`${fieldRef(context)} references unknown table "${targetTable}".`);
+  }
+
+  const keyField = Object.hasOwn(target.fields, key) ? target.fields[key] : undefined;
+  if (!keyField) {
+    throw new Error(
+      `${fieldRef(context)} references unknown field "${key}" on table "${targetTable}".`,
+    );
+  }
+  if (keyField.type !== fieldType) {
+    throw new Error(
+      `${fieldRef(context)} is of type "${fieldType}", but the field it references, "${targetTable}.${key}", is of type "${keyField.type}". ` +
+        `A relation needs both fields to have the same type.`,
+    );
+  }
+  const keyIsUnique = keyField.rawRelation
+    ? processRelationMetadata(
+        keyField.rawRelation,
+        { ...context, tableName: targetTable, fieldName: key },
+        keyField.metadata.array,
+      ).unique
+    : keyField.metadata.unique;
+  if (key !== "id" && !keyIsUnique) {
+    throw new Error(
+      `${fieldRef(context)} references "${targetTable}.${key}", which must be unique.`,
+    );
   }
 }
 
@@ -84,11 +130,7 @@ export function processRelationMetadata(
   isArrayField: boolean = false,
 ): ProcessedRelationMetadata {
   const isUnique = relationTypes[rawRelation.type] === "1-1";
-  const key = rawRelation.toward.key ?? "id";
-
-  // Resolve target table name (handle "self" reference)
-  const targetTypeName =
-    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
+  const { table: targetTypeName, key } = relationTarget(rawRelation, context);
 
   // Index and unique are not supported on array fields
   const shouldSetIndex = !isArrayField;
@@ -121,11 +163,7 @@ export function buildRelationInfo(
   }
 
   const isUnique = relationTypes[rawRelation.type] === "1-1";
-  const key = rawRelation.toward.key ?? "id";
-
-  // Resolve target table name (handle "self" reference)
-  const targetTypeName =
-    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
+  const { table: targetTypeName, key } = relationTarget(rawRelation, context);
 
   let forwardName = rawRelation.toward.as;
   if (!forwardName) {
@@ -178,7 +216,7 @@ export function applyNestedRelationMetadata(
     Object.entries(fieldConfig.fields).map(([name, inner]) => {
       if (!inner.rawRelation) return [name, inner];
       const innerContext = { ...context, fieldName: `${context.fieldName}.${name}` };
-      validateRelationConfig(inner.rawRelation, innerContext);
+      validateRelationConfig(inner.rawRelation, inner.type, innerContext);
       const { foreignKey, foreignKeyType, foreignKeyField } = processRelationMetadata(
         inner.rawRelation,
         innerContext,
