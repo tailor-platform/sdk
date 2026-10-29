@@ -19,7 +19,8 @@
     "!docs/**/*.*.md",
     "postinstall.mjs",
     "README.md",
-    "agent-skills"
+    "agent-skills",
+    "wasm"
   ],
   "type": "module",
   "sideEffects": [

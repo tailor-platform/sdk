@@ -1172,7 +1172,11 @@ describe("analyzeSql", () => {
 
     test("reports parse errors at their place", () => {
       expect(rejected('SELECT "id" FROM "Order" WHERE "id" = :id::uuid')).toEqual([
-        { message: "Casts (::) are not supported by TailorDB SQL", at: "::" },
+        {
+          message:
+            "failed to parse: the query may contain unsupported syntax. expected: end of statement, found: ::",
+          at: "::",
+        },
       ]);
     });
   });

@@ -330,60 +330,107 @@ describe("parseSql", () => {
   });
 
   describe("rejections", () => {
+    const transaction =
+      "Transaction statements are not supported in a .sql file; run the query on a transaction instead";
+
     test.each([
-      { source: 'SELECT "id" FROM "T" WHERE "id" = :id::uuid', message: /casts/i, at: "::" },
-      { source: 'SELECT "id" FROM "T" WHERE "id" = $1', message: /:name/, at: "$1" },
-      { source: 'SELECT coalesce("a", 0) FROM "T"', message: /coalesce/, at: "coalesce" },
-      { source: 'SELECT DISTINCT "a" FROM "T"', message: /DISTINCT/, at: "DISTINCT" },
-      { source: 'SELECT "a" b FROM "T"', message: /AS/, at: "b" },
-      { source: 'SELECT count(*) n FROM "T"', message: /AS/, at: "n" },
-      { source: 'WITH x AS (SELECT 1) SELECT "a" FROM x', message: /WITH/, at: "WITH" },
+      { source: 'SELECT "id" FROM "T" WHERE "id" = :id::uuid', message: "found: ::", at: "::" },
+      { source: 'SELECT "id" FROM "T" WHERE "id" = $1', message: ":name", at: "$1" },
+      { source: 'SELECT coalesce("a", 0) FROM "T"', message: "expected: FROM, found: (", at: "(" },
+      { source: 'SELECT DISTINCT "a" FROM "T"', message: 'expected: FROM, found: "a"', at: '"a"' },
+      { source: 'SELECT "a" b FROM "T"', message: "expected: FROM, found: b", at: "b" },
+      { source: 'SELECT count(*) n FROM "T"', message: "expected: FROM, found: n", at: "n" },
+      {
+        source: 'WITH x AS (SELECT 1) SELECT "a" FROM x',
+        message: "expected: SQL statement, found: WITH",
+        at: "WITH",
+      },
       {
         source: 'SELECT "a" FROM "T" WHERE "a" IN (SELECT "b" FROM "U")',
-        message: /subquer/i,
-        at: "SELECT",
+        message: 'expected: RParen, found: "b"',
+        at: '"b"',
       },
-      { source: 'SELECT "a" FROM "T" ORDER BY "a" NULLS FIRST', message: /NULLS/, at: "NULLS" },
-      { source: 'SELECT "a" % 2 FROM "T"', message: /%/, at: "%" },
-      { source: 'SELECT "a" FROM "T" WHERE "a">-1', message: /space/, at: ">-" },
-      { source: 'SELECT "a" FROM "T" WHERE "a"<>-1', message: /space/, at: "<>-" },
-      { source: 'SELECT "a" FROM "T" WHERE "a" || \'x\' = :p', message: /\|\|/, at: "||" },
-      { source: 'SELECT sum("a") + 1 FROM "T"', message: /HAVING/, at: "+" },
-      { source: 'SELECT 1 + count(*) FROM "T"', message: /HAVING/, at: "count" },
-      { source: 'SELECT sum(max("a")) FROM "T"', message: /nested/i, at: "max" },
-      { source: 'SELECT count(DISTINCT *) FROM "T"', message: /DISTINCT/, at: "*" },
-      { source: 'SELECT "a" FROM "T" ORDER BY "a" + 1', message: /AS/, at: "+" },
+      {
+        source: 'SELECT "a" FROM "T" ORDER BY "a" NULLS FIRST',
+        message: "found: NULLS",
+        at: "NULLS",
+      },
+      { source: 'SELECT "a" % 2 FROM "T"', message: "expected: FROM, found: %", at: "%" },
+      { source: 'SELECT "a" FROM "T" WHERE "a">-1', message: "found: >-", at: ">-" },
+      { source: 'SELECT "a" FROM "T" WHERE "a"<>-1', message: "found: <>-", at: "<>-" },
+      { source: 'SELECT "a" FROM "T" WHERE "a" || \'x\' = :p', message: "found: ||", at: "||" },
+      { source: 'SELECT sum("a") + 1 FROM "T"', message: "expected: FROM, found: +", at: "+" },
+      { source: 'SELECT 1 + count(*) FROM "T"', message: "expected: FROM, found: (", at: "(" },
+      { source: 'SELECT sum(max("a")) FROM "T"', message: "expected: RParen, found: (", at: "(" },
+      { source: 'SELECT count(DISTINCT *) FROM "T"', message: "DISTINCT not allowed", at: "*" },
+      { source: 'SELECT "a" FROM "T" ORDER BY "a" + 1', message: "found: +", at: "+" },
       {
         source: 'SELECT "a" FROM "T" ORDER BY VECTOR_SIMILARITY("a", :q)',
-        message: /lowercase/,
+        message: "expected: vector function",
         at: "VECTOR_SIMILARITY",
       },
-      { source: 'SELECT "a" FROM "T" WHERE "a" = ANY(:ids)', message: /ANY/, at: "ANY" },
-      { source: 'SELECT "a" FROM "T" WHERE "a" = 0x1F', message: /Hexadecimal/, at: "0x1F" },
-      { source: 'SELECT "a" FROM "T", "U"', message: /JOIN/, at: "," },
-      { source: 'SELECT "a" FROM s."T"', message: /Schema/, at: "." },
+      { source: 'SELECT "a" FROM "T" WHERE "a" = ANY(:ids)', message: "found: (", at: "(" },
+      {
+        source: 'SELECT "a" FROM "T" WHERE "a" = 0x1F',
+        message: "expected: expression",
+        at: "0x1F",
+      },
+      { source: 'SELECT "a" FROM "T", "U"', message: "found: ,", at: "," },
+      { source: 'SELECT "a" FROM s."T"', message: "found: .", at: "." },
       {
         source:
           'INSERT INTO "T" ("id", "a") VALUES (:id, 1) ON CONFLICT ("id") DO UPDATE SET "a" = EXCLUDED."a" WHERE "a" > 0',
-        message: /WHERE/,
+        message: "found: WHERE",
         at: "WHERE",
       },
-      { source: 'INSERT INTO "T" ("a") VALUES (1 + 1)', message: /"\)"/, at: "+" },
-      { source: "BEGIN", message: /transaction/i, at: "BEGIN" },
+      {
+        source: 'INSERT INTO "T" ("a") VALUES (1 + 1)',
+        message: "expected: RParen, found: +",
+        at: "+",
+      },
+      { source: "BEGIN", message: transaction, at: "BEGIN" },
+      { source: "START TRANSACTION", message: transaction, at: "START TRANSACTION" },
+      { source: "COMMIT;", message: transaction, at: "COMMIT" },
+      { source: "ROLLBACK", message: transaction, at: "ROLLBACK" },
       {
         source: 'SELECT "a" FROM "T"; SELECT "b" FROM "U"',
-        message: /one statement/,
+        message: "one statement",
         at: "SELECT",
       },
-      { source: 'SELECT "a" FROM "T" UNION SELECT "b" FROM "U"', message: /UNION/, at: "UNION" },
-      { source: "  -- nothing\n;", message: /no statement/i, at: "" },
-      { source: 'SELECT "a" FROM "T" /* open', message: /comment/i, at: "/* open" },
-      { source: 'SELECT "a" FROM "T" WHERE "a" = \'open', message: /unterminated/i, at: "'open" },
+      {
+        source: 'SELECT "a" FROM "T" UNION SELECT "b" FROM "U"',
+        message: "found: SELECT",
+        at: "SELECT",
+      },
+      { source: "  -- nothing\n;", message: "no statement", at: "" },
     ])("$source", ({ source, message, at }) => {
       const result = rejection(source);
 
-      expect(result.message).toMatch(message);
+      expect(result.message).toContain(message);
       expect(result.at).toBe(at);
+    });
+
+    test("points an unterminated string at its quote and an unterminated comment at the end", () => {
+      const string = 'SELECT "a" FROM "T" WHERE "a" = \'open';
+      const comment = 'SELECT "a" FROM "T" /* open';
+
+      expect(parseSql(string).diagnostics).toEqual([
+        { message: "Unterminated string literal", start: string.indexOf("'"), length: 0 },
+      ]);
+      expect(parseSql(comment).diagnostics).toEqual([
+        {
+          message: "Unexpected EOF while in a multi-line comment",
+          start: comment.length,
+          length: 0,
+        },
+      ]);
+    });
+
+    test("reports a condition nested too deeply and parses the next query", () => {
+      const nested = `SELECT "a" FROM "T" WHERE ${"(".repeat(10_000)}"a" = 1${")".repeat(10_000)}`;
+
+      expect(parseSql(nested).diagnostics).toHaveLength(1);
+      expect(parsed('SELECT "a" FROM "T"')).toMatchObject({ kind: "select" });
     });
   });
 });

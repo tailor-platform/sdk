@@ -17,3 +17,6 @@ src/cli/commands/deploy/__test_fixtures__/plugins-compat-out/
 
 # Bundler test output
 src/**/__test_bundler__/
+
+# TailorDB's SQL parser built to WebAssembly
+wasm/

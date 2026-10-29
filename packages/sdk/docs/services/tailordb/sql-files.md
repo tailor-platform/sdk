@@ -80,7 +80,7 @@ A `.sql` file holds one `SELECT`, `INSERT`, `UPDATE`, or `DELETE` statement in t
 - `SUM`, `AVG`, `MIN`, and `MAX` of Decimal fields.
 - `FOR NO KEY UPDATE`, `FOR KEY SHARE`, `NOWAIT`, and `SKIP LOCKED`.
 
-Anything else is an error at its place in the file: for example a cast (`::`), a function other than `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`, a subquery, `NULLS FIRST`, arithmetic in `ORDER BY` (order by the name you give it with `AS` instead), anything but columns and `*` in `RETURNING`, or `WHERE` after `ON CONFLICT ... DO UPDATE`, which the reference lists but TailorDB rejects. So is a query TailorDB would reject when it runs:
+Anything else is an error, reported where TailorDB stops reading the query, which can be just after the unsupported part: for example a cast (`::`), a function other than `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`, a subquery, `NULLS FIRST`, arithmetic in `ORDER BY` (order by the name you give it with `AS` instead), anything but columns and `*` in `RETURNING`, or `WHERE` after `ON CONFLICT ... DO UPDATE`, which the reference lists but TailorDB rejects. So is a query TailorDB would reject when it runs:
 
 - Compared values must have the same type, except that numbers compare with numbers. A string compared with or written to a column must be a valid value of the column's type.
 - Conditions, `GROUP BY`, and `ORDER BY` cannot use array or nested fields.

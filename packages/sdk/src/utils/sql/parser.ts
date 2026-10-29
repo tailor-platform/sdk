@@ -1,11 +1,29 @@
 /**
- * Parser for the SQL TailorDB accepts through `tailordb.Client`, following the
- * grammar the platform's SQL service parses, with `:name` placeholders in
- * place of `$n`. Unquoted identifiers keep their case, as TailorDB does not
- * fold them.
+ * Parser for the SQL TailorDB accepts through `tailordb.Client`, with `:name`
+ * placeholders in place of `$n`: TailorDB's own parser reads the file, and its
+ * syntax tree becomes the one the analysis reads. Unquoted identifiers keep
+ * their case, as TailorDB does not fold them.
  */
 
 import { assertDefined } from "#/utils/assert";
+import {
+  parseWithPlatformParser,
+  type PlatformAggregate,
+  type PlatformArithmeticOp,
+  type PlatformBinaryOp,
+  type PlatformColumn,
+  type PlatformColumnOrValue,
+  type PlatformExpr,
+  type PlatformIdent,
+  type PlatformJoin,
+  type PlatformOrderBy,
+  type PlatformScalarExpr,
+  type PlatformSelectItem,
+  type PlatformSpan,
+  type PlatformStatement,
+  type PlatformTable,
+  type PlatformValue,
+} from "./platform-parser";
 
 /** A range of the original source, in UTF-16 code units. */
 export interface SqlSpan {
@@ -162,7 +180,6 @@ export interface SqlJoin {
   type: "inner" | "left" | "right" | "full" | "cross";
   table: SqlTableRef;
   on?: SqlExpression;
-  span: SqlSpan;
 }
 
 interface SqlVectorSimilarity {
@@ -175,7 +192,6 @@ interface SqlVectorSimilarity {
 interface SqlOrderItem {
   by: SqlColumnRef | SqlVectorSimilarity;
   desc: boolean;
-  span: SqlSpan;
 }
 
 interface SqlSelect {
@@ -196,7 +212,6 @@ interface SqlSelect {
 
 interface SqlDefault {
   kind: "default";
-  span: SqlSpan;
 }
 
 interface SqlExcluded {
@@ -271,966 +286,331 @@ export type ParsedSql =
     }
   | { statement?: undefined; diagnostics: SqlDiagnostic[] };
 
-type Token =
-  | { kind: "word"; text: string; quoted: boolean; start: number; end: number }
-  | { kind: "string"; value: string; start: number; end: number }
-  | { kind: "number"; text: string; start: number; end: number }
-  | { kind: "param"; name: string; start: number; end: number }
-  | { kind: "op"; text: string; start: number; end: number }
-  | { kind: "eof"; start: number; end: number };
-
-class SqlSyntaxError extends Error {
-  constructor(
-    message: string,
-    readonly start: number,
-    readonly end: number,
-  ) {
-    super(message);
-  }
-}
-
-const OPERATORS: Readonly<Record<string, SqlBinary["op"]>> = {
-  "+": "+",
-  "-": "-",
-  "*": "*",
-  "/": "/",
-  "=": "=",
-  "<>": "<>",
-  "!=": "<>",
-  "<": "<",
-  "<=": "<=",
-  ">": ">",
-  ">=": ">=",
-  "~~": "LIKE",
-  "!~~": "NOT LIKE",
-  "~~*": "ILIKE",
-  "!~~*": "NOT ILIKE",
-  "~": "~",
-  "!~": "!~",
-  "~*": "~*",
-  "!~*": "!~*",
-};
-
-// Binding power in conditions, as in PostgreSQL: higher binds tighter.
-const PRECEDENCE = {
-  lowest: 0,
-  or: 1,
-  and: 2,
-  not: 3,
-  is: 4,
-  comparison: 5,
-  pattern: 6,
-  additive: 7,
-  multiplicative: 8,
-  unary: 9,
-};
-
-const OPERATOR_PRECEDENCE: Readonly<Record<string, number>> = {
-  "+": PRECEDENCE.additive,
-  "-": PRECEDENCE.additive,
-  "*": PRECEDENCE.multiplicative,
-  "/": PRECEDENCE.multiplicative,
-  "=": PRECEDENCE.comparison,
-  "<>": PRECEDENCE.comparison,
-  "!=": PRECEDENCE.comparison,
-  "<": PRECEDENCE.comparison,
-  "<=": PRECEDENCE.comparison,
-  ">": PRECEDENCE.comparison,
-  ">=": PRECEDENCE.comparison,
-  "~~": PRECEDENCE.pattern,
-  "!~~": PRECEDENCE.pattern,
-  "~~*": PRECEDENCE.pattern,
-  "!~~*": PRECEDENCE.pattern,
-  "~": PRECEDENCE.pattern,
-  "!~": PRECEDENCE.pattern,
-  "~*": PRECEDENCE.pattern,
-  "!~*": PRECEDENCE.pattern,
-};
-
 export const ARITHMETIC_OPERATORS = ["+", "-", "*", "/"];
-const AGGREGATES = new Set<string>(["COUNT", "SUM", "AVG", "MIN", "MAX"]);
 
-// Words that end a table reference instead of naming its alias.
-const TABLE_ALIAS_STOPS = [
-  "JOIN",
-  "INNER",
-  "LEFT",
-  "RIGHT",
-  "FULL",
-  "CROSS",
-  "WHERE",
-  "GROUP",
-  "HAVING",
-  "ORDER",
-  "LIMIT",
-  "OFFSET",
-  "FOR",
-  "ON",
-];
+const TRANSACTION =
+  "Transaction statements are not supported in a .sql file; run the query on a transaction instead";
 
-const STANDALONE_AGGREGATE =
-  "An aggregate in the select list must stand alone; arithmetic on aggregates is only supported in HAVING";
+const BINARY_OPERATORS: Readonly<Record<PlatformBinaryOp, SqlBinary["op"]>> = {
+  Add: "+",
+  Subtract: "-",
+  Multiply: "*",
+  Divide: "/",
+  Eq: "=",
+  NotEq: "<>",
+  Gt: ">",
+  GtEq: ">=",
+  Lt: "<",
+  LtEq: "<=",
+  Like: "LIKE",
+  NotLike: "NOT LIKE",
+  ILike: "ILIKE",
+  NotILike: "NOT ILIKE",
+  Regexp: "~",
+  NotRegexp: "!~",
+  IRegexp: "~*",
+  NotIRegexp: "!~*",
+  And: "AND",
+  Or: "OR",
+};
 
-// Characters an operator absorbs, as PostgreSQL reads user-defined operators.
-const OPERATOR_PART = /[+\-*/<>=~!@#%^&|`?]/;
-const WHITESPACE = /[ \t\n\r\v\f]/;
-const DIGIT = /[0-9]/;
-const IDENT_START = /[A-Za-z_\u0080-\uffff]/;
-const IDENT_PART = /[A-Za-z0-9_$\u0080-\uffff]/;
+const ARITHMETIC: Readonly<Record<PlatformArithmeticOp, SqlArithmeticOperator>> = {
+  Add: "+",
+  Subtract: "-",
+  Multiply: "*",
+  Divide: "/",
+};
 
-function tokenize(source: string): Token[] {
-  const tokens: Token[] = [];
-  let i = source.charCodeAt(0) === 0xfeff ? 1 : 0;
-  const at = (offset = 0) => source.charAt(i + offset);
-  const push = (start: number) =>
-    tokens.push({ kind: "op", text: source.slice(start, i), start, end: i });
-  // End an operator that started at `start`, taking in the operator characters that follow.
-  const absorb = (start: number) => {
-    while (OPERATOR_PART.test(at())) i++;
-    push(start);
-  };
-  const digits = () => {
-    while (DIGIT.test(at()) || (at() === "_" && DIGIT.test(at(1)))) i++;
-  };
-  while (i < source.length) {
-    const c = at();
-    const start = i;
-    if (WHITESPACE.test(c)) {
-      i++;
-    } else if (source.startsWith("--", i)) {
-      while (i < source.length && at() !== "\n" && at() !== "\r") i++;
-    } else if (source.startsWith("/*", i)) {
-      let depth = 0;
-      while (i < source.length) {
-        if (source.startsWith("/*", i)) {
-          depth++;
-          i += 2;
-        } else if (source.startsWith("*/", i)) {
-          depth--;
-          i += 2;
-          if (depth === 0) break;
-        } else {
-          i++;
-        }
-      }
-      if (depth > 0) throw new SqlSyntaxError("Unterminated comment", start, source.length);
-    } else if (c === "'" || c === '"') {
-      let value = "";
-      for (i++; ; i++) {
-        if (i >= source.length) {
-          throw new SqlSyntaxError(
-            c === "'" ? "Unterminated string literal" : "Unterminated quoted identifier",
-            start,
-            source.length,
-          );
-        }
-        if (at() === c) {
-          if (at(1) !== c) break;
-          i++;
-        }
-        value += at();
-      }
-      i++;
-      tokens.push(
-        c === "'"
-          ? { kind: "string", value, start, end: i }
-          : { kind: "word", text: value, quoted: true, start, end: i },
-      );
-    } else if (c === ":" && IDENT_START.test(at(1))) {
-      for (i += 2; i < source.length && IDENT_PART.test(at()); i++);
-      tokens.push({ kind: "param", name: source.slice(start + 1, i), start, end: i });
-    } else if (c === "$" && DIGIT.test(at(1))) {
-      for (i++; i < source.length && DIGIT.test(at()); i++);
-      throw new SqlSyntaxError(
-        `Use :name placeholders instead of ${source.slice(start, i)}; each placeholder is bound by name`,
-        start,
-        i,
-      );
-    } else if (DIGIT.test(c) || (c === "." && DIGIT.test(at(1)))) {
-      digits();
-      if (source.slice(start, i) === "0" && at() === "x") {
-        for (i++; /[0-9a-fA-F]/.test(at()); i++);
-        throw new SqlSyntaxError(
-          "Hexadecimal literals are not supported by TailorDB SQL",
-          start,
-          i,
-        );
-      }
-      if (at() === ".") {
-        i++;
-        digits();
-      }
-      const sign = /[+-]/.test(at(1)) ? 1 : 0;
-      if (/[eE]/.test(at()) && DIGIT.test(at(1 + sign))) {
-        i += 1 + sign;
-        digits();
-      }
-      const text = source.slice(start, i);
-      if (at() === "L") i++;
-      tokens.push({ kind: "number", text, start, end: i });
-    } else if (IDENT_START.test(c)) {
-      for (i++; i < source.length && IDENT_PART.test(at()); i++);
-      tokens.push({ kind: "word", text: source.slice(start, i), quoted: false, start, end: i });
-    } else if ("(),;.[]+*/\\".includes(c)) {
-      i++;
-      push(start);
-    } else if (c === ":") {
-      i += at(1) === ":" ? 2 : 1;
-      push(start);
-    } else if (c === "=") {
-      i += at(1) === ">" || at(1) === "=" ? 2 : 1;
-      push(start);
-    } else if (c === "!") {
-      i += (["!~~*", "!~~", "!~*", "!~", "!=", "!!"].find((op) => source.startsWith(op, i)) ?? "!")
-        .length;
-      push(start);
-    } else if (c === "<") {
-      i++;
-      if (at() === "=" && (at(1) === "+" || at(1) === "-")) {
-        i++;
-        push(start);
-      } else if (at() === "+" || (at() === "-" && at(1) !== ">")) {
-        push(start);
-      } else {
-        absorb(start);
-      }
-    } else if (OPERATOR_PART.test(c)) {
-      i++;
-      absorb(start);
-    } else {
-      throw new SqlSyntaxError(`Unexpected character ${JSON.stringify(c)}`, start, start + 1);
-    }
-  }
-  tokens.push({ kind: "eof", start: source.length, end: source.length });
-  return tokens;
+function spanOf(first: { span: SqlSpan }, last: { span: SqlSpan }): SqlSpan {
+  return { start: first.span.start, end: last.span.end };
 }
 
-function describeToken(token: Token): string {
-  switch (token.kind) {
-    case "eof":
-      return "the end of the file";
-    case "word":
-      return token.quoted ? `"${token.text}"` : token.text;
-    case "string":
-      return `'${token.value}'`;
-    case "number":
-      return token.text;
-    case "param":
-      return `:${token.name}`;
-    case "op":
-      return `"${token.text}"`;
-  }
-}
+// Turns the parser's syntax tree into the one the analysis reads.
+class Converter {
+  constructor(
+    readonly source: string,
+    readonly paramNames: string[],
+  ) {}
 
-class Parser {
-  #index = 0;
-
-  constructor(private readonly tokens: Token[]) {}
-
-  get #token(): Token {
-    return assertDefined(this.tokens[this.#index], "token index out of range");
-  }
-
-  #peek(offset = 1): Token {
-    return assertDefined(
-      this.tokens[Math.min(this.#index + offset, this.tokens.length - 1)],
-      "token index out of range",
-    );
-  }
-
-  #advance(): Token {
-    const token = this.#token;
-    if (token.kind !== "eof") this.#index++;
-    return token;
-  }
-
-  #span(start: number): SqlSpan {
-    return { start, end: this.tokens[this.#index - 1]?.end ?? 0 };
-  }
-
-  #isKeyword(keyword: string, token: Token = this.#token): boolean {
-    return token.kind === "word" && !token.quoted && token.text.toUpperCase() === keyword;
-  }
-
-  #isOp(text: string, token: Token = this.#token): boolean {
-    return token.kind === "op" && token.text === text;
-  }
-
-  #isArithmeticOperator(): boolean {
-    return ARITHMETIC_OPERATORS.some((op) => this.#isOp(op));
-  }
-
-  #acceptKeyword(keyword: string): boolean {
-    if (!this.#isKeyword(keyword)) return false;
-    this.#advance();
-    return true;
-  }
-
-  // Accept the keywords in sequence, or none of them.
-  #acceptKeywords(...keywords: string[]): boolean {
-    if (!keywords.every((keyword, offset) => this.#isKeyword(keyword, this.#peek(offset)))) {
-      return false;
-    }
-    for (const _keyword of keywords) this.#advance();
-    return true;
-  }
-
-  #acceptOp(text: string): boolean {
-    if (!this.#isOp(text)) return false;
-    this.#advance();
-    return true;
-  }
-
-  #fail(message: string, token: Token = this.#token): never {
-    throw new SqlSyntaxError(message, token.start, token.end);
-  }
-
-  #failAt(message: string, span: SqlSpan): never {
-    throw new SqlSyntaxError(message, span.start, span.end);
-  }
-
-  #unexpected(expected: string, token: Token = this.#token): never {
-    if (token.kind === "op" && !(token.text in OPERATORS) && !"(),;.[]".includes(token.text)) {
-      if (token.text === "::") this.#fail("Casts (::) are not supported by TailorDB SQL", token);
-      const merged = /^(>=?|<>|<=?|~~?\*?|-)([+\-*/<>=~!@#%^&|`?].*)$/.exec(token.text);
-      if (merged) {
-        this.#fail(
-          `TailorDB SQL reads "${token.text}" as one operator; put a space between "${merged[1]}" and "${merged[2]}"`,
-          token,
-        );
-      }
-      this.#fail(`Operator "${token.text}" is not supported by TailorDB SQL`, token);
-    }
-    if (this.#isKeyword("NULLS", token)) {
-      this.#fail("NULLS FIRST and NULLS LAST are not supported by TailorDB SQL", token);
-    }
-    // A set operator after a table reads as its alias.
-    const previous = this.tokens[this.#index - 1];
-    for (const candidate of previous ? [token, previous] : [token]) {
-      if (["UNION", "INTERSECT", "EXCEPT"].some((keyword) => this.#isKeyword(keyword, candidate))) {
-        this.#fail(
-          `${describeToken(candidate).toUpperCase()} is not supported by TailorDB SQL`,
-          candidate,
-        );
-      }
-    }
-    this.#fail(`Unexpected ${describeToken(token)}; expected ${expected}`, token);
-  }
-
-  #expectKeyword(keyword: string): void {
-    if (!this.#acceptKeyword(keyword)) this.#unexpected(keyword);
-  }
-
-  #expectOp(text: string): void {
-    if (!this.#acceptOp(text)) this.#unexpected(`"${text}"`);
-  }
-
-  #identifier(expected: string): SqlIdentifier {
-    const token = this.#token;
-    if (token.kind !== "word") this.#unexpected(expected);
-    this.#advance();
-    return { name: token.text, quoted: token.quoted, span: { start: token.start, end: token.end } };
-  }
-
-  #commaSeparated<T>(item: () => T): T[] {
-    const items: T[] = [];
-    do items.push(item());
-    while (this.#acceptOp(","));
-    return items;
-  }
-
-  statement(): SqlStatement {
-    while (this.#acceptOp(";"));
-    if (this.#token.kind === "eof") throw new SqlSyntaxError("The file has no statement", 0, 0);
-    let statement: SqlStatement;
-    if (this.#isKeyword("SELECT")) statement = this.#select();
-    else if (this.#isKeyword("INSERT")) statement = this.#insert();
-    else if (this.#isKeyword("UPDATE")) statement = this.#update();
-    else if (this.#isKeyword("DELETE")) statement = this.#delete();
-    else if (this.#isKeyword("WITH")) this.#fail("WITH is not supported by TailorDB SQL");
-    else if (["BEGIN", "START", "COMMIT", "ROLLBACK"].some((k) => this.#isKeyword(k))) {
-      this.#fail(
-        "Transaction statements are not supported in a .sql file; run the query on a transaction instead",
-      );
-    } else this.#unexpected("SELECT, INSERT, UPDATE or DELETE");
-    let separated = false;
-    while (this.#acceptOp(";")) separated = true;
-    if (this.#peek(0).kind === "eof") return statement;
-    if (separated) this.#fail("A .sql file must contain one statement");
-    this.#unexpected("the end of the statement");
-  }
-
-  #select(): SqlSelect {
-    const start = this.#token.start;
-    this.#expectKeyword("SELECT");
-    const items = this.#commaSeparated(() => this.#selectItem());
-    if (!this.#isKeyword("FROM")) this.#afterSelectItems(items);
-    this.#advance();
-    const from = this.#tableRef();
-    const joins: SqlJoin[] = [];
-    for (let join = this.#join(); join; join = this.#join()) joins.push(join);
-    if (this.#isOp(",")) this.#fail("Comma-separated tables are not supported; use JOIN");
-    const where = this.#acceptKeyword("WHERE") ? this.#expression() : undefined;
-    const groupBy = this.#acceptKeywords("GROUP", "BY")
-      ? this.#commaSeparated(() => this.#columnRef("a column"))
-      : [];
-    const having = this.#acceptKeyword("HAVING") ? this.#expression() : undefined;
-    const orderBy = this.#acceptKeywords("ORDER", "BY")
-      ? this.#commaSeparated(() => this.#orderItem())
-      : [];
-    const limit = this.#acceptKeyword("LIMIT")
-      ? this.#value("a number or a placeholder")
-      : undefined;
-    const offset = this.#acceptKeyword("OFFSET")
-      ? this.#value("a number or a placeholder")
-      : undefined;
-    const locks: SqlSpan[] = [];
-    while (this.#isKeyword("FOR")) locks.push(this.#lock());
-    return {
-      kind: "select",
-      items,
-      from,
-      joins,
-      where,
-      groupBy,
-      having,
-      orderBy,
-      limit,
-      offset,
-      locks,
-      span: this.#span(start),
-    };
-  }
-
-  // Explain what follows the select list when it is not FROM.
-  #afterSelectItems(items: SqlSelectItem[]): never {
-    const [first] = items;
-    const expr = first?.expr;
-    if (
-      items.length === 1 &&
-      !first?.alias &&
-      expr?.kind === "column" &&
-      !expr.table &&
-      !expr.column.quoted &&
-      ["DISTINCT", "ALL"].includes(expr.column.name.toUpperCase())
-    ) {
-      this.#failAt(
-        `SELECT ${expr.column.name.toUpperCase()} is not supported by TailorDB SQL`,
-        expr.span,
-      );
-    }
-    const token = this.#token;
-    if (token.kind === "word" && !items.at(-1)?.alias) {
-      this.#fail(`Write AS before the column alias ${describeToken(token)}; TailorDB SQL needs it`);
-    }
-    this.#unexpected("FROM");
-  }
-
-  #selectItem(): SqlSelectItem {
-    const token = this.#token;
-    const start = token.start;
-    let expr: SqlSelectItem["expr"];
-    if (this.#isAggregateStart()) {
-      expr = this.#aggregate();
-      if (this.#isArithmeticOperator()) this.#fail(STANDALONE_AGGREGATE);
-    } else if (this.#acceptOp("*")) {
-      expr = { kind: "star", span: this.#span(start) };
-    } else if (
-      token.kind === "word" &&
-      this.#isOp(".", this.#peek()) &&
-      this.#isOp("*", this.#peek(2))
-    ) {
-      const table = this.#identifier("a table");
-      this.#advance();
-      this.#advance();
-      expr = { kind: "star", table, span: this.#span(start) };
-    } else {
-      expr = this.#scalar(STANDALONE_AGGREGATE);
-    }
-    const alias = this.#acceptKeyword("AS") ? this.#identifier("an alias") : undefined;
-    return { expr, alias, span: this.#span(start) };
-  }
-
-  #isAggregateStart(): boolean {
-    const token = this.#token;
-    return (
-      token.kind === "word" &&
-      !token.quoted &&
-      AGGREGATES.has(token.text.toUpperCase()) &&
-      this.#isOp("(", this.#peek())
-    );
-  }
-
-  #aggregate(): SqlAggregate {
-    const nameToken = this.#advance();
-    const fn = (
-      nameToken.kind === "word" ? nameToken.text : ""
-    ).toLowerCase() as SqlAggregateFunction;
-    this.#expectOp("(");
-    const distinct = this.#acceptKeyword("DISTINCT");
-    let arg: SqlExpression | undefined;
-    if (fn === "count" && this.#isOp("*")) {
-      if (distinct) this.#fail("COUNT(DISTINCT *) is not supported by TailorDB SQL");
-      this.#advance();
-    } else {
-      arg = this.#scalar("Aggregates cannot be nested");
-    }
-    this.#expectOp(")");
-    return { kind: "aggregate", fn, distinct, arg, span: this.#span(nameToken.start) };
-  }
-
-  // The arithmetic of the select list, RETURNING and aggregate arguments; `nested` reports an
-  // aggregate inside it.
-  #scalar(nested: string): SqlExpression {
-    let left = this.#scalarTerm(nested);
-    while (this.#isOp("+") || this.#isOp("-")) {
-      const op = this.#advance();
-      left = this.#binary(op, left, this.#scalarTerm(nested));
-    }
-    return left;
-  }
-
-  #scalarTerm(nested: string): SqlExpression {
-    let left = this.#scalarPrefix(nested);
-    while (this.#isOp("*") || this.#isOp("/")) {
-      const op = this.#advance();
-      left = this.#binary(op, left, this.#scalarPrefix(nested));
-    }
-    return left;
-  }
-
-  #scalarPrefix(nested: string): SqlExpression {
-    const token = this.#token;
-    if (this.#isOp("+") || this.#isOp("-")) {
-      this.#advance();
-      const operand = this.#scalarPrefix(nested);
+  statement(json: PlatformStatement, span: PlatformSpan): SqlStatement | undefined {
+    if (typeof json === "string" || "StartTransaction" in json) return undefined;
+    if ("Select" in json) {
+      const select = json.Select;
       return {
-        kind: "unary",
-        op: this.#isOp("+", token) ? "+" : "-",
-        operand,
-        span: this.#span(token.start),
-      };
-    }
-    if (this.#isOp("(") && !this.#isKeyword("SELECT", this.#peek())) {
-      this.#advance();
-      const inner = this.#scalar(nested);
-      this.#expectOp(")");
-      return inner;
-    }
-    if (this.#isAggregateStart()) this.#fail(nested);
-    return this.#primary("a column or a literal");
-  }
-
-  #binary(op: Token, left: SqlExpression, right: SqlExpression): SqlBinary {
-    const text = op.kind === "op" ? op.text : op.kind === "word" ? op.text.toUpperCase() : "";
-    return {
-      kind: "binary",
-      op: OPERATORS[text] ?? (text === "AND" ? "AND" : "OR"),
-      left,
-      right,
-      span: { start: left.span.start, end: right.span.end },
-    };
-  }
-
-  // A value, or else a column.
-  #primary(expected: string): SqlExpression {
-    return this.#startsValue() ? this.#value(expected) : this.#columnRef(expected);
-  }
-
-  #startsValue(): boolean {
-    const token = this.#token;
-    return (
-      token.kind === "param" ||
-      token.kind === "string" ||
-      token.kind === "number" ||
-      ["TRUE", "FALSE", "NULL"].some((keyword) => this.#isKeyword(keyword)) ||
-      (this.#isKeyword("ARRAY") && this.#isOp("[", this.#peek())) ||
-      (this.#isOp("(") && this.#isKeyword("SELECT", this.#peek()))
-    );
-  }
-
-  #value(expected: string): SqlValue {
-    const token = this.#token;
-    const span = { start: token.start, end: token.end };
-    if (token.kind === "param") {
-      this.#advance();
-      return { kind: "param", name: token.name, span };
-    }
-    if (token.kind === "string") {
-      this.#advance();
-      return { kind: "literal", type: "string", value: token.value, span };
-    }
-    if (token.kind === "number") {
-      this.#advance();
-      return { kind: "literal", type: "number", value: token.text, span };
-    }
-    if ((this.#isOp("-") || this.#isOp("+")) && this.#peek().kind === "number") {
-      this.#advance();
-      const number = this.#advance();
-      const text = number.kind === "number" ? number.text : "";
-      return {
-        kind: "literal",
-        type: "number",
-        value: this.#isOp("-", token) ? `-${text}` : text,
-        span: { start: token.start, end: number.end },
-      };
-    }
-    if (this.#isKeyword("TRUE") || this.#isKeyword("FALSE")) {
-      this.#advance();
-      return {
-        kind: "literal",
-        type: "boolean",
-        value: token.kind === "word" ? token.text.toLowerCase() : "",
+        kind: "select",
+        items: select.select_items.map((item) => this.selectItem(item)),
+        from: this.tableRef(select.from.table),
+        joins: select.from.joins.map((join) => this.join(join)),
+        where: this.optionalExpr(select.where_expr),
+        groupBy: (select.group_by ?? []).map((column) => this.column(column)),
+        having: this.optionalExpr(select.having),
+        orderBy: (select.order_by ?? []).map((item) => this.orderItem(item)),
+        limit: select.limit ? this.value(select.limit) : undefined,
+        offset: select.offset ? this.value(select.offset) : undefined,
+        locks: select.locks.map((lock) => lock.span),
         span,
       };
     }
-    if (this.#isKeyword("NULL")) {
-      this.#advance();
-      return { kind: "literal", type: "null", value: "null", span };
-    }
-    if (this.#isKeyword("ARRAY") && this.#isOp("[", this.#peek())) {
-      this.#advance();
-      this.#advance();
-      const items = this.#isOp("]") ? [] : this.#commaSeparated(() => this.#value("a value"));
-      this.#expectOp("]");
-      return { kind: "array", items, span: this.#span(token.start) };
-    }
-    if (this.#isOp("(") && this.#isKeyword("SELECT", this.#peek())) this.#subquery(this.#peek());
-    this.#unexpected(expected);
-  }
-
-  #columnRef(expected: string): SqlColumnRef {
-    const start = this.#token.start;
-    if (this.#token.kind === "word" && this.#isOp("(", this.#peek())) this.#unsupportedFunction();
-    if (!this.#isOp(".", this.#peek())) {
-      return { kind: "column", column: this.#identifier(expected), span: this.#span(start) };
-    }
-    const table = this.#identifier(expected);
-    this.#advance();
-    const column = this.#identifier("a column");
-    if (this.#isOp(".")) this.#fail("Schema-qualified names are not supported by TailorDB SQL");
-    return { kind: "column", table, column, span: this.#span(start) };
-  }
-
-  #unsupportedFunction(): never {
-    const token = this.#token;
-    const name = token.kind === "word" ? token.text : "";
-    if (this.#isKeyword("ANY") || this.#isKeyword("ALL") || this.#isKeyword("SOME")) {
-      this.#fail(`${name.toUpperCase()} is not supported by TailorDB SQL; use IN`);
-    }
-    this.#fail(
-      `Function "${name}" is not supported by TailorDB SQL; only COUNT, SUM, AVG, MIN and MAX are`,
-    );
-  }
-
-  #subquery(token: Token): never {
-    this.#fail("Subqueries are not supported by TailorDB SQL", token);
-  }
-
-  #tableRef(): SqlTableRef {
-    const start = this.#token.start;
-    if (this.#isOp("(") && this.#isKeyword("SELECT", this.#peek())) this.#subquery(this.#peek());
-    const table = this.#identifier("a table");
-    if (this.#isOp(".")) this.#fail("Schema-qualified names are not supported by TailorDB SQL");
-    let alias: SqlIdentifier | undefined;
-    if (this.#acceptKeyword("AS")) {
-      alias = this.#identifier("an alias");
-    } else if (
-      this.#token.kind === "word" &&
-      !TABLE_ALIAS_STOPS.some((keyword) => this.#isKeyword(keyword))
-    ) {
-      alias = this.#identifier("an alias");
-    }
-    return { table, alias, span: this.#span(start) };
-  }
-
-  #join(): SqlJoin | undefined {
-    const start = this.#token.start;
-    if (this.#acceptKeywords("CROSS", "JOIN")) {
-      return { type: "cross", table: this.#tableRef(), span: this.#span(start) };
-    }
-    let type: SqlJoin["type"];
-    if (this.#acceptKeyword("JOIN") || this.#acceptKeywords("INNER", "JOIN")) {
-      type = "inner";
-    } else if (this.#isKeyword("LEFT") || this.#isKeyword("RIGHT") || this.#isKeyword("FULL")) {
-      const keyword = this.#advance();
-      type = (keyword.kind === "word" ? keyword.text.toLowerCase() : "left") as SqlJoin["type"];
-      this.#acceptKeyword("OUTER");
-      this.#expectKeyword("JOIN");
-    } else {
-      return undefined;
-    }
-    const table = this.#tableRef();
-    this.#expectKeyword("ON");
-    const on = this.#expression();
-    return { type, table, on, span: this.#span(start) };
-  }
-
-  #orderItem(): SqlOrderItem {
-    const token = this.#token;
-    let by: SqlOrderItem["by"];
-    if (this.#isOp("(", this.#peek())) {
-      if (token.kind !== "word" || token.text !== "vector_similarity") {
-        if (token.kind === "word" && token.text.toLowerCase() === "vector_similarity") {
-          this.#fail("Write vector_similarity in lowercase; TailorDB SQL matches it exactly");
-        }
-        this.#fail(
-          "ORDER BY takes a column, a result column name, or vector_similarity(column, value)",
-        );
+    if ("Insert" in json) {
+      const insert = json.Insert;
+      const conflict = insert.on_conflict;
+      let onConflict: SqlInsert["onConflict"];
+      if (conflict) {
+        const column = this.identifier(conflict.target.column);
+        onConflict =
+          conflict.action === "Nothing"
+            ? { column, action: { kind: "nothing" } }
+            : {
+                column,
+                action: {
+                  kind: "update",
+                  sets: conflict.action.Update.map((set) => {
+                    const target = this.identifier(set.column.column);
+                    const value: SqlValue | SqlExcluded =
+                      "Column" in set.value
+                        ? {
+                            kind: "excluded",
+                            column: this.identifier(set.value.Column.column),
+                            span: set.value_span,
+                          }
+                        : this.value(set.value.Value);
+                    return {
+                      column: target,
+                      value,
+                      span: { start: target.span.start, end: set.value_span.end },
+                    };
+                  }),
+                },
+              };
       }
-      this.#advance();
-      this.#advance();
-      const column = this.#columnRef("a column");
-      this.#expectOp(",");
-      const value = this.#value("a placeholder or a string");
-      this.#expectOp(")");
-      by = { kind: "vector", column, value, span: this.#span(token.start) };
-    } else {
-      by = this.#columnRef("a column");
-      if (this.#isArithmeticOperator()) {
-        this.#fail(
-          "ORDER BY takes a column or a result column name; name the expression with AS and order by that name",
-        );
-      }
-    }
-    const desc = this.#acceptKeyword("DESC");
-    if (!desc) this.#acceptKeyword("ASC");
-    return { by, desc, span: this.#span(token.start) };
-  }
-
-  #lock(): SqlSpan {
-    const start = this.#token.start;
-    this.#advance();
-    if (
-      !this.#acceptKeywords("NO", "KEY", "UPDATE") &&
-      !this.#acceptKeywords("KEY", "SHARE") &&
-      !this.#acceptKeyword("SHARE") &&
-      !this.#acceptKeyword("UPDATE")
-    ) {
-      this.#unexpected("UPDATE, NO KEY UPDATE, SHARE or KEY SHARE");
-    }
-    if (!this.#acceptKeyword("NOWAIT")) this.#acceptKeywords("SKIP", "LOCKED");
-    return this.#span(start);
-  }
-
-  // A condition of WHERE, ON or HAVING, binding operators tighter than `precedence`.
-  #expression(precedence = PRECEDENCE.lowest): SqlExpression {
-    let left = this.#prefix();
-    for (;;) {
-      const next = this.#nextPrecedence();
-      if (precedence >= next) return left;
-      left = this.#infix(left, next);
-    }
-  }
-
-  #prefix(): SqlExpression {
-    const token = this.#token;
-    if (this.#isOp("+") || this.#isOp("-")) {
-      this.#advance();
-      const operand = this.#expression(PRECEDENCE.unary);
       return {
-        kind: "unary",
-        op: this.#isOp("+", token) ? "+" : "-",
-        operand,
-        span: this.#span(token.start),
+        kind: "insert",
+        table: this.identifier(insert.table.name),
+        columns: insert.columns.map((column) => this.identifier(column.column)),
+        rows:
+          insert.columns.length === 0
+            ? "default"
+            : insert.values.map((row) => ({
+                values: row.values.map((value) =>
+                  value === "Default" ? { kind: "default" } : this.value(value.Value),
+                ),
+                span: row.span,
+              })),
+        onConflict,
+        returning: this.returning(insert.returning),
+        span,
       };
     }
-    if (this.#isOp("(") && !this.#isKeyword("SELECT", this.#peek())) {
-      this.#advance();
-      const inner = this.#expression();
-      this.#expectOp(")");
-      return inner;
+    if ("Update" in json) {
+      const update = json.Update;
+      return {
+        kind: "update",
+        table: this.identifier(update.table.name),
+        sets: update.assignments.map((assignment) => {
+          const column = this.identifier(assignment.column.column);
+          const left = this.setOperand(assignment.left_value);
+          let value: SqlSetOperand | SqlSetArithmetic = left;
+          if (assignment.arithmetic_op && assignment.right_value) {
+            const right = this.setOperand(assignment.right_value);
+            value = {
+              kind: "arithmetic",
+              op: ARITHMETIC[assignment.arithmetic_op],
+              left,
+              right,
+              span: spanOf(left, right),
+            };
+          }
+          return { column, value, span: spanOf(column, value) };
+        }),
+        where: this.optionalExpr(update.where_expr),
+        returning: this.returning(update.returning),
+        span,
+      };
     }
-    if (this.#isKeyword("NOT")) {
-      this.#advance();
-      const operand = this.#expression(PRECEDENCE.not);
-      return { kind: "unary", op: "NOT", operand, span: this.#span(token.start) };
-    }
-    if (this.#isAggregateStart()) return this.#aggregate();
-    if (
-      token.kind === "word" ||
-      token.kind === "number" ||
-      token.kind === "string" ||
-      token.kind === "param" ||
-      this.#isOp("(")
-    ) {
-      return this.#primary("a column, a literal or a placeholder");
-    }
-    this.#unexpected("an expression");
-  }
-
-  #nextPrecedence(): number {
-    const token = this.#token;
-    if (token.kind === "op") return OPERATOR_PRECEDENCE[token.text] ?? PRECEDENCE.lowest;
-    if (this.#isKeyword("AND")) return PRECEDENCE.and;
-    if (this.#isKeyword("OR")) return PRECEDENCE.or;
-    if (this.#isKeyword("IS")) return PRECEDENCE.is;
-    const operator = this.#isKeyword("NOT") ? this.#peek() : token;
-    return ["LIKE", "ILIKE", "BETWEEN", "IN"].some((keyword) => this.#isKeyword(keyword, operator))
-      ? PRECEDENCE.pattern
-      : PRECEDENCE.lowest;
-  }
-
-  #infix(left: SqlExpression, precedence: number): SqlExpression {
-    const token = this.#token;
-    const start = left.span.start;
-    if (token.kind === "op" || this.#isKeyword("AND") || this.#isKeyword("OR")) {
-      this.#advance();
-      return this.#binary(token, left, this.#expression(precedence));
-    }
-    if (this.#acceptKeyword("IS")) {
-      const not = this.#acceptKeyword("NOT");
-      this.#expectKeyword("NULL");
-      return { kind: "isNull", not, left, span: this.#span(start) };
-    }
-    const not = this.#acceptKeyword("NOT");
-    if (this.#acceptKeyword("IN")) {
-      this.#expectOp("(");
-      if (this.#isKeyword("SELECT")) this.#subquery(this.#token);
-      const items = this.#commaSeparated(() => this.#expression());
-      this.#expectOp(")");
-      return { kind: "in", not, left, items, span: this.#span(start) };
-    }
-    if (this.#acceptKeyword("BETWEEN")) {
-      const low = this.#expression(PRECEDENCE.pattern);
-      this.#expectKeyword("AND");
-      const high = this.#expression(PRECEDENCE.pattern);
-      return { kind: "between", not, left, low, high, span: this.#span(start) };
-    }
-    const keyword = this.#isKeyword("ILIKE") ? "ILIKE" : "LIKE";
-    this.#advance();
-    const right = this.#expression(precedence);
+    const remove = json.Delete;
     return {
-      kind: "binary",
-      op: not ? `NOT ${keyword}` : keyword,
-      left,
-      right,
-      span: { start, end: right.span.end },
+      kind: "delete",
+      table: this.identifier(remove.table.name),
+      where: this.optionalExpr(remove.where_expr),
+      returning: this.returning(remove.returning),
+      span,
     };
   }
 
-  #insert(): SqlInsert {
-    const start = this.#token.start;
-    this.#expectKeyword("INSERT");
-    this.#expectKeyword("INTO");
-    const table = this.#identifier("a table");
-    let columns: SqlIdentifier[] = [];
-    let rows: SqlInsert["rows"];
-    if (this.#acceptKeywords("DEFAULT", "VALUES")) {
-      rows = "default";
-    } else {
-      this.#expectOp("(");
-      columns = this.#commaSeparated(() => this.#identifier("a column"));
-      this.#expectOp(")");
-      this.#expectKeyword("VALUES");
-      rows = this.#commaSeparated(() => {
-        const rowStart = this.#token.start;
-        this.#expectOp("(");
-        const values = this.#commaSeparated((): SqlValue | SqlDefault => {
-          const token = this.#token;
-          if (this.#acceptKeyword("DEFAULT")) {
-            return { kind: "default", span: { start: token.start, end: token.end } };
-          }
-          return this.#value("a literal, a placeholder or DEFAULT");
-        });
-        this.#expectOp(")");
-        return { values, span: this.#span(rowStart) };
-      });
-    }
-    let onConflict: SqlInsert["onConflict"];
-    if (this.#acceptKeywords("ON", "CONFLICT")) {
-      this.#expectOp("(");
-      const column = this.#identifier("a column");
-      if (this.#isOp(",")) this.#fail("ON CONFLICT takes a single column in TailorDB SQL");
-      this.#expectOp(")");
-      this.#expectKeyword("DO");
-      if (this.#acceptKeyword("NOTHING")) {
-        onConflict = { column, action: { kind: "nothing" } };
-      } else if (this.#acceptKeyword("UPDATE")) {
-        this.#expectKeyword("SET");
-        const sets = this.#commaSeparated(() => {
-          const setStart = this.#token.start;
-          const target = this.#identifier("a column");
-          this.#expectOp("=");
-          return { column: target, value: this.#conflictValue(), span: this.#span(setStart) };
-        });
-        if (this.#isKeyword("WHERE")) {
-          this.#fail("WHERE after ON CONFLICT DO UPDATE is not supported by TailorDB SQL");
-        }
-        onConflict = { column, action: { kind: "update", sets } };
-      } else {
-        this.#unexpected("NOTHING or UPDATE");
-      }
-    }
-    const returning = this.#returning();
-    return { kind: "insert", table, columns, rows, onConflict, returning, span: this.#span(start) };
+  identifier(json: PlatformIdent): SqlIdentifier {
+    return { name: json.value, quoted: this.source[json.span.start] === '"', span: json.span };
   }
 
-  #conflictValue(): SqlValue | SqlExcluded {
-    const token = this.#token;
-    if (
-      token.kind === "word" &&
-      (token.quoted ? token.text === "excluded" : token.text.toLowerCase() === "excluded")
-    ) {
-      this.#advance();
-      this.#expectOp(".");
-      const column = this.#identifier("a column");
-      return { kind: "excluded", column, span: this.#span(token.start) };
-    }
-    return this.#value("a literal, a placeholder or EXCLUDED.column");
+  column(json: PlatformColumn): SqlColumnRef {
+    const column = this.identifier(json.column);
+    const table = json.table ? this.identifier(json.table) : undefined;
+    return { kind: "column", table, column, span: spanOf(table ?? column, column) };
   }
 
-  #update(): SqlUpdate {
-    const start = this.#token.start;
-    this.#expectKeyword("UPDATE");
-    const table = this.#identifier("a table");
-    this.#expectKeyword("SET");
-    const sets = this.#commaSeparated(() => {
-      const setStart = this.#token.start;
-      const column = this.#identifier("a column");
-      this.#expectOp("=");
-      const left = this.#setOperand();
-      const opToken = this.#token;
-      if (!this.#isArithmeticOperator()) {
-        return { column, value: left, span: this.#span(setStart) };
+  value(json: PlatformValue): SqlValue {
+    const { kind, span } = json;
+    if (kind === "Null") return { kind: "literal", type: "null", value: "null", span };
+    if ("Placeholder" in kind) {
+      const name = assertDefined(this.paramNames[kind.Placeholder - 1], "placeholder name");
+      return { kind: "param", name, span };
+    }
+    if ("String" in kind) return { kind: "literal", type: "string", value: kind.String, span };
+    if ("Number" in kind) return { kind: "literal", type: "number", value: kind.Number, span };
+    if ("Boolean" in kind) {
+      return { kind: "literal", type: "boolean", value: String(kind.Boolean), span };
+    }
+    return { kind: "array", items: kind.Array.map((item) => this.value(item)), span };
+  }
+
+  aggregate(json: PlatformAggregate): SqlAggregate {
+    const { kind, span } = json;
+    if ("Count" in kind) {
+      const argument = kind.Count;
+      if (argument === "Wildcard") {
+        return { kind: "aggregate", fn: "count", distinct: false, arg: undefined, span };
       }
-      this.#advance();
-      const right = this.#setOperand();
-      const value: SqlSetArithmetic = {
-        kind: "arithmetic",
-        op: (opToken.kind === "op" ? opToken.text : "+") as SqlArithmeticOperator,
-        left,
-        right,
-        span: { start: left.span.start, end: right.span.end },
+      const { distinct, expr } = argument.Column;
+      return { kind: "aggregate", fn: "count", distinct, arg: this.scalar(expr), span };
+    }
+    const [fn, argument] =
+      "Sum" in kind
+        ? (["sum", kind.Sum] as const)
+        : "Avg" in kind
+          ? (["avg", kind.Avg] as const)
+          : "Max" in kind
+            ? (["max", kind.Max] as const)
+            : (["min", kind.Min] as const);
+    return {
+      kind: "aggregate",
+      fn,
+      distinct: argument.distinct,
+      arg: this.scalar(argument.expr),
+      span,
+    };
+  }
+
+  scalar(json: PlatformScalarExpr): SqlExpression {
+    if ("Column" in json) return this.column(json.Column);
+    if ("Value" in json) return this.value(json.Value);
+    if ("UnaryOp" in json) {
+      const { op, expr, span } = json.UnaryOp;
+      return { kind: "unary", op: op === "Plus" ? "+" : "-", operand: this.scalar(expr), span };
+    }
+    const { left, op, right } = json.BinaryOp;
+    return this.binary(BINARY_OPERATORS[op], this.scalar(left), this.scalar(right));
+  }
+
+  expr(json: PlatformExpr): SqlExpression {
+    if ("Column" in json) return this.column(json.Column);
+    if ("Value" in json) return this.value(json.Value);
+    if ("AggregateFunction" in json) return this.aggregate(json.AggregateFunction);
+    if ("UnaryOp" in json) {
+      const { op, expr, span } = json.UnaryOp;
+      const operator = op === "Plus" ? "+" : op === "Minus" ? "-" : "NOT";
+      return { kind: "unary", op: operator, operand: this.expr(expr), span };
+    }
+    if ("BinaryOp" in json) {
+      const { left, op, right } = json.BinaryOp;
+      return this.binary(BINARY_OPERATORS[op], this.expr(left), this.expr(right));
+    }
+    if ("In" in json) {
+      const { left, values, negated, span } = json.In;
+      const operand = this.expr(left);
+      return {
+        kind: "in",
+        not: negated,
+        left: operand,
+        items: values.map((value) => this.expr(value)),
+        span: { start: operand.span.start, end: span.end },
       };
-      return { column, value, span: this.#span(setStart) };
-    });
-    const where = this.#acceptKeyword("WHERE") ? this.#expression() : undefined;
-    const returning = this.#returning();
-    return { kind: "update", table, sets, where, returning, span: this.#span(start) };
+    }
+    if ("Between" in json) {
+      const { left, low, high, negated } = json.Between;
+      const operand = this.expr(left);
+      const upper = this.expr(high);
+      return {
+        kind: "between",
+        not: negated,
+        left: operand,
+        low: this.expr(low),
+        high: upper,
+        span: spanOf(operand, upper),
+      };
+    }
+    const { left, negated, span } = json.IsNull;
+    const operand = this.expr(left);
+    return {
+      kind: "isNull",
+      not: negated,
+      left: operand,
+      span: { start: operand.span.start, end: span.end },
+    };
   }
 
-  #setOperand(): SqlSetOperand {
-    const signed = (this.#isOp("-") || this.#isOp("+")) && this.#peek().kind === "number";
-    return signed || this.#startsValue()
-      ? this.#value("a column, a literal or a placeholder")
-      : this.#columnRef("a column, a literal or a placeholder");
+  optionalExpr(json: PlatformExpr | null): SqlExpression | undefined {
+    return json ? this.expr(json) : undefined;
   }
 
-  #delete(): SqlDelete {
-    const start = this.#token.start;
-    this.#expectKeyword("DELETE");
-    this.#expectKeyword("FROM");
-    const table = this.#identifier("a table");
-    const where = this.#acceptKeyword("WHERE") ? this.#expression() : undefined;
-    const returning = this.#returning();
-    return { kind: "delete", table, where, returning, span: this.#span(start) };
+  binary(op: SqlBinary["op"], left: SqlExpression, right: SqlExpression): SqlBinary {
+    return { kind: "binary", op, left, right, span: spanOf(left, right) };
   }
 
-  #returning(): SqlSelectItem[] | undefined {
-    return this.#acceptKeyword("RETURNING")
-      ? this.#commaSeparated(() => this.#selectItem())
-      : undefined;
+  selectItem(json: PlatformSelectItem): SqlSelectItem {
+    let expr: SqlSelectItem["expr"];
+    let alias: PlatformIdent | null = null;
+    if ("Wildcard" in json) {
+      const { table, span } = json.Wildcard;
+      expr = { kind: "star", table: table ? this.identifier(table) : undefined, span };
+    } else if ("Column" in json) {
+      expr = this.column(json.Column.column);
+      alias = json.Column.alias;
+    } else if ("AggregateFunction" in json) {
+      expr = this.aggregate(json.AggregateFunction.function);
+      alias = json.AggregateFunction.alias;
+    } else {
+      expr = this.scalar(json.Expression.expr);
+      alias = json.Expression.alias;
+    }
+    const name = alias ? this.identifier(alias) : undefined;
+    return { expr, alias: name, span: spanOf(expr, name ?? expr) };
+  }
+
+  returning(items: PlatformSelectItem[]): SqlSelectItem[] | undefined {
+    return items.length === 0 ? undefined : items.map((item) => this.selectItem(item));
+  }
+
+  tableRef(json: PlatformTable): SqlTableRef {
+    const table = this.identifier(json.name);
+    const alias = json.alias ? this.identifier(json.alias) : undefined;
+    return { table, alias, span: spanOf(table, alias ?? table) };
+  }
+
+  join(json: PlatformJoin): SqlJoin {
+    const table = this.tableRef(json.table);
+    const { action } = json;
+    if (action === "Cross") return { type: "cross", table };
+    if ("Inner" in action) return { type: "inner", table, on: this.expr(action.Inner) };
+    if ("Left" in action) return { type: "left", table, on: this.expr(action.Left) };
+    if ("Right" in action) return { type: "right", table, on: this.expr(action.Right) };
+    return { type: "full", table, on: this.expr(action.Full) };
+  }
+
+  orderItem(json: PlatformOrderBy): SqlOrderItem {
+    const { target } = json;
+    const by: SqlOrderItem["by"] =
+      "Column" in target
+        ? this.column(target.Column)
+        : {
+            kind: "vector",
+            column: this.column(target.Vector.column),
+            value: this.value(target.Vector.value),
+            span: target.Vector.span,
+          };
+    return { by, desc: json.direction === "Desc" };
+  }
+
+  setOperand(json: PlatformColumnOrValue): SqlSetOperand {
+    return "Column" in json ? this.column(json.Column) : this.value(json.Value);
   }
 }
 
@@ -1240,29 +620,20 @@ class Parser {
  * @returns The statement and its text as sent, or the problem that stopped parsing
  */
 export function parseSql(source: string): ParsedSql {
-  let tokens: Token[];
-  let statement: SqlStatement;
-  try {
-    tokens = tokenize(source);
-    statement = new Parser(tokens).statement();
-  } catch (error) {
-    if (!(error instanceof SqlSyntaxError)) throw error;
+  const result = parseWithPlatformParser(source);
+  if (!result.ok) {
     return {
       diagnostics: [
-        { message: error.message, start: error.start, length: error.end - error.start },
+        { message: result.message, start: result.start, length: result.end - result.start },
       ],
     };
   }
-  const { start, end } = statement.span;
-  const paramNames: string[] = [];
-  let text = "";
-  let at = start;
-  for (const token of tokens) {
-    if (token.kind !== "param" || token.start < start || token.end > end) continue;
-    paramNames.push(token.name);
-    text += `${source.slice(at, token.start)}$${paramNames.length}`;
-    at = token.end;
+  const { text, paramNames, span } = result;
+  const statement = new Converter(source, paramNames).statement(result.statement, span);
+  if (!statement) {
+    return {
+      diagnostics: [{ message: TRANSACTION, start: span.start, length: span.end - span.start }],
+    };
   }
-  text += source.slice(at, end);
   return { statement, text, paramNames, diagnostics: [] };
 }
