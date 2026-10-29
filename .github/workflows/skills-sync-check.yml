@@ -5,10 +5,12 @@ on:
     paths:
       - "packages/sdk/agent-skills/**"
       - ".github/workflows/skills-sync-check.yml"
+      - ".github/scripts/sync-skills.sh"
   push:
     branches: [main]
     paths:
       - "packages/sdk/agent-skills/**"
+      - ".github/scripts/sync-skills.sh"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,19 +33,20 @@ jobs:
           persist-credentials: false
 
       - name: Sync skills to root
-        run: |
-          # Copy public skills from packages/sdk/agent-skills/ to skills/.
-          # The bundled copy lives under a non-`skills/` directory so that
-          # `gh skill`'s recursive `**/skills/*/SKILL.md` match resolves to a
-          # single entry (the repo-root mirror). Root `skills/` is what both
-          # `gh skill install` and `npx skills add <repo>` actually pick up.
+        run: bash .github/scripts/sync-skills.sh
 
-          for skill_dir in packages/sdk/agent-skills/*/; do
-            skill_name=$(basename "$skill_dir")
-            mkdir -p "skills/$skill_name"
-            cp -r "$skill_dir"* "skills/$skill_name/"
-            echo "✓ Synced $skill_name"
-          done
+      # On a pull request from this repository, the securefix workflow pushes
+      # the synced files and CI runs again on the new head. This run is the
+      # superseded one; pushes to main and pull requests from forks cannot be
+      # fixed that way.
+      - name: Check for uncommitted changes
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "::error::skills/ is out of sync with packages/sdk/agent-skills/. Run 'bash .github/scripts/sync-skills.sh' and commit the result."
+            git status --porcelain --untracked-files=all
+            git diff
+            exit 1
+          fi
 
       - name: Upgrade gh CLI
         env:
@@ -61,20 +64,3 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh skill publish --dry-run
-
-      # Omitting `files` lets securefix list the files itself with
-      # `git ls-files --modified --others --exclude-standard`, which also
-      # covers untracked output. The server pushes the commit with a GitHub
-      # App token, so CI runs again on the new head. The step fails once it
-      # has sent the request, which only marks this superseded run.
-      # Only pull requests from this repository can use it: forks get no
-      # secrets, and securefix does not push to main.
-      - name: Commit changes
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: csm-actions/securefix-action@ada5710dddfb54a0a55109e320830a757472ce04 # v0.6.4
-        with:
-          action: client
-          app_id: ${{ vars.SECUREFIX_CLIENT_APP_ID }}
-          app_private_key: ${{ secrets.SECUREFIX_CLIENT_APP_PRIVATE_KEY }}
-          server_repository: securefix-server
-          commit_message: "chore: sync skills"
