@@ -62,12 +62,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh skill publish --dry-run
 
-      # Omitting `files` lets commit-action list the files itself with
+      # Omitting `files` lets securefix list the files itself with
       # `git ls-files --modified --others --exclude-standard`, which also
-      # covers untracked output. It no-ops when nothing changed.
+      # covers untracked output. The server pushes the commit with a GitHub
+      # App token, so CI runs again on the new head. The step fails once it
+      # has sent the request, which only marks this superseded run.
+      # Only pull requests from this repository can use it: forks get no
+      # secrets, and securefix does not push to main.
       - name: Commit changes
-        uses: suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7 # v1.1.0
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: csm-actions/securefix-action@ada5710dddfb54a0a55109e320830a757472ce04 # v0.6.4
         with:
-          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          action: client
+          app_id: ${{ vars.SECUREFIX_CLIENT_APP_ID }}
+          app_private_key: ${{ secrets.SECUREFIX_CLIENT_APP_PRIVATE_KEY }}
+          server_repository: securefix-server
           commit_message: "chore: sync skills"
