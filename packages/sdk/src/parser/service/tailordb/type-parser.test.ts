@@ -805,6 +805,83 @@ describe("parseTypes", () => {
       ).toThrow(error);
     });
 
+    test("rejects a same-type relation to a non-unique key", () => {
+      const user = db.table("User", { email: db.string() });
+      const post = db.table("Post", {
+        userEmail: db.string().relation({ type: "keyOnly", toward: { table: user, key: "email" } }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow('Field "userEmail" on table "Post" references "User.email", which must be unique.');
+    });
+
+    test("rejects a relation key whose explicit uniqueness is overridden by keyOnly", () => {
+      const account = db.table("Account", { name: db.string() });
+      const user = db.table("User", {
+        accountID: db
+          .uuid()
+          .unique()
+          .relation({ type: "keyOnly", toward: { table: account } }),
+      });
+      const post = db.table("Post", {
+        accountID: db.uuid().relation({
+          type: "keyOnly",
+          toward: { table: user, key: "accountID" },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ Account: account, User: user, Post: post }), "test-namespace"),
+      ).toThrow(
+        'Field "accountID" on table "Post" references "User.accountID", which must be unique.',
+      );
+    });
+
+    test.each(["1-1", "oneToOne"] as const)(
+      "accepts a relation to a key made unique by a %s relation",
+      (type) => {
+        const account = db.table("Account", { name: db.string() });
+        const user = db.table("User", {
+          accountID: db.uuid().relation({ type, toward: { table: account } }),
+        });
+        const post = db.table("Post", {
+          accountID: db.uuid().relation({
+            type: "keyOnly",
+            toward: { table: user, key: "accountID" },
+          }),
+        });
+
+        expect(() =>
+          parseTypes(
+            toSchemaOutputs({ Account: account, User: user, Post: post }),
+            "test-namespace",
+          ),
+        ).not.toThrow();
+      },
+    );
+
+    test("rejects a relation to an array key with a 1-1 relation", () => {
+      const account = db.table("Account", { name: db.string() });
+      const user = db.table("User", {
+        accountIDs: db
+          .uuid({ array: true })
+          .relation({ type: "1-1", toward: { table: account, as: "accounts" } }),
+      });
+      const post = db.table("Post", {
+        accountID: db.uuid().relation({
+          type: "keyOnly",
+          toward: { table: user, key: "accountIDs" },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ Account: account, User: user, Post: post }), "test-namespace"),
+      ).toThrow(
+        'Field "accountID" on table "Post" references "User.accountIDs", which must be unique.',
+      );
+    });
+
     test.each(["missing", "toString"])("rejects a key %s that the table does not have", (key) => {
       const node = db.table("Node", {
         parentID: db.uuid().relation({ type: "keyOnly", toward: { table: "self", key } }),

@@ -265,7 +265,8 @@ name with `toward.as`.
 
 A relation field must have the same type as the field it points at: `db.uuid()` for the default
 `id`, and the type of the `toward.key` field otherwise. The SDK rejects a relation whose types
-differ, such as a `db.string()` field related to `id`.
+differ, such as a `db.string()` field related to `id`. A custom `toward.key` must be unique,
+through `.unique()` or a one-to-one relation.
 
 Customize relation names using `toward.as` / `backward` options:
 

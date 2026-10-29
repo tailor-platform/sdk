@@ -103,6 +103,18 @@ export function validateRelationConfig(
         `A relation needs both fields to have the same type.`,
     );
   }
+  const keyIsUnique = keyField.rawRelation
+    ? processRelationMetadata(
+        keyField.rawRelation,
+        { ...context, tableName: targetTable, fieldName: key },
+        keyField.metadata.array,
+      ).unique
+    : keyField.metadata.unique;
+  if (key !== "id" && !keyIsUnique) {
+    throw new Error(
+      `${fieldRef(context)} references "${targetTable}.${key}", which must be unique.`,
+    );
+  }
 }
 
 /**
