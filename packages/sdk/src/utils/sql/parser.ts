@@ -7,7 +7,7 @@
 
 import { assertDefined } from "#/utils/assert";
 import {
-  parseWithPlatformParser,
+  parseWithPlatform,
   type PlatformAggregate,
   type PlatformArithmeticOp,
   type PlatformBinaryOp,
@@ -23,7 +23,7 @@ import {
   type PlatformStatement,
   type PlatformTable,
   type PlatformValue,
-} from "./platform-parser";
+} from "./platform-sql";
 
 /** A range of the original source, in UTF-16 code units. */
 export interface SqlSpan {
@@ -57,13 +57,13 @@ interface SqlStar {
   span: SqlSpan;
 }
 
-export interface SqlParam {
+interface SqlParam {
   kind: "param";
   name: string;
   span: SqlSpan;
 }
 
-export interface SqlLiteral {
+interface SqlLiteral {
   kind: "literal";
   type: "string" | "number" | "boolean" | "null";
   value: string;
@@ -77,11 +77,11 @@ interface SqlArrayLiteral {
 }
 
 /** A literal or placeholder, as VALUES, SET, LIMIT and OFFSET take. */
-export type SqlValue = SqlParam | SqlLiteral | SqlArrayLiteral;
+type SqlValue = SqlParam | SqlLiteral | SqlArrayLiteral;
 
 type SqlAggregateFunction = "count" | "sum" | "avg" | "min" | "max";
 
-export interface SqlAggregate {
+interface SqlAggregate {
   kind: "aggregate";
   fn: SqlAggregateFunction;
   distinct: boolean;
@@ -98,7 +98,7 @@ interface SqlUnary {
 }
 
 /** Operators that match a string against a pattern. */
-export const PATTERN_OPERATORS = [
+const PATTERN_OPERATORS = [
   "LIKE",
   "NOT LIKE",
   "ILIKE",
@@ -221,7 +221,7 @@ interface SqlExcluded {
 }
 
 /** An operand of UPDATE SET arithmetic. */
-export type SqlSetOperand = SqlValue | SqlColumnRef;
+type SqlSetOperand = SqlValue | SqlColumnRef;
 
 interface SqlSetArithmetic {
   kind: "arithmetic";
@@ -282,9 +282,11 @@ export type ParsedSql =
       text: string;
       /** The placeholder name each `$n` of `text` binds, in order. */
       paramNames: string[];
+      /** Where each `$n` of `text` is written in the source, in order. */
+      paramSpans: SqlSpan[];
       diagnostics: [];
     }
-  | { statement?: undefined; diagnostics: SqlDiagnostic[] };
+  | { statement?: undefined; paramSpans?: undefined; diagnostics: SqlDiagnostic[] };
 
 export const ARITHMETIC_OPERATORS = ["+", "-", "*", "/"];
 
@@ -327,6 +329,8 @@ function spanOf(first: { span: SqlSpan }, last: { span: SqlSpan }): SqlSpan {
 
 // Turns the parser's syntax tree into the one the analysis reads.
 class Converter {
+  readonly paramSpans: SqlSpan[] = [];
+
   constructor(
     readonly source: string,
     readonly paramNames: string[],
@@ -452,6 +456,7 @@ class Converter {
     if (kind === "Null") return { kind: "literal", type: "null", value: "null", span };
     if ("Placeholder" in kind) {
       const name = assertDefined(this.paramNames[kind.Placeholder - 1], "placeholder name");
+      this.paramSpans[kind.Placeholder - 1] = span;
       return { kind: "param", name, span };
     }
     if ("String" in kind) return { kind: "literal", type: "string", value: kind.String, span };
@@ -620,7 +625,7 @@ class Converter {
  * @returns The statement and its text as sent, or the problem that stopped parsing
  */
 export function parseSql(source: string): ParsedSql {
-  const result = parseWithPlatformParser(source);
+  const result = parseWithPlatform(source);
   if (!result.ok) {
     return {
       diagnostics: [
@@ -629,11 +634,12 @@ export function parseSql(source: string): ParsedSql {
     };
   }
   const { text, paramNames, span } = result;
-  const statement = new Converter(source, paramNames).statement(result.statement, span);
+  const converter = new Converter(source, paramNames);
+  const statement = converter.statement(result.statement, span);
   if (!statement) {
     return {
       diagnostics: [{ message: TRANSACTION, start: span.start, length: span.end - span.start }],
     };
   }
-  return { statement, text, paramNames, diagnostics: [] };
+  return { statement, text, paramNames, paramSpans: converter.paramSpans, diagnostics: [] };
 }

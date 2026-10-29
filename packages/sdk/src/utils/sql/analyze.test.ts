@@ -222,6 +222,12 @@ describe("analyzeSql", () => {
       ]);
     });
 
+    test("types MIN and MAX of an enum field by its values", () => {
+      expect(analyzed('SELECT max("status") AS s FROM "Order"').columns).toEqual([
+        { name: "s", type: '"PENDING" | "PAID" | "CANCELLED" | null' },
+      ]);
+    });
+
     test("types sum and avg as nullable numbers", () => {
       expect(
         analyzed('SELECT sum("amount") AS s, avg("weight") AS a FROM "Order"').columns,
@@ -708,33 +714,33 @@ describe("analyzeSql", () => {
     test.each([
       {
         source: 'SELECT "id" FROM "customer"',
-        message:
-          'Table "customer" is not defined in any TailorDB namespace; did you mean "Customer"?',
+        message: "table 'customer' not found",
         at: '"customer"',
       },
       {
         source: 'SELECT "nope" FROM "Order"',
-        message: 'Column "nope" does not exist in "Order"',
+        message: "field 'nope' not found",
         at: '"nope"',
       },
       {
         source: 'SELECT "name" FROM "Customer" c JOIN "Product" p ON c."id" = p."id"',
-        message: 'Column "name" is ambiguous: it exists in "Customer" c and "Product" p',
+        message: "field 'name' is ambiguous - Hint: use table.field syntax",
         at: '"name"',
       },
       {
         source: 'SELECT "amount" FROM "Order" a JOIN "Order" b ON a."id" = b."id"',
-        message: 'Column "amount" is ambiguous: it exists in "Order" a and "Order" b',
+        message: "field 'amount' is ambiguous - Hint: use table.field syntax",
         at: '"amount"',
       },
       {
         source: 'SELECT x."name" FROM "Customer" x JOIN "Order" x ON x."id" = x."id"',
-        message: 'Table or alias "x" is used more than once',
+        message:
+          "table alias `x` specified more than once - Hint: use a unique alias to distinguish",
         at: "x",
       },
       {
         source: 'SELECT x."id" FROM "Order" o',
-        message: 'Table or alias "x" is not in the query',
+        message: "table 'x' not found",
         at: "x",
       },
       {
@@ -768,38 +774,37 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "status" IN (\'PAID\', \'NONE\')',
-        message: "'NONE' is not a value of \"status\": PENDING, PAID, CANCELLED",
+        message: "field 'status' expected valid enum value, got 'NONE'",
         at: "'NONE'",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "tags" = :tags',
-        message: 'The array field "tags" can only be selected or returned in TailorDB SQL',
+        message: "cannot query array field `tags`",
         at: '"tags"',
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "shipping" = :s',
-        message: 'The nested field "shipping" can only be selected or returned in TailorDB SQL',
+        message: "cannot query nested field `shipping`",
         at: '"shipping"',
       },
       {
         source: 'SELECT min("id") FROM "Order"',
-        message:
-          "MIN takes an Integer, Float, Decimal, String, Enum, Date, Time or DateTime field, not uuid",
+        message: "MAX/MIN requires comparable field, got field `id`",
         at: 'min("id")',
       },
       {
         source: 'SELECT sum("status") FROM "Order"',
-        message: "SUM takes an Integer, Float or Decimal field, not enum",
+        message: "SUM/AVG requires numeric field, got field `status`",
         at: 'sum("status")',
       },
       {
         source: 'SELECT "paid" + 1 AS x FROM "Order"',
-        message: 'Arithmetic needs an Integer, Float or Decimal field, and "paid" is boolean',
+        message: "binary arithmetic expression requires numeric field, got field type `Boolean`",
         at: '"paid"',
       },
       {
         source: "SELECT 'a' + 1 AS x FROM \"Order\"",
-        message: "Arithmetic needs an Integer, Float or Decimal field, and 'a' is string",
+        message: "binary arithmetic expression requires numeric field, got field type `String`",
         at: "'a'",
       },
       {
@@ -819,17 +824,17 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount" > 2147483648',
-        message: "TailorDB SQL takes integers in the 32-bit range, and 2147483648 is not",
+        message: "numeric literal `2147483648` is out of range for 32-bit integer",
         at: "2147483648",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount" IN (1, 2147483648)',
-        message: "TailorDB SQL takes integers in the 32-bit range, and 2147483648 is not",
+        message: "numeric literal `2147483648` is out of range for 32-bit integer",
         at: "2147483648",
       },
       {
         source: 'SELECT -2147483648 AS x FROM "Order"',
-        message: "TailorDB SQL takes integers in the 32-bit range, and 2147483648 is not",
+        message: "numeric literal `2147483648` is out of range for 32-bit integer expressions",
         at: "2147483648",
       },
       {
@@ -840,7 +845,7 @@ describe("analyzeSql", () => {
       },
       {
         source: 'DELETE FROM "Order" WHERE "id" = :id RETURNING count(*)',
-        message: "RETURNING takes only columns and * in TailorDB SQL",
+        message: "Aggregate functions are not supported in RETURNING clause",
         at: "count(*)",
       },
       {
@@ -851,23 +856,23 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT "id" FROM "Product" ORDER BY vector_similarity("name", :q)',
-        message: 'vector_similarity takes a vector field, and "name" is not one',
+        message: "cannot query non-vector field `name`",
         at: '"name"',
       },
       {
         source:
           'INSERT INTO "Customer" ("name", "email", "tier") VALUES (:n, :e, :t) ON CONFLICT ("name") DO NOTHING',
-        message: 'ON CONFLICT takes "id" or a unique field, and "name" is not unique',
+        message: "field `name` is not unique",
         at: '"name"',
       },
       {
         source: 'INSERT INTO "Event" ("name") VALUES (:a, :b)',
-        message: "VALUES has 2 values for 1 column",
+        message: "INSERT expected 1 values for columns [name], got 2",
         at: "(:a, :b)",
       },
       {
         source: 'INSERT INTO "Event" ("name", "name") VALUES (:a, :b)',
-        message: 'Column "name" is listed more than once',
+        message: "field 'name' appears multiple times in INSERT column list",
         at: '"name"',
       },
       {
@@ -877,103 +882,111 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "orderDate" = "paidAt"',
-        message: 'Cannot compare "orderDate" (date) with "paidAt" (datetime)',
+        message: "type mismatch: field 'orderDate' is date, but field 'paidAt' is datetime",
         at: '"paidAt"',
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount" = \'abc\'',
-        message: "'abc' for \"amount\" is not a valid Integer value",
+        message: "field 'amount' expected integer, got abc",
         at: "'abc'",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "customerID" = \'x\'',
-        message: "'x' for \"customerID\" is not a valid UUID value",
+        message: "field 'customerID' expected uuid, got x",
         at: "'x'",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "orderDate" = \'2026-13-01\'',
-        message: "'2026-13-01' for \"orderDate\" is not a valid Date value",
+        message: "field 'orderDate' expected date, got 2026-13-01",
         at: "'2026-13-01'",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE :a + :b > 0',
-        message: "Arithmetic needs a column or a number on one side to know its type",
+        message:
+          "cannot determine type for arithmetic between untyped values - Hint: use a typed column on at least one side",
         at: ":a",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount" > -:p',
-        message: "A sign needs a column or a number to know its type",
+        message:
+          "cannot determine type for unary arithmetic on untyped value - Hint: use a typed column or an explicitly typed literal as the operand",
         at: "-:p",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount"',
-        message: 'Expected a condition, but "amount" is integer',
+        message: "type mismatch: expected boolean, got integer",
         at: '"amount"',
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount" LIKE \'1%\'',
-        message: 'LIKE needs a String or Enum value on its left, and "amount" is integer',
+        message: "field 'amount' expected string or enum for like operator (~~), got integer",
         at: '"amount"',
       },
       {
         source: 'SELECT "id" FROM "Customer" WHERE "name" ~ \'^(a+)+$\'',
-        message: "The pattern nests repetition, which TailorDB rejects as too complex",
+        message: "regex pattern too complex: star-height 2 exceeds limit of 1",
         at: "'^(a+)+$'",
       },
       {
         source: 'SELECT "id" FROM "Customer" WHERE "name" ~ \'(?=a)\'',
-        message: "The pattern uses lookaround",
+        message:
+          "invalid regex pattern: regex parse error:\n    (?=a)\n    ^^^\nerror: look-around, including look-ahead and look-behind, is not supported",
         at: "'(?=a)'",
       },
       {
         source: 'SELECT "id" FROM "Customer" WHERE "name" ~* \'a{300}\'',
-        message: "The pattern repeats more than 255 times, which TailorDB rejects as too complex",
+        message: "regex pattern too complex: repeat bound 300 exceeds limit of 255",
         at: "'a{300}'",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "tags" IS NULL',
-        message: 'The array field "tags" can only be selected or returned in TailorDB SQL',
+        message: "cannot query array field `tags`",
         at: '"tags"',
       },
       {
         source: 'SELECT "tags" FROM "Order" ORDER BY "tags"',
-        message: 'The array field "tags" can only be selected or returned in TailorDB SQL',
+        message: "cannot query array field `tags`",
         at: '"tags"',
       },
       {
         source: 'SELECT count(*) AS n FROM "Order" GROUP BY "shipping"',
-        message: 'The nested field "shipping" can only be selected or returned in TailorDB SQL',
+        message: "cannot query nested field `shipping`",
         at: '"shipping"',
       },
       {
         source: 'SELECT "status", count(*) FROM "Order"',
-        message: 'Column "status" must appear in GROUP BY or be used in an aggregate',
+        message:
+          "field `Order.status` must appear in the GROUP BY clause or be used in an aggregate function",
         at: '"status"',
       },
       {
         source: 'SELECT * FROM "Event" GROUP BY "name"',
-        message: 'Column "id" must appear in GROUP BY or be used in an aggregate',
+        message:
+          "field `Event.id` must appear in the GROUP BY clause or be used in an aggregate function",
         at: "*",
       },
       {
         source: 'SELECT "name" FROM "Event" HAVING count(*) > 1',
-        message: 'Column "name" must appear in GROUP BY or be used in an aggregate',
+        message:
+          "field `Event.name` must appear in the GROUP BY clause or be used in an aggregate function",
         at: '"name"',
       },
       {
         source: 'SELECT count(*) AS n FROM "Order" GROUP BY "status" ORDER BY "amount"',
-        message: 'Column "amount" must appear in GROUP BY or be used in an aggregate',
+        message:
+          "field `Order.amount` must appear in the GROUP BY clause or be used in an aggregate function",
         at: '"amount"',
       },
       {
         source:
           'SELECT "name", count(*) AS n FROM "Product" GROUP BY "name" ORDER BY vector_similarity("description", :q)',
-        message: "vector_similarity cannot be used with GROUP BY or aggregates",
+        message:
+          "cannot order by vector field `description` with aggregate functions or GROUP BY clause",
         at: 'vector_similarity("description", :q)',
       },
       {
         source: 'SELECT "id" FROM "Order" LIMIT 9999999999',
-        message: '9999999999 is not a valid Integer value for "LIMIT"',
+        message: "field '?column?' expected integer, got 9999999999",
         at: "9999999999",
       },
       {
@@ -983,70 +996,73 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT "id" FROM "Order" LIMIT NULL',
-        message: "LIMIT and OFFSET take a number, not NULL",
+        message:
+          "field '?column?' is required but got null - Hint: provide a non-null value or make the field optional in schema",
         at: "NULL",
       },
       {
         source: 'SELECT count(*) FROM "Order" FOR UPDATE',
-        message: "FOR UPDATE and FOR SHARE cannot be used with aggregates",
+        message: "row locks are not allowed with aggregate functions",
         at: "FOR UPDATE",
       },
       {
         source:
           'SELECT o."id" FROM "Order" o LEFT JOIN "Customer" c ON c."id" = o."customerID" FOR SHARE',
-        message: "FOR UPDATE and FOR SHARE cannot be used with outer joins",
+        message: "row locks are not allowed with OUTER JOINs",
         at: "FOR SHARE",
       },
       {
         source:
           'SELECT a."id" FROM "Order" a JOIN "Order" b ON b."id" = c."id" JOIN "Order" c ON c."id" = a."id"',
-        message: '"c" is joined after this ON, which can only use the tables joined so far',
+        message: "table 'c' not found",
         at: "c",
       },
       {
         source: 'INSERT INTO "Event" ("name") VALUES (NULL)',
-        message: '"name" is required, so it cannot be NULL',
+        message:
+          "field 'name' is required but got null - Hint: provide a non-null value or make the field optional in schema",
         at: "NULL",
       },
       {
         source: 'UPDATE "Order" SET "amount" = "amount" * 1.5',
-        message: '1.5 is not a valid Integer value for "amount"',
+        message: "field 'amount' expected integer, got 1.5",
         at: "1.5",
       },
       {
         source: 'UPDATE "Order" SET "amount" = 2147483648',
-        message: '2147483648 is not a valid Integer value for "amount"',
+        message: "field 'amount' expected integer, got 2147483648",
         at: "2147483648",
       },
       {
         source: 'UPDATE "Order" SET "tags" = ARRAY[\'a\', NULL]',
-        message: "Array elements cannot be NULL",
+        message:
+          "array element in field 'tags' cannot be null - Hint: remove null elements from the array",
         at: "NULL",
       },
       {
         source: 'UPDATE "Order" SET "amount" = ARRAY[1]',
-        message: '"amount" is not an array field',
+        message: "field 'amount' expected integer, got array",
         at: "ARRAY[1]",
       },
       {
         source: 'UPDATE "Order" SET "shipping" = \'{"town": "Osaka"}\'',
-        message: '\'{"town": "Osaka"}\' for "shipping" has the unknown key "town"',
+        message: "field `city` is required",
         at: '\'{"town": "Osaka"}\'',
       },
       {
         source: 'UPDATE "Event" SET "id" = :x',
-        message: '"id" cannot be updated',
+        message: "cannot update field `id`",
         at: '"id"',
       },
       {
         source: 'UPDATE "Order" SET "weight" = "amount"',
-        message: 'Cannot set "weight" (float) from "amount" (integer)',
+        message: "type mismatch: column 'amount' is integer but 'weight' is float",
         at: '"amount"',
       },
       {
         source:
           'INSERT INTO "Customer" ("name", "email", "tier") VALUES (:n, :e, :t) ON CONFLICT ("email") DO UPDATE SET "name" = EXCLUDED."tier"',
-        message: 'Cannot set "name" (string) from EXCLUDED."tier" (enum)',
+        message: "field `tier` has different type from field `name`",
         at: 'EXCLUDED."tier"',
       },
       {
@@ -1056,118 +1072,162 @@ describe("analyzeSql", () => {
       },
       {
         source: 'SELECT :a FROM "Order"',
-        message: "Placeholders are not supported in the select list",
+        message: "placeholders are not supported in scalar expressions yet",
         at: ":a",
       },
       {
         source: 'SELECT "amount" + :a AS x FROM "Order"',
-        message: "Placeholders are not supported in the select list",
+        message: "placeholders are not supported in scalar expressions yet",
         at: ":a",
       },
       {
         source: 'SELECT sum(:a) FROM "Order"',
-        message: "Placeholders are not supported in an aggregate",
+        message: "placeholders are not supported in scalar expressions yet",
         at: ":a",
       },
       {
         source: 'SELECT NULL AS x FROM "Order"',
-        message: "NULL is not supported in the select list",
+        message: "NULL literal is not supported in scalar expressions",
         at: "NULL",
       },
       {
         source: 'SELECT "amount" + NULL AS x FROM "Order"',
-        message: "NULL is not supported in the select list",
+        message: "NULL literal is not supported in scalar expressions",
         at: "NULL",
       },
       {
         source: 'SELECT sum(NULL) FROM "Order"',
-        message: "NULL is not supported in an aggregate",
+        message: "NULL literal is not supported in scalar expressions",
         at: "NULL",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE count(*) > 1',
-        message: "Aggregates are only allowed in HAVING and the select list",
+        message: "aggregate functions are not allowed in WHERE",
         at: "count(*)",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "status" = ARRAY[\'a\']',
-        message: "Array literals are only supported in VALUES and SET",
+        message: "array literals are not supported in expressions",
         at: "ARRAY['a']",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "amount" = 1_000',
-        message: "1_000 is not a number TailorDB SQL reads",
+        message: "numeric literal `1_000` is out of range for 32-bit integer",
         at: "1_000",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE :p LIKE \'x%\'',
-        message: "LIKE needs a String or Enum value on its left",
+        message:
+          "cannot determine type for left side of like operator (~~) - Hint: use a typed column on the left side",
         at: ":p",
       },
       {
         source: 'SELECT "id" FROM "Customer" WHERE "name" LIKE 1',
-        message: "LIKE needs a String or Enum pattern, and 1 is integer",
+        message: "right side of like operator (~~) expected string or enum, got integer",
         at: "1",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE "paid" AND "amount"',
-        message: 'AND needs conditions, and "amount" is integer',
+        message: "right side of AND expected boolean, got integer",
         at: '"amount"',
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE :p IN (1, 2)',
-        message: "The left side of IN needs a column or a typed value",
+        message:
+          "cannot determine type for left side of IN expression - Hint: use a typed column on the left side",
         at: ":p",
       },
       {
         source: 'SELECT "id" FROM "Order" WHERE :a = :b',
-        message: "One side of the comparison needs a column or a typed value to know its type",
+        message:
+          "cannot determine type for comparison between untyped values - Hint: use a typed column on at least one side",
         at: ":a",
       },
       {
         source: 'SELECT "id" FROM "Customer" WHERE "name" ~ \'(a)\\1\'',
-        message: "The pattern uses a backreference",
+        message:
+          "invalid regex pattern: regex parse error:\n    (a)\\1\n       ^^\nerror: backreferences are not supported",
         at: "'(a)\\1'",
       },
       {
         source: 'SELECT "id" FROM "Customer" WHERE "name" ~ \'\\yab\'',
-        message: "The pattern uses \\y, which TailorDB does not support",
+        message:
+          "invalid regex pattern: regex parse error:\n    \\yab\n    ^^\nerror: unrecognized escape sequence",
         at: "'\\yab'",
       },
       {
         source: 'UPDATE "Order" SET "tags" = ARRAY[:t]',
-        message: "Array elements cannot be placeholders",
+        message: "array elements cannot contain placeholders, got :t",
         at: ":t",
       },
       {
         source: 'SELECT "status" FROM "Order" WHERE "amount" > 1 HAVING count(*) > 1',
-        message: 'Column "status" must appear in GROUP BY or be used in an aggregate',
+        message:
+          "field `Order.status` must appear in the GROUP BY clause or be used in an aggregate function",
         at: '"status"',
       },
       {
         source: 'SELECT x.* FROM "Order"',
-        message: 'Table or alias "x" is not in the query',
+        message: "table 'x' not found",
         at: "x",
       },
       {
         source: 'SELECT "status", count(*) AS n FROM "Order" GROUP BY "status" HAVING n > :min',
-        message: 'Column "n" does not exist in "Order"',
+        message: "field 'n' not found",
         at: "n",
       },
     ])("$source", ({ source, message, at }) => {
       expect(rejected(source)).toEqual([{ message, at }]);
     });
 
-    test("reports row locks with HAVING and ORDER BY names that match several columns", () => {
+    test("reports row locks with GROUP BY and ORDER BY names that match several columns", () => {
       expect(
         rejected('SELECT "id" FROM "Order" GROUP BY "id" HAVING "id" = :id FOR UPDATE'),
-      ).toContainEqual({
-        message: "FOR UPDATE and FOR SHARE cannot be used with GROUP BY or HAVING",
-        at: "FOR UPDATE",
-      });
+      ).toEqual([{ message: "row locks are not allowed with GROUP BY clause", at: "FOR UPDATE" }]);
+      expect(rejected('SELECT "amount" AS x, "weight" AS x FROM "Order" ORDER BY x')).toEqual([
+        { message: "ORDER BY `x` is ambiguous - Hint: use table.field syntax", at: "x" },
+      ]);
+    });
+
+    test("reports what fails for HAVING without GROUP BY, which groups the rows", () => {
       expect(
-        rejected('SELECT "amount" AS x, "weight" AS x FROM "Order" ORDER BY x'),
-      ).toContainEqual({ message: 'ORDER BY "x" matches more than one result column', at: "x" });
+        rejected('SELECT o."id" FROM "Order" o HAVING count(*) > 1 ORDER BY "amount" FOR UPDATE'),
+      ).toEqual([
+        {
+          message:
+            "field `o.id` must appear in the GROUP BY clause or be used in an aggregate function",
+          at: 'o."id"',
+        },
+        {
+          message:
+            "field `o.amount` must appear in the GROUP BY clause or be used in an aggregate function",
+          at: '"amount"',
+        },
+        { message: "row locks are not allowed with HAVING clause", at: "FOR UPDATE" },
+      ]);
+      expect(
+        rejected(
+          'SELECT * FROM "Product" HAVING count(*) > 0 ORDER BY vector_similarity("description", :q)',
+        ),
+      ).toEqual([
+        {
+          message:
+            "field `Product.id` must appear in the GROUP BY clause or be used in an aggregate function",
+          at: "*",
+        },
+        {
+          message: "cannot order by vector field `description` with HAVING clause",
+          at: 'vector_similarity("description", :q)',
+        },
+      ]);
+    });
+
+    test("reports failures it checks itself along with the error TailorDB reports", () => {
+      expect(rejected('SELECT "nope" / 0 AS x FROM "Order" OFFSET -1')).toEqual([
+        { message: "field 'nope' not found", at: '"nope"' },
+        { message: "Dividing by zero fails in TailorDB SQL", at: "0" },
+        { message: "LIMIT and OFFSET take a number that is not negative", at: "-1" },
+      ]);
     });
 
     test("reports parse errors at their place", () => {

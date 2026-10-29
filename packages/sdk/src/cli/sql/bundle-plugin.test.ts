@@ -74,10 +74,7 @@ describe("bundling .sql imports", () => {
 
   test("fails with every problem of the file, located in it", async () => {
     using tmp = projectDir(".sdk-sql-bundle-invalid-");
-    const sourceFile = writeProject(
-      tmp.dir,
-      'SELECT "nope"\nFROM "Order" WHERE "status" = \'NONE\'',
-    );
+    const sourceFile = writeProject(tmp.dir, 'SELECT "amount" / 0 AS a\nFROM "Order" OFFSET -1');
 
     await expect(
       bundle(sourceFile, {
@@ -86,13 +83,13 @@ describe("bundling .sql imports", () => {
     ).rejects.toMatchObject({
       code: "SQL_INVALID",
       message: expect.stringMatching(
-        /query\.sql:1:8: Column "nope" does not exist in "Order"\n.*query\.sql:2:31: 'NONE' is not a value of "status": PAID$/,
+        /query\.sql:1:19: Dividing by zero fails in TailorDB SQL\n.*query\.sql:2:21: LIMIT and OFFSET take a number that is not negative$/,
       ),
       context: {
         file: path.join(tmp.dir, "query.sql"),
         diagnostics: [
-          { line: 1, column: 8, message: 'Column "nope" does not exist in "Order"' },
-          { line: 2, column: 31, message: "'NONE' is not a value of \"status\": PAID" },
+          { line: 1, column: 19, message: "Dividing by zero fails in TailorDB SQL" },
+          { line: 2, column: 21, message: "LIMIT and OFFSET take a number that is not negative" },
         ],
       },
     });

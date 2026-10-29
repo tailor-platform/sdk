@@ -103,7 +103,7 @@ describe("content mapper", () => {
 
     expect(result.diagnostics).toEqual([
       {
-        messageText: 'Column "nope" does not exist in "Order"',
+        messageText: "field 'nope' not found",
         start: Buffer.byteLength("-- 注文\nSELECT "),
         length: '"nope"'.length,
         code: 1,

@@ -1,6 +1,7 @@
 /**
- * TailorDB's SQL parser, built to WebAssembly, which reads a `.sql` file written with `:name`
- * placeholders and returns its syntax tree as JSON.
+ * TailorDB's SQL parser and analyzer, built to WebAssembly, which read a `.sql` file written with
+ * `:name` placeholders and return its syntax tree, or what the statement takes and returns, as
+ * JSON.
  */
 
 import { readFileSync } from "node:fs";
@@ -188,72 +189,141 @@ export type PlatformParseResult =
     }
   | { ok: false; message: string; start: number; end: number };
 
-interface ParserExports {
+/** A field as TailorDB's analyzer typed a result column or a placeholder. */
+export interface PlatformField {
+  /** The table the field belongs to, or empty for one the analyzer derived. */
+  table: string;
+  name: string;
+  type: string;
+  required: boolean;
+  array: boolean;
+  allowedValues: string[] | null;
+  fields: Record<string, PlatformField> | null;
+}
+
+/** What a statement returns and takes as TailorDB's analyzer sees it, or why it rejects it. */
+export type PlatformAnalyzeResult =
+  | {
+      ok: true;
+      /** The result columns, with `*` expanded in an order of TailorDB's choosing. */
+      columns: { name: string; schema: PlatformField }[];
+      /** The field each `$n` is bound to, by `n`. */
+      params: { index: number; schema: PlatformField }[];
+    }
+  | { ok: false; message: string; start: number; end: number };
+
+interface PlatformExports {
   memory: WebAssembly.Memory;
   alloc(length: number): number;
   dealloc(pointer: number, length: number): void;
   parse(pointer: number, length: number): number;
+  analyze(pointer: number, length: number, schemaPointer: number, schemaLength: number): number;
+}
+
+/** TailorDB's SQL parser and analyzer. */
+export interface PlatformSql {
+  parse(source: string): PlatformParseResult;
+  analyze(source: string, schema: string): PlatformAnalyzeResult;
 }
 
 const STOPPED =
-  "The SQL parser stopped on this query; it may be nested too deeply, so split it into simpler conditions";
+  "TailorDB's SQL check stopped on this query; it may be nested too deeply, so split it into simpler conditions";
 
 /**
- * Load the parser from a `.wasm` file.
+ * Load the parser and analyzer from a `.wasm` file.
  * @param wasmPath - The file to load
- * @returns A function that parses one `.sql` source
+ * @returns Functions that parse and analyze one `.sql` source
  */
-export function createPlatformParser(wasmPath: string): (source: string) => PlatformParseResult {
+export function createPlatformSql(wasmPath: string): PlatformSql {
   let bytes: Uint8Array<ArrayBuffer>;
   try {
     bytes = readFileSync(wasmPath);
   } catch (error) {
-    throw new Error(`The SQL parser is missing: ${wasmPath}`, { cause: error });
+    throw new Error(`TailorDB's SQL parser and analyzer are missing: ${wasmPath}`, {
+      cause: error,
+    });
   }
   const module = new WebAssembly.Module(bytes);
   const instantiate = () =>
-    new WebAssembly.Instance(module, {}).exports as unknown as ParserExports;
-  let parser = instantiate();
+    new WebAssembly.Instance(module, {}).exports as unknown as PlatformExports;
+  let exports = instantiate();
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
-  return (source) => {
-    const input = encoder.encode(source);
-    let json: string;
+  // Run an export on UTF-8 copies of `inputs`, or return undefined when the module traps.
+  const call = (inputs: string[], run: (...pointers: number[]) => number): string | undefined => {
     try {
-      const pointer = parser.alloc(input.length);
-      new Uint8Array(parser.memory.buffer, pointer, input.length).set(input);
-      const output = parser.parse(pointer, input.length);
-      parser.dealloc(pointer, input.length);
-      const length = new DataView(parser.memory.buffer).getUint32(output, true);
-      json = decoder.decode(new Uint8Array(parser.memory.buffer, output + 4, length));
-      parser.dealloc(output, 4 + length);
+      const allocated = inputs.map((input) => {
+        const encoded = encoder.encode(input);
+        const pointer = exports.alloc(encoded.length);
+        new Uint8Array(exports.memory.buffer, pointer, encoded.length).set(encoded);
+        return { pointer, length: encoded.length };
+      });
+      const output = run(...allocated.flatMap(({ pointer, length }) => [pointer, length]));
+      for (const { pointer, length } of allocated) exports.dealloc(pointer, length);
+      const length = new DataView(exports.memory.buffer).getUint32(output, true);
+      const json = decoder.decode(new Uint8Array(exports.memory.buffer, output + 4, length));
+      exports.dealloc(output, 4 + length);
+      return json;
     } catch (error) {
       if (!(error instanceof WebAssembly.RuntimeError || error instanceof RangeError)) throw error;
       // A trap leaves the instance unusable.
-      parser = instantiate();
-      return { ok: false, message: STOPPED, start: 0, end: 0 };
+      exports = instantiate();
+      return undefined;
     }
-    return JSON.parse(json) as PlatformParseResult;
+  };
+  return {
+    parse(source) {
+      const json = call([source], (pointer, length) => exports.parse(pointer, length));
+      if (json === undefined) return { ok: false, message: STOPPED, start: 0, end: 0 };
+      return JSON.parse(json) as PlatformParseResult;
+    },
+    analyze(source, schema) {
+      const json = call([source, schema], (pointer, length, schemaPointer, schemaLength) =>
+        exports.analyze(pointer, length, schemaPointer, schemaLength),
+      );
+      if (json === undefined) return { ok: false, message: STOPPED, start: 0, end: 0 };
+      const result = JSON.parse(json) as PlatformAnalyzeResult | { invalidSchema: string };
+      if ("invalidSchema" in result) {
+        throw new Error(
+          `TailorDB's SQL analyzer cannot read the schema of the namespace: ${result.invalidSchema}`,
+        );
+      }
+      return result;
+    },
   };
 }
 
-let parsePlatformSql: ((source: string) => PlatformParseResult) | undefined;
+let platformSql: PlatformSql | undefined;
 
-/**
- * Parse a `.sql` source with the parser shipped in this package's `wasm` directory, loaded on
- * first use.
- * @param source - The content of a `.sql` file
- * @returns The statement, or why it does not parse
- */
-export function parseWithPlatformParser(source: string): PlatformParseResult {
-  if (!parsePlatformSql) {
+// The module in this package's `wasm` directory, loaded on first use.
+function loadPlatformSql(): PlatformSql {
+  if (!platformSql) {
     const packageJson = findUpSync("package.json", {
       cwd: path.dirname(fileURLToPath(import.meta.url)),
     });
-    if (!packageJson) throw new Error("Cannot find the package of the SQL parser");
-    parsePlatformSql = createPlatformParser(
-      path.join(path.dirname(packageJson), "wasm", "sqlaccess_parser.wasm"),
-    );
+    if (!packageJson) {
+      throw new Error("Cannot find the package of TailorDB's SQL parser and analyzer");
+    }
+    platformSql = createPlatformSql(path.join(path.dirname(packageJson), "wasm", "sqlaccess.wasm"));
   }
-  return parsePlatformSql(source);
+  return platformSql;
+}
+
+/**
+ * Parse a `.sql` source with TailorDB's parser.
+ * @param source - The content of a `.sql` file
+ * @returns The statement, or why it does not parse
+ */
+export function parseWithPlatform(source: string): PlatformParseResult {
+  return loadPlatformSql().parse(source);
+}
+
+/**
+ * Analyze a `.sql` source with TailorDB's analyzer, against the types of one namespace.
+ * @param source - The content of a `.sql` file
+ * @param schema - TailorDB's JSON of each type of the namespace, keyed by type name
+ * @returns What the statement returns and takes, or why TailorDB rejects it
+ */
+export function analyzeWithPlatform(source: string, schema: string): PlatformAnalyzeResult {
+  return loadPlatformSql().analyze(source, schema);
 }

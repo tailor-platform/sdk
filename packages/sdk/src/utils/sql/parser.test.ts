@@ -305,6 +305,18 @@ describe("parseSql", () => {
       });
     });
 
+    test("locates each placeholder by its number", () => {
+      const source = 'SELECT "id" FROM "T" WHERE "a" = :a AND "b" IN (:b, :a)';
+      const result = parseSql(source);
+
+      expect(result.paramSpans?.map((span) => source.slice(span.start, span.end))).toEqual([
+        ":a",
+        ":b",
+        ":a",
+      ]);
+      expect(result.paramSpans?.[2]?.start).toBe(source.lastIndexOf(":a"));
+    });
+
     test("sends the statement without leading comments, a BOM or semicolons", () => {
       expect(parseSql('﻿;-- get orders\nselect "id" from "Order";;\n')).toMatchObject({
         text: 'select "id" from "Order"',
