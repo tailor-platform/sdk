@@ -822,33 +822,6 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     ]);
   });
 
-  test("restores a namespace whose checkpoint is in another migration history when its first migration fails before committing", async () => {
-    checkpoint.state.historyId = "hremote";
-    snapshotState.historyId = "hlocal";
-    const client = createMockClient({
-      existingSettings: { Order: { publishRecordEvents: true } },
-    });
-    const order = snapshotTable("Order", { value: { type: "string", required: true } });
-    snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    checkpoint.mockPending([mkPendingMigration([])]);
-    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
-      new Error("migration failed"),
-    );
-
-    const error = await applyTailorDB(
-      client,
-      createMockPlanResult({ creates: [] }),
-      "create-update",
-    ).catch((failure: unknown) => failure);
-
-    expect(error).toMatchObject({ message: "migration failed" });
-    expect(JSON.stringify(errorToJson(error))).not.toContain("MIGRATION_CHECKPOINT_CONFLICT");
-    expect(publishFlagWrites(client).filter(([name]) => name === "Order")).toEqual([
-      ["Order", false],
-      ["Order", true],
-    ]);
-  });
-
   test("does not restore over a checkpoint that advances after this migration commits", async () => {
     const client = createMockClient({
       existingSettings: { Order: { publishRecordEvents: true } },

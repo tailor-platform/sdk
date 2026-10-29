@@ -98,15 +98,13 @@ export async function fetchRemoteMigrationState(
 export type ExpectedMigrationCheckpoint = {
   number: number | null;
   historyId: string | null;
-  /** Set when the deploy read a history label it could not parse. */
-  historyIdInvalid?: boolean;
 };
 
 /**
  * Whether the namespace still has the checkpoint and history ID a deploy expects.
  * @param remoteState - Remote migration state of the namespace
  * @param expectedCheckpoint - Checkpoint the deploy expects
- * @returns False when either changed, or the history label cannot be read when the deploy read one it could
+ * @returns False when either changed, or the history label cannot be read
  */
 export function isCheckpointStillOwned(
   remoteState: RemoteMigrationState,
@@ -114,7 +112,7 @@ export function isCheckpointStillOwned(
 ): boolean {
   return (
     remoteState.number === expectedCheckpoint.number &&
-    remoteState.historyIdInvalid === (expectedCheckpoint.historyIdInvalid ?? false) &&
+    !remoteState.historyIdInvalid &&
     remoteState.historyId === expectedCheckpoint.historyId
   );
 }

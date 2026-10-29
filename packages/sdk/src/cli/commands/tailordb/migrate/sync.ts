@@ -182,10 +182,9 @@ type SyncResult = {
  * mutation, verifies that the migration history reproduces the current local
  * table definitions (see {@link assertMigrationsReproduceLocalTypes}).
  *
- * Intended for recovering from drift introduced by `deploy --no-schema-check`
- * runs against an older revision: instead of having to `git checkout` that
- * revision and re-deploy, the operator can sync the remote back to a known
- * snapshot version directly.
+ * Intended for recovering from drift introduced by `deploy --no-schema-check`,
+ * and for moving a checkpoint that `deploy` refuses as not in the local
+ * migration history back to that history on purpose.
  * @param options - Command options
  * @returns What the sync sent to the remote, and whether it changed anything
  */

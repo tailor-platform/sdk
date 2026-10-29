@@ -123,6 +123,7 @@ const snapshotFixtures = vi.hoisted(() => {
   };
 
   return {
+    latestMigrationNumber: Math.max(...Object.keys(typesByMigration).map(Number)),
     reconstructSnapshotFromMigrations: (migrationsDir: string, maxVersion?: number) => {
       void migrationsDir;
       const number = maxVersion ?? 0;
@@ -147,6 +148,7 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
   return {
     ...original,
     assertValidMigrationFiles: vi.fn(),
+    getLatestMigrationNumber: vi.fn(() => snapshotFixtures.latestMigrationNumber),
     reconstructSnapshotFromMigrations: vi.fn(snapshotFixtures.reconstructSnapshotFromMigrations),
   };
 });

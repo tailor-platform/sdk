@@ -827,6 +827,8 @@ To bypass both checks during deploy (not recommended outside of recovery scenari
 tailor deploy --no-schema-check
 ```
 
+`--no-schema-check` does not bypass the check that the remote migration checkpoint is in the local migration history. See ["Remote migration checkpoint is not in the local migration history" error](#remote-migration-checkpoint-is-not-in-the-local-migration-history-error).
+
 ### Example output
 
 ```
@@ -899,7 +901,10 @@ Like `set`, `sync` refuses to run when the namespace records another migration h
 
 Because syncing backward causes already-applied scripts to re-execute on the next deploy, **write `migrate.ts` scripts to be idempotent** (see [Performance and Large Tables](#performance-and-large-tables) for resumable `where` clauses).
 
-The main use case is recovering from drift after a `deploy --no-schema-check` from an older revision: instead of checking out that revision, run `migration sync <N>` to restore the remote to a known snapshot, then `tailor deploy` to apply the remaining migrations from the working tree.
+The main use cases are:
+
+- Recovering from drift after a `deploy --no-schema-check`, which deploys the local table definitions without checking them against the migration snapshots: run `migration sync <N>` to restore the remote to a known snapshot, then `tailor deploy` to apply the remaining migrations from the working tree.
+- Moving a checkpoint that `tailor deploy` reports as not in the local migration history back to that history on purpose (see ["Remote migration checkpoint is not in the local migration history" error](#remote-migration-checkpoint-is-not-in-the-local-migration-history-error)).
 
 ## Team Workflow and CI/CD
 
@@ -1191,11 +1196,11 @@ For genuinely different schemas across environments, prefer separate workspaces 
 2. Compare with teammates — has someone applied different migrations?
 3. If remote was changed manually, decide whether to update local migrations to match or to use `migration set <N>` to align bookkeeping.
 4. To force the remote schema back to a known snapshot, use `migration sync <N>` (see [`migration sync` Semantics](#migration-sync-semantics)). If the drift follows a failed deploy that warned it could not restore a table's schema, see [Failure Recovery](#failure-recovery) instead.
-5. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround.
+5. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround. It does not skip the checkpoint check described next.
 
 ### "Remote migration checkpoint is not in the local migration history" error
 
-**Cause:** The deployed namespace's checkpoint refers to a migration number, or a migration history ID, that the local `migrations/` directory no longer has a record of. This is a different code path from schema drift above: it fires before any schema comparison, because the CLI cannot even locate the remote's recorded position in the local history.
+**Cause:** The deployed namespace's checkpoint refers to a migration number, or a migration history ID, that the local `migrations/` directory no longer has a record of. This is a different code path from schema drift above: it fires before any schema comparison, because the CLI cannot even locate the remote's recorded position in the local history. `tailor deploy` stops with this error even with `--no-schema-check`, so a deploy from an outdated checkout never moves the checkpoint back or overwrites the tables with an older schema.
 
 One specific cause is a `migration rebaseline` run on a different environment while this one had not yet caught up to the latest pre-rebaseline migration. `migration rebaseline` requires every other environment to already be at the latest migration (see [Re-baselining a deployed migration history](#re-baselining-a-deployed-migration-history)), but the CLI only verifies the one workspace it runs against. If this environment was behind, the error message names the migration this environment must reach (the migration every environment was required to be at before the rebaseline) alongside the migration it is actually at.
 
@@ -1205,7 +1210,7 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 2. Deploy this environment against that restored history until its checkpoint reaches the migration named in the error, running any `migrate.ts` scripts it still needs.
 3. Switch back to the current (rebaselined) migration files and deploy again. The remote schema now matches the new baseline, so this deploy offers the automatic checkpoint reset to `0000` under the new history ID.
 
-**Resolution (any other cause):** Run `tailor tailordb migration status` to compare local and remote, or pull the latest migration files if your checkout is stale.
+**Resolution (any other cause):** Run `tailor tailordb migration status` to compare local and remote, and pull the latest migration files if your checkout is stale. To move the checkpoint back to the local migration history on purpose, run `tailor tailordb migration sync <N>`, which also rewrites the tables to snapshot `<N>`, or `tailor tailordb migration set <N>`, which moves only the checkpoint, with the latest local migration as `<N>` (the error suggests both commands). Then deploy again.
 
 ### "Invalid schema snapshot" or "Invalid migration diff" error
 
