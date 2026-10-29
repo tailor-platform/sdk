@@ -49,10 +49,9 @@ A feature is beta only when it carries the beta mark itself:
   how `tailor deploy` applies pending TailorDB migrations (schema verification, migration phases,
   checkpoints, and scripts), including the `migrate.ts` contract.
 
-Where the docs explain or mention an API does not change this. The docs under `packages/sdk/docs/`
-repeat the mark as `(Beta)` for readers, so when marking an API, add it to the headings and list items
-dedicated to that API too. When a change to a beta API also changes a non-beta one, such as a beta type
-that also shapes non-beta command output, the non-beta one decides the level.
+Where the docs explain or mention an API does not change this; the `(Beta)` in `packages/sdk/docs/`
+only repeats the mark for readers. When a change to a beta API also changes a non-beta one, such as a
+beta type that also shapes non-beta command output, the non-beta one decides the level.
 
 A breaking change to a beta feature is `minor`, and its description starts with
 `**Breaking change (beta)**:` followed by the user impact and migration steps.

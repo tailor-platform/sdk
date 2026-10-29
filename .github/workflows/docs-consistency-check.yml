@@ -5,6 +5,7 @@ on:
     types: [ready_for_review, labeled]
     paths:
       - "packages/sdk/src/**"
+      - "packages/sdk-plugin-*/src/**"
       - "packages/sdk/docs/**"
       - "example/**"
       - "AGENTS.md"
@@ -107,6 +108,12 @@ jobs:
             #### Reverse Check (docs changed but implementation not updated)
             - If documentation was changed, verify the implementation matches
             - Look for docs describing features that don't exist yet or have been removed
+
+            #### Beta Marks
+            - Scope: all of `packages/sdk/docs/**`, including `*.template.md`, not only the Target Documentation list above
+            - `docs/changeset.md` ("Breaking changes to beta features") defines what is beta. Find the marks with Grep for `\*\*Beta:\*\*` and `\(beta\)` under `packages/sdk/src` and `packages/sdk-plugin-*/src`
+            - For each API whose mark the PR adds or removes, and each heading or list item the PR adds or changes, verify that a heading or list item dedicated to one beta API or behavior carries `(Beta)`. One on an enclosing heading or on the sentence introducing the list also counts, and generated CLI docs show it through the `(beta)` in the command description
+            - Also verify that a heading or list item for an API that is not beta does not carry `(Beta)` itself
 
             ### 4. Reader-Perspective Review (`packages/sdk/docs/**`, `example/`, and published JSDoc)
 
