@@ -148,6 +148,7 @@ interface DeployCLIContext {
 interface DeployInternalContext {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  migrationMachineUserOverride?: string;
   suppressResultOutput?: boolean;
   skipDeployedHooks?: boolean;
 }
@@ -292,6 +293,7 @@ type PlanDeploymentTargetParams = {
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  migrationMachineUserOverride?: string;
   /** Resource kinds to reuse from `previous` instead of re-planning. */
   skip?: ReadonlySet<ReusablePlanKind>;
   /** This target's own plan result from before the rebuild, source for `skip` reuse. */
@@ -315,6 +317,7 @@ type PlanDeploymentTargetsParams = {
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  migrationMachineUserOverride?: string;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
   /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
   skip?: ReadonlySet<ReusablePlanKind>;
@@ -447,6 +450,7 @@ async function planDeploymentTarget(
     migrationSkipSteps,
     migrationTestBaselines,
     migrationTestSnapshots,
+    migrationMachineUserOverride,
     skip,
     previous,
   } = params;
@@ -499,6 +503,7 @@ async function planDeploymentTarget(
       migrationSkipSteps,
       migrationTestBaselines,
       migrationTestSnapshots,
+      migrationMachineUserOverride,
       forceApplyAll,
       ...runInputs,
       idpUserTriggerTargets: subscribedIdps(owned),
@@ -962,6 +967,7 @@ async function deployInternal(
         migrationSkipSteps: options?.migrationSkipSteps,
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
+        migrationMachineUserOverride: internalContext?.migrationMachineUserOverride,
         skip: reuse?.skip,
         previousDeployments: reuse?.previousDeployments,
       });
@@ -1178,14 +1184,17 @@ export function deployMigrationTestBaseline(
  * Deploy pending migrations without emitting deploy's standalone result payload.
  * @param options - Deploy execution options
  * @param snapshots - Final committed snapshots keyed by TailorDB namespace
+ * @param machineUser - Machine user that runs the migration scripts in place of the configured one
  * @returns Deploy result
  */
 export function deployMigrationTestTarget(
   options: DeployOptions,
   snapshots: TailorDBMigrationTestSnapshots,
+  machineUser?: string,
 ) {
   return deployInternal(options, undefined, {
     migrationTestSnapshots: snapshots,
+    migrationMachineUserOverride: machineUser,
     suppressResultOutput: true,
     skipDeployedHooks: true,
   });

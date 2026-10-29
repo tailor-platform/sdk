@@ -271,7 +271,8 @@ export default defineConfig({
       files: ["./tailordb/*.ts"],
       migration: {
         directory: "./migrations",
-        // Optional. Defaults to the first machine user in auth.machineUsers.
+        // Optional. Defaults to the first machine user in auth.machineUsers,
+        // and must name one of them.
         machineUser: "admin-machine-user",
       },
     },
@@ -282,7 +283,7 @@ export default defineConfig({
 | Option                  | Type   | Description                                                                                                                         |
 | ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `migration.directory`   | string | Directory path for migration files. Required when migrations are enabled for the namespace. Each namespace needs its own directory. |
-| `migration.machineUser` | string | Machine user used to run migration scripts. Optional; defaults to the first entry in `auth.machineUsers`.                           |
+| `migration.machineUser` | string | Machine user used to run migration scripts. Must be defined in `auth.machineUsers`. Optional; defaults to the first entry there.    |
 
 ## Generated Files
 
@@ -668,7 +669,7 @@ tailor tailordb migration test --data seed
 
 Rows are loaded only for tables present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing table files are treated as empty. IdP `_User` fixtures are not loaded by this command.
 
-Use `--machine-user` to override the seed plugin's `machineUserName`, the namespace migration setting, and the first configured Auth machine user for seed and assertion execution.
+Use `--machine-user` to run the seed, the pending migration scripts, and the assertion as that machine user, in place of `db.<namespace>.migration.machineUser` and the first entry in `auth.machineUsers` (and, for the seed, the seed plugin's `machineUserName`). For the pending migration scripts, it must be defined in `auth.machineUsers`.
 
 ### Clone mode
 
@@ -724,7 +725,7 @@ When you run `tailor deploy`, the SDK detects pending migrations (anything past 
 For each pending migration:
 
 1. **Pre-migration**: Schema changes that would be breaking are applied in a relaxed form first. A verified in-place field type change keeps its complete previous field contract until Post-migration, including field and table-level hooks or validators changed by the same migration. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the table so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped); members removed from a nested field are kept the same way, and the new member of a confirmed nested rename is added as optional and non-unique. Added or newly required nested members are optional and removed nested enum values remain allowed until Post-migration. For a renamed field, the old field is kept and the new field is added with its constraints relaxed, so the script can read the old field and write the new one. For a renamed table, the new table is created with its full constraints while the old table stays on the namespace until post-migration cleanup, so the script can copy rows between them. A foreign key added to an existing top-level field is withheld until Post-migration, so `migrate.ts` can update rows whose values point at no record; Post-migration adds it without checking the stored values. Breaking table-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
-2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and runs on the platform as the configured machine user inside a transaction — or, for a script that exports [`steps`](#splitting-a-migration-into-steps), one transaction per step. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) — deploy fails if the file is missing, unless a `--no-script` acknowledgment was recorded (see [Breaking changes without a script](#breaking-changes-without-a-script)). It is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
+2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and runs on the platform as the [configured machine user](#machine-user-and-permissions) inside a transaction — or, for a script that exports [`steps`](#splitting-a-migration-into-steps), one transaction per step. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) — deploy fails if the file is missing, unless a `--no-script` acknowledgment was recorded (see [Breaking changes without a script](#breaking-changes-without-a-script)). It is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
 3. **Post-migration schema**: Required constraints and the target field definitions are applied. Do not assume that removing a field clears its underlying stored JSON value.
 4. **Checkpoint and cleanup**: The `sdk-migration` label is bumped to this migration's number, then removed GQL permissions and tables — including the old table left behind by a rename — are deleted. Advancing the checkpoint first prevents a failed checkpoint write from requiring the SDK to recreate irreversibly deleted records.
 
@@ -975,7 +976,9 @@ Migration scripts execute server-side under a machine user identity. The CLI sel
 1. `db.<namespace>.migration.machineUser` if set in `tailor.config.ts`.
 2. The first entry in `auth.machineUsers` otherwise.
 
-The CLI logs the selected user before running scripts (`Using machine user: ...`).
+The selected user must be defined in `auth.machineUsers`. The CLI logs the selected user before running scripts (`Using machine user: ...`).
+
+When a pending migration has a `migrate.ts`, `tailor deploy` checks while planning that auth is configured, that a machine user is selected and defined in `auth.machineUsers`, and that each script can be bundled. A failure stops the deploy before anything is applied, and `tailor deploy --dry-run` reports it too.
 
 **Permissions required**
 
@@ -984,7 +987,7 @@ The machine user needs read/write access to every table the migration script tou
 If you see `No machine user available for migration execution`, either:
 
 - Add `machineUsers: { ... }` to your auth config and `tailor deploy` it, or
-- Set `migration.machineUser` to an existing machine user name in the db config.
+- Set `migration.machineUser` to a machine user defined in `auth.machineUsers`.
 
 ## Multi-Namespace Coordination
 
@@ -1218,15 +1221,21 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 
 ### "No machine user available for migration execution"
 
-**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`.
+**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied.
 
-**Resolution:** Add a machine user to auth, apply auth changes, then re-run.
+**Resolution:** Add a machine user to `auth.machineUsers`, then run `tailor deploy` again. The deploy creates the machine user before it runs the migration scripts.
+
+### "Machine user for migration execution is not defined in auth"
+
+**Cause:** `migration.machineUser`, or `--machine-user` of `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied.
+
+**Resolution:** Either add the machine user to `auth.machineUsers`, or name one that is defined there.
 
 ### "Machine user not found"
 
-**Cause:** `migration.machineUser` references a name that doesn't exist in the deployed auth config.
+**Cause:** In `tailor tailordb migration test`, the machine user that runs the seed or the assertion (from `--machine-user`, the seed plugin's `machineUserName`, or `migration.machineUser`) is not in `auth.machineUsers`, so the temporary workspace does not have it.
 
-**Resolution:** Either add the machine user to `auth.machineUsers` and apply, or change `migration.machineUser` to a valid name.
+**Resolution:** Either add the machine user to `auth.machineUsers`, or name one that is defined there.
 
 ### Migration script execution fails
 

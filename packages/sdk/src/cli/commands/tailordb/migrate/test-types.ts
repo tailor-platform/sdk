@@ -61,10 +61,13 @@ interface MigrationTestDataTarget extends MigrationTestTarget {
   cloneTimeout?: number;
 }
 
-interface MigrationTestAssertionTarget extends MigrationTestTarget {
+interface MigrationTestScriptTarget extends MigrationTestTarget {
+  machineUser?: string;
+}
+
+interface MigrationTestAssertionTarget extends MigrationTestScriptTarget {
   assertionPath: string;
   assertionNamespace?: string;
-  machineUser?: string;
 }
 
 export interface MigrationTestDependencies {
@@ -74,7 +77,7 @@ export interface MigrationTestDependencies {
   deployBaseline(target: MigrationTestTarget): Promise<void>;
   seedData(target: MigrationTestDataTarget): Promise<void>;
   cloneData(target: MigrationTestDataTarget): Promise<void>;
-  deployMigrations(target: MigrationTestTarget): Promise<void>;
+  deployMigrations(target: MigrationTestScriptTarget): Promise<void>;
   runAssertion(target: MigrationTestAssertionTarget): Promise<void>;
   deleteWorkspace(workspaceId: string): Promise<void>;
 }

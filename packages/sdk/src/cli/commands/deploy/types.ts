@@ -64,4 +64,6 @@ export interface PlanContext {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   /** Committed schema snapshots used internally by `tailordb migration test`. Consumed by TailorDB planning only. */
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  /** Machine user that runs migration scripts in place of the configured one, given by `tailordb migration test`. Consumed by TailorDB planning only. */
+  migrationMachineUserOverride?: string;
 }

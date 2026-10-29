@@ -21,6 +21,8 @@ import {
   bundleMigrationScript,
   bundleMigrationSteps,
   bundleSingleStepMigration,
+  type BundleSingleStepMigrationOptions,
+  type MigrationBundleResult,
 } from "#/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import { formatMigrationScriptHint } from "#/cli/commands/tailordb/migrate/hints";
@@ -59,7 +61,7 @@ import {
   sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
 import { type OperatorClient } from "#/cli/shared/client";
-import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { protoEnumName } from "#/cli/shared/proto-enum";
@@ -78,6 +80,8 @@ import {
   type MigrationStepsWorkflowResult,
 } from "./migration-workflow";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
+import type { Application } from "#/cli/services/application";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { Spinner } from "#/cli/shared/spinner";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
@@ -106,8 +110,8 @@ export interface MigrationContext {
   client: OperatorClient;
   workspaceId: string;
   authNamespace: string;
-  machineUsers: string[] | undefined;
-  dbConfig: Record<string, TailorDBServiceConfig | undefined>;
+  /** Machine user that runs the scripts of each namespace. */
+  machineUserByNamespace: ReadonlyMap<string, string>;
   env: Record<string, string | number | boolean>;
   configDir: string;
   /** Application name, used to label a migration's temporary resources. */
@@ -352,6 +356,106 @@ function displayMigrationRun(
   };
 }
 
+interface MigrationBundleOptions {
+  env: Record<string, string | number | boolean>;
+  configDir: string;
+  /** Whether an earlier deploy left this migration in progress. */
+  resumed: boolean;
+  /** Steps the step runner reports as skipped. */
+  skipSteps?: readonly string[];
+}
+
+/**
+ * Bundle a pending migration's script the way its run executes it.
+ * @param migration - Pending migration with a script
+ * @param options - Bundle options
+ * @returns Bundled migration result
+ */
+async function bundlePendingMigration(
+  migration: PendingMigration,
+  options: MigrationBundleOptions,
+): Promise<MigrationBundleResult> {
+  const { env, configDir, resumed, skipSteps } = options;
+  const form = migration.scriptForm;
+  const temporal = migration.diff.temporal ?? false;
+  const dateDefault = migration.diff.dateRepresentation ?? "legacy";
+  try {
+    if (form?.kind !== "steps") {
+      return await bundleMigrationScript(
+        migration.scriptPath,
+        migration.namespace,
+        migration.number,
+        env,
+        configDir,
+        temporal,
+        dateDefault,
+      );
+    }
+    const stepsOptions: Omit<BundleSingleStepMigrationOptions, "step"> = {
+      sourceFile: migration.scriptPath,
+      namespace: migration.namespace,
+      migrationNumber: migration.number,
+      env,
+      baseDir: configDir,
+      temporal,
+      dateDefault,
+    };
+    return usesStepRunner(form, resumed)
+      ? await bundleMigrationSteps({
+          ...stepsOptions,
+          order: form.order,
+          skipSteps,
+          runnerJobFunctionName: migrationStepRunnerName(
+            migrationWorkflowResourceName(migration.namespace, migration.number),
+          ),
+        })
+      : await bundleSingleStepMigration({
+          ...stepsOptions,
+          step: assertDefined(form.order[0], "a steps script has at least one step"),
+        });
+  } catch (error) {
+    if (error instanceof Error && !isCLIError(error)) {
+      withErrorDiagnostics(error, {
+        code: "MIGRATION_SCRIPT_BUNDLE_FAILED",
+        context: { namespace: migration.namespace, migrationNumber: migration.number },
+      });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Bundle the script of each pending migration so a script that cannot be
+ * bundled fails the deploy before anything is applied.
+ * @param pendingMigrations - Pending migrations
+ * @param inProgressByNamespace - Migrations an earlier deploy left in progress, by namespace
+ * @param env - Environment variables injected into the scripts
+ * @param configDir - Directory of the config file
+ */
+export async function assertMigrationScriptsBundle(
+  pendingMigrations: readonly PendingMigration[],
+  inProgressByNamespace: Readonly<Record<string, MigrationInProgress>>,
+  env: Record<string, string | number | boolean>,
+  configDir: string,
+): Promise<void> {
+  for (const migration of pendingMigrations) {
+    if (!migration.hasScript) continue;
+    await bundlePendingMigration(migration, {
+      env,
+      configDir,
+      resumed: inProgressRecordOf(migration, inProgressByNamespace) !== undefined,
+    });
+  }
+}
+
+function inProgressRecordOf(
+  migration: PendingMigration,
+  inProgressByNamespace: Readonly<Record<string, MigrationInProgress>>,
+): MigrationInProgress | undefined {
+  const recorded = inProgressByNamespace[migration.namespace];
+  return recorded?.number === migration.number ? recorded : undefined;
+}
+
 /**
  * Execute a single migration script
  * @param {MigrationExecutionOptions} options - Execution options
@@ -374,30 +478,11 @@ async function executeSingleMigration(
     return executeStepsMigration(options, migration, form, inProgress, sp, display);
   }
 
-  // Bundle the migration script
-  const temporal = migration.diff.temporal ?? false;
-  const dateDefault = migration.diff.dateRepresentation ?? "legacy";
-  const bundleResult =
-    form?.kind === "steps"
-      ? await bundleSingleStepMigration({
-          sourceFile: migration.scriptPath,
-          namespace: migration.namespace,
-          migrationNumber: migration.number,
-          env,
-          baseDir: configDir,
-          step: assertDefined(form.order[0], "a steps script has at least one step"),
-          temporal,
-          dateDefault,
-        })
-      : await bundleMigrationScript(
-          migration.scriptPath,
-          migration.namespace,
-          migration.number,
-          env,
-          configDir,
-          temporal,
-          dateDefault,
-        );
+  const bundleResult = await bundlePendingMigration(migration, {
+    env,
+    configDir,
+    resumed: inProgress !== undefined,
+  });
 
   const notify = notifyAround(sp);
   const recording = { mayBeRecorded: false };
@@ -969,19 +1054,11 @@ async function executeStepsMigration(
 ): Promise<ExecutionResult> {
   const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
   const skipSteps = (inProgress && options.skipSteps?.get(migration.namespace)) || [];
-  const bundleResult = await bundleMigrationSteps({
-    sourceFile: migration.scriptPath,
-    namespace: migration.namespace,
-    migrationNumber: migration.number,
+  const bundleResult = await bundlePendingMigration(migration, {
     env,
-    baseDir: configDir,
-    order: form.order,
+    configDir,
+    resumed: inProgress !== undefined,
     skipSteps,
-    runnerJobFunctionName: migrationStepRunnerName(
-      migrationWorkflowResourceName(migration.namespace, migration.number),
-    ),
-    temporal: migration.diff.temporal ?? false,
-    dateDefault: migration.diff.dateRepresentation ?? "legacy",
   });
 
   const notify = notifyAround(sp);
@@ -1107,19 +1184,10 @@ export async function executeMigrations(
 
   // Execute migrations for each namespace with appropriate machine user
   for (const [namespace, namespaceMigrations] of migrationsByNamespace) {
-    const dbConfig = context.dbConfig[namespace];
-    const migrationConfig = dbConfig?.migration;
-
-    // Get machine user name for this namespace
-    const machineUserName = getMigrationMachineUser(migrationConfig, context.machineUsers);
-    if (!machineUserName) {
-      throw CLIError({
-        code: "MACHINE_USER_REQUIRED",
-        message: `No machine user available for migration execution in namespace '${namespace}'.`,
-        suggestion:
-          "Either configure 'migration.machineUser' in db config or define machine users in auth config.",
-      });
-    }
+    const machineUserName = assertDefined(
+      context.machineUserByNamespace.get(namespace),
+      `machine user for namespace '${namespace}' was not resolved`,
+    );
 
     const invoker = create(AuthInvokerSchema, {
       namespace: context.authNamespace,
@@ -1146,13 +1214,12 @@ export async function executeMigrations(
       const timer = new ScriptRunTimer(migration.namespace, migration.number);
       const sp = spinner().start(`Executing migration ${migrationLabel}...`);
 
-      const recorded = inProgressByNamespace[migration.namespace];
       let result: ExecutionResult;
       try {
         result = await executeSingleMigration(
           options,
           migration,
-          recorded?.number === migration.number ? recorded : undefined,
+          inProgressRecordOf(migration, inProgressByNamespace),
           sp,
           displayMigrationRun(migrationLabel, timer, sp),
         );
@@ -1229,6 +1296,107 @@ export function getMigrationMachineUser(
   }
 
   return undefined;
+}
+
+/** Where the machine user that runs a deploy's migration scripts comes from. */
+interface MigrationMachineUserSource {
+  application: Pick<Application, "authService">;
+  config: LoadedConfig;
+  /** Machine user that runs every namespace's scripts in place of the configured one. */
+  migrationMachineUserOverride?: string;
+}
+
+/** Machine user that runs the migration scripts of each namespace. */
+export interface MigrationMachineUsers {
+  authNamespace: string;
+  byNamespace: ReadonlyMap<string, string>;
+}
+
+/**
+ * Resolve the machine user that runs the scripts of the pending migrations,
+ * failing when one cannot run them.
+ * @param source - Auth, config, and override to resolve from
+ * @param pendingMigrations - Pending migrations
+ * @returns Machine user of each namespace with a script to run, or undefined when no script runs
+ */
+export function resolveMigrationMachineUsers(
+  source: MigrationMachineUserSource,
+  pendingMigrations: readonly PendingMigration[],
+): MigrationMachineUsers | undefined {
+  const namespaces = new Set(
+    pendingMigrations.filter((migration) => migration.hasScript).map(({ namespace }) => namespace),
+  );
+  if (namespaces.size === 0) return undefined;
+  const authService = source.application.authService;
+  if (!authService) {
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: "Auth configuration is required to execute migration scripts.",
+      suggestion:
+        "Define auth with machine users in this config; migration scripts run as one of them.",
+    });
+  }
+  const authMachineUsers = Object.keys(authService.config.machineUsers ?? {});
+  const byNamespace = new Map<string, string>();
+  const missing: string[] = [];
+  for (const namespace of namespaces) {
+    const migrationConfig = (source.config.db?.[namespace] as TailorDBServiceConfig | undefined)
+      ?.migration;
+    const machineUser =
+      source.migrationMachineUserOverride ??
+      getMigrationMachineUser(migrationConfig, authMachineUsers);
+    if (machineUser === undefined) {
+      missing.push(namespace);
+      continue;
+    }
+    byNamespace.set(namespace, machineUser);
+  }
+  if (missing.length > 0) {
+    throw CLIError({
+      code: "MACHINE_USER_REQUIRED",
+      message: `No machine user available for migration execution in ${describeNamespaces(missing)}.`,
+      suggestion:
+        "Either configure 'migration.machineUser' in db config or define machine users in auth config.",
+      context: { namespaces: missing },
+    });
+  }
+  const authNamespace = authService.config.name;
+  const undefinedMachineUsers = [...byNamespace]
+    .filter(([, machineUser]) => !authMachineUsers.includes(machineUser))
+    .map(([namespace, machineUser]) => ({ namespace, machineUser }));
+  if (undefinedMachineUsers.length > 0) {
+    throw CLIError({
+      code: "MACHINE_USER_NOT_FOUND",
+      message: `Machine user for migration execution is not defined in auth '${authNamespace}': ${undefinedMachineUsers
+        .map(({ namespace, machineUser }) => `'${machineUser}' (namespace '${namespace}')`)
+        .join(", ")}.`,
+      suggestion: undefinedMachineUserSuggestion(
+        authMachineUsers,
+        source.migrationMachineUserOverride,
+      ),
+      context: { authNamespace, machineUsers: undefinedMachineUsers },
+    });
+  }
+  return { authNamespace, byNamespace };
+}
+
+function undefinedMachineUserSuggestion(
+  authMachineUsers: readonly string[],
+  override: string | undefined,
+): string {
+  if (override !== undefined) {
+    return authMachineUsers.length > 0
+      ? `Pass a machine user defined in auth.machineUsers to --machine-user (${authMachineUsers.join(", ")}), or add '${override}' to auth.machineUsers.`
+      : `Add '${override}' to auth.machineUsers.`;
+  }
+  return authMachineUsers.length > 0
+    ? `Add the machine user to auth.machineUsers, or use one that is defined: ${authMachineUsers.join(", ")}.`
+    : "Add the machine user to auth.machineUsers.";
+}
+
+function describeNamespaces(namespaces: readonly string[]): string {
+  const quoted = namespaces.map((namespace) => `'${namespace}'`).join(", ");
+  return `${namespaces.length === 1 ? "namespace" : "namespaces"} ${quoted}`;
 }
 
 /**
