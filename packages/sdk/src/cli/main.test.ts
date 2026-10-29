@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -456,5 +456,25 @@ describe.concurrent("plugin dispatch argument forwarding", () => {
 
     expect(result.status).toBe(0);
     expect(existsSync(capture)).toBe(false);
+  }, 20_000);
+});
+
+describe("notification banner wiring", () => {
+  test("a corrupt banner state file and an unreachable platform change nothing about a command", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-banner-");
+    const stateDir = path.join(tmp.dir, "tailor-platform");
+    mkdirSync(stateDir, { recursive: true });
+    writeFileSync(path.join(stateDir, "notification-banner.json"), "{not json");
+
+    const result = await runCli(["workspace", "list", "--limit", "abc"], tmp.dir, {
+      TAILOR_PLATFORM_URL: "http://127.0.0.1:1",
+      TAILOR_PLATFORM_TOKEN: "token",
+    });
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("limit");
+    expect(result.stderr).not.toContain("notification");
+    expect(existsSync(path.join(stateDir, "config.yaml"))).toBe(false);
   }, 20_000);
 });

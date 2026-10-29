@@ -16,6 +16,7 @@ import {
   saveUserTokens,
   tryLoadWorkspaceId,
   writePlatformConfig,
+  platformConfigExists,
 } from "./context";
 import { errorToJson } from "./error-json";
 import { isCLIError } from "./errors";
@@ -2740,4 +2741,17 @@ describe.skipIf(process.platform === "win32")("writePlatformConfig file permissi
 
 afterAll(() => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
+});
+
+describe("platformConfigExists", () => {
+  test("reports whether the platform config file is present without creating it", async () => {
+    const file = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    fs.rmSync(file, { force: true });
+    expect(platformConfigExists()).toBe(false);
+    expect(fs.existsSync(file)).toBe(false);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "profiles: {}\n");
+    expect(platformConfigExists()).toBe(true);
+    fs.rmSync(file, { force: true });
+  });
 });

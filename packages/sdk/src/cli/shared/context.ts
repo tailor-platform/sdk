@@ -169,6 +169,16 @@ function platformConfigPath() {
   return path.join(xdgConfig, "tailor-platform", "config.yaml");
 }
 
+/**
+ * Whether the platform config file exists. Unlike `readPlatformConfig`, this never creates it,
+ * so a background check can run on a machine that has never logged in without side effects.
+ * @returns true when the config file is present
+ */
+export function platformConfigExists(): boolean {
+  if (!xdgConfig) return false;
+  return fs.existsSync(platformConfigPath());
+}
+
 type ProfilePlatformSettings = {
   platform_url?: string;
   oauth2_client_id?: string;
