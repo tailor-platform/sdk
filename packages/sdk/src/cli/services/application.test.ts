@@ -198,6 +198,28 @@ describe("service config validation", () => {
     expect(getErrorDiagnostics(error as Error).location).toEqual({ file: "tailor.config.ts" });
   });
 
+  test("names an OAuth2 client whose name the platform rejects", () => {
+    const error = defineInvalidApplication({
+      auth: defineAuth("my-auth", {
+        machineUserAttributes: {},
+        oauth2Clients: { c1: { redirectURIs: ["https://example.com/callback"] } },
+      }),
+    });
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      context: {
+        issues: [
+          {
+            path: ["auth", "oauth2Clients", "c1"],
+            message:
+              "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit",
+          },
+        ],
+      },
+    });
+  });
+
   test("keeps the auth message for setting both userProfile and machineUserAttributes", () => {
     const userType = db.table("User", { email: db.string().unique() });
     const error = defineInvalidApplication({

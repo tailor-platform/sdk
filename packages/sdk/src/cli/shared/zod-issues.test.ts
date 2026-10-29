@@ -101,6 +101,14 @@ describe("flattenZodIssues", () => {
     ]);
   });
 
+  test("reports an invalid record key with the key schema's message at the key", () => {
+    const schema = z.record(z.string().regex(/^[a-z]+$/, "must be lowercase"), z.number());
+
+    expect(issuesOf(schema, { ok: 1, Bad: 2 }, ["clients"])).toEqual([
+      { path: ["clients", "Bad"], message: "must be lowercase" },
+    ]);
+  });
+
   test("prepends the prefix to every path, including those inside a union", () => {
     const schema = z.strictObject({
       operation: z.union([z.literal("query"), z.literal("mutation")]),
