@@ -22,10 +22,11 @@ import { getBannerStatePath, isThrottled, readBannerState, writeBannerState } fr
 
 /** How many notifications the banner can list. */
 const PAGE_SIZE = 3;
-/** The lookup gives up after this long; the banner is best effort. */
-const LOOKUP_TIMEOUT_MS = 5_000;
-/** A lookup still unanswered after this long when the command ends counts as failed. */
-const SLOW_LOOKUP_MS = 3_000;
+/**
+ * The one limit on a lookup: unanswered after this long, it is aborted and counted as failed,
+ * whether the command is still running or has already ended.
+ */
+const LOOKUP_TIMEOUT_MS = 3_000;
 
 interface LookupResult {
   /** The profile the command line named, repeated in the hint. */
@@ -77,17 +78,21 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
       failed: false,
       stateFile,
     };
-    lookup.promise = runLookup(argv, controller.signal).then(
-      (result) => {
-        lookup.done = true;
-        lookup.settled = result;
-      },
-      () => {
-        lookup.done = true;
-        lookup.failed = true;
-        lookup.settled = undefined;
-      },
-    );
+    const timeout = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
+    timeout.unref();
+    lookup.promise = runLookup(argv, controller.signal)
+      .then(
+        (result) => {
+          lookup.done = true;
+          lookup.settled = result;
+        },
+        () => {
+          lookup.done = true;
+          lookup.failed = true;
+          lookup.settled = undefined;
+        },
+      )
+      .finally(() => clearTimeout(timeout));
     pending = lookup;
   } catch {
     pending = undefined;
@@ -133,7 +138,7 @@ async function runLookup(
   const client = await initOperatorClient(accessToken, platformConfig, { renewToken: false });
   const response = await client.listMyNotifications(
     { pageSize: PAGE_SIZE, minSeverity: Severity.WARNING, unreadOnly: true },
-    { signal: AbortSignal.any([signal, AbortSignal.timeout(LOOKUP_TIMEOUT_MS)]) },
+    { signal },
   );
   return {
     explicitProfile,
@@ -181,7 +186,7 @@ export async function printNotificationBanner(context: { error?: unknown }): Pro
     lookup.controller.abort();
     const result = lookup.settled;
     if (!result) {
-      const unanswered = !lookup.done && Date.now() - lookup.startedAt >= SLOW_LOOKUP_MS;
+      const unanswered = !lookup.done && Date.now() - lookup.startedAt >= LOOKUP_TIMEOUT_MS;
       if (lookup.failed || unanswered) recordFailure(lookup.stateFile);
       return;
     }

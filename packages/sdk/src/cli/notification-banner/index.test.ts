@@ -294,7 +294,35 @@ describe("notification banner", () => {
     expect(list).toHaveBeenCalledOnce();
   });
 
-  test("treats a lookup still unanswered after a few seconds as failed", async () => {
+  test("gives up after 3 seconds even while the command is still running, and backs off", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      let signal: AbortSignal | undefined;
+      mockLookup(
+        vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
+          signal = options.signal;
+          return new Promise((_resolve, reject) => {
+            options.signal.addEventListener("abort", () => reject(new Error("aborted")));
+          });
+        }),
+      );
+      startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+      for (let i = 0; i < 50 && !signal; i++) await new Promise((r) => setImmediate(r));
+
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(signal?.aborted).toBe(true);
+
+      await lookupSettledForTests();
+      await printNotificationBanner({});
+      expect(readBannerState(stateFile())).toMatchObject({ failedAt: expect.any(String) });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("treats a lookup still unanswered past the timeout when the command ends as failed", async () => {
     let now = Date.parse("2026-10-30T10:00:00Z");
     using _clock = vi.spyOn(Date, "now").mockImplementation(() => now);
     mockLookup(vi.fn().mockImplementation(() => new Promise(() => {})));
