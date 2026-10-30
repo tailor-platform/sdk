@@ -7,7 +7,7 @@ import {
 } from "@tailor-platform/tailor-proto/notification_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadAccessToken } from "#/cli/shared/context";
+import { loadAccessToken, loadConsoleBaseUrl } from "#/cli/shared/context";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { readCommand } from "./read";
 
@@ -19,6 +19,7 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
   loadAccessToken: vi.fn(),
+  loadConsoleBaseUrl: vi.fn(),
 }));
 
 const ID_A = "0d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e";
@@ -70,6 +71,7 @@ describe("notification read", () => {
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("scoped-token");
+    vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.example.test");
     await runTest();
     vi.unstubAllEnvs();
   });
@@ -133,6 +135,70 @@ describe("notification read", () => {
     expect(stdout.text()).not.toContain("\u001b[31m");
     expect(stdout.text()).not.toContain("\u001b[2J");
     expect(stdout.text()).toContain("Line one");
+  });
+
+  test("resolves a same-origin path action against the Console of the active profile", async () => {
+    mockClient({
+      getMyNotification: vi.fn().mockResolvedValue({
+        notification: {
+          ...notification(ID_A),
+          actions: [
+            { label: "Open workspace", url: "/workspaces/6739b373/settings" },
+            { label: "Status page", url: "https://status.example.com/" },
+          ],
+        },
+      }),
+    });
+    using stdout = captureStdout();
+
+    const result = await runCommand(readCommand, [ID_A, "--profile", "staging"]);
+
+    expect(result.success).toBe(true);
+    expect(loadConsoleBaseUrl).toHaveBeenCalledWith({
+      profile: "staging",
+      allowMissingProfile: true,
+    });
+    expect(stdout.text()).toContain(
+      "Open workspace: https://console.example.test/workspaces/6739b373/settings",
+    );
+    expect(stdout.text()).toContain("Status page: https://status.example.com/");
+  });
+
+  test("does not look up the Console when every action is already absolute", async () => {
+    mockClient();
+    using _stdout = captureStdout();
+
+    const result = await runCommand(readCommand, [ID_A]);
+
+    expect(result.success).toBe(true);
+    expect(loadConsoleBaseUrl).not.toHaveBeenCalled();
+  });
+
+  test("still prints what it fetched, with accurate marks, when a later mark-read batch fails", async () => {
+    const ids = Array.from(
+      { length: 101 },
+      (_, i) => `0d2c0f1e-5c2b-4e3a-9c1d-${String(i).padStart(12, "0")}`,
+    );
+    const client = mockClient({
+      markMyNotificationsRead: vi
+        .fn()
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable)),
+    });
+    using _json = jsonMode();
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const result = await runCommand(readCommand, ids);
+
+    expect(result.success).toBe(false);
+    expect(client.markMyNotificationsRead).toHaveBeenCalledTimes(2);
+    const printed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as {
+      id: string;
+      markedRead: boolean;
+    }[];
+    expect(printed).toHaveLength(101);
+    expect(printed.slice(0, 100).every((entry) => entry.markedRead)).toBe(true);
+    expect(printed[100]).toMatchObject({ id: ids[100], markedRead: false });
   });
 
   test("reports NOTIFICATION_NOT_FOUND when the platform answers NotFound", async () => {

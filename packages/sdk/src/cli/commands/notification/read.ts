@@ -2,6 +2,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { loadConsoleBaseUrl } from "#/cli/shared/context";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger, styles } from "#/cli/shared/logger";
 import { createNotificationClient } from "./client";
@@ -10,6 +11,41 @@ import { transformNotificationDetail, type NotificationDetailInfo } from "./tran
 
 /** MarkMyNotificationsRead accepts at most this many ids per call. */
 const MARK_READ_BATCH = 100;
+
+/**
+ * Whether an action URL is a same-origin path: exactly one leading slash (the platform refuses
+ * protocol-relative `//host`).
+ * @param url - Action URL from the platform
+ * @returns true for a Console path to resolve
+ */
+function isConsolePath(url: string): boolean {
+  return url.startsWith("/") && !url.startsWith("//");
+}
+
+/**
+ * Turn same-origin action paths into full Console URLs, so a terminal user can open them.
+ * Absolute https:// URLs are kept as they are, and the Console is looked up only when needed.
+ * @param details - Notifications as transformed for display
+ * @param profile - Profile from `--profile`, which decides the Console origin
+ * @returns The same notifications with path actions resolved
+ */
+async function resolveActionUrls(
+  details: NotificationDetailInfo[],
+  profile: string | undefined,
+): Promise<NotificationDetailInfo[]> {
+  if (!details.some((detail) => detail.actions.some((action) => isConsolePath(action.url)))) {
+    return details;
+  }
+  const consoleBaseUrl = await loadConsoleBaseUrl({ profile, allowMissingProfile: true });
+  return details.map((detail) => ({
+    ...detail,
+    actions: detail.actions.map((action) =>
+      isConsolePath(action.url)
+        ? { ...action, url: new URL(action.url, consoleBaseUrl).toString() }
+        : action,
+    ),
+  }));
+}
 
 function formatDetail(detail: NotificationDetailInfo): string {
   const lines = [
@@ -60,20 +96,31 @@ export const readCommand = defineAppCommand({
       }
     }
 
-    const markRead = !args["no-mark-read"];
-    if (markRead) {
-      const ids = details.map((detail) => detail.id);
-      for (let start = 0; start < ids.length; start += MARK_READ_BATCH) {
-        await client.markMyNotificationsRead({
-          notificationIds: ids.slice(start, start + MARK_READ_BATCH),
-        });
+    const shown = await resolveActionUrls(details, args.profile);
+
+    // Print before reporting a mark-read failure: if a later batch fails, everything fetched is
+    // still shown, each entry with an accurate markedRead, and the failure is rethrown after.
+    const marked = new Set<string>();
+    const print = () => {
+      if (logger.jsonMode) {
+        logger.out(shown.map((detail) => ({ ...detail, markedRead: marked.has(detail.id) })));
+      } else {
+        logger.out(shown.map(formatDetail).join("\n"));
+      }
+    };
+    if (!args["no-mark-read"]) {
+      const ids = shown.map((detail) => detail.id);
+      try {
+        for (let start = 0; start < ids.length; start += MARK_READ_BATCH) {
+          const batch = ids.slice(start, start + MARK_READ_BATCH);
+          await client.markMyNotificationsRead({ notificationIds: batch });
+          for (const id of batch) marked.add(id);
+        }
+      } catch (error) {
+        print();
+        throw error;
       }
     }
-
-    if (logger.jsonMode) {
-      logger.out(details.map((detail) => ({ ...detail, markedRead: markRead })));
-      return;
-    }
-    logger.out(details.map(formatDetail).join("\n"));
+    print();
   },
 });
