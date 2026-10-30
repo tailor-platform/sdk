@@ -97,22 +97,3 @@ export function lookupSkipReason(
   if (command.startsWith("__") || EXCLUDED_COMMANDS.has(command)) return "excluded-command";
   return undefined;
 }
-
-/**
- * The profile named on the command line, if any: `--profile <name>`, `--profile=<name>` or
- * `-p <name>` before a `--` separator. The banner runs before politty parses arguments, so it
- * reads the flag itself; an unparseable form yields undefined and the environment decides.
- * @param argv - Command-line arguments after the executable and script path
- * @returns Profile name, or undefined when none is given
- */
-export function profileFromArgv(argv: readonly string[]): string | undefined {
-  const tokens = tokensBeforeSeparator(argv);
-  for (const [i, token] of tokens.entries()) {
-    if (token.startsWith("--profile=")) return token.slice("--profile=".length) || undefined;
-    if (token === "--profile" || token === "-p") {
-      const value = tokens[i + 1];
-      return value !== undefined && !value.startsWith("-") ? value : undefined;
-    }
-  }
-  return undefined;
-}

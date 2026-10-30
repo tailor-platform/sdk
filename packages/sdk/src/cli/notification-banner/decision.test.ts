@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { commandNameFromArgv, lookupSkipReason, profileFromArgv } from "./decision";
+import { commandNameFromArgv, lookupSkipReason } from "./decision";
 
 describe("commandNameFromArgv", () => {
   test("returns the first positional token", () => {
@@ -73,20 +73,5 @@ describe("lookupSkipReason", () => {
     ]) {
       expect(lookupSkipReason(argv, {})).toBe("excluded-command");
     }
-  });
-});
-
-describe("profileFromArgv", () => {
-  test("reads the three spellings anywhere before --", () => {
-    expect(profileFromArgv(["deploy", "--profile", "staging"])).toBe("staging");
-    expect(profileFromArgv(["--profile=prod", "deploy"])).toBe("prod");
-    expect(profileFromArgv(["workspace", "list", "-p", "dev"])).toBe("dev");
-  });
-
-  test("is undefined without a usable value", () => {
-    expect(profileFromArgv(["deploy"])).toBeUndefined();
-    expect(profileFromArgv(["deploy", "--profile"])).toBeUndefined();
-    expect(profileFromArgv(["deploy", "--profile", "--json"])).toBeUndefined();
-    expect(profileFromArgv(["deploy", "--", "--profile", "x"])).toBeUndefined();
   });
 });

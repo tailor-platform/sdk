@@ -5,7 +5,12 @@ import { NotificationSeverity } from "@tailor-platform/tailor-proto/notification
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadAccessToken, platformConfigExists, readEnvironmentToken } from "#/cli/shared/context";
+import {
+  loadAccessToken,
+  loadStoredAccessTokenWithoutRefresh,
+  platformConfigExists,
+  readEnvironmentToken,
+} from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { CIPromptError, logger, setJsonDefaultAgent } from "#/cli/shared/logger";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
@@ -30,6 +35,7 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
   loadAccessToken: vi.fn(),
+  loadStoredAccessTokenWithoutRefresh: vi.fn(),
   loadPlatformClientConfig: vi.fn().mockResolvedValue(undefined),
   platformConfigExists: vi.fn(),
   readEnvironmentToken: vi.fn(),
@@ -93,7 +99,10 @@ describe("notification banner", () => {
     resetNotificationLookupForTests();
     vi.mocked(readEnvironmentToken).mockReturnValue(undefined);
     vi.mocked(platformConfigExists).mockReturnValue(true);
-    vi.mocked(loadAccessToken).mockResolvedValue("stored-token");
+    vi.mocked(loadStoredAccessTokenWithoutRefresh).mockResolvedValue({
+      accessToken: "stored-token",
+      platformConfig: undefined,
+    });
     resolved([]);
   });
 
@@ -135,8 +144,39 @@ describe("notification banner", () => {
   test("uses the stored login when no environment token is set", async () => {
     await run(["workspace", "list", "--profile", "staging"]);
 
-    expect(loadAccessToken).toHaveBeenCalledWith({ profile: "staging" });
-    expect(initOperatorClient).toHaveBeenCalledWith("stored-token", undefined);
+    expect(loadStoredAccessTokenWithoutRefresh).toHaveBeenCalledWith({ profile: "staging" });
+    expect(loadAccessToken).not.toHaveBeenCalled();
+    expect(initOperatorClient).toHaveBeenCalledWith("stored-token", undefined, {
+      renewToken: false,
+    });
+  });
+
+  test("uses the profile the command will use: the last one, in any spelling", async () => {
+    await run(["--profile", "first", "workspace", "list", "-p=last"]);
+
+    expect(loadStoredAccessTokenWithoutRefresh).toHaveBeenCalledWith({ profile: "last" });
+  });
+
+  test("skips the lookup instead of refreshing a stored login that is due for renewal", async () => {
+    vi.mocked(loadStoredAccessTokenWithoutRefresh).mockResolvedValue(undefined);
+    using stderr = captureStderr();
+
+    await run(["workspace", "list"]);
+
+    expect(initOperatorClient).not.toHaveBeenCalled();
+    expect(stderr.text()).toBe("");
+    expect(fs.existsSync(stateFile())).toBe(false);
+  });
+
+  test("names the profile in the hint when the command named one", async () => {
+    resolved([warning("a", "x")]);
+    using stderr = captureStderr();
+
+    await run(["workspace", "list", "--profile", "staging"]);
+
+    expect(stderr.text()).toContain(
+      "Run `tailor notification list --profile staging` for details.",
+    );
   });
 
   test("does not run when stdout is not a terminal", async () => {
@@ -208,7 +248,7 @@ describe("notification banner", () => {
 
     await run(["workspace", "list"]);
 
-    expect(loadAccessToken).not.toHaveBeenCalled();
+    expect(loadStoredAccessTokenWithoutRefresh).not.toHaveBeenCalled();
     expect(initOperatorClient).not.toHaveBeenCalled();
     expect(fs.existsSync(stateFile())).toBe(false);
   });
@@ -220,7 +260,7 @@ describe("notification banner", () => {
     await run(["workspace", "list"]);
 
     expect(loadAccessToken).not.toHaveBeenCalled();
-    expect(initOperatorClient).toHaveBeenCalledWith("env-token", undefined);
+    expect(initOperatorClient).toHaveBeenCalledWith("env-token", undefined, { renewToken: false });
   });
 
   test("swallows a failed lookup and leaves no state behind", async () => {
@@ -234,7 +274,7 @@ describe("notification banner", () => {
   });
 
   test("swallows a login that cannot be loaded", async () => {
-    vi.mocked(loadAccessToken).mockRejectedValue(new Error("no user"));
+    vi.mocked(loadStoredAccessTokenWithoutRefresh).mockRejectedValue(new Error("no user"));
     using stderr = captureStderr();
 
     await run(["workspace", "list"]);

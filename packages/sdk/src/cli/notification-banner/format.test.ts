@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import { NotificationSeverity } from "@tailor-platform/tailor-proto/notification_resource_pb";
 import { describe, expect, test } from "vitest";
+import { displayWidth } from "#/cli/shared/ascii-table";
 import { formatNotificationBanner } from "./format";
 
 function plain(banner: { header: string; lines: string[] }) {
@@ -43,11 +44,9 @@ describe("formatNotificationBanner", () => {
 
   test("sanitizes and truncates titles to the terminal width", () => {
     const banner = plain(
-      formatNotificationBanner(
-        [warning("Bad \u001b[31mtitle\u001b[0m\r " + "x".repeat(200))],
-        1,
-        60,
-      ),
+      formatNotificationBanner([warning("Bad \u001b[31mtitle\u001b[0m\r " + "x".repeat(200))], 1, {
+        columns: 60,
+      }),
     );
     const row = banner.lines[0]!;
     expect(row).not.toContain("\u001b");
@@ -58,7 +57,40 @@ describe("formatNotificationBanner", () => {
   });
 
   test("never truncates below a readable minimum even on a narrow terminal", () => {
-    const banner = plain(formatNotificationBanner([warning("x".repeat(80))], 1, 10));
+    const banner = plain(formatNotificationBanner([warning("x".repeat(80))], 1, { columns: 10 }));
     expect(banner.lines[0]!.length).toBeGreaterThan(20);
+  });
+
+  test("truncates wide (CJK) titles by display width, not by character count", () => {
+    const banner = plain(
+      formatNotificationBanner([warning("メンテナンス".repeat(10))], 1, { columns: 40 }),
+    );
+    const row = banner.lines[0]!;
+    expect(displayWidth(row)).toBeLessThanOrEqual(40);
+    expect(displayWidth(row)).toBeGreaterThanOrEqual(38);
+    expect(row.startsWith("  ⚠ WARNING   メンテナンス")).toBe(true);
+    expect(row.endsWith("…")).toBe(true);
+  });
+
+  test("never splits an emoji grapheme when truncating", () => {
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}";
+    const banner = plain(
+      formatNotificationBanner([warning("a".repeat(24) + family + "b".repeat(40))], 1, {
+        columns: 40,
+      }),
+    );
+    const row = banner.lines[0]!;
+    expect(row.startsWith(`  ⚠ WARNING   ${"a".repeat(24)}`)).toBe(true);
+    expect(row.includes(family) || !row.includes("\u{1F468}")).toBe(true);
+    expect(displayWidth(row)).toBeLessThanOrEqual(40);
+  });
+
+  test("names the profile in the hint, shell-quoted", () => {
+    expect(
+      plain(formatNotificationBanner([warning("x")], 1, { profile: "staging" })).lines.at(-1),
+    ).toBe("  Run `tailor notification list --profile staging` for details.");
+    expect(
+      plain(formatNotificationBanner([warning("x")], 1, { profile: "my profile" })).lines.at(-1),
+    ).toContain("--profile 'my profile'");
   });
 });

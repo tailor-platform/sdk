@@ -164,22 +164,38 @@ export function findAccessTokenSource(accessToken: string): AccessTokenSource | 
   return accessTokenSources.get(accessToken);
 }
 
+/** Options for {@link initOperatorClient}. */
+interface OperatorClientOptions {
+  /**
+   * Renew a browser-login token while the client runs (default true). Pass false for a
+   * best-effort call that may be abandoned mid-flight, which must never rotate the stored login.
+   */
+  renewToken?: boolean;
+}
+
 /**
  * Initialize an Operator client with the given access token.
  * A client created with a token that `loadAccessToken` returned for a browser login
  * (`tailor login`) renews the token while it runs, so it keeps working past the token's
- * lifetime; this can refresh and save the stored login. Other tokens are sent as given.
+ * lifetime; this can refresh and save the stored login. Other tokens, and every token when
+ * `renewToken` is false, are sent as given.
  * @param accessToken - Access token for authentication
  * @param config - Optional platform connection settings
+ * @param options - Client options
  * @returns Configured Operator client
  */
-export async function initOperatorClient(accessToken: string, config?: PlatformClientConfig) {
+export async function initOperatorClient(
+  accessToken: string,
+  config?: PlatformClientConfig,
+  options: OperatorClientOptions = {},
+) {
   const platformConfig = config ?? getPlatformConfigForToken(accessToken);
   const [{ createTracingInterceptor }, { OperatorService }] = await Promise.all([
     import("#/cli/telemetry/interceptor"),
     import("@tailor-platform/tailor-proto/service_pb"),
   ]);
-  const tokenSource = findAccessTokenSource(accessToken) ?? {
+  const renewing = options.renewToken === false ? undefined : findAccessTokenSource(accessToken);
+  const tokenSource = renewing ?? {
     current: async () => accessToken,
     replaceRejected: async () => undefined,
   };

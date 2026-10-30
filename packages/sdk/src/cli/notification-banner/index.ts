@@ -2,7 +2,8 @@ import { xdgConfig } from "xdg-basedir";
 import { requestedJsonModeSource } from "#/cli/shared/args";
 import { isCLIError } from "#/cli/shared/errors";
 import { CIPromptError, interactiveTerminal, logger } from "#/cli/shared/logger";
-import { lookupSkipReason, profileFromArgv } from "./decision";
+import { explicitProfileFromArgs } from "#/cli/shared/plugin";
+import { lookupSkipReason } from "./decision";
 import { formatNotificationBanner, type BannerNotification } from "./format";
 import { getBannerStatePath, isThrottled, readBannerState, writeBannerState } from "./throttle";
 /**
@@ -15,8 +16,8 @@ import { getBannerStatePath, isThrottled, readBannerState, writeBannerState } fr
  * every failure is swallowed. It is interactive-terminal only, never in JSON mode, throttled
  * to once per `BANNER_INTERVAL_MS` (throttle.ts), and marks nothing read.
  *
- * The lookup may refresh the stored token (through the shared client, under the platform
- * config lock); `login` and `logout` are excluded so it never races a login flow.
+ * The lookup never renews a stored login (no refresh request, no config write, no lock): a
+ * token due for renewal skips the banner, and the client is created with `renewToken: false`.
  */
 
 /** How many notifications the banner can list. */
@@ -25,6 +26,8 @@ const PAGE_SIZE = 3;
 const LOOKUP_TIMEOUT_MS = 5_000;
 
 interface LookupResult {
+  /** The profile the command line named, repeated in the hint. */
+  explicitProfile: string | undefined;
   totalCount: number;
   notifications: (BannerNotification & { id: string })[];
 }
@@ -87,11 +90,18 @@ async function runLookup(
   // must not do that on a machine that has never logged in.
   if (envToken === undefined && !context.platformConfigExists()) return undefined;
 
-  const profile = profileFromArgv(argv) ?? process.env.TAILOR_PLATFORM_PROFILE;
+  // Same precedence as the command: last occurrence wins, `--profile x` / `--profile=x` / `-p x` / `-p=x`.
+  const explicitProfile = explicitProfileFromArgs(argv);
+  const profile = explicitProfile ?? process.env.TAILOR_PLATFORM_PROFILE;
   let accessToken: string;
   let platformConfig: Awaited<ReturnType<typeof context.loadPlatformClientConfig>>;
   if (envToken === undefined) {
-    accessToken = await context.loadAccessToken({ profile });
+    // Never renew a stored login here: this request may be abandoned when the command exits,
+    // and a refresh cut short could rotate the refresh token and lose the replacement. A token
+    // due for renewal means no banner this time; the command itself renews it.
+    const stored = await context.loadStoredAccessTokenWithoutRefresh({ profile });
+    if (!stored) return undefined;
+    ({ accessToken, platformConfig } = stored);
   } else {
     // Read directly rather than through loadAccessToken, whose deprecated-TAILOR_TOKEN warning
     // the command itself already prints once.
@@ -103,12 +113,13 @@ async function runLookup(
     import("#/cli/shared/client"),
     import("@tailor-platform/tailor-proto/notification_resource_pb"),
   ]);
-  const client = await initOperatorClient(accessToken, platformConfig);
+  const client = await initOperatorClient(accessToken, platformConfig, { renewToken: false });
   const response = await client.listMyNotifications(
     { pageSize: PAGE_SIZE, minSeverity: Severity.WARNING, unreadOnly: true },
     { signal: AbortSignal.any([signal, AbortSignal.timeout(LOOKUP_TIMEOUT_MS)]) },
   );
   return {
+    explicitProfile,
     totalCount: Number(response.totalCount),
     notifications: response.notifications.map((n) => ({
       id: n.id,
@@ -141,7 +152,9 @@ export async function printNotificationBanner(context: { error?: unknown }): Pro
     if (logger.jsonMode || !interactiveTerminal()) return;
 
     if (result.notifications.length > 0) {
-      const banner = formatNotificationBanner(result.notifications, result.totalCount);
+      const banner = formatNotificationBanner(result.notifications, result.totalCount, {
+        profile: result.explicitProfile,
+      });
       logger.newline();
       logger.warn(banner.header);
       for (const line of banner.lines) logger.log(line);
