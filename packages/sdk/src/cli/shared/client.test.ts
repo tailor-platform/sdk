@@ -608,8 +608,13 @@ describe("access token renewal in the operator client", () => {
     vi.clearAllMocks();
   });
 
-  async function callThroughClient(token: string, server: Next, stream = false) {
-    await initOperatorClient(token);
+  async function callThroughClient(
+    token: string,
+    server: Next,
+    stream = false,
+    options?: { renewToken?: boolean },
+  ) {
+    await initOperatorClient(token, undefined, options);
     const connectNode = await import("@connectrpc/connect-node");
     const interceptors = vi.mocked(connectNode.createConnectTransport).mock.calls.at(-1)?.[0]
       .interceptors as Array<(next: Next) => Next>;
@@ -685,6 +690,19 @@ describe("access token renewal in the operator client", () => {
       code: Code.Unauthenticated,
       rawMessage: expect.stringContaining("invalid token"),
     });
+  });
+
+  test("never renews when asked not to, even for a token that has a source", async () => {
+    const source = sourceOf("renewed-6", "replacement-6");
+    registerAccessTokenSource("issued-6", source);
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(
+      callThroughClient("issued-6", server, false, { renewToken: false }),
+    ).rejects.toMatchObject({ code: Code.Unauthenticated });
+    expect(sent).toEqual(["Bearer issued-6"]);
+    expect(source.current).not.toHaveBeenCalled();
+    expect(source.replaceRejected).not.toHaveBeenCalled();
   });
 
   test("does not replay a streaming request", async () => {

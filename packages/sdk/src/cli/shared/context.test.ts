@@ -16,6 +16,8 @@ import {
   saveUserTokens,
   tryLoadWorkspaceId,
   writePlatformConfig,
+  loadStoredAccessTokenWithoutRefresh,
+  platformConfigExists,
 } from "./context";
 import { errorToJson } from "./error-json";
 import { isCLIError } from "./errors";
@@ -2740,4 +2742,90 @@ describe.skipIf(process.platform === "win32")("writePlatformConfig file permissi
 
 afterAll(() => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
+});
+
+describe("platformConfigExists", () => {
+  test("reports whether the platform config file is present without creating it", async () => {
+    const file = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    fs.rmSync(file, { force: true });
+    expect(platformConfigExists()).toBe(false);
+    expect(fs.existsSync(file)).toBe(false);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "profiles: {}\n");
+    expect(platformConfigExists()).toBe(true);
+    fs.rmSync(file, { force: true });
+  });
+});
+
+describe("loadStoredAccessTokenWithoutRefresh", () => {
+  const farFuture = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+  const soon = new Date(Date.now() + 30 * 1000).toISOString();
+
+  function storeLogin(
+    expiresAt: string,
+    profiles: Record<string, { user: string; workspace_id: string }> = {},
+  ) {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        testuser: {
+          access_token: "stored-access",
+          refresh_token: "stored-refresh",
+          token_expires_at: expiresAt,
+          storage: "file",
+        },
+      },
+      profiles: profiles,
+      current_user: "testuser",
+    });
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    clientMocks.refreshToken.mockClear();
+  });
+
+  test("returns the stored token while it is not due for renewal", async () => {
+    storeLogin(farFuture);
+
+    const result = await loadStoredAccessTokenWithoutRefresh({});
+
+    expect(result?.accessToken).toBe("stored-access");
+  });
+
+  test("returns nothing, and neither refreshes nor rewrites the config, when renewal is due", async () => {
+    storeLogin(soon);
+    const before = fs.readFileSync(path.join(xdgTempDir, "tailor-platform", "config.yaml"), "utf8");
+
+    const result = await loadStoredAccessTokenWithoutRefresh({});
+
+    expect(result).toBeUndefined();
+    expect(clientMocks.refreshToken).not.toHaveBeenCalled();
+    expect(fs.readFileSync(path.join(xdgTempDir, "tailor-platform", "config.yaml"), "utf8")).toBe(
+      before,
+    );
+  });
+
+  test("uses the profile's user", async () => {
+    storeLogin(farFuture, {
+      staging: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+    });
+
+    const result = await loadStoredAccessTokenWithoutRefresh({ profile: "staging" });
+
+    expect(result?.accessToken).toBe("stored-access");
+  });
+
+  test("returns nothing when no one is logged in", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+
+    expect(await loadStoredAccessTokenWithoutRefresh({})).toBeUndefined();
+  });
 });

@@ -169,6 +169,16 @@ function platformConfigPath() {
   return path.join(xdgConfig, "tailor-platform", "config.yaml");
 }
 
+/**
+ * Whether the platform config file exists. Unlike `readPlatformConfig`, this never creates it,
+ * so a background check can run on a machine that has never logged in without side effects.
+ * @returns true when the config file is present
+ */
+export function platformConfigExists(): boolean {
+  if (!xdgConfig) return false;
+  return fs.existsSync(platformConfigPath());
+}
+
 type ProfilePlatformSettings = {
   platform_url?: string;
   oauth2_client_id?: string;
@@ -741,6 +751,31 @@ export async function loadMachineUserName(
  */
 export function readEnvironmentToken(): string | undefined {
   return process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+}
+
+/**
+ * Read the stored browser login for a profile without ever renewing it: no refresh request, no
+ * config write, no lock. For best-effort background calls that may be abandoned mid-flight,
+ * where a refresh could rotate the refresh token and lose the replacement. Pair it with
+ * `initOperatorClient(token, config, { renewToken: false })`.
+ * @param opts - Profile options
+ * @param opts.profile - Profile name; falls back to TAILOR_PLATFORM_PROFILE, then the current user
+ * @returns The stored access token and the profile's platform settings, or undefined when there
+ *   is no login or the token is due for renewal
+ */
+export async function loadStoredAccessTokenWithoutRefresh(opts: {
+  profile?: string | undefined;
+}): Promise<{ accessToken: string; platformConfig: PlatformClientConfig | undefined } | undefined> {
+  const profile = opts.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  const pfConfig = await readPlatformConfig();
+  const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
+  if (profile && !profileEntry) return undefined;
+  const user = profileEntry?.user ?? pfConfig.current_user;
+  if (!user) return undefined;
+  const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  const stored = await readStoredToken(pfConfig, user, platformConfig, loginFailureFor(profile));
+  if (isDueForRefresh(stored)) return undefined;
+  return { accessToken: stored.tokens.accessToken, platformConfig };
 }
 
 /**

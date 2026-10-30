@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -456,5 +456,31 @@ describe.concurrent("plugin dispatch argument forwarding", () => {
 
     expect(result.status).toBe(0);
     expect(existsSync(capture)).toBe(false);
+  }, 20_000);
+});
+
+describe("notification banner wiring", () => {
+  // Spawned children have no TTY, so this covers the non-interactive gate end to end: the
+  // banner must not read or touch its state, create a config, or change the command's outcome.
+  // The interactive paths (lookup failure, pending lookup, throttling) are unit-tested in
+  // notification-banner/index.test.ts.
+  test("a non-interactive run leaves the banner state and the config alone", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-banner-");
+    const stateDir = path.join(tmp.dir, "tailor-platform");
+    const stateFile = path.join(stateDir, "notification-banner.json");
+    mkdirSync(stateDir, { recursive: true });
+    writeFileSync(stateFile, "{not json");
+
+    const result = await runCli(["workspace", "list", "--limit", "abc"], tmp.dir, {
+      TAILOR_PLATFORM_URL: "http://127.0.0.1:1",
+      TAILOR_PLATFORM_TOKEN: "token",
+    });
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("limit");
+    expect(result.stderr).not.toContain("notification");
+    expect(readFileSync(stateFile, "utf8")).toBe("{not json");
+    expect(existsSync(path.join(stateDir, "config.yaml"))).toBe(false);
   }, 20_000);
 });
