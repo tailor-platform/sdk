@@ -9,12 +9,19 @@ if (!("Temporal" in globalThis)) {
 }
 
 // Tests must not observe variables exported by the developer's shell that
-// change CLI behavior: TAILOR_* (profile, machine user, token, ...),
-// FORCE_COLOR (styles output to non-TTY streams), and EDITOR/VISUAL (select
-// the editor a command spawns, which would block the run). Tests that need
-// one set it explicitly. The e2e projects do not load this file: they take
-// workspace credentials from the environment by design.
-export const STRIPPED_ENV_KEYS: readonly string[] = ["FORCE_COLOR", "EDITOR", "VISUAL"];
+// change CLI behavior: TAILOR_* (profile, machine user, token, ...), the
+// deprecated PLATFORM_URL/PLATFORM_OAUTH2_CLIENT_ID, FORCE_COLOR (styles output
+// to non-TTY streams), and EDITOR/VISUAL (select the editor a command spawns,
+// which would block the run). Tests that need one set it explicitly. The e2e
+// projects do not load this file: they take workspace credentials from the
+// environment by design.
+export const STRIPPED_ENV_KEYS: readonly string[] = [
+  "PLATFORM_URL",
+  "PLATFORM_OAUTH2_CLIENT_ID",
+  "FORCE_COLOR",
+  "EDITOR",
+  "VISUAL",
+];
 
 export function stripDeveloperEnv(env: NodeJS.ProcessEnv): void {
   for (const key of Object.keys(env)) {
