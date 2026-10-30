@@ -15,13 +15,13 @@ export type GqlOperationsInput =
 
 export type GqlOperations = {
   /** Enable create mutation (default: true) */
-  create?: boolean | undefined;
+  create?: boolean;
   /** Enable update mutation (default: true) */
-  update?: boolean | undefined;
+  update?: boolean;
   /** Enable delete mutation (default: true) */
-  delete?: boolean | undefined;
+  delete?: boolean;
   /** Enable read queries - get, list, aggregation (default: true) */
-  read?: boolean | undefined;
+  read?: boolean;
 };
 
 export type DBFieldMetadata = {
@@ -85,7 +85,7 @@ export type DBFieldMetadataInput = DBFieldMetadata;
 
 export type RawRelationConfig = {
   /** Relation cardinality type */
-  type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
+  type: "1-1" | "N-1" | "keyOnly" | "manyToOne" | "n-1" | "oneToOne";
   toward: {
     /** Target table name, or 'self' for self-relations */
     table: string;
@@ -153,85 +153,6 @@ export type RawPermissions = {
   record?:
     | {
         create: readonly (
-          | readonly [
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-            ]
-          | readonly [
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              boolean,
-            ]
           | readonly (
               | boolean
               | readonly [
@@ -253,7 +174,7 @@ export type RawPermissions = {
                         newRecord: string;
                       }
                   ),
-                  "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+                  "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
                   (
                     | string
                     | boolean
@@ -276,45 +197,6 @@ export type RawPermissions = {
             )[]
           | {
               conditions:
-                | readonly [
-                    (
-                      | string
-                      | boolean
-                      | string[]
-                      | boolean[]
-                      | {
-                          user: string;
-                        }
-                      | {
-                          record: string;
-                        }
-                      | {
-                          oldRecord: string;
-                        }
-                      | {
-                          newRecord: string;
-                        }
-                    ),
-                    "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-                    (
-                      | string
-                      | boolean
-                      | string[]
-                      | boolean[]
-                      | {
-                          user: string;
-                        }
-                      | {
-                          record: string;
-                        }
-                      | {
-                          oldRecord: string;
-                        }
-                      | {
-                          newRecord: string;
-                        }
-                    ),
-                  ]
                 | readonly (readonly [
                     (
                       | string
@@ -334,7 +216,7 @@ export type RawPermissions = {
                           newRecord: string;
                         }
                     ),
-                    "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+                    "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
                     (
                       | string
                       | boolean
@@ -353,91 +235,130 @@ export type RawPermissions = {
                           newRecord: string;
                         }
                     ),
-                  ])[];
+                  ])[]
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | string[]
+                      | boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          record: string;
+                        }
+                      | {
+                          oldRecord: string;
+                        }
+                      | {
+                          newRecord: string;
+                        }
+                    ),
+                    "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | string[]
+                      | boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          record: string;
+                        }
+                      | {
+                          oldRecord: string;
+                        }
+                      | {
+                          newRecord: string;
+                        }
+                    ),
+                  ];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
+          | readonly [
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              boolean,
+            ]
         )[];
         read: readonly (
-          | readonly [
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-            ]
-          | readonly [
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              boolean,
-            ]
           | readonly (
               | boolean
               | readonly [
@@ -459,7 +380,7 @@ export type RawPermissions = {
                         newRecord: string;
                       }
                   ),
-                  "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+                  "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
                   (
                     | string
                     | boolean
@@ -482,45 +403,6 @@ export type RawPermissions = {
             )[]
           | {
               conditions:
-                | readonly [
-                    (
-                      | string
-                      | boolean
-                      | string[]
-                      | boolean[]
-                      | {
-                          user: string;
-                        }
-                      | {
-                          record: string;
-                        }
-                      | {
-                          oldRecord: string;
-                        }
-                      | {
-                          newRecord: string;
-                        }
-                    ),
-                    "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-                    (
-                      | string
-                      | boolean
-                      | string[]
-                      | boolean[]
-                      | {
-                          user: string;
-                        }
-                      | {
-                          record: string;
-                        }
-                      | {
-                          oldRecord: string;
-                        }
-                      | {
-                          newRecord: string;
-                        }
-                    ),
-                  ]
                 | readonly (readonly [
                     (
                       | string
@@ -540,7 +422,7 @@ export type RawPermissions = {
                           newRecord: string;
                         }
                     ),
-                    "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+                    "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
                     (
                       | string
                       | boolean
@@ -559,91 +441,130 @@ export type RawPermissions = {
                           newRecord: string;
                         }
                     ),
-                  ])[];
+                  ])[]
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | string[]
+                      | boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          record: string;
+                        }
+                      | {
+                          oldRecord: string;
+                        }
+                      | {
+                          newRecord: string;
+                        }
+                    ),
+                    "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | string[]
+                      | boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          record: string;
+                        }
+                      | {
+                          oldRecord: string;
+                        }
+                      | {
+                          newRecord: string;
+                        }
+                    ),
+                  ];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
+          | readonly [
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              boolean,
+            ]
         )[];
         update: readonly (
-          | readonly [
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-            ]
-          | readonly [
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              boolean,
-            ]
           | readonly (
               | boolean
               | readonly [
@@ -665,7 +586,7 @@ export type RawPermissions = {
                         newRecord: string;
                       }
                   ),
-                  "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+                  "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
                   (
                     | string
                     | boolean
@@ -688,45 +609,6 @@ export type RawPermissions = {
             )[]
           | {
               conditions:
-                | readonly [
-                    (
-                      | string
-                      | boolean
-                      | string[]
-                      | boolean[]
-                      | {
-                          user: string;
-                        }
-                      | {
-                          record: string;
-                        }
-                      | {
-                          oldRecord: string;
-                        }
-                      | {
-                          newRecord: string;
-                        }
-                    ),
-                    "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-                    (
-                      | string
-                      | boolean
-                      | string[]
-                      | boolean[]
-                      | {
-                          user: string;
-                        }
-                      | {
-                          record: string;
-                        }
-                      | {
-                          oldRecord: string;
-                        }
-                      | {
-                          newRecord: string;
-                        }
-                    ),
-                  ]
                 | readonly (readonly [
                     (
                       | string
@@ -746,7 +628,7 @@ export type RawPermissions = {
                           newRecord: string;
                         }
                     ),
-                    "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+                    "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
                     (
                       | string
                       | boolean
@@ -765,91 +647,130 @@ export type RawPermissions = {
                           newRecord: string;
                         }
                     ),
-                  ])[];
+                  ])[]
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | string[]
+                      | boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          record: string;
+                        }
+                      | {
+                          oldRecord: string;
+                        }
+                      | {
+                          newRecord: string;
+                        }
+                    ),
+                    "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | string[]
+                      | boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          record: string;
+                        }
+                      | {
+                          oldRecord: string;
+                        }
+                      | {
+                          newRecord: string;
+                        }
+                    ),
+                  ];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
+          | readonly [
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              boolean,
+            ]
         )[];
         delete: readonly (
-          | readonly [
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-            ]
-          | readonly [
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-              (
-                | string
-                | boolean
-                | string[]
-                | boolean[]
-                | {
-                    user: string;
-                  }
-                | {
-                    record: string;
-                  }
-                | {
-                    oldRecord: string;
-                  }
-                | {
-                    newRecord: string;
-                  }
-              ),
-              boolean,
-            ]
           | readonly (
               | boolean
               | readonly [
@@ -871,7 +792,7 @@ export type RawPermissions = {
                         newRecord: string;
                       }
                   ),
-                  "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+                  "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
                   (
                     | string
                     | boolean
@@ -894,45 +815,6 @@ export type RawPermissions = {
             )[]
           | {
               conditions:
-                | readonly [
-                    (
-                      | string
-                      | boolean
-                      | string[]
-                      | boolean[]
-                      | {
-                          user: string;
-                        }
-                      | {
-                          record: string;
-                        }
-                      | {
-                          oldRecord: string;
-                        }
-                      | {
-                          newRecord: string;
-                        }
-                    ),
-                    "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
-                    (
-                      | string
-                      | boolean
-                      | string[]
-                      | boolean[]
-                      | {
-                          user: string;
-                        }
-                      | {
-                          record: string;
-                        }
-                      | {
-                          oldRecord: string;
-                        }
-                      | {
-                          newRecord: string;
-                        }
-                    ),
-                  ]
                 | readonly (readonly [
                     (
                       | string
@@ -952,7 +834,7 @@ export type RawPermissions = {
                           newRecord: string;
                         }
                     ),
-                    "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+                    "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
                     (
                       | string
                       | boolean
@@ -971,10 +853,128 @@ export type RawPermissions = {
                           newRecord: string;
                         }
                     ),
-                  ])[];
+                  ])[]
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | string[]
+                      | boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          record: string;
+                        }
+                      | {
+                          oldRecord: string;
+                        }
+                      | {
+                          newRecord: string;
+                        }
+                    ),
+                    "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | string[]
+                      | boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          record: string;
+                        }
+                      | {
+                          oldRecord: string;
+                        }
+                      | {
+                          newRecord: string;
+                        }
+                    ),
+                  ];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
+          | readonly [
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
+              (
+                | string
+                | boolean
+                | string[]
+                | boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    record: string;
+                  }
+                | {
+                    oldRecord: string;
+                  }
+                | {
+                    newRecord: string;
+                  }
+              ),
+              boolean,
+            ]
         )[];
       }
     | undefined;
@@ -990,7 +990,7 @@ export type RawPermissions = {
                 user: string;
               }
           ),
-          "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny",
+          "!=" | "=" | "hasAny" | "in" | "not hasAny" | "not in",
           (
             | string
             | boolean
@@ -1003,7 +1003,7 @@ export type RawPermissions = {
         ])[];
         actions:
           | "all"
-          | readonly ("create" | "read" | "update" | "delete" | "aggregate" | "bulkUpsert")[];
+          | readonly ("aggregate" | "bulkUpsert" | "create" | "delete" | "read" | "update")[];
         permit?: boolean | undefined;
         description?: string | undefined;
       }[]
@@ -1034,12 +1034,12 @@ export type TailorDBTypeRawInput = {
   };
   metadata: {
     name: string;
+    description?: string | undefined;
+    settings?: TailorDBTypeParsedSettingsInput;
     permissions: RawPermissions;
     files: {
       [x: string]: string;
     };
-    description?: string | undefined;
-    settings?: TailorDBTypeParsedSettingsInput;
     indexes?:
       | {
           [x: string]: {
@@ -1081,12 +1081,12 @@ export type TailorDBTypeRaw = {
   };
   metadata: {
     name: string;
+    description?: string | undefined;
+    settings?: TailorDBTypeParsedSettings;
     permissions: RawPermissions;
     files: {
       [x: string]: string;
     };
-    description?: string | undefined;
-    settings?: TailorDBTypeParsedSettings;
     indexes?:
       | {
           [x: string]: {
