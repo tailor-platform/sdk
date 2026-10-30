@@ -35,6 +35,9 @@ automatically wire the resource into every consumer — check each of these:
   set, so `deploy` drops a delete that another config in the same run still claims. Add a
   resource with a workspace-global name through `DEPLOY_MANAGED_RESOURCE_DEFINITIONS`
   instead, which also rejects that name in two configs.
+- `cli/commands/deploy/managed-resources.ts`'s `collectImportantResourceDeletions` — when
+  deleting the new resource needs confirmation, add it there and to the deletion list under
+  **Confirmation** in `packages/sdk/docs/cli/application.template.md`.
 - `cli/commands/deploy/managed-resource-type.ts`'s `ManagedResourceType` — add the new
   resource's id before using it as a `resourceType`. `deploy --dry-run --json` reports these
   ids, so never rename an existing one. Keep the module import-free: planners and
