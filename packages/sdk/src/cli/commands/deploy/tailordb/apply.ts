@@ -37,10 +37,12 @@ import {
   isMigrationStartRefused,
   isRollbackSkippedWithRecord,
   removeRunResources,
+  resolveMigrationMachineUsers,
   rolledBackError,
   rollbackSkippedError,
   updateMigrationLabel,
   type MigrationContext,
+  type MigrationMachineUsers,
 } from "./migration";
 import {
   applyMigrationRestrictions,
@@ -83,7 +85,6 @@ import {
   type ValidateAndDetectResult,
 } from "./migration-validation";
 import type { MigrationRunKind, PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { ApplyPhase } from "../types";
 import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan";
 
@@ -143,33 +144,16 @@ async function reconcileMigrationLabels(
  * Build migration execution context for script-based migrations.
  * @param client - Operator client instance
  * @param migrationContext - Planned TailorDB context
- * @param migrationsRequiringScripts - Migrations that require scripts
+ * @param machineUsers - Machine user that runs the scripts of each namespace
  * @param maintenanceMode - Whether the migrating namespaces are in maintenance mode
  * @returns Migration context for script execution
  */
 async function buildMigrationContextForScripts(
   client: OperatorClient,
   migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
-  migrationsRequiringScripts: PendingMigration[],
+  machineUsers: MigrationMachineUsers,
   maintenanceMode: boolean,
 ): Promise<MigrationContext> {
-  const authService = migrationContext.application.authService;
-  if (!authService) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: "Auth configuration is required to execute migration scripts.",
-    });
-  }
-
-  const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
-  for (const migration of migrationsRequiringScripts) {
-    if (!(migration.namespace in dbConfigMap)) {
-      dbConfigMap[migration.namespace] = migrationContext.config.db?.[migration.namespace] as
-        | TailorDBServiceConfig
-        | undefined;
-    }
-  }
-
   // TailorDB apply always runs after staticWebsite apply in the same pass, so a
   // site this deploy just created already exists here even though `env` was
   // resolved earlier, at build time, before that site existed.
@@ -182,11 +166,8 @@ async function buildMigrationContextForScripts(
   return {
     client,
     workspaceId: migrationContext.workspaceId,
-    authNamespace: authService.config.name,
-    machineUsers: authService.config.machineUsers
-      ? Object.keys(authService.config.machineUsers)
-      : undefined,
-    dbConfig: dbConfigMap,
+    authNamespace: machineUsers.authNamespace,
+    machineUserByNamespace: machineUsers.byNamespace,
     env,
     configDir: path.dirname(migrationContext.config.path),
     appName: migrationContext.application.name,
@@ -196,10 +177,15 @@ async function buildMigrationContextForScripts(
   };
 }
 
+interface TailorDBMigrationState extends ValidateAndDetectResult {
+  /** Machine user that runs the scripts of each namespace, or undefined when no script runs. */
+  migrationMachineUsers: MigrationMachineUsers | undefined;
+}
+
 async function validateTailorDBMigrationState(
   client: OperatorClient,
   result: TailorDBPlanResult,
-): Promise<ValidateAndDetectResult> {
+): Promise<TailorDBMigrationState> {
   const { context } = result;
   if (context.migrationTestBaselines) {
     const currentMigrationFileState = captureMigrationFileState(
@@ -222,6 +208,7 @@ async function validateTailorDBMigrationState(
       inProgressMigrations: {},
       staleInProgress: [],
       maintenanceModeCheckpoints: {},
+      migrationMachineUsers: undefined,
     };
   }
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
@@ -274,7 +261,10 @@ async function validateTailorDBMigrationState(
     pendingMigrations: validation.pendingMigrations,
     inProgressByNamespace: validation.inProgressMigrations,
   });
-  return validation;
+  return {
+    ...validation,
+    migrationMachineUsers: resolveMigrationMachineUsers(context, validation.pendingMigrations),
+  };
 }
 
 /**
@@ -614,6 +604,7 @@ async function applyCreateUpdate(
     migrationHistoryIds,
     staleInProgress,
     maintenanceModeCheckpoints,
+    migrationMachineUsers,
   } = validation;
 
   // Resolved before any mutation below -- including the checkpoint-repair
@@ -622,15 +613,14 @@ async function applyCreateUpdate(
   // ...) aborts before any TailorDB migration state changes instead of
   // after.
   const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
-  const migrationCtx =
-    migrationsRequiringScripts.length > 0
-      ? await buildMigrationContextForScripts(
-          client,
-          migrationContext,
-          migrationsRequiringScripts,
-          phaseSettings.restricted,
-        )
-      : undefined;
+  const migrationCtx = migrationMachineUsers
+    ? await buildMigrationContextForScripts(
+        client,
+        migrationContext,
+        migrationMachineUsers,
+        phaseSettings.restricted,
+      )
+    : undefined;
 
   for (const repair of checkpointRepairs) {
     await updateMigrationLabel(

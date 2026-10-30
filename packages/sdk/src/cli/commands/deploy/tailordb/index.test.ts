@@ -6,6 +6,7 @@ import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resou
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
 import { SCHEMA_SNAPSHOT_VERSION } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import {
   applyPreMigrationFieldAdjustments,
@@ -20,6 +21,8 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { CLIError } from "#/cli/shared/errors";
 import { symbols } from "#/cli/shared/logger";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
@@ -64,6 +67,12 @@ vi.mock("../label", async (importOriginal) => {
     })),
   };
 });
+
+vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
+  bundleMigrationScript: vi.fn(async () => ({ bundledCode: "" })),
+  bundleMigrationSteps: vi.fn(async () => ({ bundledCode: "" })),
+  bundleSingleStepMigration: vi.fn(async () => ({ bundledCode: "" })),
+}));
 
 // Mock createChangeSet to suppress output in tests
 vi.mock("../change-set", async (importOriginal) => {
@@ -1269,6 +1278,127 @@ describe("planTailorDB (service level)", () => {
       };
 
       await expect(planTailorDB(ctx)).rejects.toThrow(/requires a migration script/);
+    });
+
+    describe("a pending migration with a script", () => {
+      aroundEach(async (runTest) => {
+        fs.mkdirSync(path.join(migrationsDir, "0001"));
+        fs.writeFileSync(
+          path.join(migrationsDir, "0001", "diff.json"),
+          JSON.stringify({
+            version: 1,
+            namespace: "test-tailordb",
+            createdAt: new Date().toISOString(),
+            changes: [],
+            hasBreakingChanges: false,
+            breakingChanges: [],
+            hasWarnings: false,
+            warnings: [],
+            requiresMigrationScript: false,
+          }),
+        );
+        fs.writeFileSync(
+          path.join(migrationsDir, "0001", "migrate.ts"),
+          "export async function main() {}\n",
+        );
+        await runTest();
+      });
+
+      function planWithScript(
+        authService: unknown,
+        migration: { machineUser?: string } = {},
+        migrationMachineUserOverride?: string,
+      ): ReturnType<typeof planTailorDB> {
+        return planTailorDB({
+          ...(migrationMachineUserOverride !== undefined && { migrationMachineUserOverride }),
+          client: createMockClient([]),
+          workspaceId,
+          application: {
+            ...createMockApplication([createMockTailorDBService("test-tailordb")]),
+            authService,
+          } as unknown as Application,
+          forRemoval: false,
+          config: {
+            path: path.join(migrationsDir, "tailor.config.ts"),
+            name: appName,
+            db: { "test-tailordb": { migration: { directory: ".", ...migration } } },
+          } as unknown as LoadedConfig,
+          noSchemaCheck: true,
+        });
+      }
+
+      test("fails at plan time when no auth is configured to run the script", async () => {
+        await expect(planWithScript(undefined)).rejects.toMatchObject({
+          code: "AUTH_CONFIG_REQUIRED",
+        });
+      });
+
+      test("fails at plan time when no machine user is available to run the script", async () => {
+        await expect(planWithScript({ config: { name: "auth" } })).rejects.toMatchObject({
+          code: "MACHINE_USER_REQUIRED",
+          message: expect.stringContaining("'test-tailordb'"),
+          context: { namespaces: ["test-tailordb"] },
+        });
+      });
+
+      test("checks the given machine user in place of the configured one and keeps it for apply", async () => {
+        const result = await planWithScript(
+          { config: { name: "auth", machineUsers: { migrator: {}, admin: {} } } },
+          { machineUser: "ghost" },
+          "admin",
+        );
+
+        expect(result.context.migrationMachineUserOverride).toBe("admin");
+      });
+
+      test("fails at plan time when the given machine user is not defined in auth", async () => {
+        await expect(
+          planWithScript(
+            { config: { name: "auth", machineUsers: { migrator: {} } } },
+            {},
+            "nobody",
+          ),
+        ).rejects.toMatchObject({
+          code: "MACHINE_USER_NOT_FOUND",
+          suggestion:
+            "Pass a machine user defined in auth.machineUsers to --machine-user (migrator), or add 'nobody' to auth.machineUsers.",
+          context: { machineUsers: [{ namespace: "test-tailordb", machineUser: "nobody" }] },
+        });
+      });
+
+      test("fails at plan time when the script cannot be bundled", async () => {
+        const bundleError = new Error("Unexpected token");
+        vi.mocked(bundleMigrationScript).mockRejectedValueOnce(bundleError);
+
+        const error = await planWithScript({
+          config: { name: "auth", machineUsers: { migrator: {} } },
+        }).catch((caught: unknown) => caught);
+
+        expect(error).toBe(bundleError);
+        expect(getErrorDiagnostics(bundleError)).toMatchObject({
+          code: "MIGRATION_SCRIPT_BUNDLE_FAILED",
+          context: { namespace: "test-tailordb", migrationNumber: 1 },
+        });
+        expect(bundleMigrationScript).toHaveBeenCalledWith(
+          path.join(migrationsDir, "0001", "migrate.ts"),
+          "test-tailordb",
+          1,
+          {},
+          migrationsDir,
+          false,
+          "legacy",
+        );
+      });
+
+      test("keeps the bundler's own error code", async () => {
+        const unresolved = CLIError({ code: "UNRESOLVED_IMPORT", message: "Could not resolve" });
+        vi.mocked(bundleMigrationScript).mockRejectedValueOnce(unresolved);
+
+        await expect(
+          planWithScript({ config: { name: "auth", machineUsers: { migrator: {} } } }),
+        ).rejects.toBe(unresolved);
+        expect(getErrorDiagnostics(unresolved).code).toBeUndefined();
+      });
     });
   });
 });

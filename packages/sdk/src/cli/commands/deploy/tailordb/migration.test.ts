@@ -33,6 +33,7 @@ import {
   groupMigrationsByNamespace,
   executeMigrations,
   isMigrationPartiallyApplied,
+  resolveMigrationMachineUsers,
   rolledBackError,
   type MigrationContext,
 } from "./migration";
@@ -40,7 +41,9 @@ import { MaintenanceTimeline } from "./migration-timing";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
+import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { MigrationRunEvent } from "./migration-workflow";
 
 // Mock label.ts for resourceTrn
@@ -225,6 +228,94 @@ describe("migration", () => {
       ["returns undefined when machine users array is empty", undefined, [], undefined],
     ])("%s", (_name, config, machineUsers, expected) => {
       expect(getMigrationMachineUser(config, machineUsers)).toBe(expected);
+    });
+  });
+
+  // ==========================================================================
+  // resolveMigrationMachineUsers
+  // ==========================================================================
+  describe("resolveMigrationMachineUsers", () => {
+    function resolve(
+      machineUsers: Record<string, object>,
+      db: Record<string, { migration: { machineUser?: string } }> = {},
+      migrationMachineUserOverride?: string,
+    ) {
+      return resolveMigrationMachineUsers(
+        {
+          application: {
+            authService: { config: { name: "auth", machineUsers } },
+          } as unknown as Pick<Application, "authService">,
+          config: { path: "/project/tailor.config.ts", db } as unknown as LoadedConfig,
+          ...(migrationMachineUserOverride !== undefined && { migrationMachineUserOverride }),
+        },
+        [
+          createMockMigration({ namespace: "namespace-a" }),
+          createMockMigration({ namespace: "namespace-b" }),
+          createMockMigration({ namespace: "namespace-c", hasScript: false, scriptForm: null }),
+        ],
+      );
+    }
+
+    test("resolves only the namespaces with a script to run", () => {
+      expect(resolve({ migrator: {} })).toEqual({
+        authNamespace: "auth",
+        byNamespace: new Map([
+          ["namespace-a", "migrator"],
+          ["namespace-b", "migrator"],
+        ]),
+      });
+    });
+
+    test("reports every namespace without a machine user together", () => {
+      expect(() => resolve({})).toThrow(
+        expect.objectContaining({
+          code: "MACHINE_USER_REQUIRED",
+          message:
+            "No machine user available for migration execution in namespaces 'namespace-a', 'namespace-b'.",
+        }),
+      );
+    });
+
+    test("asks to define a configured machine user when auth defines none", () => {
+      expect(() =>
+        resolve(
+          {},
+          {
+            "namespace-a": { migration: { machineUser: "ghost" } },
+            "namespace-b": { migration: { machineUser: "ghost" } },
+          },
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          code: "MACHINE_USER_NOT_FOUND",
+          message:
+            "Machine user for migration execution is not defined in auth 'auth': 'ghost' (namespace 'namespace-a'), 'ghost' (namespace 'namespace-b').",
+          suggestion: "Add the machine user to auth.machineUsers.",
+        }),
+      );
+    });
+
+    test("names the defined machine users when the configured one is not among them", () => {
+      expect(() =>
+        resolve(
+          { migrator: {}, admin: {} },
+          { "namespace-a": { migration: { machineUser: "ghost" } } },
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          suggestion:
+            "Add the machine user to auth.machineUsers, or use one that is defined: migrator, admin.",
+        }),
+      );
+    });
+
+    test("asks to define the given machine user when auth defines none", () => {
+      expect(() => resolve({}, {}, "admin")).toThrow(
+        expect.objectContaining({
+          code: "MACHINE_USER_NOT_FOUND",
+          suggestion: "Add 'admin' to auth.machineUsers.",
+        }),
+      );
     });
   });
 
@@ -796,8 +887,7 @@ describe("migration", () => {
         client: {} as unknown as OperatorClient,
         workspaceId,
         authNamespace: "auth",
-        machineUsers: ["test-machine-user"],
-        dbConfig: {},
+        machineUserByNamespace: new Map([["tailordb", "test-machine-user"]]),
         env: {},
         configDir: "/project",
         appName: "test-app",
@@ -822,6 +912,21 @@ describe("migration", () => {
         logs: "",
       });
       await runTest();
+    });
+
+    test("runs each namespace's scripts as the machine user resolved for that namespace", async () => {
+      await executeMigrations(
+        createMockContext({
+          client: createMetadataClient({ labels: {} }, vi.fn()),
+          machineUserByNamespace: new Map([["tailordb", "migrator"]]),
+        }),
+        [createMockMigration()],
+        checkpoints,
+      );
+
+      expect(executeMigrationAsWorkflowMock.mock.calls[0]![0]).toMatchObject({
+        invoker: { namespace: "auth", machineUserName: "migrator" },
+      });
     });
 
     const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill", "recompute"] };
