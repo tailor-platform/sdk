@@ -1,0 +1,307 @@
+name: securefix
+
+# The securefix server only accepts a request from a client workflow named
+# `securefix`, so every fix that is pushed to a pull request branch lives here
+# instead of in the workflow that checks the same files.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+# The jobs are split on purpose. `regenerate` runs the dependencies and tools of
+# the pull request branch, so it holds no secret and only hands over a patch.
+# `push` holds the securefix client key, never installs or runs anything from
+# the branch, and applies the patch only if every changed path is allowed.
+# Keeping both in one job would let an updated dependency overwrite the
+# securefix action on the runner or widen what gets committed.
+jobs:
+  plan:
+    name: Plan fixes
+    # Pull requests from forks get no secrets, so they cannot request a fix.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout the PR head
+    outputs:
+      generate: ${{ steps.filter_generate.outputs.generate }}
+      skills: ${{ steps.others.outputs.skills }}
+      aqua: ${{ steps.others.outputs.aqua }}
+      renovate: ${{ steps.renovate.outputs.is-renovate }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      # Shared with generate.yml, which runs the checks on the same paths.
+      - name: Detect generate changes
+        id: filter_generate
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/path-filters/generate.yml
+
+      - name: Detect skills and aqua changes
+        id: others
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            skills:
+              - packages/sdk/agent-skills/**
+              - .github/scripts/sync-skills.sh
+              - .github/workflows/securefix.yml
+            aqua:
+              - aqua.yaml
+              - aqua-checksums.json
+              - .github/workflows/securefix.yml
+
+      - name: Detect Renovate pull request
+        id: renovate
+        env:
+          IS_RENOVATE: >-
+            ${{ startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+            github.event.pull_request.user.login == 'renovate[bot]' &&
+            github.event.pull_request.user.type == 'Bot' }}
+        run: echo "is-renovate=$IS_RENOVATE" >> "$GITHUB_OUTPUT"
+
+  regenerate:
+    name: Regenerate files
+    needs: plan
+    if: >-
+      needs.plan.outputs.generate == 'true' ||
+      needs.plan.outputs.skills == 'true' ||
+      needs.plan.outputs.aqua == 'true' ||
+      needs.plan.outputs.renovate == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read # checkout the PR head
+    outputs:
+      changed: ${{ steps.patch.outputs.changed }}
+      skip-changeset: ${{ steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes != 'true' }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Default ref on pull_request events is the merge ref, which would
+          # regenerate from base-branch changes the PR head lacks. fetch-depth 0
+          # gives the changeset step a merge base to read the base lockfile from.
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install aqua
+        if: needs.plan.outputs.aqua == 'true' || needs.plan.outputs.renovate == 'true'
+        uses: $/.github/actions/install-aqua
+
+      - name: Install deps
+        if: needs.plan.outputs.generate == 'true' || needs.plan.outputs.renovate == 'true'
+        uses: $/.github/actions/install-deps
+
+      - name: Generate code
+        if: needs.plan.outputs.generate == 'true'
+        run: pnpm -r run generate
+
+      # The "expected" generator fixtures come from a separate config
+      # (tailor.config.expected.ts) that `pnpm generate` does not cover.
+      - name: Update generator expected fixtures
+        if: needs.plan.outputs.generate == 'true'
+        run: pnpm --filter example run test:generator:update-expects
+
+      # Runs after generate so the generated files are formatted too.
+      - name: Apply lint fix
+        if: needs.plan.outputs.renovate == 'true'
+        run: pnpm run lint:fix
+
+      - name: Apply format fix
+        if: needs.plan.outputs.renovate == 'true'
+        run: pnpm run format
+
+      - name: Sync skills to root
+        if: needs.plan.outputs.skills == 'true'
+        run: bash .github/scripts/sync-skills.sh
+
+      - name: Update aqua-checksums.json
+        if: needs.plan.outputs.aqua == 'true'
+        env:
+          AQUA_GITHUB_TOKEN: ${{ github.token }}
+        run: aqua update-checksum -deep -prune
+
+      - name: Check for existing changeset
+        if: needs.plan.outputs.renovate == 'true'
+        id: existing
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -eo pipefail
+          FILENAME=".changeset/renovate-${PR_NUMBER}.md"
+          if [ -f "$FILENAME" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Changeset $FILENAME already exists; skipping"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Snapshot base lockfile
+        if: steps.existing.outputs.found == 'false'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -eo pipefail
+          git fetch --no-tags --quiet origin "$BASE_REF"
+          BASE_SHA=$(git merge-base "origin/${BASE_REF}" HEAD)
+          git show "$BASE_SHA:pnpm-lock.yaml" > /tmp/renovate-base-lock.yaml
+
+      - name: Determine changeset requirement
+        if: steps.existing.outputs.found == 'false'
+        id: changeset_check
+        uses: $/.github/actions/skip-changeset-check
+        with:
+          before-lockfile: /tmp/renovate-base-lock.yaml
+
+      - name: Create changeset file
+        if: steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes == 'true'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          NAMES: ${{ steps.changeset_check.outputs.changed-names }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -eo pipefail
+          FILENAME=".changeset/renovate-${PR_NUMBER}.md"
+
+          # This job checks out the Renovate branch's own head sha (not
+          # merged with the base), so a branch opened before this script
+          # existed won't have it on disk. Fall back to the copy already
+          # fetched from the base branch (by the "Snapshot base lockfile"
+          # step above) for those older, still-open Renovate PRs.
+          if [ -f .github/scripts/neutralize-mentions.mjs ]; then
+            SANITIZER=.github/scripts/neutralize-mentions.mjs
+          else
+            SANITIZER=$(mktemp --suffix=.mjs)
+            git show "origin/${BASE_REF}:.github/scripts/neutralize-mentions.mjs" > "$SANITIZER"
+          fi
+          SAFE_TITLE=$(printf '%s' "${PR_TITLE}" | node "$SANITIZER")
+
+          {
+            echo "---"
+            while IFS= read -r name; do
+              [ -z "$name" ] && continue
+              printf '"%s": patch\n' "$name"
+            done <<< "$NAMES"
+            echo "---"
+            echo ""
+            printf '%s\n' "${SAFE_TITLE}"
+          } > "$FILENAME"
+
+      - name: Build the patch
+        id: patch
+        run: |
+          git add --all
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff --cached --stat
+            git diff --cached --binary --full-index > "$RUNNER_TEMP/regenerated.patch"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the patch
+        if: steps.patch.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: regenerated-patch
+          path: ${{ runner.temp }}/regenerated.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  # A Renovate pull request whose dependency change reaches no published
+  # package needs no changeset; the label tells Changeset Check to skip it.
+  label:
+    name: Add skip-changeset label
+    needs: regenerate
+    if: needs.regenerate.outputs.skip-changeset == 'true'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write # add the skip-changeset label
+    steps:
+      - name: Add skip-changeset label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR_NUMBER" --add-label skip-changeset
+
+  push:
+    name: Push fixed files
+    needs: regenerate
+    if: needs.regenerate.outputs.changed == 'true'
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout the PR head
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Download the patch
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: regenerated-patch
+          path: ${{ runner.temp }}/patch
+
+      # The patch comes from a job that ran the branch's dependencies, so it is
+      # untrusted input. Lint and format fixes may rewrite any source file, so
+      # the check is a denylist of what could change how CI or installs behave
+      # (workflows, hooks, package manager and tool settings, manifests), plus
+      # the two files other than sources that the fixes write. Only plain
+      # file additions and edits are accepted: no symlinks, no new executables.
+      - name: Check the patch
+        run: |
+          set -euo pipefail
+          allowed='^(\.changeset/renovate-[0-9]+\.md|aqua-checksums\.json)$'
+          denied='^(\.github|\.claude|\.agents|\.husky|\.changeset|\.vscode|\.devcontainer)/|^(lefthook(-local)?\.yml|renovate\.json|aqua\.yaml|pnpm-lock\.yaml|\.gitattributes|\.gitignore|\.gitmodules|\.mcp\.json|\.nvmrc|\.node-version|\.tool-versions|CLAUDE\.md|AGENTS\.md|\.pnpmfile\..*|\.oxfmtrc.*|\.oxlintrc.*)$|(^|/)(package\.json|\.npmrc|pnpm-workspace\.yaml|\.pnpmfile\.[cm]?js|CLAUDE\.md|AGENTS\.md|tsconfig[^/]*\.json)$'
+          git apply --index "$RUNNER_TEMP/patch/regenerated.patch"
+          git diff --cached --raw -z --no-renames > "$RUNNER_TEMP/changes.raw"
+          bad=0
+          while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+            read -r oldmode newmode _ _ status <<< "$meta"
+            oldmode=${oldmode#:}
+            case "$status" in
+              A) [ "$newmode" = "100644" ] || { echo "::error::Unexpected mode $newmode for added $path"; bad=1; } ;;
+              M) { [ "$newmode" = "$oldmode" ] && [[ $newmode =~ ^100(644|755)$ ]]; } || { echo "::error::Unexpected mode change $oldmode -> $newmode for $path"; bad=1; } ;;
+              D) ;;
+              *) echo "::error::Unexpected status $status for $path"; bad=1 ;;
+            esac
+            if ! [[ $path =~ $allowed ]] && [[ $path =~ $denied ]]; then
+              echo "::error::Change to a protected path: $path"
+              bad=1
+            fi
+          done < "$RUNNER_TEMP/changes.raw"
+          [ "$bad" -eq 0 ]
+          git reset --quiet
+
+      # Omitting `files` lets securefix list the files itself with
+      # `git ls-files --modified --others --exclude-standard`, which also
+      # covers untracked output. The server pushes the commit with a GitHub App
+      # token, so CI runs again on the new head. This step fails once it has
+      # sent the request, which only marks this superseded run.
+      - name: Push the fixed files
+        uses: csm-actions/securefix-action@ada5710dddfb54a0a55109e320830a757472ce04 # v0.6.4
+        with:
+          action: client
+          app_id: ${{ vars.SECUREFIX_CLIENT_APP_ID }}
+          app_private_key: ${{ secrets.SECUREFIX_CLIENT_APP_PRIVATE_KEY }}
+          server_repository: securefix-server
+          commit_message: "chore: apply automated fixes"
