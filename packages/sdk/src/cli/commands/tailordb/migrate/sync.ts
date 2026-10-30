@@ -365,7 +365,7 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
 export const syncCommand = defineAppCommand({
   name: "sync",
   description:
-    "Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).",
+    "Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.",
   notes: `The command refuses to run when the namespace records a migration history ID other than the local one, or one that cannot be read, unless the namespace has neither a checkpoint nor a history ID yet. \`--force\` overwrites the tables and that history ID with those of the local history, and still asks for confirmation unless \`--yes\` is given.`,
   args: z.strictObject({
     ...deploymentArgs,

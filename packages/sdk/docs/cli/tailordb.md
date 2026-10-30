@@ -106,7 +106,7 @@ tailor tailordb migration <command>
 | [`tailordb migration script`](#tailordb-migration-script)         | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                                                      |
 | [`tailordb migration set`](#tailordb-migration-set)               | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                                                            |
 | [`tailordb migration status`](#tailordb-migration-status)         | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                                                      |
-| [`tailordb migration sync`](#tailordb-migration-sync)             | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                                                                                                                                                                                     |
+| [`tailordb migration sync`](#tailordb-migration-sync)             | Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.                                                                                                                                                                          |
 | [`tailordb migration test`](#tailordb-migration-test)             | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                                                                                                                                                                                       |
 | [`tailordb migration validate`](#tailordb-migration-validate)     | Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
 
@@ -295,7 +295,7 @@ Local migration files are checked for a valid layout (numbering and required fil
 
 #### tailordb migration sync
 
-Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).
+Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.
 
 **Usage**
 
