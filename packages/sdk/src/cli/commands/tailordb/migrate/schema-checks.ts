@@ -17,9 +17,14 @@ import {
   formatDiffSummary,
   type MigrationDiff,
 } from "./diff-calculator";
+import { formatCheckpointMoveHints } from "./hints";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
-import { fetchRemoteMigrationState } from "./remote-state";
+import {
+  fetchRemoteMigrationState,
+  matchesLocalMigrationHistory,
+  type RemoteMigrationState,
+} from "./remote-state";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -30,11 +35,13 @@ import {
   createSnapshotFromRemoteTypes,
   getLatestMigrationNumber,
   getMigrationFilePath,
+  getMigrationFiles,
   loadDiff,
   isMigrationRestricted,
   MIGRATION_RESTRICTION_SETTINGS,
   MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
   stripFieldScriptProps,
+  type RebaselineMarker,
   type RemoteGqlPermission,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
@@ -44,6 +51,7 @@ import {
   type NormalizedSchemaSnapshot,
 } from "./snapshot";
 import {
+  type MigrationCheckpointRepair,
   type RebaselinePendingInfo,
   type RemoteSchemaVerificationResult,
   type SchemaDrift,
@@ -339,6 +347,99 @@ export async function compareRemoteSchemaWithSnapshot(
   );
 }
 
+/** Where a namespace's remote migration checkpoint stands in its local migration history. */
+export type RemoteCheckpointLocation =
+  | { kind: "unset" }
+  | {
+      kind: "outside";
+      number: number;
+      /** Latest local migration, or `null` when the local history has none */
+      localLatestMigration: number | null;
+      /** Whether the namespace records another migration history ID, or one that cannot be read */
+      historyIdMismatch: boolean;
+      rebaselinePending?: RebaselinePendingInfo;
+    }
+  | {
+      kind: "inside";
+      number: number;
+      checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
+    };
+
+/**
+ * Locate a namespace's remote migration checkpoint in its local migration history.
+ * @param remoteState - Remote migration state of the namespace
+ * @param migrationsDir - Migrations directory of the namespace
+ * @param rebaseline - Rebaseline marker of the local baseline, if any
+ * @returns `unset` when no checkpoint was recorded, `outside` when the local history has no record of the checkpoint or its history ID, and `inside` otherwise, with the reset to `0000` a re-baselined history offers
+ */
+export function locateRemoteCheckpoint(
+  remoteState: RemoteMigrationState,
+  migrationsDir: string,
+  rebaseline: RebaselineMarker | undefined,
+): RemoteCheckpointLocation {
+  const remoteMigrationNumber = remoteState.number;
+  const latestMigrationNumber = getLatestMigrationNumber(migrationsDir);
+  const localLatestMigration =
+    getMigrationFiles(migrationsDir).length > 0 ? latestMigrationNumber : null;
+  const historyIdMismatch = !matchesLocalMigrationHistory(
+    remoteState,
+    rebaseline?.historyId ?? null,
+  );
+  if (
+    remoteState.historyIdInvalid ||
+    (remoteMigrationNumber === null && remoteState.historyId !== null)
+  ) {
+    return {
+      kind: "outside",
+      number: remoteMigrationNumber ?? 0,
+      localLatestMigration,
+      historyIdMismatch,
+    };
+  }
+  if (remoteMigrationNumber === null) return { kind: "unset" };
+
+  const historyMatchesCurrent = rebaseline
+    ? remoteState.historyId === rebaseline.historyId
+    : remoteState.historyId === null;
+  const historyMatchesReplaced = rebaseline
+    ? remoteState.historyId === rebaseline.replacedHistoryId
+    : false;
+  const checkpointRepair =
+    rebaseline &&
+    historyMatchesReplaced &&
+    remoteMigrationNumber === rebaseline.replacedLatestMigration
+      ? ({
+          from: remoteMigrationNumber,
+          to: 0,
+          fromHistoryId: remoteState.historyId,
+          toHistoryId: rebaseline.historyId,
+        } as const)
+      : undefined;
+  const checkpointMissingLocal =
+    (!historyMatchesCurrent && !checkpointRepair) ||
+    (remoteMigrationNumber > latestMigrationNumber && !checkpointRepair);
+  if (checkpointMissingLocal) {
+    const rebaselinePending =
+      rebaseline &&
+      historyMatchesReplaced &&
+      remoteMigrationNumber < rebaseline.replacedLatestMigration
+        ? { replacedLatestMigration: rebaseline.replacedLatestMigration }
+        : undefined;
+    return {
+      kind: "outside",
+      number: remoteMigrationNumber,
+      localLatestMigration,
+      historyIdMismatch,
+      ...(rebaselinePending ? { rebaselinePending } : {}),
+    };
+  }
+  return {
+    kind: "inside",
+    number: remoteMigrationNumber,
+    ...(checkpointRepair ? { checkpointRepair } : {}),
+  };
+}
+
 /**
  * Verify remote schema matches the expected snapshot state
  * @param {OperatorClient} client - Operator client instance
@@ -363,75 +464,40 @@ export async function verifyRemoteSchema(
       client,
       resourceTrn(workspaceId, "tailordb", namespace),
     );
-    const { metadataExists, number: remoteMigrationNumber } = remoteState;
+    const location = locateRemoteCheckpoint(
+      remoteState,
+      migrationsDir,
+      reconstructSnapshotFromMigrations(migrationsDir, 0)?.rebaseline,
+    );
 
-    if (
-      remoteState.historyIdInvalid ||
-      (remoteMigrationNumber === null && remoteState.historyId !== null)
-    ) {
+    if (location.kind === "outside") {
       results.push({
         namespace,
-        remoteMigrationNumber: remoteMigrationNumber ?? 0,
+        remoteMigrationNumber: location.number,
         drifts: [],
         hasDrift: false,
         checkpointMissingLocal: true,
+        localLatestMigration: location.localLatestMigration,
+        historyIdMismatch: location.historyIdMismatch,
+        ...(location.rebaselinePending ? { rebaselinePending: location.rebaselinePending } : {}),
       });
       continue;
     }
 
     // If no migration label exists, this is likely a first apply - skip verification
     // Remote verification only makes sense when there's an established migration history
-    if (remoteMigrationNumber === null) {
+    if (location.kind === "unset") {
       results.push({
         namespace,
         remoteMigrationNumber: 0,
         drifts: [],
         hasDrift: false,
-        skipped: metadataExists ? "no_migration_label" : "not_deployed",
+        skipped: remoteState.metadataExists ? "no_migration_label" : "not_deployed",
       });
       continue;
     }
 
-    const latestMigrationNumber = getLatestMigrationNumber(migrationsDir);
-    const baselineSnapshot = reconstructSnapshotFromMigrations(migrationsDir, 0);
-    const rebaseline = baselineSnapshot?.rebaseline;
-    const historyMatchesCurrent = rebaseline
-      ? remoteState.historyId === rebaseline.historyId
-      : remoteState.historyId === null;
-    const historyMatchesReplaced = rebaseline
-      ? remoteState.historyId === rebaseline.replacedHistoryId
-      : false;
-    const checkpointRepair =
-      rebaseline &&
-      historyMatchesReplaced &&
-      remoteMigrationNumber === rebaseline.replacedLatestMigration
-        ? ({
-            from: remoteMigrationNumber,
-            to: 0,
-            fromHistoryId: remoteState.historyId,
-            toHistoryId: rebaseline.historyId,
-          } as const)
-        : undefined;
-    const checkpointMissingLocal =
-      (!historyMatchesCurrent && !checkpointRepair) ||
-      (remoteMigrationNumber > latestMigrationNumber && !checkpointRepair);
-    if (checkpointMissingLocal) {
-      const rebaselinePending =
-        rebaseline &&
-        historyMatchesReplaced &&
-        remoteMigrationNumber < rebaseline.replacedLatestMigration
-          ? { replacedLatestMigration: rebaseline.replacedLatestMigration }
-          : undefined;
-      results.push({
-        namespace,
-        remoteMigrationNumber,
-        drifts: [],
-        hasDrift: false,
-        checkpointMissingLocal: true,
-        ...(rebaselinePending ? { rebaselinePending } : {}),
-      });
-      continue;
-    }
+    const { number: remoteMigrationNumber, checkpointRepair } = location;
     const expectedMigrationNumber = checkpointRepair?.to ?? remoteMigrationNumber;
     const inProgressNumber =
       !checkpointRepair && remoteState.inProgress?.number === remoteMigrationNumber + 1
@@ -568,14 +634,51 @@ function hasRebaselinePending(
   return result.rebaselinePending !== undefined;
 }
 
+export interface CheckpointRecoveryInput extends CheckpointMissingGuidanceInput {
+  /** Latest local migration, or `null` when the local history has none */
+  localLatestMigration: number | null;
+  /** Whether the namespace records another migration history ID, or one that cannot be read */
+  historyIdMismatch: boolean;
+}
+
 /**
- * Log recovery guidance for namespaces whose remote migration checkpoint is not in the local
- * migration history, singling out the specific "fell behind before a rebaseline" cause when
- * present.
- * @param {readonly CheckpointMissingGuidanceInput[]} results - Namespaces with a missing checkpoint
- * @returns {void}
+ * Format recovery options for checkpoints outside the local history, excluding rebaseline recovery.
+ * @param results - Namespaces with a missing checkpoint
+ * @param configPath - Config file path to preserve in recovery commands
+ * @returns Recovery instructions for human and JSON errors
  */
-export function logMissingCheckpointGuidance(
+export function missingCheckpointRecoveryHints(
+  results: readonly CheckpointRecoveryInput[],
+  configPath?: string,
+): string[] {
+  const missing = results.filter((result) => !result.rebaselinePending);
+  if (missing.length === 0) return [];
+  const moveCommands = missing.flatMap(({ namespace, localLatestMigration, historyIdMismatch }) =>
+    localLatestMigration === null
+      ? []
+      : formatCheckpointMoveHints({
+          namespace,
+          migrationNumber: localLatestMigration,
+          configPath,
+          replaceHistoryId: historyIdMismatch,
+        }).map((hint) => `  ${hint}`),
+  );
+  return [
+    "Pull the latest migration files if this checkout is behind.",
+    ...(moveCommands.length > 0
+      ? [
+          "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy:",
+          ...moveCommands,
+        ]
+      : []),
+  ];
+}
+
+/**
+ * Log recovery steps for namespaces that fell behind before `migration rebaseline` ran.
+ * @param results - Namespaces with a missing checkpoint
+ */
+export function logRebaselinePendingGuidance(
   results: readonly CheckpointMissingGuidanceInput[],
 ): void {
   const pending = results.filter(hasRebaselinePending);
@@ -600,12 +703,6 @@ export function logMissingCheckpointGuidance(
     logger.info(
       "  3. Switch back to the current migration files and deploy again — the automatic checkpoint reset to the new baseline then applies.",
       { mode: "plain" },
-    );
-  }
-  if (pending.length < results.length) {
-    if (pending.length > 0) logger.newline();
-    logger.info(
-      "Pull the latest migration files, or run 'tailor tailordb migration status' to compare.",
     );
   }
 }

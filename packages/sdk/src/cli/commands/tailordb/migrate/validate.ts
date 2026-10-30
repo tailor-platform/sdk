@@ -26,7 +26,8 @@ import {
 import { formatMigrationScriptHint } from "./hints";
 import {
   checkMigrationDiffs,
-  logMissingCheckpointGuidance,
+  logRebaselinePendingGuidance,
+  missingCheckpointRecoveryHints,
   logRemoteDriftGuidance,
   toTailorDBDeployInput,
   verifyRemoteSchema,
@@ -87,6 +88,10 @@ interface CompletedRemoteSchemaReport {
    * before `migration rebaseline` ran, rather than a generic history mismatch.
    */
   rebaselinePending?: RebaselinePendingInfo;
+  /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
+  localLatestMigration?: number | null;
+  /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
+  historyIdMismatch?: boolean;
   checkpointRepair?: { from: number; to: 0 };
 }
 
@@ -97,6 +102,8 @@ interface FailedRemoteSchemaReport {
   drifts?: never;
   checkpointMissingLocal?: never;
   rebaselinePending?: never;
+  localLatestMigration?: never;
+  historyIdMismatch?: never;
   checkpointRepair?: never;
 }
 
@@ -272,6 +279,12 @@ function buildValidationReports(
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
       ...(remote.rebaselinePending ? { rebaselinePending: remote.rebaselinePending } : {}),
+      ...(remote.localLatestMigration !== undefined
+        ? { localLatestMigration: remote.localLatestMigration }
+        : {}),
+      ...(remote.historyIdMismatch !== undefined
+        ? { historyIdMismatch: remote.historyIdMismatch }
+        : {}),
       ...(remote.checkpointRepair ? { checkpointRepair: remote.checkpointRepair } : {}),
     };
 
@@ -510,18 +523,15 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
   if (reports.some((r) => r.localSchema?.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create migration files.");
   }
-  const missingCheckpointReports = reports.filter(hasMissingCheckpoint);
-  if (missingCheckpointReports.length > 0) {
-    logMissingCheckpointGuidance(
-      missingCheckpointReports.map((r) => ({
-        namespace: r.namespace,
-        remoteMigrationNumber: r.remoteSchema.remoteMigrationNumber,
-        ...(r.remoteSchema.rebaselinePending
-          ? { rebaselinePending: r.remoteSchema.rebaselinePending }
-          : {}),
-      })),
-    );
-  }
+  logRebaselinePendingGuidance(
+    reports.filter(hasMissingCheckpoint).map((r) => ({
+      namespace: r.namespace,
+      remoteMigrationNumber: r.remoteSchema.remoteMigrationNumber,
+      ...(r.remoteSchema.rebaselinePending
+        ? { rebaselinePending: r.remoteSchema.rebaselinePending }
+        : {}),
+    })),
+  );
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
     logRemoteDriftGuidance(
       reports.map((r) => ({
@@ -582,6 +592,16 @@ async function validate(options: ValidateOptions): Promise<void> {
     throw CLIError({
       code: "MIGRATION_VALIDATION_FAILED",
       message: `Migration validation failed for ${invalidCount} namespace(s)`,
+      suggestion:
+        missingCheckpointRecoveryHints(
+          reports.filter(hasMissingCheckpoint).map((report) => ({
+            namespace: report.namespace,
+            ...report.remoteSchema,
+            localLatestMigration: report.remoteSchema.localLatestMigration ?? null,
+            historyIdMismatch: report.remoteSchema.historyIdMismatch ?? false,
+          })),
+          options.configPath,
+        ).join("\n") || undefined,
     });
   }
 }

@@ -381,6 +381,66 @@ describe("tailordb migration status --json", () => {
         error: expect.stringMatching(/checkpoint 0009.*ahead.*latest local migration 0002/i),
       },
     ]);
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).toContain("sync 0002 --namespace tailordb");
+    expect(error).toContain("set 0002 --namespace tailordb");
+    expect(error).toContain("rewrites the tables");
+    expect(error).toContain("moves only the checkpoint");
+    expect(error).not.toContain("--force");
+  });
+
+  test.each([
+    { history: "another migration history ID", label: "hremote" },
+    { history: "a migration history label it cannot read", label: "Not a history ID" },
+  ])("offers to replace $history with --force", async ({ label }) => {
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-history": label } },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).toContain("Pull the latest migration files");
+    expect(error).toContain("sync 0002 --force --namespace tailordb");
+    expect(error).toContain("set 0002 --force --namespace tailordb");
+    expect(error).toContain("replaces the migration history ID");
+  });
+
+  test("does not offer to move a checkpoint the next deploy resets to the new baseline", async () => {
+    writeRebaselineMarker(state.migrationsDir, "hlocal", "hprevious");
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0000", "sdk-migration-history": "hprevious" } },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).not.toContain("migration sync");
+    expect(error).not.toContain("migration set");
+  });
+
+  test("does not suggest checkpoint moves without a local snapshot", async () => {
+    fs.rmSync(state.migrationsDir, { recursive: true });
+    fs.mkdirSync(state.migrationsDir);
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).toContain("Pull the latest migration files");
+    expect(error).not.toContain("migration sync");
+    expect(error).not.toContain("migration set");
   });
 
   test("identifies a migration history mismatch in human-readable output", async () => {
