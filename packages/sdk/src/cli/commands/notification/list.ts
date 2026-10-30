@@ -4,7 +4,7 @@ import {
   NotificationSeverity,
 } from "@tailor-platform/tailor-proto/notification_resource_pb";
 import { z } from "zod";
-import { paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { pagedLogArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { humanizeRelativeTime } from "#/cli/shared/format";
@@ -33,7 +33,7 @@ export const listCommand = defineAppCommand({
   name: "list",
   description: "List the notifications in your inbox.",
   args: z.strictObject({
-    ...paginationArgs(),
+    ...pagedLogArgs,
     profile: workspaceArgs.profile,
     category: arg(z.enum(categoryNames).optional(), {
       description: `Only this category (${categoryNames.join(", ")})`,

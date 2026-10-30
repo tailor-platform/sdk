@@ -68,7 +68,7 @@ tailor notification list [options]
 | Option                                      | Alias | Description                                                     | Required | Default  | Env                       |
 | ------------------------------------------- | ----- | --------------------------------------------------------------- | -------- | -------- | ------------------------- |
 | `--order <ORDER>`                           | -     | Sort order (asc or desc)                                        | No       | `"desc"` | -                         |
-| `--limit <LIMIT>`                           | `-l`  | Maximum number of items to return (0 or omit: unlimited)        | No       | -        | -                         |
+| `--limit <LIMIT>`                           | `-l`  | Maximum number of items to return (0: unlimited)                | No       | `50`     | -                         |
 | `--profile <PROFILE>`                       | `-p`  | Workspace profile                                               | No       | -        | `TAILOR_PLATFORM_PROFILE` |
 | `--category <CATEGORY>`                     | -     | Only this category (alert, incident, maintenance, announcement) | No       | -        | -                         |
 | `--severity <SEVERITY>`                     | -     | Only this severity or higher (info, warning, critical)          | No       | -        | -                         |
