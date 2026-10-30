@@ -1072,7 +1072,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         timeout: cloneTimeout,
       });
     },
-    deployMigrations: async ({ prepared, targetWorkspaceId }) => {
+    deployMigrations: async ({ prepared, targetWorkspaceId, machineUser }) => {
       const state = stateOrThrow(runtimeState);
       await deployMigrationTestTarget(
         {
@@ -1082,6 +1082,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
           yes: true,
         },
         prepared.targetSnapshots,
+        machineUser,
       );
     },
     runAssertion: async ({

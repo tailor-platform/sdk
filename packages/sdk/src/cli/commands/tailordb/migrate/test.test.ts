@@ -133,6 +133,16 @@ describe("tailordb migration test", () => {
     expect(dependencies.seedData).not.toHaveBeenCalled();
   });
 
+  test("runs the pending migration scripts as the given machine user", async () => {
+    const dependencies = createDependencies([]);
+
+    await runMigrationTest({ data: "clone", machineUser: "admin" }, dependencies);
+
+    expect(dependencies.deployMigrations).toHaveBeenCalledWith(
+      expect.objectContaining({ machineUser: "admin" }),
+    );
+  });
+
   test("passes the clone timeout to the clone step", async () => {
     const dependencies = createDependencies([]);
 

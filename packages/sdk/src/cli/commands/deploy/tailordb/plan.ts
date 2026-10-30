@@ -47,6 +47,7 @@ import {
   normalizeComparableGqlPermission,
   normalizeComparableTailorDBType,
 } from "./compare";
+import { assertMigrationScriptsBundle, resolveMigrationMachineUsers } from "./migration";
 import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import { validateAndDetectMigrations } from "./migration-validation";
 import type { PlanContext } from "../types";
@@ -101,8 +102,9 @@ export async function planTailorDB(context: PlanContext) {
     }
   }
 
-  // Validate migrations at plan time so a missing migration script fails the
-  // deploy (including --dry-run) before any resource is applied.
+  // Validate migrations at plan time so a migration script that is missing,
+  // cannot be bundled, or has no machine user to run it fails the deploy
+  // (including --dry-run) before any resource is applied.
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
   for (const tailordb of tailordbs) {
     typesByNamespace.set(tailordb.namespace, tailordb.types);
@@ -156,6 +158,13 @@ export async function planTailorDB(context: PlanContext) {
       pendingMigrations: detected.pendingMigrations,
       inProgressByNamespace: detected.inProgressMigrations,
     });
+    resolveMigrationMachineUsers(context, detected.pendingMigrations);
+    await assertMigrationScriptsBundle(
+      detected.pendingMigrations,
+      detected.inProgressMigrations,
+      application.env,
+      path.dirname(config.path),
+    );
   }
   const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = detected ?? {
     namespacesWithMigrations: migrationConfig,
@@ -213,6 +222,9 @@ export async function planTailorDB(context: PlanContext) {
       noSchemaCheck: noSchemaCheck ?? false,
       ...(migrationSkipSteps ? { migrationSkipSteps } : {}),
       ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
+      ...(context.migrationMachineUserOverride !== undefined
+        ? { migrationMachineUserOverride: context.migrationMachineUserOverride }
+        : {}),
       namespacesWithMigrations,
       migrationFileState,
       checkpointRepairs,

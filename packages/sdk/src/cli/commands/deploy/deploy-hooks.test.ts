@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   getAIGateway: vi.fn(),
   listAuthOAuth2Clients: vi.fn(),
   fetchMissingDependentApps: vi.fn(),
+  planTailorDB: vi.fn(),
 }));
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
@@ -60,7 +61,7 @@ vi.mock(import("./function-registry"), async (original) => ({
 }));
 vi.mock(import("./tailordb"), async (original) => ({
   ...(await original()),
-  planTailorDB: async () => mocks.results.tailorDB,
+  planTailorDB: mocks.planTailorDB,
 }));
 vi.mock(import("./staticwebsite"), async (original) => ({
   ...(await original()),
@@ -131,6 +132,7 @@ beforeEach(() => {
     },
   } as unknown as BuiltDeploymentTarget;
   mocks.results = emptyPlanResults();
+  mocks.planTailorDB.mockImplementation(async () => mocks.results.tailorDB);
   mocks.apply.mockResolvedValue([]);
   mocks.fetchMissingDependentApps.mockResolvedValue([]);
   mocks.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
@@ -213,6 +215,13 @@ test("does not execute hooks during a migration target deploy", async () => {
   await deployMigrationTestTarget({ yes: true, noValidate: true }, new Map());
   expect(hook).not.toHaveBeenCalled();
   expect(mocks.getApplication).not.toHaveBeenCalled();
+});
+test("plans a migration target deploy to run the scripts as the given machine user", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  await deployMigrationTestTarget({ yes: true, noValidate: true }, new Map(), "admin");
+  expect(mocks.planTailorDB).toHaveBeenCalledWith(
+    expect.objectContaining({ migrationMachineUserOverride: "admin" }),
+  );
 });
 test("adds hook outputs to the JSON deployment result", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");

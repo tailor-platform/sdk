@@ -12,28 +12,16 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { statusCommand } from "./status";
 import { migrationDbConfig } from "./test-helpers/migration-config";
-import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import {
+  writeDiff,
+  writeInitialSchema,
+  writeRebaselineMarker,
+} from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
   getMetadata: vi.fn(),
 }));
-
-function markHistoryAsRebaselined(historyId = "hlocal"): void {
-  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-  fs.writeFileSync(
-    schemaPath,
-    JSON.stringify({
-      ...schema,
-      rebaseline: {
-        historyId,
-        replacedHistoryId: null,
-        replacedLatestMigration: 0,
-      },
-    }),
-  );
-}
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
@@ -353,7 +341,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("reports a remote migration history mismatch", async () => {
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hremote" },
@@ -396,7 +384,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("identifies a migration history mismatch in human-readable output", async () => {
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hremote" },
@@ -414,7 +402,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("accepts a matching remote migration history", async () => {
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hlocal" },
@@ -437,7 +425,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("does not report a history mismatch for an undeployed namespace", async () => {
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);

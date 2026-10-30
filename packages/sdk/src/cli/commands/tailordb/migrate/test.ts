@@ -147,13 +147,13 @@ export async function runMigrationTest(
       await dependencies.seedData(dataTarget);
     }
 
-    await dependencies.deployMigrations(target);
+    const scriptTarget = { ...target, machineUser: options.machineUser };
+    await dependencies.deployMigrations(scriptTarget);
     if (options.assertionPath) {
       await dependencies.runAssertion({
-        ...target,
+        ...scriptTarget,
         assertionPath: options.assertionPath,
         assertionNamespace: options.assertionNamespace,
-        machineUser: options.machineUser,
       });
     }
   } catch (error) {
@@ -265,7 +265,7 @@ export const testCommand = defineAppCommand({
       completion: { type: "none" },
     }),
     "machine-user": arg(z.string().optional(), {
-      description: "Machine user for seed and assertion script execution",
+      description: "Machine user for seed, migration, and assertion script execution",
     }),
   }),
   run: async (args) => {

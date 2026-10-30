@@ -18,9 +18,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read # checkout the repository
-    outputs:
-      lint-failed: ${{ steps.lint.outcome == 'failure' || steps.lint_vitest.outcome == 'failure' || steps.lint_tooling.outcome == 'failure' }}
-      format-failed: ${{ steps.format.outcome == 'failure' }}
 
     steps:
       - name: Checkout
@@ -148,44 +145,3 @@ jobs:
           # `@deprecated` declaration fails here.
           - name: Check deprecations
             run: pnpm run check:deprecations
-
-  auto-fix-lint-format:
-    name: Auto-fix lint/format (renovate)
-    needs: [ci]
-    if: >-
-      always() &&
-      (needs.ci.outputs.lint-failed == 'true' || needs.ci.outputs.format-failed == 'true') &&
-      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
-      github.event.pull_request.user.login == 'renovate[bot]' &&
-      github.event.pull_request.user.type == 'Bot'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read # checkout the PR head
-
-    steps:
-      - name: Checkout PR head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Install aqua
-        uses: $/.github/actions/install-aqua
-
-      - name: Install deps
-        uses: $/.github/actions/install-deps
-
-      - name: Apply lint fix
-        run: pnpm run lint:fix
-
-      - name: Apply format fix
-        run: pnpm run format
-
-      - name: Push changes to the remote branch
-        uses: suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7 # v1.1.0
-        with:
-          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
-          commit_message: "chore: apply oxlint --fix and oxfmt --write"
-          fail_on_self_push: false

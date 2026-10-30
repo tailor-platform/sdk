@@ -5,6 +5,10 @@ export type HttpAdapterConfigInput = {
   name: string;
   /** Path pattern with segment wildcards (trailing or single-segment) */
   pathPattern: string;
+  /** Whether the adapter is active */
+  enabled?: boolean | undefined;
+  /** Matching priority; the lowest value wins when multiple adapters match */
+  priority?: number | undefined;
   /** Per-method functions that transform HTTP requests to GraphQL requests */
   input: {
     /** Handler for GET requests */
@@ -18,10 +22,6 @@ export type HttpAdapterConfigInput = {
     /** Handler for DELETE requests */
     delete?: Function | undefined;
   };
-  /** Whether the adapter is active */
-  enabled?: boolean | undefined;
-  /** Matching priority; the lowest value wins when multiple adapters match */
-  priority?: number | undefined;
   /** Function that transforms GraphQL response to HTTP response */
   output?: Function | undefined;
 };

@@ -4,6 +4,7 @@ import {
   assertNoMigrationInProgress,
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
+  matchesLocalMigrationHistory,
   type RemoteMigrationState,
 } from "./remote-state";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -159,5 +160,56 @@ describe("isStaleMigrationInProgress", () => {
     ["nothing is in progress", state(3, null), false],
   ])("%s", (_label, input, expected) => {
     expect(isStaleMigrationInProgress(input)).toBe(expected);
+  });
+});
+
+describe("matchesLocalMigrationHistory", () => {
+  const state = (
+    number: number | null,
+    historyId: string | null,
+    historyIdInvalid = false,
+  ): RemoteMigrationState => ({
+    metadataExists: true,
+    number,
+    historyId,
+    historyIdInvalid,
+    inProgress: null,
+    inProgressInvalid: false,
+    maintenanceModeCheckpoint: null,
+  });
+
+  test.each([
+    ["the namespace records no checkpoint or history yet", state(null, null), "hlocal", true],
+    ["both histories are markerless", state(2, null), null, true],
+    ["both record the same history", state(2, "hlocal"), "hlocal", true],
+    [
+      "only a history ID is recorded, and it is the local one",
+      state(null, "hlocal"),
+      "hlocal",
+      true,
+    ],
+    ["the namespace records another history", state(2, "hother"), "hlocal", false],
+    [
+      "the namespace records a history the markerless local one lacks",
+      state(2, "hother"),
+      null,
+      false,
+    ],
+    ["a markerless checkpoint meets a re-baselined local history", state(2, null), "hlocal", false],
+    [
+      "only a history ID is recorded, and it is another one",
+      state(null, "hother"),
+      "hlocal",
+      false,
+    ],
+    ["the history label cannot be read", state(2, null, true), null, false],
+    [
+      "the history label cannot be read and no checkpoint is set",
+      state(null, null, true),
+      null,
+      false,
+    ],
+  ])("%s", (_label, input, localHistoryId, expected) => {
+    expect(matchesLocalMigrationHistory(input, localHistoryId)).toBe(expected);
   });
 });
