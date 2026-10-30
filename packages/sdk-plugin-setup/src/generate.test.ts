@@ -436,6 +436,19 @@ describe("renderBranchWorkflow", () => {
     );
   });
 
+  test("writes the ERD exports' type definitions to the scratch output directory", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(buildStep).toContain('TAILOR_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts"');
+    expect(buildStep).toContain('TAILOR_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts"');
+  });
+
   test("uses the base setup app directory for ERD base export", () => {
     const { content } = renderBranchWorkflow({
       ...branchBase,
@@ -482,9 +495,7 @@ describe("renderBranchWorkflow", () => {
     expect(buildStep).not.toContain(
       'cd "$GITHUB_WORKSPACE/$APP_DIR"\n              case "__PACKAGE_MANAGER__"',
     );
-    expect(buildStep).not.toContain(
-      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            TAILOR_PLATFORM_SDK_DTS_PATH',
-    );
+    expect(buildStep).not.toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"\n            TAILOR_DTS_PATH');
     expect(buildStep).not.toContain(
       'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_cli tailordb erd diff',
     );

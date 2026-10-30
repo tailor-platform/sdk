@@ -266,7 +266,7 @@ export function main() {
           sourceFile,
           "export default { body: ({ input }: { input: unknown }) => input };\n",
         );
-        process.env.TAILOR_SDK_OUTPUT_DIR = outputDir;
+        process.env.TAILOR_BUILD_OUTPUT_DIR = outputDir;
 
         const result = await bundleForRun({
           detected: { type: "resolver", name: "cross-project" },
