@@ -215,12 +215,15 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
         error:
           `Remote migration checkpoint ${formatMigrationNumber(currentMigration)} is ahead of ` +
           `the latest local migration ${formatMigrationNumber(latestLocalMigration)}.\n` +
-          "Pull the latest migration files, or move the checkpoint back on purpose: " +
-          formatCheckpointMoveHints({
-            namespace,
-            migrationNumber: formatMigrationNumber(latestLocalMigration),
-            configPath: options.configPath,
-          }).join(" or "),
+          "Pull the latest migration files." +
+          (migrationFiles.length > 0
+            ? " Or move the checkpoint back on purpose: " +
+              formatCheckpointMoveHints({
+                namespace,
+                migrationNumber: formatMigrationNumber(latestLocalMigration),
+                configPath: options.configPath,
+              }).join(" or ")
+            : ""),
       });
       continue;
     }

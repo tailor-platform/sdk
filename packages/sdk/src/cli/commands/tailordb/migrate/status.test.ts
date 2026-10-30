@@ -388,6 +388,22 @@ describe("tailordb migration status --json", () => {
     expect(error).toContain("moves only the checkpoint");
   });
 
+  test("does not suggest checkpoint moves without a local snapshot", async () => {
+    fs.rmSync(state.migrationsDir, { recursive: true });
+    fs.mkdirSync(state.migrationsDir);
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).toContain("Pull the latest migration files");
+    expect(error).not.toContain("migration sync");
+    expect(error).not.toContain("migration set");
+  });
+
   test("identifies a migration history mismatch in human-readable output", async () => {
     writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockResolvedValue({
