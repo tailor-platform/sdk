@@ -757,21 +757,85 @@ describe("platform environment variables", () => {
   aroundEach(async (runTest) => {
     await runTest();
     vi.unstubAllEnvs();
+    vi.resetModules();
   });
 
-  test("uses legacy platform env vars when renamed vars are absent", () => {
+  async function importFreshClient() {
+    vi.resetModules();
+    const { logger } = await import("./logger");
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    return { client: await import("./client"), warnSpy };
+  }
+
+  test("uses legacy platform env vars when renamed vars are absent, warning once per name", async () => {
     vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
     vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    const { client, warnSpy } = await importFreshClient();
 
-    expect(getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
-    expect(getOAuth2ClientId()).toBe("legacy-client");
-    expect(getEffectivePlatformConfig()).toEqual({
+    expect(client.getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
+    expect(client.getOAuth2ClientId()).toBe("legacy-client");
+    expect(client.getEffectivePlatformConfig()).toEqual({
       platformUrl: "https://api.legacy.tailor.tech",
       oauth2ClientId: "legacy-client",
     });
+    expect(warnSpy.mock.calls).toEqual([
+      ["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."],
+      [
+        "PLATFORM_OAUTH2_CLIENT_ID is deprecated. Please use TAILOR_PLATFORM_OAUTH2_CLIENT_ID instead.",
+      ],
+    ]);
   });
 
-  test("prefers renamed platform env vars over legacy env vars", () => {
+  test.each([
+    {
+      name: "uses the default platform when neither name is set",
+      env: {},
+      platformUrl: "https://api.tailor.tech",
+      warnings: [],
+    },
+    {
+      name: "uses the renamed var without warning",
+      env: { TAILOR_PLATFORM_URL: "https://api.dev.tailor.tech" },
+      platformUrl: "https://api.dev.tailor.tech",
+      warnings: [],
+    },
+    {
+      name: "treats an empty renamed var as unset",
+      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "https://api.legacy.tailor.tech" },
+      platformUrl: "https://api.legacy.tailor.tech",
+      warnings: [["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."]],
+    },
+    {
+      name: "treats empty vars as unset without warning",
+      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "" },
+      platformUrl: "https://api.tailor.tech",
+      warnings: [],
+    },
+  ])("$name", async ({ env, platformUrl, warnings }) => {
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    const { client, warnSpy } = await importFreshClient();
+
+    expect(client.getPlatformBaseUrl()).toBe(platformUrl);
+    expect(warnSpy.mock.calls).toEqual(warnings);
+  });
+
+  test("does not warn when the profile supplies the platform settings", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    const { client, warnSpy } = await importFreshClient();
+    const profile = {
+      platformUrl: "https://api.profile.tailor.tech",
+      oauth2ClientId: "profile-client",
+    };
+
+    expect(client.getPlatformBaseUrl(profile)).toBe("https://api.profile.tailor.tech");
+    expect(client.getOAuth2ClientId(profile)).toBe("profile-client");
+    expect(client.getEffectivePlatformConfig(profile)).toEqual(profile);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("prefers renamed platform env vars over legacy env vars without warning", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
     vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
@@ -783,6 +847,7 @@ describe("platform environment variables", () => {
       platformUrl: "https://api.dev.tailor.tech",
       oauth2ClientId: "dev-client",
     });
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 

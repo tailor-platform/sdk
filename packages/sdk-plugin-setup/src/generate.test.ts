@@ -436,6 +436,19 @@ describe("renderBranchWorkflow", () => {
     );
   });
 
+  test("writes the ERD exports' type definitions to the scratch output directory", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(buildStep).toContain('TAILOR_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts"');
+    expect(buildStep).toContain('TAILOR_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts"');
+  });
+
   test("uses the base setup app directory for ERD base export", () => {
     const { content } = renderBranchWorkflow({
       ...branchBase,
@@ -482,9 +495,7 @@ describe("renderBranchWorkflow", () => {
     expect(buildStep).not.toContain(
       'cd "$GITHUB_WORKSPACE/$APP_DIR"\n              case "__PACKAGE_MANAGER__"',
     );
-    expect(buildStep).not.toContain(
-      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            TAILOR_PLATFORM_SDK_DTS_PATH',
-    );
+    expect(buildStep).not.toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"\n            TAILOR_DTS_PATH');
     expect(buildStep).not.toContain(
       'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_cli tailordb erd diff',
     );
@@ -729,8 +740,7 @@ describe("multi-directory branch workflow", () => {
     );
 
     expect(plan?.env).toEqual({
-      TAILOR_PLATFORM_SDK_CONFIG_PATH:
-        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      TAILOR_CONFIG_PATH: "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
     });
     expect(plan?.with).not.toHaveProperty("working-directory");
   });
@@ -742,8 +752,7 @@ describe("multi-directory branch workflow", () => {
     );
 
     expect(apply?.env).toEqual({
-      TAILOR_PLATFORM_SDK_CONFIG_PATH:
-        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      TAILOR_CONFIG_PATH: "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
     });
     expect(apply?.with).not.toHaveProperty("working-directory");
   });
@@ -1167,8 +1176,7 @@ describe("multi-directory tag workflow", () => {
       workflow.jobs[job]?.steps.find((step) => step.id === id)?.env;
 
     expect(configEnv("tailor-plan", "tailor-plan")).toEqual({
-      TAILOR_PLATFORM_SDK_CONFIG_PATH:
-        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      TAILOR_CONFIG_PATH: "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
     });
     expect(configEnv("tailor-deploy", "tailor-apply")).toEqual(
       configEnv("tailor-plan", "tailor-plan"),
@@ -1199,8 +1207,7 @@ describe("multi-directory preview workflow", () => {
     ]?.steps.find((step) => step.id === "tailor-preview-deploy");
 
     expect(deploy?.env).toEqual({
-      TAILOR_PLATFORM_SDK_CONFIG_PATH:
-        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      TAILOR_CONFIG_PATH: "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
     });
     expect(deploy?.with).not.toHaveProperty("working-directory");
     expect(generatedIds).toEqual(
@@ -3423,7 +3430,7 @@ export default defineConfig({
 
       const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-erp.yml"), "utf-8");
       expect(wf).toContain(
-        "TAILOR_PLATFORM_SDK_CONFIG_PATH: apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+        "TAILOR_CONFIG_PATH: apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
       );
       expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({
         dir: ".",
