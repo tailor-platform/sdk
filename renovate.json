@@ -40,10 +40,10 @@
       "customType": "regex",
       "managerFilePatterns": ["/^packages/sdk-plugin-setup/src/templates\\.ts$/"],
       "matchStrings": [
-        "export const ACTIONS_SHA = \"(?<currentDigest>[a-f0-9]+)\";\\nexport const ACTIONS_VERSION = \"(?<currentValue>v[\\d.]+)\";"
+        "const TEMPLATE_CHANGED_SINCE_RELEASE = (?:true|false);\\nexport const ACTIONS_SHA = \"(?<currentDigest>[a-f0-9]+)\";\\nexport const ACTIONS_VERSION = \"(?<currentValue>v[\\d.]+)\";"
       ],
       "depNameTemplate": "tailor-platform/actions",
-      "autoReplaceStringTemplate": "export const ACTIONS_SHA = \"{{newDigest}}\";\nexport const ACTIONS_VERSION = \"{{newValue}}\";",
+      "autoReplaceStringTemplate": "const TEMPLATE_CHANGED_SINCE_RELEASE = true;\nexport const ACTIONS_SHA = \"{{newDigest}}\";\nexport const ACTIONS_VERSION = \"{{newValue}}\";",
       "datasourceTemplate": "github-tags"
     }
   ],

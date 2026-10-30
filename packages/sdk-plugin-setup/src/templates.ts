@@ -6,7 +6,10 @@ import tagTemplate from "./tag.workflow.yml";
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
 // Released template fingerprint: 65fef953eac654ad98514cedca78053db6c64d7a05187bf9ed8ce37b98b05cdc
 const RELEASED_TEMPLATE_VERSION = 22;
-const TEMPLATE_CHANGED_SINCE_RELEASE = false;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
+export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
+export const ACTIONS_VERSION = "v2.8.0";
+
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
   RELEASED_TEMPLATE_VERSION + (TEMPLATE_CHANGED_SINCE_RELEASE ? 1 : 0);
@@ -761,6 +764,3 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
 
   return appendResultJob({ content: out, generatedIds }, "tailor-preview-result");
 }
-
-export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
-export const ACTIONS_VERSION = "v2.8.0";
