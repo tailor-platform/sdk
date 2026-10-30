@@ -2521,6 +2521,51 @@ describe("applyTailorDB migration label reconciliation", () => {
     },
   );
 
+  test.each<{ checkpoint: string; labels: Record<string, string>; historyIdMismatch: boolean }>([
+    {
+      checkpoint: "ahead of the local migration history",
+      labels: { "sdk-migration": "m0002" },
+      historyIdMismatch: false,
+    },
+    {
+      checkpoint: "in another migration history",
+      labels: { "sdk-migration": "m0000", "sdk-migration-history": "hprevious" },
+      historyIdMismatch: true,
+    },
+    {
+      checkpoint: "in a migration history label it cannot read",
+      labels: { "sdk-migration": "m0000", "sdk-migration-history": "Not a history ID" },
+      historyIdMismatch: true,
+    },
+  ])(
+    "suggests --force only to replace the migration history of a checkpoint $checkpoint",
+    async ({ labels, historyIdMismatch }) => {
+      const { client } = createMigrationClient(labels);
+      using _stderr = captureStderr();
+
+      for (const noSchemaCheck of [false, true]) {
+        const error = await runValidation(client, makePlanResult(noSchemaCheck)).catch(
+          (failure: unknown) => failure,
+        );
+
+        expect(error).toMatchObject({
+          code: "MIGRATION_CHECKPOINT_UNKNOWN",
+          context: { namespaces: [{ namespace: "test-tailordb", historyIdMismatch }] },
+        });
+        const commands = (error as { suggestion: string }).suggestion
+          .split("\n")
+          .filter((line) => line.startsWith("  "));
+        expect(commands).toHaveLength(2);
+        for (const command of commands) {
+          expect(command.includes(" 0000 --force --namespace test-tailordb")).toBe(
+            historyIdMismatch,
+          );
+          expect(command.includes("replaces the migration history ID")).toBe(historyIdMismatch);
+        }
+      }
+    },
+  );
+
   test("suggests moving each namespace's checkpoint to its own latest local migration, if it has one", async () => {
     for (const [namespace, lastMigration] of [
       ["inventory", 0],

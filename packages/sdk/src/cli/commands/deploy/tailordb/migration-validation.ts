@@ -248,10 +248,17 @@ function assertCheckpointsInLocalHistory(
     ].join("\n"),
     context: {
       namespaces: missing.map(
-        ({ namespace, remoteMigrationNumber, rebaselinePending, localLatestMigration }) => ({
+        ({
+          namespace,
+          remoteMigrationNumber,
+          rebaselinePending,
+          localLatestMigration,
+          historyIdMismatch,
+        }) => ({
           namespace,
           remoteCheckpoint: remoteMigrationNumber,
           localLatestMigration,
+          historyIdMismatch,
           ...(rebaselinePending && {
             replacedLatestMigration: rebaselinePending.replacedLatestMigration,
           }),
@@ -348,7 +355,13 @@ export async function validateAndDetectMigrations(
       assertCheckpointsInLocalHistory(
         remoteVerificationResults.flatMap((result) =>
           result.checkpointMissingLocal
-            ? [{ ...result, localLatestMigration: result.localLatestMigration ?? null }]
+            ? [
+                {
+                  ...result,
+                  localLatestMigration: result.localLatestMigration ?? null,
+                  historyIdMismatch: result.historyIdMismatch ?? false,
+                },
+              ]
             : [],
         ),
         config.path,
@@ -410,6 +423,7 @@ export async function validateAndDetectMigrations(
                   namespace,
                   remoteMigrationNumber: location.number,
                   localLatestMigration: location.localLatestMigration,
+                  historyIdMismatch: location.historyIdMismatch,
                   ...(location.rebaselinePending
                     ? { rebaselinePending: location.rebaselinePending }
                     : {}),

@@ -368,6 +368,7 @@ describe("tailordb migration validate", () => {
       checkpointMissingLocal: true,
       rebaselinePending: { replacedLatestMigration: 5 },
       localLatestMigration: 0,
+      historyIdMismatch: true,
     });
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
@@ -392,6 +393,7 @@ describe("tailordb migration validate", () => {
       drifts: [],
       checkpointMissingLocal: true,
       localLatestMigration: 0,
+      historyIdMismatch: true,
     });
   });
 
@@ -414,10 +416,13 @@ describe("tailordb migration validate", () => {
       expect(stderr.output).not.toContain("Pull the latest migration files");
       const { suggestion } = result.error as CLIError;
       expect(suggestion).toContain("Pull the latest migration files");
-      expect(suggestion).toContain("sync 0000 --namespace tailordb --config=custom.config.ts");
-      expect(suggestion).toContain("set 0000 --namespace tailordb");
+      expect(suggestion).toContain(
+        "sync 0000 --force --namespace tailordb --config=custom.config.ts",
+      );
+      expect(suggestion).toContain("set 0000 --force --namespace tailordb");
       expect(suggestion).toContain("rewrites the tables");
       expect(suggestion).toContain("moves only the checkpoint");
+      expect(suggestion).toContain("replaces the migration history ID");
     },
   );
 

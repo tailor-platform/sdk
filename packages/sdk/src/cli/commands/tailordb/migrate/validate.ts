@@ -90,6 +90,8 @@ interface CompletedRemoteSchemaReport {
   rebaselinePending?: RebaselinePendingInfo;
   /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
   localLatestMigration?: number | null;
+  /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
+  historyIdMismatch?: boolean;
   checkpointRepair?: { from: number; to: 0 };
 }
 
@@ -101,6 +103,7 @@ interface FailedRemoteSchemaReport {
   checkpointMissingLocal?: never;
   rebaselinePending?: never;
   localLatestMigration?: never;
+  historyIdMismatch?: never;
   checkpointRepair?: never;
 }
 
@@ -278,6 +281,9 @@ function buildValidationReports(
       ...(remote.rebaselinePending ? { rebaselinePending: remote.rebaselinePending } : {}),
       ...(remote.localLatestMigration !== undefined
         ? { localLatestMigration: remote.localLatestMigration }
+        : {}),
+      ...(remote.historyIdMismatch !== undefined
+        ? { historyIdMismatch: remote.historyIdMismatch }
         : {}),
       ...(remote.checkpointRepair ? { checkpointRepair: remote.checkpointRepair } : {}),
     };
@@ -592,6 +598,7 @@ async function validate(options: ValidateOptions): Promise<void> {
             namespace: report.namespace,
             ...report.remoteSchema,
             localLatestMigration: report.remoteSchema.localLatestMigration ?? null,
+            historyIdMismatch: report.remoteSchema.historyIdMismatch ?? false,
           })),
           options.configPath,
         ).join("\n") || undefined,

@@ -83,6 +83,8 @@ export function formatNamespaceMigrationHint(options: NamespaceMigrationCommandO
 
 interface CheckpointMoveHintOptions extends RebaselineCommandOptions {
   migrationNumber: string;
+  /** Whether the namespace records another migration history ID, which only `--force` replaces */
+  replaceHistoryId?: boolean;
 }
 
 /**
@@ -91,11 +93,14 @@ interface CheckpointMoveHintOptions extends RebaselineCommandOptions {
  * @returns Commands and their effects on the remote schema
  */
 export function formatCheckpointMoveHints(options: CheckpointMoveHintOptions): string[] {
+  const { migrationNumber, replaceHistoryId, ...commandOptions } = options;
   return (["sync", "set"] as const).map((subcommand) => {
     const command = formatNamespaceMigrationHint({
-      ...options,
-      subcommand: [subcommand, options.migrationNumber],
+      ...commandOptions,
+      subcommand: [subcommand, migrationNumber, ...(replaceHistoryId ? ["--force"] : [])],
     });
-    return `${command} (${subcommand === "sync" ? "rewrites the tables to that snapshot" : "moves only the checkpoint"})`;
+    const effect =
+      subcommand === "sync" ? "rewrites the tables to that snapshot" : "moves only the checkpoint";
+    return `${command} (${effect}${replaceHistoryId ? " and replaces the migration history ID" : ""})`;
   });
 }

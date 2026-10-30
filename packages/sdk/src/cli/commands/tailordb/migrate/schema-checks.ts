@@ -20,7 +20,11 @@ import {
 import { formatCheckpointMoveHints } from "./hints";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
-import { fetchRemoteMigrationState, type RemoteMigrationState } from "./remote-state";
+import {
+  fetchRemoteMigrationState,
+  matchesLocalMigrationHistory,
+  type RemoteMigrationState,
+} from "./remote-state";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -351,6 +355,8 @@ export type RemoteCheckpointLocation =
       number: number;
       /** Latest local migration, or `null` when the local history has none */
       localLatestMigration: number | null;
+      /** Whether the namespace records another migration history ID, or one that cannot be read */
+      historyIdMismatch: boolean;
       rebaselinePending?: RebaselinePendingInfo;
     }
   | {
@@ -375,11 +381,20 @@ export function locateRemoteCheckpoint(
   const latestMigrationNumber = getLatestMigrationNumber(migrationsDir);
   const localLatestMigration =
     getMigrationFiles(migrationsDir).length > 0 ? latestMigrationNumber : null;
+  const historyIdMismatch = !matchesLocalMigrationHistory(
+    remoteState,
+    rebaseline?.historyId ?? null,
+  );
   if (
     remoteState.historyIdInvalid ||
     (remoteMigrationNumber === null && remoteState.historyId !== null)
   ) {
-    return { kind: "outside", number: remoteMigrationNumber ?? 0, localLatestMigration };
+    return {
+      kind: "outside",
+      number: remoteMigrationNumber ?? 0,
+      localLatestMigration,
+      historyIdMismatch,
+    };
   }
   if (remoteMigrationNumber === null) return { kind: "unset" };
 
@@ -414,6 +429,7 @@ export function locateRemoteCheckpoint(
       kind: "outside",
       number: remoteMigrationNumber,
       localLatestMigration,
+      historyIdMismatch,
       ...(rebaselinePending ? { rebaselinePending } : {}),
     };
   }
@@ -462,6 +478,7 @@ export async function verifyRemoteSchema(
         hasDrift: false,
         checkpointMissingLocal: true,
         localLatestMigration: location.localLatestMigration,
+        historyIdMismatch: location.historyIdMismatch,
         ...(location.rebaselinePending ? { rebaselinePending: location.rebaselinePending } : {}),
       });
       continue;
@@ -620,6 +637,8 @@ function hasRebaselinePending(
 export interface CheckpointRecoveryInput extends CheckpointMissingGuidanceInput {
   /** Latest local migration, or `null` when the local history has none */
   localLatestMigration: number | null;
+  /** Whether the namespace records another migration history ID, or one that cannot be read */
+  historyIdMismatch: boolean;
 }
 
 /**
@@ -634,13 +653,14 @@ export function missingCheckpointRecoveryHints(
 ): string[] {
   const missing = results.filter((result) => !result.rebaselinePending);
   if (missing.length === 0) return [];
-  const moveCommands = missing.flatMap(({ namespace, localLatestMigration }) =>
+  const moveCommands = missing.flatMap(({ namespace, localLatestMigration, historyIdMismatch }) =>
     localLatestMigration === null
       ? []
       : formatCheckpointMoveHints({
           namespace,
           migrationNumber: formatMigrationNumber(localLatestMigration),
           configPath,
+          replaceHistoryId: historyIdMismatch,
         }).map((hint) => `  ${hint}`),
   );
   return [
