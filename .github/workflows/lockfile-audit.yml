@@ -48,7 +48,7 @@ jobs:
       - name: Audit lockfile for newly introduced vulnerabilities
         id: audit_regression
         continue-on-error: true
-        uses: tailor-platform/actions/lockfile-audit@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/lockfile-audit@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
 
       - name: Require a clean full audit when the regression check fails
         if: steps.audit_regression.outcome == 'failure'
