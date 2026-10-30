@@ -25,11 +25,11 @@ export type AuthConnectionConfig = {
   clientId: string;
   /** OAuth2 client secret */
   clientSecret: string;
-  /** Connection type */
-  type: "oauth2";
   /** OAuth2 authorization endpoint override */
   authUrl?: string | undefined;
   /** OAuth2 token endpoint override */
   tokenUrl?: string | undefined;
+  /** Connection type */
+  type: "oauth2";
 };
 export type AuthConnectionConfigInput = AuthConnectionConfig;
