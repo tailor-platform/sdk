@@ -210,9 +210,22 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 ```json
 {
   "summary": { "create": 1, "update": 2, "delete": 0, "replace": 0, "forcedBySdkVersion": 0 },
-  "status": "applied"
+  "status": "applied",
+  "workspaceId": "ws_abc123",
+  "applications": [
+    {
+      "name": "my-app",
+      "configPath": "/path/to/my-app/tailor.config.ts",
+      "url": "https://my-app.example.com",
+      "domain": "my-app.example.com",
+      "aiGateways": [],
+      "staticWebsites": {}
+    }
+  ]
 }
 ```
+
+Some deploys also add `tailordbMaintenance` or `deployedHooks`, as described under **JSON result** above.
 
 {{politty:command:remove}}
 {{politty:command:show}}

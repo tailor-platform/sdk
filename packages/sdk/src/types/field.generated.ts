@@ -3,21 +3,21 @@
 export type TailorField = {
   /** Field data type */
   type:
-    | "string"
     | "boolean"
-    | "uuid"
-    | "integer"
-    | "float"
-    | "decimal"
-    | "enum"
     | "date"
     | "datetime"
+    | "decimal"
+    | "enum"
+    | "float"
+    | "integer"
+    | "nested"
+    | "string"
     | "time"
-    | "nested";
+    | "uuid";
   /** Field metadata configuration */
   metadata: {
     /** Date value representation; "default" follows defaultDateRepresentation */
-    as?: "string" | "date" | "temporal" | "default" | undefined;
+    as?: "date" | "default" | "string" | "temporal" | undefined;
     /** Whether the field is required */
     required?: boolean | undefined;
     /** Whether the field is an array */

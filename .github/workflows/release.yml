@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: write # push release commits/tags and create GitHub releases
+      pull-requests: write # open and update the release PR
       id-token: write # OIDC for npm trusted publishing
     steps:
       - name: Checkout Repo
@@ -33,16 +34,6 @@ jobs:
       - name: Install Deps
         uses: $/.github/actions/install-deps
 
-      - name: Get github access token for release PR / publish
-        id: get_access_token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
-          repositories: ${{ github.event.repository.name }}
-          permission-contents: write
-          permission-pull-requests: write
-
       # pnpm v11's `runtime set node` no longer bundles npm, so PATH falls back
       # to the runner's system npm (10.8.2). Install npm 11+ into pnpm's global
       # prefix; pnpm/action-setup puts that prefix ahead of the system one.
@@ -57,14 +48,14 @@ jobs:
           publish-script: "node .github/scripts/changeset-publish.mjs"
           create-github-releases: true
           pr-title: "Release - ${{ github.ref_name }}"
-          github-token: ${{ steps.get_access_token.outputs.token }}
+          github-token: ${{ github.token }}
 
       # Only fires when changesets/action created/updated a release PR (as
       # opposed to publishing). See resolve-pending-release-versions.sh.
       - name: Resolve pending release versions
         if: steps.changesets.outputs['pr-number']
         env:
-          GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.changesets.outputs['pr-number'] }}
         shell: bash
         run: bash ./.github/scripts/resolve-pending-release-versions.sh
