@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { prompt } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { setupAutofix } from "./autofix";
 import { setupDelete } from "./delete";
 import { setupTarget } from "./generate";
 import { readLock } from "./lock";
@@ -119,6 +120,34 @@ describe("setupDelete", () => {
     expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-app-a.yml"))).toBe(false);
     expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-app-b-tag.yml"))).toBe(false);
     expect(readLock(testDir)?.targets).toHaveLength(0);
+  });
+
+  test("deletes the autofix workflow and its lock entry, keeping the targets", async () => {
+    await setupTarget(branchOpts("my-app"));
+    await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+
+    await setupDelete({
+      files: [".github/workflows/tailor-autofix.yml"],
+      yes: true,
+      outputDir: testDir,
+    });
+
+    expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-autofix.yml"))).toBe(false);
+    const lock = readLock(testDir);
+    expect(lock?.autofix).toBeUndefined();
+    expect(lock?.targets.map((target) => target.workspaceName)).toEqual(["my-app"]);
+  });
+
+  test("deletes the autofix workflow of a lock that records no target", async () => {
+    await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+
+    await setupDelete({
+      files: [".github/workflows/tailor-autofix.yml"],
+      yes: true,
+      outputDir: testDir,
+    });
+
+    expect(readLock(testDir)).toEqual({ version: expect.any(Number), targets: [] });
   });
 
   test("errors when the lock is missing", async () => {

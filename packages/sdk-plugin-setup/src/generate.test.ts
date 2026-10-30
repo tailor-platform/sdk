@@ -20,13 +20,17 @@ import { computeManagedHash, isManagedHash } from "./managed";
 import {
   ACTIONS_SHA,
   ACTIONS_VERSION,
+  AUTOFIX_WORKFLOW_FILE,
   TEMPLATE_VERSION,
+  renderAutofixWorkflow,
   renderBranchWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
+  type RenderAutofixParams,
   type RenderBranchParams,
   type RenderTagParams,
 } from "./templates";
+import { autofixLockEntry } from "./test-helpers/autofix";
 import { tempDir } from "./test-helpers/temp-dir";
 
 const NO_MARKER = /__[A-Z_]+__/;
@@ -38,6 +42,18 @@ const BRANCH_TEMPLATE = fs.readFileSync(
 const [, UPLOAD_ARTIFACT_GITHUB_COM, UPLOAD_ARTIFACT_GITHUB_COM_VERSION] =
   /uses: (actions\/upload-artifact@[0-9a-f]{40}) # (v\S+)/.exec(BRANCH_TEMPLATE) ?? [];
 const UPLOAD_ARTIFACT_V3 = "actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf";
+
+const autofixRenders: RenderAutofixParams[] = [
+  { provider: "github-token", dirs: ["."], packageManager: "pnpm" },
+  { provider: "github-app", dirs: ["apps/a", "apps/b"], packageManager: "bun" },
+  { provider: "autofix-ci", dirs: ["."], packageManager: "npm" },
+  {
+    provider: "securefix",
+    securefixServerRepository: "securefix-server",
+    dirs: ["."],
+    packageManager: "yarn",
+  },
+];
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -190,6 +206,9 @@ describe("renderBranchWorkflow", () => {
     for (const pm of ["pnpm", "yarn", "npm", "bun"] as const) {
       assertShaPinned(renderBranchWorkflow({ ...branchBase, packageManager: pm }).content);
       assertShaPinned(renderTagWorkflow({ ...tagBase, packageManager: pm }).content);
+    }
+    for (const params of autofixRenders) {
+      assertShaPinned(renderAutofixWorkflow(params).content);
     }
   });
 
@@ -1733,6 +1752,7 @@ describe("Tailor Platform action pins", () => {
         packageManager: "pnpm",
         region: "us-west",
       }).content,
+      ...autofixRenders.map((params) => renderAutofixWorkflow(params).content),
     ];
 
     for (const content of contents) {
@@ -1747,6 +1767,27 @@ describe("Tailor Platform action pins", () => {
         });
       }
     }
+  });
+
+  test("pins the actions the autofix workflow shares with the deploy workflows identically", () => {
+    const pinsOf = (content: string) =>
+      new Map([...content.matchAll(/uses: (\S+?)@(\S+)/g)].map(([, action, ref]) => [action, ref]));
+    const deploy = pinsOf(
+      renderBranchWorkflow({ ...branchBase, erdPreview: { namespaces: ["tailordb"] } }).content,
+    );
+    const shared = autofixRenders.flatMap((params) =>
+      [...pinsOf(renderAutofixWorkflow(params).content)].filter(([action]) => deploy.has(action)),
+    );
+
+    expect(new Set(shared.map(([action]) => action))).toEqual(
+      new Set([
+        "actions/checkout",
+        "actions/upload-artifact",
+        "tailor-platform/actions/setup",
+        "tailor-platform/actions/install",
+      ]),
+    );
+    expect(shared.filter(([action, ref]) => ref !== deploy.get(action))).toEqual([]);
   });
 
   test("Renovate's custom manager regex actually matches this file's ACTIONS_SHA/ACTIONS_VERSION declarations", () => {
@@ -2178,6 +2219,23 @@ describe("setupTarget (integration)", () => {
       packageManager: "yarn",
       packageManagerAutoDetected: false,
     });
+  });
+
+  test("refuses a workspace named autofix while the autofix workflow owns its file", async () => {
+    writeLock(testDir, {
+      version: LOCK_VERSION,
+      targets: [],
+      autofix: autofixLockEntry("github-token"),
+    });
+    const file = path.join(testDir, AUTOFIX_WORKFLOW_FILE);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "name: autofix\n");
+
+    await expect(
+      setupTarget(baseOptions({ workspaceName: "autofix", force: true })),
+    ).rejects.toThrow(/The autofix workflow already owns \.github\/workflows\/tailor-autofix\.yml/);
+    expect(fs.readFileSync(file, "utf-8")).toBe("name: autofix\n");
+    expect(readLock(testDir)?.targets).toEqual([]);
   });
 
   test("stops before loading the config, without writing anything, when no package manager can be detected", async () => {

@@ -1,6 +1,7 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { describe, expect, test, vi } from "vitest";
 import {
+  autofixRequirements,
   collectEnvironmentRequirements,
   renderGhCommands,
   renderTerraform,
@@ -9,7 +10,14 @@ import {
   targetRequirements,
 } from "./env";
 import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind, writeLock } from "./lock";
-import { renderBranchWorkflow, renderPreviewWorkflow, renderTagWorkflow } from "./templates";
+import {
+  AUTOFIX_PROVIDERS,
+  renderBranchWorkflow,
+  renderPreviewWorkflow,
+  renderTagWorkflow,
+  type AutofixProvider,
+} from "./templates";
+import { autofixLockEntry, renderAutofixFor } from "./test-helpers/autofix";
 import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
 import type { GhRunner } from "./gh";
@@ -93,6 +101,144 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
       );
     },
   );
+});
+
+const withAutofix = (provider: AutofixProvider, ...targets: LockTarget[]): LockFile => ({
+  ...lockOf(...targets),
+  autofix: autofixLockEntry(provider),
+});
+
+describe("autofixRequirements matches the secrets/vars the rendered autofix workflow references", () => {
+  test.each(AUTOFIX_PROVIDERS)("%s", (provider) => {
+    expect(referencedNames(renderAutofixFor(provider).content)).toEqual(
+      autofixRequirements(provider)
+        .map((r) => `${r.type} ${r.name}`)
+        .toSorted(),
+    );
+  });
+});
+
+describe("repository secrets and variables of the autofix workflow", () => {
+  const repository = { owner: "acme", name: "app" };
+
+  test("form a group of their own after the environments", () => {
+    const groups = collectEnvironmentRequirements(
+      withAutofix("github-app", target("branch", "my-app", "stg")),
+    );
+
+    expect(groups.map((group) => [group.environment, group.targets])).toEqual([
+      ["stg", ["branch my-app"]],
+      [null, ["autofix"]],
+    ]);
+    expect(groups[1]?.requirements.map((r) => [r.type, r.name, r.required])).toEqual([
+      ["variable", "TAILOR_AUTOFIX_APP_CLIENT_ID", true],
+      ["secret", "TAILOR_AUTOFIX_APP_PRIVATE_KEY", true],
+    ]);
+  });
+
+  test.each(["github-token", "autofix-ci"] as const)(
+    "are not listed for %s, which reads none",
+    (provider) => {
+      expect(
+        collectEnvironmentRequirements(
+          withAutofix(provider, target("branch", "my-app", "stg")),
+        ).map((group) => group.environment),
+      ).toEqual(["stg"]);
+    },
+  );
+
+  test("describe the securefix client App for securefix", () => {
+    const [group] = collectEnvironmentRequirements(withAutofix("securefix"));
+
+    expect(group?.requirements.map((r) => r.name)).toEqual([
+      "TAILOR_AUTOFIX_APP_CLIENT_ID",
+      "TAILOR_AUTOFIX_APP_PRIVATE_KEY",
+    ]);
+    expect(group?.requirements[0]?.description).toMatch(/securefix client/);
+  });
+
+  test("are set on the repository by the gh commands, with no environment", () => {
+    const lines = renderGhCommands(
+      collectEnvironmentRequirements(withAutofix("github-app")),
+      repository,
+    ).split("\n");
+
+    expect(lines).toContain("# Repository secrets and variables (autofix)");
+    expect(lines).toContain("gh variable set TAILOR_AUTOFIX_APP_CLIENT_ID --repo=acme/app");
+    expect(lines).toContain("gh secret set TAILOR_AUTOFIX_APP_PRIVATE_KEY --repo=acme/app");
+    expect(lines.some((line) => line.includes("environments/"))).toBe(false);
+  });
+
+  test("are repository secrets and variables in Terraform", () => {
+    const hcl = renderTerraform(collectEnvironmentRequirements(withAutofix("github-app")));
+
+    expect(hcl).toContain(
+      [
+        'resource "github_actions_variable" "repository_tailor_autofix_app_client_id" {',
+        "  repository    = var.repository",
+        '  variable_name = "TAILOR_AUTOFIX_APP_CLIENT_ID"',
+        "  value         = var.repository_tailor_autofix_app_client_id",
+        "}",
+      ].join("\n"),
+    );
+    expect(hcl).toContain(
+      [
+        'resource "github_actions_secret" "repository_tailor_autofix_app_private_key" {',
+        "  repository      = var.repository",
+        '  secret_name     = "TAILOR_AUTOFIX_APP_PRIVATE_KEY"',
+        "  plaintext_value = var.repository_tailor_autofix_app_private_key",
+        "}",
+      ].join("\n"),
+    );
+    expect(hcl).toContain(
+      "#   terraform import github_actions_variable.repository_tailor_autofix_app_client_id <repository>:TAILOR_AUTOFIX_APP_CLIENT_ID",
+    );
+    expect(hcl).not.toContain("github_repository_environment");
+  });
+
+  test("keep their Terraform names apart from an environment named repository", () => {
+    expect(() =>
+      renderTerraform(
+        collectEnvironmentRequirements(
+          withAutofix("github-app", target("branch", "my-app", "repository")),
+        ),
+      ),
+    ).toThrow(/"repository"/);
+  });
+
+  test("are printed for a lock that records only the autofix workflow", () => {
+    using tmp = tempDir("setup-env-");
+    const lock = withAutofix("github-app");
+    writeLock(tmp.dir, lock);
+    using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    setupEnv({ outputDir: tmp.dir, format: "gh", gitRunner: () => "git@github.com:acme/app.git" });
+
+    expect(out).toHaveBeenCalledWith(
+      renderGhCommands(collectEnvironmentRequirements(lock), repository),
+    );
+  });
+
+  test("leave --environment nothing to select when no target uses an environment", () => {
+    using tmp = tempDir("setup-env-");
+    writeLock(tmp.dir, withAutofix("github-app"));
+
+    expect(() => setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["stg"] })).toThrow(
+      'No generated workflow uses the environment "stg". The workflows in .github/tailor.lock use no GitHub Environment.',
+    );
+  });
+
+  test("are left out when --environment selects environments", () => {
+    using tmp = tempDir("setup-env-");
+    const lock = withAutofix("github-app", target("branch", "my-app", "stg"));
+    writeLock(tmp.dir, lock);
+    using out = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    setupEnv({ outputDir: tmp.dir, format: "gh", environments: ["stg"], ghRunner: () => null });
+
+    const [stg] = collectEnvironmentRequirements(lock);
+    expect(out).toHaveBeenCalledWith(renderGhCommands([stg!]));
+  });
 });
 
 describe("how to get each value", () => {

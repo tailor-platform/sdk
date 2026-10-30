@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
-import { renderBranchWorkflow, renderPreviewWorkflow, renderTagWorkflow } from "./templates";
+import {
+  AUTOFIX_PROVIDERS,
+  renderBranchWorkflow,
+  renderPreviewWorkflow,
+  renderTagWorkflow,
+} from "./templates";
+import { renderAutofixFor } from "./test-helpers/autofix";
 
 type Step = { id?: string; uses?: string; with?: Record<string, unknown> };
 type Workflow = { jobs: Record<string, { steps?: Step[] }> };
@@ -18,6 +24,10 @@ const workflows: [string, string][] = [
     renderTagWorkflow({ ...COMMON, tagPattern: "v*", branch: "main" }).content,
   ],
   ["preview", renderPreviewWorkflow({ ...COMMON, branch: "main", region: "us-west" }).content],
+  ...AUTOFIX_PROVIDERS.map((provider): [string, string] => [
+    `${provider} autofix`,
+    renderAutofixFor(provider).content,
+  ]),
 ];
 
 function steps(content: string, uses: string): { job: string; step: Step }[] {

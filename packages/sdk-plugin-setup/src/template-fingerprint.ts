@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import {
+  AUTOFIX_PROVIDERS,
   PACKAGE_MANAGERS,
+  renderAutofixWorkflow,
   renderBranchWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
@@ -162,6 +164,27 @@ function renderAll(): RenderedTemplate[] {
       region: "us-west",
       apps,
       extraPaths,
+    }),
+  );
+  const autofixBase = { dirs: ["."], packageManager: "pnpm" } as const;
+  for (const provider of AUTOFIX_PROVIDERS) {
+    add(
+      `autofix/${provider}`,
+      provider === "securefix"
+        ? renderAutofixWorkflow({
+            ...autofixBase,
+            provider,
+            securefixServerRepository: "securefix-server",
+          })
+        : renderAutofixWorkflow({ ...autofixBase, provider }),
+    );
+  }
+  add(
+    "autofix/multi-dir",
+    renderAutofixWorkflow({
+      provider: "github-token",
+      dirs: apps.map((app) => app.dir),
+      packageManager: "pnpm",
     }),
   );
   return out;

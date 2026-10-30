@@ -22,6 +22,7 @@ import {
   type LockFile,
   type LockInputs,
   type LockTarget,
+  type ManagedWorkflow,
   type TargetKind,
 } from "./lock";
 import {
@@ -375,7 +376,7 @@ function escapesRoot(rel: string): boolean {
  * @param dir - App directory relative to the repo root
  * @returns Absolute path to tailor.config.ts
  */
-function resolveConfigPath(outputDir: string, dir: string): string {
+export function resolveConfigPath(outputDir: string, dir: string): string {
   const appDir = path.resolve(outputDir, dir);
   const rel = path.relative(outputDir, appDir);
   if (path.isAbsolute(dir) || escapesRoot(rel)) {
@@ -415,11 +416,14 @@ type Resolved = {
   configPaths: string[];
 };
 
-// Normalize before any filesystem use and before embedding into workflow
-// YAML (paths filters / working-directory): POSIX separators, collapse
-// duplicate slashes, drop a leading "./" and trailing "/" so values like
-// "./apps/backend/" produce a clean "apps/backend".
-function normalizeDir(dir: string): string {
+/**
+ * Normalize a `--dir` value before any filesystem use and before embedding it into workflow
+ * YAML (paths filters / working-directory): POSIX separators, no duplicate slashes, and no
+ * leading "./" or trailing "/", so "./apps/backend/" becomes "apps/backend".
+ * @param dir - App directory as given
+ * @returns The normalized directory, or "." for the repository root
+ */
+export function normalizeDir(dir: string): string {
   const normalized =
     path.normalize(dir.replaceAll("\\", "/")).replace(/^\.\//, "").replace(/\/$/, "") || ".";
   validateDir(normalized);
@@ -507,6 +511,30 @@ export function detectPackageManager(outputDir: string): PackageManager | undefi
   return isPackageManager(declared) ? declared : undefined;
 }
 
+/**
+ * Take the package manager given with `--package-manager`, or detect it from the repository root.
+ * @param outputDir - Repository root
+ * @param packageManager - Package manager given with `--package-manager`, if any
+ * @returns The package manager the workflow uses
+ */
+export function resolvePackageManager(
+  outputDir: string,
+  packageManager: PackageManager | undefined,
+): PackageManager {
+  const resolved = packageManager ?? detectPackageManager(outputDir);
+  if (resolved === undefined) {
+    throw new Error(
+      "Could not detect the package manager: the repository root has no lockfile " +
+        `(${LOCKFILES.map(([file]) => file).join(", ")}), and its package.json declares no ` +
+        "supported one in packageManager or devEngines.packageManager. Commit the lockfile at " +
+        "the repository root, where the generated workflow installs dependencies, or declare " +
+        "packageManager in package.json. To generate the workflow before the lockfile exists, " +
+        "pass --package-manager to `tailor setup ci`.",
+    );
+  }
+  return resolved;
+}
+
 function rootDeclaresSdk(outputDir: string): boolean {
   const manifest = readRootManifest(outputDir);
   if (manifest === undefined) return false;
@@ -529,6 +557,14 @@ function assertMultiDirTarget(options: SetupTargetOptions, dirs: readonly string
         "repository root, so the tailor CLI must resolve there.",
     );
   }
+  assertDistinctAppSlugs(dirs);
+}
+
+/**
+ * Reject app directories whose per-app step ids would collide.
+ * @param dirs - Normalized app directories
+ */
+export function assertDistinctAppSlugs(dirs: readonly string[]): void {
   const bySlug = new Map<string, string>();
   for (const dir of dirs) {
     const other = bySlug.get(appSlug(dir));
@@ -597,17 +633,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
   await assertSeedable(options, configPath, multi);
 
-  const packageManager = options.packageManager ?? detectPackageManager(options.outputDir);
-  if (packageManager === undefined) {
-    throw new Error(
-      "Could not detect the package manager: the repository root has no lockfile " +
-        `(${LOCKFILES.map(([file]) => file).join(", ")}), and its package.json declares no ` +
-        "supported one in packageManager or devEngines.packageManager. Commit the lockfile at " +
-        "the repository root, where the generated workflow installs dependencies, or declare " +
-        "packageManager in package.json. To generate the workflow before the lockfile exists, " +
-        "pass --package-manager to `tailor setup ci`.",
-    );
-  }
+  const packageManager = resolvePackageManager(options.outputDir, options.packageManager);
 
   const loadName = options.loadConfigName ?? defaultLoadConfigName;
   const workspaceName = options.workspaceName ?? (await loadName(configPath));
@@ -801,7 +827,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   };
 }
 
-type Decision =
+export type Decision =
   | { action: "create" }
   | { action: "restore" }
   | { action: "adopt" }
@@ -818,7 +844,7 @@ type Decision =
  * @returns The reconciliation action
  */
 export function decideAction(obj: {
-  existing: LockTarget | undefined;
+  existing: ManagedWorkflow | undefined;
   fileExists: boolean;
   currentContent: string | null;
   force: boolean;
@@ -874,10 +900,10 @@ export function decideAction(obj: {
  * @param obj.render - Fresh template render
  * @returns Content to write and the lock hash for it
  */
-function reconcileContent(obj: {
+export function reconcileContent(obj: {
   file: string;
   decision: Decision;
-  existing: LockTarget | undefined;
+  existing: ManagedWorkflow | undefined;
   currentContent: string | null;
   render: RenderResult;
 }): { content: string; contentHash: string; managedHashes: Record<string, string> } {
@@ -932,6 +958,27 @@ function assertNoKindCollision(obj: {
       `A ${collision.kind} target already owns ${file}, which conflicts with this ${kind} target. ` +
         "Pass a different name with --name to generate a separate workflow.",
     );
+  }
+  if (lock?.autofix?.file === file) {
+    throw new Error(
+      `The autofix workflow already owns ${file}, which conflicts with this ${kind} target. ` +
+        "Pass a different name with --name to generate a separate workflow.",
+    );
+  }
+}
+
+/**
+ * Report a workflow file written as `decision` decided.
+ * @param decision - Reconciliation action the file was written under
+ * @param file - Repository-relative file path
+ */
+export function logWritten(decision: Decision, file: string): void {
+  if (decision.action === "restore") {
+    logger.success(`Regenerated ${styles.path(file)} (was missing on disk)`);
+  } else if (decision.action === "regenerate" || decision.action === "adopt") {
+    logger.success(`Regenerated ${styles.path(file)}`);
+  } else {
+    logger.success(`Generated ${styles.path(file)}`);
   }
 }
 
@@ -1090,13 +1137,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
   });
   const { configEdited } = await removeAdoptedConfigIds(appIdPlan);
 
-  if (decision.action === "restore") {
-    logger.success(`Regenerated ${styles.path(resolved.file)} (was missing on disk)`);
-  } else if (decision.action === "regenerate" || decision.action === "adopt") {
-    logger.success(`Regenerated ${styles.path(resolved.file)}`);
-  } else {
-    logger.success(`Generated ${styles.path(resolved.file)}`);
-  }
+  logWritten(decision, resolved.file);
 
   return {
     kind: resolved.kind,

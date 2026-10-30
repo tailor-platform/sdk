@@ -1,3 +1,4 @@
+import autofixTemplate from "./autofix.workflow.yml";
 import branchTemplate from "./branch.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
@@ -6,7 +7,7 @@ import tagTemplate from "./tag.workflow.yml";
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
 // Released template fingerprint: 65fef953eac654ad98514cedca78053db6c64d7a05187bf9ed8ce37b98b05cdc
 const RELEASED_TEMPLATE_VERSION = 22;
-const TEMPLATE_CHANGED_SINCE_RELEASE = false;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
   RELEASED_TEMPLATE_VERSION + (TEMPLATE_CHANGED_SINCE_RELEASE ? 1 : 0);
@@ -760,6 +761,126 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   ];
 
   return appendResultJob({ content: out, generatedIds }, "tailor-preview-result");
+}
+
+export const AUTOFIX_PROVIDERS = ["github-token", "autofix-ci", "securefix", "github-app"] as const;
+
+/** What commits the regenerated files to the pull request branch. */
+export type AutofixProvider = (typeof AUTOFIX_PROVIDERS)[number];
+
+export const AUTOFIX_WORKFLOW_FILE = ".github/workflows/tailor-autofix.yml";
+
+const AUTOFIX_COMMIT_MESSAGE = "chore: run tailor generate";
+
+// autofix.ci and a default securefix server accept requests only from workflows of these names.
+const AUTOFIX_WORKFLOW_NAMES: Record<AutofixProvider, string> = {
+  "github-token": "Tailor Autofix",
+  "autofix-ci": "autofix.ci",
+  securefix: "securefix",
+  "github-app": "Tailor Autofix",
+};
+
+/** A provider, with the settings it needs. */
+export type AutofixProviderParams =
+  | { provider: Exclude<AutofixProvider, "securefix"> }
+  | {
+      provider: "securefix";
+      /** Name of the repository, under the same owner, that runs the securefix server workflow. */
+      securefixServerRepository: string;
+    };
+
+export type RenderAutofixParams = AutofixProviderParams & {
+  /** App directories relative to the repository root; `tailor generate` runs in each. */
+  dirs: readonly string[];
+  packageManager: PackageManager;
+};
+
+function perAppGenerateSteps(dirs: readonly string[]): string {
+  return dirs
+    .flatMap((dir) => [
+      `- id: tailor-generate-${appSlug(dir)}`,
+      `  run: __TAILOR_CLI__ generate`,
+      ...(dir === "." ? [] : [`  working-directory: ${dir}`]),
+    ])
+    .join("\n");
+}
+
+/**
+ * Render the workflow that commits the files `tailor generate` changes to the pull request.
+ * @param params - Provider, app directories, and package manager
+ * @returns Rendered YAML and the list of managed job/step ids
+ */
+export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult {
+  const { provider, dirs, packageManager } = params;
+  const multi = dirs.length > 1;
+  const hasPushJob = provider === "github-token" || provider === "github-app";
+  const workingDirectory = !multi && dirs[0] !== "." ? dirs[0] : undefined;
+
+  let out = line(autofixTemplate, "HEADER", HEADER);
+  out = line(
+    out,
+    "AUTOFIX_IF",
+    provider === "autofix-ci"
+      ? undefined
+      : "if: |-\n  github.event.pull_request.head.repo.full_name == github.repository &&\n  github.actor != 'dependabot[bot]'",
+  );
+  out = block(out, "GENERATE", !multi);
+  out = line(out, "PER_APP_GENERATE", multi ? perAppGenerateSteps(dirs) : undefined);
+  out = line(
+    out,
+    "WORKING_DIRECTORY",
+    workingDirectory ? `working-directory: ${workingDirectory}` : undefined,
+  );
+  out = block(out, "PATCH_OUTPUTS", hasPushJob);
+  out = block(out, "RESTORE_PATCH", !hasPushJob);
+  out = block(out, "UPLOAD_PATCH", hasPushJob);
+  out = block(out, "PUSH_JOB", hasPushJob);
+  out = block(out, "APP_TOKEN", provider === "github-app");
+  out = block(out, "AUTOFIX_CI", provider === "autofix-ci");
+  out = block(out, "SECUREFIX", provider === "securefix");
+  out = out
+    .replaceAll("__WORKFLOW_NAME__", AUTOFIX_WORKFLOW_NAMES[provider])
+    .replaceAll("__PUSH_CONTENTS_PERMISSION__", provider === "github-token" ? "write" : "read")
+    .replaceAll(
+      "__PUSH_TOKEN__",
+      provider === "github-app"
+        ? "${{ steps.tailor-app-token.outputs.token }}"
+        : "${{ github.token }}",
+    )
+    .replaceAll("__COMMIT_MESSAGE__", AUTOFIX_COMMIT_MESSAGE)
+    .replaceAll("__PACKAGE_MANAGER__", packageManager)
+    .replaceAll("__TAILOR_CLI__", TAILOR_CLI_COMMANDS[packageManager]);
+  if (params.provider === "securefix") {
+    out = out.replaceAll("__SECUREFIX_SERVER_REPOSITORY__", () => params.securefixServerRepository);
+  }
+
+  const generatedIds = [
+    "tailor-autofix",
+    "tailor-autofix/tailor-checkout",
+    "tailor-autofix/tailor-setup",
+    "tailor-autofix/tailor-install",
+    "tailor-autofix/tailor-autofix-baseline",
+    ...(multi
+      ? dirs.map((dir) => `tailor-autofix/tailor-generate-${appSlug(dir)}`)
+      : ["tailor-autofix/tailor-generate"]),
+    "tailor-autofix/tailor-autofix-diff",
+  ];
+  if (hasPushJob) {
+    generatedIds.push(
+      "tailor-autofix/tailor-upload-patch",
+      "tailor-autofix-push",
+      ...(provider === "github-app" ? ["tailor-autofix-push/tailor-app-token"] : []),
+      "tailor-autofix-push/tailor-checkout",
+      "tailor-autofix-push/tailor-download-patch",
+      "tailor-autofix-push/tailor-commit",
+    );
+  } else if (provider === "autofix-ci") {
+    generatedIds.push("tailor-autofix/tailor-autofix-ci-auth", "tailor-autofix/tailor-autofix-ci");
+  } else {
+    generatedIds.push("tailor-autofix/tailor-securefix");
+  }
+
+  return { content: out, generatedIds };
 }
 
 export const ACTIONS_SHA = "26a3cae341adecfaf0e6c81bd969de09c72dad55";

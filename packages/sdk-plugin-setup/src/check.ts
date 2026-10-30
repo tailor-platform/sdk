@@ -8,7 +8,14 @@ import {
 import * as path from "pathe";
 import { isCI } from "std-env";
 import { detectDefaultBranch, type GitRunner } from "./git";
-import { type LockTarget, readLock } from "./lock";
+import {
+  AUTOFIX_LABEL,
+  type LockAutofix,
+  type LockTarget,
+  type ManagedWorkflow,
+  managedWorkflows,
+  readManagedLock,
+} from "./lock";
 import {
   currentContentHash,
   describeHandEdit,
@@ -46,8 +53,8 @@ export type DriftFinding = {
   message: string;
 };
 
-/** Current repository/config state for one target, gathered by the caller. */
-export type TargetState = {
+/** Current state of one generated workflow file, gathered by the caller. */
+type FileState = {
   fileExists: boolean;
   /**
    * Hash of the on-disk file in the scheme of the lock entry, or null when it
@@ -58,12 +65,16 @@ export type TargetState = {
   editedParts?: string[];
   /** Ids of the user's jobs and steps that use the reserved `tailor-` prefix. */
   reservedIds: string[];
+  /** The template version this SDK build generates. */
+  templateVersion: number;
+};
+
+/** Current repository/config state for one target, gathered by the caller. */
+export type TargetState = FileState & {
   /** Whether tailor.config.ts exists under the target's recorded dir. */
   configExists: boolean;
   /** Detected repository default branch, or null when it cannot be determined. */
   defaultBranch: string | null;
-  /** The template version this SDK build generates. */
-  templateVersion: number;
   /** Current owned TailorDB namespaces for ERD preview checks, or null when unavailable. */
   erdNamespaces: string[] | null;
   /** Whether the current config has TailorDB namespaces with migrations (branch/tag only). */
@@ -74,6 +85,12 @@ export type TargetState = {
   seedProblem?: string;
   /** Current state of each app of a multi-directory target, in the order the lock records them. */
   apps?: AppState[];
+};
+
+/** Current repository state for the autofix workflow, gathered by the caller. */
+export type AutofixState = FileState & {
+  /** Recorded app directories that hold no tailor.config.ts anymore. */
+  dirsWithoutConfig: string[];
 };
 
 /** Current config state for one app of a multi-directory target. */
@@ -94,19 +111,23 @@ function sameNamespaces(a: readonly string[], b: readonly string[]): boolean {
   );
 }
 
+function missingConfig(id: string, dir: string): DriftFinding {
+  return {
+    target: id,
+    rule: "config-dir",
+    message:
+      `tailor.config.ts not found under "${dir}". The app directory may have moved; ` +
+      "re-run setup with the correct --dir.",
+  };
+}
+
 function findAppDrift(id: string, target: LockTarget, apps: readonly AppState[]): DriftFinding[] {
   const findings: DriftFinding[] = [];
   const planKind = target.kind === "branch" || target.kind === "tag";
   for (const app of apps) {
     const recorded = target.inputs.apps?.find((entry) => entry.dir === app.dir);
     if (!app.configExists) {
-      findings.push({
-        target: id,
-        rule: "config-dir",
-        message:
-          `tailor.config.ts not found under "${app.dir}". The app directory may have moved; ` +
-          "re-run setup with the correct --dir.",
-      });
+      findings.push(missingConfig(id, app.dir));
       continue;
     }
     if (planKind && recorded?.migrationDriftCheck === false && app.hasMigrations === true) {
@@ -143,34 +164,26 @@ function findAppDrift(id: string, target: LockTarget, apps: readonly AppState[])
   return findings;
 }
 
-/**
- * Compute drift findings for one target by comparing its recorded lock state
- * against the current repository/config state.
- * @param target - The lock target being audited
- * @param state - Current repository/config state for this target
- * @returns Drift findings (empty when the target is in sync)
- */
-export function findTargetDrift(target: LockTarget, state: TargetState): DriftFinding[] {
-  const id = `${target.kind} ${target.workspaceName}`;
+function findFileDrift(id: string, workflow: ManagedWorkflow, state: FileState): DriftFinding[] {
   const findings: DriftFinding[] = [];
 
   if (!state.fileExists) {
     findings.push({
       target: id,
       rule: "missing-file",
-      message: `${target.file} is missing or unreadable. Re-run setup to restore it.`,
+      message: `${workflow.file} is missing or unreadable. Re-run setup to restore it.`,
     });
-  } else if (state.currentHash !== target.contentHash) {
+  } else if (state.currentHash !== workflow.contentHash) {
     findings.push({
       target: id,
       rule: "hand-edit",
       message:
         state.currentHash === null
-          ? `${target.file} is not valid YAML. Fix it, or re-run setup with --force to replace it.`
-          : isManagedHash(target.contentHash)
-            ? `${describeHandEdit(target.file, state.editedParts)} Revert them, or re-run setup ` +
+          ? `${workflow.file} is not valid YAML. Fix it, or re-run setup with --force to replace it.`
+          : isManagedHash(workflow.contentHash)
+            ? `${describeHandEdit(workflow.file, state.editedParts)} Revert them, or re-run setup ` +
               "with --force to reset them; your own jobs and steps are kept."
-            : `${target.file} was generated by an older setup version, which compares the whole ` +
+            : `${workflow.file} was generated by an older setup version, which compares the whole ` +
               "file, and was edited since. Re-run setup with --force once to reset only the " +
               "SDK-managed parts; your own jobs and steps are kept.",
     });
@@ -180,30 +193,38 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     findings.push({
       target: id,
       rule: "reserved-id",
-      message: `${target.file}: ${describeReservedId(reservedId)}`,
+      message: `${workflow.file}: ${describeReservedId(reservedId)}`,
     });
   }
 
-  if (target.templateVersion < state.templateVersion) {
+  if (workflow.templateVersion < state.templateVersion) {
     findings.push({
       target: id,
       rule: "template-version",
       message:
-        `A newer workflow template is available (generated with v${String(target.templateVersion)}, ` +
+        `A newer workflow template is available (generated with v${String(workflow.templateVersion)}, ` +
         `current v${String(state.templateVersion)}). Run \`tailor setup update\` to regenerate every target.`,
     });
   }
 
+  return findings;
+}
+
+/**
+ * Compute drift findings for one target by comparing its recorded lock state
+ * against the current repository/config state.
+ * @param target - The lock target being audited
+ * @param state - Current repository/config state for this target
+ * @returns Drift findings (empty when the target is in sync)
+ */
+export function findTargetDrift(target: LockTarget, state: TargetState): DriftFinding[] {
+  const id = `${target.kind} ${target.workspaceName}`;
+  const findings = findFileDrift(id, target, state);
+
   if (state.apps) {
     findings.push(...findAppDrift(id, target, state.apps));
   } else if (!state.configExists) {
-    findings.push({
-      target: id,
-      rule: "config-dir",
-      message:
-        `tailor.config.ts not found under "${target.inputs.dir}". The app directory may have ` +
-        "moved; re-run setup with the correct --dir.",
-    });
+    findings.push(missingConfig(id, target.inputs.dir));
   }
 
   if (
@@ -283,9 +304,22 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
   return findings;
 }
 
-function reservedIdsIn(target: LockTarget, content: string): string[] {
+/**
+ * Compute drift findings for the autofix workflow.
+ * @param autofix - The lock's autofix entry
+ * @param state - Current repository state for the autofix workflow
+ * @returns Drift findings (empty when the workflow is in sync)
+ */
+export function findAutofixDrift(autofix: LockAutofix, state: AutofixState): DriftFinding[] {
+  return [
+    ...findFileDrift(AUTOFIX_LABEL, autofix, state),
+    ...state.dirsWithoutConfig.map((dir) => missingConfig(AUTOFIX_LABEL, dir)),
+  ];
+}
+
+function reservedIdsIn(workflow: ManagedWorkflow, content: string): string[] {
   try {
-    return findReservedIds(content, target.generatedIds);
+    return findReservedIds(content, workflow.generatedIds);
   } catch (error) {
     if (error instanceof ManagedMergeError) return [];
     throw error;
@@ -333,6 +367,22 @@ function readContent(absFile: string): string | null {
   }
 }
 
+function fileStateOf(outputDir: string, workflow: ManagedWorkflow): FileState {
+  const absFile = resolveWithinRoot(outputDir, workflow.file);
+  const content = absFile === null ? null : readContent(absFile);
+  const currentHash = content === null ? null : currentContentHash(workflow, content);
+  return {
+    fileExists: content !== null,
+    currentHash,
+    reservedIds: content === null ? [] : reservedIdsIn(workflow, content),
+    editedParts:
+      content !== null && currentHash !== null && currentHash !== workflow.contentHash
+        ? editedPartsOf(workflow, content)
+        : undefined,
+    templateVersion: TEMPLATE_VERSION,
+  };
+}
+
 export type CheckGitHubOptions = {
   /** Repository root where `.github` lives. */
   outputDir: string;
@@ -376,15 +426,13 @@ async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
  */
 export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   const { outputDir } = options;
-  const lock = readLock(outputDir);
-  if (!lock || lock.targets.length === 0) {
-    throw new Error(
-      "No managed workflows found (.github/tailor.lock is missing or empty). " +
-        "Run `tailor setup ci branch` (or another setup subcommand) first.",
-    );
-  }
+  const lock = readManagedLock(outputDir);
 
   const exists = options.configExistsAt ?? ((p: string) => fs.existsSync(p));
+  const existingConfig = (dir: string): string | null => {
+    const configAbs = resolveWithinRoot(outputDir, path.join(dir, "tailor.config.ts"));
+    return configAbs !== null && exists(configAbs) ? configAbs : null;
+  };
   const defaultBranch = detectDefaultBranchSafe(outputDir, options.gitRunner);
   const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
   const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
@@ -393,40 +441,28 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
 
   const findings: DriftFinding[] = [];
   for (const target of lock.targets) {
-    const absFile = resolveWithinRoot(outputDir, target.file);
-    const content = absFile === null ? null : readContent(absFile);
-    const currentHash = content === null ? null : currentContentHash(target, content);
-    const reservedIds = content === null ? [] : reservedIdsIn(target, content);
-    const editedParts =
-      content !== null && currentHash !== null && currentHash !== target.contentHash
-        ? editedPartsOf(target, content)
-        : undefined;
     // Multi-directory targets are audited per app below.
     const noRootConfig = target.inputs.apps !== undefined;
-    const configAbs = noRootConfig
-      ? null
-      : resolveWithinRoot(outputDir, path.join(target.inputs.dir, "tailor.config.ts"));
-    const configExists = noRootConfig || (configAbs !== null && exists(configAbs));
+    const configAbs = noRootConfig ? null : existingConfig(target.inputs.dir);
+    const configExists = noRootConfig || configAbs !== null;
     const erdNamespaces =
-      target.kind === "branch" && target.inputs.erdPreview && configAbs !== null && configExists
+      target.kind === "branch" && target.inputs.erdPreview && configAbs !== null
         ? await loadErdNamespaces(configAbs)
         : null;
     const hasMigrations =
       (target.kind === "branch" || target.kind === "tag") &&
       target.inputs.migrationDriftCheck !== undefined &&
-      configAbs !== null &&
-      configExists
+      configAbs !== null
         ? await loadHasMigrations(configAbs)
         : undefined;
     const hasSeeds =
       (target.kind === "branch" || target.kind === "tag") &&
       target.inputs.seedValidate !== undefined &&
-      configAbs !== null &&
-      configExists
+      configAbs !== null
         ? await loadHasSeeds(configAbs)
         : undefined;
     const seedProblem =
-      target.inputs.seed !== undefined && configAbs !== null && configExists
+      target.inputs.seed !== undefined && configAbs !== null
         ? seedSettingsProblem(target.inputs.seed.datasets, await loadSeedSettings(configAbs))
         : undefined;
     const planKind = target.kind === "branch" || target.kind === "tag";
@@ -435,24 +471,20 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
         ? undefined
         : await Promise.all(
             target.inputs.apps.map(async (app): Promise<AppState> => {
-              const appConfig = resolveWithinRoot(
-                outputDir,
-                path.join(app.dir, "tailor.config.ts"),
-              );
-              const appConfigExists = appConfig !== null && exists(appConfig);
+              const appConfig = existingConfig(app.dir);
               return {
                 dir: app.dir,
-                configExists: appConfigExists,
+                configExists: appConfig !== null,
                 hasMigrations:
-                  planKind && appConfigExists && app.migrationDriftCheck !== undefined
+                  planKind && appConfig !== null && app.migrationDriftCheck !== undefined
                     ? await loadHasMigrations(appConfig)
                     : undefined,
                 hasSeeds:
-                  planKind && appConfigExists && app.seedValidate !== undefined
+                  planKind && appConfig !== null && app.seedValidate !== undefined
                     ? await loadHasSeeds(appConfig)
                     : undefined,
                 erdNamespaces:
-                  target.kind === "branch" && target.inputs.erdPreview && appConfigExists
+                  target.kind === "branch" && target.inputs.erdPreview && appConfig !== null
                     ? await loadErdNamespaces(appConfig)
                     : undefined,
               };
@@ -460,13 +492,9 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
           );
     findings.push(
       ...findTargetDrift(target, {
-        fileExists: content !== null,
-        currentHash,
-        reservedIds,
-        editedParts,
+        ...fileStateOf(outputDir, target),
         configExists,
         defaultBranch,
-        templateVersion: TEMPLATE_VERSION,
         erdNamespaces,
         hasMigrations,
         hasSeeds,
@@ -476,9 +504,18 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
     );
   }
 
-  const count = lock.targets.length;
+  if (lock.autofix) {
+    findings.push(
+      ...findAutofixDrift(lock.autofix, {
+        ...fileStateOf(outputDir, lock.autofix),
+        dirsWithoutConfig: lock.autofix.inputs.dirs.filter((dir) => existingConfig(dir) === null),
+      }),
+    );
+  }
+
+  const count = managedWorkflows(lock).length;
   if (findings.length === 0) {
-    logger.success(`No drift detected across ${String(count)} target(s).`);
+    logger.success(`No drift detected across ${String(count)} workflow(s).`);
     return;
   }
 
@@ -489,7 +526,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
     logger.log(`${DRIFT_COUNT_MARKER}=${String(findings.length)}`);
   }
   throw new Error(
-    `Detected ${String(findings.length)} drift finding(s) across ${String(count)} target(s). ` +
+    `Detected ${String(findings.length)} drift finding(s) across ${String(count)} workflow(s). ` +
       "Run `tailor setup update` to regenerate, or address each finding above.",
   );
 }
