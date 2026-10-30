@@ -62,8 +62,9 @@ pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 3. **Lint** — Run standard and Vitest-specific oxlint passes, plus create-sdk template lint
 4. **Typecheck** — Run tsrs
 5. **Knip** — Detect unused dependencies and exports
+6. **Changed packages** — Run `lint`, `typecheck`, and `knip` in every package under `packages/` except the SDK that changed since `HEAD`, staged or not
 
-Steps 2–5 run as separate jobs in this order, only when staged files include `.ts`/`.js`, and stop at the first failing job.
+Steps 2–5 run as separate jobs in this order, only when staged files include `.ts`/`.js`, and stop at the first failing job. Step 6 runs after them whenever staged files are under `packages/`, even if one of them failed, and stops at its own first failing job.
 
 Post-commit verifies GPG signature.
 
