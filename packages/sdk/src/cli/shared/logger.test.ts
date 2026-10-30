@@ -5,6 +5,8 @@ import {
   formatLogLine,
   logger,
   redactSecrets,
+  sanitizeTerminalBlock,
+  sanitizeTerminalText,
   resetSecretRegistry,
   styles,
 } from "./logger";
@@ -409,5 +411,28 @@ describe("logger", () => {
       const stillWorks = captureStderr(() => logger.info("cache-invalidation-second-secret"));
       expect(stillWorks).not.toContain("cache-invalidation-second-secret");
     });
+  });
+});
+
+describe("sanitizeTerminalText", () => {
+  test("strips ANSI escapes and control characters from server-provided text", () => {
+    const input =
+      "\u001b[31mRed\u001b[0m title\u0007 with\rCR\u007f and \u2028line sep\u001b]8;;https://x\u0007";
+    expect(sanitizeTerminalText(input)).toBe("Red title withCR and line sep");
+  });
+
+  test("collapses runs of whitespace, turns tabs and newlines into one space, and trims", () => {
+    expect(sanitizeTerminalText("  a\t\tb\n\nc  ")).toBe("a b c");
+  });
+
+  test("keeps non-ASCII text intact", () => {
+    expect(sanitizeTerminalText("メンテナンス予定 — région")).toBe("メンテナンス予定 — région");
+  });
+});
+
+describe("sanitizeTerminalBlock", () => {
+  test("strips escapes and control characters but keeps newlines and indentation", () => {
+    const input = "Line one\u001b[2J\n\n  - item\twith tab\r\n\u0007done\u2029";
+    expect(sanitizeTerminalBlock(input)).toBe("Line one\n\n  - item\twith tab\ndone");
   });
 });

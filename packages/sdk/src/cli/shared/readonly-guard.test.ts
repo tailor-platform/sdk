@@ -26,6 +26,14 @@ const ADDITIONAL_RUNNABLE_COMMAND_PATHS: string[] = [];
  * of its `run()` and leave this list alone.
  */
 const READ_OR_LOCAL_COMMAND_PATHS = new Set([
+  // Notification inbox (per user, independent of the profile's workspace).
+  // read marks the caller's own inbox entries read and dismiss hides one; like
+  // crashreport/send.ts they touch no workspace or platform resource a
+  // read-only profile exists to protect.
+  "notification/index.ts",
+  "notification/list.ts",
+  "notification/read.ts",
+  "notification/dismiss.ts",
   // Top-level local-only operations
   "init.ts",
   "login.ts",

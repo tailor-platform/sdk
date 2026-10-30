@@ -20,6 +20,7 @@ export const BUILTIN_COMMAND_NAMES = [
   "login",
   "logout",
   "machineuser",
+  "notification",
   "oauth2client",
   "open",
   "organization",

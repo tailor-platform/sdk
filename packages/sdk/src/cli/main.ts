@@ -19,6 +19,7 @@ import { initCommand } from "./commands/init";
 import { loginCommand } from "./commands/login";
 import { logoutCommand } from "./commands/logout";
 import { machineuserCommand } from "./commands/machineuser";
+import { notificationCommand } from "./commands/notification";
 import { oauth2clientCommand } from "./commands/oauth2client";
 import { openCommand } from "./commands/open";
 import { organizationCommand } from "./commands/organization";
@@ -94,6 +95,7 @@ The \`setup\` commands are provided by the @tailor-platform/sdk-plugin-setup CLI
       login: loginCommand,
       logout: logoutCommand,
       machineuser: machineuserCommand,
+      notification: notificationCommand,
       oauth2client: oauth2clientCommand,
       open: openCommand,
       organization: organizationCommand,
