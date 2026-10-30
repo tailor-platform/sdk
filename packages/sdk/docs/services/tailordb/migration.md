@@ -1207,7 +1207,7 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 **Resolution:**
 
 1. Read the error message — it includes the file path and the offending field.
-2. Restore the file from version control (`git checkout -- <path>`); `migration generate` reads every migration file and stops with the same error until then. If the broken file belongs to the latest migration and no environment has deployed it, you can instead recreate that migration: copy out the files you edited in its directory (such as `migrate.ts` and its tests), delete the directory, run `migration generate` with the options that created it (such as `--data-only`, `--rename`, `--drop`, or `--expand-contract`), copy your edits back, and record any `--no-script` reason again with `migration script`.
+2. Restore the file from version control (`git checkout -- <path>`); `migration generate` reads every migration file and stops with the same error until then. If the broken file belongs to the latest migration and no environment has deployed it, you can instead recreate that migration: copy out the files you edited in its directory (such as `migrate.ts` and its tests), delete the directory, run `migration generate` with the options that created it (such as `--data-only`, `--rename`, or `--drop`), copy your edits back, and record any `--no-script` reason again with `migration script`. A migration pair created with `--expand-contract` cannot be recreated this way, so restore its files from version control.
 3. Do not hand-edit `schema.json` or `diff.json`; they are managed by the CLI.
 
 ### "Unsupported migration file format version" error
