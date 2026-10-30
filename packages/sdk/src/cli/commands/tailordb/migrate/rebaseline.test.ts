@@ -602,7 +602,7 @@ describe("tailordb migration rebaseline", () => {
     expect(String(result.error)).toMatch(/local migration history was re-baselined/i);
     expect(result.error).toMatchObject({ code: "REBASELINE_CHECKPOINT_UPDATE_FAILED" });
     const { suggestion } = result.error as CLIError;
-    expect(suggestion).toContain("tailor tailordb migration set 0");
+    expect(suggestion).toContain("tailor tailordb migration set 0 --force");
     expect(suggestion).toContain("--namespace tailordb");
     expect(suggestion).toContain("--config");
     expect(suggestion).toContain("--workspace-id=87654321-4321-4cba-8fed-210987654321");

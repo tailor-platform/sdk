@@ -22,7 +22,11 @@ import {
 } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { parseMigrationNumberArg } from "./migration-number";
-import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
+import {
+  assertLocalMigrationHistory,
+  assertNoMigrationInProgress,
+  fetchRemoteMigrationState,
+} from "./remote-state";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
@@ -40,6 +44,7 @@ interface SyncOptions {
   number: string;
   namespace?: string;
   yes?: boolean;
+  force: boolean;
   workspaceId?: string;
   profile?: string;
 }
@@ -218,6 +223,14 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
   const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
   const currentState = await fetchRemoteMigrationState(client, trn);
   assertNoMigrationInProgress(currentState, target.namespace);
+  const historyId = snapshot.rebaseline?.historyId;
+  const historyOverwrite = assertLocalMigrationHistory({
+    state: currentState,
+    localHistoryId: historyId ?? null,
+    namespace: target.namespace,
+    code: "MIGRATION_SYNC_HISTORY_MISMATCH",
+    force: options.force,
+  });
   const current = currentState.number;
   const plan = await planSnapshotApply({
     client,
@@ -239,6 +252,11 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
   logger.log(`  GQL permissions to set: ${styles.bold(String(desiredGqlPermissions.length))}`);
   logger.log(`  GQL permissions to delete: ${styles.bold(String(gqlPermissionDeletes.length))}`);
   logger.newline();
+
+  if (historyOverwrite) {
+    logger.warn(historyOverwrite);
+    logger.newline();
+  }
 
   const totalOps =
     creates.length +
@@ -310,7 +328,6 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     ]);
   }
 
-  const historyId = snapshot.rebaseline?.historyId;
   const labelChanged = await updateMigrationLabel(
     client,
     workspaceId,
@@ -350,6 +367,7 @@ export const syncCommand = defineAppCommand({
   name: "sync",
   description:
     "Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).",
+  notes: `The command refuses to run when the namespace records a migration history ID other than the local one, or one that cannot be read, unless the namespace has neither a checkpoint nor a history ID yet. \`--force\` overwrites the tables and that history ID with those of the local history, and still asks for confirmation unless \`--yes\` is given.`,
   args: z.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
@@ -361,6 +379,10 @@ export const syncCommand = defineAppCommand({
       alias: "n",
       description: "Target TailorDB namespace (required if multiple namespaces exist)",
     }),
+    force: arg(z.boolean().default(false), {
+      description:
+        "Proceed even when the namespace records a migration history ID other than the local one",
+    }),
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
@@ -369,6 +391,7 @@ export const syncCommand = defineAppCommand({
       number: args.number,
       namespace: args.namespace,
       yes: args.yes,
+      force: args.force,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

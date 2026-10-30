@@ -1,0 +1,15 @@
+# Paths whose changes make `pnpm generate` output relevant. Read by both
+# generate.yml (to decide whether to run the checks) and securefix.yml (to
+# decide whether to regenerate and push), so the two cannot drift apart.
+generate:
+  - .github/workflows/generate.yml
+  - .github/workflows/securefix.yml
+  - .github/path-filters/generate.yml
+  - .github/actions/**
+  - .github/scripts/run-generate-with-log*
+  - packages/**
+  - example/**
+  - package.json
+  - tsconfig.json
+  - pnpm-workspace.yaml
+  - pnpm-lock.yaml

@@ -34,7 +34,7 @@
     "@bufbuild/protobuf": "2.16.0",
     "@connectrpc/connect": "2.2.0",
     "@connectrpc/connect-node": "2.2.0",
-    "@electric-sql/pglite": "0.5.11",
+    "@electric-sql/pglite": "0.5.12",
     "@tailor-platform/sdk-plugin-seed": "workspace:^",
     "@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
     "@types/node": "26.6.5",

@@ -145,6 +145,51 @@ describe("notification list", () => {
     );
   });
 
+  test("caps the listing at the 50 newest notifications by default", async () => {
+    const arrivedAt = timestampFromDate(new Date("2026-10-29T01:02:03Z"));
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      id: `0d2c0f1e-5c2b-4e3a-9c1d-${String(i).padStart(12, "0")}`,
+      category: NotificationCategory.ANNOUNCEMENT,
+      severity: NotificationSeverity.INFO,
+      title: `n${i}`,
+      bodyMarkdown: "",
+      actions: [],
+      scopeRefs: [],
+      arrivedAt,
+    }));
+    const list = mockClient(
+      vi.fn(async ({ pageSize }: { pageSize: number }) => ({
+        notifications: many.slice(0, pageSize),
+        nextPageToken: "",
+        totalCount: many.length,
+      })),
+    );
+    using _json = jsonMode();
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    using _stderr = captureStderr();
+
+    const result = await runCommand(listCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({ pageSize: 51, pageDirection: PageDirection.DESC }),
+    );
+    expect(JSON.parse(logSpy.mock.calls[0]?.[0] as string)).toHaveLength(50);
+  });
+
+  test("--limit 0 lists everything", async () => {
+    const list = mockClient(
+      vi.fn().mockResolvedValue({ notifications: [], nextPageToken: "", totalCount: 0 }),
+    );
+    using _json = jsonMode();
+
+    const result = await runCommand(listCommand, ["--limit", "0"]);
+
+    expect(result.success).toBe(true);
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ pageSize: expect.any(Number) }));
+    expect(list.mock.calls[0]?.[0].pageSize).toBeGreaterThan(51);
+  });
+
   test("rejects a scope that is not a UUID", async () => {
     using _json = jsonMode();
 

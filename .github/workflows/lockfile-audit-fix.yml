@@ -31,7 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read
+      contents: write # push the fix branch
+      pull-requests: write # open or update the pull request and label it
 
     steps:
       - name: Checkout
@@ -66,29 +67,14 @@ jobs:
           fix(deps): automated lockfile security fix
           EOF
 
-      - name: Determine repository name
-        if: steps.audit_fix.outputs.changed == 'true'
-        id: repo
-        env:
-          REPOSITORY: ${{ github.repository }}
-        run: echo "name=${REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
-
-      - name: Get GitHub App token
-        if: steps.audit_fix.outputs.changed == 'true'
-        id: get_access_token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
-          repositories: ${{ steps.repo.outputs.name }}
-          permission-contents: write
-          permission-pull-requests: write
-
+      # The pull request is opened with GITHUB_TOKEN, so its checks start only
+      # after someone with write access selects "Approve workflows to run" on
+      # the pull request page.
       - name: Create or update pull request
         if: steps.audit_fix.outputs.changed == 'true'
         uses: tailor-platform/actions/create-signed-pr@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
         with:
-          token: ${{ steps.get_access_token.outputs.token }}
+          token: ${{ github.token }}
           branch: chore/lockfile-audit-fix
           commit-message: "fix(deps): automated lockfile security fix"
           title: "fix(deps): automated lockfile security fix"
