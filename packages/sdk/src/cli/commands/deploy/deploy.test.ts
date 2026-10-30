@@ -10,7 +10,6 @@ import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-script
 import {
   adjustApplicationForMigrationTest,
   assertEnvResolvedAfterRebuild,
-  carryConfirmedAppDeletes,
   confirmDeploymentPlans,
   collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
@@ -23,6 +22,7 @@ import {
   assertUniqueGlobalResourceNames,
   computeRenamedAppDeletions,
   dropCrossDeploymentManagedDeletes,
+  scheduleRenamedAppDeletes,
 } from "./managed-resources";
 import { printDeploymentPlans, printPlanResults, summarizePlanResults } from "./plan-report";
 import { emptyPlanResults, plannedDeleteLists, PLANNED_DELETE } from "./test-helpers/plan-results";
@@ -640,9 +640,8 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 });
 
-describe("confirmDeploymentPlans", () => {
-  test("uses resource owners from all deployments before deleting renamed apps", async () => {
-    using _logger = silenceLogger("warn", "log", "success", "newline");
+describe("scheduleRenamedAppDeletes", () => {
+  test("uses resource owners from all deployments before deleting renamed apps", () => {
     const renamedTarget = emptyPlanResults();
     renamedTarget.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
@@ -654,19 +653,15 @@ describe("confirmDeploymentPlans", () => {
     const peer = emptyPlanResults();
     peer.staticWebsite.resourceOwners.add("old-app");
 
-    await confirmDeploymentPlans({
-      deployments: [
-        plannedDeployment("new-app", renamedTarget),
-        plannedDeployment("peer-app", peer),
-      ],
-      yes: true,
-    });
+    scheduleRenamedAppDeletes([
+      plannedDeployment("new-app", renamedTarget),
+      plannedDeployment("peer-app", peer),
+    ]);
 
     expect(renamedTarget.app.deletes).toEqual([]);
   });
 
-  test("deduplicates renamed app deletions across deployments", async () => {
-    using _logger = silenceLogger("warn", "log", "success", "newline");
+  test("deduplicates renamed app deletions across deployments", () => {
     const first = emptyPlanResults();
     first.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
@@ -682,16 +677,34 @@ describe("confirmDeploymentPlans", () => {
       currentOwner: "old-app",
     });
 
-    await confirmDeploymentPlans({
-      deployments: [plannedDeployment("new-app-a", first), plannedDeployment("new-app-b", second)],
-      yes: true,
-    });
+    scheduleRenamedAppDeletes([
+      plannedDeployment("new-app-a", first),
+      plannedDeployment("new-app-b", second),
+    ]);
 
     expect([...first.app.deletes, ...second.app.deletes].map((item) => item.name)).toEqual([
       "old-app",
     ]);
   });
 
+  test("does not add a delete the application plan already carries under the same name", () => {
+    const results = emptyPlanResults();
+    results.tailorDB.conflicts.push({
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB service",
+      resourceName: "shared",
+      currentOwner: "old-app",
+    });
+    const planned = { name: "old-app", request: { workspaceId: "ws", applicationName: "old-app" } };
+    results.app.deletes.push(planned);
+
+    scheduleRenamedAppDeletes([plannedDeployment("new-app", results)]);
+
+    expect(results.app.deletes).toEqual([planned]);
+  });
+});
+
+describe("confirmDeploymentPlans", () => {
   test("names a deleted TailorDB table a table", async () => {
     using _logger = silenceLogger("warn", "success", "newline");
     const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
@@ -714,7 +727,7 @@ describe("confirmDeploymentPlans", () => {
     logSpy.mockRestore();
   });
 
-  const dryRunWarnings: Array<{
+  const confirmationWarnings: Array<{
     warning: string;
     plan: () => Pick<
       Parameters<typeof confirmDeploymentPlans>[0],
@@ -791,7 +804,7 @@ describe("confirmDeploymentPlans", () => {
   ];
 
   test.for(
-    dryRunWarnings.flatMap((testCase) => [false, true].map((yes) => ({ ...testCase, yes }))),
+    confirmationWarnings.flatMap((testCase) => [false, true].map((yes) => ({ ...testCase, yes }))),
   )(
     "dry-run warns '$warning' without confirming it (yes: $yes)",
     async ({ warning, plan, yes }) => {
@@ -809,6 +822,46 @@ describe("confirmDeploymentPlans", () => {
       ).not.toContain("--yes flag specified");
     },
   );
+
+  test.for(confirmationWarnings.filter(({ plan }) => !plan().missingDependentApps))(
+    "does not repeat '$warning' for what the application already confirmed",
+    async ({ warning, plan }) => {
+      using _logger = silenceLogger("warn", "log", "success", "newline");
+      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+
+      await confirmDeploymentPlans({
+        deployments: plan().deployments,
+        yes: false,
+        confirmedDeployments: plan().deployments,
+      });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalledWith(warning);
+    },
+  );
+
+  test("asks about a conflict that only another application confirmed", async () => {
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+    const withConflict = () => {
+      const results = emptyPlanResults();
+      results.tailorDB.conflicts.push({
+        resourceType: "tailordb.service",
+        resourceLabel: "TailorDB service",
+        resourceName: "shared",
+        currentOwner: "old-app",
+      });
+      return results;
+    };
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("app-b", withConflict())],
+      yes: false,
+      confirmedDeployments: [plannedDeployment("app-a", withConflict())],
+    });
+
+    expect(confirm).toHaveBeenCalledOnce();
+  });
 });
 
 describe("printPlanResults", () => {
@@ -1552,60 +1605,6 @@ describe("multi-config deployment orchestration", () => {
       { appName: "buyer", skip, previous: previousBuyer },
       { appName: "supplier", skip, previous: previousSupplier },
     ]);
-  });
-});
-
-describe("carryConfirmedAppDeletes", () => {
-  function appDelete(name: string): PlannedDeployment["app"]["deletes"][number] {
-    return { name, request: { workspaceId: "ws", applicationName: name } };
-  }
-
-  function withAppDeletes(
-    name: string,
-    deletes: ReadonlyArray<PlannedDeployment["app"]["deletes"][number]>,
-  ): PlannedDeployment {
-    const deployment = plannedDeployment(name, emptyPlanResults());
-    deployment.app.deletes.push(...deletes);
-    return deployment;
-  }
-
-  test("carries a confirm-added delete over onto the matching rebuilt deployment", () => {
-    const original = [
-      withAppDeletes("buyer", [appDelete("renamed-buyer")]),
-      withAppDeletes("supplier", []),
-    ];
-    const preConfirmAppDeleteCounts = new Map([
-      ["buyer", 0],
-      ["supplier", 0],
-    ]);
-    const rebuilt = [withAppDeletes("buyer", []), withAppDeletes("supplier", [])];
-
-    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
-
-    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
-    expect(rebuilt[1]!.app.deletes).toEqual([]);
-  });
-
-  test("leaves a fresh delete already present in the rebuild untouched", () => {
-    const original = [
-      withAppDeletes("buyer", [appDelete("own-delete"), appDelete("renamed-buyer")]),
-    ];
-    const preConfirmAppDeleteCounts = new Map([["buyer", 1]]);
-    const rebuilt = [withAppDeletes("buyer", [appDelete("own-delete")])];
-
-    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
-
-    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("own-delete"), appDelete("renamed-buyer")]);
-  });
-
-  test("does not duplicate a delete the rebuild already carries under the same name", () => {
-    const original = [withAppDeletes("buyer", [appDelete("renamed-buyer")])];
-    const preConfirmAppDeleteCounts = new Map([["buyer", 0]]);
-    const rebuilt = [withAppDeletes("buyer", [appDelete("renamed-buyer")])];
-
-    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
-
-    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
   });
 });
 
