@@ -58,7 +58,7 @@ export function formatRebaselineHint(options: RebaselineCommandOptions): string 
 }
 
 export interface NamespaceMigrationCommandOptions {
-  /** `tailor tailordb migration` subcommand, followed by its positional arguments */
+  /** `tailor tailordb migration` subcommand, followed by its arguments */
   subcommand: readonly string[];
   namespace: string;
   /** Config path the current run used; omitted from the command when it resolves to the default */
@@ -82,9 +82,9 @@ export function formatNamespaceMigrationHint(options: NamespaceMigrationCommandO
 }
 
 interface CheckpointMoveHintOptions extends RebaselineCommandOptions {
-  migrationNumber: string;
+  migrationNumber: number;
   /** Whether the namespace records another migration history ID, which only `--force` replaces */
-  replaceHistoryId?: boolean;
+  replaceHistoryId: boolean;
 }
 
 /**
@@ -97,7 +97,11 @@ export function formatCheckpointMoveHints(options: CheckpointMoveHintOptions): s
   return (["sync", "set"] as const).map((subcommand) => {
     const command = formatNamespaceMigrationHint({
       ...commandOptions,
-      subcommand: [subcommand, migrationNumber, ...(replaceHistoryId ? ["--force"] : [])],
+      subcommand: [
+        subcommand,
+        formatMigrationNumber(migrationNumber),
+        ...(replaceHistoryId ? ["--force"] : []),
+      ],
     });
     const effect =
       subcommand === "sync" ? "rewrites the tables to that snapshot" : "moves only the checkpoint";

@@ -136,7 +136,7 @@ By default, `deploy` performs two verification steps:
 
 If remote schema drift is detected, the deploy will fail with an error showing the differences. This helps prevent applying migrations to an inconsistent state.
 
-Use `--no-schema-check` to skip both verifications (not recommended for production). It does not skip the check that the remote migration checkpoint is in the local migration history: when the deployed checkpoint is ahead of the local migration files or belongs to another migration history, the deploy stops before changing anything. Pull the latest migration files, or move the checkpoint on purpose with `tailor tailordb migration sync` or `tailor tailordb migration set`, adding `--force` when the checkpoint belongs to another migration history, then deploy again.
+Use `--no-schema-check` to skip both verifications (not recommended for production). It does not skip the check that the remote migration checkpoint is in the local migration history: when the deployed checkpoint is ahead of the local migration files or belongs to another migration history, the deploy stops before changing anything. Pull the latest migration files, or move the checkpoint on purpose with `tailor tailordb migration sync` or `tailor tailordb migration set`, adding `--force` when the checkpoint belongs to another migration history or has a history label that cannot be read, then deploy again.
 
 **Plan Output:**
 

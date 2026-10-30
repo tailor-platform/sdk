@@ -618,7 +618,7 @@ export function logRemoteDriftGuidance(driftResults?: readonly DriftGuidanceInpu
  * Minimal per-namespace shape needed to report a missing remote checkpoint, shared by callers
  * that hold either a full {@link RemoteSchemaVerificationResult} or a validation report's subset.
  */
-export interface CheckpointMissingGuidanceInput {
+interface CheckpointMissingGuidanceInput {
   namespace: string;
   remoteMigrationNumber: number;
   rebaselinePending?: RebaselinePendingInfo;
@@ -658,7 +658,7 @@ export function missingCheckpointRecoveryHints(
       ? []
       : formatCheckpointMoveHints({
           namespace,
-          migrationNumber: formatMigrationNumber(localLatestMigration),
+          migrationNumber: localLatestMigration,
           configPath,
           replaceHistoryId: historyIdMismatch,
         }).map((hint) => `  ${hint}`),

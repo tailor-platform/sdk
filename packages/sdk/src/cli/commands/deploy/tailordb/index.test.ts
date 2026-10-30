@@ -2537,6 +2537,11 @@ describe("applyTailorDB migration label reconciliation", () => {
       labels: { "sdk-migration": "m0000", "sdk-migration-history": "Not a history ID" },
       historyIdMismatch: true,
     },
+    {
+      checkpoint: "missing under another migration history ID",
+      labels: { "sdk-migration-history": "hprevious" },
+      historyIdMismatch: true,
+    },
   ])(
     "suggests --force only to replace the migration history of a checkpoint $checkpoint",
     async ({ labels, historyIdMismatch }) => {

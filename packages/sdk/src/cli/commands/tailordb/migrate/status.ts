@@ -10,13 +10,16 @@ import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
-import { formatCheckpointMoveHints } from "./hints";
 import {
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
   matchesLocalMigrationHistory,
 } from "./remote-state";
-import { locateRemoteCheckpoint, type RemoteCheckpointLocation } from "./schema-checks";
+import {
+  locateRemoteCheckpoint,
+  missingCheckpointRecoveryHints,
+  type RemoteCheckpointLocation,
+} from "./schema-checks";
 import {
   assertValidMigrationFiles,
   getMigrationFiles,
@@ -74,20 +77,20 @@ function formatCheckpointRecovery(
   namespace: string,
   configPath: string | undefined,
 ): string {
-  if (location.kind !== "outside" || location.rebaselinePending) return "";
-  const { localLatestMigration } = location;
-  return (
-    "\nPull the latest migration files." +
-    (localLatestMigration === null
-      ? ""
-      : " Or move the checkpoint back on purpose: " +
-        formatCheckpointMoveHints({
-          namespace,
-          migrationNumber: formatMigrationNumber(localLatestMigration),
-          configPath,
-          replaceHistoryId: location.historyIdMismatch,
-        }).join(" or "))
+  if (location.kind !== "outside") return "";
+  const hints = missingCheckpointRecoveryHints(
+    [
+      {
+        namespace,
+        remoteMigrationNumber: location.number,
+        localLatestMigration: location.localLatestMigration,
+        historyIdMismatch: location.historyIdMismatch,
+        ...(location.rebaselinePending ? { rebaselinePending: location.rebaselinePending } : {}),
+      },
+    ],
+    configPath,
   );
+  return hints.map((hint) => `\n${hint}`).join("");
 }
 
 async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusRow[]> {
