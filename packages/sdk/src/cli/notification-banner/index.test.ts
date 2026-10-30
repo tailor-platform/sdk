@@ -322,16 +322,33 @@ describe("notification banner", () => {
     }
   });
 
-  test("treats a lookup still unanswered past the timeout when the command ends as failed", async () => {
-    let now = Date.parse("2026-10-30T10:00:00Z");
-    using _clock = vi.spyOn(Date, "now").mockImplementation(() => now);
-    mockLookup(vi.fn().mockImplementation(() => new Promise(() => {})));
+  test("records nothing when the command ends before the request was sent", async () => {
+    vi.mocked(loadStoredAccessTokenWithoutRefresh).mockImplementation(() => new Promise(() => {}));
+    const list = resolved([warning("a", "x")]);
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
-    now += 4_000;
+    await new Promise((r) => setImmediate(r));
 
     await printNotificationBanner({});
 
+    expect(list).not.toHaveBeenCalled();
+    expect(fs.existsSync(stateFile())).toBe(false);
+  });
+
+  test("persists the backoff as soon as a lookup fails, before the command ends", async () => {
+    mockLookup(vi.fn().mockRejectedValue(new ConnectError("unavailable", Code.Unavailable)));
+    startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+
+    await lookupSettledForTests();
+
     expect(readBannerState(stateFile())).toMatchObject({ failedAt: expect.any(String) });
+  });
+
+  test("does not back off when the lookup failed before sending anything", async () => {
+    vi.mocked(loadStoredAccessTokenWithoutRefresh).mockRejectedValue(new Error("keyring locked"));
+
+    await run(["workspace", "list"]);
+
+    expect(fs.existsSync(stateFile())).toBe(false);
   });
 
   test("swallows a login that cannot be loaded", async () => {
@@ -343,7 +360,7 @@ describe("notification banner", () => {
     expect(stderr.text()).toBe("");
   });
 
-  test("prints nothing and aborts the request when the lookup is still pending", async () => {
+  test("prints nothing, aborts, and backs off when the sent request is still pending", async () => {
     let signal: AbortSignal | undefined;
     mockLookup(
       vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
@@ -363,7 +380,7 @@ describe("notification banner", () => {
 
     expect(stderr.text()).toBe("");
     expect(signal?.aborted).toBe(true);
-    expect(fs.existsSync(stateFile())).toBe(false);
+    expect(readBannerState(stateFile())).toMatchObject({ failedAt: expect.any(String) });
   });
 
   test("records an empty inbox so it is not polled again within the interval", async () => {

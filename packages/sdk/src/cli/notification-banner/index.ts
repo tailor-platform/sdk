@@ -22,10 +22,7 @@ import { getBannerStatePath, isThrottled, readBannerState, writeBannerState } fr
 
 /** How many notifications the banner can list. */
 const PAGE_SIZE = 3;
-/**
- * The one limit on a lookup: unanswered after this long, it is aborted and counted as failed,
- * whether the command is still running or has already ended.
- */
+/** A lookup unanswered after this long while the command runs is aborted and counted as failed. */
 const LOOKUP_TIMEOUT_MS = 3_000;
 
 interface LookupResult {
@@ -38,11 +35,10 @@ interface LookupResult {
 interface PendingLookup {
   controller: AbortController;
   promise: Promise<void>;
-  startedAt: number;
+  /** The request has been sent to the platform; only then can a failure cost load. */
+  dispatched: boolean;
   /** The lookup has finished, with a result, a skip, or an error. */
   done: boolean;
-  /** The lookup ended in an error (network, platform, timeout). */
-  failed: boolean;
   settled?: LookupResult | undefined;
   stateFile: string | undefined;
 }
@@ -73,14 +69,15 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
     const lookup: PendingLookup = {
       controller,
       promise: Promise.resolve(),
-      startedAt: Date.now(),
+      dispatched: false,
       done: false,
-      failed: false,
       stateFile,
     };
     const timeout = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
     timeout.unref();
-    lookup.promise = runLookup(argv, controller.signal)
+    lookup.promise = runLookup(argv, controller.signal, () => {
+      lookup.dispatched = true;
+    })
       .then(
         (result) => {
           lookup.done = true;
@@ -88,8 +85,9 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
         },
         () => {
           lookup.done = true;
-          lookup.failed = true;
           lookup.settled = undefined;
+          // Persist right away, so other terminals back off while this command keeps running.
+          if (lookup.dispatched) recordFailure(lookup.stateFile);
         },
       )
       .finally(() => clearTimeout(timeout));
@@ -102,6 +100,7 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
 async function runLookup(
   argv: readonly string[],
   signal: AbortSignal,
+  onDispatch: () => void,
 ): Promise<LookupResult | undefined> {
   // Let the command's own start-up win the first turn of the event loop.
   await new Promise((resolve) => setImmediate(resolve));
@@ -136,6 +135,7 @@ async function runLookup(
     import("@tailor-platform/tailor-proto/notification_resource_pb"),
   ]);
   const client = await initOperatorClient(accessToken, platformConfig, { renewToken: false });
+  onDispatch();
   const response = await client.listMyNotifications(
     { pageSize: PAGE_SIZE, minSeverity: Severity.WARNING, unreadOnly: true },
     { signal },
@@ -163,13 +163,17 @@ function suppressedByError(error: unknown): boolean {
  */
 function recordFailure(stateFile: string | undefined): void {
   if (!stateFile) return;
-  const previous = readBannerState(stateFile);
-  writeBannerState(stateFile, {
-    version: 1,
-    ...(previous?.shownAt === undefined ? {} : { shownAt: previous.shownAt }),
-    failedAt: new Date(Date.now()).toISOString(),
-    lastSeenIds: previous?.lastSeenIds ?? [],
-  });
+  try {
+    const previous = readBannerState(stateFile);
+    writeBannerState(stateFile, {
+      version: 1,
+      ...(previous?.shownAt === undefined ? {} : { shownAt: previous.shownAt }),
+      failedAt: new Date(Date.now()).toISOString(),
+      lastSeenIds: previous?.lastSeenIds ?? [],
+    });
+  } catch {
+    // Best effort, like the banner itself.
+  }
 }
 
 /**
@@ -186,8 +190,10 @@ export async function printNotificationBanner(context: { error?: unknown }): Pro
     lookup.controller.abort();
     const result = lookup.settled;
     if (!result) {
-      const unanswered = !lookup.done && Date.now() - lookup.startedAt >= LOOKUP_TIMEOUT_MS;
-      if (lookup.failed || unanswered) recordFailure(lookup.stateFile);
+      // A sent request the command abandons counts as failed: during a hanging outage, short
+      // commands would otherwise each send one. A failure was already recorded when it happened,
+      // and a lookup that never sent anything (or skipped) records nothing.
+      if (lookup.dispatched && !lookup.done) recordFailure(lookup.stateFile);
       return;
     }
     if (suppressedByError(context.error)) return;
