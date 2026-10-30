@@ -22,9 +22,12 @@ import {
   startNotificationLookup,
 } from "./index";
 
+const ciState = vi.hoisted(() => ({ isCI: false }));
 vi.mock("std-env", async (importOriginal) => ({
   ...(await importOriginal()),
-  isCI: false,
+  get isCI() {
+    return ciState.isCI;
+  },
 }));
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
@@ -97,6 +100,7 @@ describe("notification banner", () => {
     tmp = tempDir("banner-");
     tty = setTTY(true);
     resetNotificationLookupForTests();
+    ciState.isCI = false;
     vi.mocked(readEnvironmentToken).mockReturnValue(undefined);
     vi.mocked(platformConfigExists).mockReturnValue(true);
     vi.mocked(loadStoredAccessTokenWithoutRefresh).mockResolvedValue({
@@ -263,14 +267,43 @@ describe("notification banner", () => {
     expect(initOperatorClient).toHaveBeenCalledWith("env-token", undefined, { renewToken: false });
   });
 
-  test("swallows a failed lookup and leaves no state behind", async () => {
-    mockLookup(vi.fn().mockRejectedValue(new ConnectError("expired", Code.Unauthenticated)));
+  test("does not run in CI even on a terminal", async () => {
+    ciState.isCI = true;
+    const list = resolved([warning("a", "x")]);
     using stderr = captureStderr();
 
     await run(["workspace", "list"]);
 
+    expect(list).not.toHaveBeenCalled();
+    expect(loadStoredAccessTokenWithoutRefresh).not.toHaveBeenCalled();
     expect(stderr.text()).toBe("");
-    expect(fs.existsSync(stateFile())).toBe(false);
+  });
+
+  test("swallows a failed lookup and backs off before trying again", async () => {
+    const list = mockLookup(
+      vi.fn().mockRejectedValue(new ConnectError("unavailable", Code.Unavailable)),
+    );
+    using stderr = captureStderr();
+
+    await run(["workspace", "list"]);
+    expect(stderr.text()).toBe("");
+    expect(readBannerState(stateFile())).toMatchObject({ failedAt: expect.any(String) });
+
+    resetNotificationLookupForTests();
+    await run(["workspace", "list"]);
+    expect(list).toHaveBeenCalledOnce();
+  });
+
+  test("treats a lookup still unanswered after a few seconds as failed", async () => {
+    let now = Date.parse("2026-10-30T10:00:00Z");
+    using _clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    mockLookup(vi.fn().mockImplementation(() => new Promise(() => {})));
+    startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+    now += 4_000;
+
+    await printNotificationBanner({});
+
+    expect(readBannerState(stateFile())).toMatchObject({ failedAt: expect.any(String) });
   });
 
   test("swallows a login that cannot be loaded", async () => {

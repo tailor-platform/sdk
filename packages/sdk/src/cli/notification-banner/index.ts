@@ -24,6 +24,8 @@ import { getBannerStatePath, isThrottled, readBannerState, writeBannerState } fr
 const PAGE_SIZE = 3;
 /** The lookup gives up after this long; the banner is best effort. */
 const LOOKUP_TIMEOUT_MS = 5_000;
+/** A lookup still unanswered after this long when the command ends counts as failed. */
+const SLOW_LOOKUP_MS = 3_000;
 
 interface LookupResult {
   /** The profile the command line named, repeated in the hint. */
@@ -35,6 +37,11 @@ interface LookupResult {
 interface PendingLookup {
   controller: AbortController;
   promise: Promise<void>;
+  startedAt: number;
+  /** The lookup has finished, with a result, a skip, or an error. */
+  done: boolean;
+  /** The lookup ended in an error (network, platform, timeout). */
+  failed: boolean;
   settled?: LookupResult | undefined;
   stateFile: string | undefined;
 }
@@ -62,12 +69,22 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
     if (stateFile && isThrottled(readBannerState(stateFile), Date.now())) return;
 
     const controller = new AbortController();
-    const lookup: PendingLookup = { controller, promise: Promise.resolve(), stateFile };
+    const lookup: PendingLookup = {
+      controller,
+      promise: Promise.resolve(),
+      startedAt: Date.now(),
+      done: false,
+      failed: false,
+      stateFile,
+    };
     lookup.promise = runLookup(argv, controller.signal).then(
       (result) => {
+        lookup.done = true;
         lookup.settled = result;
       },
       () => {
+        lookup.done = true;
+        lookup.failed = true;
         lookup.settled = undefined;
       },
     );
@@ -135,6 +152,22 @@ function suppressedByError(error: unknown): boolean {
 }
 
 /**
+ * Remember that a lookup failed, so the next commands back off instead of each sending a
+ * request during an outage. Keeps the last successful `shownAt`.
+ * @param stateFile - Throttle state path, if the user has a config directory
+ */
+function recordFailure(stateFile: string | undefined): void {
+  if (!stateFile) return;
+  const previous = readBannerState(stateFile);
+  writeBannerState(stateFile, {
+    version: 1,
+    ...(previous?.shownAt === undefined ? {} : { shownAt: previous.shownAt }),
+    failedAt: new Date(Date.now()).toISOString(),
+    lastSeenIds: previous?.lastSeenIds ?? [],
+  });
+}
+
+/**
  * Print the banner if the lookup started by {@link startNotificationLookup} has answered, and
  * abandon it otherwise. Never throws, never waits.
  * @param context - The command's outcome
@@ -147,7 +180,11 @@ export async function printNotificationBanner(context: { error?: unknown }): Pro
   try {
     lookup.controller.abort();
     const result = lookup.settled;
-    if (!result) return;
+    if (!result) {
+      const unanswered = !lookup.done && Date.now() - lookup.startedAt >= SLOW_LOOKUP_MS;
+      if (lookup.failed || unanswered) recordFailure(lookup.stateFile);
+      return;
+    }
     if (suppressedByError(context.error)) return;
     if (logger.jsonMode || !interactiveTerminal()) return;
 

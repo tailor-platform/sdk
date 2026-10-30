@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import {
   BANNER_INTERVAL_MS,
+  FAILURE_BACKOFF_MS,
   getBannerStatePath,
   isThrottled,
   readBannerState,
@@ -77,5 +78,23 @@ describe("isThrottled", () => {
   test("is false when shownAt is in the future (clock went backwards)", () => {
     const shownAt = new Date(NOW + 2 * BANNER_INTERVAL_MS).toISOString();
     expect(isThrottled({ version: 1, shownAt, lastSeenIds: [] }, NOW)).toBe(false);
+  });
+
+  test("backs off for a short while after a failed lookup, without a successful one", () => {
+    const failedAt = new Date(NOW - FAILURE_BACKOFF_MS + 1000).toISOString();
+    expect(isThrottled({ version: 1, failedAt, lastSeenIds: [] }, NOW)).toBe(true);
+    const old = new Date(NOW - FAILURE_BACKOFF_MS - 1000).toISOString();
+    expect(isThrottled({ version: 1, failedAt: old, lastSeenIds: [] }, NOW)).toBe(false);
+    expect(FAILURE_BACKOFF_MS).toBeLessThan(BANNER_INTERVAL_MS);
+  });
+});
+
+describe("readBannerState with a failure", () => {
+  test("round-trips failedAt without shownAt", () => {
+    using tmp = tempDir("banner-");
+    const file = path.join(tmp.dir, "state.json");
+    const state = { version: 1 as const, failedAt: new Date(NOW).toISOString(), lastSeenIds: [] };
+    writeBannerState(file, state);
+    expect(readBannerState(file)).toEqual(state);
   });
 });
