@@ -75,6 +75,28 @@ export function writeInitialSchema(
 }
 
 /**
+ * Record a re-baseline marker on the 0000 baseline schema snapshot of a migrations directory
+ * @param {string} migrationsDir - Migrations directory path
+ * @param {string} historyId - Migration history ID of the baseline
+ * @param {string | null} replacedHistoryId - Migration history ID the baseline replaced
+ */
+export function writeRebaselineMarker(
+  migrationsDir: string,
+  historyId: string,
+  replacedHistoryId: string | null = null,
+): void {
+  const schemaPath = path.join(migrationsDir, "0000", "schema.json");
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as SchemaSnapshot;
+  fs.writeFileSync(
+    schemaPath,
+    JSON.stringify({
+      ...schema,
+      rebaseline: { historyId, replacedHistoryId, replacedLatestMigration: 0 },
+    }),
+  );
+}
+
+/**
  * Write a numbered diff.json into a migrations directory
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} number - Migration number

@@ -10,7 +10,11 @@ import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
-import { fetchRemoteMigrationState, isStaleMigrationInProgress } from "./remote-state";
+import {
+  fetchRemoteMigrationState,
+  isStaleMigrationInProgress,
+  matchesLocalMigrationHistory,
+} from "./remote-state";
 import {
   assertValidMigrationFiles,
   getMigrationFiles,
@@ -187,8 +191,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       continue;
     }
 
-    const hasRemoteMigrationState = remoteState.number !== null || remoteState.historyId !== null;
-    if (hasRemoteMigrationState && remoteState.historyId !== localHistoryId) {
+    if (!matchesLocalMigrationHistory(remoteState, localHistoryId)) {
       rows.push({
         status: "error",
         namespace,

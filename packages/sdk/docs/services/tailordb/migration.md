@@ -865,7 +865,9 @@ Partial squashing is not supported: re-baselining always replaces the full histo
 
 ## `migration set` Semantics
 
-`tailor tailordb migration set <N>` updates the `sdk-migration` label on the deployed namespace's metadata. **It does not modify any data or schema.** It only changes which migrations the next `apply` will consider pending. The command also aligns the remote migration history ID with the local baseline, removing a stale ID when the local history predates re-baselining.
+`tailor tailordb migration set <N>` updates the `sdk-migration` label on the deployed namespace's metadata. **It does not modify any data or schema.** It only changes which migrations the next `apply` will consider pending. The command also records the migration history ID of the local baseline on the namespace.
+
+The command refuses to run when the namespace records a migration history ID other than the local one, or one that cannot be read, unless the namespace has neither a checkpoint nor a history ID yet. Run it from a checkout of the migration history deployed to the workspace. To write the local history over another one on purpose, for example after `migration rebaseline` re-baselined the local history but could not update the workspace, pass `--force`: the command shows the history ID it replaces, records the local history ID or, when the local history has none, removes the namespace's one, and still asks for confirmation unless you pass `--yes`.
 
 The migration number is validated before anything is sent to the remote: it must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the working tree's migration history, which is itself validated (a gapped history is rejected). `0` is always accepted as the baseline (even when no migrations directory exists yet), provided the history passes validation.
 
@@ -884,7 +886,7 @@ Use cases:
 
 ## `migration sync` Semantics
 
-`tailor tailordb migration sync <N>` reconstructs the schema snapshot at migration `N` from the working tree's migration history and **overwrites the remote schema to match it**, then sets the `sdk-migration` label to `N` and aligns the remote migration history ID with the local baseline. Unlike `migration set`, it changes the remote schema as well as the bookkeeping. Like `set`, it never runs `migrate.ts` scripts itself — it only changes what the next `apply` considers pending:
+`tailor tailordb migration sync <N>` reconstructs the schema snapshot at migration `N` from the working tree's migration history and **overwrites the remote schema to match it**, then sets the `sdk-migration` label to `N` and records the migration history ID of the local baseline. Unlike `migration set`, it changes the remote schema as well as the bookkeeping. Like `set`, it never runs `migrate.ts` scripts itself — it only changes what the next `apply` considers pending:
 
 | Movement                         | Effect on next `apply`                                                                    | Effect on data                                                                                              |
 | -------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -892,6 +894,8 @@ Use cases:
 | Forward (e.g., `0001` → `0003`)  | Migrations `0002` and `0003` are skipped — their `migrate.ts` scripts will not run.       | Data the skipped scripts would have migrated stays as-is.                                                   |
 
 Before anything is sent to the remote, `sync` verifies that replaying the full migration history reproduces the current local table definitions. If it does not — because migration files were edited and no longer match, or because a schema change has not been recorded with `migration generate` yet — the command fails without touching the remote. This means a rewritten migration history is validated before it can overwrite the deployed schema.
+
+Like `set`, `sync` refuses to run when the namespace records another migration history ID, or one that cannot be read, before it reads or changes any table. With `--force`, it overwrites both the tables and the history ID with those of the local history, and still asks for confirmation unless you pass `--yes`.
 
 Because syncing backward causes already-applied scripts to re-execute on the next deploy, **write `migrate.ts` scripts to be idempotent** (see [Performance and Large Tables](#performance-and-large-tables) for resumable `where` clauses).
 

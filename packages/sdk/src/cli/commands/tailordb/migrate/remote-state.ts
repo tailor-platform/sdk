@@ -120,6 +120,83 @@ export function isCheckpointStillOwned(
 }
 
 /**
+ * Whether the namespace records the local migration history, or neither a checkpoint nor a
+ * history ID yet.
+ * @param state - Remote migration state of the namespace
+ * @param localHistoryId - History ID of the local baseline, if it has one
+ * @returns False when the namespace records another history, or a history label that cannot be read
+ */
+export function matchesLocalMigrationHistory(
+  state: Pick<RemoteMigrationState, "number" | "historyId" | "historyIdInvalid">,
+  localHistoryId: string | null,
+): boolean {
+  if (state.historyIdInvalid) return false;
+  return (state.number === null && state.historyId === null) || state.historyId === localHistoryId;
+}
+
+/**
+ * Format a namespace's migration history ID for a message, including a label that cannot be read.
+ * @param state - Remote migration state of the namespace
+ * @returns The history ID, `<invalid>`, or `<unset>`
+ */
+export function describeMigrationHistoryId(
+  state: Pick<RemoteMigrationState, "historyId" | "historyIdInvalid">,
+): string {
+  return state.historyIdInvalid ? "<invalid>" : (state.historyId ?? "<unset>");
+}
+
+type MigrationHistoryMismatch = {
+  state: RemoteMigrationState;
+  localHistoryId: string | null;
+  namespace: string;
+  code: string;
+  suggestion: string;
+};
+
+/**
+ * Build the error that refuses a command run from a checkout of another migration history.
+ * @param params - Remote state, local history ID, and the refusing command's code and suggestion
+ * @returns The error
+ */
+export function migrationHistoryMismatchError(params: MigrationHistoryMismatch): CLIError {
+  const { state, localHistoryId, namespace, code, suggestion } = params;
+  return CLIError({
+    code,
+    message: `The migration history of namespace "${namespace}" on the workspace does not match the local migration history.`,
+    details: `The workspace records migration history ID ${describeMigrationHistoryId(state)}; the local migration history has ${localHistoryId ?? "<unset>"}.`,
+    suggestion,
+    context: {
+      namespace,
+      remoteHistoryId: state.historyId,
+      remoteHistoryIdInvalid: state.historyIdInvalid,
+      localHistoryId,
+    },
+  });
+}
+
+type MigrationHistoryWrite = Omit<MigrationHistoryMismatch, "suggestion"> & { force: boolean };
+
+/**
+ * Refuse a command that writes the local migration history over a namespace recording another
+ * one, unless `--force` asks for the overwrite.
+ * @param params - Remote state, local history ID, the refusing command's code, and `--force`
+ * @returns The warning naming what `--force` overwrites, when it overwrites another history
+ */
+export function assertLocalMigrationHistory(params: MigrationHistoryWrite): string | undefined {
+  const { force, ...mismatch } = params;
+  const { state, localHistoryId } = mismatch;
+  if (matchesLocalMigrationHistory(state, localHistoryId)) return undefined;
+  if (!force) {
+    throw migrationHistoryMismatchError({
+      ...mismatch,
+      suggestion:
+        "Run the command from a checkout of the migration history that was deployed to the workspace, or pass --force to replace it with the local migration history.",
+    });
+  }
+  return `Overwriting the migration history ID ${describeMigrationHistoryId(state)} with ${localHistoryId ?? "<unset>"} (--force).`;
+}
+
+/**
  * Format a checkpoint for a message, including a namespace without one.
  * @param number - Checkpoint, if any
  * @returns The formatted number, or `<unset>`
