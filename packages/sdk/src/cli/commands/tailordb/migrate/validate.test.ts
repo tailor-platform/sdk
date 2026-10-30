@@ -392,21 +392,36 @@ describe("tailordb migration validate", () => {
     });
   });
 
-  test("falls back to the generic checkpoint guidance when already past the replaced migration", async () => {
-    using stderr = captureStderr();
-    markHistoryAsRebaselinedFrom("hprevious");
-    state.getMetadata.mockResolvedValue({
-      metadata: {
-        labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
-      },
-    });
+  test.each([false, true])(
+    "offers checkpoint recovery past the replaced migration (json=%s)",
+    async (json) => {
+      using _json = json ? jsonMode() : undefined;
+      using stderr = captureStderr();
+      markHistoryAsRebaselinedFrom("hprevious");
+      state.getMetadata.mockResolvedValue({
+        metadata: {
+          labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
+        },
+      });
 
-    const result = await runCommand(validateCommand, []);
+      const result = await runCommand(validateCommand, ["--config", "custom.config.ts"]);
 
-    expect(result.success).toBe(false);
-    expect(stderr.output).not.toContain("fell behind");
-    expect(stderr.output).toContain("Pull the latest migration files");
-  });
+      expect(result.success).toBe(false);
+      const guidance = json ? JSON.stringify(result.error) : stderr.output;
+      expect(guidance).not.toContain("fell behind");
+      expect(guidance).toContain("Pull the latest migration files");
+      expect(guidance).toContain("sync '<N>' --namespace tailordb");
+      expect(guidance).toContain("set '<N>' --namespace tailordb");
+      expect(guidance).toContain("rewrites the tables");
+      expect(guidance).toContain("moves only the checkpoint");
+      expect(guidance).toContain("--config=custom.config.ts");
+      expect(result.error).toMatchObject({
+        suggestion: expect.stringContaining(
+          "sync '<N>' --namespace tailordb --config=custom.config.ts",
+        ),
+      });
+    },
+  );
 
   test("explains the rebaseline-pending recovery procedure for a checkpoint that fell behind", async () => {
     using stderr = captureStderr();
@@ -422,6 +437,8 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(false);
     expect(stderr.output).toContain("fell behind before 'migration rebaseline' ran");
     expect(stderr.output).toContain("must reach 0005");
+    expect(stderr.output).not.toContain("sync '<N>'");
+    expect(stderr.output).not.toContain("set '<N>'");
     expect(stderr.output).toContain(
       "Restore the pre-rebaseline migrations/ directory from git history",
     );

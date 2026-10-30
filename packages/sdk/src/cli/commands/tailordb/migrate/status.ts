@@ -10,6 +10,7 @@ import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
+import { formatCheckpointMoveHints } from "./hints";
 import {
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
@@ -213,7 +214,13 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
         namespace,
         error:
           `Remote migration checkpoint ${formatMigrationNumber(currentMigration)} is ahead of ` +
-          `the latest local migration ${formatMigrationNumber(latestLocalMigration)}.`,
+          `the latest local migration ${formatMigrationNumber(latestLocalMigration)}.\n` +
+          "Pull the latest migration files, or move the checkpoint back on purpose: " +
+          formatCheckpointMoveHints({
+            namespace,
+            migrationNumber: formatMigrationNumber(latestLocalMigration),
+            configPath: options.configPath,
+          }).join(" or "),
       });
       continue;
     }

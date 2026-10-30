@@ -27,6 +27,7 @@ import { formatMigrationScriptHint } from "./hints";
 import {
   checkMigrationDiffs,
   logMissingCheckpointGuidance,
+  missingCheckpointRecoveryHints,
   logRemoteDriftGuidance,
   toTailorDBDeployInput,
   verifyRemoteSchema,
@@ -520,6 +521,7 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
           ? { rebaselinePending: r.remoteSchema.rebaselinePending }
           : {}),
       })),
+      configPath,
     );
   }
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
@@ -582,6 +584,14 @@ async function validate(options: ValidateOptions): Promise<void> {
     throw CLIError({
       code: "MIGRATION_VALIDATION_FAILED",
       message: `Migration validation failed for ${invalidCount} namespace(s)`,
+      suggestion:
+        missingCheckpointRecoveryHints(
+          reports.filter(hasMissingCheckpoint).map((report) => ({
+            namespace: report.namespace,
+            ...report.remoteSchema,
+          })),
+          options.configPath,
+        ).join("\n") || undefined,
     });
   }
 }

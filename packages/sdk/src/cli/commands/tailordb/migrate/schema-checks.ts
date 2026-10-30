@@ -17,6 +17,7 @@ import {
   formatDiffSummary,
   type MigrationDiff,
 } from "./diff-calculator";
+import { formatCheckpointMoveHints } from "./hints";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import { fetchRemoteMigrationState, type RemoteMigrationState } from "./remote-state";
@@ -610,19 +611,46 @@ function hasRebaselinePending(
  * migration history, singling out the specific "fell behind before a rebaseline" cause when
  * present.
  * @param {readonly CheckpointMissingGuidanceInput[]} results - Namespaces with a missing checkpoint
+ * @param configPath - Config file path to preserve in recovery commands
  * @returns {void}
  */
 export function logMissingCheckpointGuidance(
   results: readonly CheckpointMissingGuidanceInput[],
+  configPath?: string,
 ): void {
   logRebaselinePendingGuidance(results);
   const pendingCount = results.filter(hasRebaselinePending).length;
   if (pendingCount < results.length) {
     if (pendingCount > 0) logger.newline();
-    logger.info(
-      "Pull the latest migration files, or run 'tailor tailordb migration status' to compare.",
-    );
+    for (const hint of missingCheckpointRecoveryHints(results, configPath)) {
+      logger.info(hint);
+    }
   }
+}
+
+/**
+ * Format recovery options for checkpoints outside the local history, excluding rebaseline recovery.
+ * @param results - Namespaces with a missing checkpoint
+ * @param configPath - Config file path to preserve in recovery commands
+ * @returns Recovery instructions for human and JSON errors
+ */
+export function missingCheckpointRecoveryHints(
+  results: readonly CheckpointMissingGuidanceInput[],
+  configPath?: string,
+): string[] {
+  const missing = results.filter((result) => !result.rebaselinePending);
+  if (missing.length === 0) return [];
+  return [
+    "Pull the latest migration files if this checkout is behind.",
+    "To move the checkpoint back to the local history on purpose, choose a local migration number for <N> and run one of these for each namespace:",
+    ...missing.flatMap((result) =>
+      formatCheckpointMoveHints({
+        namespace: result.namespace,
+        migrationNumber: "<N>",
+        configPath,
+      }),
+    ),
+  ];
 }
 
 /**

@@ -80,3 +80,22 @@ export function formatNamespaceMigrationHint(options: NamespaceMigrationCommandO
   }
   return formatCommandHint({ command: "tailor", args });
 }
+
+interface CheckpointMoveHintOptions extends RebaselineCommandOptions {
+  migrationNumber: string;
+}
+
+/**
+ * Describe the two explicit ways to move a checkpoint to a local migration.
+ * @param options - Target migration and invocation context
+ * @returns Commands and their effects on the remote schema
+ */
+export function formatCheckpointMoveHints(options: CheckpointMoveHintOptions): string[] {
+  return (["sync", "set"] as const).map((subcommand) => {
+    const command = formatNamespaceMigrationHint({
+      ...options,
+      subcommand: [subcommand, options.migrationNumber],
+    });
+    return `${command} (${subcommand === "sync" ? "rewrites the tables to that snapshot" : "moves only the checkpoint"})`;
+  });
+}

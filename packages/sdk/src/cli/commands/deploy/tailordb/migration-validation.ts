@@ -4,7 +4,7 @@ import {
   type NamespaceWithMigrations,
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
-import { formatNamespaceMigrationHint } from "#/cli/commands/tailordb/migrate/hints";
+import { formatCheckpointMoveHints } from "#/cli/commands/tailordb/migrate/hints";
 import {
   describeMainRunSettlement,
   formatMigrationResolveHint,
@@ -253,20 +253,15 @@ function assertCheckpointsInLocalHistory(
     };
   });
   const rebaselinePendingCount = missing.filter((result) => result.rebaselinePending).length;
-  const commandHint = (subcommand: "sync" | "set", migrationNumber: number, namespace: string) =>
-    formatNamespaceMigrationHint({
-      subcommand: [subcommand, formatMigrationNumber(migrationNumber)],
-      namespace,
-      configPath,
-    });
   const moveCommands = checkpoints.flatMap(
     ({ namespace, rebaselinePending, localLatestMigration }) =>
       rebaselinePending || localLatestMigration === null
         ? []
-        : [
-            `  ${commandHint("sync", localLatestMigration, namespace)} (rewrites the tables to that snapshot)`,
-            `  ${commandHint("set", localLatestMigration, namespace)} (moves only the checkpoint)`,
-          ],
+        : formatCheckpointMoveHints({
+            namespace,
+            migrationNumber: formatMigrationNumber(localLatestMigration),
+            configPath,
+          }).map((hint) => `  ${hint}`),
   );
   throw CLIError({
     code: "MIGRATION_CHECKPOINT_UNKNOWN",

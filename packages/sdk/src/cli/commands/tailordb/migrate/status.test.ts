@@ -381,6 +381,11 @@ describe("tailordb migration status --json", () => {
         error: expect.stringMatching(/checkpoint 0009.*ahead.*latest local migration 0002/i),
       },
     ]);
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).toContain("sync 0002 --namespace tailordb");
+    expect(error).toContain("set 0002 --namespace tailordb");
+    expect(error).toContain("rewrites the tables");
+    expect(error).toContain("moves only the checkpoint");
   });
 
   test("identifies a migration history mismatch in human-readable output", async () => {
