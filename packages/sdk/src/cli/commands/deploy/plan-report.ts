@@ -35,7 +35,7 @@ interface PendingDeployedHook {
   pluginId: string;
 }
 
-type PrintDeploymentPlansOptions = PrintPlanOptions & {
+export type PrintDeploymentPlansOptions = PrintPlanOptions & {
   pendingDeployedHooks?: readonly PendingDeployedHook[];
   /** Applications recorded as dependencies but absent from this deploy. */
   missingDependentApps?: readonly MissingDependentApp[];
