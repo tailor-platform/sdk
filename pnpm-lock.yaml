@@ -640,6 +640,12 @@ importers:
       '@connectrpc/connect-node':
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))
+      '@enlumine/graphql':
+        specifier: 0.1.0
+        version: 0.1.0
+      '@enlumine/sql':
+        specifier: 0.1.0
+        version: 0.1.0
       '@inquirer/core':
         specifier: 12.0.5
         version: 12.0.5(@types/node@26.6.5)
@@ -757,9 +763,6 @@ importers:
       semver:
         specifier: 7.8.5
         version: 7.8.5
-      sql-highlight:
-        specifier: 6.1.0
-        version: 6.1.0
       std-env:
         specifier: 4.3.0
         version: 4.3.0
@@ -1345,6 +1348,18 @@ packages:
 
   '@emnapi/wasi-threads@1.2.2':
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
+
+  '@enlumine/core@0.1.0':
+    resolution: {integrity: sha512-ksKGACac5641ogsf3uKEiyUFlFp1kNkpvKBsK0KS9WPP0N6Zvy/47e1yeiYy1v07fjjrYv8JF7HJ85CclJkGNw==}
+    engines: {node: '>=22'}
+
+  '@enlumine/graphql@0.1.0':
+    resolution: {integrity: sha512-WmISonwkfdUiHNzm9xvgsLFIkDbViDv3nd2IA+pVhMlMDh4FXgdIzFKixHyiPL0uvEcWIrF7SljFZ6ZhhOPN6A==}
+    engines: {node: '>=22'}
+
+  '@enlumine/sql@0.1.0':
+    resolution: {integrity: sha512-b1LpFeu9LTXn6rapY71Jd59GTbvfA73ylLx5iTwQIqkkRPFy1roM82/Aw5z8jdF7xZfoQQgD4E422QVYU1o2Ng==}
+    engines: {node: '>=22'}
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -4059,10 +4074,6 @@ packages:
   split2@3.2.2:
     resolution: {integrity: sha512-9NThjpgZnifTkJpzTZ7Eue85S49QwpNhZTq6GRJwObb6jnLFNGB7Qm73V5HewTROPyxD0C29xqmaI68bQtV+hg==}
 
-  sql-highlight@6.1.0:
-    resolution: {integrity: sha512-ed7OK4e9ywpE7pgRMkMQmZDPKSVdm0oX5IEtZiKnFucSF0zu6c80GZBe38UqHuVhTWJ9xsKgSMjCG2bml86KvA==}
-    engines: {node: '>=14'}
-
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
 
@@ -4742,6 +4753,16 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
+
+  '@enlumine/core@0.1.0': {}
+
+  '@enlumine/graphql@0.1.0':
+    dependencies:
+      '@enlumine/core': 0.1.0
+
+  '@enlumine/sql@0.1.0':
+    dependencies:
+      '@enlumine/core': 0.1.0
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
@@ -6995,8 +7016,6 @@ snapshots:
   split2@3.2.2:
     dependencies:
       readable-stream: 3.6.2
-
-  sql-highlight@6.1.0: {}
 
   std-env@4.3.0: {}
 

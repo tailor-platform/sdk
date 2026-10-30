@@ -505,7 +505,7 @@ async function runRepl(
   const execute = await prepareQueryExecutor(options);
   const historyPath = getReplHistoryPath(options.engine, options.profile, options.workspaceId);
   const validate = createReplValidator(options.engine);
-  // Lazy-load the editor module so the `graphql` and `sql-highlight` libs are
+  // Lazy-load the editor module so the `@enlumine/*` highlighters are
   // only pulled in when the REPL is actually entered, not on every CLI startup.
   const { highlightSqlLines, highlightGraphqlLines, replTransform } = await import("./repl-editor");
   const highlightLines = options.engine === "sql" ? highlightSqlLines : highlightGraphqlLines;
