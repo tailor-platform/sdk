@@ -88,6 +88,8 @@ interface CompletedRemoteSchemaReport {
    * before `migration rebaseline` ran, rather than a generic history mismatch.
    */
   rebaselinePending?: RebaselinePendingInfo;
+  /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
+  localLatestMigration?: number | null;
   checkpointRepair?: { from: number; to: 0 };
 }
 
@@ -98,6 +100,7 @@ interface FailedRemoteSchemaReport {
   drifts?: never;
   checkpointMissingLocal?: never;
   rebaselinePending?: never;
+  localLatestMigration?: never;
   checkpointRepair?: never;
 }
 
@@ -273,6 +276,9 @@ function buildValidationReports(
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
       ...(remote.rebaselinePending ? { rebaselinePending: remote.rebaselinePending } : {}),
+      ...(remote.localLatestMigration !== undefined
+        ? { localLatestMigration: remote.localLatestMigration }
+        : {}),
       ...(remote.checkpointRepair ? { checkpointRepair: remote.checkpointRepair } : {}),
     };
 
@@ -585,6 +591,7 @@ async function validate(options: ValidateOptions): Promise<void> {
           reports.filter(hasMissingCheckpoint).map((report) => ({
             namespace: report.namespace,
             ...report.remoteSchema,
+            localLatestMigration: report.remoteSchema.localLatestMigration ?? null,
           })),
           options.configPath,
         ).join("\n") || undefined,

@@ -2508,7 +2508,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       const lines = (error as { suggestion: string }).suggestion.split("\n");
       expect(lines.slice(0, 2)).toEqual([
         "Pull the latest migration files if this checkout is behind.",
-        "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy again:",
+        "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy:",
       ]);
       expect(lines.slice(2)).toEqual([
         expect.stringMatching(

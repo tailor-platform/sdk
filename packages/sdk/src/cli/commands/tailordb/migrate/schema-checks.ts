@@ -31,6 +31,7 @@ import {
   createSnapshotFromRemoteTypes,
   getLatestMigrationNumber,
   getMigrationFilePath,
+  getMigrationFiles,
   loadDiff,
   isMigrationRestricted,
   MIGRATION_RESTRICTION_SETTINGS,
@@ -345,7 +346,13 @@ export async function compareRemoteSchemaWithSnapshot(
 /** Where a namespace's remote migration checkpoint stands in its local migration history. */
 export type RemoteCheckpointLocation =
   | { kind: "unset" }
-  | { kind: "outside"; number: number; rebaselinePending?: RebaselinePendingInfo }
+  | {
+      kind: "outside";
+      number: number;
+      /** Latest local migration, or `null` when the local history has none */
+      localLatestMigration: number | null;
+      rebaselinePending?: RebaselinePendingInfo;
+    }
   | {
       kind: "inside";
       number: number;
@@ -365,15 +372,17 @@ export function locateRemoteCheckpoint(
   rebaseline: RebaselineMarker | undefined,
 ): RemoteCheckpointLocation {
   const remoteMigrationNumber = remoteState.number;
+  const latestMigrationNumber = getLatestMigrationNumber(migrationsDir);
+  const localLatestMigration =
+    getMigrationFiles(migrationsDir).length > 0 ? latestMigrationNumber : null;
   if (
     remoteState.historyIdInvalid ||
     (remoteMigrationNumber === null && remoteState.historyId !== null)
   ) {
-    return { kind: "outside", number: remoteMigrationNumber ?? 0 };
+    return { kind: "outside", number: remoteMigrationNumber ?? 0, localLatestMigration };
   }
   if (remoteMigrationNumber === null) return { kind: "unset" };
 
-  const latestMigrationNumber = getLatestMigrationNumber(migrationsDir);
   const historyMatchesCurrent = rebaseline
     ? remoteState.historyId === rebaseline.historyId
     : remoteState.historyId === null;
@@ -404,6 +413,7 @@ export function locateRemoteCheckpoint(
     return {
       kind: "outside",
       number: remoteMigrationNumber,
+      localLatestMigration,
       ...(rebaselinePending ? { rebaselinePending } : {}),
     };
   }
@@ -451,6 +461,7 @@ export async function verifyRemoteSchema(
         drifts: [],
         hasDrift: false,
         checkpointMissingLocal: true,
+        localLatestMigration: location.localLatestMigration,
         ...(location.rebaselinePending ? { rebaselinePending: location.rebaselinePending } : {}),
       });
       continue;
@@ -606,6 +617,11 @@ function hasRebaselinePending(
   return result.rebaselinePending !== undefined;
 }
 
+export interface CheckpointRecoveryInput extends CheckpointMissingGuidanceInput {
+  /** Latest local migration, or `null` when the local history has none */
+  localLatestMigration: number | null;
+}
+
 /**
  * Format recovery options for checkpoints outside the local history, excluding rebaseline recovery.
  * @param results - Namespaces with a missing checkpoint
@@ -613,21 +629,28 @@ function hasRebaselinePending(
  * @returns Recovery instructions for human and JSON errors
  */
 export function missingCheckpointRecoveryHints(
-  results: readonly CheckpointMissingGuidanceInput[],
+  results: readonly CheckpointRecoveryInput[],
   configPath?: string,
 ): string[] {
   const missing = results.filter((result) => !result.rebaselinePending);
   if (missing.length === 0) return [];
+  const moveCommands = missing.flatMap(({ namespace, localLatestMigration }) =>
+    localLatestMigration === null
+      ? []
+      : formatCheckpointMoveHints({
+          namespace,
+          migrationNumber: formatMigrationNumber(localLatestMigration),
+          configPath,
+        }).map((hint) => `  ${hint}`),
+  );
   return [
     "Pull the latest migration files if this checkout is behind.",
-    "To move the checkpoint back to the local history on purpose, choose a local migration number for <N> and run one of these for each namespace:",
-    ...missing.flatMap((result) =>
-      formatCheckpointMoveHints({
-        namespace: result.namespace,
-        migrationNumber: "<N>",
-        configPath,
-      }),
-    ),
+    ...(moveCommands.length > 0
+      ? [
+          "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy:",
+          ...moveCommands,
+        ]
+      : []),
   ];
 }
 

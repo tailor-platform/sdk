@@ -367,6 +367,7 @@ describe("tailordb migration validate", () => {
       drifts: [],
       checkpointMissingLocal: true,
       rebaselinePending: { replacedLatestMigration: 5 },
+      localLatestMigration: 0,
     });
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
@@ -390,6 +391,7 @@ describe("tailordb migration validate", () => {
       hasDrift: false,
       drifts: [],
       checkpointMissingLocal: true,
+      localLatestMigration: 0,
     });
   });
 
@@ -412,12 +414,28 @@ describe("tailordb migration validate", () => {
       expect(stderr.output).not.toContain("Pull the latest migration files");
       const { suggestion } = result.error as CLIError;
       expect(suggestion).toContain("Pull the latest migration files");
-      expect(suggestion).toContain("sync '<N>' --namespace tailordb --config=custom.config.ts");
-      expect(suggestion).toContain("set '<N>' --namespace tailordb");
+      expect(suggestion).toContain("sync 0000 --namespace tailordb --config=custom.config.ts");
+      expect(suggestion).toContain("set 0000 --namespace tailordb");
       expect(suggestion).toContain("rewrites the tables");
       expect(suggestion).toContain("moves only the checkpoint");
     },
   );
+
+  test("does not suggest checkpoint moves without a local migration", async () => {
+    fs.rmSync(state.migrationsDir, { recursive: true });
+    fs.mkdirSync(state.migrationsDir);
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0007" } },
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const { suggestion } = result.error as CLIError;
+    expect(suggestion).toContain("Pull the latest migration files");
+    expect(suggestion).not.toContain("migration sync");
+    expect(suggestion).not.toContain("migration set");
+  });
 
   test("explains the rebaseline-pending recovery procedure for a checkpoint that fell behind", async () => {
     using stderr = captureStderr();
@@ -433,8 +451,8 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(false);
     expect(stderr.output).toContain("fell behind before 'migration rebaseline' ran");
     expect(stderr.output).toContain("must reach 0005");
-    expect(stderr.output).not.toContain("sync '<N>'");
-    expect(stderr.output).not.toContain("set '<N>'");
+    expect(stderr.output).not.toContain("migration sync");
+    expect(stderr.output).not.toContain("migration set");
     expect(stderr.output).toContain(
       "Restore the pre-rebaseline migrations/ directory from git history",
     );

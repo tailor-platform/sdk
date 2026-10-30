@@ -4,7 +4,6 @@ import {
   type NamespaceWithMigrations,
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
-import { formatCheckpointMoveHints } from "#/cli/commands/tailordb/migrate/hints";
 import {
   describeMainRunSettlement,
   formatMigrationResolveHint,
@@ -20,16 +19,15 @@ import {
   locateRemoteCheckpoint,
   logRebaselinePendingGuidance,
   logRemoteDriftGuidance,
+  missingCheckpointRecoveryHints,
   verifyRemoteSchema,
-  type CheckpointMissingGuidanceInput,
+  type CheckpointRecoveryInput,
   type TailorDBDeployInput,
 } from "#/cli/commands/tailordb/migrate/schema-checks";
 import {
   reconstructSnapshotFromMigrations,
   assertValidMigrationFiles,
   formatMigrationNumber,
-  getLatestMigrationNumber,
-  getMigrationFiles,
   type RebaselineMarker,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
@@ -223,12 +221,10 @@ async function validateMigrationsInProgress(
  * Refuse to deploy while a namespace's remote migration checkpoint is not in its local migration
  * history. Only `tailordb migration sync` and `set` move such a checkpoint.
  * @param missing - Namespaces whose checkpoint is not in the local migration history
- * @param migrationsDirs - Migrations directory of each namespace
  * @param configPath - Config file path, kept in the suggested commands
  */
 function assertCheckpointsInLocalHistory(
-  missing: readonly CheckpointMissingGuidanceInput[],
-  migrationsDirs: ReadonlyMap<string, string>,
+  missing: readonly CheckpointRecoveryInput[],
   configPath: string,
 ): void {
   if (missing.length === 0) return;
@@ -239,51 +235,19 @@ function assertCheckpointsInLocalHistory(
   logger.newline();
   logRebaselinePendingGuidance(missing);
 
-  const checkpoints = missing.map((result) => {
-    const migrationsDir = assertDefined(
-      migrationsDirs.get(result.namespace),
-      "a namespace with a checkpoint to verify has a migrations directory",
-    );
-    return {
-      ...result,
-      localLatestMigration:
-        getMigrationFiles(migrationsDir).length > 0
-          ? getLatestMigrationNumber(migrationsDir)
-          : null,
-    };
-  });
-  const rebaselinePendingCount = missing.filter((result) => result.rebaselinePending).length;
-  const moveCommands = checkpoints.flatMap(
-    ({ namespace, rebaselinePending, localLatestMigration }) =>
-      rebaselinePending || localLatestMigration === null
-        ? []
-        : formatCheckpointMoveHints({
-            namespace,
-            migrationNumber: formatMigrationNumber(localLatestMigration),
-            configPath,
-          }).map((hint) => `  ${hint}`),
-  );
   throw CLIError({
     code: "MIGRATION_CHECKPOINT_UNKNOWN",
     message: "Remote migration checkpoint verification failed",
     suggestion: [
-      ...(rebaselinePendingCount < missing.length
-        ? ["Pull the latest migration files if this checkout is behind."]
-        : []),
-      ...(moveCommands.length > 0
-        ? [
-            "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy again:",
-            ...moveCommands,
-          ]
-        : []),
-      ...(rebaselinePendingCount > 0
+      ...missingCheckpointRecoveryHints(missing, configPath),
+      ...(missing.some((result) => result.rebaselinePending)
         ? [
             "For a namespace that fell behind before 'migration rebaseline' ran, follow the recovery steps above.",
           ]
         : []),
     ].join("\n"),
     context: {
-      namespaces: checkpoints.map(
+      namespaces: missing.map(
         ({ namespace, remoteMigrationNumber, rebaselinePending, localLatestMigration }) => ({
           namespace,
           remoteCheckpoint: remoteMigrationNumber,
@@ -382,8 +346,11 @@ export async function validateAndDetectMigrations(
         )
         .map((result) => result.namespace);
       assertCheckpointsInLocalHistory(
-        remoteVerificationResults.filter((result) => result.checkpointMissingLocal),
-        migrationsDirs,
+        remoteVerificationResults.flatMap((result) =>
+          result.checkpointMissingLocal
+            ? [{ ...result, localLatestMigration: result.localLatestMigration ?? null }]
+            : [],
+        ),
         config.path,
       );
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
@@ -442,6 +409,7 @@ export async function validateAndDetectMigrations(
                 {
                   namespace,
                   remoteMigrationNumber: location.number,
+                  localLatestMigration: location.localLatestMigration,
                   ...(location.rebaselinePending
                     ? { rebaselinePending: location.rebaselinePending }
                     : {}),
@@ -449,7 +417,6 @@ export async function validateAndDetectMigrations(
               ]
             : [];
         }),
-        migrationsDirs,
         config.path,
       );
     }
