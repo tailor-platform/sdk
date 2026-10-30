@@ -729,8 +729,7 @@ describe("multi-directory branch workflow", () => {
     );
 
     expect(plan?.env).toEqual({
-      TAILOR_PLATFORM_SDK_CONFIG_PATH:
-        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      TAILOR_CONFIG_PATH: "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
     });
     expect(plan?.with).not.toHaveProperty("working-directory");
   });
@@ -742,8 +741,7 @@ describe("multi-directory branch workflow", () => {
     );
 
     expect(apply?.env).toEqual({
-      TAILOR_PLATFORM_SDK_CONFIG_PATH:
-        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      TAILOR_CONFIG_PATH: "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
     });
     expect(apply?.with).not.toHaveProperty("working-directory");
   });
@@ -1167,8 +1165,7 @@ describe("multi-directory tag workflow", () => {
       workflow.jobs[job]?.steps.find((step) => step.id === id)?.env;
 
     expect(configEnv("tailor-plan", "tailor-plan")).toEqual({
-      TAILOR_PLATFORM_SDK_CONFIG_PATH:
-        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      TAILOR_CONFIG_PATH: "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
     });
     expect(configEnv("tailor-deploy", "tailor-apply")).toEqual(
       configEnv("tailor-plan", "tailor-plan"),
@@ -1199,8 +1196,7 @@ describe("multi-directory preview workflow", () => {
     ]?.steps.find((step) => step.id === "tailor-preview-deploy");
 
     expect(deploy?.env).toEqual({
-      TAILOR_PLATFORM_SDK_CONFIG_PATH:
-        "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+      TAILOR_CONFIG_PATH: "apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
     });
     expect(deploy?.with).not.toHaveProperty("working-directory");
     expect(generatedIds).toEqual(
@@ -3423,7 +3419,7 @@ export default defineConfig({
 
       const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-erp.yml"), "utf-8");
       expect(wf).toContain(
-        "TAILOR_PLATFORM_SDK_CONFIG_PATH: apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
+        "TAILOR_CONFIG_PATH: apps/erp/backend/tailor.config.ts,apps/users/backend/tailor.config.ts",
       );
       expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({
         dir: ".",

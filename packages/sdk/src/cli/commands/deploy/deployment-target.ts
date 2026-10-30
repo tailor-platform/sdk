@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { hashFile } from "#/cli/cache/hasher";
 import { createCacheManager } from "#/cli/cache/manager";
 import { loadApplication, type Application } from "#/cli/services/application";
+import { readDeployConfigPathEnv } from "#/cli/shared/args";
 import { type OperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadConfigPath } from "#/cli/shared/context";
@@ -82,7 +83,7 @@ type BuildDeploymentTargetsParams = Omit<
  * @returns Config paths, or one undefined entry to preserve default config lookup
  */
 export function parseDeployConfigPaths(configPath?: string): Array<string | undefined> {
-  const rawConfigPath = configPath ?? process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+  const rawConfigPath = configPath ?? readDeployConfigPathEnv();
   if (rawConfigPath === undefined) {
     return [undefined];
   }

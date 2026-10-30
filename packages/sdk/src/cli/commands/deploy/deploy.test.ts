@@ -289,16 +289,41 @@ describe("computeRenamedAppDeletions", () => {
 
 describe("parseDeployConfigPaths", () => {
   test("preserves default config lookup when no path is provided", () => {
-    const previous = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
-    delete process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
     try {
       expect(parseDeployConfigPaths()).toEqual([undefined]);
     } finally {
-      if (previous === undefined) {
-        delete process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
-      } else {
-        process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH = previous;
-      }
+      vi.unstubAllEnvs();
+    }
+  });
+
+  test.each([
+    {
+      name: "reads TAILOR_CONFIG_PATH when no path is provided",
+      env: { TAILOR_CONFIG_PATH: "buyer/tailor.config.ts,supplier/tailor.config.ts" },
+      configPath: undefined,
+      expected: ["buyer/tailor.config.ts", "supplier/tailor.config.ts"],
+      warnings: [],
+    },
+    {
+      name: "prefers a provided path over both config path variables",
+      env: {
+        TAILOR_CONFIG_PATH: "new/tailor.config.ts",
+        TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts",
+      },
+      configPath: "given/tailor.config.ts",
+      expected: ["given/tailor.config.ts"],
+      warnings: [],
+    },
+  ])("$name", ({ env, configPath, expected, warnings }) => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    try {
+      expect(parseDeployConfigPaths(configPath)).toEqual(expected);
+      expect(warnSpy.mock.calls).toEqual(warnings);
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 
