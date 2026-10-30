@@ -26,7 +26,7 @@ import {
 import { formatMigrationScriptHint } from "./hints";
 import {
   checkMigrationDiffs,
-  logMissingCheckpointGuidance,
+  logRebaselinePendingGuidance,
   missingCheckpointRecoveryHints,
   logRemoteDriftGuidance,
   toTailorDBDeployInput,
@@ -511,19 +511,15 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
   if (reports.some((r) => r.localSchema?.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create migration files.");
   }
-  const missingCheckpointReports = reports.filter(hasMissingCheckpoint);
-  if (missingCheckpointReports.length > 0) {
-    logMissingCheckpointGuidance(
-      missingCheckpointReports.map((r) => ({
-        namespace: r.namespace,
-        remoteMigrationNumber: r.remoteSchema.remoteMigrationNumber,
-        ...(r.remoteSchema.rebaselinePending
-          ? { rebaselinePending: r.remoteSchema.rebaselinePending }
-          : {}),
-      })),
-      configPath,
-    );
-  }
+  logRebaselinePendingGuidance(
+    reports.filter(hasMissingCheckpoint).map((r) => ({
+      namespace: r.namespace,
+      remoteMigrationNumber: r.remoteSchema.remoteMigrationNumber,
+      ...(r.remoteSchema.rebaselinePending
+        ? { rebaselinePending: r.remoteSchema.rebaselinePending }
+        : {}),
+    })),
+  );
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
     logRemoteDriftGuidance(
       reports.map((r) => ({

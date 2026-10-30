@@ -607,28 +607,6 @@ function hasRebaselinePending(
 }
 
 /**
- * Log recovery guidance for namespaces whose remote migration checkpoint is not in the local
- * migration history, singling out the specific "fell behind before a rebaseline" cause when
- * present.
- * @param {readonly CheckpointMissingGuidanceInput[]} results - Namespaces with a missing checkpoint
- * @param configPath - Config file path to preserve in recovery commands
- * @returns {void}
- */
-export function logMissingCheckpointGuidance(
-  results: readonly CheckpointMissingGuidanceInput[],
-  configPath?: string,
-): void {
-  logRebaselinePendingGuidance(results);
-  const pendingCount = results.filter(hasRebaselinePending).length;
-  if (pendingCount < results.length) {
-    if (pendingCount > 0) logger.newline();
-    for (const hint of missingCheckpointRecoveryHints(results, configPath)) {
-      logger.info(hint);
-    }
-  }
-}
-
-/**
  * Format recovery options for checkpoints outside the local history, excluding rebaseline recovery.
  * @param results - Namespaces with a missing checkpoint
  * @param configPath - Config file path to preserve in recovery commands

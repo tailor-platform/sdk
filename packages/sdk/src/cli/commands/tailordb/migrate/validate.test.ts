@@ -16,6 +16,7 @@ import {
   writeInitialSchema,
 } from "./test-helpers/schema-fixtures";
 import { validateCommand } from "./validate";
+import type { CLIError } from "#/cli/shared/errors";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
@@ -393,7 +394,7 @@ describe("tailordb migration validate", () => {
   });
 
   test.each([false, true])(
-    "offers checkpoint recovery past the replaced migration (json=%s)",
+    "offers checkpoint recovery past the replaced migration only in the error (json=%s)",
     async (json) => {
       using _json = json ? jsonMode() : undefined;
       using stderr = captureStderr();
@@ -407,19 +408,14 @@ describe("tailordb migration validate", () => {
       const result = await runCommand(validateCommand, ["--config", "custom.config.ts"]);
 
       expect(result.success).toBe(false);
-      const guidance = json ? JSON.stringify(result.error) : stderr.output;
-      expect(guidance).not.toContain("fell behind");
-      expect(guidance).toContain("Pull the latest migration files");
-      expect(guidance).toContain("sync '<N>' --namespace tailordb");
-      expect(guidance).toContain("set '<N>' --namespace tailordb");
-      expect(guidance).toContain("rewrites the tables");
-      expect(guidance).toContain("moves only the checkpoint");
-      expect(guidance).toContain("--config=custom.config.ts");
-      expect(result.error).toMatchObject({
-        suggestion: expect.stringContaining(
-          "sync '<N>' --namespace tailordb --config=custom.config.ts",
-        ),
-      });
+      expect(stderr.output).not.toContain("fell behind");
+      expect(stderr.output).not.toContain("Pull the latest migration files");
+      const { suggestion } = result.error as CLIError;
+      expect(suggestion).toContain("Pull the latest migration files");
+      expect(suggestion).toContain("sync '<N>' --namespace tailordb --config=custom.config.ts");
+      expect(suggestion).toContain("set '<N>' --namespace tailordb");
+      expect(suggestion).toContain("rewrites the tables");
+      expect(suggestion).toContain("moves only the checkpoint");
     },
   );
 
