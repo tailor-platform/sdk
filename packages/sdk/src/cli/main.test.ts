@@ -112,6 +112,67 @@ describe.concurrent("CLI error verbosity", () => {
   );
 });
 
+describe.concurrent("env files", () => {
+  test.each([
+    { name: "every repeated flag", args: ["organization", "get", "-e", "a.env", "-e", "b.env"] },
+    {
+      name: "flags on both sides of the subcommand",
+      args: ["-e", "a.env", "organization", "get", "--env-file", "b.env"],
+    },
+    {
+      name: "--env-file-if-exists after --env-file",
+      args: ["organization", "get", "--env-file-if-exists=b.env", "--envFile", "a.env"],
+    },
+  ])(
+    "loads $name before validating options",
+    async ({ args }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempDir("cli-env-file-");
+      writeFileSync(
+        path.join(tmp.dir, "a.env"),
+        "TAILOR_PLATFORM_ORGANIZATION_ID=11111111-1111-4111-8111-111111111111\n",
+      );
+      writeFileSync(path.join(tmp.dir, "b.env"), "UNRELATED=1\n");
+
+      const result = await runCli([...args, "--json"], tmp.dir);
+
+      expect(result.status).toBe(1);
+      expect(JSON.parse(result.stderr).error).toMatchObject({ code: "AUTH_TOKEN_NOT_FOUND" });
+    },
+    20_000,
+  );
+
+  test("uses the config path an env file sets", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-env-file-config-");
+    writeFileSync(path.join(tmp.dir, "c.env"), "TAILOR_CONFIG_PATH=from-env-file.config.ts\n");
+
+    const result = await runCli(
+      ["tailordb", "migration", "generate", "--json", "-e", "c.env"],
+      tmp.dir,
+    );
+
+    expect(result.status).toBe(1);
+    const envelope = JSON.parse(result.stderr.trim().split("\n").at(-1) ?? "");
+    expect(envelope.error.message).toBe("Configuration file not found: from-env-file.config.ts");
+  }, 20_000);
+
+  test("reports a missing --env-file as an argument error", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-env-file-missing-");
+
+    const result = await runCli(["organization", "get", "-e", "missing.env", "--json"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stderr).error).toMatchObject({
+      code: "INVALID_ARGUMENTS",
+      message: expect.stringMatching(/^Environment file not found: \/.*\/missing\.env$/),
+    });
+  }, 20_000);
+});
+
 describe.concurrent("argument errors under JSON output", () => {
   test.each([
     { name: "--json", args: ["--json"], extraEnv: {} },

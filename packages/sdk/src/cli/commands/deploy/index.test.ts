@@ -7,6 +7,7 @@ import { z } from "zod";
 import { deployCommand } from "#/cli/commands/deploy/index";
 import { commonArgs } from "#/cli/shared/args";
 import { logger } from "#/cli/shared/logger";
+import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 
 const mocks = vi.hoisted(() => ({
   assertWritable: vi.fn(),
@@ -40,14 +41,12 @@ describe("deployCommand", () => {
       "TAILOR_PLATFORM_ORGANIZATION_ID=11111111-1111-4111-8111-111111111111\nTAILOR_PLATFORM_FOLDER_ID=22222222-2222-4222-8222-222222222222\n",
     );
     try {
-      const result = await runCommand(
-        deployCommand,
-        ["--create-workspace", "--env-file", envFile, ...args],
-        {
-          // strip unknown keys
-          globalArgs: z.object(commonArgs),
-        },
-      );
+      const result = await runCliCommand(deployCommand, [
+        "--create-workspace",
+        "--env-file",
+        envFile,
+        ...args,
+      ]);
 
       expect(result.success).toBe(true);
       expect(mocks.deployFromCLI).toHaveBeenCalledWith(
@@ -55,6 +54,29 @@ describe("deployCommand", () => {
           organizationId,
           folderId: "22222222-2222-4222-8222-222222222222",
         }),
+        expect.any(Object),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    { name: "a shell variable", envFileLine: undefined },
+    { name: "an env file", envFileLine: "TAILOR_PLATFORM_ORGANIZATION_ID=\n" },
+  ])("treats an empty organization ID from $name as not given", async ({ envFileLine }) => {
+    const dir = fs.mkdtempSync(path.join(tmpdir(), "tailor-deploy-empty-location-"));
+    const envFile = path.join(dir, ".env");
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", envFileLine === undefined ? "" : undefined);
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
+    fs.writeFileSync(envFile, envFileLine ?? "");
+    try {
+      const result = await runCliCommand(deployCommand, ["--create-workspace", "-e", envFile]);
+
+      expect(result.success).toBe(true);
+      expect(mocks.deployFromCLI).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: undefined, folderId: undefined }),
         expect.any(Object),
       );
     } finally {
@@ -150,10 +172,7 @@ describe("deployCommand", () => {
     vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
     fs.writeFileSync(envFile, `${variable}=env-file/tailor.config.ts\n`);
     try {
-      await runCommand(deployCommand, ["--env-file", envFile], {
-        // strip unknown keys
-        globalArgs: z.object(commonArgs),
-      });
+      await runCliCommand(deployCommand, ["--env-file", envFile]);
 
       expect(mocks.deployFromCLI).toHaveBeenCalledWith(
         expect.objectContaining({ configPath: "env-file/tailor.config.ts" }),
@@ -176,24 +195,39 @@ describe("deployCommand", () => {
   });
 
   test("forwards global options needed to reproduce deploy", async () => {
-    await runCommand(deployCommand, ["--env-file-if-exists", ".env.local", "--verbose", "--json"], {
-      // strip unknown keys
-      globalArgs: z.object(commonArgs),
-    });
+    const dir = fs.mkdtempSync(path.join(tmpdir(), "tailor-deploy-recovery-"));
+    const [envFileA, envFileB] = [path.join(dir, "a.env"), path.join(dir, "b.env")];
+    fs.writeFileSync(envFileA, "");
+    fs.writeFileSync(envFileB, "");
+    const commandArgs = [
+      "--env-file-if-exists",
+      ".env.local",
+      "-e",
+      envFileB,
+      "--verbose",
+      "--json",
+    ];
+    const originalArgv = process.argv;
+    process.argv = ["node", "tailor", "-e", envFileA, "deploy", ...commandArgs];
+    try {
+      await runCommand(deployCommand, commandArgs, {
+        // strip unknown keys
+        globalArgs: z.object(commonArgs),
+      });
+    } finally {
+      process.argv = originalArgv;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
 
+    const cliContext = {
+      envFiles: [envFileA, envFileB],
+      envFilesIfExists: [".env.local"],
+      verbose: true,
+      json: true,
+    };
     expect(mocks.deployFromCLI).toHaveBeenCalledWith(
-      expect.not.objectContaining({
-        envFile: undefined,
-        envFileIfExists: ".env.local",
-        verbose: true,
-        json: true,
-      }),
-      {
-        envFile: undefined,
-        envFileIfExists: ".env.local",
-        verbose: true,
-        json: true,
-      },
+      expect.not.objectContaining(cliContext),
+      cliContext,
     );
   });
 });

@@ -317,6 +317,45 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
   });
 
+  test("injects the config path a forwarded env file sets", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    fs.writeFileSync(
+      path.join(project, ".env.staging"),
+      "TAILOR_CONFIG_PATH=env-file/tailor.config.ts\n",
+    );
+    contextMocks.loadConfigPath.mockImplementation(
+      () => process.env.TAILOR_CONFIG_PATH ?? "/proj/tailor.config.ts",
+    );
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "-e", ".env.staging"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    expect(readCapture().env.TAILOR_CONFIG_PATH).toBe("env-file/tailor.config.ts");
+  });
+
+  test("leaves a missing --env-file for the plugin to report", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "-e", ".env.missing"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    expect(readCapture().argv).toEqual(["deploy", "-e", ".env.missing"]);
+  });
+
   // `main.ts` hands the host-consumed tokens to `dispatchPlugin` already
   // concatenated ahead of the post-name args, so the flags reaching the three
   // consumers here are whatever position the user typed them in. The end-to-end
@@ -541,6 +580,10 @@ describe("hasEnvFileFlag", () => {
     [["deploy", "-e", ".env"], true],
     [["deploy", "--env-file=.env"], true],
     [["deploy", "--env-file-if-exists", ".env"], true],
+    [["deploy", "--envFile", ".env"], true],
+    [["deploy", "--envFileIfExists=.env"], true],
+    [["deploy", "-e"], false],
+    [["deploy", "-e", "--json"], false],
     [["deploy"], false],
     [["deploy", "--", "--env-file", ".env"], false],
   ])("detects env-file flag in %j", (args, expected) => {

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
@@ -45,6 +46,30 @@ describe("tailordb-erd CLI JSON errors", () => {
           message: `Configuration file not found: ${path.resolve(missingConfigPath)}`,
         },
       });
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "reads the config path from an --env-file",
+    () => {
+      const dir = mkdtempSync(path.join(tmpdir(), "erd-env-file-"));
+      try {
+        const envFile = path.join(dir, ".env");
+        writeFileSync(envFile, `TAILOR_CONFIG_PATH=${missingConfigPath}\n`);
+
+        const result = runCli(["export", "--json", "-e", envFile]);
+
+        expect(result.status).toBe(1);
+        expect(parseErrorEnvelope(result.stderr)).toEqual({
+          error: {
+            code: "UNEXPECTED_ERROR",
+            message: `Configuration file not found: ${path.resolve(missingConfigPath)}`,
+          },
+        });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     },
     CLI_TEST_TIMEOUT_MS,
   );

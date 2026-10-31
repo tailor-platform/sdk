@@ -5,6 +5,7 @@ import {
   annotateTerminalError,
   serializeError,
   createCommonArgs,
+  loadEnvFilesFromArgv,
   logger,
   defineCommand,
   runMain,
@@ -46,6 +47,7 @@ void runMain(mainCommand, {
   // -v matches the generated seed runner this plugin replaces
   globalArgs: z.strictObject(createCommonArgs({ verboseAlias: "v" })),
   displayErrors: false,
+  setup: () => loadEnvFilesFromArgv(process.argv.slice(2)),
   cleanup: ({ error }) => {
     if (!error) return;
     if (logger.jsonMode) {

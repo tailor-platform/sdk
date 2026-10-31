@@ -6,8 +6,10 @@ import { describe, expect, aroundEach, test, vi } from "vitest";
 import { z } from "zod";
 import {
   createCommonArgs,
+  readEnvFileArgs,
   globalArgsApplied,
   loadEnvFiles,
+  loadEnvFilesFromArgv,
   durationArg,
   parseDuration,
   positiveIntArg,
@@ -144,6 +146,98 @@ describe("loadEnvFiles", () => {
     test("handles empty arrays", () => {
       expect(() => loadEnvFiles([], [])).not.toThrow();
     });
+  });
+});
+
+describe("readEnvFileArgs", () => {
+  test.each([
+    {
+      name: "repeated flags on both sides of a subcommand",
+      argv: ["--env-file", "a.env", "deploy", "-e", "b.env", "--env-file-if-exists", "c.env"],
+      expected: { envFiles: ["a.env", "b.env"], envFilesIfExists: ["c.env"] },
+    },
+    {
+      name: "inline values and camelCase spellings",
+      argv: ["--env-file=a.env", "-e=b.env", "--envFile", "c.env", "--envFileIfExists=d.env"],
+      expected: { envFiles: ["a.env", "b.env", "c.env"], envFilesIfExists: ["d.env"] },
+    },
+    {
+      name: "only the flags before --",
+      argv: ["-e", "a.env", "--", "-e", "b.env"],
+      expected: { envFiles: ["a.env"], envFilesIfExists: [] },
+    },
+    {
+      name: "no value from a flag followed by another option",
+      argv: ["-e", "--json", "--env-file"],
+      expected: { envFiles: [], envFilesIfExists: [] },
+    },
+    {
+      name: "nothing from short-option bundles",
+      argv: ["-je", "a.env", "-e.env"],
+      expected: { envFiles: [], envFilesIfExists: [] },
+    },
+  ])("reads $name", ({ argv, expected }) => {
+    expect(readEnvFileArgs(argv)).toEqual(expected);
+  });
+});
+
+describe("loading env files from the command line", () => {
+  const originalEnv = process.env;
+  let tempDir: string;
+
+  aroundEach(async (runTest) => {
+    process.env = { ...originalEnv };
+    using tmp = tempCwd("tailor-env-argv-test-");
+    tempDir = tmp.dir;
+    await runTest();
+    process.env = originalEnv;
+  });
+
+  test("loads every file, --env-file-if-exists files after --env-file files", () => {
+    fs.writeFileSync(path.join(tempDir, "a.env"), "ONLY_IN_A=a\nSHARED=a\n");
+    fs.writeFileSync(path.join(tempDir, "b.env"), "SHARED=b\n");
+    fs.writeFileSync(path.join(tempDir, "c.env"), "SHARED=c\n");
+
+    loadEnvFilesFromArgv([
+      "--env-file-if-exists",
+      "c.env",
+      "-e",
+      "a.env",
+      "deploy",
+      "--env-file",
+      "b.env",
+      "--env-file-if-exists",
+      "missing.env",
+    ]);
+
+    expect(process.env.ONLY_IN_A).toBe("a");
+    expect(process.env.SHARED).toBe("c");
+  });
+
+  test("throws for a missing --env-file", () => {
+    expect(() => loadEnvFilesFromArgv(["-e", "missing.env"])).toThrow(
+      /Environment file not found: .*missing\.env/,
+    );
+  });
+
+  test("loads every file after parsing when the caller did not load them first", async () => {
+    fs.writeFileSync(path.join(tempDir, "a.env"), "ONLY_IN_A=a\n");
+    fs.writeFileSync(path.join(tempDir, "b.env"), "ONLY_IN_B=b\n");
+    let loaded: (string | undefined)[] = [];
+    const command = defineAppCommand({
+      name: "probe",
+      args: z.strictObject({}),
+      run: () => {
+        loaded = [process.env.ONLY_IN_A, process.env.ONLY_IN_B];
+      },
+    });
+
+    const result = await runCommand(command, ["-e", "a.env", "-e", "b.env"], {
+      globalArgs: z.strictObject(createCommonArgs()),
+    });
+
+    expect(result.success).toBe(true);
+    expect(loaded).toEqual(["a", "b"]);
   });
 });
 

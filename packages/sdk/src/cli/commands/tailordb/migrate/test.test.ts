@@ -3,8 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { runCommand } from "@politty/zod";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { z } from "zod";
-import { commonArgs } from "#/cli/shared/args";
+import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 import {
   runMigrationTest,
   testCommand,
@@ -199,26 +198,61 @@ describe("tailordb migration test", () => {
       }
     });
 
-    test("passes the IDs loaded by --env-file to the preparation step", async () => {
+    function writeEnvFile(content: string): string {
       const directory = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-env-"));
       directories.push(directory);
       const envFile = path.join(directory, "location.env");
-      fs.writeFileSync(
-        envFile,
+      fs.writeFileSync(envFile, content);
+      return envFile;
+    }
+
+    test("passes the IDs loaded by --env-file to the preparation step", async () => {
+      const envFile = writeEnvFile(
         `TAILOR_PLATFORM_ORGANIZATION_ID=${organizationId}\nTAILOR_PLATFORM_FOLDER_ID=${folderId}\n`,
       );
       const dependencies = createDependencies([]);
       mocks.dependencies = dependencies;
 
-      const result = await runCommand(testCommand, ["--env-file", envFile], {
-        // strip unknown keys
-        globalArgs: z.object(commonArgs),
-      });
+      const result = await runCliCommand(testCommand, ["--env-file", envFile]);
 
       expect(result.success).toBe(true);
       expect(dependencies.prepare).toHaveBeenCalledWith(
         expect.objectContaining({ organizationId, folderId }),
       );
+    });
+
+    test("treats empty ID lines in an --env-file as not given", async () => {
+      const envFile = writeEnvFile(
+        "TAILOR_PLATFORM_ORGANIZATION_ID=\nTAILOR_PLATFORM_FOLDER_ID=\n",
+      );
+      const dependencies = createDependencies([]);
+      mocks.dependencies = dependencies;
+
+      const result = await runCliCommand(testCommand, ["--env-file", envFile]);
+
+      expect(result.success).toBe(true);
+      expect(dependencies.prepare).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: undefined, folderId: undefined }),
+      );
+    });
+
+    test.each([
+      { name: "a command-line value", args: ["--organization-id", "not-a-uuid"], content: "" },
+      {
+        name: "an env-file value",
+        args: [],
+        content: "TAILOR_PLATFORM_ORGANIZATION_ID=not-a-uuid\n",
+      },
+      { name: "an empty command-line value", args: ["--organization-id", ""], content: "" },
+    ])("rejects $name that is not a UUID", async ({ args, content }) => {
+      const envFile = writeEnvFile(content);
+      const dependencies = createDependencies([]);
+      mocks.dependencies = dependencies;
+
+      const result = await runCliCommand(testCommand, ["--env-file", envFile, ...args]);
+
+      expect(result.success).toBe(false);
+      expect(dependencies.prepare).not.toHaveBeenCalled();
     });
   });
 
