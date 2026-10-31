@@ -7,9 +7,8 @@ import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 import { ageArg, parseAge } from "../age";
-import { decodeExpiresAt, encodeExpiresAt, writeWorkspaceExpiry } from "../expiry";
+import { recordedExpiresAt, writeWorkspaceExpiry } from "../expiry";
 
 // strip unknown keys
 const setTtlOptionsSchema = z.object({
@@ -41,7 +40,7 @@ async function setWorkspaceTtl(options: SetTtlOptions): Promise<RecordedExpiry> 
     workspaceId: validated.workspaceId,
   });
 
-  const expiresAt = new Date(Date.now() + parseAge(validated.ttl));
+  const expiresAt = recordedExpiresAt(new Date(Date.now() + parseAge(validated.ttl)));
   const changed = await writeWorkspaceExpiry(client, workspaceId, expiresAt);
   return { workspaceId, expiresAt, changed };
 }
@@ -69,10 +68,6 @@ export const setCommand = defineAppCommand({
     });
 
     logger.success(`Workspace becomes prunable at ${expiresAt.toISOString()}.`);
-    const recorded = assertDefined(
-      decodeExpiresAt(encodeExpiresAt(expiresAt)),
-      "encoded workspace expiry must decode",
-    );
-    printMutationResult({ changed, workspaceId, expiresAt: recorded.toISOString() });
+    printMutationResult({ changed, workspaceId, expiresAt: expiresAt.toISOString() });
   },
 });

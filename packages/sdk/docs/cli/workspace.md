@@ -125,6 +125,8 @@ Every workspace belongs to an organization. Without --organization-id and --fold
 
 TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID are also read from --env-file. Command-line options take precedence over the corresponding environment variables. Empty values in the env file are treated as not given.
 
+When --ttl is given but the expiry cannot be confirmed, the command still prints the created workspace, then fails with WORKSPACE_TTL_WRITE_FAILED. With --json, the printed `ttl.state` is then `unconfirmed` instead of `written`, so a script can read the workspace ID and record the expiry again with `workspace ttl set`.
+
 ### workspace delete
 
 Delete a Tailor Platform workspace.
