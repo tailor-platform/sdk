@@ -214,6 +214,7 @@ export { truncate, type TruncateOptions } from "./commands/tailordb/truncate";
 export {
   generate as migrateGenerate,
   type GenerateOptions as MigrateGenerateOptions,
+  type GenerateResult as MigrateGenerateResult,
 } from "./commands/tailordb/migrate/generate";
 export {
   createSnapshotFromLocalTypes,

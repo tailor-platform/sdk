@@ -225,7 +225,8 @@ type GeneratedMigration = {
   pgliteSchemaError: string | null;
 };
 
-type GenerateResult = {
+/** **Beta:** The outcome of generating TailorDB migrations. */
+export type GenerateResult = {
   changed: boolean;
   /** Namespaces whose migration directory --init deleted */
   clearedNamespaces: string[];
@@ -261,10 +262,10 @@ function generatedMigration(namespace: string, files: WrittenMigrationFiles): Ge
  *
  * **Beta:** This API may change in future releases.
  * @param {GenerateOptions} options - Generation options
- * @returns {Promise<void>} Promise that resolves when generation is complete
+ * @returns {Promise<GenerateResult>} The migrations written, the directories cleared, and the namespaces skipped
  */
-export async function generate(options: GenerateOptions): Promise<void> {
-  await generateMigrations(options);
+export async function generate(options: GenerateOptions): Promise<GenerateResult> {
+  return generateMigrations(options);
 }
 
 /**

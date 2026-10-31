@@ -2,15 +2,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { generateCommand } from "./generate";
+import { generate, generateCommand } from "./generate";
 import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
 import { getNextMigrationNumber, loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import type { MigrateGenerateResult } from "#/cli/lib";
 import type * as SnapshotModule from "./snapshot";
 
 interface TestNamespace {
@@ -1562,6 +1563,15 @@ describe("tailordb migration generate declined confirmations", () => {
     expect(result.success).toBe(true);
     expect(stderr.output).toContain("Skipped: tailordb");
     expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("returns skipped namespaces to programmatic callers", async () => {
+    addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
+
+    const result = await generate({});
+
+    expect(result.skippedNamespaces).toEqual(["tailordb"]);
+    expectTypeOf(result).toEqualTypeOf<MigrateGenerateResult>();
   });
 
   test("writes the other namespaces and reports the declined one as skipped", async () => {
