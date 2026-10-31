@@ -98,18 +98,9 @@ interface CompletedRemoteSchemaReport {
   checkpointRepair?: { from: number; to: 0 };
 }
 
-interface FailedRemoteSchemaReport {
-  skipped: "check_failed";
-  remoteMigrationNumber?: never;
-  hasDrift?: never;
-  drifts?: never;
-  checkpointUnset?: never;
-  checkpointMissingLocal?: never;
-  rebaselinePending?: never;
-  localLatestMigration?: never;
-  historyIdMismatch?: never;
-  checkpointRepair?: never;
-}
+type FailedRemoteSchemaReport = { skipped: "check_failed" } & {
+  [K in Exclude<keyof CompletedRemoteSchemaReport, "skipped">]?: never;
+};
 
 type RemoteSchemaReport = CompletedRemoteSchemaReport | FailedRemoteSchemaReport;
 
