@@ -250,23 +250,7 @@ export function createGenerationManager(params: {
             } else {
               const relativePath = path.relative(process.cwd(), file.path);
               logger.debug(`${sourceId} | generate: ${styles.success(relativePath)}`);
-              // Set executable permission if requested
-              if (file.executable) {
-                fs.chmod(file.path, 0o755, (chmodErr) => {
-                  if (chmodErr) {
-                    const relativePath = path.relative(process.cwd(), file.path);
-                    logger.error(
-                      `Error setting executable permission on ${styles.bold(relativePath)}`,
-                    );
-                    logger.error(String(chmodErr));
-                    reject(chmodErr);
-                  } else {
-                    resolve();
-                  }
-                });
-              } else {
-                resolve();
-              }
+              resolve();
             }
           });
         });
