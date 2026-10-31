@@ -3,6 +3,7 @@ import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { formatConfigArg } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
@@ -21,6 +22,8 @@ import {
 } from "./test-helpers/schema-fixtures";
 import type { CLIError } from "#/cli/shared/errors";
 
+const workspaceId = vi.hoisted(() => "12345678-1234-4abc-8def-123456789012");
+
 const state = vi.hoisted(() => ({
   migrationsDir: "",
   localTypes: {} as Record<string, unknown>,
@@ -36,7 +39,7 @@ vi.mock("#/cli/shared/config-loader", () => ({
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
-  loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
+  loadWorkspaceId: vi.fn().mockResolvedValue(workspaceId),
 }));
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
@@ -71,7 +74,7 @@ vi.mock("#/cli/services/application", () => ({
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
   vi.mocked(loadConfig).mockResolvedValue({
     config: {
-      path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+      path: configPath(),
       db: migrationDbConfig(namespaces, state.migrationsDir),
     },
     plugins: [],
@@ -115,6 +118,10 @@ function remoteType(name: string): Record<string, unknown> {
       files: {},
     },
   };
+}
+
+function configPath(): string {
+  return path.join(path.dirname(state.migrationsDir), "tailor.config.ts");
 }
 
 function migrationDirectories(): string[] {
@@ -238,7 +245,7 @@ describe("tailordb migration rebaseline", () => {
     };
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
-      workspaceId: "12345678-1234-4abc-8def-123456789012",
+      workspaceId,
       namespace: "tailordb",
       historyId: baseline.rebaseline.historyId,
       replacedHistoryId: null,
@@ -357,6 +364,12 @@ describe("tailordb migration rebaseline", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/remote schema must match the latest migration/i);
+    expect(result.error).toMatchObject({ code: "REBASELINE_REMOTE_SCHEMA_MISMATCH" });
+    const { suggestion } = result.error as CLIError;
+    expect(suggestion).toContain(
+      `tailor tailordb migration sync 0001 --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}`,
+    );
+    expect(suggestion).not.toContain("--force");
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
@@ -372,6 +385,10 @@ describe("tailordb migration rebaseline", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/invalid migration history marker/i);
+    expect(result.error).toMatchObject({ code: "REBASELINE_REMOTE_HISTORY_INVALID" });
+    expect((result.error as CLIError).suggestion).toContain(
+      `tailor tailordb migration set 0001 --force --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}`,
+    );
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
@@ -388,6 +405,13 @@ describe("tailordb migration rebaseline", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/does not match the local migration history/i);
+    expect(result.error).toMatchObject({
+      code: "REBASELINE_REMOTE_HISTORY_MISMATCH",
+      context: { remoteHistoryId: "hother", localHistoryId: "hcurrent" },
+    });
+    expect((result.error as CLIError).suggestion).toContain(
+      `tailor tailordb migration set 0001 --force --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}`,
+    );
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
@@ -416,6 +440,25 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/history changed while waiting for confirmation/i);
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("asks for a rerun when the history marker becomes invalid while waiting for confirmation", async () => {
+    state.getMetadata
+      .mockResolvedValueOnce({ metadata: { labels: { "sdk-migration": "m0001" } } })
+      .mockResolvedValueOnce({ metadata: { labels: { "sdk-migration": "m0001" } } })
+      .mockResolvedValueOnce({
+        metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-history": "INVALID!" } },
+      });
+
+    const result = await runCommand(rebaselineCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "REBASELINE_REMOTE_HISTORY_INVALID",
+      suggestion: expect.stringMatching(/run the command again/i),
+    });
+    expect((result.error as CLIError).suggestion).not.toContain("--force");
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 

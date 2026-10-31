@@ -162,6 +162,19 @@ export function internalError(message: string, options?: ErrorOptions): Error {
 }
 
 /**
+ * Create the error for a profile name that the platform config does not define.
+ * @param profile - Requested profile name
+ * @returns CLIError with code `PROFILE_NOT_FOUND`
+ */
+export function profileNotFoundError(profile: string): CLIError {
+  return CLIError({
+    code: "PROFILE_NOT_FOUND",
+    message: `Profile "${profile}" not found`,
+    suggestion: `Run ${formatCommandHint({ command: "tailor", args: ["profile", "list"] })} to see the configured profiles.`,
+  });
+}
+
+/**
  * Convert a caught value into an Error, keeping Error instances as-is
  * @param value - Caught value
  * @returns The value itself when it is an Error, otherwise an Error of its string form with the value as `cause`

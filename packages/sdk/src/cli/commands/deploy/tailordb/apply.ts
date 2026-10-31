@@ -22,6 +22,7 @@ import {
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
@@ -1438,12 +1439,19 @@ async function commitMigration(
   try {
     await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
   } catch (error) {
+    const syncHint = formatNamespaceMigrationHint({
+      subcommand: ["sync", formatMigrationNumber(migration.number)],
+      namespace: migration.namespace,
+      configPath: migrationContext.config.path,
+      contextArgs: [
+        ...recoveryContextArgs({ workspaceId: migrationContext.workspaceId }),
+        ...(migrationContext.migrationRecoveryArgs ?? []),
+      ],
+    });
     logger.warn(
       `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-        (phaseSettings.restricted
-          ? "The leftover resources remain locked. Remove them"
-          : "Remove the leftover resources") +
-        " manually before the next deployment; remote schema verification will fail closed until then.",
+        (phaseSettings.restricted ? "The leftover resources remain locked. " : "") +
+        `Before the next deployment, delete them by running ${syncHint}, or remove them manually; remote schema verification will fail closed until then.`,
     );
     throw error;
   }

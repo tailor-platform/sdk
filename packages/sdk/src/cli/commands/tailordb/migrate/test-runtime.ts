@@ -15,6 +15,7 @@ import {
 import { bundleSeedScript } from "#/cli/commands/generate/seed/bundler";
 import {
   fetchRemoteSchemaSnapshot,
+  PULL_LATEST_MIGRATIONS_SUGGESTION,
   toTailorDBDeployInput,
   type TailorDBDeployInput,
   verifyRemoteSchema,
@@ -22,6 +23,7 @@ import {
 import { parseAge } from "#/cli/commands/workspace/age";
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
 import { writeWorkspaceExpiry } from "#/cli/commands/workspace/expiry";
+import { recoveryContextArgs, type RecoveryContext } from "#/cli/shared/args";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
@@ -37,6 +39,7 @@ import { assertDefined } from "#/utils/assert";
 import { collectForeignKeyTargets } from "#/utils/foreign-key-targets";
 import { bundleMigrationScript } from "./bundler";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
+import { formatNamespaceMigrationHint } from "./hints";
 import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertValidMigrationFiles,
@@ -525,13 +528,21 @@ export function assertTargetMatchesLocation(
   }
 }
 
+/** Source workspace and config of a migration test, kept in the commands its errors suggest. */
+export interface MigrationTestSource extends RecoveryContext {
+  workspaceId: string;
+  configPath: string;
+}
+
 /**
  * Require every source namespace to match its migration checkpoint and to have
  * no checkpoint repair pending.
  * @param checks - Remote schema verification results of the source namespaces
+ * @param source - Source workspace and config, kept in the suggested commands
  */
 export function assertSourceMatchesCheckpoints(
   checks: readonly RemoteSchemaVerificationResult[],
+  source: MigrationTestSource,
 ): void {
   const invalidRemote = checks.find((check) => check.hasDrift || check.checkpointMissingLocal);
   if (invalidRemote?.checkpointUnset) {
@@ -543,10 +554,20 @@ export function assertSourceMatchesCheckpoints(
     });
   }
   if (invalidRemote) {
+    const hintOptions = {
+      namespace: invalidRemote.namespace,
+      configPath: source.configPath,
+      contextArgs: recoveryContextArgs(source),
+    };
+    const statusHint = formatNamespaceMigrationHint({ ...hintOptions, subcommand: ["status"] });
+    const validateHint = formatNamespaceMigrationHint({ ...hintOptions, subcommand: ["validate"] });
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_INVALID",
       message: `Source namespace "${invalidRemote.namespace}" does not match its migration checkpoint.`,
-      suggestion: "Validate the migration history first.",
+      ...(invalidRemote.hasDrift ? { details: formatSchemaDrifts(invalidRemote.drifts) } : {}),
+      suggestion: invalidRemote.checkpointMissingLocal
+        ? `${PULL_LATEST_MIGRATIONS_SUGGESTION} Otherwise run ${statusHint} to compare the source workspace's checkpoint and migration history with the local ones.`
+        : `Run ${validateHint} to check the migration history and source schema, or ${statusHint} to inspect the source workspace's checkpoint.`,
     });
   }
   const pendingRepair = checks.find((check) => check.checkpointRepair);
@@ -728,7 +749,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     throw migrationConfigNotFoundError();
   }
   for (const namespace of namespaces) {
-    assertValidMigrationFiles(namespace.migrationsDir, namespace.namespace);
+    assertValidMigrationFiles(namespace.migrationsDir, namespace.namespace, loaded.config.path);
   }
 
   let seedContext: SeedContext | undefined;
@@ -789,7 +810,11 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     loaded.config,
     inputs,
   );
-  assertSourceMatchesCheckpoints(remoteChecks);
+  assertSourceMatchesCheckpoints(remoteChecks, {
+    workspaceId: sourceWorkspaceId,
+    profile: options.profile,
+    configPath: loaded.config.path,
+  });
 
   const baselines = new Map<
     string,

@@ -63,6 +63,8 @@ export interface NamespaceMigrationCommandOptions {
   namespace: string;
   /** Config path the current run used; omitted from the command when it resolves to the default */
   configPath?: string;
+  /** Profile and workspace selection to keep, from `recoveryContextArgs` */
+  contextArgs?: readonly string[];
 }
 
 /**
@@ -72,12 +74,13 @@ export interface NamespaceMigrationCommandOptions {
  * @returns {string} The command part of the hint, as rendered by `formatCommandHint`
  */
 export function formatNamespaceMigrationHint(options: NamespaceMigrationCommandOptions): string {
-  const { subcommand, namespace, configPath } = options;
+  const { subcommand, namespace, configPath, contextArgs = [] } = options;
   const args = ["tailordb", "migration", ...subcommand, "--namespace", namespace];
   const configArg = formatConfigArg(configPath);
   if (configArg !== undefined) {
     args.push(configArg);
   }
+  args.push(...contextArgs);
   return formatCommandHint({ command: "tailor", args });
 }
 

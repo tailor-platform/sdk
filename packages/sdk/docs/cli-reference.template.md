@@ -45,7 +45,8 @@ flag always wins, so `--json=false` forces table output even when the variable i
 `true`, `True`, `TRUE`, `t`, `T`, and `1` enable JSON; `false`, `False`, `FALSE`, `f`, `F`, and `0`
 keep table output. Other values are rejected. JSON mode also disables interactive prompts, so set the
 variable per invocation or per job rather than exporting it from a shell profile; a command that
-needed a prompt names what selected JSON when it refuses.
+needed a prompt names what selected JSON when it refuses. In JSON mode, pass `--yes` to commands that
+ask for confirmation, and pass the options that a command would otherwise prompt for.
 
 When an AI coding agent such as Claude Code, Codex, Cursor, or Gemini CLI runs the CLI, every
 command defaults to JSON as if `TAILOR_JSON_OUTPUT=true` were set, and `--help` starts with a short

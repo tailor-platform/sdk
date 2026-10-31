@@ -304,7 +304,7 @@ export async function validateAndDetectMigrations(
   if (namespacesWithMigrations.length > 0) {
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
     for (const { namespace, migrationsDir } of namespacesWithMigrations) {
-      assertValidMigrationFiles(migrationsDir, namespace);
+      assertValidMigrationFiles(migrationsDir, namespace, config.path);
       const rebaseline = reconstructSnapshotFromMigrations(migrationsDir)?.rebaseline;
       rebaselines.set(namespace, rebaseline);
       migrationHistoryIds[namespace] = rebaseline?.historyId ?? null;

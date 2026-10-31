@@ -1,6 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
+import { confirmationArgs, SKIP_CONFIRMATION_SUGGESTION, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -73,6 +73,7 @@ export const removeCommand = defineAppCommand({
     if (!args.yes) {
       const confirmation = await prompt.text({
         message: `Are you sure you want to remove user "${args.email}" from the workspace? (yes/no):`,
+        suggestion: SKIP_CONFIRMATION_SUGGESTION,
       });
       if (confirmation !== "yes") {
         throw CLIError({

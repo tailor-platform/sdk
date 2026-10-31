@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { describe, expect, test, aroundEach, aroundAll } from "vitest";
+import { formatConfigArg } from "#/cli/shared/args";
 import {
   reconstructSnapshotFromMigrations,
   validateMigrationFiles,
@@ -820,6 +821,9 @@ describe("snapshot", () => {
   });
 
   describe("assertValidMigrationFiles", () => {
+    const configPath = () => path.join(testDir, "app", "tailor.config.ts");
+    const assertTestFiles = () => assertValidMigrationFiles(testDir, "test", configPath());
+
     test("does not throw for valid migrations (directory structure)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
@@ -829,7 +833,7 @@ describe("snapshot", () => {
       };
       writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, snapshot);
 
-      expect(() => assertValidMigrationFiles(testDir, "test")).not.toThrow();
+      expect(assertTestFiles).not.toThrow();
     });
 
     test("throws for invalid migrations with detailed error message (directory structure)", () => {
@@ -847,10 +851,8 @@ describe("snapshot", () => {
       // Missing 0000/schema.json
       writeDiffToDir(testDir, 1, diff);
 
-      expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(
-        /Migration file validation failed for namespace "test"/,
-      );
-      expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(/Initial schema snapshot/);
+      expect(assertTestFiles).toThrow(/Migration file validation failed for namespace "test"/);
+      expect(assertTestFiles).toThrow(/Initial schema snapshot/);
     });
 
     test("throws MIGRATION_FILES_INVALID with remediation for a migration without diff.json", () => {
@@ -858,7 +860,7 @@ describe("snapshot", () => {
       fs.mkdirSync(path.join(testDir, "0001"));
       fs.writeFileSync(path.join(testDir, "0001", "migrate.ts"), "export async function main() {}");
 
-      expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(
+      expect(assertTestFiles).toThrow(
         expect.objectContaining({
           code: "MIGRATION_FILES_INVALID",
           suggestion:
@@ -866,5 +868,38 @@ describe("snapshot", () => {
         }),
       );
     });
+
+    test.each([
+      { history: "a gap", diffNumbers: [1, 3], leftover: undefined },
+      {
+        history: "a gap next to a leftover directory without diff.json",
+        diffNumbers: [1, 4],
+        leftover: {
+          number: "0003",
+          suggestion: "Restore diff.json in migration directory 0003.",
+        },
+      },
+    ])(
+      "suggests restoring the history or recreating 0000 for $history",
+      ({ diffNumbers, leftover }) => {
+        writeInitialSchema(testDir, {});
+        for (const diffNumber of diffNumbers) writeDiff(testDir, diffNumber, []);
+        if (leftover) {
+          fs.mkdirSync(path.join(testDir, leftover.number));
+          fs.writeFileSync(
+            path.join(testDir, leftover.number, "migrate.ts"),
+            "export async function main() {}",
+          );
+        }
+        const restoreOrInit = `Restore the migration files from version control. If no workspace has been deployed with these migrations, you can instead recreate 0000 from the local tables with \`tailor tailordb migration generate --init --namespace test ${formatConfigArg(configPath())}\`, which deletes every migration of the namespace.`;
+
+        expect(assertTestFiles).toThrow(
+          expect.objectContaining({
+            code: "MIGRATION_FILES_INVALID",
+            suggestion: leftover ? `${leftover.suggestion}\n${restoreOrInit}` : restoreOrInit,
+          }),
+        );
+      },
+    );
   });
 });

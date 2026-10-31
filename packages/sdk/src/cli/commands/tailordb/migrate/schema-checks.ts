@@ -696,6 +696,10 @@ export interface CheckpointRecoveryInput extends CheckpointMissingGuidanceInput 
   historyIdMismatch: boolean;
 }
 
+/** First recovery step for a remote checkpoint outside the local migration history. */
+export const PULL_LATEST_MIGRATIONS_SUGGESTION =
+  "Pull the latest migration files if this checkout is behind.";
+
 /**
  * Format recovery options for checkpoints outside the local history, excluding rebaseline recovery.
  * @param results - Namespaces with a missing checkpoint
@@ -719,7 +723,7 @@ export function missingCheckpointRecoveryHints(
         }).map((hint) => `  ${hint}`),
   );
   return [
-    "Pull the latest migration files if this checkout is behind.",
+    PULL_LATEST_MIGRATIONS_SUGGESTION,
     ...(missing.some((result) => result.historyIdMismatch && result.localLatestMigration !== null)
       ? [
           "For a namespace that records another migration history, work from a checkout of that history instead; run its --force commands below only if the local migration history should replace it.",

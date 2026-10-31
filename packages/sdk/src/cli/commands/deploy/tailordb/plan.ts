@@ -70,6 +70,7 @@ export async function planTailorDB(context: PlanContext) {
     config,
     noSchemaCheck,
     migrationSkipSteps,
+    migrationRecoveryArgs,
     forceApplyAll = false,
   } = context;
   const tailordbs: TailorDBDeployInput[] = [];
@@ -221,6 +222,7 @@ export async function planTailorDB(context: PlanContext) {
       config,
       noSchemaCheck: noSchemaCheck ?? false,
       ...(migrationSkipSteps ? { migrationSkipSteps } : {}),
+      ...(migrationRecoveryArgs ? { migrationRecoveryArgs } : {}),
       ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
       ...(context.migrationMachineUserOverride !== undefined
         ? { migrationMachineUserOverride: context.migrationMachineUserOverride }

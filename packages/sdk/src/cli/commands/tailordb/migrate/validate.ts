@@ -364,7 +364,7 @@ async function collectValidationReports(
     : undefined;
   for (const target of targetNamespaces) {
     try {
-      assertValidMigrationFiles(target.migrationsDir, target.namespace);
+      assertValidMigrationFiles(target.migrationsDir, target.namespace, config.path);
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);

@@ -368,6 +368,19 @@ describe("planTailorDB (service level)", () => {
     });
   });
 
+  test("keeps the deploy's recovery arguments for apply", async () => {
+    const result = await planTailorDB({
+      client: createMockClient([]),
+      workspaceId,
+      application: createMockApplication([createMockTailorDBService("tailordb")]),
+      forRemoval: false,
+      config: mockConfig,
+      migrationRecoveryArgs: ["--profile=staging"],
+    });
+
+    expect(result.context.migrationRecoveryArgs).toEqual(["--profile=staging"]);
+  });
+
   describe("rename scenarios (service level)", () => {
     test("old service is deleted when renamed", async () => {
       const client = createMockClient([{ name: "old-tailordb", label: appName }]);

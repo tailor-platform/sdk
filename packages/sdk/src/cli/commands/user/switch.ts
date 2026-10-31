@@ -8,7 +8,7 @@ import {
   resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, profileNotFoundError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 
@@ -27,10 +27,7 @@ export const switchCommand = defineAppCommand({
     const activeProfileName = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
     const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
     if (activeProfileName && !activeProfileEntry) {
-      throw CLIError({
-        code: "PROFILE_NOT_FOUND",
-        message: `Profile "${activeProfileName}" not found`,
-      });
+      throw profileNotFoundError(activeProfileName);
     }
     const platformConfig = activeProfileEntry
       ? platformConfigFromProfile(activeProfileEntry)

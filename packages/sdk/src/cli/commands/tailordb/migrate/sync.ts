@@ -199,7 +199,7 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   const target = selectTargetNamespace(namespacesWithMigrations, options.namespace);
 
-  assertValidMigrationFiles(target.migrationsDir, target.namespace);
+  assertValidMigrationFiles(target.migrationsDir, target.namespace, config.path);
 
   const latest = assertMigrationNumberExists(target.migrationsDir, targetVersion);
 

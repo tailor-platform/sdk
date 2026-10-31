@@ -503,6 +503,9 @@ export const confirmationArgs = {
   }),
 } satisfies ArgsShape;
 
+/** Suggestion for a confirmation prompt that {@link confirmationArgs} skips but cannot be shown. */
+export const SKIP_CONFIRMATION_SUGGESTION = "Pass --yes to skip the confirmation.";
+
 /**
  * Arguments for commands that require organization context
  */

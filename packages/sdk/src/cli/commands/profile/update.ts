@@ -8,7 +8,7 @@ import {
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, profileNotFoundError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import type { ProfileInfo } from "./types";
 
@@ -58,7 +58,7 @@ export const updateCommand = defineAppCommand({
     // Check if profile exists
     const profile = config.profiles[args.name];
     if (!profile) {
-      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${args.name}" not found.` });
+      throw profileNotFoundError(args.name);
     }
 
     // Check if at least one property is provided
@@ -145,7 +145,7 @@ export const updateCommand = defineAppCommand({
         args.name,
       );
       if (config.profiles[args.name] !== profile) {
-        throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${args.name}" not found.` });
+        throw profileNotFoundError(args.name);
       }
       resolvedUser = refreshed.user;
 
