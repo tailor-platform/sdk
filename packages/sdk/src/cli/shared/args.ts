@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
-import { arg, parseArgv, type ArgSource } from "@politty/zod";
+import { arg, extractFields, parseArgv, toCamelCase, type ArgSource } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
@@ -330,18 +330,19 @@ interface CommonArgsOptions {
  */
 export function createCommonArgs(options: CommonArgsOptions = {}) {
   return {
-    "env-file": arg(z.string().optional(), {
+    "env-file": arg(z.array(z.string()).optional(), {
       alias: "e",
-      description: "Path to the environment file (error if not found)",
+      description: "Path to an environment file, repeatable (error if not found)",
       completion: { type: "file", matcher: [".env.*", ".env"] },
     }),
-    "env-file-if-exists": arg(z.string().optional(), {
-      description: "Path to the environment file (ignored if not found)",
+    "env-file-if-exists": arg(z.array(z.string()).optional(), {
+      description: "Path to an environment file, repeatable (ignored if not found)",
       completion: { type: "file", matcher: [".env.*", ".env"] },
+      // Sets nothing new after loadEnvFilesFromArgv; loads the files for runs that skip it.
       effect: (_value, { args }) => {
         loadEnvFiles(
-          args["env-file"] as string | undefined,
-          args["env-file-if-exists"] as string | undefined,
+          args["env-file"] as string[] | undefined,
+          args["env-file-if-exists"] as string[] | undefined,
         );
       },
     }),
@@ -373,6 +374,80 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
  * Common arguments for all CLI commands
  */
 export const commonArgs = createCommonArgs();
+
+interface NamedOption {
+  cliName: string;
+  alias?: readonly string[] | undefined;
+}
+
+/**
+ * Spell an option every way the CLI accepts it on the command line.
+ * @param option - Option field as `extractFields` describes it
+ * @returns `-x` for each one-letter name, and the kebab-case and camelCase forms of each longer one
+ */
+export function flagTokensOf(option: NamedOption): string[] {
+  return [option.cliName, ...(option.alias ?? [])].flatMap((name) =>
+    name.length === 1 ? [`-${name}`] : [`--${name}`, `--${toCamelCase(name)}`],
+  );
+}
+
+/** Env file paths given on the command line, in the order given. */
+export interface EnvFileArgs {
+  envFiles: string[];
+  envFilesIfExists: string[];
+}
+
+const envFileArgKeys = new Map<string, keyof EnvFileArgs>([
+  ["env-file", "envFiles"],
+  ["env-file-if-exists", "envFilesIfExists"],
+]);
+
+const envFileArgKeyByToken: ReadonlyMap<string, keyof EnvFileArgs> = new Map(
+  extractFields(z.strictObject(commonArgs)).fields.flatMap((field) => {
+    const key = envFileArgKeys.get(field.name);
+    if (key === undefined) return [];
+    return flagTokensOf(field).map((token) => [token, key] as const);
+  }),
+);
+
+/**
+ * Read the env file paths given on the command line. A short-option bundle
+ * such as `-je .env` is skipped, because how it splits depends on the
+ * command's own options.
+ * @param argv - Command-line arguments after the executable and script path
+ * @returns Every `--env-file` and `--env-file-if-exists` value before `--`
+ */
+export function readEnvFileArgs(argv: readonly string[]): EnvFileArgs {
+  const result: EnvFileArgs = { envFiles: [], envFilesIfExists: [] };
+  const tokens = optionTokens(argv);
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index] ?? "";
+    const separator = token.indexOf("=");
+    const key = envFileArgKeyByToken.get(separator === -1 ? token : token.slice(0, separator));
+    if (key === undefined) continue;
+    if (separator !== -1) {
+      result[key].push(token.slice(separator + 1));
+      continue;
+    }
+    const value = tokens[index + 1];
+    if (value !== undefined && !value.startsWith("-")) {
+      result[key].push(value);
+      index++;
+    }
+  }
+  return result;
+}
+
+/**
+ * Load the env files given on the command line, so that options backed by an
+ * environment variable read the values these files set. Call it before the
+ * CLI parses its arguments, such as from the `setup` hook of `runMain`.
+ * @param argv - Command-line arguments after the executable and script path
+ */
+export function loadEnvFilesFromArgv(argv: readonly string[]): void {
+  const { envFiles, envFilesIfExists } = readEnvFileArgs(argv);
+  loadEnvFiles(envFiles, envFilesIfExists);
+}
 
 /**
  * Arguments for commands that require workspace context
@@ -471,7 +546,6 @@ export const multiConfigArg = {
 
 /**
  * Read the deploy config paths set through the environment, warning when the deprecated TAILOR_PLATFORM_SDK_CONFIG_PATH supplies them.
- * Call it at run time: politty fills `args` from the environment before `--env-file` loads.
  * @returns TAILOR_CONFIG_PATH, or the deprecated TAILOR_PLATFORM_SDK_CONFIG_PATH; empty values count as not set
  */
 export function readDeployConfigPathEnv(): string | undefined {
@@ -565,26 +639,28 @@ export const folderArgs = {
   }),
 } satisfies ArgsShape;
 
+type LocationIdName = "organization-id" | "folder-id";
+
 type LocationIdArgs = {
-  "organization-id"?: string;
-  "folder-id"?: string;
+  [name in LocationIdName]?: string | undefined;
+} & {
+  $source?: ((name: LocationIdName) => ArgSource) | undefined;
 };
 
 /**
- * Read the organization and folder ID options, including IDs loaded by `--env-file`.
- * politty fills `args` from the environment before `--env-file` loads, so only env-file values reach the fallback.
+ * Read the organization and folder ID options.
  * @param args - Parsed command arguments
- * @returns Organization and folder IDs; empty env-file values count as not given
+ * @returns Organization and folder IDs; empty values from the environment count as not given
  */
-export function locationIdsWithEnvFile(args: LocationIdArgs): {
+export function locationIds(args: LocationIdArgs): {
   organizationId?: string;
   folderId?: string;
 } {
-  return {
-    organizationId:
-      args["organization-id"] ?? (process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined),
-    folderId: args["folder-id"] ?? (process.env.TAILOR_PLATFORM_FOLDER_ID || undefined),
+  const read = (name: LocationIdName) => {
+    const value = args[name];
+    return value === "" && args.$source?.(name) === "env" ? undefined : value;
   };
+  return { organizationId: read("organization-id"), folderId: read("folder-id") };
 }
 
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;

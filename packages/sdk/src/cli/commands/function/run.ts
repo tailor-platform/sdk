@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
-import { arg, extractFields, toCamelCase } from "@politty/zod";
+import { arg, extractFields } from "@politty/zod";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
@@ -15,6 +15,7 @@ import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver
 import {
   commonArgs,
   resolveMachineUserInputSource,
+  flagTokensOf,
   type MachineUserInputSource,
   workspaceArgs,
 } from "#/cli/shared/args";
@@ -309,13 +310,8 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
 const valueTakingGlobalFlags: ReadonlySet<string> = new Set(
   extractFields(z.strictObject(commonArgs))
     .fields.filter((field) => field.type !== "boolean")
-    .flatMap((field) => [field.cliName, ...(field.alias ?? [])].flatMap(toFlagTokens)),
+    .flatMap(flagTokensOf),
 );
-
-function toFlagTokens(name: string): string[] {
-  if (name.length === 1) return [`-${name}`];
-  return [`--${name}`, `--${toCamelCase(name)}`];
-}
 
 /**
  * Detect whether the command was invoked through the deprecated `test-run`

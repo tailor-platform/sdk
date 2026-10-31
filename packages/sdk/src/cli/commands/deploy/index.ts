@@ -5,7 +5,8 @@ import { parseMigrationSkipSteps } from "#/cli/commands/deploy/tailordb/migratio
 import {
   confirmationArgs,
   DEFAULT_CONFIG_PATH,
-  locationIdsWithEnvFile,
+  readEnvFileArgs,
+  locationIds,
   multiConfigArg,
   readDeployConfigPathEnv,
   workspaceArgs,
@@ -17,7 +18,7 @@ export const deployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy your application by applying the Tailor configuration.",
   notes:
-    "Every workspace belongs to an organization; when none is given or set as a default, interactive runs ask for one and non-interactive runs fail. Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. Organization and folder IDs loaded by --env-file also replace the defaults; command-line options take precedence, and empty env-file values are ignored. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.",
+    "Every workspace belongs to an organization; when none is given or set as a default, interactive runs ask for one and non-interactive runs fail. Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID, including values loaded by --env-file, also replace the defaults; command-line options take precedence, and an empty value of either variable is ignored. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.",
   args: z.strictObject({
     ...workspaceArgs,
     ...multiConfigArg,
@@ -77,7 +78,7 @@ export const deployCommand = defineAppCommand({
         createWorkspace: args["create-workspace"],
         workspaceName: args["workspace-name"],
         workspaceRegion: args["workspace-region"],
-        ...locationIdsWithEnvFile(args),
+        ...locationIds(args),
         noSchemaCheck: args["no-schema-check"],
         migrationSkipSteps: parseMigrationSkipSteps(args["migration-skip-steps"]),
         noValidate: args["no-validate"],
@@ -85,8 +86,8 @@ export const deployCommand = defineAppCommand({
         cleanCache: args["clean-cache"],
       },
       {
-        envFile: args["env-file"],
-        envFileIfExists: args["env-file-if-exists"],
+        // Parsed values drop the occurrences given before the subcommand name.
+        ...readEnvFileArgs(process.argv.slice(2)),
         verbose: args.verbose,
         json: args.json,
       },

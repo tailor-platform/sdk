@@ -317,6 +317,24 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
   });
 
+  test("injects the config path a forwarded env file sets, leaving a missing one to the plugin", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    fs.writeFileSync(path.join(project, ".env.staging"), "TAILOR_CONFIG_PATH=env/tailor.config.ts");
+    contextMocks.loadConfigPath.mockImplementation(() => process.env.TAILOR_CONFIG_PATH);
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "-e", ".env.staging", "-e", ".env.missing"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    expect(readCapture().env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
+  });
+
   // `main.ts` hands the host-consumed tokens to `dispatchPlugin` already
   // concatenated ahead of the post-name args, so the flags reaching the three
   // consumers here are whatever position the user typed them in. The end-to-end
@@ -541,6 +559,10 @@ describe("hasEnvFileFlag", () => {
     [["deploy", "-e", ".env"], true],
     [["deploy", "--env-file=.env"], true],
     [["deploy", "--env-file-if-exists", ".env"], true],
+    [["deploy", "--envFile", ".env"], true],
+    [["deploy", "--envFileIfExists=.env"], true],
+    [["deploy", "-e"], false],
+    [["deploy", "-e", "--json"], false],
     [["deploy"], false],
     [["deploy", "--", "--env-file", ".env"], false],
   ])("detects env-file flag in %j", (args, expected) => {

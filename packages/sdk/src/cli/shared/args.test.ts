@@ -6,8 +6,10 @@ import { describe, expect, aroundEach, test, vi } from "vitest";
 import { z } from "zod";
 import {
   createCommonArgs,
+  readEnvFileArgs,
   globalArgsApplied,
   loadEnvFiles,
+  loadEnvFilesFromArgv,
   durationArg,
   parseDuration,
   positiveIntArg,
@@ -144,6 +146,49 @@ describe("loadEnvFiles", () => {
     test("handles empty arrays", () => {
       expect(() => loadEnvFiles([], [])).not.toThrow();
     });
+  });
+
+  describe("from the command line", () => {
+    test("loads every file, --env-file-if-exists files after --env-file files", () => {
+      fs.writeFileSync(path.join(tempDir, "a"), "ONLY_IN_A=a\nSHARED=a\n");
+      fs.writeFileSync(path.join(tempDir, "b"), "SHARED=b\n");
+      fs.writeFileSync(path.join(tempDir, "c"), "SHARED=c\n");
+
+      loadEnvFilesFromArgv(["--env-file-if-exists", "c", "-e", "a", "deploy", "-e", "b"]);
+
+      expect(process.env.ONLY_IN_A).toBe("a");
+      expect(process.env.SHARED).toBe("c");
+    });
+
+    test("loads every file after parsing when the caller did not load them first", async () => {
+      fs.writeFileSync(path.join(tempDir, "a"), "ONLY_IN_A=a\n");
+      fs.writeFileSync(path.join(tempDir, "b"), "ONLY_IN_B=b\n");
+      let loaded: (string | undefined)[] = [];
+      const command = defineAppCommand({
+        name: "probe",
+        args: z.strictObject({}),
+        run: () => {
+          loaded = [process.env.ONLY_IN_A, process.env.ONLY_IN_B];
+        },
+      });
+
+      await runCommand(command, ["-e", "a", "-e", "b"], {
+        globalArgs: z.strictObject(createCommonArgs()),
+      });
+
+      expect(loaded).toEqual(["a", "b"]);
+    });
+  });
+});
+
+describe("readEnvFileArgs", () => {
+  test.each([
+    [["-e", "a", "deploy", "--env-file=b", "--", "-e", "c"], ["a", "b"], []],
+    [["--envFile", "a", "-e=b", "--envFileIfExists=c"], ["a", "b"], ["c"]],
+    [["--env-file-if-exists", "a", "--env-file-if-exists=b"], [], ["a", "b"]],
+    [["-je", "a", "-e.env", "-e", "--json"], [], []],
+  ])("reads %j", (argv, envFiles, envFilesIfExists) => {
+    expect(readEnvFileArgs(argv)).toEqual({ envFiles, envFilesIfExists });
   });
 });
 

@@ -52,6 +52,22 @@ describe("seed CLI JSON errors", () => {
   );
 
   test(
+    "reads the config path from an --env-file",
+    () => {
+      const result = runCli(["validate", "--json", "-e", "src/__fixtures__/missing-config.env"]);
+
+      expect(result.status).toBe(1);
+      expect(parseErrorEnvelope(result.stderr)).toEqual({
+        error: {
+          code: "UNEXPECTED_ERROR",
+          message: "Configuration file not found: src/__fixtures__/missing.config.ts",
+        },
+      });
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
     "serializes a missing machine user error",
     () => {
       const configPath = fileURLToPath(

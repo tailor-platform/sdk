@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   annotateTerminalError,
   createCommonArgs,
+  loadEnvFilesFromArgv,
   logger,
   defineCommand,
   runMain,
@@ -45,6 +46,7 @@ void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
   globalArgs: z.strictObject(createCommonArgs()),
   displayErrors: false,
+  setup: () => loadEnvFilesFromArgv(process.argv.slice(2)),
   // Render errors like the host CLI does: a JSON envelope under --json, the CLIError format otherwise.
   cleanup: ({ error }) => {
     if (!error) return;
