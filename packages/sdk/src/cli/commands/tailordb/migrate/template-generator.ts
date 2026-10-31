@@ -1297,6 +1297,14 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
     selfRefColumns.length > 0
       ? `pending.map((row) => ({ ...row, ${clearedValues.join(", ")} }))`
       : "pending";
+  const hasReferenceToRestore = selfRefColumns
+    .map((name) => {
+      const paths = nestedSelfRefPaths.get(name);
+      return paths
+        ? `JSON.stringify(clearNestedReferences(${rowValue(name)}, ${JSON.stringify(paths)})) !== JSON.stringify(${rowValue(name)})`
+        : `${rowValue(name)} !== null && ${rowValue(name)} !== undefined`;
+    })
+    .join(" || ");
   const selfRefBackfill =
     selfRefColumns.length > 0
       ? `
@@ -1318,7 +1326,7 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
 
       for (const row of rows) {
         const restored = { ${selfRefColumns.map((name) => `${objectKey(name)}: ${rowValue(name)}`).join(", ")} };
-        if (Object.values(restored).every((value) => value === null || value === undefined)) {
+        if (!(${hasReferenceToRestore})) {
           continue;
         }
         await trx

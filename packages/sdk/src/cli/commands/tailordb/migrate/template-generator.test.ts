@@ -1664,7 +1664,7 @@ describe("template-generator", () => {
       }
     }, 30_000);
 
-    test("should restore nested self-references on the copied rows and skip rows with a null nested value", async () => {
+    test("should restore nested self-references on the copied rows and skip rows whose nested value holds no reference", async () => {
       const nestedFields = (foreignKeyType: string) =>
         ({
           info: {
@@ -1711,6 +1711,7 @@ describe("template-generator", () => {
         root: "00000000-0000-0000-0000-000000000011",
         otherRoot: "00000000-0000-0000-0000-000000000012",
         child: "00000000-0000-0000-0000-000000000013",
+        emptyReference: "00000000-0000-0000-0000-000000000014",
       };
       type Row = { id: string; info: { parentID: string | null } | null };
       const pglite = new PGlite();
@@ -1728,6 +1729,7 @@ describe("template-generator", () => {
             { id: ids.root, info: null },
             { id: ids.otherRoot, info: null },
             { id: ids.child, info: { parentID: ids.root } },
+            { id: ids.emptyReference, info: { parentID: null } },
           ])
           .execute();
 
@@ -1737,6 +1739,7 @@ describe("template-generator", () => {
           { id: ids.root, info: null },
           { id: ids.otherRoot, info: null },
           { id: ids.child, info: { parentID: ids.root } },
+          { id: ids.emptyReference, info: { parentID: null } },
         ]);
         const updates = await pglite.query<{ count: string }>(
           "SELECT count(*) AS count FROM update_log WHERE table_name = 'Vertex'",
