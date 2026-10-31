@@ -404,7 +404,7 @@ function applyCommon(
     out,
     "CONFIG_ENV",
     apps
-      ? `env:\n  TAILOR_PLATFORM_SDK_CONFIG_PATH: ${apps.map((app) => configPathOf(app.dir)).join(",")}`
+      ? `env:\n  TAILOR_CONFIG_PATH: ${apps.map((app) => configPathOf(app.dir)).join(",")}`
       : undefined,
   );
   out = line(

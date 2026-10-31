@@ -4,12 +4,14 @@ import {
   type NamespaceWithMigrations,
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
+import { formatNamespaceMigrationHint } from "#/cli/commands/tailordb/migrate/hints";
 import {
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   isCheckpointStillOwned,
   type ExpectedMigrationCheckpoint,
 } from "#/cli/commands/tailordb/migrate/remote-state";
+import { locateRemoteCheckpoint } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { usesStepRunner } from "#/cli/commands/tailordb/migrate/script-form";
 import {
   reconstructSnapshotFromMigrations,
@@ -93,19 +95,21 @@ import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan
  * the working tree after a create-update apply.
  *
  * This records the initial baseline (`0000`), which is deployed via the normal
- * flow and never bumps the label itself, and keeps the label `<= working_tree_max`
- * after a `--no-schema-check` deploy from an older revision. Namespaces without a
- * baseline are skipped so no phantom label is written.
+ * flow and never bumps the label itself. A checkpoint that is not in the local
+ * migration history is left unchanged, so a deploy never moves it back.
+ * Namespaces without a baseline are skipped so no phantom label is written.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
  * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
+ * @param configPath - Config file path, kept in the suggested commands
  */
 async function reconcileMigrationLabels(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
   migrationHistoryIds: Readonly<Record<string, string | null>>,
+  configPath: string,
 ): Promise<void> {
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     if (getMigrationFiles(migrationsDir).length === 0) {
@@ -119,6 +123,20 @@ async function reconcileMigrationLabels(
     ).catch(() => null);
     const currentVersion = remoteState?.number ?? null;
     if (remoteState && currentVersion === targetVersion && remoteState.historyId === historyId) {
+      continue;
+    }
+    if (
+      remoteState &&
+      locateRemoteCheckpoint(
+        remoteState,
+        migrationsDir,
+        reconstructSnapshotFromMigrations(migrationsDir, 0)?.rebaseline,
+      ).kind === "outside"
+    ) {
+      logger.warn(
+        `Migration checkpoint of namespace ${namespace} is ${describeMigrationCheckpoint(currentVersion)}, which is not in the local migration history, so it was left unchanged. ` +
+          `Run ${formatNamespaceMigrationHint({ subcommand: ["status"], namespace, configPath })} to compare.`,
+      );
       continue;
     }
     await updateMigrationLabel(
@@ -664,16 +682,14 @@ async function applyCreateUpdate(
 
   // Skip when pending migrations ran: each already bumped the label, and
   // re-pinning to working_tree_max could mask one left intentionally pending
-  // (e.g. a missing script). --no-schema-check always re-pins to repair drift.
-  if (
-    namespacesWithMigrations.length > 0 &&
-    (migrationContext.noSchemaCheck || pendingMigrations.length === 0)
-  ) {
+  // (e.g. a missing script).
+  if (namespacesWithMigrations.length > 0 && pendingMigrations.length === 0) {
     await reconcileMigrationLabels(
       client,
       migrationContext.workspaceId,
       namespacesWithMigrations,
       migrationHistoryIds,
+      migrationContext.config.path,
     );
   }
 

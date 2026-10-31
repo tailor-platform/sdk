@@ -16,6 +16,7 @@ import {
   writeInitialSchema,
 } from "./test-helpers/schema-fixtures";
 import { validateCommand } from "./validate";
+import type { CLIError } from "#/cli/shared/errors";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
@@ -366,6 +367,8 @@ describe("tailordb migration validate", () => {
       drifts: [],
       checkpointMissingLocal: true,
       rebaselinePending: { replacedLatestMigration: 5 },
+      localLatestMigration: 0,
+      historyIdMismatch: true,
     });
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
@@ -389,23 +392,54 @@ describe("tailordb migration validate", () => {
       hasDrift: false,
       drifts: [],
       checkpointMissingLocal: true,
+      localLatestMigration: 0,
+      historyIdMismatch: true,
     });
   });
 
-  test("falls back to the generic checkpoint guidance when already past the replaced migration", async () => {
-    using stderr = captureStderr();
-    markHistoryAsRebaselinedFrom("hprevious");
+  test.each([false, true])(
+    "offers checkpoint recovery past the replaced migration only in the error (json=%s)",
+    async (json) => {
+      using _json = json ? jsonMode() : undefined;
+      using stderr = captureStderr();
+      markHistoryAsRebaselinedFrom("hprevious");
+      state.getMetadata.mockResolvedValue({
+        metadata: {
+          labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
+        },
+      });
+
+      const result = await runCommand(validateCommand, ["--config", "custom.config.ts"]);
+
+      expect(result.success).toBe(false);
+      expect(stderr.output).not.toContain("fell behind");
+      expect(stderr.output).not.toContain("Pull the latest migration files");
+      const { suggestion } = result.error as CLIError;
+      expect(suggestion).toContain("Pull the latest migration files");
+      expect(suggestion).toContain(
+        "sync 0000 --force --namespace tailordb --config=custom.config.ts",
+      );
+      expect(suggestion).toContain("set 0000 --force --namespace tailordb");
+      expect(suggestion).toContain("rewrites the tables");
+      expect(suggestion).toContain("moves only the checkpoint");
+      expect(suggestion).toContain("replaces the migration history ID");
+    },
+  );
+
+  test("does not suggest checkpoint moves without a local migration", async () => {
+    fs.rmSync(state.migrationsDir, { recursive: true });
+    fs.mkdirSync(state.migrationsDir);
     state.getMetadata.mockResolvedValue({
-      metadata: {
-        labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
-      },
+      metadata: { labels: { "sdk-migration": "m0007" } },
     });
 
     const result = await runCommand(validateCommand, []);
 
     expect(result.success).toBe(false);
-    expect(stderr.output).not.toContain("fell behind");
-    expect(stderr.output).toContain("Pull the latest migration files");
+    const { suggestion } = result.error as CLIError;
+    expect(suggestion).toContain("Pull the latest migration files");
+    expect(suggestion).not.toContain("migration sync");
+    expect(suggestion).not.toContain("migration set");
   });
 
   test("explains the rebaseline-pending recovery procedure for a checkpoint that fell behind", async () => {
@@ -422,6 +456,8 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(false);
     expect(stderr.output).toContain("fell behind before 'migration rebaseline' ran");
     expect(stderr.output).toContain("must reach 0005");
+    expect(stderr.output).not.toContain("migration sync");
+    expect(stderr.output).not.toContain("migration set");
     expect(stderr.output).toContain(
       "Restore the pre-rebaseline migrations/ directory from git history",
     );

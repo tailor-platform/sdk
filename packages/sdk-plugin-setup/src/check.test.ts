@@ -456,6 +456,17 @@ describe("checkGitHub (integration)", () => {
     contentHash: "sha256:abc",
   });
 
+  const writeFiles = (...files: string[]): void => {
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(testDir, file)), { recursive: true });
+      fs.writeFileSync(path.join(testDir, file), "name: legacy\n");
+    }
+  };
+  const writeLegacyLock = (content: string): void => {
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, ".github/tailor-sdk.lock"), content);
+  };
+
   describe("in CI (isCI: true)", () => {
     let checkGitHub: typeof CheckGitHub;
     let logger: typeof Logger;
@@ -792,6 +803,79 @@ describe("checkGitHub (integration)", () => {
       fs.mkdirSync(path.join(testDir, file), { recursive: true });
       await expect(check()).rejects.toThrow(/drift/);
     });
+
+    test("reports the files only a leftover .github/tailor-sdk.lock records", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const preview = ".github/workflows/tailor-my-app-preview.yml";
+      const action = ".github/actions/tailor-my-app/action.yml";
+      writeFiles(preview, action);
+      writeLegacyLock(
+        JSON.stringify({
+          version: 1,
+          targets: [
+            { kind: "branch", file: ".github/workflows/tailor-my-app.yml" },
+            { kind: "preview", file: preview },
+            { kind: "branch", file: ".github/workflows/tailor-gone.yml" },
+            { kind: "branch", file: path.join(testDir, "tailor.config.ts") },
+            null,
+            { kind: "action", file: action },
+            { kind: "preview", file: preview },
+          ],
+        }),
+      );
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await expect(check()).rejects.toThrow(/1 drift finding/);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[.github/tailor-sdk.lock] Left by an older setup, with files it generated that " +
+          `.github/tailor.lock does not track: ${preview}, ${action}. ` +
+          `Remove them with \`git rm .github/tailor-sdk.lock ${preview} ${action}\`. ` +
+          "(ignore key: legacy-lock)",
+      );
+    });
+
+    test("reports a leftover .github/tailor-sdk.lock alone when .github/tailor.lock tracks its files", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      writeLegacyLock(
+        JSON.stringify({
+          version: 1,
+          targets: [{ kind: "branch", file: ".github/workflows/tailor-my-app.yml" }],
+        }),
+      );
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await expect(check()).rejects.toThrow(/1 drift finding/);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[.github/tailor-sdk.lock] Left by an older setup. " +
+          "Remove it with `git rm .github/tailor-sdk.lock`. (ignore key: legacy-lock)",
+      );
+    });
+
+    test.each<[string, () => void]>([
+      ["is not valid JSON", () => writeLegacyLock("{")],
+      ["has no targets array", () => writeLegacyLock('{"version":1}')],
+      [
+        "is a directory",
+        () => fs.mkdirSync(path.join(testDir, ".github/tailor-sdk.lock"), { recursive: true }),
+      ],
+    ])(
+      "reports a leftover .github/tailor-sdk.lock that %s without listing its files",
+      async (_, writeLock) => {
+        await setupTarget(setupOptions({ workspaceName: "my-app" }));
+        writeLock();
+        using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+        await expect(check()).rejects.toThrow(/1 drift finding/);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringMatching(
+            /^\[\.github\/tailor-sdk\.lock\] .*cannot be read.*`git rm \.github\/tailor-sdk\.lock`.*\(ignore key: legacy-lock\)$/,
+          ),
+        );
+      },
+    );
   });
 
   describe("outside CI (isCI: false)", () => {
@@ -810,6 +894,21 @@ describe("checkGitHub (integration)", () => {
 
     test("errors when no lock exists", async () => {
       await expect(checkGitHub({ outputDir: testDir })).rejects.toThrow(/No managed workflows/);
+    });
+
+    test("keeps a managed autofix workflow out of legacy lock removal suggestions", async () => {
+      await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+      writeLegacyLock(JSON.stringify({ version: 1, targets: [{ file: AUTOFIX_WORKFLOW_FILE }] }));
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+      ).rejects.toThrow(/1 drift finding/);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[.github/tailor-sdk.lock] Left by an older setup. " +
+          "Remove it with `git rm .github/tailor-sdk.lock`. (ignore key: legacy-lock)",
+      );
     });
 
     test("audits the autofix workflow, even when the lock records no target", async () => {

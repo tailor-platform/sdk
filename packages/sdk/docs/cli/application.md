@@ -64,7 +64,7 @@ tailor deploy [options]
 | ----------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
 | `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                                    | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
 | `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                               | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`                             | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together.                                            | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--config <CONFIG>`                             | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together.                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`              |
 | `--yes`                                         | `-y`  | Skip confirmation prompts                                                                                                       | No       | `false`              | -                                 |
 | `--create-workspace`                            | -     | Create a workspace when the account has none                                                                                    | No       | -                    | -                                 |
 | `--workspace-name <WORKSPACE_NAME>`             | -     | Name for a workspace created during deploy                                                                                      | No       | -                    | -                                 |
@@ -154,7 +154,8 @@ tailor deploy \
 `--create-workspace` only creates when the account has no workspace. If the existing workspace
 matches the requested name, region, organization, and folder, `deploy` reuses it so the same command
 is safe to rerun. If multiple workspaces exist, the flag never creates another one or guesses which
-workspace to use. `--yes` skips deployment confirmation but does not authorize workspace creation.
+workspace to use. `--yes` accepts the deployment confirmations described under Confirmation below
+but does not authorize workspace creation.
 
 If a saved workspace has been deleted or is no longer accessible, interactive terminals return to
 workspace selection. Non-interactive environments stop with `WORKSPACE_CONTEXT_STALE` instead of
@@ -206,7 +207,7 @@ By default, `deploy` performs two verification steps:
 
 If remote schema drift is detected, the deploy will fail with an error showing the differences. This helps prevent applying migrations to an inconsistent state.
 
-Use `--no-schema-check` to skip both verifications (not recommended for production).
+Use `--no-schema-check` to skip both verifications (not recommended for production). It does not skip the check that the remote migration checkpoint is in the local migration history: when the deployed checkpoint is ahead of the local migration files or belongs to another migration history, the deploy stops before changing anything. Pull the latest migration files, or move the checkpoint on purpose with `tailor tailordb migration sync` or `tailor tailordb migration set`, adding `--force` when the checkpoint belongs to another migration history or has a history label that cannot be read, then deploy again.
 
 **Plan Output:**
 
@@ -238,6 +239,22 @@ tailor deploy --dry-run > plan.txt
 ```
 
 In apply mode, the plan is printed to stderr so it does not interfere with piped output.
+
+**Confirmation:**
+
+After printing the plan, `deploy` asks for confirmation before applying when the plan includes any of the following:
+
+- TailorDB migration checkpoints that must be reset before deploying (Beta)
+- Applications recorded as depending on this deploy that are missing from it
+- Resources owned by another application, or tagged with a different application id
+- Existing resources that `tailor` does not manage yet
+- Deletion of TailorDB tables, static websites, AI gateways, OAuth2 clients (including a client type change), Auth connections, Secret Manager vaults, or Secret Manager secrets
+
+Declining cancels the deploy. When the plan includes none of these, `deploy` applies it without asking.
+
+`--yes` accepts these confirmations without asking. In a non-interactive environment or with `--json`, a deploy that needs one of them fails unless `--yes` is passed. `--dry-run` lists them as warnings without asking.
+
+When [`env`](../configuration.md#environment-variables) references the URL of a static website that the same deploy creates, `deploy` first applies static websites and the other resources that cannot reference that URL, then plans the rest again with the real URL and prints that plan as well. It asks again only about what the new plan adds; declining at that point leaves the resources applied first in place.
 
 **JSON Output:**
 

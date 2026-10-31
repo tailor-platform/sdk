@@ -1357,23 +1357,6 @@ describe("migration", () => {
         expect(spinnerMock.fail).toHaveBeenCalledWith("Migration tailordb/0003 did not start");
       });
 
-      test("starts on a migration history label it could not read before either", async () => {
-        const store = createMetadataStore(
-          {},
-          { [MIGRATION_LABEL_KEY]: "m0002", [MIGRATION_HISTORY_LABEL_KEY]: "Not a history ID" },
-        );
-        executeMigrationAsWorkflowMock.mockImplementationOnce(startRun);
-
-        await executeMigrations(
-          { ...createMockContext(), client: store.client },
-          [createMockMigration({ number: 3 })],
-          new Map([["tailordb", { number: 2, historyId: null, historyIdInvalid: true }]]),
-        );
-
-        expect(runStarted).toHaveBeenCalledOnce();
-        expect(store.labels()).toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY, "m0003-main");
-      });
-
       test.each([
         {
           name: "its migration history changed",

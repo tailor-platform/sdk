@@ -1115,8 +1115,12 @@ parts were edited by hand, a job or step of yours uses the reserved `tailor-`
 prefix, a newer template is available, `tailor.config.ts` is no longer under the recorded
 `--dir`, or the repository default branch no longer matches a branch target's
 trigger. It audits the autofix workflow the same way, along with each app
-directory it runs `tailor generate` in. It exits non-zero when it finds drift,
-so you can run it in CI. Each finding names a stable rule key for future suppression. Run
+directory it runs `tailor generate` in. It also reports a `.github/tailor-sdk.lock` left by an older setup,
+with the files it generated that `.github/tailor.lock` does not track, since
+the workflows among them still run, and prints the `git rm` command that
+removes them.
+It exits non-zero when it finds drift, so you can run it in CI. Each
+finding names a stable rule key for future suppression. Run
 [`tailor setup update`](#updating-the-generated-workflow) to regenerate the
 workflows it reports.
 
@@ -1131,8 +1135,9 @@ Drift findings are advisory by default. Set the repository variable
 `TAILOR_PLATFORM_FAIL_ON_DRIFT` to `true` to make unsuppressed findings fail
 the job. Execution and configuration errors fail regardless of this variable.
 
-`check` compares only the generated files, `.github/tailor.lock`, and the
-config; it does not read the GitHub Environment secrets and variables, so it
+`check` compares only the generated files, `.github/tailor.lock` (and a
+leftover `.github/tailor-sdk.lock`), and the config; it does not read the
+GitHub Environment secrets and variables, so it
 runs the same on your own machine and in CI. Run `tailor setup ci env` to list
 what each environment needs.
 

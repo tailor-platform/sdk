@@ -29,6 +29,7 @@ import { defaultLoadSeedSettings, seedSettingsProblem, type SeedSettings } from 
 import { TEMPLATE_VERSION } from "./templates";
 
 const DRIFT_COUNT_MARKER = "TAILOR_SETUP_CHECK_DRIFT_COUNT";
+const LEGACY_LOCK_FILENAME = ".github/tailor-sdk.lock";
 
 /**
  * Stable drift rule keys. These are part of the public contract: a future
@@ -44,10 +45,11 @@ type DriftRule =
   | "erd-namespaces"
   | "migration-drift"
   | "seed-validate"
-  | "seed";
+  | "seed"
+  | "legacy-lock";
 
 export type DriftFinding = {
-  /** Human label for the target: `<kind> <workspaceName>`. */
+  /** Human label for the target: `<kind> <workspaceName>`, or the leftover legacy lock's path. */
   target: string;
   rule: DriftRule;
   message: string;
@@ -383,6 +385,58 @@ function fileStateOf(outputDir: string, workflow: ManagedWorkflow): FileState {
   };
 }
 
+function recordedFiles(lockContent: string): string[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(lockContent);
+  } catch {
+    return null;
+  }
+  const targets =
+    typeof parsed === "object" && parsed !== null && "targets" in parsed ? parsed.targets : null;
+  if (!Array.isArray(targets)) return null;
+  return targets.flatMap((target: unknown) =>
+    typeof target === "object" &&
+    target !== null &&
+    "file" in target &&
+    typeof target.file === "string"
+      ? [target.file]
+      : [],
+  );
+}
+
+function findLegacyLockDrift(
+  outputDir: string,
+  trackedFiles: ReadonlySet<string>,
+): DriftFinding | null {
+  if (!fs.existsSync(path.join(outputDir, LEGACY_LOCK_FILENAME))) return null;
+  const finding = (message: string): DriftFinding => ({
+    target: LEGACY_LOCK_FILENAME,
+    rule: "legacy-lock",
+    message,
+  });
+  const lockAbs = resolveWithinRoot(outputDir, LEGACY_LOCK_FILENAME);
+  const content = lockAbs === null ? null : readContent(lockAbs);
+  const recorded = content === null ? null : recordedFiles(content);
+  if (recorded === null) {
+    return finding(
+      "Left by an older setup and cannot be read, so the files it generated are not listed. " +
+        `Remove it with \`git rm ${LEGACY_LOCK_FILENAME}\` together with those files.`,
+    );
+  }
+  const leftovers = [...new Set(recorded)].filter((file) => {
+    const abs = resolveWithinRoot(outputDir, file);
+    return abs !== null && !trackedFiles.has(abs) && fs.existsSync(abs);
+  });
+  if (leftovers.length === 0) {
+    return finding(`Left by an older setup. Remove it with \`git rm ${LEGACY_LOCK_FILENAME}\`.`);
+  }
+  return finding(
+    `Left by an older setup, with files it generated that .github/tailor.lock does not track: ` +
+      `${leftovers.join(", ")}. Remove them with \`git rm ${[LEGACY_LOCK_FILENAME, ...leftovers].join(" ")}\`.`,
+  );
+}
+
 export type CheckGitHubOptions = {
   /** Repository root where `.github` lives. */
   outputDir: string;
@@ -440,6 +494,11 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   const loadSeedSettings = options.loadSeedSettings ?? defaultLoadSeedSettings;
 
   const findings: DriftFinding[] = [];
+  const trackedFiles = new Set<string>();
+  for (const workflow of managedWorkflows(lock)) {
+    const absFile = resolveWithinRoot(outputDir, workflow.file);
+    if (absFile !== null) trackedFiles.add(absFile);
+  }
   for (const target of lock.targets) {
     // Multi-directory targets are audited per app below.
     const noRootConfig = target.inputs.apps !== undefined;
@@ -512,6 +571,9 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
       }),
     );
   }
+
+  const legacyLockFinding = findLegacyLockDrift(outputDir, trackedFiles);
+  if (legacyLockFinding) findings.push(legacyLockFinding);
 
   const count = managedWorkflows(lock).length;
   if (findings.length === 0) {

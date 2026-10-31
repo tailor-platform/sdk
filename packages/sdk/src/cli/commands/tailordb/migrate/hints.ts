@@ -54,11 +54,57 @@ export interface RebaselineCommandOptions {
  * @returns {string} The command part of the hint, as rendered by `formatCommandHint`
  */
 export function formatRebaselineHint(options: RebaselineCommandOptions): string {
-  const { namespace, configPath } = options;
-  const args = ["tailordb", "migration", "rebaseline", "--namespace", namespace];
+  return formatNamespaceMigrationHint({ ...options, subcommand: ["rebaseline"] });
+}
+
+export interface NamespaceMigrationCommandOptions {
+  /** `tailor tailordb migration` subcommand, followed by its arguments */
+  subcommand: readonly string[];
+  namespace: string;
+  /** Config path the current run used; omitted from the command when it resolves to the default */
+  configPath?: string;
+}
+
+/**
+ * Render a `tailor tailordb migration` command for one namespace as a
+ * remediation hint, reproducing the current run's invocation context.
+ * @param {NamespaceMigrationCommandOptions} options - Subcommand, target namespace, and invocation context
+ * @returns {string} The command part of the hint, as rendered by `formatCommandHint`
+ */
+export function formatNamespaceMigrationHint(options: NamespaceMigrationCommandOptions): string {
+  const { subcommand, namespace, configPath } = options;
+  const args = ["tailordb", "migration", ...subcommand, "--namespace", namespace];
   const configArg = formatConfigArg(configPath);
   if (configArg !== undefined) {
     args.push(configArg);
   }
   return formatCommandHint({ command: "tailor", args });
+}
+
+interface CheckpointMoveHintOptions extends RebaselineCommandOptions {
+  migrationNumber: number;
+  /** Whether the namespace records another migration history ID, which only `--force` replaces */
+  replaceHistoryId: boolean;
+}
+
+/**
+ * Describe the two explicit ways to move a checkpoint to a local migration.
+ * @param options - Target migration and invocation context
+ * @returns Commands and their effects on the remote schema
+ */
+export function formatCheckpointMoveHints(options: CheckpointMoveHintOptions): string[] {
+  const { migrationNumber, replaceHistoryId, ...commandOptions } = options;
+  return (["sync", "set"] as const).map((subcommand) => {
+    const command = formatNamespaceMigrationHint({
+      ...commandOptions,
+      subcommand: [
+        subcommand,
+        formatMigrationNumber(migrationNumber),
+        ...(replaceHistoryId ? ["--force"] : []),
+      ],
+    });
+    const effect =
+      subcommand === "sync" ? "rewrites the tables to that snapshot" : "moves only the checkpoint";
+    return `${command} (${effect}${replaceHistoryId ? " and replaces the migration history ID" : ""})`;
+  });
 }

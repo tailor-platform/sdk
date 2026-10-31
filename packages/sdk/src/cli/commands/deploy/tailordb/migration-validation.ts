@@ -16,19 +16,24 @@ import {
   checkMigrationDiffs,
   formatMigrationCheckResults,
   formatRemoteVerificationResults,
-  logMissingCheckpointGuidance,
+  locateRemoteCheckpoint,
+  logRebaselinePendingGuidance,
   logRemoteDriftGuidance,
+  missingCheckpointRecoveryHints,
   verifyRemoteSchema,
+  type CheckpointRecoveryInput,
   type TailorDBDeployInput,
 } from "#/cli/commands/tailordb/migrate/schema-checks";
 import {
   reconstructSnapshotFromMigrations,
   assertValidMigrationFiles,
   formatMigrationNumber,
+  type RebaselineMarker,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { detectPendingMigrations } from "./migration";
 import {
   migrationWorkflowResourceName,
@@ -213,6 +218,57 @@ async function validateMigrationsInProgress(
 }
 
 /**
+ * Refuse to deploy while a namespace's remote migration checkpoint is not in its local migration
+ * history. Only `tailordb migration sync` and `set` move such a checkpoint.
+ * @param missing - Namespaces whose checkpoint is not in the local migration history
+ * @param configPath - Config file path, kept in the suggested commands
+ */
+function assertCheckpointsInLocalHistory(
+  missing: readonly CheckpointRecoveryInput[],
+  configPath: string,
+): void {
+  if (missing.length === 0) return;
+  logger.error("Remote migration checkpoint is not in the local migration history:");
+  for (const result of missing) {
+    logger.log(`  ${result.namespace}: ${formatMigrationNumber(result.remoteMigrationNumber)}`);
+  }
+  logger.newline();
+  logRebaselinePendingGuidance(missing);
+
+  throw CLIError({
+    code: "MIGRATION_CHECKPOINT_UNKNOWN",
+    message: "Remote migration checkpoint verification failed",
+    suggestion: [
+      ...missingCheckpointRecoveryHints(missing, configPath),
+      ...(missing.some((result) => result.rebaselinePending)
+        ? [
+            "For a namespace that fell behind before 'migration rebaseline' ran, follow the recovery steps above.",
+          ]
+        : []),
+    ].join("\n"),
+    context: {
+      namespaces: missing.map(
+        ({
+          namespace,
+          remoteMigrationNumber,
+          rebaselinePending,
+          localLatestMigration,
+          historyIdMismatch,
+        }) => ({
+          namespace,
+          remoteCheckpoint: remoteMigrationNumber,
+          localLatestMigration,
+          historyIdMismatch,
+          ...(rebaselinePending && {
+            replacedLatestMigration: rebaselinePending.replacedLatestMigration,
+          }),
+        }),
+      ),
+    },
+  });
+}
+
+/**
  * Validate migration files and detect pending migrations
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
@@ -232,11 +288,15 @@ export async function validateAndDetectMigrations(
 ): Promise<ValidateAndDetectResult> {
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
+  const migrationsDirs = new Map(
+    namespacesWithMigrations.map(({ namespace, migrationsDir }) => [namespace, migrationsDir]),
+  );
   let pendingMigrations: PendingMigration[] = [];
   let checkpointRepairs: MigrationCheckpointRepair[] = [];
   let inProgress: InProgressValidation = { inProgressMigrations: {}, staleInProgress: [] };
   let repairedInProgress: string[] = [];
   const migrationHistoryIds = Object.create(null) as Record<string, string | null>;
+  const rebaselines = new Map<string, RebaselineMarker | undefined>();
   const checkpoints = new Map<string, ExpectedMigrationCheckpoint>();
   const maintenanceModeCheckpoints = Object.create(null) as Record<string, number>;
 
@@ -244,8 +304,9 @@ export async function validateAndDetectMigrations(
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
     for (const { namespace, migrationsDir } of namespacesWithMigrations) {
       assertValidMigrationFiles(migrationsDir, namespace);
-      migrationHistoryIds[namespace] =
-        reconstructSnapshotFromMigrations(migrationsDir)?.rebaseline?.historyId ?? null;
+      const rebaseline = reconstructSnapshotFromMigrations(migrationsDir)?.rebaseline;
+      rebaselines.set(namespace, rebaseline);
+      migrationHistoryIds[namespace] = rebaseline?.historyId ?? null;
     }
 
     // Check for schema diffs if not skipped
@@ -291,23 +352,20 @@ export async function validateAndDetectMigrations(
             (result.migrationInProgress || result.migrationInProgressInvalid),
         )
         .map((result) => result.namespace);
-      const missingCheckpointResults = remoteVerificationResults.filter(
-        (result) => result.checkpointMissingLocal,
+      assertCheckpointsInLocalHistory(
+        remoteVerificationResults.flatMap((result) =>
+          result.checkpointMissingLocal
+            ? [
+                {
+                  ...result,
+                  localLatestMigration: result.localLatestMigration ?? null,
+                  historyIdMismatch: result.historyIdMismatch ?? false,
+                },
+              ]
+            : [],
+        ),
+        config.path,
       );
-      if (missingCheckpointResults.length > 0) {
-        logger.error("Remote migration checkpoint is not in the local migration history:");
-        for (const result of missingCheckpointResults) {
-          logger.log(
-            `  ${result.namespace}: ${formatMigrationNumber(result.remoteMigrationNumber)}`,
-          );
-        }
-        logger.newline();
-        logMissingCheckpointGuidance(missingCheckpointResults);
-        throw CLIError({
-          code: "MIGRATION_CHECKPOINT_UNKNOWN",
-          message: "Remote migration checkpoint verification failed",
-        });
-      }
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
 
       if (hasRemoteDrift) {
@@ -348,6 +406,34 @@ export async function validateAndDetectMigrations(
       currentMigrationOverrides,
       remoteStates,
     );
+    if (noSchemaCheck) {
+      assertCheckpointsInLocalHistory(
+        [...remoteStates].flatMap(([namespace, state]) => {
+          const location = locateRemoteCheckpoint(
+            state,
+            assertDefined(
+              migrationsDirs.get(namespace),
+              "every namespace with a remote state has a migrations directory",
+            ),
+            rebaselines.get(namespace),
+          );
+          return location.kind === "outside"
+            ? [
+                {
+                  namespace,
+                  remoteMigrationNumber: location.number,
+                  localLatestMigration: location.localLatestMigration,
+                  historyIdMismatch: location.historyIdMismatch,
+                  ...(location.rebaselinePending
+                    ? { rebaselinePending: location.rebaselinePending }
+                    : {}),
+                },
+              ]
+            : [];
+        }),
+        config.path,
+      );
+    }
     inProgress = await validateMigrationsInProgress(
       client,
       workspaceId,
@@ -359,11 +445,7 @@ export async function validateAndDetectMigrations(
       checkpoints.set(repair.namespace, { number: repair.to, historyId: repair.toHistoryId });
     }
     for (const [namespace, state] of remoteStates) {
-      checkpoints.set(namespace, {
-        number: state.number,
-        historyId: state.historyId,
-        ...(state.historyIdInvalid && { historyIdInvalid: true }),
-      });
+      checkpoints.set(namespace, { number: state.number, historyId: state.historyId });
       if (state.maintenanceModeCheckpoint === null) continue;
       maintenanceModeCheckpoints[namespace] = state.maintenanceModeCheckpoint;
     }

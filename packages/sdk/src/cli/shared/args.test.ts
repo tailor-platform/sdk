@@ -11,6 +11,7 @@ import {
   durationArg,
   parseDuration,
   positiveIntArg,
+  readDeployConfigPathEnv,
   recoveryContextArgs,
   requestedJsonModeSource,
   resolveEarlyFailure,
@@ -143,6 +144,57 @@ describe("loadEnvFiles", () => {
     test("handles empty arrays", () => {
       expect(() => loadEnvFiles([], [])).not.toThrow();
     });
+  });
+});
+
+describe("readDeployConfigPathEnv", () => {
+  test.each([
+    {
+      name: "reads TAILOR_CONFIG_PATH",
+      env: { TAILOR_CONFIG_PATH: "a/tailor.config.ts,b/tailor.config.ts" },
+      expected: "a/tailor.config.ts,b/tailor.config.ts",
+      warnings: [],
+    },
+    {
+      name: "falls back to TAILOR_PLATFORM_SDK_CONFIG_PATH with a warning",
+      env: { TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts" },
+      expected: "old/tailor.config.ts",
+      warnings: [
+        ["TAILOR_PLATFORM_SDK_CONFIG_PATH is deprecated. Please use TAILOR_CONFIG_PATH instead."],
+      ],
+    },
+    {
+      name: "prefers TAILOR_CONFIG_PATH over TAILOR_PLATFORM_SDK_CONFIG_PATH",
+      env: {
+        TAILOR_CONFIG_PATH: "new/tailor.config.ts",
+        TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts",
+      },
+      expected: "new/tailor.config.ts",
+      warnings: [],
+    },
+    {
+      name: "treats empty values as unset",
+      env: { TAILOR_CONFIG_PATH: "", TAILOR_PLATFORM_SDK_CONFIG_PATH: "" },
+      expected: undefined,
+      warnings: [],
+    },
+    {
+      name: "returns undefined when neither is set",
+      env: {},
+      expected: undefined,
+      warnings: [],
+    },
+  ])("$name", ({ env, expected, warnings }) => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    try {
+      expect(readDeployConfigPathEnv()).toBe(expected);
+      expect(warnSpy.mock.calls).toEqual(warnings);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
