@@ -564,6 +564,7 @@ export function assertSourceMatchesCheckpoints(
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_INVALID",
       message: `Source namespace "${invalidRemote.namespace}" does not match its migration checkpoint.`,
+      ...(invalidRemote.hasDrift ? { details: formatSchemaDrifts(invalidRemote.drifts) } : {}),
       suggestion: invalidRemote.checkpointMissingLocal
         ? `${PULL_LATEST_MIGRATIONS_SUGGESTION} Otherwise run ${statusHint} to compare the source workspace's checkpoint and migration history with the local ones.`
         : `Run ${validateHint} to check the migration history and source schema, or ${statusHint} to inspect the source workspace's checkpoint.`,

@@ -826,6 +826,7 @@ describe("migration test runtime", () => {
       expect.objectContaining({
         code: "MIGRATION_TEST_SOURCE_INVALID",
         message: expect.stringContaining("does not match its migration checkpoint"),
+        details: expect.stringContaining("AuditLog"),
         suggestion: `Run \`tailor tailordb migration validate --namespace main --config=source.config.ts --workspace-id=${source.workspaceId} --profile=${source.profile}\` to check the migration history and source schema, or \`tailor tailordb migration status --namespace main --config=source.config.ts --workspace-id=${source.workspaceId} --profile=${source.profile}\` to inspect the source workspace's checkpoint.`,
       }),
     );
